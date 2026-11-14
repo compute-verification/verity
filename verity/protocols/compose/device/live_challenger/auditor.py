@@ -11,11 +11,6 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     vy-challenger-gate policy-register --name NAME --policy ID --alpha N/D --gamma G
     vy-challenger-gate model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR
     vy-challenger-gate model-key --model M --circuit SHA512 [--weights-root W]
-    vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token]
-                                          [--requests N] [--tokens N] [--height H]
-                                          ([--in-flight N] [--profile planned|served] [--temperature T] [--top-p P]
-                                           | --traffic varied [--rate R] [--prompt-range LO:HI | --prompts < PROMPTS]
-                                             [--seed S] [--eos-ids ID,...] [--compact B] [--margin M])
     vy-challenger-gate warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--height H]
                                        [--temperature T] [--top-p P] [--watermark]
                                        [--scan [--bucket-ms MS]
@@ -33,7 +28,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   session; it never names code. The admin account `vy-admin` runs the same gate (`sudo vy-challenger-gate VERB ...`, `by` vy-admin),
   and it alone may reserve a window for a lane that has no key of its own (`--for LANE`: the reserve records `for` and
   keeps `by` vy-admin, and the window's prover is LANE). Nothing else runs as `research` there, and nothing runs as
-  `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit (the certifier's or the warden's).
+  `auditor` but the session unit, `reserve`, `admit` and a rehearsal's unit.
 - **What runs.** `/opt/vy-challenger/current` -> `/opt/vy-challenger/<commit>`, a root-owned `git archive` of that commit
   (`pin.sh`); the commit is the directory's name, and every entry names it (`pinned`). pin.sh pins only a commit on
   origin/main's first-parent history, which it fetches from GitHub itself, and appends `pin_line(commit, main, utc)` to
@@ -164,48 +159,11 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   (its id, α and Γ, read as a period-open reads them), so the policy a period's open names (`--policy-name`) is the
   auditor's own, fixed before any lane's open. `policies` reads the registry.
 
-- **A certifier rehearsal** (`certifier-rehearse`, a lane's own gate key or vy-admin): the network certifier in front of
-  a served endpoint, `benchmarks/network_traces/certifier_serve.py rehearse`, run here, on the auditor's machine, as the
-  auditor's device would. The gate validates the request (`--peer` one of /etc/vy/peers, `--port` the endpoint's on the
-  peer's loopback, `--minutes` 1 to 170, `--tamper` one of `TAMPERS` for a tampering shim instead of an honest one
-  (`certifier_serve.py`'s: `late` holds a window-0 session past every sync, `extra` writes one event more and `drop`
-  one fewer, which the rehearsal's check refuses, and `token` writes window 0's tokens with other bytes, a run it
-  accepts, exit 0, since only the I/O tie refuses it), `--requests` 4 to 400, `--in-flight` 1 to 4 requests sent
-  together and `--tokens` 16 to 64 tokens out of each, each recorded and passed on only when given
-  (`certifier_serve.py`'s 4 and 64 otherwise), `--profile planned|served` N2's profile, planned by default: the planned
-  egress occupancy, or the served profile, whose egress counts derive from the ingress head's, and the sampling
-  and the keys' height below). With `--traffic varied` (recorded only then) the rehearsal runs `certifier_serve.py`'s varied plan:
-  Poisson arrivals of varied prompts as id requests, each ending at the model's EOS or its `max_tokens` (1 to
-  `--tokens`, the cap), and the responses written as id events (each sampled token's id), N2 on the advice profile;
-  its own flags are `--rate` arrivals a second (above 0, at most 8), `--prompt-range LO:HI` (1 to 2048 tokens),
-  `--seed`, `--eos-ids` (at most 8), `--compact B` (8 to 4096: compact egress framing, each sampled token's
-  compact record in a B-byte cell instead of an id event, the certifier PROTOCOL's "Compact records") and `--margin M`
-  (1 to 8: the plan's margin over the probed rates and latencies, 2 otherwise; an endpoint that slows under a load its
-  probes didn't meet needs more), each recorded and passed on only when given (`parse_varied`). `--prompts` sends the
-  caller's own prompts in place of `--prompt-range`'s chat turns: the gate reads them off its stdin as a scan
-  rehearsal's, each of up to 2048 ids (`certifier_prompts`), writes them to `witness/prompts.json` (the request records
-  their count and ids),
-  and request j sends the (j mod n)-th of the n at the same seed's arrivals and `max_tokens`; the plan and the
-  certified I/O in `out/` carry them, as they carry every varied request's prompt. It takes no `--in-flight`,
-  `--profile`, `--temperature` or `--top-p` (its requests are greedy, each with a seed of its own), nor a `--minutes`
-  its arrivals outlast. Each
-  request's `user` is `<run>.j` (`--name`, the run), which the shim forwards the endpoint, so a committing endpoint
-  records each request under the name the certified I/O reads, and the run's id events (or compact records), records
-  and `io.json` are in its `fetch`: `negatives.py tie-run --run TARBALL --ids REQUESTS.jsonl` ties them to the
-  endpoint's committed ids, which refuses `token`. The gate refuses while another rehearsal runs, writes
-  `certifier/<run>/request.json` and starts its unit
-  (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
-  (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
-  rehearsal through it into `out/`, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why
-  it ended, the SHA-512 of each file of `out/`, and from `out/summary.json` each run's verdict, network verdict, audit,
-  salt and what a second reveal of window 0's salt got). `status RUN` and `fetch RUN` return it. The rehearsal's keys are made in a scratch directory and removed, and `out/` holds no salt. A rehearsal is
-  no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
-  `verify_ledger`'s).
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
   (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
-  rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
-  client ──cells──▶ warden (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`, `--port` and
-  `--minutes` as a certifier rehearsal's (it takes no `--tamper`: the warden is the device, with no shim to tamper),
+  rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through a
+  tunnel: client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
+  (one of /etc/vy/peers), `--port` (the endpoint's on the peer's loopback), `--minutes` (1 to 170),
   `--requests` 4 to 1700 (100 by default) and `--tokens` 16 to 256, the most tokens a request asks for, recorded and
   passed on only when given (`warden_serve.py`'s 256 otherwise), and the sampling and the key's height below. The traffic
   is the gate's (`WARDEN_RATE`, `WARDEN_SEED`, `WARDEN_TAIL_S`), so a request whose `--minutes` is under
@@ -235,8 +193,14 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   endpoint, through the same tunnel, the watermark stream an engine admitting at certified ticks waits on
   (`verity.protocols.accounting.certifier.verifier.release`: `POST /verity/watermark`, one line `t n` a tick, then the releases of
   bucket t its server connections lost); the warden reads nothing
-  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`; it
-  shares the certifier rehearsal's directory, run names, unit, `status` and `fetch`, and one of either runs at a time.
+  back, and nothing it signs, certifies or publishes changes. Its request carries `device: warden`. The gate
+  refuses while another rehearsal runs, writes `certifier/<run>/request.json` and starts its unit
+  (`vy-certifier@<run>.service`), which runs `certifier-run` as `auditor`: an `ssh -N -L` with the auditor's tunnel key
+  (the peer's line of /etc/vy/peers) from a free port of this host's loopback to 127.0.0.1:PORT on the peer, then the
+  rehearsal through it, stopped at `--minutes`, then the tunnel closed and `end.json` written (its exit, why it
+  ended and the SHA-512 of each file of `out/`). `status RUN` and `fetch RUN` return it. A rehearsal is no window of
+  the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
+  `verify_ledger`'s).
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), the cells' salts (each link-window's rows' and wiring's), the traffic, the client's log and
   the check, all the prover's. Its unit publishes to `out/` only what isn't: `deployment.json` (the warden's key,
@@ -344,23 +308,22 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   the check's `load` (values and how many registered). `load-relay.json` (the relay's counts and the sink's
   acknowledgements, or why it was refused) varies with the load and nothing decides on it, so it is witness, beside
   the cells' salts.
-- **A rehearsal's sampling** (`sampling`, both verbs): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
+- **A rehearsal's sampling** (`sampling`): `--temperature` 0 to 2 (0 by default) and `--top-p` above 0
   and at most 1 (1 by default), each a plain decimal of at most 4 places, recorded in every request and passed on
   every one (`sampling_argv`), so every request the rehearsal sends carries both: an endpoint applies its own
   generation config (a committing LLAMA32_1B's: temperature 0.6, top_p 0.9) to a request that omits them. The gate
   takes a top_p below 1, which the compile unit refuses while the seeded top-p sampler's split count reads the live
   row count.
-- **A rehearsal's keys** (`--height`, both verbs): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
+- **A rehearsal's keys** (`--height`): LMS (N = 64, W = 1) at a tree height within `REHEARSAL_HEIGHT`, the
   deployed key's (`lms.DEPLOYED`, 20) by default, so that a rehearsal signs as the deployed device does unless its
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
-  a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its session's start
-  (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer refuses
-  every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the least
-  height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal samples
-  each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger here
-  samples none, since a rehearsal is none of its windows.
+  a rehearsal makes one, which `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its
+  session's start (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer
+  refuses every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the
+  least height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal
+  samples each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger
+  here samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
@@ -438,29 +401,6 @@ CERTIFIER_RUN = re.compile(r"c\d{8}T\d{6}Z-[0-9a-f]{4}")
 #: a rehearsal's --minutes: at most 170, so that a run stays inside its unit's RuntimeMaxSec=3h (vy-certifier@.service)
 #: with 10 minutes for its tunnels and outcome; an H200 load's 67 then leave about 100 of serving
 CERTIFIER_MINUTES = (1, 170)
-CERTIFIER_REQUESTS = (4, 400)
-CERTIFIER_IN_FLIGHT = (1, 4)
-CERTIFIER_TOKENS = (16, 64)
-#: a certifier rehearsal's tampering shims, each `certifier_serve.py`'s `--tamper` of that name
-TAMPERS = ("late", "extra", "drop", "token", "byte")
-CERTIFIER_PROFILES = ("planned", "served")
-#: a certifier rehearsal's traffic, `certifier_serve.py`'s `--traffic`
-CERTIFIER_TRAFFIC = ("fixed", "varied")
-#: varied traffic's bounds: the most arrivals a second, prompts' lengths in tokens, the largest seed, the most EOS ids
-CERTIFIER_RATE = 8.0
-#: `certifier_serve.py`'s rate when a request gives none
-CERTIFIER_VARIED_RATE = 2.0
-CERTIFIER_PROMPTS = (1, 2048)
-CERTIFIER_SEED = (1 << 32) - 1
-CERTIFIER_EOS = 8
-#: a compact cell's bytes: at least a compact record's (`active.COMPACT_RECORD`), at most an id event's frame
-#: (`certifier_serve.FRAME_BYTES`)
-CERTIFIER_COMPACT = (8, 4096)
-#: a varied plan's `--margin` over the probed rates and latencies (`certifier_serve.varied_plan`'s 2 otherwise)
-CERTIFIER_MARGIN = (1, 8)
-#: varied traffic's flags the gate passes on when given, each (flag, the request's key)
-CERTIFIER_VARIED = (("--tokens", "tokens"), ("--rate", "rate"), ("--prompt-range", "prompt_range"), ("--seed", "seed"),
-                    ("--eos-ids", "eos_ids"), ("--compact", "compact"), ("--margin", "margin"))
 #: a rehearsal's `--temperature` bounds; `--top-p` is above 0 and at most 1, and each is a plain decimal (`DECIMAL`)
 TEMPERATURE = (0.0, 2.0)
 DECIMAL = r"[0-9](\.[0-9]{1,4})?"
@@ -1399,107 +1339,6 @@ def gate_fetch(session: str, host: Host) -> bytes:
     return buf.getvalue()
 
 
-def parse_certifier(argv: list[str], host: Host) -> dict:
-    """A certifier rehearsal's request: the peer, the endpoint's port on its loopback, the minutes it may run, the
-    tampering shim if any, how many requests the plan sends, how many tokens each when given, the keys' height and the
-    sampling (`sampling`); on fixed traffic how many in flight when given and N2's profile, on varied traffic (`--traffic
-    varied`, recorded only then) its rate, prompts' lengths or prompts on stdin, seed, EOS ids, compact cells and
-    margin when given (`parse_varied`)."""
-    p = argparse.ArgumentParser(prog="vy-challenger-gate certifier-rehearse", exit_on_error=False, add_help=False,
-                                allow_abbrev=False)
-    p.add_argument("--peer", required=True)
-    p.add_argument("--port", required=True)
-    p.add_argument("--minutes", required=True)
-    p.add_argument("--tamper", default=None)
-    p.add_argument("--requests", default=str(CERTIFIER_REQUESTS[1]))
-    p.add_argument("--in-flight", default=None)
-    p.add_argument("--tokens", default=None)
-    p.add_argument("--profile", default=None)
-    p.add_argument("--traffic", default=CERTIFIER_TRAFFIC[0])
-    for flag, _ in CERTIFIER_VARIED[1:]:
-        p.add_argument(flag, default=None)
-    p.add_argument("--prompts", action="store_true")
-
-    a = _parse_rehearsal(p, argv, host)
-    port = bounded("--port", a.port, 1024, 65535)
-    minutes = bounded("--minutes", a.minutes, *CERTIFIER_MINUTES)
-    requests = bounded("--requests", a.requests, *CERTIFIER_REQUESTS)
-    given = {}
-    if a.tokens is not None:
-        given["tokens"] = bounded("--tokens", a.tokens, *CERTIFIER_TOKENS)
-    if a.tamper is not None and a.tamper not in TAMPERS:
-        raise Refused(f"--tamper {a.tamper!r}: one of {list(TAMPERS)}, or none for an honest shim")
-    if a.traffic not in CERTIFIER_TRAFFIC:
-        raise Refused(f"--traffic {a.traffic!r}: one of {list(CERTIFIER_TRAFFIC)}")
-    req = {"peer": a.peer, "port": port, "minutes": minutes, "tamper": a.tamper, "requests": requests,
-           "height": a.height}
-    if a.traffic == "varied":
-        return req | {"traffic": "varied"} | a.sampling | given | parse_varied(a, minutes, requests)
-    if (flag := next((f for f, k in CERTIFIER_VARIED[1:] if getattr(a, k) is not None),
-                     "--prompts" if a.prompts else None)) is not None:
-        raise Refused(f"{flag}: varied traffic's (--traffic varied)")
-    if a.in_flight is not None:
-        given["in_flight"] = bounded("--in-flight", a.in_flight, *CERTIFIER_IN_FLIGHT)
-    profile = CERTIFIER_PROFILES[0] if a.profile is None else a.profile
-    if profile not in CERTIFIER_PROFILES:
-        raise Refused(f"--profile {profile!r}: one of {list(CERTIFIER_PROFILES)}")
-    return req | {"profile": profile} | a.sampling | given
-
-
-def parse_varied(a: argparse.Namespace, minutes: int, requests: int) -> dict:
-    """Varied traffic's flags, each recorded only when given (`certifier_serve.py`'s 2 a second, 16:1024, seed 0 and
-    the probe's EOS otherwise): `--rate` arrivals a second, above 0 and at most `CERTIFIER_RATE`, a plain decimal;
-    `--prompt-range LO:HI` within `CERTIFIER_PROMPTS`; `--seed` 0 to `CERTIFIER_SEED`; `--eos-ids` at most
-    `CERTIFIER_EOS` token ids, comma-separated; `--compact B`, B within `CERTIFIER_COMPACT`, compact egress records in
-    B-byte cells instead of id events; `--margin M` within `CERTIFIER_MARGIN`, a plain decimal; `--prompts`, the
-    prompts on stdin (`certifier_prompts`) in place of `--prompt-range`'s chat turns. Its requests are greedy, each
-    with a seed of its own, and N2's profile is the advice, so it takes no `--temperature`, `--top-p`, `--in-flight` or
-    `--profile`; and its arrivals must end within `--minutes`."""
-    for flag, v in (("--in-flight", a.in_flight), ("--profile", a.profile)):
-        if v is not None:
-            raise Refused(f"{flag}: fixed traffic's; varied requests arrive at --rate a second and N2's profile is "
-                          f"the advice")
-    if a.sampling != {"temperature": 0.0, "top_p": 1.0}:
-        raise Refused("--temperature, --top-p: fixed traffic's; varied requests are greedy (temperature 0, top_p 1), "
-                      "each with a seed of its own")
-    given: dict = {}
-    if a.rate is not None:
-        if not re.fullmatch(DECIMAL, a.rate) or not 0 < float(a.rate) <= CERTIFIER_RATE:
-            raise Refused(f"--rate {a.rate!r}: above 0, at most {CERTIFIER_RATE:g}")
-        given["rate"] = float(a.rate)
-    if a.prompt_range is not None:
-        lo, hi = CERTIFIER_PROMPTS
-        m = re.fullmatch(r"([1-9][0-9]{0,4}):([1-9][0-9]{0,4})", a.prompt_range)
-        if not m or not lo <= int(m[1]) <= int(m[2]) <= hi:
-            raise Refused(f"--prompt-range {a.prompt_range!r}: LO:HI, {lo} ≤ LO ≤ HI ≤ {hi}")
-        given["prompt_range"] = f"{int(m[1])}:{int(m[2])}"
-    if a.seed is not None:
-        if not re.fullmatch(r"0|[1-9][0-9]{0,9}", a.seed) or int(a.seed) > CERTIFIER_SEED:
-            raise Refused(f"--seed {a.seed!r}: 0 to {CERTIFIER_SEED}")
-        given["seed"] = int(a.seed)
-    if a.eos_ids is not None:
-        one = r"(0|[1-9][0-9]{0,6})"
-        if not re.fullmatch(rf"{one}(,{one}){{0,{CERTIFIER_EOS - 1}}}", a.eos_ids):
-            raise Refused(f"--eos-ids {a.eos_ids!r}: 1 to {CERTIFIER_EOS} token ids, comma-separated")
-        given["eos_ids"] = [int(t) for t in a.eos_ids.split(",")]
-    if a.compact is not None:
-        given["compact"] = bounded("--compact", a.compact, *CERTIFIER_COMPACT)
-    if a.margin is not None:
-        lo, hi = CERTIFIER_MARGIN
-        if not re.fullmatch(DECIMAL, a.margin) or not lo <= float(a.margin) <= hi:
-            raise Refused(f"--margin {a.margin!r}: {lo} to {hi}, a plain decimal")
-        given["margin"] = float(a.margin)
-    if a.prompts:
-        if "prompt_range" in given:
-            raise Refused("--prompt-range: the chat turns' lengths, which --prompts replaces with the prompts on stdin")
-        given["prompts"] = True
-    rate = given.get("rate", CERTIFIER_VARIED_RATE)
-    if (span := requests / rate) > minutes * 60:
-        raise Refused(f"--minutes {minutes}: {requests} requests at {rate:g} a second arrive over {span:g} seconds: "
-                      f"give more --minutes, fewer --requests or a higher --rate")
-    return given
-
-
 def _parse_rehearsal(p: argparse.ArgumentParser, argv: list[str], host: Host, *,
                      sampled: bool = True) -> argparse.Namespace:
     """A rehearsal verb's arguments, with the three every rehearsal takes, `--temperature` and `--top-p`
@@ -1867,20 +1706,9 @@ def warden_prompts(req: dict, data: bytes) -> bytes:
     return json.dumps(prompts, separators=(",", ":")).encode()
 
 
-def certifier_prompts(req: dict, data: bytes) -> bytes:
-    """A varied certifier rehearsal's `--prompts` (`prompts_of`, each of `CERTIFIER_PROMPTS` ids, the varied plan's
-    prompt lengths: no scan reads them): request j sends the (j mod n)-th of the n (`certifier_serve.py rehearse
-    --prompts-file`), at the same seed's arrivals and `max_tokens`. The request records their count and ids alone.
-    Returns the prompts' canonical bytes, the witness's `PROMPTS`."""
-    prompts = prompts_of(data, CERTIFIER_PROMPTS)
-    req["prompts"] = {"count": len(prompts), "ids": sum(map(len, prompts))}
-    return json.dumps(prompts, separators=(",", ":")).encode()
-
-
-#: each verb the rehearsal unit runs, its request parser: the two rehearsals, the load (a warden rehearsal with its
-#: load first), the store's write and the relay session (the relay of a network certifier rehearsal, kept up for
-#: clients that aren't its own)
-REHEARSALS = {"certifier-rehearse": parse_certifier, "warden-rehearse": parse_warden,
+#: each verb the rehearsal unit runs, its request parser: the rehearsal, the load (a rehearsal with its load first),
+#: the store's write and the relay session (the relay of a rehearsal, kept up for clients that aren't its own)
+REHEARSALS = {"warden-rehearse": parse_warden,
               "load-relay": lambda argv, host: parse_warden(argv, host, load=True), "weights-write": parse_weights,
               "relay-session": lambda argv, host: parse_warden(argv, host, session=True)}
 
@@ -1892,20 +1720,17 @@ def certifier_runs(host: Host) -> list[str]:
 
 def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token: str, start: Callable[[str], None],
                    own: Callable[[Path], None], active: Callable[[str], bool],
-                   parse: Callable[[list[str], Host], dict] = parse_certifier,
+                   parse: Callable[[list[str], Host], dict],
                    read: Callable[[int], bytes] = lambda n: b"") -> dict:
-    """Validate a rehearsal's request (`parse`: the certifier's or the warden's), refused while another of either runs
+    """Validate a request of the rehearsal unit's (`parse`: its verb's, of `REHEARSALS`), refused while another runs
     (under the gate's lock), and `start` its unit, which runs `certifier-run` as `auditor`. Returns at once: `status
-    RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`warden_prompts`, a certifier's
-    `certifier_prompts`) and written to the run's `witness/` (0700, the file 0600, both `auditor`'s), never to its
-    request."""
+    RUN` follows it. A `--prompts` request's prompts are `read` off stdin (`warden_prompts`) and written to the run's
+    `witness/` (0700, the file 0600, both `auditor`'s), never to its request."""
     req = parse(argv, host)
-    prompts = None if not req.get("prompts") else (
-        warden_prompts if req.get("device") == "warden" else certifier_prompts)(req, read(WARDEN_PROMPTS_BYTES + 1))
+    prompts = None if not req.get("prompts") else warden_prompts(req, read(WARDEN_PROMPTS_BYTES + 1))
     with locked(host.root / "gate.lock"):
         if (running := next((r for r in certifier_runs(host) if active(r)), None)) is not None:
-            raise Refused(f"rehearsal {running} still runs: one at a time, a certifier's or a warden's "
-                          f"(status {running})")
+            raise Refused(f"rehearsal {running} still runs: one at a time (status {running})")
         if not host.certifier.is_dir():
             host.certifier.mkdir(mode=0o755)
             own(host.certifier)
@@ -1975,10 +1800,6 @@ USAGE = ("verbs: reserve --peer NAME --scheme S --families JSON [--epoch E] [--m
          "(a lane's own gate key, or vy-admin) "
          "| model-register --model M --circuit SHA512 --descriptor FILE --checkpoint DIR (vy-admin's) "
          "| model-key --model M --circuit SHA512 [--weights-root W] (a lane's own gate key, or vy-admin) "
-         "| certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra|drop|token] [--requests N] "
-         "[--in-flight N] [--tokens N] [--profile planned|served] [--temperature T] [--top-p P] "
-         "[--traffic varied [--rate R] [--prompt-range LO:HI | --prompts: the prompts on stdin] [--seed S] "
-         "[--eos-ids ID,...] [--compact B] [--margin M]: no --in-flight, --profile or sampling] "
          "| warden-rehearse --peer NAME --port PORT --minutes M [--requests N] [--tokens N] [--temperature T] "
          "[--top-p P] [--watermark] [--scan [--bucket-ms MS] [--prompts [--window-per-group]]: the prompts on stdin] "
          "(a lane's own gate key, or vy-admin) "
@@ -2551,30 +2372,6 @@ def tunnel_up(tunnel: subprocess.Popen, port: int, seconds: float = 60.0) -> boo
     return False
 
 
-def certifier_command(req: dict, out: Path, url: str, tree: Path = TREE) -> list[str]:
-    """`certifier_serve.py rehearse` of the request, the endpoint at `url` (the tunnel's local end): the honest shim, or
-    the request's tamper, with N2 on the request's profile (planned for a request written before it had one), the
-    request's in-flight count and tokens only when it has them, and its keys' height (`height_argv`) and sampling
-    (`sampling_argv`) always. A varied
-    request's (`--traffic varied`) passes its varied flags instead when it has them, its prompts (`--prompts-file`, the
-    gate's `PROMPTS` in the run's `witness/`, beside `out`) when it has them, and its run as `--name`, so each
-    request's `user` upstream, `RUN.j`, is no other run's."""
-    varied = req.get("traffic") == "varied"
-    flags = CERTIFIER_VARIED if varied else (("--in-flight", "in_flight"), ("--tokens", "tokens"))
-    given = [w for flag, key in flags if key in req for w in (flag, _flag_value(req[key]))]
-    prompts = ["--prompts-file", str(out.parent / WITNESS / PROMPTS)] if varied and req.get("prompts") else []
-    traffic = ["--traffic", "varied", "--name", req["run"]] if varied else \
-        ["--profile", req.get("profile", CERTIFIER_PROFILES[0])]
-    return [sys.executable, str(tree / "benchmarks/network_traces/certifier_serve.py"), "rehearse",
-            "--upstream", url, "--out", str(out), *height_argv(req), "--requests", str(req["requests"]), *given,
-            *prompts, *sampling_argv(req), *traffic, "--strategies", req["tamper"] or "honest"]
-
-
-def _flag_value(v: object) -> str:
-    """A recorded flag's value as `certifier_serve.py` reads it, EOS ids comma-separated."""
-    return ",".join(map(str, v)) if isinstance(v, list) else str(v)
-
-
 def certifier_env(tree: Path = TREE) -> dict[str, str]:
     """The rehearsal's environment: this unit's PATH (the pinned tree's Lean toolchain first, which builds
     network-records on first use) and the pinned tree for `verity`, since the rehearsal's processes don't run
@@ -2764,10 +2561,10 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
                   up: Callable[[subprocess.Popen, int], bool] = tunnel_up,
                   command: Callable[..., list[str]] | None = None,
                   wait: Callable[[subprocess.Popen, float], int] | None = None, stop: _Stop) -> dict:
-    """Run the requested rehearsal (the module docstring's "A certifier rehearsal", "A warden rehearsal" and "The
-    load") or relay session ("A relay session": a network certifier rehearsal's relay alone, where the same ssh also
-    brings the peer's clients to its listener, `tunnel_argv`'s third argument, and the session is stopped when that
-    ssh exits), as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
+    """Run the requested rehearsal (the module docstring's "A warden rehearsal" and "The load") or relay session ("A
+    relay session": a rehearsal's relay alone, where the same ssh also brings the peer's clients to its listener,
+    `tunnel_argv`'s third argument, and the session is stopped when that ssh exits), as `auditor`: open the tunnel to
+    the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. A warden rehearsal writes to `witness/`, and its public outcome (`warden_outcome`) to `out/` and the
     end. A store's write opens no tunnel: it runs `weights_command` (`command(req, out, store)`) and its end carries
@@ -2776,18 +2573,18 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
         raise Refused(f"no certifier rehearsal {run!r}")
     d = host.certifier / run
     req = json.loads((d / "request.json").read_text())
-    warden, weights, load = req.get("device") == "warden", req.get("device") == "weights", req.get("load")
-    command = command or (warden_command if warden else weights_command if weights else certifier_command)
+    weights, load = req.get("device") == "weights", req.get("load")
+    if not weights and req.get("device") != "warden":
+        raise Refused(f"rehearsal {run}'s request names no device the rehearsal unit runs: {req.get('device')!r}")
+    command = command or (weights_command if weights else warden_command)
     out = d / "out"
     if out.exists():
         raise Refused(f"certifier rehearsal {run} has run already")
     out.mkdir(mode=0o755)
     if weights:
         return _weights_run(host, d, req, pinned=pinned, now=now, command=command, wait=wait, stop=stop)
-    work = out
-    if warden:
-        work = d / WITNESS
-        work.mkdir(mode=0o700, exist_ok=True)
+    work = d / WITNESS
+    work.mkdir(mode=0o700, exist_ok=True)
     sys.path.insert(0, str(HERE))
     import serve
     kept = "client_port" in req
@@ -2844,21 +2641,9 @@ def certifier_run(host: Host, run: str, *, pinned: str, now: Callable[[], dateti
             tunnel.wait()
         if kept:
             held.close()
-    if warden:
-        outcome = {"device": "warden", **warden_outcome(out, work)}
-    else:
-        try:
-            summary = json.loads((out / "summary.json").read_text())
-        except (OSError, ValueError):
-            summary = {}
-        outcome = {"runs": {s: {"verdict": r.get("verdict"),
-                                "network": (r.get("network_verdict") or {}).get("accepted"),
-                                "audit": r.get("audit_accepted"), "salt": r.get("salt_accepted"),
-                                "salt_again": r.get("salt_again")}
-                            for s, r in summary.get("runs", {}).items()}}
     if kept and why is None:
         why = "the session ended" if rc == 0 else f"the session exited {rc}"
-    return _end(d, rc, why, outcome, pinned=pinned, now=now)
+    return _end(d, rc, why, {"device": "warden", **warden_outcome(out, work)}, pinned=pinned, now=now)
 
 
 def _end(d: Path, rc: int, why: str | None, outcome: dict, *, pinned: str, now: Callable[[], datetime]) -> dict:
@@ -2923,7 +2708,7 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps({"seq": e["seq"], "session": e["session"], "rc": e["body"]["rc"]}))
         elif argv[:1] == ["certifier-run"] and len(argv) == 2:
             e = certifier_run(host, argv[1], pinned=pinned_commit(), now=lambda: datetime.now(timezone.utc))
-            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "runs", "device") if k in e}))
+            print(json.dumps({k: e[k] for k in ("run", "rc", "ended", "device") if k in e}))
         elif argv[:1] in (["model-register"], ["policy-register"]) and len(argv) == 5:
             register = model_register if argv[0] == "model-register" else policy_register
             line = register(host, argv[1:], pinned=pinned_commit(), now=datetime.now(timezone.utc))
