@@ -53,10 +53,9 @@ from verity_vllm.acquire.sources.inductor_hooks import (
     install_codegen_hooks,
 )
 from verity_vllm.engine import hooks
+from verity_vllm.engine.graph_slots import GRAPH_MODES, Slots
 
-GRAPH_MODES = ("FULL", "PIECEWISE")
 INPUT_NAMES = (("input_ids", "ids"), ("positions", "positions"))
-WORDS = ((8, torch.int64), (4, torch.int32), (2, torch.int16), (1, torch.uint8))
 
 
 def _capturing(val: torch.Tensor) -> bool:
@@ -69,7 +68,6 @@ class ServedCompiledSource:
     def __init__(self, fault: str | None = None, into: hooks.Hooks | None = None, batch_copies: bool = True) -> None:
         self.fault = fault
         self.batch_copies = batch_copies                                # captured copies issued at the wrapper's flushes, as one copy each
-        self.pending: list[tuple[torch.Tensor, torch.Tensor]] = []
         self.omit = fault.split(":", 1)[1] if fault and fault.startswith("compiled_omit:") else None
         self.c: Any = None
         self._hooks = into if into is not None else hooks.Hooks()
@@ -77,11 +75,6 @@ class ServedCompiledSource:
         self.piece = -1
         self.index: dict[int, int] = {}
         self.in_cgw = False
-        self.max_rows = 0
-        self.slots: dict[tuple, torch.Tensor] = {}
-        self.static: set[tuple] = set()                                 # (order, name) captured once with a leading dim other than the padded size
-        self.plans: dict[tuple[str, int], list[tuple]] = {}
-        self.capturing: tuple[str, int] | None = None
         self.step_mode: str | None = None
         self.step_pad = 0
         self.step_tokens = 0
@@ -101,6 +94,14 @@ class ServedCompiledSource:
         self.stats: dict[str, Any] = {}
         self.stats_reset_step_counters()
         self.stats.update(capture_copies=0, slot_bytes=0, slot_resets=0, profiling_captures=0, capture_flushes=0, strided_copies=0)
+        self.g = Slots(self.errors, self.stats, dropped=self._slots_dropped)    # the slots, the captures' plans and the held copies
+
+    max_rows = property(lambda self: self.g.max_rows, lambda self, v: setattr(self.g, "max_rows", v))
+    slots = property(lambda self: self.g.slots)
+    static = property(lambda self: self.g.static)
+    plans = property(lambda self: self.g.plans)
+    capturing = property(lambda self: self.g.capturing, lambda self, v: setattr(self.g, "capturing", v))
+    pending = property(lambda self: self.g.pending)
 
     # ------------------------------------------------------------------ installation (before the engine compiles and captures)
 
@@ -135,31 +136,6 @@ class ServedCompiledSource:
                     src.in_cgw = False
             return call
 
-        def capture(orig):
-            def run(self_m, create_forward_fn, *a, **kw):
-                descs = [d for ds in getattr(self_m, "_capture_descs", {}).values() for d in ds]
-                src._begin_capture(max((int(d.num_tokens) for d in descs), default=0))
-
-                def create(desc, warmup):
-                    fn = create_forward_fn(desc, warmup=warmup)
-                    key = (desc.cg_mode.name, int(desc.num_tokens))
-
-                    def forward_fn(cg_mode):
-                        src.plans[key] = []
-                        src.capturing = key
-                        try:
-                            return fn(cg_mode)
-                        finally:
-                            src.capturing = None
-                            src._end_capture(key)
-                    return forward_fn
-                try:
-                    return orig(self_m, create, *a, **kw)
-                finally:
-                    if getattr(self_m, "_capture_mem_samples", None) is not None:
-                        src._end_profiling_capture()            # vLLM's memory profiling: its graphs are discarded, so are their slots
-            return run
-
         def dispatch(orig):
             def run(manager, num_reqs, num_tokens, *a, **kw):
                 out = orig(manager, num_reqs, num_tokens, *a, **kw)
@@ -187,7 +163,7 @@ class ServedCompiledSource:
 
         into.wrap(pb.PiecewiseBackend, "__call__", pb_call)
         into.wrap(cg.CUDAGraphWrapper, "__call__", cgw_call)
-        into.wrap(cgu.CudaGraphManager, "capture", capture)
+        into.wrap(cgu.CudaGraphManager, "capture", self.g.capture_wrapper())
         into.wrap(mr, "dispatch_cg_and_sync_dp", dispatch)
         into.wrap(attn.Attention, "__init__", attention_init)
         into.wrap(LogitsProcessor, "forward", logits)
@@ -331,25 +307,15 @@ class ServedCompiledSource:
         return forward
 
     def _begin_capture(self, rows: int) -> None:
-        if rows > self.max_rows:
-            if self.slots:
-                self.stats["slot_resets"] += 1
-            self._drop_slots()
-            self.max_rows = rows
+        self.g.begin_capture(rows)
 
     def _end_capture(self, key: tuple[str, int]) -> None:
-        if self.pending:
-            self.errors.append(f"capture {key[0]}:{key[1]}: {len(self.pending)} captured copies never flushed")
-            self.pending = []
+        self.g.end_capture(key)
 
     def _end_profiling_capture(self) -> None:
-        self._drop_slots()
-        self.max_rows = 0
-        self.stats["profiling_captures"] += 1
+        self.g.end_profiling_capture()
 
-    def _drop_slots(self) -> None:
-        self.slots, self.plans, self.static, self.pending = {}, {}, set(), []
-        self.stats["slot_bytes"] = 0
+    def _slots_dropped(self) -> None:
         if self.native_plans and self.c is not None:
             self.c.clear_slot_plans()
         self.native_plans = {}
@@ -408,43 +374,10 @@ class ServedCompiledSource:
             self.c._nc.flush()
 
     def _stage(self, order: tuple, name: str, val: torch.Tensor, n_pad: int, defer: bool = False) -> tuple:
-        rows = val.dim() > 0 and int(val.shape[0]) == n_pad and n_pad <= self.max_rows
-        if not rows:
-            self.static.add((order, name))
-        key = (order, name) if rows else (order, name, tuple(val.shape))
-        slot = self.slots.get(key)
-        if slot is None or slot.dtype != val.dtype or tuple(slot.shape[1:]) != tuple(val.shape[1:]):
-            if slot is not None:
-                self.errors.append(f"{name}: slot {tuple(slot.shape)}/{slot.dtype} reused for {tuple(val.shape)}/{val.dtype}")
-            shape = (self.max_rows, *val.shape[1:]) if rows else tuple(val.shape)
-            slot = torch.empty(shape, dtype=val.dtype, device=val.device)
-            self.slots[key] = slot
-            self.stats["slot_bytes"] += slot.numel() * slot.element_size()
-        dst = slot[: val.shape[0]] if rows else slot
-        if defer:
-            self.pending.append((dst, val))                             # holds `val`, so its storage outlives the wrapper's `del`
-        else:
-            dst.copy_(val)
-        return order, name, slot, rows
+        return self.g.stage(order, name, val, n_pad, defer=defer)
 
     def _flush(self) -> None:
-        """Issue the recorded captured copies: the dense ones as one multi-tensor copy per word width (the widest that divides a copy's
-        length and both its addresses), the strided ones one by one."""
-        groups: dict[torch.dtype, tuple[list, list]] = {}
-        for d, v in self.pending:
-            if not (d.is_contiguous() and v.is_contiguous()):
-                d.copy_(v)
-                self.stats["strided_copies"] += 1
-                continue
-            nb = v.numel() * v.element_size()
-            word = next(dt for w, dt in WORDS if nb % w == 0 and d.data_ptr() % w == 0 and v.data_ptr() % w == 0)
-            dst, src = groups.setdefault(word, ([], []))
-            dst.append(d.reshape(-1).view(word))
-            src.append(v.reshape(-1).view(word))
-        for dst, src in groups.values():
-            torch._foreach_copy_(dst, src)
-        self.stats["capture_flushes"] += 1
-        self.pending = []
+        self.g.flush()
 
     def _acquire(self, name: str, val: torch.Tensor, job: Any) -> None:
         if self.omit and self.omit in name:
@@ -461,7 +394,7 @@ class ServedCompiledSource:
         if job is None or self.step_mode not in GRAPH_MODES:
             return
         t0 = time.perf_counter()
-        plan = self.plans.get((self.step_mode, self.step_pad))
+        plan = self.g.entries(self.step_mode, self.step_pad, self.live)
         if plan is None:
             self.errors.append(f"step {job.step}: no captured plan for {self.step_mode} at {self.step_pad} tokens")
             return
@@ -471,9 +404,8 @@ class ServedCompiledSource:
             key = (self.step_mode, self.step_pad)
             h = self.native_plans.get(key)
             if h is None:
-                ordered = sorted(plan, key=lambda e: e[0])
-                kinds = [0 if not rows else 2 if (order, name) in self.static else 1 for order, name, _slot, rows in ordered]
-                h = self.native_plans[key] = self.c.slot_plan([e[1] for e in ordered], [e[2] for e in ordered], kinds)
+                kinds = [0 if not rows else 2 if (order, name) in self.static else 1 for order, name, _slot, rows in plan]
+                h = self.native_plans[key] = self.c.slot_plan([e[1] for e in plan], [e[2] for e in plan], kinds)
             self.stats["replay_drains"] += self.c.stage_slot_plan(h, n, self.step_pad)
             self.stats["replayed_steps"] += 1
             self.stats["padded_steps"] += int(n != self.step_pad)
@@ -481,8 +413,9 @@ class ServedCompiledSource:
                 self.c._nc.flush()
             self.stats["drain_s"] += time.perf_counter() - t0
             return
-        for order, name, slot, rows in sorted(plan + self.live, key=lambda e: e[0]):
-            value = slot if not rows else slot[: self.step_pad] if (order, name) in self.static else slot[:n]
+        for entry in plan:
+            _order, name, slot, _rows = entry
+            value = self.g.value(entry, n, self.step_pad)
             if late:
                 prev = self.stale.get(id(slot))
                 self.stale[id(slot)] = value.clone()
