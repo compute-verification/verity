@@ -304,7 +304,7 @@ SESSION = bytes(range(32))
 #: a link-window's scan's templates in its Program's order: the start unit (`IngressScanStart`), then every bucket's
 #: ingress unit (`IngressScanBucket`, bucket 0's too) and its egress unit, 2T + 1 units, one link-window a registration
 TEMPLATES = ("start", "ingress", "egress")
-#: the unread round's: one ingress unit
+#: the unread round's: the ingress units alone, every bucket's
 UNREAD = ("ingress",)
 #: the block round's: the slot entries' stand-in (`SlotEntry`), one unit a slot entry, whose o0 rows are the scan's
 #: slot entries
@@ -326,7 +326,7 @@ ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
 FIXED = {"start": 1, "ingress": 2, "egress": 1}
 #: each kind of round's templates, and its outcome: accepted, refused by Lean's registered reads, or proved with every
-#: read held and its unit's ok bit 0; the block first, since the scan reads its outputs. A round is one link-window's,
+#: read held and one unit's ok bit 0; the block first, since the scan reads its outputs. A round is one link-window's,
 #: ``<kind>-<w>`` (`round_name`)
 ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chain": (TEMPLATES, "does not open"),
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0"), "stale": (STALE, "does not open")}
@@ -429,20 +429,18 @@ def slot_entries(cls: IS.Class, progs: list[list[int]]) -> list[list[list[int]]]
     return [[IS.prog_rows(cls, progs[b * cls.EVERY])[j] for b in range(nb)] for j in range(cls.NR)]
 
 
-def members_of(templates: tuple[str, ...], T: int, bucket: int = 0, entries: int = 0,
-               lanes: int = 1) -> list[SimpleNamespace]:
+def members_of(templates: tuple[str, ...], T: int, entries: int = 0, lanes: int = 1) -> list[SimpleNamespace]:
     """A link-window's round's members in its Program's order: each one's name, its first unit (``base``) and the
     link-window's buckets its units compute, unit ``base + k`` bucket ``buckets[k]``. The scan's (`TEMPLATES`):
     ``start``, the start unit, which computes no bucket (its one unit is listed as bucket 0, the bucket whose ``sin``
     its o0 is); ``ingress-0``, buckets 0 … T − 2, and ``last``, bucket T − 1, a member of its own (its S_t has no
     state leaf, and a registered port holds every instance's row); ``egress-0``, buckets 0 … T − 1: the members
-    `NetworkCheck.ScanOk` names. The stale round's (`STALE`) the start unit alone; the unread round's one unit
-    (`UNREAD`) bucket ``bucket``; the block round's (`BLOCK`) the link-window's ``entries`` slot entries
-    (`entries_of`) cut into ``lanes`` members of consecutive units, as one-stage cuts a template (``block-c<j>``,
-    lane j's, its ``lane``), unit j·nb + b slot entry b of lane j, since its o0 rows are the lane's ``prog<j>``
-    tree."""
-    if templates == UNREAD:
-        return [SimpleNamespace(template="ingress", name="ingress-0", base=0, buckets=range(bucket, bucket + 1))]
+    `NetworkCheck.ScanOk` names. A round of some of those templates has their members: the stale round's (`STALE`)
+    the start unit alone, the tampered round's the egress units, the unread round's (`UNREAD`) the ingress units, every
+    bucket's, so that unit m of a template is bucket m in every Program that batches it. The block round's (`BLOCK`)
+    the link-window's ``entries`` slot entries (`entries_of`) cut into ``lanes`` members of consecutive units, as
+    one-stage cuts a template (``block-c<j>``, lane j's, its ``lane``), unit j·nb + b slot entry b of lane j, since
+    its o0 rows are the lane's ``prog<j>`` tree."""
     if templates == BLOCK:
         if entries < 1 or lanes < 1 or entries % lanes:
             raise ValueError("the block round's members are the link-window's slot entries, a lane each: give "
@@ -804,7 +802,7 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
 
 
 def _unread(cls: IS.Class, ch) -> SimpleNamespace | None:
-    """The unread round's unit: the group's first ingress bucket b ≥ 1 at which a slot's Program starts (a request's
+    """The unread round's bucket: the group's first ingress bucket b ≥ 1 at which a slot's Program starts (a request's
     anchor, the slot due and its `occ` 1), the first such slot j, and lane j's slot entries with slot j's at b's
     boundary (row ``entry``) absent, its read bit cleared and its outputs kept (``rows``, which b's link-window
     commits in place of its ``prog<j>``, `window_of`); None when no request is anchored in the group past bucket
@@ -1112,25 +1110,33 @@ def rounds_of(at: SimpleNamespace) -> dict[str, tuple[tuple[str, ...], str]]:
 def targets(at: SimpleNamespace, name: str) -> list[str]:
     """The members a refused round's refusal names: chain's, those of ingress units a, a + 1 and a + 2 (a the swap's
     bucket in the link-window) whose o1 opens a state leaf (the link-window's last unit's opens none); stale's, the
-    start unit's; unread's, its one ingress unit's; tampered's and a void link-window's honest round's, the egress
-    member."""
+    start unit's; unread's, the member of the ingress unit whose slot entry is unread; tampered's and a void
+    link-window's honest round's, the egress member."""
     kind = kind_of(name)
     if kind == "chain":
         a = at.setup.A % at.T
         return sorted({mb.name for mb in members_of(TEMPLATES, at.T) if mb.template == "ingress"
                        for b in mb.buckets if a <= b <= a + 2 and b + 1 < at.T})
-    return [{"stale": "start", "unread": "ingress-0"}.get(kind, "egress-0")]
+    if kind == "unread":
+        return [mb.name for mb in members_of(UNREAD, at.T) if at.unread.bucket in mb.buckets]
+    return ["start" if kind == "stale" else "egress-0"]
+
+
+def unread_words(at: SimpleNamespace) -> dict[str, list[int]]:
+    """The unread round's public words by member: every ingress unit's 1 but the one at the unread bucket, 0."""
+    return {mb.name: [int(b != at.unread.bucket) for b in mb.buckets] for mb in members_of(UNREAD, at.T)}
 
 
 def predicted(at: SimpleNamespace, name: str, members: list[SimpleNamespace]) -> bool:
     """The host's read of a round before any proof, as the round's: accepted, every read held and every output 1 (the
-    slot entries' and the start's none: their o0 is no public word); unread's, every read held and its one unit's
-    output 0; refused, its target members' reads refused ("does not open") and every other member's held."""
+    slot entries' and the start's none: their o0 is no public word); unread's, every read held and every output 1 but
+    the unread bucket's unit's, 0 (`unread_words`); refused, its target members' reads refused ("does not open") and
+    every other member's held."""
     outcome = rounds_of(at)[kind_of(name)][1]
     if outcome == "accepted":
         return all(m.refused is None and (m.outputs is None or set(m.outputs) == {1}) for m in members)
     if outcome == "ok 0":
-        return [(m.name, m.refused, m.outputs) for m in members] == [(targets(at, name)[0], None, [0])]
+        return all(m.refused is None for m in members) and {m.name: m.outputs for m in members} == unread_words(at)
     t = targets(at, name)
     return all((outcome in (m.refused or "")) if m.name in t else m.refused is None for m in members)
 
@@ -1245,8 +1251,7 @@ def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Set
     def read(at: SimpleNamespace, number: int) -> None:
         for kind, (templates, outcome) in rounds_of(at).items():
             name = round_name(kind, number)
-            ms = [member(at, name, mb) for mb in members_of(templates, T, at.unread.bucket if at.unread else 0,
-                                                            entries_of(cls, T), cls.NR)]
+            ms = [member(at, name, mb) for mb in members_of(templates, T, entries_of(cls, T), cls.NR)]
             if not predicted(at, name, ms) or (kind == "honest" and wired(ms)):
                 raise SystemExit(f"{name}: the host's read of the round isn't {outcome}: "
                                  f"{[(m.name, m.refused, m.outputs) for m in ms]}, chains {wired(ms)}")
@@ -1976,42 +1981,45 @@ def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tupl
     return reg, window_answer(reg, record, delta, reason, res.get("rests_on_period_check") or ())
 
 
-def answers(at: SimpleNamespace, out: Path, res: dict, delta: Fraction, block: dict | None = None) -> dict:
-    """``answers.json`` (`ANSWERS`) of the honest round's audit (``res``, its files under ``out / "honest"``): its
-    registration and, for each link-window W of the group, the scan's answer for W and the warden's ingress and egress
-    row registrations of W, the rows form's evidence of W but its certificates. The answer is the group's for every W
-    (`window_answer`: accepted where the round's outputs all open to 1), since its registration holds each W's rows
-    (`warden_roots`). A refused round's (a void run's) names the members Lean refused. With the block round's audit
-    (``block``), the compute audit whose lanes' o0 are the scan's ``prog<j>`` (``audits``): its registration and
-    answer, and the terms a period's parameters give it, its Program's descriptor, its free inputs (every bit of every
-    slot entry, the stand-in's ``x``: it copies its input) and no steps."""
-    reg, answer = _answer(out, "honest", res, delta, f"the scan's audit of link-windows {at.windows}")
-    audits = []
-    if block is not None:
-        breg, banswer = _answer(out, "block", block, delta, "the block's audit")
-        audits.append({"answer": banswer, "free": entries_of(at.setup.cls, at.G, at.T) * IS.entry_bits(at.setup.cls),
-                       "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
-                       "registration": breg, "steps": 0})
-    doc = {"format": ANSWERS, "delta": str(delta), "registration": reg, "audits": audits,
-           "windows": [{"window": w, "answer": answer,
-                        "registrations": [at.sides[s][i].registration for s in ("ingress", "egress")]}
-                       for i, w in enumerate(at.windows)]}
+def answers(ats: Sequence[SimpleNamespace], out: Path, results: Mapping[str, dict], delta: Fraction) -> dict:
+    """``answers.json`` (`ANSWERS`) of the honest rounds' audits of link-windows ``ats`` (``results``, by round, each
+    round's files under ``out / <round>``): for each link-window W, in order, the scan's registration of W, its answer
+    (`window_answer`: accepted where the round's outputs all open to 1; a refused round's, a void link-window's, names
+    the members Lean refused) and the warden's ingress and egress row registrations of W, the rows form's evidence of
+    W but its certificates. With W's block round's audit, the compute audit whose lanes' o0 are W's scan's
+    ``prog<j>`` (``audits``, in link-window order): its registration and answer, and the terms a period's parameters
+    give it, its Program's descriptor, its free inputs (every bit of every slot entry, the stand-in's ``x``: it
+    copies its input) and no steps. -> each link-window's answer in short, by its number."""
+    audits, windows, said = [], [], {}
+    for at in ats:
+        cls, honest, block = at.setup.cls, round_name("honest", at.number), round_name("block", at.number)
+        reg, answer = _answer(out, honest, results[honest], delta, f"the scan's audit of link-window {at.number}")
+        if block in results:
+            breg, banswer = _answer(out, block, results[block], delta, "the block's audit")
+            audits.append({"answer": banswer, "free": entries_of(cls, at.T) * IS.entry_bits(cls),
+                           "program": json.loads((out / PROGRAMS[BLOCK] / "program.json").read_text()),
+                           "registration": breg, "steps": 0})
+        windows.append({"window": at.number, "registration": reg, "answer": answer,
+                        "registrations": [at.sides[s].registration for s in ("ingress", "egress")]})
+        said[at.number] = {"verdict": answer["verdict"], "bound": (answer["public"] or {}).get("bound"),
+                           "reason": answer["reason"], "commitment": answer["commitment"]}
+    doc = {"format": ANSWERS, "delta": str(delta), "audits": audits, "windows": windows}
     (out / "answers.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
-    return {"verdict": answer["verdict"], "bound": (answer["public"] or {}).get("bound"), "reason": answer["reason"],
-            "commitment": answer["commitment"]}
+    return said
 
 
 def expected(at: SimpleNamespace, name: str, res: dict) -> bool:
-    """An accepted round: accepted, every output 1; the unread round: its proof held and its audit accepted, and its
-    unit's output opened to 0, so the link-window is refused; a refused one (`rounds_of`): refused by Lean's
-    registered reads ("does not open") at each of its target members (`targets`), every other member's proof held."""
+    """An accepted round: accepted, every output 1; the unread round: its proofs held and its audit accepted, and
+    the unread bucket's unit's output opened to 0 (`unread_words`), so the link-window is refused; a refused one
+    (`rounds_of`): refused by Lean's registered reads ("does not open") at each of its target members (`targets`),
+    every other member's proof held."""
     lean = {k.split("/", 1)[1]: v for k, v in res["verdicts"].items() if k.startswith("lean-verify/")}
-    outcome = rounds_of(at)[name][1]
+    outcome = rounds_of(at)[kind_of(name)][1]
     if outcome == "accepted":
         return res["window_accepted"] and all(lean.values())
     if outcome == "ok 0":
         return (res["accepted"] and not res["window_accepted"] and bool(lean) and all(lean.values())
-                and res["opened"] == {targets(at, name)[0]: [0]})
+                and res["opened"] == unread_words(at))
     ts = targets(at, name)
     whys = [res["why"].get(f"lean-verify/{t}") or "" for t in ts]
     return (not res["accepted"] and all(lean.get(t) is False for t in ts)
@@ -2090,130 +2098,166 @@ def unseen(rec: dict) -> bool:
     return all(not r["verifier_found"] and r["control"]["holds_all"] for r in (rec, rec.get("whole_rows")) if r)
 
 
-def prove(a) -> int:
-    out = Path(a.out)
-    out.mkdir(parents=True, exist_ok=True)
-    setup = SETUPS[a.setup]
-    h = host(out / "warden", a.warden_run, a.draw, setup, a.group, v3c=a.v3c)
-    at, T, G = h.at, h.at.T, h.at.G
-    ch, cls, N = at.chain, setup.cls, 2 * G * T
-    if a.draw is not None and not 3 <= a.draw <= N:
-        raise SystemExit(f"--draw {a.draw}: a round's draw is 3 .. {N} of its {N} units (one a template at least)")
-    ks = {"honest": a.draw, "chain": a.draw, "tampered": None if a.draw is None else stratum_k(a.draw, G * T, N),
-          "unread": None, "block": None}
-    sh = cls.egress
-    summary: dict = {"source": at.source, "warden_run": at.run_id, "draw": ks if a.draw is not None else "every unit",
-                     "setup": setup.name, "class": asdict(cls), "params": asdict(at.params), "shape": asdict(sh),
-                     "T": T, "group": G, "windows": at.windows,
-                     "bits": {f"{tp}/{r}": b for tp, (ins, outs) in ports_of(cls).items() for r, b in ins + outs},
-                     "members": {name: [{"name": m.name, "base": m.base, "n": m.n} for m in ms]
-                                 for name, ms in h.rounds.items()},
-                     "admitted": at.admitted, "anchors": {q: cls.anchor(s, s % cls.EVERY) for q, s in at.admitted.items()},
-                     "responses": {q: len(x) for q, x in sorted(at.outputs.items())}, "run_s": at.run_s,
-                     "swap": [setup.A, setup.A + 1],
-                     "unread": at.unread and {"bucket": at.unread.bucket, "slot": at.unread.slot, "q": at.unread.q},
-                     "tampered": at.tampered and {"bucket": at.tampered.bucket,
-                                                  "window": at.windows[at.tampered.window], "key": at.tampered.key_of},
-                     "void": at.void and {"buckets": at.void, "failed": at.failed, "why": at.failed_why,
-                                          "refused": targets(at, "honest")},
-                     "cells": {side: {"data": sum(r[s * cls.B] == DATA for r in rows for s in range(sh.R)),
-                                      "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
-                               for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
-                     "roots": {k: r.root.hex() for k, r in at.trees.items()},
-                     "v3c": at.v3c and {"window": str(at.v3c), "trees": sorted(k for k, r in at.trees.items()
-                                                                               if isinstance(r, Held))},
-                     "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs} for m in ms]
-                              for name, ms in h.rounds.items()}}
-    void = (f" but its FAIL buckets {at.void} (void: the honest round alone, refused at {targets(at, 'honest')})"
-            if at.void else "")
-    log(f"run: {at.source}; {setup.name}'s class, link-windows {at.windows} of {T} buckets, admitted {at.admitted}, "
-        f"responses {summary['responses']}, anchors {summary['anchors']}, cells {summary['cells']}; every egress "
-        f"bucket computes the warden's row from its ingress bucket's view{void}; host reads as expected "
-        f"({at.run_s} s); draw {summary['draw']}")
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    if a.dry:
-        log("dry: done")
-        return 0
-    M = WZ._one_stage()
-    rounds = rounds_of(at)
-    pgs = {templates: program(M, cls, templates, G, T, out / PROGRAMS[templates])
-           for templates in {t for t, _o in rounds.values()}}
-    summary["stagers"] = {f"{PROGRAMS[k]}/{tp}": {
-        "unit": g.defn.id, "lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "vus_per_block": g.st.meta["vus_per_block"],
-        "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
-    log(f"stagers: {summary['stagers']}")
-    ok, results = True, {}
-    with challenger(a, at, out) as coins:
-        if coins is not None:
-            summary["coins"] = {"challenger": coins.challenger, "window_root": coins.root, "rounds": ["honest"]}
-            log(f"the honest round draws on the challenger's coins ({coins.challenger}), its session on the group's "
-                f"root {coins.root[:16]}…; the other rounds on a development challenger's")
-        for j, (name, mrs) in enumerate(h.rounds.items()):
-            pg = pgs[rounds[name][0]]
-            members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in mrs]
-            if name == "honest":
-                summary["wires"] = staged_wires(members)
-                if summary["wires"]:
-                    raise SystemExit(f"the honest round's chains don't hold on its public files: {summary['wires']}")
-            summary.setdefault("rounds", {})[name] = {
-                m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
-                            "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
-            log(f"staged {name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + {m['nbl']}, "
-                                               f"outputs {m['outputs']}" for m in members))
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-            av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
-            trees = {**at.trees, **({"state": at.swapped} if name == "chain" else {}),
-                     **({f"prog{at.unread.slot}": at.unread.tree} if name == "unread" else {})}
-            reads = {("egress",): ("view",), BLOCK: ("state", *lane_kinds(cls))}.get(pg.templates)
-            trees = {k: v for k, v in trees.items() if reads is None or k in reads}
-            res = audit(M, av, at, pg, name, members, trees, out / name, a.port and a.port + (2 * G + 2) * j, ks[name],
-                        coins if name == "honest" else None)
-            results[name] = res
-            if name == "honest":
-                summary["answers"] = answers(at, out, res, Fraction(a.delta), results.get("block"))
-                log(f"answers: link-windows {at.windows}, each {summary['answers']}")
-            inst = out / name / "instances.bin"
-            inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
-            rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
-                                             known(members, at))
-            inst.unlink()
-            good = expected(at, name, res) and unseen(rec)
-            if coins is not None and name == "honest":
-                good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
-            ok &= good
-            summary["rounds"][name]["audit"] = res
-            whole = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
-            log(f"round {name}: drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
-                f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
-                f"{res.get('audit')}, opened "
-                f"{ {k: v for k, v in res.get('opened', {}).items()} }, Lean {res['why']}, verifier received "
-                f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} (of "
-                f"{rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), rows "
-                f"shorter than a piece found whole there: {whole['verifier_found'] or 'none'} (of {whole['rows']}), "
-                f"control {rec['control']['blobs_found']}; {'as expected' if good else 'UNEXPECTED'}")
-            (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    if coins is not None:
-        pub = coins.published or {}
-        summary["coins"]["session"] = {x: pub.get(x) for x in ("trusted", "error", "plan")}
-        ok &= pub.get("error") is None and (pub.get("trusted") or {}).get("pinned_session") is None
-        log(f"the challenger's session: {summary['coins']['session']}")
-    summary["ok"] = ok
-    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    log("done: " + ("ok" if ok else "FAILED"))
-    return 0 if ok else 1
-
-
 def frame_leaf(earlier: dict, start: dict) -> dict:
-    """A carried start's leaf on the staged files of two rounds: ``earlier``, the round before's staged ``last``
-    member, whose statement commits its o1 as a frame port of one leaf, so that port's root is that leaf as Flock's
-    statement frames it; ``start``, this round's staged start member, whose ``sin`` row's b‖c one-stage's registered
-    read frames at leaf 0 of that port's domain (`registered.leaf`, the leaf Lean's registered reads open). The two
-    leaves, and whether they and the two rows' b‖c are the same bytes."""
+    """A start's leaf on the staged files of two link-windows' honest rounds: ``earlier``, the one before's staged
+    ``last`` member, whose statement commits its o1 as a frame port of one leaf, so that port's root is that leaf as
+    Flock's statement frames it; ``start``, this one's staged start member, whose ``sin`` row's b‖c one-stage's
+    registered read frames at leaf 0 of that port's domain (`registered.leaf`, the leaf Lean's registered reads
+    open). The two leaves, and whether they and the two rows' b‖c are the same bytes."""
     fv, dom = earlier["header"]["frame_v3"], ADV.domain(frame_binding(earlier["set"], 1, "o1"), 1)
     read = REG.leaf(dom, 0, start["bcs"][0]["sin"], BitRowLeaf.hiding_schema).hex()
     return {"statement": fv["roots"]["o1"], "registered_read": read,
             "same": (read == fv["roots"]["o1"] and dom.domain_id.hex() == fv["domain_ids"]["o1"]
                      and start["bcs"][0]["sin"] == earlier["bcs"][0]["o1"])}
+
+
+def prove(a) -> int:
+    """``prove``: every round of the group's link-windows (`host`), in link-window order on one verifier's log: each
+    member proved --zk and held by Lean, a start member's ``sin`` against the root and domain the verifier took from
+    its log (`carry_of`). A link-window's rounds with a start unit (`STARTED`) are registered against the log as that
+    link-window found it, and the log takes the honest round's record only once its audit accepted it with every
+    opened output 1, so no start is read from a link-window the verifier refused: the link-window after one stops at
+    `carry_of`. A round is as expected when its outcome is its kind's (`expected`) and what the verifier received
+    holds no witness piece (`unseen`); with a start unit, when its record's changed forms are also refused as named;
+    and an accepted honest round, when the verdicts of record also opened its start against that root and, after
+    the first link-window, its start's leaf is the round before's frame leaf byte for byte (`frame_leaf`)."""
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    setup = SETUPS[a.setup]
+    h = host(out / "warden", a.warden_run, a.draw, setup, a.group, v3c=a.v3c)
+    whole, T = h.whole, h.T
+    ch, cls, N = whole.chain, setup.cls, 2 * T + 1
+    if a.draw is not None and not 3 <= a.draw <= N:
+        raise SystemExit(f"--draw {a.draw}: a round's draw is 3 .. {N} of its {N} units (one a template at least)")
+    ks = {"honest": a.draw, "chain": a.draw, "tampered": None if a.draw is None else stratum_k(a.draw, T, N)}
+    sh = cls.egress
+    last = next(r.at for r in reversed(h.rounds.values()) if r.kind == "honest")
+    summary: dict = {"source": whole.source, "warden_run": whole.run_id,
+                     "draw": ks if a.draw is not None else "every unit",
+                     "setup": setup.name, "class": asdict(cls), "params": asdict(whole.params), "shape": asdict(sh),
+                     "T": T, "group": whole.G, "windows": whole.windows,
+                     "bits": {f"{tp}/{r}": b for tp, (ins, outs) in ports_of(cls).items() for r, b in ins + outs},
+                     "members": {name: [{"name": m.name, "base": m.base, "n": m.n} for m in r.members]
+                                 for name, r in h.rounds.items()},
+                     "admitted": whole.admitted,
+                     "anchors": {q: cls.anchor(s, s % cls.EVERY) for q, s in whole.admitted.items()},
+                     "responses": {q: len(x) for q, x in sorted(whole.outputs.items())}, "run_s": whole.run_s,
+                     "swap": None if whole.swap is None else [whole.swap, whole.swap + 1],
+                     "unread": whole.unread and {"bucket": whole.unread.bucket, "slot": whole.unread.slot,
+                                                 "q": whole.unread.q},
+                     "tampered": whole.tampered and {"bucket": whole.tampered.bucket,
+                                                     "window": whole.windows[whole.tampered.window],
+                                                     "key": whole.tampered.key_of},
+                     "void": whole.void and {"buckets": whole.void, "failed": whole.failed, "why": whole.failed_why,
+                                             "refused": targets(last, round_name("honest", last.number))},
+                     "cells": {side: {"data": sum(r[s * cls.B] == DATA for r in rows for s in range(sh.R)),
+                                      "end": sum(r[s * cls.B] == W.END for r in rows for s in range(sh.R))}
+                               for side, rows in (("ingress", ch.ingress), ("egress", ch.egress))},
+                     "roots": {r.number: {k: t.root.hex() for k, t in r.at.trees.items()}
+                               for r in h.rounds.values() if r.kind == "honest"},
+                     "start": {name: {x: r.members[0].ports["sin"][x] for x in ("value", "root", "domain")}
+                               for name, r in h.rounds.items() if r.kind in STARTED},
+                     "v3c": whole.v3c and {"window": str(whole.v3c),
+                                           "trees": sorted(k for k, t in last.trees.items() if isinstance(t, Held))},
+                     "host": {name: [{"member": m.name, "refused": m.refused, "outputs": m.outputs}
+                                     for m in r.members] for name, r in h.rounds.items()}}
+    void = (f" but its FAIL buckets {whole.void} (void: link-window {last.number}'s honest round refused at "
+            f"{summary['void']['refused']})" if whole.void else "")
+    log(f"run: {whole.source}; {setup.name}'s class, link-windows {whole.windows} of {T} buckets, each a "
+        f"registration, admitted {whole.admitted}, responses {summary['responses']}, anchors {summary['anchors']}, "
+        f"cells {summary['cells']}; every egress bucket computes the warden's row from its ingress bucket's "
+        f"view{void}; host reads as expected ({whole.run_s} s); draw {summary['draw']}")
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    if a.dry:
+        log("dry: done")
+        return 0
+    M = WZ._one_stage()
+    pgs = {templates: program(M, cls, templates, T, out / PROGRAMS[templates])
+           for templates in dict.fromkeys(r.templates for r in h.rounds.values())}
+    summary["stagers"] = {f"{PROGRAMS[k]}/{tp}": {
+        "unit": g.defn.id, "lower_s": g.lower_s, "k_log": g.st.meta["k_log"], "vus_per_block": g.st.meta["vus_per_block"],
+        "pin": g.st.pin, "base": g.base, "n": g.n} for k, pg in pgs.items() for tp, g in pg.stagers.items()}
+    log(f"stagers: {summary['stagers']}")
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta)
+    by_window: dict[int, list[SimpleNamespace]] = {}
+    for r in h.rounds.values():
+        by_window.setdefault(r.number, []).append(r)
+    stride = max(len(r.members) for r in h.rounds.values())
+    ok, results, records, done, before, j = True, {}, [], [], None, 0
+    for number, rs in by_window.items():
+        honest = next((r for r in rs if r.kind == "honest"), None)
+        found = list(records)
+        with challenger(a, honest and honest.at, out / f"challenger-{number}") as coins:
+            if coins is not None:
+                summary.setdefault("coins", {"challenger": coins.challenger, "sessions": {}})["sessions"][
+                    honest.name] = {"window_root": coins.root}
+                log(f"{honest.name} draws on the challenger's coins ({coins.challenger}), its session on the "
+                    f"link-window's root {coins.root[:16]}…; the other rounds on a development challenger's")
+            for r in rs:
+                name, at, pg = r.name, r.at, pgs[r.templates]
+                members = [stage(M, pg, mr, out / name / f"stage-{mr.name}") for mr in r.members]
+                if r.kind == "honest" and (wires := staged_wires(members)):
+                    raise SystemExit(f"{name}'s chains don't hold on its public files: {wires}")
+                summary.setdefault("rounds", {})[name] = {
+                    m["name"]: {"ands": m["ands"], "k_log": m["k_log"], "nbl": m["nbl"], "m": m["k_log"] + m["nbl"],
+                                "stage_s": m["stage_s"], "outputs": m["outputs"]} for m in members}
+                log(f"staged {name}: " + "; ".join(f"{m['name']} {m['ands']} ANDs a unit, m = {m['k_log']} + "
+                                                   f"{m['nbl']}, outputs {m['outputs']}" for m in members))
+                (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+                carry = carry_of(pg, cls, found, r.members[0].ports["sin"]) if r.kind in STARTED else None
+                res = audit(M, av, at, pg, name, members, r.trees, out / name, a.port and a.port + stride * j,
+                            ks.get(r.kind), coins if r.kind == "honest" else None, carry)
+                results[name], j = res, j + 1
+                if r.kind == "honest":
+                    if res["window_accepted"]:
+                        records.append(json.loads((out / name / "registration.json").read_text()))
+                    done.append(at)
+                    summary["answers"] = answers(done, out, results, Fraction(a.delta))
+                    log(f"answers: link-window {number}: {summary['answers'][number]}")
+                inst = out / name / "instances.bin"
+                inst.write_bytes(b"".join((m["dir"] / f"inst-{m['n']}.bin").read_bytes() for m in members))
+                rec = res["received"] = received(M.a8, out / name / "verifier", inst, *blobs_of(members),
+                                                 known(members, at))
+                inst.unlink()
+                good = expected(at, name, res) and unseen(rec)
+                negatives = res.get("registration_negatives") or {}
+                if carry is not None:
+                    good = good and bool(negatives) and all(
+                        x["expected"] in x["codes"] if x["expected"] else not x["codes"] for x in negatives.values())
+                if r.kind == "honest" and r.outcome == "accepted":
+                    leaf = res["frame_leaf"] = frame_leaf(before, members[0]) if before else None
+                    good = good and res.get("carried_start") == {CARRY: carry.root} and (leaf is None or leaf["same"])
+                    before = next(m for m in members if m["name"] == "last")
+                if coins is not None and r.kind == "honest":
+                    good = good and bool(res.get("coin_negatives")) and all(res["coin_negatives"].values())
+                ok &= good
+                summary["rounds"][name]["audit"] = res
+                rows = rec.get("whole_rows") or {"rows": 0, "verifier_found": []}
+                started = "" if carry is None else (
+                    f"start {CARRY} at {carry.root[:16]}… ("
+                    + ("pinned, the empty state's" if "pinned" in carry.check else f"{CARRY_PORT} of the record before")
+                    + f"), changed forms { {x: y['codes'] for x, y in negatives.items()} }, the verdicts of record "
+                    f"opened { {k: (v or '')[:16] for k, v in (res.get('carried_start') or {}).items()} }, frame "
+                    f"leaf {res.get('frame_leaf')}; ")
+                log(f"round {name}: {started}drawn {len(res.get('draw', {}).get('units') or [])} of {pg.units}, "
+                    f"charge {res.get('charge')}, per unit {res.get('per_unit')}; proofs {res['verdicts']}, audit "
+                    f"{res.get('audit')}, opened {res.get('opened', {})}, Lean {res['why']}, verifier received "
+                    f"{rec['verifier_bytes']} bytes, witness pieces found there: {rec['verifier_found'] or 'none'} "
+                    f"(of {rec['blobs']}; {rec['public_pieces']} public, {rec['sparse_pieces']} sparse left out), "
+                    f"rows shorter than a piece found whole there: {rows['verifier_found'] or 'none'} (of "
+                    f"{rows['rows']}), control {rec['control']['blobs_found']}; "
+                    f"{'as expected' if good else 'UNEXPECTED'}")
+                (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        if coins is not None:
+            pub = coins.published or {}
+            session = {x: pub.get(x) for x in ("trusted", "error", "plan")}
+            summary["coins"]["sessions"][honest.name]["session"] = session
+            ok &= pub.get("error") is None and (pub.get("trusted") or {}).get("pinned_session") is None
+            log(f"the challenger's session for link-window {number}: {session}")
+    summary["ok"] = ok
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log("done: " + ("ok" if ok else "FAILED"))
+    return 0 if ok else 1
 
 
 def prove_carried(a) -> int:
