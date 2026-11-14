@@ -2,7 +2,6 @@
   "rule": "superseded Definition versions (tools/verity/circuit_check/tests/test_superseded_versions.py)",
   "held": {},
   "entries": [
-    {"file": "adapters/vllm/verity_vllm/program/frontend/seed_rule.py", "kind": "superseded", "symbol": "SeedCheck", "detail": "SeedCheck_v1"},
     {"file": "verity/circuits/ops/boolean/attention.py", "kind": "superseded", "symbol": "F32AddFtz", "detail": "F32AddFtz_v3"},
     {"file": "verity/circuits/ops/boolean/attention.py", "kind": "superseded", "symbol": "F32FmaFtz", "detail": "F32FmaFtz_v3"},
     {"file": "verity/circuits/ops/boolean/attention.py", "kind": "superseded", "symbol": "F32FmaSubFtz", "detail": "F32FmaSubFtz_v3"},

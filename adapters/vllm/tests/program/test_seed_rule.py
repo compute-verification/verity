@@ -1,8 +1,8 @@
 """`frontend.seed_rule`: `ServedSeed_v1` is the body's seed where it names one and `served_seed.derived` of the window's coin and
 the request's id where it doesn't, at a message of one SHA-512 block and of two (one `Sha512Compress_v1` Call a block but the last,
-which `SeedSelect_v1` compresses); `SeedCheck_v1`, from a body's bytes through ingress schema v1's parse
-(`boolean_io_shell.IngressSampled_v1`), passes the rule's seed and fails every forged one; and `SeedCheck_v2`, the check a
-stochastic request Program returns, does so on the sampler's i64 seed word."""
+which `SeedSelect_v1` compresses); and `SeedCheck_v2`, the check a stochastic request Program returns, from a body's bytes
+through ingress schema v1's parse (`boolean_io_shell.IngressSampled_v1`), passes the rule's seed as the sampler's i64 seed word
+and fails every forged one."""
 from __future__ import annotations
 
 import numpy as np
@@ -50,7 +50,7 @@ def test_the_rule_is_the_bodys_seed_else_derived_from_the_coin_and_the_id(COIN, 
 
 @pytest.mark.slow
 def test_a_forged_seed_fails_the_check():
-    """From two bodies' bytes, one naming no seed and one naming 12345, through `IngressSampled_v1` to `SeedCheck_v1` under the
+    """From two bodies' bytes, one naming no seed and one naming 12345, through `IngressSampled_v1` to `SeedCheck_v2` under the
     window's coin: the seed the rule gives passes, and every other a server might sample under fails: the derived seed with a
     bit flipped, the public default, the seed derived under another coin or for another id, the null field's digit sum, and
     for the seeded body the derived seed and a neighbour of its own."""
@@ -70,7 +70,7 @@ def test_a_forged_seed_fails_the_check():
              (1, 12345, 1), (1, served_seed.derived(coin, "r002"), 0), (1, 12346, 0)]
     served = [s for _, s, _ in cases]
     seeded, seed, user = ([parsed[i][k] for i, _, _ in cases] for k in (1, 2, 3))
-    got = _eval(bind(SR.SeedCheck, COIN=COIN, RID=st["RID"]), _col(served), _col(seeded), _col(seed), _rows([coin] * len(cases)),
+    got = _eval(bind(SR.SeedCheckWord, COIN=COIN, RID=st["RID"]), _col(served), _col(seeded), _col(seed), _rows([coin] * len(cases)),
                 _rows(user))
     assert got == [w for _, _, w in cases]
     assert got == [SR.check_reference(*a) for a in zip(served, seeded, seed, [coin] * len(cases), user)]
@@ -79,9 +79,9 @@ def test_a_forged_seed_fails_the_check():
 @pytest.mark.slow
 def test_the_word_check_accepts_the_rules_seed_alone():
     """At the window's 64-byte seed salt and a request's `values`, the rule's seed of an unseeded request (derived from the salt
-    and its id) and of a seeded one (its body's) passes, and fails with any one of its 64 bits flipped (`SeedCheck_v1`) or with
-    the other request's seed: `SeedCheck_v2`, the check the Program returns, agrees on the sampler's i64 word at its ends' bits, so
-    a Program's sampler passes it with one seed alone."""
+    and its id) and of a seeded one (its body's) passes `SeedCheck_v2`, the check the Program returns, on the sampler's i64 word,
+    and fails with any one of its 64 bits flipped or with the other request's seed; at its ends' bits it agrees from the request's
+    `values`, so a Program's sampler passes it with one seed alone."""
     from verity.circuits.evaluation import evaluate_batch
 
     coin, uid = bytes(range(SR.COIN)), "r001"
@@ -95,7 +95,7 @@ def test_the_word_check_accepts_the_rules_seed_alone():
         return [np.stack(col) for col in zip(*(SR.values(body, coin, uid) for body, _, _ in cs))]
 
     every, ends = cases(range(64)), cases((0, 1, 62, 63))
-    bits = _eval(bind(SR.SeedCheck, COIN=SR.COIN, RID=SR.rid_of(uid)), _col(s for _, s, _ in every),
+    bits = _eval(bind(SR.SeedCheckWord, COIN=SR.COIN, RID=SR.rid_of(uid)), _col(s for _, s, _ in every),
                  _col(b is not None for b, _, _ in every), _col(b or 0 for b, _, _ in every), _rows([coin] * len(every)),
                  _rows([uid.encode()] * len(every)))
     word = evaluate_batch(bind(SR.SeedCheckWord, COIN=SR.COIN, RID=SR.rid_of(uid)), np.array([s for _, s, _ in ends], dtype=np.uint64),
@@ -132,6 +132,6 @@ def test_the_wrappers_inputs_are_the_programs_parameters_and_the_check_refuses_a
 
 @pytest.mark.parametrize("kw", [{"COIN": 0, "RID": 4}, {"COIN": 16, "RID": 0}, {"COIN": 16, "RID": True}])
 def test_lengths_of_no_bytes_are_refused(kw):
-    for d in (SR.ServedSeed, SR.SeedCheck, SR.SeedCheckWord):
+    for d in (SR.ServedSeed, SR.SeedCheckWord):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(d, **kw)

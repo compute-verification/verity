@@ -2,8 +2,7 @@
 ``seed`` where the body names one, else `served_seed.derived` of the window's verifier coin and the request's id, in gates.
 
     ServedSeed_v1{COIN, RID}  (seeded: bit, seed: Word, coin: Array<COIN, u8>, user: Array<RID, u8>) -> Word
-    SeedCheck_v1{COIN, RID}   (served: Word, seeded, seed, coin, user) -> bit
-    SeedCheck_v2{COIN, RID}   (served: i64, seeded, seed, coin, user) -> bit: SeedCheck_v1's Calls on the seed word's bits
+    SeedCheck_v2{COIN, RID}   (served: i64, seeded, seed, coin, user) -> bit: 1 iff the seed word's bits are the rule's
     SeedWord_v1               (served: i64) -> Word: the word's 64 bits
     SeedBlocks_v1{COIN, RID}  (coin, user) -> Array<8 + 16 n, Word>: SHA-512's IV, then the message's n padded blocks
     SeedSelect_v1             (seeded: bit, seed: Word, cv: Array<8, Word>, block: Array<16, Word>) -> Word: seed if seeded,
@@ -12,19 +11,19 @@
 
 (Word is ``Array<64, Value<1>>``, LSB first; a byte's bits are LSB first, a block's words big-endian.) `ServedSeed_v1` is the
 rule: ``seed`` where ``seeded``, else the first 63 bits of SHA-512 over `served_seed.DERIVED`, u32be(COIN), the coin, u32be(RID)
-and the id (`served_seed.derived`). It and `SeedCheck_v1` are calls and wiring only: `SeedBlocks_v1`, then a Call of
+and the id (`served_seed.derived`). It is calls and wiring only: `SeedBlocks_v1`, then a Call of
 `lms.Sha512Compress_v1` on each block but the last (`blocks`: one where the message and its padding fit 128 bytes, else two),
 then `SeedSelect_v1` on the last, which computes only the digest's first word, so no gate of the rule is one its output doesn't
 read. COIN and RID are the coin's and the id's lengths in bytes, so the padding is
 constant. ``seeded``, ``seed`` and ``user`` are ingress schema v1's (`boolean_io_shell.IngressSampled_v1`), certified, and the
-coin is the window's. `SeedCheck_v1` is 1 exactly when ``served``, the seed the Program's sampler read, is the rule's
-(`SeedEqual_v1`): any other seed fails it.
+coin is the window's.
 
 Every stochastic request Program returns `SeedCheck_v2{COIN, RID}` as a check (`check`, `predict.common.with_checks` and
 `in_derive`), COIN the window's seed salt's 64 bytes and RID its id's length (`rid_of`), so serving's choice of seed is a witness
 the check holds to one value (`program.inputs`). Its sampler reads the seed as one i64 word, which a Program reads at that width
-alone, so `SeedCheck_v2` takes the word, splits it into its 64 bits (`SeedWord_v1`: `BitAtx64_v1` at each position) and checks
-them by `SeedCheck_v1`'s Calls, so it too is calls and wiring only.
+alone, so `SeedCheck_v2` takes the word, splits it into its 64 bits (`SeedWord_v1`: `BitAtx64_v1` at each position) and is 1
+exactly when they are the rule's seed (the rule's Calls, then `SeedEqual_v1`): any other seed fails it. It too is calls and wiring
+only.
 The rule's other inputs are the Program's certified parameters `PARAMS` (`params`), after its ``seed``: ``seeded``,
 ``body_seed`` and ``user`` are ingress schema v1's (`boolean_io_shell.IngressSampled_v1`'s outputs, of the same types), and
 ``seed_salt`` is the window's (``window.seed_salt``). An unseeded request's seed is derived (``seeded`` 0: `served_seed.derived`
@@ -50,7 +49,7 @@ from verity.definitions.registry.sampling import bit_at
 
 from verity_vllm.engine import served_seed
 
-__all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
+__all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
            "blocks", "check", "check_reference", "definition", "in_derive", "params", "reference", "rid_entry", "rid_of", "values",
            "rid_of_ids", "rid_in", "inputs"]
 
@@ -62,7 +61,7 @@ STATICS = ("COIN", "RID")
 CONFORMANCE = "protocol-defined: the served seed rule, whose function is `served_seed.derived` or the body's seed (`reference`)"
 #: the window's seed salt in bytes (128 hex characters, `reads.seed_of`): every Program check's COIN
 COIN = 64
-#: the certified Program parameters the check reads after the sampler's ``seed``, in the order `SeedCheck_v1` takes them
+#: the certified Program parameters the check reads after the sampler's ``seed``, in the order `SeedCheck_v2` takes them
 PARAMS = ("seeded", "body_seed", "seed_salt", "user")
 #: the check's Call name and its trace's node hint
 NAME = "seed_rule"
@@ -136,8 +135,6 @@ def _check(B: Any, S: Any, served: Coll, *ins: Coll) -> Coll:
 ServedSeed = CompositeDefinition("ServedSeed", 1, STATICS, _rule_sig, _rule, refuse=_refuse, conformance=CONFORMANCE,
                                  doc="A sampled request's seed: its body's where it names one, else served_seed.derived of the "
                                      "window's verifier coin (COIN bytes) and its id (RID bytes), on Sha512Compress_v1 Calls")
-SeedCheck = CompositeDefinition("SeedCheck", 1, STATICS, _check_sig, _check, refuse=_refuse, conformance=CONFORMANCE,
-                                doc="1 iff served, the seed a Program's sampler read, is ServedSeed_v1's of the certified inputs")
 
 
 def _bits(B: Any, S: Any, served: Coll) -> Coll:
@@ -160,7 +157,7 @@ def _word_check(B: Any, S: Any, served: Coll, *ins: Coll) -> Coll:
 
 SeedCheckWord = CompositeDefinition("SeedCheck", 2, STATICS, _word_sig, _word_check, refuse=_refuse, conformance=CONFORMANCE,
                                     doc="1 iff served, the i64 seed word a Program's sampler read, is ServedSeed_v1's of the "
-                                        "certified inputs: SeedCheck_v1's Calls on its 64 bits (SeedWord_v1)")
+                                        "certified inputs: its 64 bits (SeedWord_v1), the rule's Calls and SeedEqual_v1")
 
 
 def rid_of(request_id: str) -> int:
@@ -269,5 +266,5 @@ def reference(seeded: int, seed: int, coin: bytes, user: bytes) -> int:
 
 
 def check_reference(served: int, seeded: int, seed: int, coin: bytes, user: bytes) -> int:
-    """`SeedCheck_v1`'s function, and `SeedCheck_v2`'s of the served word's unsigned value."""
+    """`SeedCheck_v2`'s function of the served word's unsigned value."""
     return int(int(served) % (1 << 64) == reference(seeded, seed, coin, user))
