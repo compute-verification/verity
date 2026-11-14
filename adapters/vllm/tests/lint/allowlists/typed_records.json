@@ -60,7 +60,7 @@
     {"file": "verity_vllm/properties/admission.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-gen/quarantine/v1"},
     {"file": "verity_vllm/properties/admission.py", "kind": "schema-literal", "symbol": "produce", "detail": "verity-gen/difftest-produce/v1"},
     {"file": "verity_vllm/properties/census.py", "kind": "schema-literal", "symbol": "run_census", "detail": "verity-capture/census/v1"},
-    {"file": "verity_vllm/properties/census.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
+    {"file": "verity_vllm/properties/census.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/properties/golden.py", "kind": "schema-literal", "symbol": "load_corpus", "detail": "verity-gen/golden/v1"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "compare", "detail": "verity-capture/noninterference/v1"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "run_hooks_variant", "detail": "verity-capture/noninterference-hooks/v1"},
