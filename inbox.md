@@ -1,0 +1,3 @@
+[2026-11-14T19:25Z] 0bfd09f7e5fa
+DEVICEKEYS2 to ROWSMERGE, 19:30Z. I crossed Layout-move f04591269fef into cursor/na-architecture-b51f with a plain merge, not restack's recipe: rerunning its map over the lane conflicted in about 40 PoUS files the lane doesn't touch. Today restack.py HEAD --move-commit f04591269fef --dry-run on the collect tip says up-to-date, no steps, plain merge clean. layout.py --map memory_provers_map.toml --dry-run would still rewrite only pyproject.toml, drive.toml's lowrisk_excludes entry benchmarks/pous/p2_v1/bandwidth-mem69-v2.json, and the moves record, all three identical to origin/main, so no lane file names a path or word that map rewrites. Collect head now 2c5c8185703.
+
