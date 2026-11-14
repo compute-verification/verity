@@ -1053,8 +1053,8 @@ GATE_VERDICTS = 1000
 WARN_GATE_SAYS = "A warn gate refuses nothing: the PR lands, and its owner fixes it in their next PR"
 #: what the ready mark's preflight says after the ratchet gate's failure (`Preflight._merged`)
 RATCHET_SAYS = ("The ratchet gate refuses nothing here, since it can read a violation whose line moved, or an import cycle through a "
-                "module the PR adds, as new: check's `ratchet-gate` step, off the merge gate, judges the PR's merge again in its "
-                "candidate")
+                "module the PR adds, as new: check's `ratchet-gate` step, on the merge gate, judges the PR's merge again in its "
+                "candidate, whose check its red fails")
 #: what the ready mark's preflight says after the marked PRs a head doesn't merge with (`Preflight._collisions`)
 COLLIDE_SAYS = ("Nothing is refused for it: the verified queue refuses whichever of the two it merges second, for its conflict "
                 "with `main` by then. To be the second without that refusal, wait for the PR named to land, merge `main` and mark "

@@ -1,6 +1,6 @@
-"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once (but ratchet-gate's, off the gate,
-where a plan doesn't name it), each shard holds what its jobs need or runs it beside their parts, a shard runs only its parts (lean-audit on its
-packages, lean-suites on its suites), and its result names what it ran."""
+"""`check.py --shard K/N`: ci.toml's plans run every part of an unsharded check exactly once, each shard holds what its jobs
+need or runs it beside their parts, a shard runs only its parts (lean-audit on its packages, lean-suites on its suites), and
+its result names what it ran."""
 from __future__ import annotations
 
 import importlib.util
@@ -65,10 +65,11 @@ def test_the_plans_are_the_documented_ones():
     assert D.plans() == {
         3: ((*NAMED, "pytest", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement"),
-            ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST)),
+            ("flock-circuit-build", "circuit-check", "flock-rust-tests", *WITH_RUST, "ratchet-gate")),
         4: ((*NAMED, "circuit-check:1/4", *BESIDE_AUDIT),
             (*build, "lean-audit:*", *BESIDE_BUILD, "lean-agreement", "circuit-check:2/4"),
-            ("pytest", "circuit-check:3/4"), ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST)),
+            ("pytest", "circuit-check:3/4"),
+            ("flock-circuit-build", "flock-rust-tests", "circuit-check:*", *WITH_RUST, "ratchet-gate")),
         5: ((*NAMED, "pytest:verity/definitions", *BESIDE_AUDIT),
             ("flock-circuit-build", "flock-rust-tests", "lean-audit:*", *WITH_RUST, "ratchet-gate"),
             (*build, *BESIDE_BUILD, "lean-agreement"), ("pytest:*",), ("circuit-check",))}
@@ -155,15 +156,13 @@ def test_a_spec_the_plan_doesnt_name_goes_with_its_provers_and_a_plan_naming_the
 
 @pytest.mark.parametrize("n", sorted(D.plans()))
 def test_every_plan_runs_every_part_of_this_tree_exactly_once_and_the_same_way_each_time(n):
-    """Every part but ratchet-gate's where the plan doesn't name it, which is off the gate: circuit-check, off the gate too, stays
-    planned."""
+    """Those off the gate too: circuit-check, off it, stays planned."""
     every = D.all_parts(CHECK.JOBS, _parts(n=n))
     assert len(PACKAGES) >= 4 and all(every.count(s) == 1 for s in SECURITY) and {"lean-audit", "lean-suites"}.isdisjoint(every)
     assert {p.partition(":")[0] for p in every} == {j.name for j in CHECK.JOBS}
     shards = _resolved(n)
     flat = [p for s in shards for p in s]
-    planned = [p for p in every if p != "ratchet-gate" or any("ratchet-gate" in s for s in D.plans()[n])]
-    assert len(shards) == n and all(shards) and sorted(flat) == sorted(planned) and len(set(flat)) == len(flat)
+    assert len(shards) == n and all(shards) and sorted(flat) == sorted(every) and len(set(flat)) == len(flat)
     assert _resolved(n) == shards == _resolved(n, list(reversed(PACKAGES))), "deterministic, whatever order git lists"
     assert all(s == [p for p in every if p in s] for s in shards), "each shard's parts in the unsharded check's order"
 

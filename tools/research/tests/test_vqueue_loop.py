@@ -5023,10 +5023,10 @@ def test_under_gate_check_a_batch_built_in_the_tick_that_commits_a_lean_one_take
 #: circuit-check's targets in these tests: the head check's, which its sidecar's pins file pins; one no pins file pins, whose
 #: statics hold brackets as real targets' do (a regex would read them as a class); one an allowance covers; one whose process died
 HEAD, ROPE, DEAD, BIG = "NetworkHeadCheck_v2{L=6,T=32,COUNTS=0}", "RopeHead_v1{D=128,POS=[0,4096]}", "Callee_v1", "Big_v1{N=4}"
-#: `main`'s tree for what a check fails off the merge gate: its policy takes circuit-check and ratchet-gate off the gate and
-#: allows `DEAD`'s failure, drive.toml makes two steps warn steps, ci.toml gives each job but lean-audit an owner, the registry
-#: holds the PRs' lanes, heads, who owns the head check's sidecar, whose pins file pins `HEAD`, and the owner of a fixture
-#: naming `HEAD` that is no pins file
+#: the tree these tests put on their `main` for what a check fails off the merge gate: a policy that takes circuit-check and
+#: ratchet-gate off the gate and allows `DEAD`'s failure, drive.toml makes two steps warn steps, ci.toml gives each job but
+#: lean-audit an owner, the registry holds the PRs' lanes, heads, who owns the head check's sidecar, whose pins file pins
+#: `HEAD`, and the owner of a fixture naming `HEAD` that is no pins file
 OFF_TREE = {"tools/verity/check/policy.toml": 'schema = "policy/v0"\noff_gate = ["circuit-check", "ratchet-gate"]\n'
                                               '[[allow]]\nid = "circuit-check lowering/dead Callee_v1"\nowner = "circuits"\n'
                                               'expires = "2030-06-01T00:00:00Z"\nreason = "red until its fix lands"\n',

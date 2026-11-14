@@ -49,14 +49,14 @@ def test_a_deferred_run_runs_only_its_steps_and_what_they_need_inside_a_recorded
 
 
 def test_a_recorded_check_runs_every_job_on_the_gate_and_passes_without_circuit_check(monkeypatch, tmp_path):
-    """circuit-check and ratchet-gate are off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared
-    command in a run) leaves them out, and its `check/v1` passes on the jobs on the gate alone."""
+    """circuit-check is off the gate (policy.toml's `off_gate`): a recorded check (`--record`, the declared command in a run)
+    leaves it out, and its `check/v1` passes on the jobs on the gate alone, ratchet-gate among them."""
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path / "cache" / "check"))
     monkeypatch.setenv("VERITY_TEST_CACHE", str(tmp_path / "cache" / "tests"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     rc, only = _main(monkeypatch, run_dir, ["--keep-going"])
-    off = {"circuit-check", "ratchet-gate"}
+    off = {"circuit-check"}
     assert rc == 0 and only == [p for p in CHECK.shard_parts() if p.partition(":")[0] not in off] == CHECK.gated_parts()
     assert {p.partition(":")[0] for p in only} == {j.name for j in CHECK.JOBS} - off
     doc = json.loads((run_dir / "result.json").read_text())
@@ -128,16 +128,15 @@ def test_every_shard_of_every_plan_runs_a_step_of_a_check_whose_lean_audit_anoth
             assert rc == 0 and only, f"shard {k}/{n} holds none of {steps}"
 
 
-def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_last_unless_named():
-    """ratchet-gate was in no shard of ci.toml's plans: drive's sharded after-landing run never ran it, so drive took each passing
-    run as one that passed without ratchet-gate, verified nothing and ended no red record, while `main` moved on its gate.  A
-    plan that doesn't name it runs it in its last shard."""
+def test_the_shards_of_a_deferred_run_together_run_every_part_ratchet_gate_in_the_shard_its_plan_names():
+    """A sharded check whose shards ran no ratchet-gate would pass without it.  Every plan names it in one shard, which runs it
+    deferred or gated alike, since it is on the merge gate."""
     for n, plan in CHECK.DECLARATION.plans().items():
         got = [CHECK.shard(f"{k}/{n}", gated=False)["parts"] for k in range(1, n + 1)]
         assert sorted(p for s in got for p in s) == sorted(CHECK.DECLARATION.all_parts(CHECK.JOBS, CHECK._parts_of(plan))), n
-        named = [k for k, s in enumerate(plan) if "ratchet-gate" in s]
-        assert "ratchet-gate" in got[named[0] if named else -1]
-        assert all("ratchet-gate" not in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1))
+        [named] = [k for k, s in enumerate(plan) if "ratchet-gate" in s]
+        assert ["ratchet-gate" in s for s in got] == [k == named for k in range(n)], n
+        assert ["ratchet-gate" in CHECK.shard(f"{k}/{n}")["parts"] for k in range(1, n + 1)] == [k == named for k in range(n)], n
 
 
 def test_record_of_a_deferred_run_launches_it_without_the_check_tool_and_without_lean(monkeypatch):

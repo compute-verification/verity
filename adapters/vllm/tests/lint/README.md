@@ -77,15 +77,15 @@ tracked file outside this lint's own), except that it counts findings per (file,
 queued PRs that a tree doesn't have yet, and `python3 tests/lint/test_repo_ruff.py --prune` lowers what a tree no
 longer finds. Exempt are reverts and pure moves that `tools/verity/check/move_check.py` certifies. A feature
 PR owes no cleanup; dedicated cleanup lanes pay the exceptions down. `adapters/vllm/tools/ratchet_gate.py` holds the
-rule off the merge gate (`tools/verity/check/policy.toml`'s `off_gate`): it is the check's `ratchet-gate` step, which each
-candidate's check runs as the step's base has it, judging each `Queue: #N` merge above that base against the one below. It
+rule on the merge gate: it is the check's `ratchet-gate` step, which each candidate's check runs as the step's base has
+it, judging each `Queue: #N` merge above that base against the one below. It
 fails a merge that grows a ratchet (naming the entries it added) or on whose tree the base's lints find what its lists don't
 cover (naming each violation). Before a PR's candidate, only the ready mark's preflight runs it, on the PR's merge within the
 preflight's budget, and prints what it fails as a warning without refusing the mark (`PREFLIGHT_RATCHET` in
 `tools/research/src/research/queue.py`): the gate tells a new violation by its text, so a moved line, or a cycle through a
-module the PR adds, can read as new. Its red never holds `main`
-(`tools/verity/check/drive.toml`'s `warn_steps`): the verified queue rings the owner of each merge it fails, who fixes it
-forward in their next PR.
+module the PR adds, can read as new. Its red fails the candidate, and the verified queue ejects the PR whose merge it fails:
+fix the violation and mark the new head. A change that narrows a lint lands with its list as it was, and the prune follows
+in a later PR.
 It lints the PR's own Python too: ruff, under its base's root `ruff.toml`, on each `*.py` file the PR adds or modifies
 outside this lint's files, before and after, and a PR whose (file, rule) count grows fails, naming each new finding
 `file:line RULE message`. Fix the code; the list never takes a new finding. (file, rule) is the repository lint's key too, so

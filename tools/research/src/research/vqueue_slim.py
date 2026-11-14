@@ -1,8 +1,8 @@
 """The run beside each candidate of the verified queue (`research.vqueue`) of what its graph2 check doesn't check: no graph/v2
 task runs lean-agreement or the preflights.  It is `train.sh SHA MACHINES --deferred STEPS` of `SLIM_STEPS`, lean-agreement
 left out when a run of every step would skip it (`Landing.beside_args`), whose check runs the preflights before any step.  It
-is judged on the merge gate: the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.  A candidate passes only once its
-graph2 check's gating tasks and this run both passed (`combine`).
+is judged on the merge gate: the preflights, lean-agreement and ratchet-gate count, a step policy.toml's `off_gate` names
+doesn't.  A candidate passes only once its graph2 check's gating tasks and this run both passed (`combine`).
 
 What the loop does.  It starts the run with each candidate's build, beside each candidate's check, so up to its `--depth`
 of them at once take the queue's machines, or once for a candidate on `main`'s chain whose start its log doesn't hold; until

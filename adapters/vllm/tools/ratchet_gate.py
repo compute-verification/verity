@@ -117,12 +117,11 @@ It runs on git, in the repository of the current directory, and runs no code but
 and BASE's move_check, beside the scripts it loads).  The ready mark's preflight runs it on the PR's merge, as BASE has it,
 and only warns (``research.queue``'s ``PREFLIGHT_RATCHET``), since a moved line or a module the PR adds can read as a new
 violation; what judges a PR is the check's ``ratchet-gate`` step
-(``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
-drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
-change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
-above BASE is judged against the one below it, so a failure names its PR, which drive takes as the red's culprit.  The red
-never holds `main`, and drive never reverts its culprit (drive.toml's ``warn_steps``): it rings the culprit's owner, who
-fixes it forward in their next PR.  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
+(``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), on the merge gate, which a candidate's check runs as
+``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no change it judges can weaken, BASE a commit below the
+tip that the verified queue sends (``check.py`` says which).  Each `Queue: #N` merge above BASE is judged against the one
+below it, so a failure names its PR.  The red fails the candidate, and the verified queue ejects the PR whose merge it
+fails.  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
 on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
 else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
 and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each

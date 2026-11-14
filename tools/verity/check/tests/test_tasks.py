@@ -105,8 +105,8 @@ def test_list_is_a_tasks_v1_graph_closed_under_its_deps_and_the_same_each_time(t
     assert _graph(tree)[1] == text, "the same tree lists the same graph"
 
     preflight = {t["id"] for t in _graph(tree, "--kind", "preflight")[0]["tasks"]}
-    assert "pytest:a" in preflight and not any(i.startswith(("circuit-check", "ratchet-gate")) for i in preflight), \
-        "the jobs off the merge gate are in no preflight"
+    assert "pytest:a" in preflight and "ratchet-gate" in preflight and not any(i.startswith("circuit-check") for i in preflight), \
+        "the preflight is the jobs on the merge gate: circuit-check, off it, is in none"
     assert [t["id"] for t in _graph(tree, "--circuit-shards", "2")[0]["tasks"] if t["kind"] == "circuit-check"] == \
         ["circuit-check:1/2", "circuit-check:2/2"]
 

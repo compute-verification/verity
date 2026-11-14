@@ -125,8 +125,9 @@ rerun or a cancel of it.  `--no-graph2-shadow` reads none.  The steps the
 check leaves out (policy.toml's `off_gate`, drive.toml's `warn_steps`) still run, and hold no pass: a check passes once every
 step it is judged on passed in every shard holding it (`vqueue_slim._passed_early`), and its landing's drop leaves the runs
 still running one, which any other drop cancels.  Once a candidate's verdict is pass or fail and its runs ended, what it
-failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the lane of
-each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`), read on past its
+failed of one that the run beside its base's check didn't is rung, once a candidate and step, to who acts on it: the owner of
+each circuit-check target's pins, and, of ratchet-gate where a policy leaves it out, the lane of each member whose merge it
+fails (`Loop._off_gate`), read on past its
 drop while they or the run beside its base's check run (`Past.off_gate_running`); a red its base shares rings nobody.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick

@@ -34,7 +34,7 @@ from test_queue import World, _git
 from test_vqueue_loop import NEW, PLAN, _check, env  # noqa: F401  (env: the loop's fixture)
 from test_vqueue_loop import _row as _loop_row
 
-#: policy.toml's `off_gate` in the tree: ratchet-gate is off the merge gate
+#: the harness's `off_gate` unless a test gives its own: a policy that takes ratchet-gate off the merge gate too
 OFF = ("circuit-check", "ratchet-gate")
 #: what `step_paths` finds of `LINT_LOG`, a failed preflight-lints: its failing test and the path its failure names
 LINT_PATHS = frozenset({"tests/test_repository.py", "tools/research/src/research/store/README.md"})
@@ -300,8 +300,8 @@ def test_a_failures_frames_are_named_from_the_repositorys_root_and_frames_outsid
 
 @pytest.mark.parametrize("off_gate", [OFF, ("circuit-check",)])
 def test_a_red_ratchet_gate_fails_the_candidate_only_on_the_gate(world, monkeypatch, tmp_path, off_gate):
-    """ratchet-gate is off the gate in the tree, so its red holds no candidate; on the gate, the candidate's own policy.toml
-    says so, it fails it."""
+    """Where the candidate's policy.toml takes ratchet-gate off the gate, its red holds no candidate; where it leaves it on, the
+    red fails it."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=off_gate)
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, ratchet_gate="  merge 1 (0123456789ab): failed: grows p01.json 2 -> 3 entries\n")
@@ -967,7 +967,7 @@ def test_the_loops_rebuild_after_a_drop_waits_for_the_cancelled_shards_records_t
                                         ("flock-rust-tests", FAIL), ("preflight-lock", FAIL)])
 def test_the_check_that_gates_is_judged_on_the_steps_main_waits_for_at_its_base(world, monkeypatch, tmp_path, red, state):
     """Every step `main` waits for at the base gates, the preflights among them: not one policy.toml takes off the gate there
-    (circuit-check) or drive.toml's warn step (ratchet-gate).  The candidate's
+    (circuit-check) or a warn step of drive.toml's (here ratchet-gate).  The candidate's
     own policy.toml takes flock-rust-tests off the gate, and it fails on it all the same."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), change={
         "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "flock-rust-tests"))})

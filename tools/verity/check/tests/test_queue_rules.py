@@ -46,7 +46,7 @@ def test_drives_gates_are_in_the_tree_and_the_markdown_caps_only_warn():
     assert all((ROOT / g).is_file() for g in flags.landing_gates + flags.warn_gates)
 
 
-def test_a_red_ratchet_gate_step_never_reverts():
-    """A red ratchet-gate step is a warn step's: drive rings its culprits' lanes, which fix it forward in their next PR, and
-    reverts none of them."""
-    assert "ratchet-gate" in DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS).warn_steps
+def test_a_red_ratchet_gate_step_holds_its_candidate():
+    """ratchet-gate is on the merge gate: no warn step, so under the loop's `--gate check` a merge it fails fails its candidate,
+    as it does under graph2 (`vqueue_slim.judge`)."""
+    assert "ratchet-gate" not in DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS).warn_steps

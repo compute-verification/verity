@@ -94,9 +94,7 @@ name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
 group = 6
-# Off the merge gate by drive's policy (policy.toml's `off_gate`). It runs in drive's after-landing run (`--deferred`, every
-# job, its base the last verified commit; sharded, in the shard its plan names, else in its last shard), where a red's culprit
-# is the landing whose merge it names.
+# On the merge gate, in the shard each plan names: a candidate's red fails it, its culprit the PR whose merge it names.
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the
@@ -120,7 +118,7 @@ group = 6
 # runs either whole.
 
 # 3 pods: the security analysis's audit beside pytest and the parallel suites; lean-build, the rest of the Lean and the Flock
-# suite; the Rust build and the circuits beside the rest of lean-suites.
+# suite; the Rust build, the circuits and ratchet-gate beside the rest of lean-suites.
 [[plan]]
 shards = [
     ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest", "lean-suites:verity-vllm",
@@ -130,7 +128,7 @@ shards = [
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
-     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*", "ratchet-gate"],
 ]
 
 # 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
@@ -145,7 +143,7 @@ shards = [
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
     ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3",
-     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*", "ratchet-gate"],
 ]
 
 # 5 pods: pytest apart, and circuit-check alone in the last shard, so no step on the gate waits behind a cold circuit-check, in

@@ -26,8 +26,8 @@ warn_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # the check's steps whose failure holds no candidate where the whole check gates (the loop's `--gate check`): its verdict
 # leaves them out beside policy.toml's `off_gate` (`vqueue_slim._gate`), and what a candidate failed of one that the run
 # beside its base's check didn't is rung once, ratchet-gate's to the lane of each member whose merge it fails; nothing is
-# held or ejected for it (`Loop._off_gate`)
-warn_steps = ["ratchet-gate"]
+# held or ejected for it (`Loop._off_gate`). None: ratchet-gate is on the merge gate
+warn_steps = []
 # parsed (`DriveFlags`: "review", its one value) and read by no other code: the verified queue takes a PR on its land verdict,
 # or on its ready mark alone under the low-risk lane (`World.ready`)
 land = "review"

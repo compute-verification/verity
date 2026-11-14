@@ -8,13 +8,13 @@ schema = "policy/v0"
 
 # The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s
 # OFF_GATE, from `declaration.load`), `research merge` requires them of no check, and the verified queue moves `main` without
-# them: under its graph2 gate no task of theirs gates (`World.verdict`) and ratchet-gate runs in the run beside the check,
-# whose verdict leaves it out; under `--gate check` they run in the check (`--deferred`, every job), whose verdict leaves them
-# out, and what a candidate failed of one that its base's run didn't is rung to who acts on it (`Loop._off_gate`).
-# circuit-check returns to the gate
-# once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
-# run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
-off_gate = ["circuit-check", "ratchet-gate"]
+# them: under its graph2 gate no task of theirs gates (`World.verdict`); under `--gate check` they run in the check
+# (`--deferred`, every job), whose verdict leaves them out, and what a candidate failed of one that its base's run didn't is
+# rung to who acts on it (`Loop._off_gate`). circuit-check returns to the gate once `circuit-check --all` fits inside the rest
+# of the check (under 30 minutes). Every other job gates: ratchet-gate judges each `Queue: #N` merge above the run's base
+# (under graph2, in the run beside the check), and its red fails the candidate. A job here has no `merge_requires`, and no job
+# on the gate `needs` it or runs `after` it.
+off_gate = ["circuit-check"]
 
 # Allowances: a failure the verified queue doesn't take as one while its allowance at a candidate's base is unexpired: the
 # step or task counts as passed (`vqueue_slim.judge`, `World._allowed`), so it holds no candidate and makes no suspect.

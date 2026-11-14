@@ -143,9 +143,10 @@ Landing:
 
 - Lint ratchets are no-growth, and a change to a lint is judged like source; cleanup lanes pay the exceptions down and a
   feature PR owes none. `adapters/vllm/tools/ratchet_gate.py` states the rules (the adapter's ratchets and `noqa`
-  count, `tests/lint/`'s lists) and judges each candidate's merges off the merge gate, ringing a failed merge's lane,
-  never reverting. Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an environment read
-  goes through the area's settings registry, and a swallowing handler re-raises, records or narrows.
+  count, `tests/lint/`'s lists) and judges each candidate's merges on the merge gate: a merge it fails fails its
+  candidate, and the loop ejects its PR. Fix the code, never the list: a rename moves its entries (`--move OLD NEW`), an
+  environment read goes through the area's settings registry, and a swallowing handler re-raises, records or narrows. A
+  change that narrows a lint lands with its list as it was, and the prune follows in a later PR.
 
 Protocols and claims:
 

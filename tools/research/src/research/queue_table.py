@@ -42,6 +42,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 
+from . import policy
 from .auto import SPILL_POOL
 
 CONTROL = "vy-control-verity"
@@ -53,8 +54,6 @@ CPU_NODES = tuple(f"vy-nebius-cpu-{i}" for i in range(1, 14))
 REPO = "compute-verification/verity"
 #: the target: nine in ten PRs on `main` within two hours of the mark
 TARGET_MIN, TARGET_SHARE = 120.0, 0.9
-#: the steps off the merge gate when the checkout's policy.toml can't be read: a candidate's verdict doesn't wait for them
-OFF_GATE = ("circuit-check", "ratchet-gate")
 #: a file whose change is a Lean change: a module, a lakefile, a Lake manifest, a toolchain, a lock, or the Lean check's own
 #: code less its tests and docs, most of which every package's audit is keyed on (`lean_audit.tool_files`)
 LEAN_FILE = re.compile(r"\.lean$|(^|/)lakefile\.|(^|/)lake-manifest\.json$|(^|/)lean-toolchain$|(^|/)lean-audit\.json$"
@@ -567,11 +566,10 @@ def collect(store_root=None, sample_s: float = 5.0, nodes: list[str] | None = No
             doc["open"] = {}
             doc["errors"].append("gh pr list: no list of open PRs")
     try:
-        import tomllib
-
-        doc["off_gate"] = tomllib.loads((CHECKOUT / "tools/verity/check/policy.toml").read_text())["off_gate"]
-    except (OSError, ValueError, KeyError, IndexError):
-        doc["off_gate"] = list(OFF_GATE)
+        doc["off_gate"] = list(policy.parse((CHECKOUT / policy.PATH).read_text()).off_gate)
+    except (OSError, policy.PolicyError) as e:
+        doc["off_gate"] = []
+        doc["errors"].append(f"{policy.PATH}: {e}: every step counts as on the merge gate")
     built = {(str(pr), head) for r in doc["control"].get("decisions", []) if r["action"] in ("advance", "build") and not r.get("shadow")
              for pr, head in zip(r.get("members") or [], r.get("heads") or [])}
     # the heads whose mark is counted: those landed in the window (and, under `until`, since it) and the open ones
@@ -749,7 +747,7 @@ def red_kind(why: str, failed: list[str]) -> str:
     return "Lean audit" if "lean" in text else "test"
 
 
-def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, off_gate: tuple[str, ...] = OFF_GATE) -> list[dict]:
+def candidates(decisions: list[dict], runs: dict[str, dict], day_start: float, off_gate: tuple[str, ...] = ()) -> list[dict]:
     """Each candidate built since ``day_start``: its build, verdict (the loop's first `judged pass` or `judged fail`), outcome
     (`green`: `main` moved to it; `red`: dropped for a failure, a member held over one, or infrastructure, with its kind;
     `dropped`: for another cause; `running`), its shards' runs (those the loop names, else the shard runs of its commit), and
@@ -1018,7 +1016,7 @@ def table(doc: dict, prev: dict | None = None, readings: list[dict] | tuple = ()
     decisions = doc["control"].get("decisions") or []
     labels, open_prs, lowrisk = doc["labels"], doc["open"], doc.get("lowrisk") or {}
     restacked, past = doc.get("restacks") or {}, PAST if doc.get("until") else ""
-    off_gate = tuple(doc.get("off_gate") or OFF_GATE)
+    off_gate = tuple(doc.get("off_gate") or ())
     checks = [n for n in doc["check_nodes"] if n in doc["nodes"]]
     runs = window_runs(doc)
     rows: list[dict] = []
@@ -1450,7 +1448,7 @@ def rounds(doc: dict) -> list[dict]:
     that ran `lean-changed`, each its state and seconds (so far, while it runs); `staged`, `reused`, `passed`, `audit_s`
     and `unread` are the first shard's audit log (`reuse`).  The pole is the step on the gate that ended last among its shards, or the
     first that failed."""
-    now, off_gate, lean = doc["now"], tuple(doc.get("off_gate") or OFF_GATE), doc.get("lean") or {}
+    now, off_gate, lean = doc["now"], tuple(doc.get("off_gate") or ()), doc.get("lean") or {}
     cands = {c["sha"]: c for c in candidates(doc["control"].get("decisions") or [], window_runs(doc), window_start(doc), off_gate)}
 
     def step(shard: dict | None, name: str) -> dict | None:

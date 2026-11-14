@@ -142,8 +142,8 @@ def test_candidates_carry_their_outcome_their_shards_and_a_reds_times():
     rs = runs()
     rs["r20261110-012500-bbbb"]["steps"].append({"step": "ratchet-gate", "state": "failed", "seconds": 60, "end": qt.ts(at("01:40"))})
     first = lambda **kw: {c["sha"][0]: c for c in qt.candidates(decisions(), rs, T0, **kw)}["b"]["first_failure"]   # noqa: E731
-    assert first() == qt.ts(at("02:00"))                         # a step off the gate fails without making its candidate red
-    assert first(off_gate=()) == qt.ts(at("01:40"))
+    assert first(off_gate=("ratchet-gate",)) == qt.ts(at("02:00"))   # a step off the gate fails without making its candidate red
+    assert first() == qt.ts(at("01:40"))
 
 
 def doc() -> dict:

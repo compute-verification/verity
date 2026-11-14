@@ -29,9 +29,8 @@ ruff's style findings and three of the Lean bar's rules (the module docstring, t
 bookkeeping: they warn, and a later PR fixes them. Ruff's errors (`ERRORS` in its lint) and a new `maxHeartbeats 0`
 (`test_no_new_unlimited_heartbeats`) still fail, and so does a tree the Lean bar names with no `.lean` file under it
 (`test_every_tree_holds_lean`: its Lean moved, so name where it lives now). An entry that allows more than is found doesn't, so the list can run
-ahead of the tree (the Lean bar warns of one, naming the count to lower it to); the ratchet gate, which holds nothing
-(`off_gate` in `tools/verity/check/policy.toml`), reports a change that grows a list or adds a finding to a file it
-touches.
+ahead of the tree (the Lean bar warns of one, naming the count to lower it to); the ratchet gate, on the merge gate (check's
+`ratchet-gate` step), fails a change that grows a list or adds a finding to a file it touches.
 
 `lint/allowlists/superseded_versions.json` is circuit-check's suite's
 (`tools/verity/circuit_check/tests/test_superseded_versions.py`): every Definition version the registries register below
