@@ -44,7 +44,10 @@ read back from the noise kernel and what a producer hands the units kernel. Besi
 period's close (`pouw_h1_window.after_close`), a host library that returns nonzero
 (`pouw_h1_registered_device.host_commit`, `host_zy`, `host_public_salts`, `pouw_h1_tables_device.host_roots`) and
 call tables whose kernels don't build (`pouw_h1_tables_device.available`,
-`pouw_h1_registered_device.zy_available`)."""
+`pouw_h1_registered_device.zy_available`).
+
+And two things beside those: a row of the window's grid read several times (`pouw_h1._repeat`), and a window that
+core samples nothing from or whose --circuits are another Program's (`drawn.stage`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -58,6 +61,7 @@ import random
 import shutil
 import socket
 import threading
+import warnings
 from contextlib import contextmanager
 from fractions import Fraction
 from pathlib import Path
@@ -73,6 +77,7 @@ else:
     torch = pytest.importorskip("torch")
 
 from verity.circuits.codec import canonical_json
+from verity.circuits.refs import Affine, Strided
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.accounting.pouw.verifier import salt as PS
@@ -2494,7 +2499,10 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     kernels that don't build, here with no nvcc, a warning says that they hash with `hiding_rows` and why; once they
     are built for the current device, the GPU path is taken. The z table's kernel is asked for only where the
     values' kernels are there, and where it doesn't build a warning says that the z tables hash apart from their
-    values. Both build with `pouw_device`'s nvcc."""
+    values. Both build with `pouw_device`'s nvcc. The z table's kernel is built after the values' device library is
+    asked for on the current device, with that nvcc and for the device's compute capability (the build is a stand-in
+    that builds nothing), and once: a device that has it (here a stand-in) is given it again, with nothing built and
+    nothing said."""
     built: list[tuple] = []
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert TBD.available.__wrapped__() is False and RGD.zy_available.__wrapped__() is False
@@ -2516,3 +2524,63 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
                                                "the path))")]
     monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]
+    asked: list[tuple] = []
+
+    def builds_nothing(tool, sources, flags, name):
+        asked.append((tool, tuple(sources), flags[-1], name))
+        raise OSError("the stand-in builds nothing")
+
+    monkeypatch.setattr(RGD.RTD, "_build", builds_nothing)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", {0: (12, 0)}.__getitem__)
+    with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(RuntimeError: no nvcc "):
+        assert RGD.zy_available.__wrapped__() is False
+    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    with pytest.warns(RuntimeWarning, match=r"zy_commit\.cu doesn't build here \(OSError: the stand-in builds nothing\)"):
+        assert RGD.zy_available.__wrapped__() is False
+    assert built[1:] == [(0, RGD.device_lib, "rr_midstates")] * 2
+    assert asked == [("/a/toolchain/nvcc", tuple(RGD.ZY_DEVICE_SOURCES), "-gencode=arch=compute_120,code=sm_120",
+                      "libzy_commit_cuda.so")]
+    held = (object(), object(), 9)
+    monkeypatch.setitem(RGD._ZY_LIBS, 0, held)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert RGD._zy(torch) is held and RGD.zy_available.__wrapped__() is True
+    assert len(built) == 3 and len(asked) == 1
+
+
+@pytest.mark.parametrize(("row", "one_view"), [(Affine("p", 0, 5, 3), True), (Strided("n", 3, 7, 1, 0, 0, 2), True),
+                                               (Strided("n", 3, 7, 2, 4, 1, 4), False)],
+                         ids=["a run of leaves", "one leaf read twice", "a strided view"])
+def test_a_row_read_n_times_in_a_row_is_its_leaves_in_order_n_times_over(row, one_view):
+    """`_repeat` lays a call's rows beside its weight rows in the window's grid. Whichever form a row's references
+    have, the row read n times is its leaves in order, n times over; a run of leaves and one leaf read several
+    times stay one strided view, whatever n."""
+    got = PH._repeat(row, 3)
+    assert list(got) == list(row) * 3 and len(got) == 3 * len(row)
+    assert isinstance(got, Strided) is one_view
+
+
+def test_a_windows_calls_are_staged_only_on_cores_sample_and_its_programs_circuit_files(tmp_path, monkeypatch, capsys):
+    """`stage` reads core's sample of the window, then --circuits' manifest, before it stages a call. A window core
+    samples nothing from, here a record with no sampling coin, is refused with the part of the record core refused
+    and core's reason. With the coin, a manifest for another Program is refused by both digests, and nothing is
+    written. `window_of` is stood in for: the window is a declared Program's descriptor and layout and, of its
+    record, the sampling coin alone."""
+    raw = SV.descriptor(_declared().program)
+    layout, why = CR.layout_of(raw)
+    assert why is None
+    coin, root, registered, receipts = (hashlib.sha512(x).hexdigest() for x in (b"coin", b"window", b"sample", b"receipts"))
+    opening = LC.LiveOpening(0, Wd.DRAW, 0, bytes(64), bytes.fromhex(coin), bytes(16), ()).to_json()
+    win = {"record": {}, "root": root, "raw": raw, "layout": layout, "program": hashlib.sha512(raw).hexdigest()}
+    monkeypatch.setattr(DN, "window_of", lambda *a: win)
+    (tmp_path / DN.MANIFEST).write_text(json.dumps({"program": "00" * 64}))
+    a = SimpleNamespace(serve_dir=tmp_path, work=tmp_path / "work", prover=None, window=0, k=1, circuits=tmp_path)
+    assert DN.run("stage", a) == 1
+    said = capsys.readouterr().err
+    assert said.startswith("REFUSED: core ") and said.endswith(
+        f" nothing from the window: draw: the window's draw coin is malformed ({NO_OPENING})\n"), said
+    win["record"] = {"commitment": {"draw": {"coin": opening, "root": registered, "receipts": receipts}}}
+    assert DN.run("stage", a) == 1
+    assert capsys.readouterr().err == (f"REFUSED: --circuits' manifest is for Program {'00' * 8}..., not the window's "
+                                       f"{win['program'][:16]}...\n")
+    assert not (tmp_path / "work").exists()

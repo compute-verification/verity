@@ -17,7 +17,7 @@ that predates them.  A set's subcircuit is derived from its ``relation`` (``temp
 
     python -m verity_flock.input_sets show DIR
     python -m verity_flock.input_sets verify DIR [--lo L --hi H]      files against the manifest, then every instance
-                                                                                re-evaluated by the IR evaluator
+                                                                                re-evaluated by the reference evaluator
     python -m verity_flock.input_sets meta DIR                        the ``input-set/v1`` store meta (``research data put``)
 """
 from __future__ import annotations
@@ -215,8 +215,8 @@ class InputSet:
 
 
 def verify(path: str | Path, lo: int = 0, hi: int | None = None, chunk: int = 256) -> dict[str, Any]:
-    """Every file digest against the manifest, then every instance of ``[lo, hi)`` re-evaluated by the IR evaluator and compared
-    word for word with its recorded outputs."""
+    """Every file digest against the manifest, then every instance of ``[lo, hi)`` re-evaluated by the circuits' reference
+    evaluator and compared word for word with its recorded outputs."""
     s = InputSet.open(path)
     hi = s.n if hi is None else hi
     files = s.check_files()

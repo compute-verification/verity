@@ -58,8 +58,8 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   naming no issue. The mark's preflight refuses a head that conflicts or that drive.toml's `landing_gates` refuse; a
   Markdown file over its cap, the vLLM ratchet gate and a marked PR the head doesn't merge with (named, with its files
   and the fix) only warn. A `hold` label keeps a PR out.
-- Before marking, run the Lean check of the packages and the suites your change touches (the testing skill's pre-mark
-  run), plus a suite's slow tier when you changed its core. Prefer small PRs.
+- Before marking, run the suites your change touches (the testing skill's pre-mark run), plus a suite's slow tier when
+  you changed its core; no Lean records run of your own. Prefer small PRs.
 - Reviewers ci staffs, never the owner, record a verdict at the head (`research queue review N --land|--hold REASON --by
   LANE`), signed as that reviewer once ci's holder registers its agent (`research queue delegate AGENT --by review-NN`);
   no other per-head grant exists. While drive.toml's `lowrisk_lane` is on, a PR touching nothing its

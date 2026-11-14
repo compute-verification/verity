@@ -3,7 +3,7 @@
 //!
 //! Every random value the prover uses is the operating system's own bytes (`getrandom`), read where it is sampled and kept where it
 //! is used again, so no premise on a stream generator is left on any of them. Under the outer
-//! firewall the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
+//! ZK server, the Lean server reads them ([`set_os_source`]), and this process only carries them. A test harness (feature
 //! `seed-injection`) can inject a [`ProverSeed`] instead, and then the prover is a deterministic function of (statement, witness,
 //! seed, verifier coins): no message byte depends on thread scheduling (every reduction is a GF(2^128) sum, order-free) or on
 //! unseeded device state; the selftest `prover_is_deterministic` checks proofs and transcript byte for byte.
@@ -14,7 +14,7 @@
 //! 0's hiding for the table's session, each rep's pads in the rep's state, each block's mask words with the table's witness
 //! sources. Under an injected seed they are ChaCha20 streams of it, addressed by `(purpose, index)` (`set_stream` /
 //! `set_word_pos`). It never reads the transcript, and outside tests every constructor takes a [`ProverSeed`], which a proving
-//! build can only sample from the OS: no fixed or test seed is reachable in a production build.
+//! build can only sample from the OS: no fixed or test seed is reachable in a proving build.
 //!
 //! The Merkle leaf salts of `hm96-sha512/v1` are [`LeafSalts`]'s: the OS's bytes too, read tree by tree (decision 4(a)). With an
 //! injected seed they are a ChaCha20 expansion of that seed instead, so a test proof is reproducible. The hm96 key is not prover
@@ -219,7 +219,7 @@ impl LeafSalts {
         std::sync::Arc::try_unwrap(self.take(id, leaves)).unwrap_or_else(|s| s.to_vec())
     }
 
-    /// [`Self::expand`]'s salts, shared: level 0's kept ones, a tree's preset or drawn-ahead ones ([`SaltsAhead`]) at that size,
+    /// [`Self::expand`]'s salts, shared: level 0's kept ones, a tree's preset or read-ahead ones ([`SaltsAhead`]) at that size,
     /// once, else read afresh.
     pub fn take(&self, id: u64, leaves: usize) -> std::sync::Arc<Vec<u8>> {
         if id == self.level0 {

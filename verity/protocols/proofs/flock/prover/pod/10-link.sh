@@ -3,7 +3,7 @@
 # verity/protocols/proofs/flock/prover/live in as crates/flock-live, run the flock-link negatives (in-process verifier) and timed sessions
 # against a verifier PROCESS (loopback, or VERIFIER=host:port for a verifier on another pod).
 # F2 (the pinned census-unit + BLAKE3 union verifier and the GPU unit-table verifier): verity_unit.rs goes into
-# flock-prover, the unit netlists are exported with export_unit.py, and `flock-live selftest-f2` runs when F2=1.
+# flock-prover, the units' circuit descriptions are exported with export_unit.py, and `flock-live selftest-f2` runs when F2=1.
 # LEGACY=1 also runs flock-live's own selftest (stub link, F3 cases) and its BLAKE3-union bench at LEGACY_N compressions
 # (the same-host baseline: no circuit, no link claims).
 # env: SELF_VUS="8 64"  BENCH_VUS="4096"  RUNS=2  VERIFIER=  SERVE_ONLY=  SKIP_BENCH=  F2=  LEGACY=  LEGACY_N=393216

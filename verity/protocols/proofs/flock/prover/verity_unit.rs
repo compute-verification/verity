@@ -1,11 +1,11 @@
-//! flock-bench (verity), copied by flock-link with an explicit-profile prove/params: a netlist-defined boolean table on the union prover — one
-//! tensor-core transition unit (the binary census's `unit.py`, exported by
+//! flock-bench (verity), copied by flock-link with an explicit-profile prove/params: a boolean table defined by a circuit description on the
+//! union prover — one tensor-core transition unit (the binary census's `unit.py`, exported by
 //! `export_unit.py`) per 2^13-bit block, `C = I`, constant wire pinned at the
 //! last useful column. Mirrors `sha2::Sha256HybridSetup` (single-slot union,
 //! batch-major partial witness, CSC lincheck circuit).
 //!
-//! Instances are indices into the netlist's validated input vectors; the
-//! witness is evaluated from the netlist rows (inputs, then rows in order).
+//! Instances are indices into the circuit description's validated input vectors; the
+//! witness is evaluated from the circuit description's rows (inputs, then rows in order).
 
 use std::array::from_fn;
 
@@ -421,7 +421,7 @@ impl VerityUnitSetup {
 /// One unit's input words: x bytes [0, 256), W bytes [256, 512) as four 128-bit words, then the accumulator word.
 pub type UnitRow = [F128; 5];
 
-/// A `flock-unit-io/v1` netlist: the lowered unit with word-aligned IO (see `verity_flock/lowering.py`).
+/// A `flock-unit-io/v1` circuit description: the lowered unit with word-aligned IO (see `verity_flock/lowering.py`).
 #[derive(Debug)]
 pub struct UnitNet {
     pub relation: String,

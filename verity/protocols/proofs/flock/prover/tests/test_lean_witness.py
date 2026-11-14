@@ -416,7 +416,7 @@ def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):  # noqa:
     session its coefficients are checked against, the verifier's full sample of that session (`_f1_draw`), and the challenger's
     live-coin part's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
     (`RecVStar.checkTopRows`, `RecCoins.checkLink`), as `85-rec-reprice.sh`'s STEP=lean runs it: through every check and
-    every refusal the verdict runs last (the form's, a draw-less session's, a V* session's short of every unit,
+    every refusal the verdict runs last (the form's, a sample-less session's, a V* session's short of every unit,
     `RecSetup.fullDraw`, and one over an inner session whose record holds no sample, `RecSetup.innerDrawn`), and not as a
     private circuit's. The checks above are the model's predicates; this is the shipped verdict, so a refusal added to it
     that an honest V* session meets fails here and nowhere else. About two minutes, beside the gate's witness runs."""

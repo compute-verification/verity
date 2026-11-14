@@ -35,6 +35,7 @@ import hashlib
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from verity.commitments import hm96, keyed
@@ -378,7 +379,7 @@ class DeviceWords:
         self._rs = _tree_step(ext, dom)
         self._leaves: list = []
         self._next = 0
-        self._one = None
+        self._one: Any = None  # the one chunk's words on the device, where the instance has one leaf
 
     @property
     def count(self) -> int:

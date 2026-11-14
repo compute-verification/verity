@@ -38,7 +38,7 @@ IN_COLS = (0, 1, 2, 3, 4)
 
 @dataclass(frozen=True)
 class Pipe:
-    relation: str        # the B-Ligero relation name whose instance set and model this unit lowers
+    relation: str        # the B-Ligero relation name whose input set and model this unit lowers
     fmt: object          # unit.BF16 | unit.E4M3
     groups: tuple
     width: int

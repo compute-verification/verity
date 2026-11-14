@@ -347,9 +347,9 @@ def verify_unit(step_root: bytes, context: bytes, layout: CommitShape, step: int
 
 # --- layouts and test data ---------------------------------------------------------------------------------------------
 
-def _cut(source: int, offset: int, nbytes: int, cap: int) -> list[tuple[Row, ...]]:
-    """``nbytes`` at ``offset`` of ``source`` as one-row units of at most ``cap`` bytes."""
-    return [(Row((Part(source, offset + a, min(cap, nbytes - a)),)),) for a in range(0, nbytes, cap)]
+def _cut(source: int, offset: int, nbytes: int, unit_bytes: int) -> list[tuple[Row, ...]]:
+    """``nbytes`` at ``offset`` of ``source`` as one-row units of at most ``unit_bytes`` bytes."""
+    return [(Row((Part(source, offset + a, min(unit_bytes, nbytes - a)),)),) for a in range(0, nbytes, unit_bytes)]
 
 
 def h200_layout(layers: int = 52, d: int = 16384, heads: int = 256, head_dim: int = 64, kv_heads: int = 1, mlp: int = 65536,
@@ -362,7 +362,7 @@ def h200_layout(layers: int = 52, d: int = 16384, heads: int = 256, head_dim: in
     and output, the residual add, the MLP's RMSNorm and quantizer, up (bf16 mlp), ReLU (bf16 mlp), down's quantizer (mlp codes
     and the scale), down (bf16 d) and the residual add. ``ctx_rows`` stands in for the scores' t + 1 (16, the mean at a
     context of 32). The group's tensors are the ops' outputs in that order, a quantizer's codes and scale two tensors."""
-    cap = UNIT_MAX_BITS // 8
+    unit_bytes = UNIT_MAX_BITS // 8
     qkv = 2 * (heads * head_dim + 2 * kv_heads * head_dim)
     ops = [("bf16", 2 * d), ("quant", d), ("bf16", qkv), ("f32", 4 * heads * ctx_rows), ("bf16", 2 * heads * ctx_rows),
            ("bf16", 2 * d), ("quant", d), ("bf16", 2 * d), ("bf16", 2 * d), ("bf16", 2 * d), ("quant", d), ("bf16", 2 * mlp),
@@ -373,13 +373,13 @@ def h200_layout(layers: int = 52, d: int = 16384, heads: int = 256, head_dim: in
         src = len(sources)
         if kind == "quant":
             sources += [n, 4]
-            if n + 4 <= cap:
+            if n + 4 <= unit_bytes:
                 units.append((Row((Part(src, 0, n), Part(src + 1, 0, 4))),))
             else:
-                units += _cut(src, 0, n, cap) + [(Row((Part(src + 1, 0, 4),)),)]
+                units += _cut(src, 0, n, unit_bytes) + [(Row((Part(src + 1, 0, 4),)),)]
         else:
             sources.append(n)
-            units += _cut(src, 0, n, cap)
+            units += _cut(src, 0, n, unit_bytes)
     group = Group(tuple(sources), tuple(units))
     return CommitShape(f"h200-mqa-d{d}-h{heads}x{head_dim}-kv{kv_heads}-f{mlp}-c{ctx_rows}-every-op/v1", (group,) * layers)
 
