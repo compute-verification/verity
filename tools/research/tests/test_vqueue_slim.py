@@ -27,8 +27,8 @@ from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Ad
 from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
                                   WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
                                   audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
-                                  lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
-                                  step_test, suite_kind, traced_reads, unnamed)
+                                  lends_onward, lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start,
+                                  step_kind, step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -887,7 +887,8 @@ def test_a_check_leaving_suites_to_its_base_s_names_it_to_each_launch_and_its_re
     """``suites_from``, the candidate the check is built on: each launch names it by the setting `check.lender` reads
     (`LEND_ENV`, which settings.py declares under this name), an auto plan's shards as they launch, and the next launch
     names none; the record says whose check answers for the suites it leaves out (``suites_from``).  Only the check that
-    gates takes one, and only its own base."""
+    gates takes one: a candidate's only its own base, and the check of `main`'s own tip, which is its own base, another
+    commit, an earlier tip, never itself."""
     assert LEND_ENV == "TRAIN_SUITES_FROM"
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, named, plans = "m1,m2,m3", [], Plans(h.d, tmp_path)
@@ -906,6 +907,14 @@ def test_a_check_leaving_suites_to_its_base_s_names_it_to_each_launch_and_its_re
         start(h.d, sha, base, suites_from=base)
     with pytest.raises(ValueError, match="only the check that gates"):
         start(h.d, sha, base, shards=1, suites_from=sha)
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, sha, shards=1, suites_from=sha)
+    other = world.change({"x.txt": "x\n"})
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, shards=1, suites_from=other)
+    named.clear()
+    own = start(h.d, sha, sha, shards=1, suites_from=base)
+    assert (own["suites_from"], own["tip"], own["base"], named) == (base, sha, sha, [base]) and LEND_ENV not in _handed()
 
 
 def test_a_check_leaves_no_suite_to_its_base_s_under_a_deselect_list(world, monkeypatch, tmp_path):
@@ -924,10 +933,12 @@ def test_a_check_leaves_no_suite_to_its_base_s_under_a_deselect_list(world, monk
 
 def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite_steps(world, monkeypatch, tmp_path):
     """`lends_suites`: the check that gates, judged on pytest and lean-suites, lends them while the check of `main` keeps a
-    verdict that passed both.  Not the run beside a graph2 check, not a check launched under a deselect list, not where a
-    suite step gates nothing or the candidate's policy isn't its base's (an allowance its check is judged without), and
-    not while `main`'s check keeps no verdict or one that failed a suite step: a candidate above lands on that failure
-    as inherited, and a check that left the suite out would record the step passed."""
+    verdict that passed both; `lends_onward`, to the check of a later tip of `main`, the same check whatever its verdict
+    yet, where that tip's policy is the one it was judged under.  Not the run beside a graph2 check, not a check launched
+    under a deselect list, not where a suite step gates nothing or the candidate's policy isn't its base's (an allowance
+    its check is judged without), and, for `lends_suites`, not while `main`'s check keeps no verdict or one that failed a
+    suite step: a candidate above lands on that failure as inherited, and a check that left the suite out would record
+    the step passed."""
     h, base, sha, _ = _harness(world, monkeypatch)
     green = start(h.d, base, base, shards=1)
     _slim(h, tmp_path)
@@ -943,8 +954,14 @@ def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite
     other = world.change({"tools/verity/check/policy.toml": _policy(("suite x", "ci", LIVE), off_gate=OFF)})
     _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{other}")
     assert not lends_suites(h.d, start(h.d, other, base, shards=1), green), "its policy isn't its base's"
+    assert lends_onward(h.d, green, sha) and lends_onward(h.d, rec, sha)
+    assert lends_onward(h.d, start(h.d, base, base, shards=1), sha), "one still running lends too"
+    assert not lends_onward(h.d, None, sha) and not lends_onward(h.d, start(h.d, base, base), sha)
+    assert not lends_onward(h.d, {**green, "deselect": True}, sha)
+    assert not lends_onward(h.d, green, other), "the tip's policy isn't the one that check was judged under"
+    assert not lends_onward(h.d, start(h.d, other, base, shards=1), other), "nor is its own its base's"
     h.d.warn_steps = ("lean-suites",)
-    assert not lends_suites(h.d, rec, green)
+    assert not lends_suites(h.d, rec, green) and not lends_onward(h.d, green, sha)
 
 
 def test_a_check_that_left_suites_to_another_passes_only_once_that_one_passed_both_suite_steps(world, monkeypatch, tmp_path):

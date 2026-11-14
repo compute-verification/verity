@@ -364,8 +364,9 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     it (`LEND_ENV`, `_lending`) and the record keeps it (``suites_from``): the candidate's check leaves out each suite whose
     key in ``base``'s tree is its key in the candidate's (`suites.py --lend-from`), which ``base``'s check is running.  This
     check's verdict then stands on that one's: it passes only once that check passed both suite steps (`borrowed`), and
-    ``base`` dropped drops its candidate.  Not with a ``deselect`` list in force, under which the two checks may run
-    different tests of a suite.  Each sends only the steps the
+    ``base`` dropped drops its candidate.  The check of `main`'s own tip (``sha`` is ``base``) names an earlier tip of
+    `main` so, whose check is running or passed (`lends_onward`).  Not with a ``deselect`` list in force, under which the
+    two checks may run different tests of a suite.  Each sends only the steps the
     candidate's own ci.toml declares as jobs (`declared_steps`).  With ``heavy_on`` (machines, a comma list) too, the check
     that gates sends the shard that audits `HEAVY_PART` (`heavy_shards`; the whole run, of one shard) to those machines
     alone, the others to theirs, and its record keeps them (``heavy_on``), so an auto plan's shards launched later do too, as
@@ -390,9 +391,9 @@ def start(driver: Landing, sha: str, base: str, shards: int | str = 0, deselect:
     if audit_from and not n:
         raise ValueError(f"audit_from {audit_from[:12]}: only the check that gates (``shards``) runs lean-audit, so only it "
                          "can take another check's verdict on it")
-    if suites_from and (not n or suites_from != base):
-        raise ValueError(f"suites_from {suites_from[:12]}: only the check that gates (``shards``) of a candidate built on it "
-                         f"(its base is {base[:12]}) can leave suites to its check")
+    if suites_from and (not n or suites_from == sha or suites_from != base and sha != base):
+        raise ValueError(f"suites_from {suites_from[:12]}: only the check that gates (``shards``) leaves suites to another's: "
+                         f"that of a candidate built on it (its base is {base[:12]}), or `main`'s own to an earlier tip's")
     kw, skip, flags = driver.beside_args(sha, base)
     if left := deselection(driver, deselect):
         suites_from = None
@@ -1451,11 +1452,18 @@ def lends_suites(driver: Landing, rec: dict | None, main: dict | None) -> bool:
     is judged under too, and ``main``, the record of the check of `main` below the chain, passed both
     (`answers_suites`).  These only keep a check from leaving suites to one that won't answer for them, which costs it a
     second start: what its pass counts on is the lender's verdict itself (`borrowed`)."""
+    return lends_onward(driver, rec, rec["tip"] if rec else "") and answers_suites(main) is True
+
+
+def lends_onward(driver: Landing, rec: dict | None, tip: str) -> bool:
+    """Whether the check of `main`'s own tip ``tip`` may leave suites to the check ``rec`` records, of an earlier tip of
+    `main` (`start`'s ``suites_from``): it is the check that gates, judged on both suite steps, launched with no deselect
+    list, and the policy it is judged under, its base's, is its own tree's and ``tip``'s, so that an allowance it passes a
+    suite under is one ``tip``'s check passes it under too.  What ``tip``'s check then reads as is that check's verdict
+    (`vqueue_loop.Loop._answered`)."""
     if rec is None or rec.get("gate") != CHECK or rec.get("deselect") or not set(SUITE_STEPS) <= set(_gate(driver, rec)):
         return False
-    if driver._policy(rec["tip"]) != driver._policy(rec.get("base") or rec["tip"]):
-        return False
-    return answers_suites(main) is True
+    return driver._policy(rec.get("base") or rec["tip"]) == driver._policy(rec["tip"]) == driver._policy(tip)
 
 
 def borrowed(v: Verdict, rec: dict | None, source: dict | None) -> Verdict:
