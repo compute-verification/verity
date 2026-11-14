@@ -27,6 +27,16 @@
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
+#     With LOAD=session the load is the caller's own, through a relay session of the network certifier's, and the run
+#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `certifier_piece.py front`, opens the session and
+#     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
+#     LOAD_TIMEOUT (default 170m, the gate's longest session), sends the load to the client address RELAY names (the
+#     session's relay.json, in the serve dir's private/), its output the serve dir's load.log; and CERTIFIER_CLOSE
+#     (`certifier_piece.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
+#     (default 180m), waits for the session's end and keeps and publishes its fetch as a rehearsal's front does. The
+#     CERTIFIER-FRONT line is then the close's, and the step's exit the load's; a front that opened no session runs no
+#     load, and the close says why. LOAD=session without all three, and LOAD_CMD, CERTIFIER_CLOSE or a front passing
+#     `--session` under any other LOAD, are refused before the lease.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
@@ -35,7 +45,7 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
+#     control compares to, and LOAD=session, whose relay-paced one none does either) less the load's counts and span, and verdict lines that name no window and count none of a
 #     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
 #     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
@@ -497,7 +507,7 @@ host_set() {
 keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" >> "$D/private/verdicts.txt"); }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
-case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is varied, fixed or front, not $LOAD"; exit 3 ;; esac
+case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: LOAD is varied, fixed, front or session, not $LOAD"; exit 3 ;; esac
 case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not $POUW"; exit 3 ;; esac
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
@@ -1008,9 +1018,28 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
       > "$D/private/certifier-front.log" 2>&1
     rc=$?
-    say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
+    [ "$LOAD" = session ] \
+      || say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
   fi
-  if [ "$LOAD" != front ]; then
+  if [ "$LOAD" = session ]; then  # the caller's load through the relay session the front opened, then the session's close
+    local relay= f sent_rc closed
+    for f in "$D"/private/certifier/*/relay.json; do  # the open session's: no fetch kept beside it yet
+      [ -f "$f" ] && [ ! -e "${f%/*}/fetch.tar.gz" ] && { relay=$f; break; }
+    done
+    if [ "$rc" = 0 ] && [ -n "$relay" ]; then
+      (cd "$TREE" && timeout -k 1m "${LOAD_TIMEOUT:-170m}" bash -c "$LOAD_CMD" _ "$relay" "$D") > "$D/load.log" 2>&1
+      sent_rc=$?
+      say "REQUESTS (exit $sent_rc): the caller's load, sent through the network certifier's relay session (the serve dir's load.log, on the node)"
+    else
+      sent_rc=$((rc ? rc : 1))
+      say "REQUESTS: none sent: the front opened no relay session (exit $rc)"
+    fi
+    (cd "$TREE" && timeout -k 1m "${CERTIFIER_CLOSE_TIMEOUT:-180m}" bash -c "$CERTIFIER_CLOSE" _ "$D" "$D/private/certifier-front") \
+      >> "$D/private/certifier-front.log" 2>&1
+    closed=$?
+    say "CERTIFIER-FRONT (exit $closed): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
+    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the certifier's verdict
+  elif [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
     [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
@@ -1025,8 +1054,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
-  # a front that failed before a window closed sent the run's only requests, so none will
-  if [ "$LOAD" != front ] || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
+  # a front that failed before a window closed sent the run's only requests, so none will; a session's load likewise
+  if { [ "$LOAD" != front ] && [ "$LOAD" != session ]; } || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
     for _ in $(seq 1 "$polls"); do     # every closed window's seal line
       c=$(count "$D/windows.jsonl"); s=$(count "$D/seals.jsonl")
       [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
@@ -1148,9 +1177,26 @@ pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the ru
   esac
   return 3
 }
-front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT passes to the tree's front, it takes
+front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three commands and no other LOAD any of a session's,
+  # and each flag CERTIFIER_FRONT passes to the tree's front, it takes
   [ "$LOAD" != front ] || [ -n "${CERTIFIER_FRONT:-}" ] \
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
+  local v session=
+  case " ${CERTIFIER_FRONT:-} " in *" --session "*) session=1 ;; esac
+  if [ "$LOAD" = session ]; then
+    for v in CERTIFIER_FRONT LOAD_CMD CERTIFIER_CLOSE; do
+      [ -n "${!v:-}" ] \
+        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (certifier_piece.py close), and $v is unset"; return 3; }
+    done
+    [ -n "$session" ] \
+      || { say "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no --session, so its front would send a group of its own"; return 3; }
+  else
+    for v in LOAD_CMD CERTIFIER_CLOSE; do
+      [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is LOAD=session's, and LOAD is $LOAD: unset it"; return 3; }
+    done
+    [ -z "$session" ] \
+      || { say "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is $LOAD, which sends none through it: LOAD=session, or a front without --session"; return 3; }
+  fi
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
     say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
@@ -1920,6 +1966,8 @@ cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
   say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+elif [ "$LOAD" = session ]; then
+  say "OVERHEAD: none with LOAD=session (the relay paces the caller's requests, so no stock control compares)"
 else
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }

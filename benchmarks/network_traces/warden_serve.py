@@ -62,8 +62,9 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         [--top-p P] [--ids [--users NAME] [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
         [--egress id|bytes] [--max-tokens-cap N]
-    python warden_serve.py session (--upstream HOST:PORT | --fake) --listen HOST:PORT --windows N --out DIR
-        [--height 10] [--start-in 5] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes] [--max-tokens-cap N]
+    python warden_serve.py session (--upstream HOST:PORT | --fake) --listen HOST:PORT [--listen-fd FD] --windows N
+        --out DIR [--height 10] [--start-in 5] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
+        [--max-tokens-cap N]
 
 - `serve` writes `deployment.json` (the network certifier's public key, the session, the schedule's parameters and their
   digest, the origin, the listener), runs the network certifier for `--windows` windows, each bucket released by its
@@ -112,8 +113,12 @@ session (`check_load`) at the relay's roots.
 **A session** (`session`, the gate's `relay-session`): the relay kept up for clients that are not its own. It is
 `rehearse` without its traffic and its client, and runs through the same code: a key in a scratch directory, `serve`
 as a process at `--listen` (the gate's: a port of the loopback its ssh forwards the peer's client port to) for exactly
-`--windows` execution phases, then `check`. It makes no request, so it asks the endpoint nothing before a client does,
-and writes no `traffic.json`, `client.log` or `client.json`.
+`--windows` execution phases, then `check`. With `--listen-fd FD` the relay serves on the listening socket it inherits
+as that descriptor, which its caller bound at `--listen` and holds, and binds none: the gate's unit holds it from before
+its ssh starts until the ssh has exited, so its forward never ends at a port another process could take. A connection
+made before the relay serves waits at that socket, and the relay takes it as it starts; one made after the relay stops
+waits there, unread, until the caller closes the socket. It makes no request, so it asks the endpoint nothing before a
+client does, and writes no `traffic.json`, `client.log` or `client.json`.
 - *Where a client connects, and what tells it the relay is ready.* `serve` writes `deployment.json` once it listens:
   the listener, the schedule, the session, the key, the run id, `windows` and `origin_unix`, bucket 0's start,
   `--start-in` seconds later. A client opens one connection a request to the listener (through the gate, to the
@@ -170,6 +175,7 @@ import re
 import resource
 import secrets
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
@@ -823,15 +829,26 @@ def prepare_process(params: WardenParams) -> dict:
     return report
 
 
+async def listening(handle, listen: tuple[str, int], sock: socket.socket | None = None) -> asyncio.Server:
+    """The relay's server: on the listening socket `sock` when its caller gives one, which the caller keeps open, so
+    the port still listens, with nothing accepting, once this server closes; else on a socket it binds at `listen`."""
+    if sock is None:
+        return await asyncio.start_server(handle, *listen)
+    return await asyncio.start_server(handle, sock=sock)
+
+
 async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], listen: tuple[str, int], key: Path,
                 session: bytes, windows: int, start_in: float = 5.0, slack: float = 0.025,
                 announce=cs._announce, probe: bool = False, process: dict | None = None,
-                load_heads: Path | None = None, paced_ms: float = cs.PACED_MS, watermark: bool = False) -> dict:
-    """One run of the network certifier on the host's clock (the module docstring's `serve`), its records published by a
-    `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when given, its
-    threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its boundary
-    (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to `upstream` when
-    `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what `prepare_process` did.
+                load_heads: Path | None = None, paced_ms: float = cs.PACED_MS, watermark: bool = False,
+                sock: socket.socket | None = None) -> dict:
+    """One run of the network certifier on the host's clock (the module docstring's `serve`), on the listening socket
+    `sock` when given (its caller's, bound at `listen`: "A session") and else one it binds at `listen`, its records
+    published by a `PublisherProcess` that holds the key in `key` and first signs the load's heads `load_heads` when
+    given, its threads sampled by `stall_probe` when `probe`, each bucket released by its pacer `paced_ms` after its
+    boundary (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark stream sent to
+    `upstream` when `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with `process`, what
+    `prepare_process` did.
     The loop's errors are kept, not logged: the ticker writes no file."""
     out.mkdir(parents=True, exist_ok=True)
     loop = asyncio.get_running_loop()
@@ -844,7 +861,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
                     publish=publish, withhold=publish.withhold, release=publish.release, slack=slack,
                     paced=paced_ms / 1000,
                     watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
-    server = await asyncio.start_server(warden.handle, *listen)
+    server = await listening(warden.handle, listen, sock)
     sampler = stall_probe.start(out / "stalls.json", origin, {"warden": os.getpid(), "publisher": publish.process.pid},
                                 {threading.get_native_id(): "ticker", publish.feeder: "feeder"}) if probe else None
     deployment = deployment_record(params, publish.key, session, origin_unix=time.time() + origin - time.monotonic(),
@@ -1227,6 +1244,7 @@ def rehearse(args) -> int:
     """`rehearse`, and `session` (the module docstring's "A session"): the same run with no traffic and no client,
     the relay at `--listen` for `--windows` execution phases."""
     kept = args.command == "session"
+    held = args.listen_fd if kept else None
     _check_paced(args)
     if args.prompts is not None and not args.ids:
         raise SystemExit("--prompts: id requests' prompts, with --ids")
@@ -1272,8 +1290,10 @@ def rehearse(args) -> int:
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
                                              str(args.paced_ms), *_flags(args), *crr.flags_of(params),
                                              *(["--watermark"] if args.watermark else []),
-                                             *(["--load-heads", str(out / "load-heads.json")] if load else [])],
-                                       stdout=subprocess.PIPE, stderr=log, text=True)
+                                             *(["--load-heads", str(out / "load-heads.json")] if load else []),
+                                             *(["--listen-fd", str(held)] if held is not None else [])],
+                                       stdout=subprocess.PIPE, stderr=log, text=True,
+                                       pass_fds=() if held is None else (held,))
             procs.append(serving)
             if "listening" not in json.loads(serving.stdout.readline() or "{}"):
                 raise SystemExit("serve exited before listening (serve.log)")
@@ -1322,6 +1342,10 @@ def parser() -> argparse.ArgumentParser:
     t.set_defaults(model="model")
     for q in (f, s, se):
         q.add_argument("--listen", required=True, type=cs._address, help="HOST:PORT (port 0: any)")
+    for q in (s, se):
+        q.add_argument("--listen-fd", type=int, metavar="FD",
+                       help="serve on the listening socket inherited as descriptor FD, which the caller bound at "
+                            "--listen and holds, and bind none")
     for q in (f, r, se):
         q.add_argument("--token-ms", type=float, default=20.0, help="the fake endpoint's milliseconds a token")
         q.add_argument("--first-ms", type=float, default=100.0,
@@ -1433,7 +1457,8 @@ def main(argv=None) -> int:
         asyncio.run(serve(params, args.out, upstream=args.upstream, listen=args.listen, key=args.key,
                           session=session, windows=args.windows, start_in=args.start_in, slack=args.slack,
                           probe=args.stall_probe, process=process, load_heads=args.load_heads,
-                          paced_ms=args.paced_ms, watermark=args.watermark))
+                          paced_ms=args.paced_ms, watermark=args.watermark,
+                          sock=None if args.listen_fd is None else socket.socket(fileno=args.listen_fd)))
         return 0
     if args.command == "client":
         ar._quiet_runtime()

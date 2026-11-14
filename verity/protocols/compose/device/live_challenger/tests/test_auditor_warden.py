@@ -9,6 +9,7 @@ from __future__ import annotations
 import io
 import json
 import shlex
+import socket
 import sys
 import tarfile
 from datetime import datetime, timezone
@@ -521,11 +522,12 @@ def test_the_longest_relay_session_is_an_hour_at_the_scans_tick_and_the_gates_mi
 
 
 def session(source: str, seen: list):
-    """A stand-in for `warden_serve.py session`, as `rehearsal`: it is given where its relay listens."""
-    def command(req, out, url, listen):
+    """A stand-in for `warden_serve.py session`, as `rehearsal`: it is given where its relay listens, and `fd`, the
+    descriptor it inherits the unit's listener as."""
+    def command(req, out, url, listen, listen_fd):
         seen.append((req, out, url, listen))
-        return [sys.executable, "-c",
-                f"import json, pathlib, sys; out, url = pathlib.Path({str(out)!r}), {url!r}\n{source}"]
+        return [sys.executable, "-c", f"import json, pathlib, sys; out, url, fd = pathlib.Path({str(out)!r}), {url!r}, "
+                                      f"{listen_fd}\n{source}"]
     return command
 
 
@@ -552,6 +554,9 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     given = A.warden_command(req | {"bucket_ms": 200, "scan_class": "w63k4", "watermark": True}, tmp_path, "u",
                              listen=1)
     assert given[-len(A.SCAN_SCHEDULE) - 1:] == [*A.scan_schedule(200, "w63k4"), "--watermark"]
+    held = A.warden_command(req, tmp_path, "http://127.0.0.1:40001", tree=Path("/opt/gate") / PIN, listen=40003,
+                            listen_fd=7)
+    assert held == [*argv[:7], "--listen-fd", "7", *argv[7:]] and argv[5:7] == ["--listen", "127.0.0.1:40003"]
 
     def status() -> dict:
         rc, st = A.gate(["--ssh", f"status {run}"], host, certifier_active=lambda r: True)
@@ -612,6 +617,64 @@ def test_a_relay_session_whose_ssh_exits_is_stopped_there_and_its_end_says_the_t
                           tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: False,
                           command=lambda *a, **k: pytest.fail("ran without its tunnel"))
     assert end["rc"] == 2 and "didn't come up (tunnel.log)" in end["ended"]
+
+
+def test_a_relay_sessions_listener_is_the_units_own_from_before_its_ssh_until_that_ssh_has_exited(
+        host, tmp_path, monkeypatch):
+    """The `-R` of a session's ssh ends at a port of this host's loopback, and that ssh is up before the relay serves
+    and after it stops. The unit binds the port itself before the ssh starts, hands the listening socket to the
+    relay's runner and closes it only once the ssh has exited. Here the ssh's stand-in connects to the port as it
+    comes up and again as it is stopped, and the test reads the unit's socket: the forward's end is that socket; a
+    connection made before the runner serves is the one the runner accepts on the descriptor it inherited; one made
+    after the runner stopped arrives at the unit's socket; and the socket still listens when the ssh is stopped and
+    is closed after."""
+    rc, out = gate(host, SESSION, started=[])
+    run = json.loads(out)["run"]
+    held, early, mark = [], [], tmp_path / "listened-at-the-sshs-end"
+    monkeypatch.setattr(A, "held_listener", lambda make=A.held_listener: held.append(make()) or held[0])
+
+    def sent(conn_or_listener, n: int) -> bytes:
+        conn, _ = conn_or_listener.accept()
+        with conn:
+            return conn.recv(n)
+
+    def tunnel_argv(ssh, local, back):  # before the ssh starts: the forward's end is the unit's socket, listening
+        (listener,) = held
+        assert listener.getsockname() == ("127.0.0.1", back[1]) and back[1] != local
+        return [sys.executable, "-c",
+                "import pathlib, signal, socket, sys\n"
+                "def stopped(*_):\n"
+                f"    socket.create_connection(('127.0.0.1', {back[1]})).close()\n"
+                f"    pathlib.Path({str(mark)!r}).write_text('yes')\n"
+                "    sys.exit(0)\n"
+                "signal.signal(signal.SIGTERM, stopped)\n"
+                f"socket.create_connection(('127.0.0.1', {back[1]})).sendall(b'up')\n"
+                "signal.pause()\n"]
+
+    def up(tunnel, port):  # the ssh is up and no runner serves yet
+        assert sent(held[0], 2) == b"up"
+        early.append(socket.create_connection(held[0].getsockname()))
+        early[0].sendall(b"early")
+        return True
+
+    def wait(proc, seconds):  # the runner has stopped and the ssh is still up
+        rc = proc.wait()
+        with socket.create_connection(held[0].getsockname()) as late:
+            late.sendall(b"late")
+            assert sent(held[0], 4) == b"late"
+        return rc
+
+    runner = ("import socket\n"
+              "conn, _ = socket.socket(fileno=fd).accept()\n"
+              '(out / "first").write_bytes(conn.recv(5))\n'
+              "conn.sendall(b'served')\n")
+    end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=tunnel_argv, up=up,
+                          command=session(runner, []), wait=wait)
+    d = host.certifier / run
+    assert end["rc"] == 0 and end["ended"] == "the session ended", (d / "out" / "rehearse.log").read_text()
+    assert (d / A.WITNESS / "first").read_bytes() == b"early" and early[0].recv(6) == b"served"
+    early[0].close()
+    assert mark.read_text() == "yes" and held[0].fileno() == -1
 
 
 PROMPTS = [[70001, 3], [5], [7]]

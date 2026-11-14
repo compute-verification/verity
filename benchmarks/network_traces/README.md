@@ -122,7 +122,13 @@ network certifier at the schedule of that class's scan (`--scan-class w63k4`, 5 
 `scan_zk.py prove --class w63k4` takes), so the engine closes it into the run's earliest window, the one the run audits,
 and the gate's fetch is kept in the serve dir's `private/certifier`. A request's answer must be whole D·τ after its
 admission, 2.7 s at the scan's 100 ms tick; for a slower endpoint `--bucket-ms` runs the scan at a longer tick, up to
-4000 ms (108 s). Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
+4000 ms (108 s). Under that runner's `LOAD=session` the load is the caller's own, and neither the runner nor the gate
+sends a request: `front --session` opens the gate's relay session in the rehearsal's place and returns once its relay
+listens, the caller's command (`LOAD_CMD`, given the session's `relay.json` and the serve dir) sends the load to the
+client address that file names, and `close` (`CERTIFIER_CLOSE`) waits for the session's end and keeps its fetch where a
+rehearsal's is. The runner refuses a session without all three, and under any other `LOAD` each of them. A session's
+records cover the connections that crossed the relay; that no other route reaches the endpoint is the placement's.
+Its `piece` (`CERTIFIER_CMD`) runs the chain's certifier path on that fetch with the serve dir's
 endpoint records, run dir and quarantine private beside the fetch, and answers with `network-period check` on the rows
 form of the scan's execution phase (`scan_period.rows_case`). The answer is accept only when the chain accepted, every
 request of the audited window is a certified one inside that execution phase, and the Lean check accepts. Its case,
