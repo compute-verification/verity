@@ -5,7 +5,7 @@ public import Lms.Sign
 public import Base.JsonParse
 
 /-!
-# The live challenger as deployed: a deployment that holds a key, draws its coins and keeps the ledger
+# The live challenger as deployed: a deployment that holds a key, flips its coins and keeps the ledger
 
 `Device.Deployment` is what fixes the device's history at a play (`Device.dev`). `Instance.Honest.deployment` is the
 idle one: no key, no coins, no ledger. This file builds the one the auditor runs (`deployment`), the SPOT live
@@ -20,10 +20,10 @@ challenger on its auditor host, each field what the host's code does:
   link's port, the session secret's SHA-512, the session's other files' digests, serve.py's exit code). All of it is fixed
   before the play: none of it is the prover's.
 * **The coins** (`families`, `draws`, `run`): the coin commitment's one family is the challenger family v2's parameters
-  name, with `MAX_COINS` coins (`Instance.coins`'s count). At the close the device draws, for every position of the layout,
+  name, with `MAX_COINS` coins (`Instance.coins`'s count). At the close the device samples, for every position of the layout,
   the coin's `COIN_BYTES` bytes and its hm96 salt's `SALT_BYTES` bytes, as `LiveChallenger.__init__`
-  (`verity/protocols/spot/device/challenger.py`) draws `(coin, salt)` per position; the play's released coins override
-  the drawn ones at their positions (`Device.coinAt`). The run's scheme and epoch are the reserve request's, its host
+  (`verity/protocols/spot/device/challenger.py`) samples `(coin, salt)` per position; the play's released coins override
+  the sampled ones at their positions (`Device.coinAt`). The run's scheme and epoch are the reserve request's, its host
   `<name>.<session>`, and how it ended and its lines' times are what the prover's close leaves to it (`closeJson`).
 * **The ledger** (`opens`, `closes`): the auditor's signed entries for the period's one window, each `append`'s line
   (`auditor.py`): `period-open`, `reserve` and `open` before any coin, `end` and `period-close` at the close, chained by
@@ -114,10 +114,10 @@ theorem coins_families {θ : ByteArray} {l : String} {m : ℕ} (h : (l, m) ∈ f
     · simp at h
   · simp at h
 
-/-- The bits the device draws for one position of its layout: the coin's `COIN_BYTES` bytes and its hm96 salt's. -/
+/-- The bits the device samples for one position of its layout: the coin's `COIN_BYTES` bytes and its hm96 salt's. -/
 def SLOT_BITS : ℕ := 8 * (COIN_BYTES + _root_.Spot.Challenger.SALT_BYTES)
 
-/-- **The bits the device draws at the close**: every position's coin and salt (`LiveChallenger.__init__`). -/
+/-- **The bits the device samples at the close**: every position's coin and salt (`LiveChallenger.__init__`). -/
 def draws (θ : ByteArray) : ℕ := _root_.Spot.Challenger.total (families θ) * SLOT_BITS
 
 /-- The bytes of the `n` bits of `ρ` from bit `off` (`Lines.coinBytes`). -/
@@ -152,7 +152,7 @@ def strOf (j : Json) : String :=
   | _ => ""
 
 /-- **The run's setup at a play** but for its key, layout and ledger, which `Deployment.setupAt` sets: the session id
-the gate reserved and the host the record signs, the reserve's scheme and epoch, each position's coin and salt drawn at
+the gate reserved and the host the record signs, the reserve's scheme and epoch, each position's coin and salt sampled at
 the close, how it ended and each line's time. -/
 def run (H : Host) (θ a : ByteArray) (_ : List Release) (b : ByteArray) (ρ : List Bool) : RunSetup where
   key := H.pub
@@ -307,7 +307,7 @@ theorem closes_length (H : Host) (θ a : ByteArray) (log : List Release) (b : By
 /-! ## The deployment -/
 
 /-- **The live challenger as deployed** on the host `H`: the run of the session the gate reserved, its coins and salts
-drawn at the close, the ledger's three entries before any coin and two at the close, and each of the play's messages
+sampled at the close, the ledger's three entries before any coin and two at the close, and each of the play's messages
 signed with the host's key at its leaf. -/
 def deployment (H : Host) : Deployment where
   run := run H
