@@ -281,9 +281,12 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
-- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It names PoUS's and the wipe's composite cases as
-  their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's and onsite's Lean verdicts on the run's cases
-  (soundness's composite reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`.
+- `served_composite.sh`: `served_verdicts.sh`'s composite: off the served node (the compose follow-on, a deferral's
+  follow-on) the step before the final record, whose verdict is its product's compiled Lean answer there
+  (`served_verdicts.py record --composite`), and on the served node, a development check, the step after its record. It
+  names PoUS's and the wipe's composite cases as their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's
+  and onsite's Lean verdicts on the run's cases (soundness's composite reader). Only the verdict lines reach the run's
+  `verdicts.txt`.
 - `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
   year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:
