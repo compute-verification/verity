@@ -119,7 +119,7 @@ the verifier expects values registered, the pool its window opens. SPOT's one-st
 audit read SPOT's acceptance through that check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's
 facts off it. -/
 def CallerCheckMeans : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
 
 /-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name

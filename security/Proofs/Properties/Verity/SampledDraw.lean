@@ -270,7 +270,7 @@ theorem samplingDesignOf_unique {p : _root_.Spot.OneStageZk.Params} {c : _root_.
   rw [h4] at h4'; cases h4'
   exact ⟨rfl, rfl⟩
 
-theorem sampledFrom_ok {v : _root_.Spot.Registration.Verifier} {samplingDesign : Lean.Json} {n : ℕ} {src : ByteArray}
+theorem sampledFrom_ok {v : _root_.Spot.Docket.Verifier} {samplingDesign : Lean.Json} {n : ℕ} {src : ByteArray}
     {units : Array ℕ} {read : ℕ} (h : _root_.Spot.OneStage.sampledFrom v samplingDesign n src = .ok (units, read)) :
     ∃ derived fl, _root_.Spot.Draw.deriveSamplingDesign v.program v.query v.samplingDesign v.workTable = .ok derived ∧
       _root_.Spot.Draw.flockSamplingDesign samplingDesign n = .ok fl ∧
@@ -299,7 +299,7 @@ theorem eq_of_bne_ite {a b : Array ℕ} {s : String} {rest : Option String}
   by_contra hab
   simp [hab] at h
 
-theorem coinsReason_none {v : _root_.Spot.Registration.Verifier} {samplingDesign rec_ draw : Lean.Json}
+theorem coinsReason_none {v : _root_.Spot.Docket.Verifier} {samplingDesign rec_ draw : Lean.Json}
     {src : ByteArray} (h : _root_.Spot.OneStage.coinsReason v samplingDesign rec_ draw src = none) :
     ∃ n read, _root_.Spot.nat? (_root_.Spot.getD rec_ "population") = some n ∧
       _root_.Spot.OneStage.sampledFrom v samplingDesign n src = .ok (sampledBlocks draw, read) := by

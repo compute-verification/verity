@@ -39,7 +39,7 @@ one-tile measurement takes, ``verity-verify-proof --zk --registered`` a statemen
 
   - **the formed rows** ``a``, ``b`` and ``y``, each a registered read opening the serve's own root at the position the
     Program fixes (`statement_rows`: one row a port).  Their roots are registered values reused from the serve's record
-    (R7, `Spot/Registration.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
+    (R7, `Spot/Docket.lean`), not inputs here; that the roots are the serve's and were committed before the draw coin
     is Pearl+'s own Lean protocol's, outside this measurement.
   - **``pub``, a supplied row of known content** (`PUBLIC`): the salt, B's root, the unit, the rows' indices, the column
     tile, the public noise (E_B's lines, F_A, F_B and G, which anyone derives from seed_B = s512("seed-B", salt ‖ root):
