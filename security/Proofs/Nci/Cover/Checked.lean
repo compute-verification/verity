@@ -12,8 +12,8 @@ public import Proofs.Nci.Cover.Training
 of every verdict of the gate-level check `NciCheck.evaluate`, from the verdict's compliance at its rate (`Witnesses`)
 and `CoverTraining_rate`, multiplied out by `c`.
 
-The check of record is `NciCheck.Baseline.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
-Its verdict is `Desc.evaluate`'s (`baseline_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
+The check of record is `NciCheck.Theta.evaluate`: `Desc.evaluate`, θ and the owners by root node, then θ's provenance.
+Its verdict is `Desc.evaluate`'s (`theta_desc`), and `Properties.DescAgrees` makes that the gate-level check's on every
 expansion of the instance, gate by gate, so `checkedCoverTraining_of_descAgrees` proves `CheckedCoverTraining` from it,
 and `SecurityProofs.CheckedCoverTraining` from `SecurityProofs.DescAgrees`.
 -/
@@ -34,19 +34,19 @@ theorem coverTrained {j out : Json} (hev : evaluate j = .ok out) : Properties.Co
       _ ≤ _ := mul_le_mul_of_nonneg_right h (Nat.cast_nonneg _)
       _ = _ := by ring
 
-/-- `Baseline.evaluate`'s verdict is `Desc.evaluate`'s: θ's provenance is checked after it, and the verdict returned
+/-- `Theta.evaluate`'s verdict is `Desc.evaluate`'s: θ's provenance is checked after it, and the verdict returned
 unchanged. -/
-theorem baseline_desc {j tr out : Json} (h : Baseline.evaluate j tr = .ok out) : Desc.evaluate j = .ok out := by
-  unfold Baseline.evaluate at h
+theorem theta_desc {j tr out : Json} (h : Theta.evaluate j tr = .ok out) : Desc.evaluate j = .ok out := by
+  unfold Theta.evaluate at h
   rcases h1 : Desc.evaluate j with e | o <;> simp only [h1, bind, Except.bind] at h
   · cases h
-  rcases h2 : Baseline.provenance j tr (fun _ k => k) with e | u <;> simp only [h2, pure, Except.pure] at h
+  rcases h2 : Theta.provenance j tr (fun _ k => k) with e | u <;> simp only [h2, pure, Except.pure] at h
   · cases h
   · rw [h]
 
 /-- **`CheckedCoverTraining` from `DescAgrees`.** -/
 theorem checkedCoverTraining_of_descAgrees (h : Properties.DescAgrees) : Properties.CheckedCoverTraining :=
-  fun _ _ _ hev => onExpansions_of h (fun _ _ => coverTrained) (baseline_desc hev)
+  fun _ _ _ hev => onExpansions_of h (fun _ _ => coverTrained) (theta_desc hev)
 
 /-- **A verdict of compliance of the check of record carries the cover theorem's factor**, for every reference training
 circuit the declaration contains, under the cover theorem's premises on its bit view and its baseline registered. -/

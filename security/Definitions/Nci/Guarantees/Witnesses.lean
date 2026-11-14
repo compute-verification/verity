@@ -10,7 +10,7 @@ public import Definitions.Nci
 public import Definitions.Nci.Dampener
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Assumptions.Threads
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Definitions.Nci.Assumptions.Layered
 public import Definitions.Nci.Assumptions.Dampener
 public import Definitions.Nci.Guarantees.CoverTraining
