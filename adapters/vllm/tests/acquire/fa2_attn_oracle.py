@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+
 from verity_vllm.definitions.registry import prims as P  # PYTHONPATH=.
 
 NEG_INF = 0xFF800000

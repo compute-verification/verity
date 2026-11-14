@@ -7,7 +7,6 @@
     {"file": "verity_vllm/observe/fold/fold.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1273},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2541},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 896},
-    {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 879},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 865},
     {"file": "verity_vllm/definitions/numerics/twins.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1015},
     {"file": "verity_vllm/definitions/registry/b1.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1146},

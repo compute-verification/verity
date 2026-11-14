@@ -190,7 +190,7 @@ def run_row(o: Run | Stage, stages: str) -> int:
     try:
         protocols = PO.at_row(o.protocols, doc, world=o.world if o.world is not None and row_world(o.row) > 1 else row_world(o.row))
     except PO.Refused as e:
-        print(f"[row] REFUSE (fail-closed): {e}", flush=True)
+        cli.write(f"[row] REFUSE (fail-closed): {e}")
         return 3
     if o.env.verity_tree and os.path.realpath(o.env.verity_tree) != os.path.realpath(ROOT):   # refuse before writing anything
         print(f"PRECHECK_FAIL_SOURCE_IDENTITY: row at {os.path.realpath(ROOT)} but $VERITY_TREE={o.env.verity_tree} names another tree",
@@ -244,6 +244,5 @@ def main(o: Any) -> int:
         return run_store(RESEARCH, "row chain").chain(o, st.env.sweep_dir)
     if isinstance(o, Shed):
         return run_store(RESEARCH, "row shed").shed(o)
-    print(fa_version(o.workload, o.target))
-    sys.stdout.flush()
+    cli.write(fa_version(o.workload, o.target))
     return 0

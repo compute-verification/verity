@@ -1,10 +1,9 @@
 """H1's requests and rounds (`Accounting.Served`: a request entry is an `act` value, a run input under the root of the round that admits it, committed before that round's coin).
 `pouw_h1.H1Run` builds them as it serves; this module holds what they are and how they are checked.
 
-* **Rounds.** Round s is step s, one round a step. The engine's scheduler admits a request in the step that first schedules it
-  (`SchedulerOutput.scheduled_new_reqs`), and `pouw_h1_hooks.admitting`, the option's wrap of the model runner's
-  ``execute_model``, hands those (`new_requests`) and the step's batch order (`batch_order`: Model Runner V2's own, each
-  scheduled request's rows in the order its A tables hold them) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
+* **Rounds.** Round s is step s, one round a step. The engine's scheduler admits a request in the step that first schedules it,
+  and the adapter hands those and the step's batch order (each scheduled request's rows in the order its A tables hold
+  them, as the engine lays them out) to `pouw_h1.H1Run.admit` before the step's forward. Round s closes
   once step s's last linear is recorded: its root (`round_root`) is over the step's calls (`step_digest`, their manifest
   rows with what the listeners bound), its request table's root and its slot table's root, and only then does the round
   coins' `LiveRecord` (the auditor device's session, the pouw setting ``challenger``; ``rounds`` in tests) open round s's coin.
@@ -14,8 +13,8 @@
 * **Entries and slots.** Each `RequestEntry` (its ordinal, round, first slot, cap and prompt tokens) is a hiding leaf of its
   round's request table (`request_table`: T hm96 leaves, the unused ones `EMPTY_REQUEST`), and slot i of round s's slot
   table (`slot_table`, T hm96 leaves) names the request whose row is slot i of step s's A tables, or none (`EMPTY_SLOT`). A
-  request is keyed by its vLLM ``req_id``: one resumed after a preemption (Model Runner V2 puts it back in
-  ``scheduled_new_reqs``) keeps its entry and is counted readmitted. A served row of a request with no entry (refused at
+  request is keyed by its engine ``req_id``: one resumed after a preemption, which the adapter hands in again as admitted,
+  keeps its entry and is counted readmitted. A served row of a request with no entry (refused at
   admission: prompt embeddings, a pooling request, past the window; or never admitted) is a gap
   (`pouw_h1.H1Run.request_gaps`), and so is a step whose batch isn't its served rows; a window with a gap credits nothing.
 * **The checks.** `request_reason` refuses an entry opened under another round's root or under none, a root whose coin
@@ -53,7 +52,6 @@ from __future__ import annotations
 
 import json
 import struct
-import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -174,7 +172,7 @@ def request_table(salt: bytes | None, r: int, rows: int, entries: Sequence[Reque
 
 
 def first_ids(prompts: Mapping[str, Sequence[int]], order: Sequence[tuple[str, int]]) -> list[int | None]:
-    """Step 0's input token ids in its batch order (`batch_order`): each request's first rows are its first prompt tokens
+    """Step 0's input token ids in its batch order (the adapter's, as `pouw_h1.H1Run.admit` takes it): each request's first rows are its first prompt tokens
     (a window opens on new requests, with no prefix cached), None for a row past its prompt or of a request with none."""
     out: list[int | None] = []
     for req_id, rows in order:
@@ -476,39 +474,9 @@ def rounds_reason(log: Sequence[Mapping[str, Any]], commitment: LiveCommitment) 
         return str(e)
 
 
-def new_requests(scheduler_output: Any) -> list[tuple[str, Sequence[int] | None, int]]:
-    """The requests vLLM's scheduler admitted in this step (`SchedulerOutput.scheduled_new_reqs`, where Model Runner V2
-    also puts requests resumed after a preemption), each (req_id, prompt token ids, token cap). A request with prompt
-    embeddings has no prompt token ids here, and a pooling request no cap."""
-    out = []
-    for r in getattr(scheduler_output, "scheduled_new_reqs", None) or ():
-        params = getattr(r, "sampling_params", None)
-        prompt = None if getattr(r, "prompt_embeds", None) is not None else getattr(r, "prompt_token_ids", None)
-        out.append((str(r.req_id), prompt, int(getattr(params, "max_tokens", 0) or 0)))
-    return out
-
-
-def sort_batch_req_ids(num_tokens_per_req: Mapping[str, int], draft_tokens: Mapping[str, Sequence[int]],
-                       decode_query_len: int) -> list[str]:
-    """Model Runner V2's batch order at vLLM d9105ea8 (``vllm/v1/worker/gpu/model_runner.py``, `sort_batch_req_ids`):
-    verification and decode first, then short extends, then prefills, by rows; the runner's own is used when its module
-    has one (`batch_order`)."""
-    return sorted(num_tokens_per_req, key=lambda r: (not draft_tokens.get(r), num_tokens_per_req[r] != decode_query_len,
-                                                     num_tokens_per_req[r]))
-
-
-def batch_order(runner: Any, scheduler_output: Any) -> list[tuple[str, int]]:
-    """The step's scheduled requests, each (req_id, rows), in the order Model Runner V2 lays their rows out in the step's
-    inputs, and so in its linears' A tables (``gather_batch_req_state``, then ``prepare_inputs``' cumulative rows)."""
-    tokens = dict(getattr(scheduler_output, "num_scheduled_tokens", None) or {})
-    drafts = getattr(scheduler_output, "scheduled_spec_decode_tokens", None) or {}
-    sort = getattr(sys.modules.get(type(runner).__module__), "sort_batch_req_ids", None) or sort_batch_req_ids
-    return [(str(r), int(tokens[r])) for r in sort(tokens, drafts, runner.decode_query_len)]
-
-
 __all__ = ["ADMISSIONS", "EMPTY_REQUEST", "EMPTY_SLOT", "HM96_SALT", "HidingTable", "NO_RECEIPTS", "OPEN_REQUESTS_TAG",
            "PER_ROUND", "REQUESTS_NONCE", "ROUND0", "RequestEntry", "RoundOpening", "SLOTS_NONCE", "TABLES_NONCE", "TABLE_NONCES",
-           "TABLE_TAGS", "UNENTERED", "batch_order", "draw_root", "first_ids", "hiding_rows", "late_admission",
-           "new_requests", "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
+           "TABLE_TAGS", "UNENTERED", "draw_root", "first_ids", "hiding_rows", "late_admission",
+           "receipts_digest", "request_reason", "request_table", "requests_binding", "round_reason", "round_root",
            "round_row", "rounds_reason", "slot_leaf", "slot_owner", "slot_reason", "slot_table", "slots", "slots_binding",
-           "sort_batch_req_ids", "step_digest", "table_leaves", "table_root", "tables_reason"]
+           "step_digest", "table_leaves", "table_root", "tables_reason"]
