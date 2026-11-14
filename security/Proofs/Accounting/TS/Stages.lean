@@ -5,7 +5,7 @@ public import Proofs.Accounting.TS
 public import Proofs.Accounting.Lemmas.TS.Stages
 
 /-!
-# Sampled proofs under per-stage coins: proofs
+# SPOT under per-stage coins: proofs
 
 The round's step (`Stages.budget_point`): for `s ≥ 2`, `p ∈ [1/e, 1)`, `L = ln(1/p)` and `0 ≤ y ≤ m ≤ 1`,
 `e^{mL}·(1 − m + y)^s ≤ 1 − m + y/p`. With `t = m − y` and `λ = t/m`, Jensen on `x ↦ x^s` between `1` and `1 − m` gives

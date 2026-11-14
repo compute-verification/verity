@@ -286,7 +286,7 @@ would have to hold: 2,400 bits at s_max = 15. The declaration below makes it a f
   a frame-v3-sha512 tree of hm96-sha512 rows (circuits' X3), hidden, and registered before any coin that depends on it.
   The registration statement proves that the rows are `Sched_E(p_i, arrivals)` for the arrivals the ingress
   certificates give, and that i < N. The count holds whenever i was chosen, since acceptance takes any value of the
-  advice. The rule that the root precedes the coins is there for the sampled proofs, so that the circuit can't be shaped
+  advice. The rule that the root precedes the coins is there for SPOT, so that the circuit can't be shaped
   around the sample.
 
 **The count.** The profile's index is `log2 N` of each execution block's `|a|` bits, read by B's codec beside the send
