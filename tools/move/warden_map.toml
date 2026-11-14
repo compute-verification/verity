@@ -28,6 +28,9 @@
 #   rows and every kept run that a later step reads;
 # - the gate's verb `warden-rehearse`, which the deployed gate serves, so it changes with the gate's own deployment;
 # - `warden-fails`, the link name of a window's fails certificate (`<link>-fails`), which signed certificates hold;
+# - five public items' reasons (`service.py`'s `PUBLIC_WARDEN`, three of `tie_service.py`'s, one of `scan_zk.spec_of`'s),
+#   which a spec's digest takes in and the verifier holds a registered stream's spec to: a new format version, and every
+#   registration made under it;
 # - the trace corpus's labels `warden-heavy` and `warden-smallkv`: the corpus artifact and the fixture cut from it.
 #
 # Kept for `warden_tokens_map.toml`, by the same [keep]: every other hyphenated name (the flags `--warden-run` and
@@ -86,7 +89,7 @@ patterns = [
     # the word in a sentence, which after `warden_term_map.toml`'s move stands only in a string literal
     '''(?<![\w-])(?:[Tt]he|[Aa]|no|its|each|this|that|same|whose|active|honest|kept|synthetic|byte-cell|▶|\w+'s) warden(?![\w-])''',
     '''(?<!\w)warden's''',
-    '(?<![\w./-])warden (?:link-windows?|rehearsals?|ordinal|profile|traces?|tests|ports?|rows?|runs?|path|link|view|windows?|cells?|thread|ticker|arrival|admission|release|check|bucket|program|beside|in front)\b',
+    '(?<![\w./-])warden (?:link-windows?|execution phases?|rehearsals?|ordinal|profile|traces?|tests|ports?|rows?|runs?|path|link|view|windows?|cells?|thread|ticker|arrival|admission|release|check|bucket|program|beside|in front)\b',
     '(?<![\w./-])(?:device|another|client /) warden(?![\w-])',
     'warden \((?:its |\{WARDEN)',
     'max ms \| warden ',
@@ -105,6 +108,11 @@ strings = [
     "a warden link's two ends are on the warden's one grid",
     "this key reads only: a warden rehearsal",        # a message made from a kept value, as its test spells it
     '"on the warden path"',
+    "the active warden's schedule (`warden.WardenParams`, the digest both ends' heads ",   # public items' reasons
+    "the warden's domain (`warden_rows.domain`), which binds the session, the ",
+    "the warden's salted root over the window's bucket rows, its signed head's",
+    "B, L, R and T: the cells' bytes, the warden's lanes, its r and its buckets a ",
+    "the round's provenance: the group's link-windows of the warden's run",
 ]
 
 [rewrite]
