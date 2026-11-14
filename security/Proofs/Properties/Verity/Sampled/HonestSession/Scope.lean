@@ -2,6 +2,8 @@ module
 
 public import Proofs.Properties.Verity.Sampled.HonestSession.CircuitFile
 public import Proofs.Properties.Verity.Sampled.HonestSession.PublicFile
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The circuit is in the proved scope and its ports' published domains are distinct
@@ -30,7 +32,9 @@ private theorem unpinned_cH : ProvedScope.unpinned cH = true := by
 private theorem bitRowsU_cH : ProvedScope.bitRowsU cH = true := by
   unfold ProvedScope.bitRowsU HmOut.nIn
   rw [CircuitFile.cH_ports, CircuitFile.cH_outRowPorts]
-  simp [v2Row_yPort, yPort]
+  first
+  | (simp [v2Row_yPort]; done)
+  | (simp [yPort, ProvedScope.v2Row]; done)
 
 private theorem bitRows_cH : ProvedScope.bitRows cH = true := by
   unfold ProvedScope.bitRows
