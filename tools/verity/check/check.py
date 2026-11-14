@@ -463,10 +463,12 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 #: what a train check's shard books in its slot (`shard_ask_gib`), in GiB as a slot's mem= and book= are: the first row all of
 #: whose names the shard's parts hold (a name with a colon is that part, one without any part of that job; lean-agreement
 #: counts only where it runs), each the most such a shard's check scope held (its memory.peak) plus 15%, up to the next 10
-#: GiB, or where a row says so the memory its suites' workers need. ci.toml's plans place the parts; slot.py books the larger
-#: of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
+#: GiB, or where a row says so the memory its suites' workers need or the slice it must fit. ci.toml's plans place the
+#: parts; slot.py books the larger of this and the slot line's book= (`booked`), and no grant passes the booking (`slot_mem_gb`)
 SHARD_ASKS_GIB: tuple[tuple[tuple[str, ...], int], ...] = (
-    (("lean-agreement",), 470),                                  # the agreement beside lean-build, Flock suite: 406 + 15%
+    # the agreement beside lean-build, Flock suite: 406 + 13%, not 15%, so that it fits vy-nebius-cpu-8's 468 GiB user slice,
+    # whose train line takes such shards and, placed there by the train minimum, a larger ask would never start
+    (("lean-agreement",), 460),
     (("lean-audit:security/Proofs",), 330),                      # security/Proofs replayed beside pytest, suites: 282 + 15%
     (("circuit-check",), 340),                                   # circuit-check granted the slot once alone: 292 + 15%
     (("pytest:verity/definitions", "lean-suites:verity-vllm:1/3"), 170),   # its test beside the parallel suites: 144 + 15%

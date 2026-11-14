@@ -809,5 +809,5 @@ def test_a_train_shards_launch_asks_its_slot_for_what_its_steps_take(monkeypatch
     assert CHECK.SLOT.RUN_MEM_ENV not in env("--deferred", steps, "--shard", "1/3"), "a lane's check books its slot line alone"
     assert CHECK.SLOT.RUN_MEM_ENV not in (whole := env("--priority")) and CHECK.SLOT.MIN_MEM_ENV in whole
     build = ["lean-build", "lean-audit:security/Properties", "lean-agreement"]
-    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 470 and CHECK.shard_ask_gib(build, []) == 130
+    assert CHECK.shard_ask_gib(build, ["lean-agreement"]) == 460 and CHECK.shard_ask_gib(build, []) == 130
     assert all(CHECK.SLOT.gib(float(CHECK.ask_gb(g))) == g for _, g in CHECK.SHARD_ASKS_GIB)
