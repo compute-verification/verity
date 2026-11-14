@@ -172,10 +172,15 @@ trial's. -/
 noncomputable def costMix (y : Σ _ : x.Ses, TrialAt W) : ℝ := (∑ j ∈ Finset.range y.1.1, (W j).t') + trialCost y.2
 
 /-- An opening a trial found for a common value: its session's opening of the value's preimage. -/
-noncomputable def op : (Σ _ : x.Ses, TrialAt W) → x.V → OpenAt W
+noncomputable def opAt : (Σ _ : x.Ses, TrialAt W) → x.V → OpenAt W
   | ⟨_, none⟩, _ => none
   | ⟨_, some ⟨t, τ, o⟩⟩, v => some ⟨t, opOfVZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀)
       (tabZHJ (W t).dj (W t).y₀) (W t).vb (reg ((W t).sim τ)) (cont ((W t).sim τ)) (x.pos t) o (pull (x.e t) v)⟩
+
+/-- **What a trial read at the leaf, each common value with the opening `opAt` gives it**: the list the finder's output
+searches (`LinkFinder.outOf`). The readings are listed by `LinkFinder.listed`: an order, and through `opAt` openings,
+taken by choice. -/
+noncomputable def op : (Σ _ : x.Ses, TrialAt W) → List (x.V × OpenAt W) := listed (rdSig fun _ => x.rd) x.opAt
 
 /-- **The collision from two openings of the leaf**, from any two sessions: `hm96`'s extractor on their bytes and
 salts. -/

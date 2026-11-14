@@ -169,10 +169,11 @@ noncomputable def plur (R : Reg) (τ : Cont L Reg PS.session R) : B.Trace := fun
   else default
 
 /-- **The link finder for `c`**: a trial, then up to `M` more until one reads anything (`LinkFinder.finderG`); its
-output is a collision from two openings of `c` with different values (`LinkFinder.outOf`). -/
+output is a collision from two openings of `c` with different values (`LinkFinder.outOf`). The trial's readings are
+listed by `LinkFinder.listed`, with the opening `Tr.op` gives each: an order and openings taken by choice. -/
 noncomputable def finderOut (R : Reg) (τ : Cont L Reg PS.session R) (c : B.Pos) :
     Tr.Out × List Tr.Out → Option (List UInt8 × List UInt8) :=
-  outOf (Tr.rd R τ c) (Tr.op R τ c) B.collide
+  outOf (Tr.rd R τ c) (listed (Tr.rd R τ c) (Tr.op R τ c)) B.collide
 
 /-- **ecr/sha-512 at the prover's link finders** (`Assumptions.SHA512CRExpected`, named): at the registration `R` and the
 prover's state `τ`, the finder for each position a sample reads finds a collision of `Hc` with probability at most its

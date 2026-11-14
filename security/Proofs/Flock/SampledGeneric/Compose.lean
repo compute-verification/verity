@@ -91,7 +91,7 @@ theorem errOf_plur_le {Xc : (R : Reg) → Cont L Reg PS.session R → B.Trace} (
   split_ifs with h
   · exact link_mass_le (Tr.T R τ c h) (Tr.sT R τ c h) (Tr.rd R τ c) Hc (Tr.finderOut R τ c) (Tr.cost R τ)
       (hwf.1 R τ) M hM
-      (fun x hS => outOf_spec (Tr.rd R τ c) (Tr.op R τ c) B.collide (fun o => B.com o = B.cs R c) B.val
+      (fun x hS => outOf_listed_spec (Tr.rd R τ c) (Tr.op R τ c) B.collide (fun o => B.com o = B.cs R c) B.val
         (fun e v hv => hop R τ c e v hv) (fun o o' h h' hv => B.collide_spec o o' (h.trans h'.symm) hv) x hS)
       (hCR c h) (hX R τ c h)
   · simp only [mul_zero, zero_div, zero_add]
