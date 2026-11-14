@@ -83,10 +83,10 @@ noncomputable abbrev tabExtL (ω : L.Ω) (u : Fin n) (bs : List (List (OutCL �
     ((stratωL H E Lf plan R τ ω).1 (tab (L.draw ω) R u)) bs
 
 open Classical in
-/-- **The message the extraction settles on for unit `u`'s table**: the first message the radius decoder lists
-(`Claims.GS.flockDecodeR`, at the extracted table's columns written out, `colsL`) that is close to the extracted table
+/-- **The message the extraction settles on for unit `u`'s table**: the first message the radius decoder lists at the
+extracted table (`decodeL`: `Claims.GS.flockDecodeR` at the table's columns written out) that is close to the table
 and packs a satisfying witness. It is a search of the decoder's list: among the close messages none is chosen. The
-decoder lists every close message (`mem_flockDecodeR_of_close`), so there is a candidate exactly when the table is
+decoder lists every close message (`mem_decodeL_of_close`), so there is a candidate exactly when the table is
 committed (`candL_of_committed`, `candL_spec`). The decoder hashes nothing. Its list is defined and not computed: the
 decoder reads a message off its polynomials by the inverse of the novel-basis coefficient map
 (`Claims.GS.novelInvEquiv`), over the novel-basis polynomials (`xP`), and each of the two is taken by choice, as is
@@ -94,8 +94,7 @@ decoder reads a message off its polynomials by the inverse of the novel-basis co
 noncomputable def candL (ω : L.Ω) (u : Fin n) (bs : List (List (OutCL 𝔽 D Sl))) :
     Option (Message 𝔽 (Partition.tabOf plan tab (L.draw ω) R u).sch.k0
       (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logCols) :=
-  (Claims.GS.flockDecodeR (Partition.tabOf plan tab (L.draw ω) R u).hsch
-    (colsL (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs))).find? fun M =>
+  (decodeL (Partition.tabOf plan tab (L.draw ω) R u).hsch (tabExtL H E Lf plan tab R τ ω u bs)).find? fun M =>
     decide (Model.Close (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.radius
         (asTable (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs))
         (encode execArith (Partition.tabOf plan tab (L.draw ω) R u).sch.level₀.logLen M) ∧
@@ -206,13 +205,13 @@ theorem candL_spec {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
   simpa only [decide_eq_true_eq] using List.find?_some h
 
 /-- **A committed table has a candidate**: the radius decoder lists the close message that packs a satisfying
-witness (`mem_flockDecodeR_of_close`), so the search finds one that fits. -/
+witness (`mem_decodeL_of_close`), so the search finds one that fits. -/
 theorem candL_of_committed {ω : L.Ω} {u : Fin n} {bs : List (List (OutCL 𝔽 D Sl))}
     (hc : Committed execArith (Partition.tabOf plan tab (L.draw ω) R u).S
       (Partition.tabOf plan tab (L.draw ω) R u).sch (tabExtL H E Lf plan tab R τ ω u bs)) :
     ∃ M, candL H E Lf plan tab R τ ω u bs = some M := by
   obtain ⟨M, hM, hS⟩ := hc
-  have hmem := mem_flockDecodeR_of_close (Partition.tabOf plan tab (L.draw ω) R u).hsch
+  have hmem := mem_decodeL_of_close (Partition.tabOf plan tab (L.draw ω) R u).hsch
     (tabExtL H E Lf plan tab R τ ω u bs) M hM
   have hsome : (candL H E Lf plan tab R τ ω u bs).isSome := by
     unfold candL

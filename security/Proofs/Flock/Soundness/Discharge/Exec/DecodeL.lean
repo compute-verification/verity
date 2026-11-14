@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Flock.Claims.GS.Radius
-public import Proofs.Flock.Claims.NumbersRadius
-public import Definitions.Flock.Defs
+public import Proofs.Flock.Soundness.Instance
+import Proofs.Flock.Claims.GS.Radius
+import Proofs.Flock.Claims.NumbersRadius
 
 /-!
 # The radius decoder lists every message close to a table
@@ -10,12 +10,17 @@ public import Definitions.Flock.Defs
 A level-0 message is close to a table (`Model.Close`, at the level's radius `γ = 1 − √ρ − 1/200`) when its encoding
 agrees with the table at enough positions. The radius decoder (`Claims.GS.flockDecodeR`) lists every message within
 that same radius of the word it is given (`Claims.GS.listWithin_flockDecodeR`). So, given a table's columns written out
-in order (`colsL`), it lists every message close to the table: `mem_flockDecodeR_of_close`.
+in order (`colsL`), it lists every message close to the table: `decodeL` is that list, and `mem_decodeL_of_close` says
+it holds each close message.
 
 A search of the decoder's list therefore finds a close message that packs a satisfying witness whenever one exists,
 and among the close messages it chooses none (`Exec.candL`). The decoder's own definition still takes by choice the
 novel-basis polynomials (`xP`), the inverse of their coefficient map (`Claims.GS.novelInvEquiv`) and its code's
 `ofRows` (`Claims.Flock.levelZero`).
+
+The decoder is imported privately, and `decodeL`'s value is not exposed: a module that imports this one reads the list
+as a constant with `mem_decodeL_of_close`, and gains none of the decoder's own imports. A lemma that reads the
+decoder's definition goes in this module.
 -/
 
 @[expose] public section
@@ -53,7 +58,7 @@ theorem find?_colsOf {Col : Type} (f : ℕ → Col) {n i : ℕ} (hi : i < n) :
       simp
 
 /-- **The zero-fill of a written-out word is the word**: nothing is left to fill. -/
-theorem fill_colsOf {Col : Type} [Zero Col] (n : ℕ) (f : ℕ → Col) (i : Fin n) :
+private theorem fill_colsOf {Col : Type} [Zero Col] (n : ℕ) (f : ℕ → Col) (i : Fin n) :
     Claims.Flock.fill n (colsOf n f) i = f i.val := by
   unfold Claims.Flock.fill
   rw [find?_colsOf f i.isLt]
@@ -72,14 +77,24 @@ theorem card_filter_le_of_imp {α : Type} [Fintype α] (p q : α → Prop) (hp :
     rw [Finset.mem_filter] at ha ⊢
     exact ⟨ha.1, h a ha.2⟩
 
+/-- **The radius decoder's list at a table**: at a `fast100` schedule, the level-0 messages the radius decoder
+(`Claims.GS.flockDecodeR`) lists at the table `C`'s written-out columns (`colsL`). It holds every message close to the
+table (`mem_decodeL_of_close`). The list is defined and not computed: the decoder reads a message off its polynomials
+by the inverse of the novel-basis coefficient map (`Claims.GS.novelInvEquiv`), over the novel-basis polynomials (`xP`),
+and each of the two is taken by choice. Its value is not exposed to a module that imports this one. -/
+@[no_expose] noncomputable def decodeL {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (C : Oracle 𝔽) :
+    List (Message 𝔽 sch.k0 sch.level₀.logCols) :=
+  Claims.GS.flockDecodeR h (colsL sch C)
+
 /-- **The radius decoder lists every message close to the table**: at a `fast100` schedule, a level-0 message whose
-encoding is within the level-0 radius of the table `C` is in `flockDecodeR`'s list at `C`'s written-out columns. The
-level's radius is the decoder's `θ` (`Numbers.level_radius_eq`), and closeness counts the positions where every lane
-agrees, which are the positions where the columns agree. -/
-theorem mem_flockDecodeR_of_close {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (C : Oracle 𝔽)
+encoding is within the level-0 radius of the table `C` is in the decoder's list at `C` (`decodeL`). The level's radius
+is the decoder's `θ` (`Numbers.level_radius_eq`), and closeness counts the positions where every lane agrees, which
+are the positions where the columns agree. -/
+theorem mem_decodeL_of_close {m : ℕ} {sch : Schedule} (h : fast100 m = some sch) (C : Oracle 𝔽)
     (M : Message 𝔽 sch.k0 sch.level₀.logCols)
     (hM : Model.Close sch.level₀.radius (asTable sch C) (encode execArith sch.level₀.logLen M)) :
-    M ∈ Claims.GS.flockDecodeR h (colsL sch C) := by
+    M ∈ decodeL h C := by
+  unfold decodeL
   refine Claims.GS.listWithin_flockDecodeR h (colsL sch C) M ?_
   have himp : ∀ q : Fin (2 ^ sch.level₀.logLen),
       (∀ ℓ, asTable sch C ℓ q = encode execArith sch.level₀.logLen M ℓ q) →
