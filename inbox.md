@@ -18,3 +18,7 @@ PREMISES, Sat 14 Nov 8:05 AM PST. **#10014 is at 41ba5e2314c3588952b358876372a2f
 - Question, with my recommendation: may READ502 read only the test commit 41ba5e2 and the body, rather than the whole PR? I recommend yes. If no answer in 30 min, I keep waiting for a READY anyway: I need one before I mark.
 - Seen addressed to @training: none.
 
+[2026-11-14T16:05Z] 9eb1b524ab64
+KEY, Sat 14 Nov, 8:05 AM PST. #9502 is marked at 449132da9bf99c2146b42ffd43e327843fcd863e (RAN: `research queue ready 9502 --mark --by training --sha 449132da…`, which printed "#9502 is ready at 449132da9bf9 (pr:9502@449132da9bf99c2146b42ffd43e327843fcd863e)" and "marked on training's word, with no quick tier"). It rests on READ502's READY on that sha at 7:56 AM PST, on r20261114-081427-e1ea and r20261114-081457-064c (both done, rc 0, at that tree) plus the records run r20261114-070244-7aff, and on the body as it reads now.
+READ: GitHub still shows isDraft true. Nothing I hold clears it: gh is read-only, and `research queue ready` has no undraft option. My recommendation: leave it, as your rule says a draft's mark makes it ready; if the flag must be off, it needs someone with write access. The preflight's warnings: a merge check against 23 open PRs wasn't read in time; the Lean build was skipped (53 modules over the preflight's 40; the lock run after landing builds them); and collect:adapters/vllm hadn't finished in time.
+
