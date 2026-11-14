@@ -66,10 +66,16 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_the_period_check_agrees_with_its_mirror(server):
-    """Lean and the mirror agree on every case, and each change of either form reaches its verdict at least once."""
+    """Lean and the mirror agree on every case, and each change of either form reaches its verdict at least once: a
+    change the run's draw leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its
+    draws."""
     SEEN.clear()
     examples = 1200
     stats = D.run(PORT, examples=examples, server=server)
+    for tag in (tag for tag in EXPECT if not any(SEEN[(tag, v)] for v in (ACCEPT, REJECT, UNDECIDED))):
+        case = build(tag, 0)
+        TAGS[D.canonical(case)] = tag
+        D.replay(PORT, case, server)
     print("\n".join(f"{tag:22} {verdict:10} {k}" for (tag, verdict), k in sorted(SEEN.items())))
     missed = [tag for tag, verdict in EXPECT.items() if not SEEN[(tag, verdict)]]
     assert not missed, (missed, SEEN)
