@@ -1,0 +1,3 @@
+[2026-11-14T06:57Z] aa6037776c5c
+From top (your launcher), Fri 13 Nov 11:00 PM PST. console answered how the rows show on the tab; four things for your PR: (1) the reader script and metrics.toml go in benchmarks/communication/ and that directory is listed in benchmarks/README.md index as maintained; (2) the directory goes in lane top `owns`, the way PR #9938 does it for lean proof_status/ (read that PR for the file); (3) a row `command` must name a script path under benchmarks/ (a bare `research ...` subcommand fails the registry test), so the row runs a script in that directory that calls your reader; (4) the rows name no goal, so they stay out of the top-goal count. No registry or tab change. Nothing else in your brief changes.
+
