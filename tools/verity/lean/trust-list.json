@@ -1,0 +1,21 @@
+{
+ "list": {
+  "Claims.ExpectedCR": {"reason": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512)"},
+  "Claims.StrictBirthday": {"reason": "SHA-512 collision resistance: the strict birthday bound at one finder (cr/sha-512)"},
+  "FlockSoundness.Assumptions.SHA512CRExpected": {"reason": "SHA-512 collision resistance, in expected time (ecr/sha-512)"},
+  "FlockSoundness.Assumptions.SHA512CRStrict": {"reason": "SHA-512 collision resistance, in strict time (cr/sha-512)"},
+  "FlockSoundness.Assumptions.UniformRandomBytes": {"reason": "the honest verifier server's uniform randomness: the bytes it reads from its operating system are uniform"},
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": {"reason": "the honest verifier server's uniform randomness, at one test"},
+  "Verity.Assumptions.ChallengerLogsCoins": {"reason": "the honest verifier server: its challenger logs every coin it releases, each its own flip"},
+  "Verity.Assumptions.FlipsAfterRecorded": {"reason": "the honest verifier server: its challenger flips a coin only after its log before that coin is fixed"},
+  "Verity.Assumptions.VerifierReadsLog": {"reason": "the honest verifier server: the verifier reads its coins only from its challenger's log"},
+  "Verity.Assumptions.TrustedHost": {"reason": "the honest verifier server: the auditor's devices run their stated code on hosts the prover doesn't control (trusted-host), part of it by ruling"},
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": {"reason": "the honest verifier server: the record the verifier reads is the one its challenger wrote, and the draw file the one it printed"},
+  "Hash.Assumptions.LmsUnforgeable": {"reason": "LMS unforgeability: the remote audit's device signatures, and pinned on-site device keys"},
+  "Claims.Hm96Hiding": {"reason": "hm96 hiding (hash-derived-key), for the zero-knowledge guarantees only", "only": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed", "Flock.SecurityProofs.SessionLoopZKDeployed"]},
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": {"reason": "hm96-sha512's salt key is outside the keys its hiding bound fails for (hash-derived-key), for the zero-knowledge guarantees only", "only": ["Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed", "Flock.SecurityProofs.SessionLoopZKDeployed"]},
+  "FlockSoundness.Assumptions.KeyedStreamsUniform": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for the streamed wipe's labels and PoUS only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]},
+  "Hash.Assumptions.Sha512Prf": {"reason": "A4, SHA-512 as a PRF (prf/sha-512), for PoUS's index streams and the streamed wipe's labels only", "only": ["Pous.EndToEnd.SecurityProofs.endToEndRingDeployed", "Pous.Period.SecurityProofs.periodHeld", "Pous.Period.SecurityProofs.periodHeldDeployed", "Pous.SecurityProofs.StreamedWipe"]}
+ },
+ "pending": {}
+}

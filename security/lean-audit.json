@@ -3330,6 +3330,7 @@
    "Claims.ZKMal.RefSession.SwCausalOn",
    "Claims.ZKServer.LeanRelease.FillRoundEq",
    "Claims.ZKServer.LeanRelease.LiveRoundEq",
+   "Claims.ZKServer.Loop.Src",
    "Flock.Guarantees.LoopInnerRound0"
   ],
   "NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"]

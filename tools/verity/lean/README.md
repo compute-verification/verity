@@ -162,6 +162,10 @@ keeps or drops from and never adds to.
   `trust_gap`: {deployed guarantee: its premises outside its trust}, which only a person adds to and `--update` drops
   from; the report prints each gap (`trust_failures`, `trust_gaps`). `verity lean deployed [--rev REV]` prints every lock's
   deployed guarantees with each one's gap and its premises, counted once by name across the locks, as JSON from git alone.
+  `posture.py` prints one line per deployed guarantee, each premise marked against Daniel's trust list
+  (`trust-list.json`), which `tests/test_trust_list.py` holds every deployed guarantee to, outside its gap; a
+  definition still by choice that its record's `premises.choosing` names (the lock's `choosing`) is one of its open
+  premises.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside (`record_scope`).
 - `escapes`: every declaration a proof cannot unfold (`opaque`, which a `partial def` is, `unsafe`,
