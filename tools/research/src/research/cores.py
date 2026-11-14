@@ -28,8 +28,10 @@ import time
 from pathlib import Path
 from typing import Callable
 
-CLAIMS = Path(os.environ.get("RESEARCH_CPU_CLAIMS_DIR", "/workspace/research/locks/cpu-claims"))
-CPU_ROOT = Path(os.environ.get("RESEARCH_CPU_ROOT", "/sys/devices/system/cpu"))
+from . import settings
+
+CLAIMS = Path(settings.get("RESEARCH_CPU_CLAIMS_DIR", "/workspace/research/locks/cpu-claims"))
+CPU_ROOT = Path(settings.get("RESEARCH_CPU_ROOT", "/sys/devices/system/cpu"))
 POLL_S = 15
 
 
@@ -208,10 +210,10 @@ def main(argv: list[str], *, sleep: Callable[[float], None] = time.sleep,
 
             ack_launch(ns.ack, "cpu-hold")
 
-    d = Path(os.environ.get("RESEARCH_CPU_CLAIMS_DIR", CLAIMS))
+    d = Path(settings.get("RESEARCH_CPU_CLAIMS_DIR", CLAIMS))
     try:
         got, fd = hold(max(ns.cpus, 1), parse(ns.share), ns.who, rank=ns.rank,
-                       d=d, root=Path(os.environ.get("RESEARCH_CPU_ROOT", CPU_ROOT)), sleep=sleep, on_hold=on_hold)
+                       d=d, root=Path(settings.get("RESEARCH_CPU_ROOT", CPU_ROOT)), sleep=sleep, on_hold=on_hold)
     except ValueError as e:
         print(f"research cpu-hold: {e}", file=sys.stderr)
         return 2

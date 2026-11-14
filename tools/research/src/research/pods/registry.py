@@ -45,6 +45,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Callable
 
+from .. import settings
 from . import strip_pod_suffix
 
 REGISTRY_ENV = "RESEARCH_MACHINES_D"
@@ -282,7 +283,7 @@ def _write_checked(name: str, entry: dict[str, Any], mt: Path, *, replace: bool,
     if same:
         return p, "unchanged"
     now = now or dt.datetime.now(dt.timezone.utc)
-    entry["registered_by"] = os.environ.get("RESEARCH_AGENT") or socket.gethostname()
+    entry["registered_by"] = settings.get("RESEARCH_AGENT") or socket.gethostname()
     entry["registered_at"] = f"{now:%Y-%m-%dT%H:%MZ}"
     write_entry(d, name, entry)
     return p, "updated" if old is not None else "registered"
@@ -352,7 +353,7 @@ def plan_import(machines_toml: Path, d: Path, running: set[str] | None) -> list[
 def _sync(paths: list[Path]) -> str | None:
     from .. import notes_sync
 
-    if os.environ.get(notes_sync.SYNC_ENV, "").strip() in ("0", "false", "no", "off"):
+    if settings.get(notes_sync.SYNC_ENV, "").strip() in ("0", "false", "no", "off"):
         return None
     root = notes_root()
     rel = [str(p.relative_to(root)) for p in paths if root in p.parents]

@@ -17,6 +17,7 @@ import urllib.request
 from pathlib import Path
 from typing import Callable
 
+from .. import settings
 from . import model
 
 DEFAULT_URL = "https://website-docs-sage.vercel.app"
@@ -57,7 +58,7 @@ def load_token(environ: dict[str, str] | None = None, path: Path | None = None, 
 
 class HTTPClient:
     def __init__(self, url: str | None = None, token: str | None = None):
-        self.url = (url or os.environ.get(URL_ENV) or DEFAULT_URL).rstrip("/")
+        self.url = (url or settings.get(URL_ENV) or DEFAULT_URL).rstrip("/")
         self._token = token if token is not None else load_token()
 
     def __repr__(self) -> str:

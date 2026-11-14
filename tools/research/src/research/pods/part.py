@@ -18,7 +18,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import remote
+from .. import remote, settings
 from ..env import sku_family
 
 TOLERANCE = 0.12
@@ -226,10 +226,9 @@ def main(argv: list[str]) -> int:
             ap.add_argument("--hours", type=float, required=True, help="the lease ends no sooner than now + H (it is never shortened)")
             ap.add_argument("--by", default=None, help="who extends it, recorded in the lease line (default $RESEARCH_LANE, else user@host)")
         ns = ap.parse_args(argv[1:])
-        import os
         import socket
 
-        by = (getattr(ns, "by", None) or os.environ.get("RESEARCH_LANE") or f"{os.environ.get('USER', '?')}@{socket.gethostname()}").replace(" ", "_")
+        by = (getattr(ns, "by", None) or settings.get("RESEARCH_LANE") or f"{settings.get('USER', '?')}@{socket.gethostname()}").replace(" ", "_")
         cmd = lease.remote_argv("extend", str(int(ns.hours * 3600)), by) if argv[0] == "extend" else lease.remote_argv("show")
         try:
             r = remote.ssh_run(ssh_base(ns.target), cmd, timeout=90)

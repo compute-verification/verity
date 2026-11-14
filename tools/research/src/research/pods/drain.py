@@ -25,21 +25,20 @@ from __future__ import annotations
 
 import calendar
 import json
-import os
 import re
 import sys
 import time
 from pathlib import Path
 from typing import Any, Callable
 
-from .. import remote
+from .. import remote, settings
 from ..store import preserved as P
 from ..store.local import LocalStore
 
 
 
 def drain_log_path() -> Path:
-    return Path(os.environ.get("RESEARCH_DRAIN_LOG", Path.home() / ".research" / "pods" / "drain.log"))
+    return Path(settings.get("RESEARCH_DRAIN_LOG", Path.home() / ".research" / "pods" / "drain.log"))
 
 
 POD_ID_RE = re.compile(r"[a-z0-9]{12,20}")      # runpod ids; a typo'd machine name must not become a terminate call
