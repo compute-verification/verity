@@ -863,6 +863,18 @@ def test_an_emptied_packages_init_of_comments_alone_is_deleted_and_certified(tmp
     assert cert["rules"]["emptied"] == ["verity/hardware/cards/__init__.py", "verity/hardware/nodes/__init__.py"]
 
 
+def test_a_relative_path_to_a_file_that_moves_beside_it_stays_relative_and_is_certified(tmp_path):
+    """`../../device/two_stage.sh` in `prover/audit/README.md` names a file the map moves into the README's own directory:
+    it is written `./two_stage.sh`, a path still read as relative, and `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {"spot/device/two_stage.sh": "echo two\n", "spot/prover/audit/README.md": "The stage (`../../device/two_stage.sh`).\n"},
+                '[roots]\nold = {}\nnew = {}\n\n[paths]\n"spot/device/two_stage.sh" = "spot/prover/audit/two_stage.sh"\n')
+    assert p.returncode == 0, p.stderr
+    assert (r / "spot/prover/audit/README.md").read_text() == "The stage (`./two_stage.sh`).\n"
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
 @pytest.mark.parametrize("held", ['"""The data sheets, one a GPU."""\n', CODE, b"# caf\xe9\n"])
 @pytest.mark.parametrize("dry", [False, True])
 def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_the_fix(tmp_path, held, dry):
