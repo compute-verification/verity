@@ -5,7 +5,7 @@ serving semantics that the commit store does not materialise.
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
 module provides that production path for four derived classes, as numpy twins of the registered gate
-semantics (`verity.definitions.registry.b1` / `prims`) in the `rmsnorm_fused` pattern:
+semantics (`verity_vllm.definitions.registry.b1` / `prims`) in the `rmsnorm_fused` pattern:
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
     per-row scalars ``(sum, mean_eps, rms, inv)`` — `inv` is the gate
@@ -40,8 +40,8 @@ from functools import lru_cache
 
 import numpy as np
 
-from verity.definitions.registry import b1
-from verity.definitions.registry import prims as P
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry import prims as P
 
 # ---------------------------------------------------------------------------------------------------------
 # bit helpers (numpy on uint32 / int64 encodings)
@@ -195,13 +195,13 @@ def fma_sub_ftz(a, b, c):
 
 @lru_cache(maxsize=None)
 def _fa2_tables():
-    from verity.definitions.numerics import fa2_relation
+    from verity_vllm.definitions.numerics import fa2_relation
     return fa2_relation.tables()
 
 
 @lru_cache(maxsize=None)
 def _rms_tables():
-    from verity.definitions.numerics import rms_relation
+    from verity_vllm.definitions.numerics import rms_relation
     return rms_relation.tables("cuda")  # sqrt + rcp + rsq banks
 
 
@@ -565,7 +565,7 @@ def dot_bf16_for(dot_prim_id: str):
 # Hopper FP8 tensor-core k32 step, vectorised (veritor.core.silicon HOPPER_E4M3_K32 / silicon_total_fp8
 # HOPPER_E4M3_WGMMA_K32: ONE group of 32 exact e4m3 products + the accumulator, 14-bit truncating adder, exponent
 # floor -139; measured on an H100, 144,543,744 words, 0 mismatches) and the two block-scaled FP8 linear
-# families of the Qwen3-4B-FP8 Program (`verity/definitions/registry/fp8.py`: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}).
+# families of the Qwen3-4B-FP8 Program (`adapters/vllm/verity_vllm/definitions/registry/fp8.py`: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}).
 # The scalar Definitions are the reference; these twins are checked word-for-word against them and against the saved
 # H100 kernel words (`tests/program/data/fp8_block_operands.npz`) in tests/program/test_derived_rows_fp8.py.
 # ---------------------------------------------------------------------------------------------------------
@@ -676,7 +676,7 @@ def fp8_group_quant_row(x: np.ndarray, *, G: int = 128) -> tuple[np.ndarray, np.
     bytes, sx (K/G,) f32 words).  Per group: `s = fmaxf-fold(eps=1e-10f, |f32(x_e)|) / 448.0f` (an exact max -- fmaxf drops a NaN
     operand -- then an IEEE div.rn.f32), `xq[e] = cvt.rn.satfinite.e4m3(fminf(fmaxf(f32(x[e]) / s, -448), 448))` (a true division; a NaN
     quotient is dropped by fmaxf -> -448 -> 0xFE, the kernel's word)."""
-    from verity.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat     # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
+    from verity_vllm.definitions.numerics.fp8_twins import np_f32_to_e4m3_sat     # the Definition's own vectorised `cvt.rn.satfinite.e4m3` twin
     x = np.asarray(x, dtype=np.uint16).reshape(-1)
     K = x.size
     if K % G:
@@ -755,7 +755,7 @@ def rmsnorm_fused_v2_rows(x: np.ndarray, res: np.ndarray, w: np.ndarray, eps: fl
     ``normed``/``resid`` and the derived f32 words ``var`` (cub BlockReduce output) and ``s``
     (`RsqrtApprox(var / N + eps)`).  Delegates to `rmsnorm_fused.fused_rows` (the twin that
     reproduced 2,340/2,340 fused-norm rows of the B0 store) with the v2 variance tree."""
-    from verity.definitions.numerics.rmsnorm_fused import fused_rows, variance_v2
+    from verity_vllm.definitions.numerics.rmsnorm_fused import fused_rows, variance_v2
     R, N = np.asarray(x).shape
     w2 = np.ascontiguousarray(np.broadcast_to(np.asarray(w, dtype=np.uint16), (R, N)))
     out, rp, var, s = fused_rows(np.ascontiguousarray(x, dtype=np.uint16),

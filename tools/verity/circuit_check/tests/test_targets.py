@@ -325,7 +325,7 @@ def test_reading_every_hook_imports_no_module_of_the_catalog():
             "from circuit_check import sidecars as SC, targets as TG\n"
             "for name in TG.HOOKS:\n"
             "    TG._handed(name)\n"
-            "print(sorted(m for m in sys.modules if m.startswith(('verity.definitions.registry', 'verity.definitions.numerics',"
-            " 'verity.definitions.boolean')) and not m.endswith('.circuit-check')))\n")
+            "print(sorted(m for m in sys.modules if m.startswith(('verity_vllm.definitions.registry', 'verity_vllm.definitions.numerics',"
+            " 'verity_vllm.definitions.boolean')) and not m.endswith('.circuit-check')))\n")
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True)
     assert r.stdout.strip() == "[]", r.stdout + r.stderr

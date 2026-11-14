@@ -126,7 +126,7 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
 def test_a_reader_of_a_program_takes_the_version_it_names_and_not_the_newest():
     """`MoeSum_v1` is the word of two registered Boolean Definitions: the newest is its Boolean version, ``family`` takes the
     other, and a family that does not name the word is refused by name.  The two answers are kept apart."""
-    from verity.definitions.registry import moe as M
+    from verity_vllm.definitions.registry import moe as M
 
     w = bind(M.MoeSum, TOPK=2, H=8)
     assert descriptor_id(BB.boolean_version(w)) == "MoeSum_v3{TOPK=2,H=8}"

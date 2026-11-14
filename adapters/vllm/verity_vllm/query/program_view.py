@@ -583,7 +583,7 @@ def specialization(fam: str, statics: dict[str, Any]) -> Any:
     """`call_scope.specialization` over the catalog, every module loaded (`registry.catalog.load`): the registered Definition
     `fam` bound to `statics`."""
     from verity.circuits.call_scope import specialization as bound
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     return bound(fam, statics, load()[0])
 
 

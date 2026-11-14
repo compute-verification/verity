@@ -10,8 +10,8 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments.gates import embedding as EMB
 from verity.circuits.call_scope import spec_base, spec_statics, specialization
-from verity.definitions.registry.catalog import load
-from verity.definitions.registry import boolean_fp8_moe as BM
+from verity_vllm.definitions.registry.catalog import load
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 
 
 def test_a_specialized_definition_valued_static_binds_to_its_family_at_its_own_record():
@@ -25,7 +25,7 @@ def test_a_specialized_definition_valued_static_binds_to_its_family_at_its_own_r
 def test_the_family_is_the_one_the_handed_registry_holds():
     from verity.circuits.defs import REGISTRY, DefinitionTable
     from verity.circuits import call_scope as CS
-    from verity.definitions.registry import b1  # noqa: F401  (registers Gemm_v1)
+    from verity_vllm.definitions.registry import b1  # noqa: F401  (registers Gemm_v1)
 
     reg = DefinitionTable()
     reg.add(REGISTRY.defs["Gemm_v1"])

@@ -1,6 +1,6 @@
 """Each Definition module's circuit-check bindings and pins, in sidecar files beside it.
 
-    fp8.py                    a Definition module (`verity.definitions.registry.fp8`)
+    fp8.py                    a Definition module (`verity_vllm.definitions.registry.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);

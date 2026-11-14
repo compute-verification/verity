@@ -11,11 +11,11 @@ import numpy as np
 
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.evaluation import evaluate_batch, kernels
-from verity.definitions.registry import sampling as SA
-from verity.definitions.registry import sampling_rows as SR
-from verity.definitions.registry import topp_keep_builder as K
-from verity.definitions.registry import topp_stages as T
-from verity.definitions.registry.topp_word_gates import GATES, SIG, WIDTH
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import sampling_rows as SR
+from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity_vllm.definitions.registry import topp_stages as T
+from verity_vllm.definitions.registry.topp_word_gates import GATES, SIG, WIDTH
 
 _M32 = np.uint64(0xFFFFFFFF)
 
@@ -271,7 +271,7 @@ def mask_chunk(logits, temp, splits, *rest, V: int, N: int, FIRST: bool, LAST: b
     """`TopPMaskChunk_v1{V,N,FIRST,LAST}` on one instance: `topp_stages.mask_lanes` in :class:`ArrayEngine`, its lanes, then
     its carry unless LAST.  It declines a carry that is no lane's (`carry_words`): the engine keeps a count or position to its
     CW bits, where the Definition's gates add in 32, and the two agree where the positions are a lane's."""
-    from verity.definitions.numerics.kernel_registry import Declined
+    from verity_vllm.definitions.numerics.kernel_registry import Declined
 
     E = ArrayEngine()
     lg = np.asarray(logits, np.uint64).reshape(-1) & np.uint64(0xFFFF)
@@ -316,7 +316,7 @@ def _sample_mask_chunk(rng, n: int, params, **statics) -> list[np.ndarray]:
 def register_kernels() -> None:
     """Register `mask_chunk` as `TopPMaskChunk_v1`'s numpy kernel, which circuit-check compares with the Definition on random
     vectors and on `_sample_mask_chunk`'s."""
-    from verity.definitions.numerics import kernel_registry as KR
+    from verity_vllm.definitions.numerics import kernel_registry as KR
 
     KR.register(T.TopPMaskChunk, mask_chunk, kernel="numpy", domain="every input whose carry is a chunk's lane's",
                 sample=_sample_mask_chunk)

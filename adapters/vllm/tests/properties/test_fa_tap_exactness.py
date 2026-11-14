@@ -29,7 +29,7 @@ ADAPTER = Path(__file__).parents[2]
 CHILD = ("import importlib, json, sys\n"
          "from verity.circuits.defs import REGISTRY\n"
          "def loaded():\n"
-         "    return sorted(m for m in sys.modules if m.startswith(('verity.circuits.evaluation', 'verity.definitions')))\n"
+         "    return sorted(m for m in sys.modules if m.startswith(('verity.circuits.evaluation', 'verity_vllm.definitions')))\n"
          "X = importlib.import_module(sys.argv[1])\n"
          "at_import, held = loaded(), set(REGISTRY.defs)\n"
          "X.ir_guard(0x3F800000)\n"
@@ -55,7 +55,7 @@ def test_importing_the_property_loads_no_definition_and_no_evaluator():
 def test_the_definitions_enter_the_table_with_the_first_ir_call():
     """`ir_guard` is what loads them, so the test above holds something."""
     got = _loaded()
-    assert "verity.definitions.registry.prims" in got["after_a_call"] and got["entered_with_a_call"]
+    assert "verity_vllm.definitions.registry.prims" in got["after_a_call"] and got["entered_with_a_call"]
 
 
 def _record(**fields):

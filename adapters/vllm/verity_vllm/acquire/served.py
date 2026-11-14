@@ -54,8 +54,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.registry import b1, cublas_bf16, cublas_gemv
-from verity.definitions.registry import inductor as IR
+from verity_vllm.definitions.registry import b1, cublas_bf16, cublas_gemv
+from verity_vllm.definitions.registry import inductor as IR
 
 from verity_vllm.acquire import compiled as C
 from verity_vllm.acquire import inductor_templates as T
@@ -681,7 +681,7 @@ def probe_routes(shapes: list[list[int]]) -> dict[str, Any]:
     import torch
 
     from verity_vllm.commit import challenge as CH
-    from verity.definitions.registry import bf16_gemm_check as BC
+    from verity_vllm.definitions.registry import bf16_gemm_check as BC
 
     to = lambda a: torch.from_numpy(a.view(np.int16)).view(torch.bfloat16).cuda()
 

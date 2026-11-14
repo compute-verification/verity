@@ -1,4 +1,4 @@
-"""`verity.definitions.boolean`'s choice of a word's Boolean version does not follow the order its candidates were registered
+"""`verity_vllm.definitions.boolean`'s choice of a word's Boolean version does not follow the order its candidates were registered
 in (`_load` gathers them in that order, `_find` chooses): two versions of one name give the newest in either order, and two
 names for one word are refused as ambiguous in either order."""
 from __future__ import annotations
@@ -11,7 +11,7 @@ from verity.circuits.boolean.trace import definition
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, PrimitiveDefinition
 from verity.circuits.types import Value
-from verity.definitions import boolean as B
+from verity_vllm.definitions import boolean as B
 
 WORD = PrimitiveDefinition("BooleanFindTestWord", 1, (("x", Value(4)),), Value(4), lambda x: x ^ 15, register=False)
 U4 = BL.bit_type(Value(4))

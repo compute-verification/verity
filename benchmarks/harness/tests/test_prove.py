@@ -1680,7 +1680,7 @@ def registered(block: str) -> str:
 
     from verity_vllm.definitions import boolean
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
 
     return boolean.boolean_version(specialization(spec_base(block), spec_statics(block), load()[0])).id
 

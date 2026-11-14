@@ -58,11 +58,11 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, concat, strided_view, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import boolean_dsa_topk_mask as BM
-from verity.definitions.registry import dsa_topk_mask as M
-from verity.definitions.registry import dsa_topk_mask_cut as X
-from verity.definitions.registry.boolean_dsa import own_gates
-from verity.definitions.registry.dsa_topk import check_statics
+from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
+from verity_vllm.definitions.registry import dsa_topk_mask as M
+from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
+from verity_vllm.definitions.registry.boolean_dsa import own_gates
+from verity_vllm.definitions.registry.dsa_topk import check_statics
 
 BIT = BL.BIT
 F32 = I32 = Array(32, BIT)

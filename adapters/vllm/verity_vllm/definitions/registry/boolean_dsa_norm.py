@@ -33,10 +33,10 @@ from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array
-from verity.definitions.registry import boolean_rope as BR
-from verity.definitions.registry import dsa as D
-from verity.definitions.registry import dsa_norm as DN
-from verity.definitions.registry.boolean_dsa import F32, bit_ops, flat, replay, replayed
+from verity_vllm.definitions.registry import boolean_rope as BR
+from verity_vllm.definitions.registry import dsa as D
+from verity_vllm.definitions.registry import dsa_norm as DN
+from verity_vllm.definitions.registry.boolean_dsa import F32, bit_ops, flat, replay, replayed
 
 BF16 = Array(16, BL.BIT)
 

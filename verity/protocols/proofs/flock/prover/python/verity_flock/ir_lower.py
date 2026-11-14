@@ -129,7 +129,7 @@ def _boolean_build(key):
     """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
-    `verity.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `verity_vllm.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
     `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
     module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
     `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has

@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.topp_stages`' Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_vllm.definitions.registry.topp_stages`' Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from typing import Any, Callable
 def mask(**statics: Any) -> Any:
     """`TopPMaskChunk_v1` bound at these statics, with the twin registered as its reference (`topp_stage_twins.mask_chunk`)."""
     from verity.circuits.defs import bind
-    from verity.definitions.numerics import topp_stage_twins as TW
-    from verity.definitions.registry import topp_stages as T
+    from verity_vllm.definitions.numerics import topp_stage_twins as TW
+    from verity_vllm.definitions.registry import topp_stages as T
 
     TW.register_kernels()
     return bind(T.TopPMaskChunk, **statics)
@@ -22,7 +22,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     reference is the twin (`topp_stage_twins.mask_chunk`), compared on circuit-check's vectors and on chunks of real rows at
     every split count (its sampler)."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import topp_stages as T
+    from verity_vllm.definitions.registry import topp_stages as T
 
     return [
         ("TopPStatsHead_v1", lambda: bind(T.TopPStatsHead, N=8, FIRST=False)),

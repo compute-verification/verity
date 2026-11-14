@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics.rows import SAMPLED_MEMBER
+from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore

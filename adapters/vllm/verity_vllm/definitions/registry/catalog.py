@@ -8,7 +8,7 @@ imported its module.  A reader of Definitions beyond the registry names their pa
 from __future__ import annotations
 
 #: the packages `load` imports, by scope
-SCOPES = {"registry": "verity.definitions.registry", "ops": "verity.circuits.ops"}
+SCOPES = {"registry": "verity_vllm.definitions.registry", "ops": "verity.circuits.ops"}
 _LOADED: dict[str, list[str]] = {}
 
 
@@ -31,7 +31,7 @@ def load(scope: str | tuple[str, ...] = "registry", _package=None, _errors: list
                 continue
             try:
                 # the literal prefix is how tests/dead_code_census.py sees every registry module reached from here
-                child = importlib.import_module(f"verity.definitions.registry.{m.name}" if _package.__name__ == SCOPES["registry"]
+                child = importlib.import_module(f"verity_vllm.definitions.registry.{m.name}" if _package.__name__ == SCOPES["registry"]
                                                 else f"{_package.__name__}.{m.name}")
             except Exception as e:  # noqa: BLE001  (recorded: the error names the module a lookup then misses)
                 errors.append(f"{_package.__name__}.{m.name}: {type(e).__name__}: {e}")

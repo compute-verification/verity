@@ -38,10 +38,10 @@ from verity.commitments.gates import embedding as EM
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import bit_row
-from verity.definitions.registry import boolean_dsa_topk_mask as BM
-from verity.definitions.registry import dsa_topk_mask as M
-from verity.definitions.registry import dsa_topk_mask_cut as X
-from verity.definitions.registry import dsa_topk_reads as R
+from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
+from verity_vllm.definitions.registry import dsa_topk_mask as M
+from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
+from verity_vllm.definitions.registry import dsa_topk_reads as R
 from verity.commitments.windows import interface as IF
 
 SERVED_TOPK, SERVED_V, SERVED_H = 2048, 1 << 17, 576

@@ -1,4 +1,4 @@
-"""Gemma-2's eager-unfused ATen chain -> its Definitions in `verity.definitions.registry.dense` (each difftested on the
+"""Gemma-2's eager-unfused ATen chain -> its Definitions in `verity_vllm.definitions.registry.dense` (each difftested on the
 pod).
 
 vLLM d9105ea80 runs `Gemma2ForCausalLM` in eager mode with `VLLM_BATCH_INVARIANT=1`; nothing of the norm / GeGLU / softcap
@@ -44,7 +44,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1 as B1, dense as D
+from verity_vllm.definitions.registry import b1 as B1, dense as D
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns import (BiasAdd, _check_pins, as_float, attribution_for, base_op, bound_args, hint_of, is_row_major,

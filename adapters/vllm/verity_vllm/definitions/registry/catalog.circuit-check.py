@@ -10,62 +10,62 @@ from typing import Any
 
 def enumerators() -> set[tuple[str, str]]:
     """The functions (module, qualified name) that list a package only to import each module listed (`cache.enumerators`)."""
-    return {("verity.definitions.registry.catalog", "load"), ("verity.definitions.boolean", "_load"),
+    return {("verity_vllm.definitions.registry.catalog", "load"), ("verity_vllm.definitions.boolean", "_load"),
             (__name__, "load_catalog")}
 
 
 def load_catalog() -> None:
     """Import every module of the registry and the kernels of the replay's rows and twins, which register with core."""
-    import verity.definitions.registry as R
+    import verity_vllm.definitions.registry as R
     for m in pkgutil.iter_modules(R.__path__):
         if m.name != "quarantine":
             importlib.import_module(f"{R.__name__}.{m.name}")
-    from verity.definitions.numerics import rows, twins  # noqa: F401
+    from verity_vllm.definitions.numerics import rows, twins  # noqa: F401
 
 
 def preload() -> dict[str, Any]:
-    from verity.definitions.numerics import twins
+    from verity_vllm.definitions.numerics import twins
 
     return twins.preload()
 
 
 def kernels() -> list[Any]:
-    from verity.definitions.numerics import kernel_registry
+    from verity_vllm.definitions.numerics import kernel_registry
 
     return kernel_registry.registered()
 
 
 def tanh_rn() -> tuple[Any, Any, int]:
-    from verity.definitions.registry import tables
+    from verity_vllm.definitions.registry import tables
 
     return tables.tanh_rn_table, tables.TANH_RN_REGIONS, tables.TANH_RN_LO
 
 
 def row_families() -> set[str]:
-    from verity.definitions.numerics import rows
+    from verity_vllm.definitions.numerics import rows
 
     return set(rows.ROWS)
 
 
 def boolean_table() -> tuple[dict[str, list], dict[str, list], list[str]]:
-    from verity.definitions.boolean import _load
+    from verity_vllm.definitions.boolean import _load
 
     return _load()
 
 
 def made_on_demand(fid: str) -> Any:
-    from verity.definitions.boolean import made_on_demand
+    from verity_vllm.definitions.boolean import made_on_demand
 
     return made_on_demand(fid)
 
 
 def boolean_version() -> tuple[Any, type[Exception]]:
-    from verity.definitions.boolean import NoBooleanVersion, boolean_version
+    from verity_vllm.definitions.boolean import NoBooleanVersion, boolean_version
 
     return boolean_version, NoBooleanVersion
 
 
 def lift_composite(defn: Any) -> Any:
-    from verity.definitions.registry.lifted import lift_composite
+    from verity_vllm.definitions.registry.lifted import lift_composite
 
     return lift_composite(defn)

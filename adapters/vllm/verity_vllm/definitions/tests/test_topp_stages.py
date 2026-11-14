@@ -25,11 +25,11 @@ from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.types import Tuple
-from verity.definitions.numerics import topp_stage_twins as TW
-from verity.definitions.registry import sampling as SA
-from verity.definitions.registry import topp_keep_builder as K
-from verity.definitions.registry import topp_stages as T
-from verity.definitions.registry.topp_word_gates import CW
+from verity_vllm.definitions.numerics import topp_stage_twins as TW
+from verity_vllm.definitions.registry import sampling as SA
+from verity_vllm.definitions.registry import topp_keep_builder as K
+from verity_vllm.definitions.registry import topp_stages as T
+from verity_vllm.definitions.registry.topp_word_gates import CW
 
 OPERANDS = ("top_p", "seed", "pos", "temp", "splits")
 SERVED_V = 154880
@@ -207,7 +207,7 @@ def _mask_chunks(V: int, lg, ops: dict, S: int, outs: dict) -> dict:
 def _check_mask_chunks(V: int, lg, ops: dict, S: int) -> tuple[np.ndarray, dict, list]:
     """The mask chunks chained along the row are `TopPMask_v4{V,S}` on its temperature-scaled lanes, and each carries the
     positions the select chunk of its lanes carries in the twin; returns the masked row, the twin's outputs and the chunks."""
-    from verity.definitions.registry import dead_free as DF, sampling_rows as SR
+    from verity_vllm.definitions.registry import dead_free as DF, sampling_rows as SR
 
     _, outs = TW.stage_rows(V, lg, splits=S, **ops)
     got = _mask_chunks(V, lg, ops, S, outs)
@@ -232,7 +232,7 @@ def test_a_mask_chunk_is_the_select_chunk_up_to_its_mask_and_topp_mask_v4(S):
     each on the twin's row scalars and the carry the one before it returned, are `TopPMask_v4{V,S}`, each carries the
     select chunk's positions, and every select chunk, evaluated, carries the Gumbel scan of the mask chunks' lanes: the
     select's own mask is the unit's.  About 25 s a split count, the twin and the Definitions' evaluator."""
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling_rows as SR
 
     V, seed, pos = 64, 0x1234_5678_9ABC_DEF0, 41
     x = np.full(V, 1.0, np.float32)
@@ -297,7 +297,7 @@ EDGE = ["ties", "nan", "few", "uniform", "posinf", "plain", "neginf"]
 
 @pytest.mark.slow
 def test_the_twin_s_keep_bits_are_topp_keep_s():
-    from verity.definitions.registry import sampling_rows as SR
+    from verity_vllm.definitions.registry import sampling_rows as SR
 
     V = 200
     rng = np.random.default_rng(5)

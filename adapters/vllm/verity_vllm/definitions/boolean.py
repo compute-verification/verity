@@ -5,7 +5,7 @@ A Definition is Boolean (`verity.circuits.boolean.is_boolean`) when it computes 
 only, through every sub-Call.  A Boolean Definition names the word Definition it computes (`verity.circuits.boolean.trace.word_of`: its
 ``word``, a Definition, or for one with statics a function of its bindings, in which case it carries its word's name).  Those
 links are the one table this module reads: `boolean_version(fn)` is the registered Boolean Definition whose word is ``fn``,
-looked up among every module of `verity.circuits.ops.boolean` and of `verity.definitions.registry` (`registry.catalog`), and
+looked up among every module of `verity.circuits.ops.boolean` and of `verity_vllm.definitions.registry` (`registry.catalog`), and
 `NoBooleanVersion` names each Definition it finds none for.  A Boolean Definition marked ``opt_in`` is left out of the table:
 it serves only the callers that bind it (`HopperBF16WgmmaDot16_v3`, the training routes' k16 step), never `boolean_version`,
 so adding it moves no served Program.  A function-valued static is bound to its own Boolean version; a
@@ -101,7 +101,7 @@ def _load() -> tuple[dict[str, list], dict[str, list], list[str]]:
     of their bindings, keyed by their name; the modules that failed to import."""
     if _TABLE:
         return _TABLE[0]
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     _, errors = load_registry()
     errors = list(errors)
     core = importlib.import_module("verity.circuits.ops.boolean")
@@ -176,7 +176,7 @@ def _families() -> tuple:
     version's factory)."""
     if not _FAMILIES:
         from verity.circuits.ops.boolean import scalar as SC
-        from verity.definitions.registry import boolean_gather as BGA
+        from verity_vllm.definitions.registry import boolean_gather as BGA
         _FAMILIES.extend([
             (re.compile(r"^Const([1-9][0-9]*)\[0x([0-9a-f]+)\]_v1$"), lambda m: SC.const_word(int(m[1]), int(m[2], 16))),
             (re.compile(r"^GatherBf16x(\d+)_v1$"), lambda m: BGA.gather_bf16(int(m[1]))),
@@ -620,7 +620,7 @@ def gate_table(fns) -> tuple[dict[str, int], list[str]]:
 
 def load_program(path: Path):
     from verity.circuits.codec import decode_program, program_digest
-    from verity.definitions.registry.catalog import load as load_registry
+    from verity_vllm.definitions.registry.catalog import load as load_registry
     opener = gzip.open if str(path).endswith(".gz") else open
     with opener(path, "rt") as f:
         desc = json.load(f)

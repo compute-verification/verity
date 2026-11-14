@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity.definitions.registry.boolean_fp8`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity_vllm.definitions.registry.boolean_fp8`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     leaf families they do not reach, at small statics."""
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
-    from verity.definitions.registry import boolean_fp8
+    from verity_vllm.definitions.registry import boolean_fp8
 
     return [
         ("QuantLinearFp8_v2", lambda: bind(boolean_fp8.QuantLinearFp8V2, K=256, N=2, BIAS=True)),

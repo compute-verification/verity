@@ -23,7 +23,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity.definitions.boolean import write_word
+from verity_vllm.definitions.boolean import write_word
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env

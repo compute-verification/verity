@@ -98,16 +98,16 @@ import numpy as np
 from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.evidence import EVIDENCE
+from verity_vllm.definitions.evidence import EVIDENCE
 from verity.circuits.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
 from verity.circuits.ops.mufu import mufu_ex2_words, table
 from verity.circuits.ops.prims import const
 from verity.circuits.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
-from verity.definitions.registry import dead_free as DF, sampling as SA, topp_stages as TS
-from verity.definitions.registry.dsa import I32Sub
-from verity.definitions.registry.dsv4_moe import Ex2Approx
-from verity.definitions.registry.ref_prims import F32GtStrict, F32Sub
-from verity.definitions.registry.topp_word_gates import I32ToF32, LOG2E, U32Xor
+from verity_vllm.definitions.registry import dead_free as DF, sampling as SA, topp_stages as TS
+from verity_vllm.definitions.registry.dsa import I32Sub
+from verity_vllm.definitions.registry.dsv4_moe import Ex2Approx
+from verity_vllm.definitions.registry.ref_prims import F32GtStrict, F32Sub
+from verity_vllm.definitions.registry.topp_word_gates import I32ToF32, LOG2E, U32Xor
 I64, U32 = SA.I64, SA.U32
 #: the stats kernel's `BLOCK_SIZE` at the pin (`VOCAB_BLOCK_SIZE`)
 STATS_TILE = 8192
@@ -178,7 +178,7 @@ def tl_exp(x) -> np.ndarray:
 
 def tile_stats(x, tile: int = STATS_TILE) -> tuple[np.ndarray, np.ndarray]:
     """Each tile's maximum and summed exponentials of a row of float32 logits (`_compute_local_logits_stats_kernel`)."""
-    from verity.definitions.registry.topp_split import tree_sum_1d
+    from verity_vllm.definitions.registry.topp_split import tree_sum_1d
 
     x = np.asarray(x, _F).reshape(-1)
     tiles = -(-x.shape[0] // tile)
@@ -194,7 +194,7 @@ def tile_stats(x, tile: int = STATS_TILE) -> tuple[np.ndarray, np.ndarray]:
 def row_lse(m, s) -> tuple[int, int]:
     """The row's log-sum-exp as lane 0 and as lane 16 of `_rejection_kernel` hold it (fp32 words), from the tiles' maxima and
     sums."""
-    from verity.definitions.registry.topp_split import fma32
+    from verity_vllm.definitions.registry.topp_split import fma32
 
     m, s = np.asarray(m, _F), np.asarray(s, _F)
     mm, ss = np.full(PADDED_TILES, -np.inf, _F), np.zeros(PADDED_TILES, _F)
@@ -224,7 +224,7 @@ def sampled_accept(logits, draft, seed: int, pos, temp: int, tile: int = STATS_T
     and the temperature's fp32 word: ``verdict``, ``accepted`` and ``appended`` as the Definition returns them, with each draft
     row's tile statistics, log-sum-exp (lane 0's and lane 16's), uniform and log-probability, the resampled row and token, and
     ``halves_split``: the first position lane 0 accepts and lane 16 refuses with a draft token after it, or None."""
-    from verity.definitions.registry.sampling_rows import gumbel_select_row
+    from verity_vllm.definitions.registry.sampling_rows import gumbel_select_row
 
     logits = np.ascontiguousarray(logits, dtype=_F)
     draft = [int(d) for d in draft]
@@ -261,7 +261,7 @@ def accept_kernel(logits, draft, seed, pos, temp, *, K: int, V: int, TILE: int) 
     """`sampled_accept` on one instance of `SampledAccept_v1{K,V,TILE}`'s words, its outputs in the Call's leaf order.  It
     declines outside the domain the reference is written for: a NaN, +inf or subnormal logit, a row with no finite one, a
     draft token at V or past it."""
-    from verity.definitions.numerics.kernel_registry import Declined
+    from verity_vllm.definitions.numerics.kernel_registry import Declined
 
     w = (np.asarray(logits, np.uint64) & np.uint64(0xFFFFFFFF)).astype(np.uint32).reshape(K + 1, V)
     x = w.view(_F)
@@ -293,7 +293,7 @@ def _sample_accept(rng, n: int, params, *, K: int, V: int, TILE: int) -> list[np
 def register_kernels() -> None:
     """Register `accept_kernel` as `SampledAccept_v1`'s numpy kernel, which circuit-check compares with the Definition on its
     vectors and on `_sample_accept`'s."""
-    from verity.definitions.numerics import kernel_registry as KR
+    from verity_vllm.definitions.numerics import kernel_registry as KR
 
     KR.register(SampledAccept, accept_kernel, kernel="numpy", domain="finite or -inf logits, none subnormal, each row one "
                 "finite; draft tokens below V", sample=_sample_accept)

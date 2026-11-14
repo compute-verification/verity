@@ -15,8 +15,8 @@ from typing import Any
 
 import numpy as np
 import pytest
-from verity.definitions.registry import topp_geometry
-from verity.definitions.registry import topp_split as TS
+from verity_vllm.definitions.registry import topp_geometry
+from verity_vllm.definitions.registry import topp_split as TS
 
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import topp_split_probe as tp
