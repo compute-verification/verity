@@ -85,6 +85,13 @@ def _more(case: dict) -> dict:
     return _restated(case, doc)
 
 
+def _as_written(made: dict) -> dict:
+    """The case the script makes from made case `made`'s files: no SPOT wiring, no rows asked, and no `block_rows`. A
+    made case may carry `block_rows`, the rows count's limits (`gamma`, `alpha`, `table`) for the difftest; the record
+    check does not read them, so the script writes none, and the case it makes is the made case less that key."""
+    return {**{k: v for k, v in made.items() if k != "block_rows"}, "spot": None, "rows": []}
+
+
 def _written(args: list[str], out: Path, name: str, *more: str) -> tuple[dict, dict]:
     assert script.main([*args, "--out", str(out), "--name", name, *more]) == 0
     return (json.loads((out / f"{name}.case.json").read_text()),
@@ -95,7 +102,7 @@ def test_the_script_reads_a_runs_files_as_the_case_they_make(shaped, tmp_path):
     made = shaped[SERVED]["case"]
     assert "order" not in made["instance"] and made["trusted"]["run"] == ref.reference.record_digest(made["trusted"]["log"][-1])
     case, got = _written(_files(made, tmp_path / "run"), tmp_path / "out", "served")
-    assert case == {**made, "spot": None, "rows": []}
+    assert case == _as_written(made)
     assert case["instance"]["pins"] and case["count"]["table"]
     inst, tr = made["instance"], made["trusted"]
     assert got == {"check": ref.check_detail(inst, tr), "count": ref.count(inst, tr, made["count"])}
@@ -130,7 +137,7 @@ def test_each_option_makes_the_case_it_says(shaped, tmp_path):
     case, got = _written(_files(more, tmp_path / "more"), tmp_path / "out", "more")
     assert got == {"check": {"error": "inputs"}, "count": {"error": "inputs"}}
     case, got = _written(_files(more, tmp_path / "more"), tmp_path / "out", "less-more", "--drop", f"registered.{MORE}")
-    assert case == {**made, "spot": None, "rows": []} and got == held
+    assert case == _as_written(made) and got == held
     inst, log = made["instance"], made["trusted"]["log"]
     limits = {"alpha": inst["alpha"], "gamma": inst["gamma"]}
     with pytest.raises(ValueError, match="registered has no such key"):
