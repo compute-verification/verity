@@ -346,7 +346,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
+        "verity/config.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
