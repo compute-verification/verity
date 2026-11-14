@@ -110,8 +110,6 @@
     {"file": "tests/query/test_boundary_oracle.py", "kind": "E741", "symbol": "test_two_dimensional_strided_member_reads", "detail": "Ambiguous variable name: `l`"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/query/test_boundary_oracle.py", "kind": "I001", "symbol": "test_partial_reads_shared_argument_and_scan_xs", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tools/migrate/superseded_quarantine.py", "kind": "ISC004", "symbol": "<module>", "detail": "Unparenthesized implicit string concatenation in collection"},
-    {"file": "tools/migrate/superseded_quarantine.py", "kind": "ISC004", "symbol": "promote_edits", "detail": "Unparenthesized implicit string concatenation in collection", "count": 13},
     {"file": "verity_vllm/acquire/compiled.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/acquire/fa2_tap_src/apply_v8.py", "kind": "SIM115", "symbol": "<module>", "detail": "Use a context manager for opening files", "count": 10},
     {"file": "verity_vllm/acquire/fa2_tap_src/apply_v8.py", "kind": "T201", "symbol": "<module>", "detail": "`print` found", "count": 7},

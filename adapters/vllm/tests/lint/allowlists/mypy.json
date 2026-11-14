@@ -9,10 +9,6 @@
   },
   "entries": [
     {"file": "tests/engine/test_tp2_attribution.py", "kind": "assignment", "symbol": "<module>", "detail": ""},
-    {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "arg-type", "symbol": "_load", "detail": ""},
-    {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "dict-item", "symbol": "test_verify_allows_new_ids_only_where_the_promoted_targets_reach", "detail": ""},
-    {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "dict-item", "symbol": "test_verify_allows_only_the_deleted_versions_to_go", "detail": ""},
-    {"file": "tests/migrate/test_superseded_quarantine.py", "kind": "union-attr", "symbol": "_load", "detail": "", "count": 3},
     {"file": "tests/pipeline/serve_async_commit_gpu.py", "kind": "arg-type", "symbol": "arm", "detail": ""},
     {"file": "tests/pipeline/serve_async_commit_gpu.py", "kind": "union-attr", "symbol": "arm", "detail": ""},
     {"file": "tests/pipeline/test_boundary_rows.py", "kind": "var-annotated", "symbol": "test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes", "detail": ""},
