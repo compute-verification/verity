@@ -40,6 +40,7 @@ public import Proofs.Accounting.ReadUnit.RowSeg
 public import Proofs.Accounting.ReadUnit.Leaf
 public import Proofs.Accounting.ReadUnit.Select
 public import Proofs.Accounting.ReadUnit.Check
+public import Proofs.Accounting.ReadUnit.Accepts
 public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.ReadUnit.Binding
 public import Proofs.Accounting.ReadUnit.BitsPorts
@@ -60,11 +61,9 @@ public import Proofs.Pouw.PerRunJoint
 public import Proofs.Pouw.PerRunNecessity
 public import Proofs.Pouw.PerRunPriced
 public import Proofs.Pouw.PerRunStop
-public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld
 public import Proofs.Poub.RemoteHeld.Meets
 public import Proofs.Poub.RemoteHeld.OverTime
-public import Proofs.Poub.RemoteHeld.Sample
 public import Proofs.Poub.RemoteHeld.DrawMeets
 public import Proofs.Poub.RemoteHeld.Binding
 public import Proofs.Poub.RemoteHeld.Sketch
@@ -123,6 +122,7 @@ public import Proofs.Compose.Additive
 public import Proofs.Slowdown.Coverage
 public import Proofs.Slowdown.ServingBlocks
 public import Proofs.Slowdown.ServingBlocks.Witnesses
+public import Proofs.Accounting.Registration.Sound
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Defs.Localization
 public import Definitions.Pous.P2.Cost
@@ -131,12 +131,12 @@ public import Definitions.Pous.P2.Cost
 # The proofs of resource accounting's guarantees
 
 `Accounting.SecurityProofs.X : Accounting.Guarantees.X` for the guarantees stated under
-`Security/Definitions/Accounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
+`security/Definitions/Accounting/Guarantees/` (`Bandwidth.SecurityProofs.X` for the bandwidth audit's own), the lemmas
 behind them, and the proofs of resource accounting's properties, the bridges that read each subprotocol's per-period
 guarantee as the joint period's input (`JointBridge/`, such as `Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld`,
-locked in `Security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
+locked in `security/Properties/lean-audit.json`). `Defs` holds the proof-only vocabulary no guarantee reads,
 `Sanity` shows the joint guarantee's hypotheses hold, and `Coverage` proves the inference-only policy's
-`Slowdown.SecurityProofs.CapabilityFloor`. `Security/lean-audit.json` pins each guarantee's theorem, so a
+`Slowdown.SecurityProofs.CapabilityFloor`. `security/lean-audit.json` pins each guarantee's theorem, so a
 change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where the top guarantees are proved
@@ -153,10 +153,10 @@ change to the guarantee, or to a definition it reads, changes its record.
 
 ## Where to look
 
-* The statements and the vocabulary they read: `Security/Definitions/Accounting.lean`, whose module docstring lists the
+* The statements and the vocabulary they read: `security/Definitions/Accounting.lean`, whose module docstring lists the
   top guarantees with one line each.
-* The properties these proofs prove: `Security/Properties/Accounting/`.
-* Which of these statements protocol soundness rests on: `Security/README.md`.
+* The properties these proofs prove: `security/Properties/Accounting/`.
+* Which of these statements protocol soundness rests on: `security/README.md`.
 -/
 
 @[expose] public section

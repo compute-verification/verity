@@ -25,20 +25,14 @@ unpacks, with the ship frame `benchmarks/kernels/ship.sh` (`benchmarks/kernels/R
   the GPU's roots to the CPU reference's and times the call.
 - `sha512_rows/`: what measures the SHA-512 engine the call runs on (`verity/commitments/cuda/sha512_rows/`). `gpu.sh`
   holds every variant to `verity.commitments`' reference, bit for bit, and times it.
-- `p2_stage/`: the store's load: P2's decode of the encoded weights store into GPU memory, with PoUB's
-  receipts beside it. `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and
-  `bw.sh` the receipts to their fixture.
-  The served path loads through it.
+- `p2_stage/`: what times the store's load, P2's decode of the encoded weights store into GPU memory
+  (`verity/protocols/accounting/poub/prover/p2_stage/`'s `stage` and `layout`), with PoUB's receipts beside it.
+  `full.sh` holds every loaded tensor to the weights manifest's SHA-256 on an H200, and `bw.sh` the receipts to their
+  fixture.
 ## Interface
 
-What code outside `benchmarks/torch_gpu` loads. Nothing else here is an interface: any other file may change or go
-without a word to another directory.
-
-| File | What is loaded | Loaded by |
-|---|---|---|
-| `p2_stage/stage.py` | the store's load on the GPU: `EncodedRows` (`decode_into`, `check`), `decode_matrix`, and the modules it binds as `L` (`layout.py`) and `gpu` | `adapters/vllm/verity_vllm/protocols/pous.py`, as the package `p2_stage`; `benchmarks/pous/p2_v1/bandwidth.py` |
-| `p2_stage/layout.py` | `StoreLayout`, `open_store`, `segment_rows`, `R`, `ROW` | the same two |
-| `p2_stage/full.py` | `Segments`, `sync`, `DEVICE` | `benchmarks/pous/p2_v1/bandwidth.py` |
-| `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
-| `verity/protocols/accounting/pous/prover/served_weights.py` | the seeded weights' generator, by its module name `verity.protocols.accounting.pous.prover.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `verity/protocols/accounting/pous/prover/p2/p2_store/store.py` |
+Nothing outside `benchmarks/torch_gpu` loads a file of it: any file here may change or go without a word to another
+directory. The store's load and P2's library's build are PoUB's and PoUS's provers' (`verity/protocols/accounting/poub/prover/p2_stage/`,
+`verity/protocols/accounting/pous/prover/p2/p2_store/build.sh`), and the seeded weights' generator PoUS's
+(`verity/protocols/accounting/pous/prover/served_weights.py`).
 

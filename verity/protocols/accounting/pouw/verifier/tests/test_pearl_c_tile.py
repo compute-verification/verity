@@ -117,7 +117,7 @@ def vector_alphas() -> tuple[list[int], list[int]]:
 
 def test_unscale_is_the_kernels_epilogue():
     """The vectors' 6 x 6 U (forming v1, the served one) at its rows' α: y is the kernels' store_y word for word, on words and
-    on bits, and with a bias each word then torch's BF16 add."""
+    on bits, and with a bias each word then the device library's BF16 add."""
     f = VECTORS["formings"]["v1"]
     u = {(c["i"], c["j"]): c["u"] for c in f["cells"]}
     grid = [u[(i, j)] for i in UV.ROWS for j in UV.COLS]

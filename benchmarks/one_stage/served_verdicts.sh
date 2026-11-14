@@ -68,7 +68,7 @@
 #     (the class of record is counted only where CLASSES names `record`, and gates like any other); then the window
 #     audited from its records alone
 #     (`prove_path.sh` with PP_RECORDS=1, `records_audit.py`): Flock `--zk` on the sampled proof blocks behind the Lean
-#     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
+#     ZK server, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
 #     is proved beside the sampled rest, which only a work:K sampling design samples, so the preflight refuses a partition of another sampling design
@@ -174,7 +174,8 @@
 # ALPHA, GAMMA, the served node, the serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on)
 # and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
-# PoUW's period case, SPOT's summary and docket), listed (inputs.txt) and hashed (inputs.sha256). A list
+# the serve's first registration record and each window's Pearl+ record W and audit's record R, PoUW's period case,
+# SPOT's summary and docket), listed (inputs.txt) and hashed (inputs.sha256). A list
 # holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
 # the advice, a key, a row dir, the requests) or a blob outside the serve dir is refused, and the run fails. Those files alone
 # are copied to the same path on COMPOSE_NODE, an auditor device the prover doesn't control and where no witness goes
@@ -849,7 +850,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
     "${pool[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
-    --firewall "$leanb/flock-firewall" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
+    --zk-server "$leanb/flock-zk-server" --ports "$ports" "${link[@]}" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
   cp "$VW/audit/summary.json" "$OUT/v3c-audit/" 2>/dev/null
   [ -z "$PEARLPLUS_TIE" ] || say "V3C-TIE: $(grep -m1 '^TIE ' "$OUT/v3c-audit/audit.log" | "$PY" -c 'import json, sys
@@ -1192,14 +1193,21 @@ inference_policy() {  # in TREE, before the lease: the policy's (c, k, n) at the
 # IO_LIMITS beside the policy, with the count rule's (c, k, n) and the policy file's SHA-512, and the deferral, the
 # compose hand-off and the composite take them as ALPHA and GAMMA (`fixed_limits`), so no later step reads them off the
 # served window's division. The developer writes them, and no auditor's device signs them.
+# Beside them, where the run sets both HELD_ALPHA and HELD_GAMMA, the file's `held` and one clause of the line state a
+# second pair, the record form's: a block a slot, θ the weights the serve's first registration record registers, so a
+# registered weight's bit is not fresh (the class's numbers alone: slots × k over Γ, and Γ a slot; `rehearsal.sh check`
+# holds the two settings to them). No verdict of the run reads that pair, and `fixed_limits` hands on v0's alone. A held
+# pair that is no limits (gamma under 1, alpha under 0, or text that is no number) is stated nowhere in the file, and the
+# line says so with both values; v0's file is written all the same.
 IO_LIMITS=${IO_LIMITS:-$OUT/inference-only-limits.json}
 limits() {
   local out
   [ -s "$IO_POLICY" ] || return 0
-  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" "${LIMITS_PROVE:-}" <<'EOF' 2>&1
+  out=$("$SAY_PY" - "$IO_POLICY" "$IO_LIMITS" "${ALPHA:-}" "${GAMMA:-}" "${LIMITS_UNIT:-}" "${LIMITS_PROVE:-}" \
+    "${HELD_ALPHA:-}" "${HELD_GAMMA:-}" <<'EOF' 2>&1
 import hashlib, json, sys
 from fractions import Fraction
-policy, out, alpha, gamma, unit, proves = sys.argv[1:7]
+policy, out, alpha, gamma, unit, proves, held_alpha, held_gamma = sys.argv[1:9]
 body = open(policy, "rb").read()
 p = json.loads(body)
 given = bool(alpha and gamma)
@@ -1213,9 +1221,27 @@ doc = {"format": "verity-bench/inference-only-limits/v1", "alpha": [a.numerator,
        "policy_sha512": hashlib.sha512(body).hexdigest(), "written_by": "the developer"}
 if given and proves:
     doc["proves"] = proves
+held = ""
+if held_alpha and held_gamma:
+    try:
+        ha, hg = Fraction(held_alpha), int(held_gamma)
+    except (ValueError, ZeroDivisionError):
+        ha = hg = None
+    if ha is None or ha < 0 or hg < 1:
+        held = (f"; the held alpha {held_alpha} and gamma {held_gamma} are no limits, so the file states no held "
+                "pair")
+    else:
+        doc["held"] = {"alpha": [ha.numerator, ha.denominator], "gamma": hg,
+                       "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma "
+                               "in a block's gates",
+                       "theta": "the weights the serve's first registration record registers "
+                                "(deployment-registration.json)"}
+        held = (f"; held for the record form, a block a slot and theta the serve's first registration record's "
+                f"weights, alpha = {ha.numerator}/{ha.denominator} and gamma = {hg}, which no verdict of the run reads")
 with open(out, "w") as f:
     f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
-print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + (f" ({proves})" if "proves" in doc else ""))
+print(f"alpha = {a.numerator}/{a.denominator} and gamma = {g}, {doc['from']}" + (f" ({proves})" if "proves" in doc else "")
+      + held)
 EOF
 ) || { say "INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case is at the run's ALPHA and" \
            "GAMMA, or at what it reads off the served window's division:" \
@@ -1437,7 +1463,9 @@ sampled_of_record() {
 # no other file of a session). The composite's: each records audit's cases (sampled-proofs-served's and V3c's
 # window/case.json, case-v2.json and their error files), the files a case names as its blobs (the circuit, the public
 # file, each session's record and proofs, the lookup tables), H1's log and each record it names, the serve's first
-# registration record where it wrote one, and PoUW's period case.
+# registration record where it wrote one, each window's Pearl+ record W and audit's record R that the serve dir holds
+# (`served_cases.py`'s RECORDS: every record a window's log can name, so the inference-only case's log is walked from
+# the copy alone, with no part of Pearl+'s case), and PoUW's period case.
 # And compose.env, its settings: the window, its engine steps (the record's, picked here from the requests file, which
 # stays), the product, the composite, α and Γ, the served node, the follow-on node COMPOSE_NODE, the tree's commit, the
 # host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none) and the record's audit (SAMPLED_AUDIT).
@@ -1475,6 +1503,7 @@ for x in open(sys.argv[1]):
     if x.strip():
         print("h1/" + str(json.loads(x).get("file")))' "$D/h1/log.jsonl"
     [ -z "$blobs" ] || printf '%s\n' "$blobs"
+    (cd "$D" && printf '%s\n' pearlplus/w*/registration.json v3c-w*/audit/window/registration.json)
     for f in pieces compose.env inference-only.json; do
       [ ! -e "$D/private/compose/$f" ] || (cd "$D" && find "private/compose/$f" -type f)
     done
@@ -1859,7 +1888,7 @@ build() {  # what prove_path.sh builds, here while the endpoint serves; prove_pa
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5
-  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) || return 7
+  (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) || return 7
   (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) || return 7
   mkdir -p "$OUT/m0-build"
   # FW is the node's, every run's: two builds in it at once break each other's crates

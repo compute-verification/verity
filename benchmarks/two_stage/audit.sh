@@ -21,7 +21,7 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 
 # under FLOCK_CHALLENGER=1 each session's challenger is audited in Lean too (the difftest's challenger pieces)
 SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=spot-difftest
-{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier $SPD); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"

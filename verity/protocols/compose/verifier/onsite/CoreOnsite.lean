@@ -125,9 +125,11 @@ private def allRefused : Answer := answer (components.map refused)
   some "params: verity/certifier/v0 is missing"
 #guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
-#guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
-#guard (answer ((components.filter (·.id != PousCheck.RunProtocol.protocol.id)).map refused)).reason ==
-  some "params: verity/pous/p2/v4/run is missing"
+-- a served run that leaves PoUS's case or the wipe's out of the composite gets a rejection naming the one missing
+private def without (id : String) : Answer := answer ((components.filter (·.id != id)).map refused)
+#guard [PousCheck.RunProtocol.protocol.id, MemoryChallenger.WipeProtocol.protocol.id].all fun id =>
+  (without id).verdict == .reject && (without id).published.isNone &&
+    (without id).reason == some s!"params: {id} is missing"
 #guard (answer ((components.take 5).map refused ++
     [refused Spot.OneStage.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
@@ -330,10 +332,10 @@ private def siteWith (links : List Core.Site.Link) : Core.Site :=
       { id := "chal0", kind := .challenger, owner := .auditor }],
     links⟩
 
-private def uplink : Core.Site.Link := { id := "eth0", ends := ("node0", "cert0"), β := 100, latency := 1 }
-private def challenged : Core.Site.Link := { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 }
-private def between : Core.Site.Link := { id := "hh0", ends := ("node0", "node1"), β := 400, latency := 1 }
-private def bare : Core.Site.Link := { id := "up1", ends := ("node0", Core.Site.outside), β := 10, latency := 1 }
+private def uplink : Core.Site.Link := { id := "eth0", ends := ("node0", "cert0"), β := some 100, latency := 1 }
+private def challenged : Core.Site.Link := { id := "mc0", ends := ("chal0", "node0"), β := some 10, latency := 1 }
+private def between : Core.Site.Link := { id := "hh0", ends := ("node0", "node1"), β := some 400, latency := 1 }
+private def bare : Core.Site.Link := { id := "up1", ends := ("node0", Core.Site.outside), β := some 10, latency := 1 }
 
 -- a host's one link, its ends in either order, the memory challenger's link aside
 #guard (wipeLink (siteWith [uplink]) "node0").toOption == some "eth0"

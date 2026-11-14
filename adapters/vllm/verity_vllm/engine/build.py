@@ -51,6 +51,11 @@ class Engine:
     rope_cache: dict | None = None  # the fused rope and KV-cache write installed at the build (`rope_cache`), None when none
     fused_producers: dict | None = None  # the int8 linears' fused producers installed at the build (`int8_producers`), None when none
 
+    @property
+    def vllm_config(self) -> Any:
+        """The built engine's ``VllmConfig`` (`handle.engine_of`), for a reader that can't import `engine.handle`."""
+        return handle.engine_of(self.llm).vllm_config
+
 
 # the workload's execution label decides `enforce_eager`; it is never a literal of the harness.  Labels are the
 # row-id vocabulary (`…__bi-eager`, `…__bi-eager-fa2`, `…__bi-compiled`); a label this table does not know fails closed (no guessing).

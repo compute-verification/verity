@@ -37,7 +37,7 @@ leaf at K = 64.
   to the lowered circuits' own port records (`unit_lowering`'s rows and input columns, `UnitStager`'s META `ports`,
   `row_schemas` and `leaves_in`), and Flock's refusals to `wires?`'s.
 
-Code: Lean core only, never `Security/`, so proofs' decoders (`Security/Proofs/Pouw/TS/Session/Lanes`) import it
+Code: Lean core only, never `security/`, so proofs' decoders (`security/Proofs/Pouw/TS/Session/Lanes`) import it
 from `pouw_window` through `security_properties`.
 -/
 

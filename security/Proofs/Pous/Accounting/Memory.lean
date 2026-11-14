@@ -9,7 +9,7 @@ import Mathlib.Data.Sym.Sym2.Init
 /-!
 # Memory adds, by counting: the guarantees
 
-Each statement of `Security/Definitions/Pous/Accounting/Guarantees/Memory.lean`, proved:
+Each statement of `security/Definitions/Pous/Accounting/Guarantees/Memory.lean`, proved:
 
 * `Memory/Counting.lean`: the counting core, Markov's inequality over the disjoint fibres;
 * `Memory/Adds.lean`: the composition with PoUS's guarantee: each fibre coded into `S` bits, the coded adversary

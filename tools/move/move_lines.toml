@@ -1,0 +1,51 @@
+# Corrections to move commits' own records, which `restack.py` reads before a commit's message (its docstring has the
+# format): under the commit's full id, `line` (the move line it ran by), `hand` (the paths where its tree is, by hand, not
+# what that script writes on its parent) and `reason`. History is never rewritten, so a record is corrected here.
+
+["f7b30e1f7ce9263a24eca5186e43c0029af55689"]
+line = "Layout-move: tools/move/two_stage_verdicts_map.toml --no-lock"
+hand = ["tools/move/two_stage_verdicts_map.toml"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."
+
+["4974327abaf70864c269bedad537067d26892d60"]
+hand = ["benchmarks/one_stage/onsite_record.py", "benchmarks/one_stage/tests/test_onsite_record.py"]
+reason = "The commit also holds device_term_map.toml's rename of trusted-host to trusted-device in three prose lines the collect branch brought, run before this map."
+
+["efb8d893607ea5c3d51c449e4581b043c7aa0ebb"]
+hand = ["benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py", "tools/move/docket_names_map.toml", "verity/protocols/proofs/spot/prover/cost/window_cost.py"]
+reason = "The commit also puts registration back for docket in the prose beside the names it renames back, and edits docket_names_map.toml's keep patterns and excludes to match."
+
+["96942e204b5c2efc583edc7b4fa09f51e9cd830a"]
+hand = ["tests/workload_messages.toml"]
+reason = "The commit also renames weights_docket_of_serve back in the message table's search pattern, a data file the word map excludes."
+
+["0b4c48a00c2c75d38c5be41f1184a13cb932d11c"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["tools/research/src/research/store/moves.json"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept one entry for the map in research's moves.json where layout.py appends a second."
+
+["b2112f543e4609e75b93ff528ec5545ecadb900f"]
+line = "Layout-move: tools/move/vllm_profile_test_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["8f35530ca87cc286a1d75ce6eed64636a1a34ca4"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["3b94ba2b786dad839e371a8f3b42286d32c833c8"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["cc6b56dfe2adeffddf5bc62c2d00d5b5aaeb4631"]
+line = "Layout-move: tools/move/torch_adapter_map.toml --no-lock"
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't; as recorded, layout.py's uv lock rewrites uv.lock."
+
+["e6c3e6eabd8fda375981e20c83c5af0dcd78f325"]
+line = "Layout-move: tools/move/audit_code_map.toml --no-lock"
+hand = ["verity/protocols/proofs/spot/prover/tests/test_audit_one_member.py"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and rewrote by hand the bare import of member_trees its subject names, which layout.py derives no module for."
+
+["9853a730c24e593ca621b602905eef8bef7d907f"]
+line = "Layout-move: tools/move/mla_inputs_map.toml --no-lock"
+hand = ["tools/move/mla_inputs_map.toml"]
+reason = "The move ran with --no-lock, as its subject says and its trailer doesn't, and kept its map as it was where layout.py rewrites the map's own paths."

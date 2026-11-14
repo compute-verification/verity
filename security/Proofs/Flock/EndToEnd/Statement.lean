@@ -45,7 +45,7 @@ $$\Pr[\text{verity-verify-proof accepts} \wedge \text{at least } K_0 \text{ unit
   the verifier parses (`keyProg c hU n`, partitioned at `Layout.outsOf`), each read at its `--zk` site in the table it
   is sampled into and bound to the rows it commits;
 * `ε_ks = ksAvgStrictZ`: the worst table's knowledge error, `ksStrictZ / (1 − N₀/(ek))`, averaged over the sample;
-* `δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, `Q_s` the expected number of commit strings the sampled
+* `ε_bind = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`, `Q_s` the expected number of commit strings the sampled
   proof blocks read.
 
 Its named assumptions, each a hypothesis:

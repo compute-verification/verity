@@ -526,8 +526,12 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
     lone = _entry_of(Registration("remote"), one, "n0", ways=alone)
     assert lone.links == (QUIET, PATH)
     assert refusal(onsite, _reached(_entry_of(onsite, one, "n0", ways=alone)), auditor) is None
-    with pytest.raises(Malformed, match=r"no interface the node file states has a rate \(\['n0/eth0'\]\).*takes no certifier"):
+    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth0'\].*takes no certifier"):
         _entry_of(Registration("remote"), one, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME), ways=alone)
+    mixed = {**node, "interface": {**PORTS, "eth2": UNRATED["eth0"]}}
+    with pytest.raises(Malformed, match=r"network certifier 'cert0': the interfaces \['n0/eth2'\].*takes no certifier"):
+        _entry_of(Registration("remote"), mixed, "n0", certifier=("cert0", "dummy-cert0-key", SCHEME),
+                  ways=(*_ways()[:2], ("n0/eth2", None, True), ("n0/storage", DISKS, False)))
 
 
 def test_an_interface_that_reads_no_rate_is_registered_without_a_capacity() -> None:

@@ -51,7 +51,7 @@ def bound (m : Option String) : Circuit :=
 
 def prog : ByteArray := "{\"root\":\"r\",\"definitions\":[1,2],\"annotations\":{\"x\":1}}".toUTF8
 
-/-- `program_digest` of `{"root": "r", "definitions": [1, 2]}` (`verity.ml.circuits.codec`, which drops `annotations`). -/
+/-- `program_digest` of `{"root": "r", "definitions": [1, 2]}` (`verity.circuits.codec`, which drops `annotations`). -/
 def progSha : String :=
   "2ddb1d2afb53742ae98210afa683ceb6842b10625d88ff0ad16eca0de13512b40226451238d1cf430a87db6db4e6d34629a43fd5ee5609bd8e23bd191e6b96a4"
 

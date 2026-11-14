@@ -30,7 +30,7 @@ floor give, outside both regions.
   session's `105` rounds), its honest strategy (`honestStrategy`, which keeps all of `C` and answers by lookup), the
   empty period (`emptyRun`) and the certificate `HONEST_S = 63,000,000` bits: what the honest and nontrivial lemmas of
   `PeriodHeld` and `PeriodHeldDeployed`, `PeriodHeldHonest` and `PeriodHeldNontrivial`
-  (`Security/Proofs/Pous/Lemmas/PeriodDeployed.lean`), are stated at.
+  (`security/Proofs/Pous/Lemmas/PeriodDeployed.lean`), are stated at.
 
 The step from the deployed device to the ring model is two premises, and no theorem here discharges either: the device
 model (`DeviceModel`: the state at each round boundary within `B + S_chip + ∑ cap_i · round`, and each on-time answer

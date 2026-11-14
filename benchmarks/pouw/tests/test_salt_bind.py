@@ -26,12 +26,12 @@ from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import window as Wd
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.accounting.pouw.prover.kernels.served_zk import of_record as OR
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import DEVICES
 from verity.protocols.proofs.spot.device import challenger as Ch
 
 import served_commit as SC
-import of_record as OR
 import of_record_lean as ORL
 
 _CASES = Path(CC.__file__).resolve().parent / "lean/check/tests"

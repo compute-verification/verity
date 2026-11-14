@@ -27,14 +27,14 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly wi
   bound at `τ`, so its value `∑ s g_s x_s` is a harm bound. The greedy fill, strata taken whole in decreasing
   `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
   `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
-  (`verity.core.protocols.spot.optimize`).
+  (`verity.protocols.proofs.spot.prover.optimize`).
 * `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
   `workOf σ w B`.
 * `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration
   form**. With harm a unit's output bits `b_s`, the floor of the fill's value is `audit_exfiltration`'s `H`.
 * `stratumRisk`, `le_stratumRisk`, `stratified_isHarmBound_exact`: the same weak duality with each stratum's exact risk
   `ln(C(n_s, k_s)/C(n_s − c, k_s))` in place of `k_s c / n_s`, which is at most it. Core's
-  `verity.core.protocols.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
+  `verity.protocols.proofs.spot.verifier.profile.Stratified.harm_bound` is that knapsack's value over the exact risk increments: below the
   closed form's, and a harm bound by this theorem at the price its greedy fill stops at, not by the closed form.
 -/
 
@@ -328,13 +328,13 @@ variable {C : Verity.Boolean.Circuit} {n m : ℕ} (P : Partition C n)
 /-- **Exfiltration under the stratified sampling design**: `audit_exfiltration` at the harm bound of a separated fill of the output
 bits `b_s` per unit of stratum `s`. A prover that picks its strategy from a uniform message and a receiver that sees only
 what is delivered on `D` succeed together with probability at most
-`2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + δ_link + δ_in`, where `miss (j + 1) < δ`. -/
+`2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + ε_bind + δ_in`, where `miss (j + 1) < δ`. -/
 theorem audit_exfiltration_stratified {σs : Fin n → Fin m} {k : Fin m → ℕ}
     {hk : ∀ s, k s ≤ (SamplingDesign.stratum σs s).card} {Reg : Type} {session : Finset (Fin n) → Reg → Game Bool}
     {X : (R : Reg) → Cont (SamplingDesign.stratified σs k hk) Reg session R → (Fin C.N → Bool)}
     {ext : (S : Finset (Fin n)) → (R : Reg) → Strategy (session S R) → Fin n → Option (Fin C.N → Bool)}
-    {a : Fin C.N → Bool} {εks δlink δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
-    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
+    {a : Fin C.N → Bool} {εks εbind δin : ℝ≥0∞} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]
+    [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound εbind)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (b : Fin m → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, b (σs u))
     (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ) {τ : ℝ} (hτ : 0 ≤ τ)
@@ -346,7 +346,7 @@ theorem audit_exfiltration_stratified {σs : Fin n → Fin m} {k : Fin m → ℕ
     avg (fun msg => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ msg)) (cont (σ msg)))) = msg)
         (audit (SamplingDesign.stratified σs k hk) Reg session) (σ msg)) ≤
       ((2 ^ ⌊∑ s, (b s : ℝ) * x s⌋₊ * ∑ i ∈ range (j + 1), n.choose i : ℕ) : ℝ≥0∞) / (Fintype.card M : ℝ≥0∞) +
-        (δ + εks + δlink + δin) :=
+        (δ + εks + εbind + δin) :=
   P.audit_exfiltration hks hlink hin hD (fun u => b (σs u)) K hK hsep hw
     (SamplingDesign.stratified_isHarmBound_bits σs k hk b x hδ hτ hfull hempty hspent) hj σ g
 

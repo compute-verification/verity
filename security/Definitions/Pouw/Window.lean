@@ -52,7 +52,7 @@ guarantee `audit_executionPhase_split_of_record` is stated over), on its own so 
   transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
   served with probability at most a term of the window's state;
-* the deployed sample, SPOT (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
+* the deployed sample, SPOT (`verity/protocols/accounting/pouw/verifier/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
   the `N` tiles; `share` and `sessionLaw`, each session's own uniform distribution; `CopyClosed`, the unit sets that hold a tile
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `IncorrectCopyClosed`,
@@ -262,25 +262,25 @@ def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
     (g : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → ℝ≥0∞) : Prop :=
   ∀ S R (τ : Strategy (sess S R)) u, u ∈ S → A.ks S R τ u ≤ κ + g S R τ
 
-/-- **A call's binding error in the window** (premise `δlink_c`): for every window prover state `τ` after the registration
+/-- **A call's binding error in the window** (premise `εbind_c`): for every window prover state `τ` after the registration
 `R` and every rule that picks a sampled proof block before the sessions' first coin, the average over the sample of call `c`'s
 `link` at the picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`),
-against the window's committed transcript, is at most `δlink_c(R, τ)`, a function of the window's state as `BindSound`'s
-`δlink` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
+against the window's committed transcript, is at most `εbind_c(R, τ)`, a function of the window's state as `BindSound`'s
+`εbind` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
 transcript is a function of the prover's state at registration, so it is the same for every call and every sample. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
 its seed reads are the committed transcript's, fixed before the sample. -/
 def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → SamplingDesign (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
-    (c : Fin C) (δlink : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
+    (c : Fin C) (εbind : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (τ : Cont Lw (executionPhaseSession sess) R) (tgt : (Lw R).Ω → Option (WUnit n)),
     avg (fun ω => along (fun c' => sess c' (slice ((Lw R).draw ω) c') R)
       (fun c' τc => if c' = c then
           atTgt (slice ((Lw R).draw ω) c') (pick (tgt ω) c')
             fun u => (A c').link (slice ((Lw R).draw ω) c') R τc u (committed R τ)
         else 0)
-      (List.finRange C) (τ ω)) ≤ δlink R τ
+      (List.finRange C) (τ ω)) ≤ εbind R τ
 
 /-- **The window's collision term** at the registration `R` and the window's state `τ`: the calls' state terms
 `g c` (`CallAnalysis.KnowledgeSound`), each at the state the window's run brings to call `c`'s session, counted on the
@@ -336,7 +336,7 @@ def MissProbWithin {Reg : Type} (Lw : Reg → SamplingDesign (WUnit n)) (L : Reg
 * `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
   `p`, its anchors;
 * `rootH3`: the pass's `-h3` root; `leaf p`, the `-h3` leaf at position `p` under it; `tileRead l v`, the words of leaf
-  `l` that unit `v` reads (`tile_read` in `verity/core/protocols/pouw/window.py`);
+  `l` that unit `v` reads (`tile_read` in `verity/protocols/accounting/pouw/verifier/window.py`);
 * `inputs X v`, `outputs X v`: a transcript `X`'s values at unit `v`'s input and output wires; `rootOf X`, the `-h3`
   root the window's entries hold in `X`.
 The positions are the units' statements' (`UnitStmts.Pos`), so a unit reads the anchors and the leaf at its own place in
@@ -392,7 +392,7 @@ end Window
 
 /-! ## The deployed sample: SPOT
 
-PoUW runs on SPOT (decision 102; `verity/core/protocols/pouw/window.py`): after the receipt the
+PoUW runs on SPOT (decision 102; `verity/protocols/accounting/pouw/verifier/window.py`): after the receipt the
 verifier samples one uniform `K′`-of-`N` subset of the window's equal tiles (`subset:K′`), and the service proves the sampled
 tiles in `⌈K′/cap⌉` sessions of `cap` instances, session `σ` holding the sampled indices of rank `σ·cap` to `σ·cap + cap − 1`
 in ascending order and padding with the filler tile `N − 1` (`instance_ts`). A session mixes tiles of every call, so the

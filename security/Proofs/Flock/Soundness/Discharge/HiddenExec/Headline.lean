@@ -38,7 +38,7 @@ hidden outputs, and let the challenger write sample `S` as the JSON `dj S` (`x�
 `Stmt.setupHidden`). Let the units be sampled with `Flock.Draw.drawWith`'s stratified sampling design on the challenger's coins, a
 byte source A3 makes uniform, and let each sample's session be the challenger's one table (`liveTable`, A6), written out
 by `wr`. Against any live prover `τ`, verity-verify-proof accepts with at least `K` incorrect proof blocks of the program `p`, at the
-simulated prover's committed values, with probability at most `miss(K) + ε_ks + δ_link`, given the program's places,
+simulated prover's committed values, with probability at most `miss(K) + ε_ks + ε_bind`, given the program's places,
 constant and zero columns and binding at the hidden tables (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`) and `hdec`. -/
 theorem flock_headline_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))

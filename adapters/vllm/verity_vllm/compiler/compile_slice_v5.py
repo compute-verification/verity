@@ -95,8 +95,11 @@ from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import block_key as BK
 from verity_vllm.compiler import cache_step as CST, compile_slice as CS
 from verity_vllm.compiler import cache_step_v3 as V3S, compile_slice_v4 as V4
-from verity.protocols.accounting.certifier.verifier import replay_chain as RC, replay_step as RS
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
+from verity_vllm.compiler import replay_chain as RC, replay_step as RS
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.trace import part as _part
+from verity.commitments.gates.frame_v3 import _refs
+from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
 
 STATICS = V4.STATICS + ("NRB", "NRK")
 #: the statics a step reads: ReplayStep_v1's, the window's shape and the slot row's widths

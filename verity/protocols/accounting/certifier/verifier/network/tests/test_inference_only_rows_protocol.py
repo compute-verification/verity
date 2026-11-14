@@ -42,7 +42,7 @@ from verity_difftest import Reject
 from verity_difftest import protocol as P
 
 PROTOCOLS = Path(__file__).resolve().parents[5]
-LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "lean"
 FIXTURES = PROTOCOLS / "proofs" / "flock" / "prover" / "tests" / "fixtures"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -346,7 +346,7 @@ def made(draw, m: str) -> dict:
 #: The honest case on circuit files a random `serve` run takes now and then (`SERVE_FILE_ONE_IN` of its cases), each
 #: with the verdict it aims at: both templates on one taken file of 56 MB, at its limits and one past each.
 SERVE_FILES = ("plain-tree", "plain-tree")
-SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-nci": "nci"}
+SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-inference_only": "nci"}
 SERVE_FILE_ONE_IN = 40
 #: what `limits` names: `at`, `Γ` and `α` exactly what a block holds; `rows`, `Γ` one under it; `fresh`, `α` one
 #: fresh bit under it

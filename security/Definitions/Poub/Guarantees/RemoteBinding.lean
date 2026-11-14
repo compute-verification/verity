@@ -49,7 +49,7 @@ can open (`L_t`) gives its share. The statement has no premise beyond `L_t` hold
 * `ReceiptsBindingOfCR`: under claim `cr/sha-512` at each window's fork finder (`Receipts.finder`), which costs `q_t`
   SHA-512 calls, the binding term is at most `Σ_t √(|L_t|·s_t·(q_t²/2^513 + split_t))`. Its step that assumes no hash,
   the fork form `ReceiptsBindingOfFork` (`Σ_t √(|L_t|·s_t·(fork_t + split_t))`), is a lemma:
-  `Security/Proofs/Poub/Lemmas/RemoteBinding.lean`.
+  `security/Proofs/Poub/Lemmas/RemoteBinding.lean`.
 
 `L_t` and `s_t` are the session's: a set holding every receipt window `t` opens at every outcome, and its sample cap, so
 the code charges at the session's bounds on a window's receipts and samples, not at one record's `U_t` and `s'_t`. Where

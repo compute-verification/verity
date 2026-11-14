@@ -15,7 +15,7 @@ from typing import Any, Protocol
 
 
 class ProofDrivers(Protocol):
-    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_draw``, ...
+    #: the one-stage audit's driver: ``SCHEME``, ``run``, ``lean_verify``, ``proved_units``, ``challenger_sample``, ...
     a0: Any
     #: the requirement audit's driver: ``M_MAX``, ``statement_checks``, ``frame_ports``, ``opens``, ``public_bcs``
     a7: Any
@@ -23,6 +23,8 @@ class ProofDrivers(Protocol):
     a8: Any
     #: the auditor's challenger's sessions: ``start``, ``RankCoins``, ``evidence``, ``negatives``, ``Replay``
     a5_coins: Any
+    #: the development challenger on this machine, which ``start`` takes for ``--challenger local``: ``Local``
+    local_challenger: Any
     #: the proof subprotocol: ``frame_ports`` over a statement's tables
     prove_subprotocol: Any
     #: Flock's circuit writer (``verity_flock.circuit``)

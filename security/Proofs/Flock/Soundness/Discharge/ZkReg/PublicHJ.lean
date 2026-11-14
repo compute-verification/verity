@@ -35,7 +35,7 @@ second conjunct ties, at each read the verifier owns, to the root `--registered 
 * `rsZHJS_incorrectRegZ`: the registered commit strings are the public file's (`keyLayoutH`'s population is `fun _ => pub`),
   so `incorrectRegZ` is one set at every registration.
 * `zk_session_soundHJR_custody_sampled_reg`: the sampled proof blocks' form of the first conjunct,
-  `Pr[verity-verify-proof accepts ∧ some drawn unit in incorrectRegZ] ≤ ε_ks + δ_link`, without A3, and the same second conjunct.
+  `Pr[verity-verify-proof accepts ∧ some drawn unit in incorrectRegZ] ≤ ε_ks + ε_bind`, without A3, and the same second conjunct.
 -/
 
 @[expose] public section

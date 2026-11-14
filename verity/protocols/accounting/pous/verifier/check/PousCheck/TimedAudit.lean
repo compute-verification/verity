@@ -6,7 +6,7 @@ public import PousCheck.Certificate
 # The timed audit's verdict on its record
 
 `protocol.TimedAudit` with `audit.UnsignedRounds` (`verity/protocols/accounting/pous/verifier/protocol.py`, `audit.py`), as the GPU
-harness's memory challenger runs it strict (`verity/core/devices/memory_challenger/timed_audit.py --strict`, P2 v3's
+harness's memory challenger runs it strict (`verity/protocols/accounting/pous/device/timed_audit.py --strict`, P2 v3's
 arm) on the registered scheme's framing (`schemes/p2.py`, `p2-<w>/v4`), judged from what that process records:
 `READY.json` (the salt, the scheme and its manifest), `LEAVES.bin` (one 64-byte leaf digest a block,
 `verifier.leaf_hash`) and its audit document (the root, `Δ`, the RTT allowance, the limit, `strict`, `k`, and each

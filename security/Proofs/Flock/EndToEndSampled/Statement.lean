@@ -46,7 +46,7 @@ verifier samples a `kd`-subset of the `n` proof blocks from its operating system
 `verity-verify-proof verify --zk --session-tables J` reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
 with "wrong" `EndToEnd`'s (`incorrectRegZ`, against the public file, in the committed transcript fixed at registration), and
-`ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss term, so it holds whatever
+`ε_ks`, `ε_bind` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss term, so it holds whatever
 the verifier's bytes: it needs no A3.
 
 Its named assumptions, each a hypothesis:
