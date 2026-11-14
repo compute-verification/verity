@@ -31,7 +31,7 @@ def window(tmp_path) -> Path:
 def _main(tmp_path: Path, bundle: Path, window: Path) -> tuple[int, dict]:
     out = tmp_path / "out"
     rc = PB.main(["--bundle", str(bundle), "--window", str(window), "--bin", "absent", "--lean", "absent",
-                  "--firewall", "absent", "--out", str(out)])
+                  "--zk-server", "absent", "--out", str(out)])
     return rc, json.loads((out / "summary.json").read_text())
 
 
