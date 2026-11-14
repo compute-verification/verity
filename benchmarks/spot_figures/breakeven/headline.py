@@ -14,8 +14,9 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
 every sparse-MLA head's blocks (`volume`: the `workload` card's sparse-MLA blocks counted over the serve plan's
-requests, `mla128`), its verification phase a datacenter's window. The head is cut as it is served (`UNITS`, a
-`partition` card beside the line's own cut): each head's key block its scores unit and its values units of 64
+requests, `mla128`), its verification phase a datacenter's window, its design held to the plan its name adds (`PLANS`:
+the planner's own, or a margin on the strata, at the planner's κ or a held one). The head is cut as it is served
+(`UNITS`, a `partition` card beside the line's own cut): each head's key block its scores unit and its values units of 64
 columns, reading the block's key rows from their writers' committed rows, one writer a column block for all the
 heads; a row names the cut and its label (`cut`). `--whole` prices the head as the card's whole key blocks and end
 block instead, for comparison, and `--partition NAME` cuts the line by another `partition` card. `price` prices its
@@ -143,10 +144,20 @@ def warm(f: float) -> dict:
     return {p: f for p in WARM_FAMILIES}
 
 
-#: each row's case fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
-ROWS = {"(i) honest": {"case": TOKENS | MEASURED | CUT, "scale": {}},
-        "(ii) honest": {"case": MEASURED | CUT, "scale": {}},
-        "(iii) honest": {"case": MEASURED | CUT, "scale": warm(0.25)}}
+#: each case's fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
+CASES = {"(i) honest": {"case": TOKENS | MEASURED | CUT, "scale": {}},
+         "(ii) honest": {"case": MEASURED | CUT, "scale": {}},
+         "(iii) honest": {"case": MEASURED | CUT, "scale": warm(0.25)}}
+#: the margin a margin plan samples every stratum by but the one that costs the most proving
+MARGIN = 0.125
+#: the plans a case's design may be held to, by what each adds to the case's name: the keywords its design passes the
+#: planner beside the line's (`optimize.two_stage_design`). None is the planner's own: each template a stratum, at its
+#: κ. With a margin, `MARGIN`, it samples (1 + MARGIN) k_t of every stratum but the one that costs the most proving, at
+#: the planner's κ or held to the κ named, which holds down the proof blocks a sampled replay block proves
+PLANS = {"": {}, ", margin 1/8": {"margin": MARGIN},
+         **{f", margin 1/8, kappa 2^{e}": {"margin": MARGIN, "kappas": (2.0 ** e,)} for e in range(-4, -9, -1)}}
+#: a row: a case under a plan
+ROWS = {name + more: case | {"plan": plan} for name, case in CASES.items() for more, plan in PLANS.items()}
 
 RMS8 = "RMSNormFusedCudaVector8_v1{N=6144,"
 #: the Lean verifier as measured, core-seconds a one-block statement and a block: RMSNorm v8's measured statement times
@@ -620,6 +631,7 @@ def installed(P: SimpleNamespace, spec: dict):
         return m
 
     def designed(cells, replay_blocks, delta, **kw):
+        kw |= spec["plan"]
         row = design(cells, replay_blocks, delta, **kw)
         trace.designs.append({"cells": list(cells), "row": row, "kw": kw})
         return row
@@ -659,8 +671,8 @@ def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, stead
     if prices:
         prices = prices | {"cells": {b: x for b, x in prices["cells"].items() if b not in gone},
                            "unread": sorted([*prices.get("unread", ()), *(b for b in prices["cells"] if b in gone)])}
-    return {"row": row, "scope": scope, "beta": beta, "case": case, "scale": r["scale"], "steady": steady,
-            "prices": prices, "volume": volume(n_heads, case.get("partition", "")),
+    return {"row": row, "scope": scope, "beta": beta, "case": case, "scale": r["scale"], "plan": r["plan"],
+            "steady": steady, "prices": prices, "volume": volume(n_heads, case.get("partition", "")),
             "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
             "share": SHARE, "step": STEP, "set": CHARGES, "S_case": SERVED_CASE, "mix": MIX, "rule": RULE,
             "run_s": RUN_S}
@@ -723,6 +735,7 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                                       "limit": pt["limit"]},
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
+               "plan": spec["plan"], "kappa": p["kappa"], "k_sum": sum(p["k"].values()),
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
         row["verification_phase"]["binding"] = binding_bound(P, d["row"], pt["registration_sample"], pt["sessions"],
                                                              gs / phase)
