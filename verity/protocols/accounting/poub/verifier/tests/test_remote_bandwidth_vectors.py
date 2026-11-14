@@ -163,9 +163,10 @@ KV_BOUND = {
 }
 
 
-# The signs at a seed of 64 zero bytes: at 64 rows the key is all 64 bytes of SHA512("verity/randomness/derive/v2\0" ‖
-# frame(seed) ‖ frame("verity/remote-bandwidth/sketch-signs/v1") ‖ frame(ctx)), ctx {"k": 64, "n": 4096, "tag":
-# "sketch-sha512"} in key order, with row 0's first 16 bytes and row 63's last 16; v0's row 0 under `derive`'s 32 bytes,
+# The signs at a seed of 64 zero bytes: at 64 rows the key is all 64 bytes of SHA512("verity/randomness/derive-wide/v1\0"
+# ‖ frame(seed) ‖ frame("verity/remote-bandwidth/sketch-signs/v1") ‖ frame(ctx)), ctx {"k": 64, "n": 4096, "tag":
+# "sketch-sha512"} in key order, its rows streamed under "verity/randomness/stream-wide/v1\0", with row 0's first 16
+# bytes and row 63's last 16; v0's row 0 under `derive`'s 32 bytes,
 # at 16 rows (the registration's default) and at 64 (what 64 rows read before v1, which no registration reads now).
 SIGNS_V1_ZERO_SEED = {
     "key": "b844824fb8704537ad7e865cc186b22f116ef99a0e48d8034d76cc07cf9ab10b"
