@@ -10,7 +10,7 @@ import pytest
 
 from verity.channel import Message
 from verity.party import Finish, Identity, Received, Send, Timer
-from verity.protocols.accounting.certifier.verifier import device_party as D
+from verity.protocols.accounting.certifier.device import device_party as D
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
