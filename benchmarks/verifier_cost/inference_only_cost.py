@@ -1,6 +1,6 @@
-"""``inference_only_cost.py CASE``: what `nci-check --policy` (`InferenceOnlyCheck.Desc`) costs under Boolean-first, each check also run through
-`nci-phases` (`inference_only_phases/Main.lean`: the check's steps timed, the slowest Definitions' summaries named), whose verdict
-must be `nci-check --policy`'s.
+"""``inference_only_cost.py CASE``: what `inference-only-check --policy` (`InferenceOnlyCheck.Desc`) costs under Boolean-first, each check also run through
+`inference-only-phases` (`inference_only_phases/Main.lean`: the check's steps timed, the slowest Definitions' summaries named), whose verdict
+must be `inference-only-check --policy`'s.
 
   suite --out DIR --phases EXE --scratch DIR
       the inference-only check's own vectors: each `runs` entry of its lean-audit.json generated and its exe timed, the largest
@@ -14,9 +14,9 @@ must be `nci-check --policy`'s.
       (`lift.on_bits`) and called once by a root of its inputs. θ empty (its weights are bound per run), one inference block, the
       request, at `inference_only_glm.GAMMA`, `inference_only_glm.ALPHA`
 
-DIR/CASE.jsonl has a row per check: the description's sizes, `nci-check --policy`'s seconds, peak RSS and verdict, and
-`nci-phases`'s PHASE lines (DIR/phases/<name>.log keeps them as they come). `--big N` is the body size from which
-`nci-phases` times a summary step by step; `--no-policy` runs `nci-phases` alone.
+DIR/CASE.jsonl has a row per check: the description's sizes, `inference-only-check --policy`'s seconds, peak RSS and verdict, and
+`inference-only-phases`'s PHASE lines (DIR/phases/<name>.log keeps them as they come). `--big N` is the body size from which
+`inference-only-phases` times a summary step by step; `--no-policy` runs `inference-only-phases` alone.
 """
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ def small(v):
 
 
 def check(args, name: str, path: Path, row: dict) -> dict:
-    """`nci-phases` then `nci-check --policy` on the instance `path`, one row."""
+    """`inference-only-phases` then `inference-only-check --policy` on the instance `path`, one row."""
     logs = Path(args.out) / "phases"
     logs.mkdir(parents=True, exist_ok=True)
     ph = launch([str(args.phases), str(path), "20", str(args.big)], logs / f"{name}.log")
@@ -242,8 +242,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--exe", type=Path, default=run.EXE)
     ap.add_argument("--config", action="append", choices=list(run.CONFIGS))
     ap.add_argument("--workload")
-    ap.add_argument("--big", type=int, default=2**17, help="nci-phases times a body of this many nodes step by step")
-    ap.add_argument("--no-policy", action="store_true", help="nci-phases only, its verdict standing for nci-check's")
+    ap.add_argument("--big", type=int, default=2**17, help="inference-only-phases times a body of this many nodes step by step")
+    ap.add_argument("--no-policy", action="store_true", help="inference-only-phases only, its verdict standing for inference-only-check's")
     ap.add_argument("--word-only", action="store_true", help="glm: the word-level descriptor only, no Boolean lift")
     args = ap.parse_args(argv)
     Path(args.out).mkdir(parents=True, exist_ok=True)
