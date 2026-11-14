@@ -13,7 +13,7 @@
    "name": "core_vstar_recursive",
    "manifestFile": "lake-manifest.json",
    "inherited": false,
-   "dir": "../../verity/protocols/proofs/recursion/verifier/recursive",
+   "dir": "../../verity/protocols/proofs/spot_flock/verifier/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
