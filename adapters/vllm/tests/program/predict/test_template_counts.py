@@ -9,6 +9,7 @@ window's planned units."""
 from __future__ import annotations
 
 from collections import Counter
+from typing import Any
 
 import pytest
 
@@ -39,11 +40,13 @@ def _phi(tmp_path, layers: int = 4, topk: int | None = None) -> Phi:
 def _instances(program) -> Counter:
     """Each template's instances in `program` as `TemplatePartition` numbers them, a root Call one and a batch its members, which
     the partition itself gives where it applies: a const called alone is a primitive node, which its query refuses."""
-    nodes, out = program.root.body.nodes, Counter()
+    nodes = program.root.body.nodes
+    out: Counter[str] = Counter()
     for k, fn in calls(program):
         out[descriptor_id(fn)] += nodes[k].n if nodes[k].form == "batch" else 1
     if all(nodes[k].form in ("call", "batch") for k, _ in calls(program)):
-        part, by = TemplatePartition(program, template_instances_query(sorted(out))), Counter()
+        part = TemplatePartition(program, template_instances_query(sorted(out)))
+        by: Counter[str] = Counter()
         for _k, tid, _at, n in part.ranges:
             by[tid] += n
         assert by == out
@@ -61,7 +64,7 @@ def _decodes(LP: int, T: int, first: list) -> list:
     return [first] + [[[1, LP + t]] for t in range(T)]
 
 
-SERVED = {
+SERVED: dict[str, dict[str, Any]] = {
     "beside-decodes": dict(LP=3, T=2, batch=[[[3, 0]], [[1, 3], [1, 9]], [[1, 4], [1, 10]]]),
     "chunks": dict(LP=6, T=1, chunks=(4, 2), batch=[[[4, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
     "first-rows-of-a-sequence": dict(LP=6, T=1, chunks=(4, 2), entries=(5, 2), batch=[[[5, 0], [1, 7]], [[2, 4]], [[1, 6]]]),
@@ -71,7 +74,7 @@ SERVED = {
     "unfused": dict(LP=5, T=1, batch=[[[5, 0], [40, 0]], [[1, 5], [1, 40]]]),
     "stop": dict(LP=3, T=2, stop=_spec(3, 2, 3), batch=_decodes(3, 2, [[3, 0]])),
 }
-DENSE = {
+DENSE: dict[str, dict[str, Any]] = {
     "alone": dict(LP=4, T=1, batch=_decodes(4, 1, [[4, 0]])),
     "chunk-with-context": dict(LP=6, T=0, chunks=(3, 3), batch=[[[3, 0]], [[3, 3]]]),
     "first-rows-of-a-sequence": dict(LP=6, T=0, chunks=(3, 3), entries=(5, 3), batch=[[[5, 0], [4, 2]], [[3, 3]]]),
@@ -80,7 +83,7 @@ DENSE = {
     "after-a-history": dict(LP=6, T=1, C=3, batch=_decodes(6, 1, [[3, 3]])),
     "then-past-topk": dict(LP=12, T=6, batch=_decodes(12, 6, [[12, 0]])),
 }
-LONG = {
+LONG: dict[str, dict[str, Any]] = {
     "prefill-and-decodes": dict(LP=6, T=2, batch=_decodes(6, 2, [[6, 0]])),
     "chunks-to-an-edge": dict(LP=9, T=-1, chunks=(5, 3), edge=EDGE, batch=[[[5, 0]], [[3, 5]]]),
     "first-rows-of-a-sequence": dict(LP=9, T=1, chunks=(5, 4), entries=(7, 4), batch=[[[7, 0]], [[4, 5]], [[1, 9]]]),
