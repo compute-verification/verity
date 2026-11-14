@@ -88,7 +88,7 @@ def test_tp2_node_is_its_ranks_joined_at_their_collectives(wrapper, shape):
 
 @pytest.mark.parametrize("wrapper,shape", [("step", {"M": 1, "pos0": 8}), ("request", {"LP": 4, "T": 2})])
 def test_the_root_is_the_input_nodes_and_one_call_of_the_body(wrapper, shape):
-    """`NciCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
+    """`InferenceOnlyCheck.Desc` keeps a root node's reads as pieces of gates, so the body is one Definition the root calls once: the root
     is the parameters' input nodes, in order, then that Call, and the descriptor holds the body's nodes in its callee."""
     node = build_node_program(_phi(TINY, tp={"world": 2, "rank": 0}), wrapper, **shape)
     lowered = sum(len(RL.lower(t)) for _, t in node.program.fn.signature()[0])

@@ -1,5 +1,5 @@
 """A served run's inference-only verdict: its declared circuit accepted as at most n (c, k)-inference blocks, or refused,
-by `NciCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/Count.lean`), against a policy the run
+by `InferenceOnlyCheck.Count`'s rule (`verity/protocols/policy/inference_only/verifier/inference_only/lean/InferenceOnlyCheck/Count.lean`), against a policy the run
 registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U]
@@ -40,7 +40,7 @@ policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is 
 by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
-are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
+are `InferenceOnlyCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
 class with a block at most c gates and k fresh bits, and the blocks at most n. Anything the rule can't decide refuses
 (`Undecided`): no policy, a serve dir that records no start, a policy written once the serve had begun (unless
 ``--retroactive`` says why it's read anyway), a record with no inference blocks, an unpriced primitive, a closed window
@@ -57,7 +57,7 @@ whole call.
 ``--out`` is the public verdict: the judgment against (c, k, n) and no count, of blocks or of windows, in any form. It
 holds the verdict, ``complies``, ``failure`` and ``reason``, each block class's session and its gates and fresh bits a
 block (``classes``), the class's slots and positions, and ``counts`` saying that n was judged on the exact count, which
-it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the exact counts (``blocks``, `NciCheck.Count`'s
+it doesn't publish. ``--private`` (the serve dir's, 0600) holds it with the exact counts (``blocks``, `InferenceOnlyCheck.Count`'s
 rows, and ``total``), each window the class doesn't take and why, and the `nci-check --count` call (``lean_detail``).
 """
 from __future__ import annotations
@@ -90,8 +90,8 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
-NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/nci/lean"
-NCI_REFERENCE = NCI_PACKAGE / "scripts" / "nci_reference.py"
+NCI_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean"
+NCI_REFERENCE = NCI_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
 #: the H200 an int8 serve's ``serve.json`` names (`serve_seal.target_of` on the card: ``TargetProfile.from_device`` with
@@ -352,9 +352,9 @@ def class_windows(serve_dir: Path, cls: Mapping[str, int]) -> tuple[int, dict[in
 
 
 def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, Any]:
-    """`NciCheck.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
+    """`InferenceOnlyCheck.Count`'s verdict on its rows (``[key, gates, fresh, blocks]``): it complies when every row with a block
     has at most ``c`` gates and ``k`` fresh bits and the blocks are at most ``n``; ``failure`` the first that fails,
-    ``[row, "gates"|"fresh"]``, else ``[None, "count"]`` (`nci_reference.evaluate_count`)."""
+    ``[row, "gates"|"fresh"]``, else ``[None, "count"]`` (`inference_only_reference.evaluate_count`)."""
     total = sum(r[3] for r in rows)
     failure = next(([i, "gates" if g > c else "fresh"] for i, (_, g, x, m) in enumerate(rows) if m > 0 and (g > c or x > k)),
                    None)
@@ -364,14 +364,14 @@ def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, An
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("nci_reference", NCI_REFERENCE)
+    spec = importlib.util.spec_from_file_location("inference_only_reference", NCI_REFERENCE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 def count_instance(doc: Mapping[str, Any], table: Mapping[str, int], c: int, k: int, n: int) -> dict[str, Any]:
-    """`NciCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
+    """`InferenceOnlyCheck.Count`'s instance on one window: its session Definition activated at its m slots (the session
     Program, `population.population_program`) with no θ, its block that Definition."""
     from verity.circuits import codec
     from verity.circuits.population import population_program
