@@ -29,10 +29,16 @@ Encoding of arguments
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Any, Iterable
+from typing import Any
 
-SCHEMA = "verity-capture/log/v1"
+from verity_vllm.records.schema_ids import CAPTURE_LOG_SCHEMA
+
+__all__ = ["DispatchEnter", "DispatchExit", "Event", "Note", "Root", "RunEnd", "RunHeader", "SampleEnd", "StepEnd",
+           "StepLink", "StepStart", "StorageAlloc", "StorageFree", "TritonLaunch", "ViewDesc", "views_in"]
+
+SCHEMA = CAPTURE_LOG_SCHEMA
 
 # torch dtype name (without the "torch." prefix) -> bytes per element.  The pure side never imports torch.
 DTYPE_BYTES: dict[str, int] = {
@@ -93,7 +99,7 @@ class ViewDesc:
         return {"$v": [self.alloc, self.offset, list(self.shape), list(self.strides), self.dtype, self.device]}
 
     @staticmethod
-    def from_json(d: dict) -> "ViewDesc":
+    def from_json(d: dict) -> ViewDesc:
         a, o, sh, st, dt, dev = d["$v"]
         return ViewDesc(int(a), int(o), tuple(sh), tuple(st), dt, dev)
 

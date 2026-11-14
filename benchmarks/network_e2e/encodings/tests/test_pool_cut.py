@@ -25,7 +25,7 @@ def _load(name, path):
 
 
 PC = _load("enc_pool_cut", HERE.parent / "pool_cut.py")
-CPV, RP = PC.CPV, PC.RP
+RI, RP = PC.RI, PC.RP
 
 KEYS = ("steps", "windows", "cut", "closed windows", "hit", "take", "alloc", "cache", "free", "max carried keys",
         "max later copies carried", "max M run", "max window slots", "K")
@@ -43,7 +43,7 @@ def synthetic(async_scheduling: bool, seed: int):
                                  tokens=p + tuple(rng.randrange(1, 99) for _ in range(out))))
     e = RP.Engine(max_num_seqs=4, max_num_batched_tokens=32, max_model_len=48, num_gpu_blocks=12, block_size=4,
                   enable_prefix_caching=True, async_scheduling=async_scheduling)
-    return CPV.Input(e, reqs, sorted(rng.randrange(0, 60) for _ in range(24)), [])
+    return RI.Input(e, reqs, sorted(rng.randrange(0, 60) for _ in range(24)), [])
 
 
 def _counts(got: dict) -> dict:
@@ -77,7 +77,7 @@ def test_a_small_pool_carries_a_key_s_later_copies_across_its_edges(async_schedu
 def test_the_prefix_cache_trace_cut_at_every_edge_agrees_at_each_one(every, want) -> None:
     """Each cut preempts the running requests and requeues them by arrival; each continuation looks its own blocks up
     again in the next window, and the three pools agree at every edge."""
-    got = PC.drive(CPV.replay_input(HERE / "fixtures" / "async-prefix-cache.jsonl"), every=every)
+    got = PC.drive(RI.replay_input(HERE / "fixtures" / "async-prefix-cache.jsonl"), every=every)
     assert _counts(got) == want
 
 
@@ -92,5 +92,5 @@ def test_the_prefix_cache_trace_cut_at_every_edge_agrees_at_each_one(every, want
 ])
 def test_the_crush_traces_cut_every_64_steps_agree_at_each_edge(name, want) -> None:
     """Through the crush traces' own preemptions between edges, sync and async; about 10 s each."""
-    got = PC.drive(CPV.replay_input(HERE / "fixtures" / name), every=64)
+    got = PC.drive(RI.replay_input(HERE / "fixtures" / name), every=64)
     assert _counts(got) == want

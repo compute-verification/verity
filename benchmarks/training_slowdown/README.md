@@ -17,7 +17,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `screen.py` | the screen of a route's source: the names a route may not contain (`FORBIDDEN`), read before the route is imported |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set, over /run and over the user's tmux directory (`enter`), and what a process can still reach of them (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, its gradient passed as row-scaled codes of a few bits or as computed, the latents and Muon's momentum low-width (bf16, and int8 codes) or float32, the codes in `_codes`, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`. The counter writes torch's dtype, so a float32 GEMM is priced as the exact one; a row whose dtype reads `tf32` is priced as the TF32 one, which holds only for a GEMM outside the term's M, since a trace names no TF32 (`grade.priced_apart`); a record of a run with the TF32 switch on that names a GEMM float32 is refused |
@@ -273,10 +273,11 @@ nothing (an in-place list form, a fused optimizer step) and for `_scaled_mm`, wh
 computes in; for an in-place form (`flops.in_place`), its tensor operands' promoted dtype, torch's `result_type`, which
 it computes in before it writes its first operand's (`bf16.mul_(f32)` is float32). The op's gates are priced in that dtype, never by its phase or its class (`gates.kind_of`), and the trace's
 circuit prices each node by the same rule. So a counted step is its trace's circuit in gates, attention's products and
-scalings excepted: a job runs them under a fused kernel, in its operands' dtype, bf16 under the routes' autocast, and
-its rows name that; a trace runs them under the math kernel, which casts half-width operands to float32, and its
-circuit holds that. The counted step is under the circuit by those ops' MACs at the two dtypes' prices and by nothing
-else, and a job run under the math kernel names them float32 as the trace does (`tests/test_run.py`). A dtype no
+scalings excepted: a job on a GPU runs them under a fused kernel, in its operands' dtype, bf16 under the routes'
+autocast, and its rows name that; a trace runs them under the math kernel, which casts half-width operands to
+float32, and its circuit holds that. The counted step is under the circuit by those ops' MACs at the two dtypes'
+prices and by nothing else. A job run under the math kernel, as every job on a CPU is (`run.cpu_attention`), names
+them float32 as the trace does, and its counted step is its trace's circuit in gates (`tests/test_run.py`). A dtype no
 Definition prices has no price and none is assumed for it:
 float64, an integer product, a list op over tensors of two dtypes. The grade refuses a record that holds such an op and
 the capture a step that does (`unpriced_dtype`), each naming the op and the dtype. A fused optimizer kernel is one op,
@@ -334,14 +335,23 @@ A job's output is its record, `OUT/run.json`, which its own process writes once,
 with the scores in. It holds no weights by default: beside the record, its last checkpoint's E when E is under
 50 MiB. The command's `--weights` makes each job it runs keep its last checkpoint's whole state too.
 
-A job on a CPU computes with oneDNN held below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `run.limit_cpu`): each of
-its two processes sets the limit itself, over whatever it was started with, before torch computes anything, because
-oneDNN's AMX kernels can return a wrong bf16 product on a virtual CPU and a step run twice then gives two results.
-The record names the variable and the value the route's process set (`cpu_isa`); on a GPU a job sets nothing and
-the field is null. Each of its processes also holds torch at the job's CPU thread count, `--threads` (default 8,
-`run.THREADS`), before torch computes anything, since what a job trains on a CPU follows that count and the cores
-only its speed. The record states the count (`threads`), and a stopped job continues only at the count its kept
-record states: started at another, it is refused with the `--threads` that continues it.
+A job's products are to be the same every time it runs on one device at one thread count. On a CPU, before torch
+computes anything, each of a job's two processes does two things, over whatever it was started with:
+
+- It holds oneDNN below AMX (`ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`, `run.limit_cpu`), since oneDNN's AMX kernels can
+  return a wrong bf16 product on a virtual CPU.
+- It holds attention at the math kernel (`run.cpu_attention`), since torch's fused CPU attention kernel can return
+  a wrong tile of its result at more than one thread. The job's own process needs this too, because it scores the
+  checkpoints.
+
+A run in which the fused CPU kernel runs at more than one thread anyway, because a route chose it, is invalid
+(`flops.CPU_FUSED_ATTENTION`). The record names what the route's process set: `cpu_isa` and `cpu_attention`. On a
+GPU a job sets neither and both fields are null.
+
+Each of its processes also holds torch at the job's CPU thread count, `--threads` (default 8, `run.THREADS`), before
+torch computes anything. What a job trains on a CPU is to be a function of that count, never of the cores it runs
+on. The record states the count (`threads`), and a stopped job continues only at the count its kept record states:
+started at another, it is refused with the `--threads` that continues it.
 
 Run the `python -m` commands from this directory. A start and its data are read where `starts.toml` says a node holds them, and checked
 against it; elsewhere, `research data fetch ART --path starts/NAME/theta.safetensors` (and its `start.json`) gets a

@@ -9,7 +9,6 @@ import subprocess
 import sys
 
 import pytest
-
 import verity.definitions.registry as registry
 
 CORE = ("verity.definitions.ops.prims", "verity.definitions.ops.scalar", "verity.definitions.ops.fp32", "verity.definitions.ops.mufu", "verity.definitions.ops.gemm", "verity.definitions.kernels.tc")
