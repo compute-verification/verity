@@ -4444,6 +4444,11 @@
       "paths": {
         "verity/protocols/proofs/spot/device/tests/test_two_stage_driver.py": "adapters/vllm/tests/pipeline/test_two_stage_driver.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattnrun.sh": "benchmarks/pouw/edited_gemm_profile/fattnrun.sh"
+      }
     }
   ]
 }
