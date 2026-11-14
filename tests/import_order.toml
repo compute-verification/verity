@@ -540,6 +540,8 @@ loaded_by = [
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",
     "verity/protocols/accounting/pous/prover/wipe_prover.py",
+    "verity/protocols/accounting/pous/prover/wipe_run.py",
+    "verity/protocols/accounting/pous/prover/wipe_store.py",
 ]
 
 [[place]]
