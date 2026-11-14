@@ -351,21 +351,25 @@ def test_a_collective_with_no_rank_local_operand_is_named_and_has_no_partial():
     assert _rows(m, "tp_rank_partials") == []
 
 
-def test_a_collective_one_of_whose_two_parts_is_another_collectives_partial_is_refused():
-    """A collective may have two rank-local parts of its own body, and both are its partials.  Where the first of them is already
-    another collective's, the collective is refused and takes neither."""
+@pytest.mark.parametrize("parts", [(R(0, "out"), R(1, "out")), (R(1, "out"), R(0, "out"))])
+def test_a_collective_one_of_whose_two_parts_is_another_collectives_partial_is_refused(parts):
+    """A collective may have two rank-local parts of its own body, and both are its partials.  Where one of them is already
+    another collective's, the collective is refused and takes neither; the fault names the family of that part's producer,
+    whichever of the two it is, and the collective's operand is its first part."""
     def program(*before: CallView) -> ProgramView:
         k = len(before) + 2
         return _rank_program((_call(1, "Gemm_v1", f"{W}.embed/linear[0]", [R(0, "out")]), *before,
-                              _call(k, AR, f"{W}.embed/all_reduce_1/all_reduce", [R(0, "out"), R(1, "out"), R(-4, "peers_1")])), 2)
+                              _call(k, AR, f"{W}.embed/all_reduce_1/all_reduce", [*parts, R(-4, "peers_1")])), 2)
 
     alone = program()
     pop = Population(alone, _corr(alone), tp=TP)
-    assert (pop.tp_faults, pop.operand, pop.partial_of) == ([], {2: R(0, "out")}, {R(0, "out"): 2, R(1, "out"): 2})
+    assert (pop.tp_faults, pop.operand, pop.partial_of) == ([], {2: parts[0]}, {R(0, "out"): 2, R(1, "out"): 2})
     P = program(_call(2, AR, f"{W}.embed/all_reduce/all_reduce", [R(0, "out"), R(-3, "peers_0")]))
     pop = Population(P, _corr(P), tp=TP)
     fault = f"EmbeddingShard_v1 under {IMPL}.embed: one Value is the rank-local partial of two collectives"
-    assert (pop.tp_faults, pop.operand, pop.partial_of) == ([fault], {2: R(0, "out"), 3: R(0, "out")}, {R(0, "out"): 2})
+    assert (pop.tp_faults, pop.operand, pop.partial_of) == ([fault], {2: R(0, "out"), 3: parts[0]}, {R(0, "out"): 2})
+    m = _rank_manifest(P)
+    assert (m["complete"], m["unmodelled"]) == (False, {fault: 1})
 
 
 def _carried(*after: CallView, weights: tuple[str, ...] = ()) -> ProgramView:
