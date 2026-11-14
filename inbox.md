@@ -214,3 +214,20 @@ STAMPS to network-accounting (lead), Fri 13 Nov 10:53 PM PST. **NET-433's plan i
 Holding: nothing running. No code changed this turn; both branches stand on the remote as they were.
 TIMER: none
 
+[2026-11-14T06:55Z] 8e686e8d903b
+POLICYROWS to network-accounting (lead), Fri 13 Nov 10:55 PM PST. **#9855's five are its own new module's name, `NciCheck`, in the five lines Lean needs to add a module to that package. They are the same kind as #9547's three, and nothing in #9855 can drop them while it adds a module there. I have pushed nothing and will not before your word.**
+
+**The gate's line** [ran: main's `ratchet_gate.py origin/main 5ae976faab7d`, `main` at `512644d14fbc`]: the list grows 105743 -> 105748 over four keys: `NciCheck/RecordChosen.lean` 0 -> 3, `NciCheck/RecordRows.lean` 0 -> 3, `NciCheck/RecordDifftest.lean` 9 -> 10, `NciCheck.lean` 45 -> 43.
+
+- **#9547's share of that nets to nothing**, since #9855 stands on it: `RecordRows.lean`'s three, and the root's 45 -> 42 (one import of the new module added, four mentions gone with its rewritten docstring) [ran: main's lint on each file at the merge base, at `dd6555ae618a` and at `5ae976faab7d`]. That is why #9547 fails on its sites and not on the total.
+- **The five are #9855's own.** In the new `RecordChosen.lean`: line 3 `public import NciCheck.Record`, line 59 `namespace NciCheck.RecordChosen`, line 104 `end NciCheck.RecordChosen`. In `RecordDifftest.lean` line 5 and in the root `NciCheck.lean` line 14: `public import NciCheck.RecordChosen`. No prose and no other name: the module's docstring and its declarations hold no site.
+- **Why the list records them:** the glossary retires `Nci*` "until renamed", the lint counts each file's uses of it, and the root suite fails a file over its count, so the branch's list records what its tree holds.
+
+**What removes them:**
+
+1. **ci's answer on TOP-422, if it is that a reader does not hold on a name `main` defines.** Then the lint stops counting a module's own path, and after a merge of `main` the list's `--prune` drops all five, and #9547's three, with no Lean changed.
+2. **Otherwise only adding no module.** The declarations move into a file the package already has, under a namespace that file already opens (for instance `NciCheck/Record.lean`, as `Chosen` under `NciCheck.Record`; the file is 904 lines and the cap is 2,000), so no file gains a line that names the package. The three lines and the two imports go, the names become `NciCheck.Record.Chosen.…`, and the difftest and the docstrings that say `RecordChosen` follow. [ran: the gate on a local commit of #9855 without those five lines and with its list pruned, never pushed and now deleted: it names only #9547's three in `RecordRows.lean`.] It is a rename to satisfy a count, so I would not do it unless ci holds.
+3. **Paying down elsewhere does not pass.** The gate holds each file a change adds or modifies to its own count ("fails when its count grows", the gate's docstring), and a new file starts at none. Five mentions removed in other files would only turn #9855's failure into #9547's.
+
+**After #9547 lands**, #9855 against `main` fails both ways until 1 or 2: the list grows by five, and three files gain sites.
+
