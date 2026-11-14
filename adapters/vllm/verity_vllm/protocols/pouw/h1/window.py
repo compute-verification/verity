@@ -341,10 +341,10 @@ Gate = Callable[..., Mapping[str, Any]]
 #: why the gate's open of a sampling session is refused before any coin (`gate_of`)
 WITHHELD_OPEN = ("a sampling session is withheld: the gate's open answers `withheld: true`, no coin commitment root "
                  "(`commitment` null until the session's end) and `signed: true`, since its challenger releases its root "
-                 "only at its close, after the prover's commitment (`reserve --withhold`, CMP-177)")
+                 "only at its close, after the prover's commitment (`reserve --withhold`)")
 #: why an H1 window's sampling coin has no session to come from (`DrawSession`)
 NO_DRAW_SESSION = ("the window's draw coin comes from a draw session of its own, opened withheld on its draw root once "
-                   "the prover's commitment is in (CMP-177), and the pouw setting 'draw_session' reserves none")
+                   "the prover's commitment is in, and the pouw setting 'draw_session' reserves none")
 
 
 def in_process_draw(rounds: Any, coins: Any) -> LiveRecord | None:
