@@ -394,7 +394,7 @@ def main(argv: list[str] | None = None) -> int:
         from verity_vllm.engine import moe_capture as MC
         site = str((a.out / ".site").resolve())
         os.environ.update(MC.declare(site, a.capture.split(","), a.capture_moe.split(",")))
-        os.environ["PYTHONPATH"] = os.pathsep.join([site, *(p for p in os.environ.get("PYTHONPATH", "").split(os.pathsep) if p)])
+        os.environ["PYTHONPATH"] = os.pathsep.join([site, *SHARED.PYTHONPATH])
         sys.path.insert(0, site)
     settings = S.value_settings()       # the environment the engine and every process it starts are given
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
