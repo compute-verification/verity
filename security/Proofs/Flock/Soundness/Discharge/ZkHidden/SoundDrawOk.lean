@@ -25,7 +25,7 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 `zk_session_soundH` takes `DrawOkZKH I dj mPts` at each of `Law.execOS`'s samples: the sample file `dj S` proves `S`'s units,
 and setupHidden, under the `--zk` tags, sets up at `mPts` link points. As at public outputs (`ZkLink/DrawOk.lean`), the
-first half is custody (`DrawFileZK`) and the second is flock-verify's own arithmetic.
+first half is custody (`DrawFileZK`) and the second is verity-verify-proof's own arithmetic.
 
 * `setupHidden_mPts_drawn`, `setupHidden_mPts_of_proved`: setupHidden's `m_pts` at a sample is `mPtsOf` of the circuit's
   `g` and the units the sample proves, as setupH's (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_of_proved`), from

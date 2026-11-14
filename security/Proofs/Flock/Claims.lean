@@ -294,6 +294,11 @@ public import Proofs.Flock.Claims.DeployOC
 public import Proofs.Flock.Claims.DeployInputs
 public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.CanonEq
+public import Proofs.Flock.Claims.CanonText
+public import Proofs.Flock.Claims.CanonEsc
+public import Proofs.Flock.Claims.CanonRead
+public import Proofs.Flock.Claims.CanonWf
+public import Proofs.Flock.Claims.CanonLine
 public import Proofs.Flock.Claims.Deploy
 public import Proofs.Flock.Claims.DeployE
 public import Proofs.Flock.Claims.DeployVK

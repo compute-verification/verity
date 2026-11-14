@@ -66,8 +66,8 @@
   "Proofs.Properties.Pous.Run",
   "Proofs.Properties.Pous.Setup",
   "Proofs.Properties.Pous.RunAt",
-  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Pous.Component",
+  "Proofs.Properties.Pous.Wipe",
   "Proofs.Properties.Accounting.Requirement",
   "Proofs.Properties.Accounting.Remote",
   "Proofs.Properties.Accounting.Remote.Coins",
@@ -122,6 +122,10 @@
   "Proofs.Properties.Verity.Sampled.OpensAt",
   "Proofs.Properties.Verity.Assembled",
   "Proofs.Properties.Challenger.Window",
+  "Proofs.Properties.Challenger.Lines",
+  "Proofs.Properties.Spot.MonitoringPeriod",
+  "Proofs.Properties.Spot.MonitoringPeriodLedger",
+  "Proofs.Properties.Spot.MonitoringPeriodSigned",
   "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn",
   "Proofs.Properties.Verity.Sampled.Messages",
@@ -166,9 +170,6 @@
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
-  "Proofs.Properties.Verity.Subprotocols",
-  "Proofs.Properties.Verity.Coupling",
-  "Proofs.Properties.Flock.Nets",
   "Proofs.Properties.Remote",
   "Proofs.Properties.Remote.Honest",
   "Proofs.Properties.Verity.Recursive",
@@ -176,7 +177,11 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
-  "Proofs.Properties.Verity.Recursive.Audit"
+  "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.InferenceOnly",
+  "Proofs.Properties.Verity.Coupling",
+  "Proofs.Properties.Flock.Nets"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
@@ -206,7 +211,6 @@
   "Fwd.ctorVal?": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.decideCond": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.discharge": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
-  "Fwd.evalFields": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.evalVal": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.exprTainted": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.rewriteIn": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
@@ -214,7 +218,8 @@
   "Fwd.step": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.summarize": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
   "Fwd.taintReason": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
-  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
+  "Fwd.walk": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds",
+  "Fwd.evalFields": "partial def of fwd_walk and fwd_def (Proofs.Flock.SessionLoop.Concrete.Fwd, under `compile_time`): elaborator code that steps a verifier computation and builds the walk's proof term; no statement reads it, and the kernel checks every definition and proof it adds"
  },
  "compile_time": {
   "Proofs.Flock.Claims.Complete.CostWalk": {

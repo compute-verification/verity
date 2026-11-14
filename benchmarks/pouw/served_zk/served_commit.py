@@ -71,7 +71,7 @@ judged through the proof system (`spot.service`, P1: a `Stream`'s `register`, `s
   (`pouw_pearl_c_device.manifest_epoch`): the pass's salt coin must open against it, as the salt coin, after the
   weights' root, and the pass's salt must be that coin's; a pass recorded before the execution phase's coins (a beacon's salt) is read
   only when the request says it is a recorded replay.  `select` opens the execution phase's sampling coin after the registration (its
-  digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``flock-verify draw --population N
+  digest), once, with no retry, and the sample's key is `draw_key` of that coin; Lean ``verity-verify-proof draw --population N
   --k K′ --stream`` samples over the key's stream (`stream_subset` is its Python twin).  An execution phase is received within
   the registration deadline of the salt coin's release and before the execution phase's sampling coin is released, or it is refused
   (`late-registration`); parameters without the deadline are refused.  The challenger records each opening
@@ -697,10 +697,10 @@ def lean_verdict(path_: Path) -> dict:
     except (OSError, ValueError):
         lines = []
     if not lines:
-        return {"of_record": True, "accepted": None, "verifier": "lean flock-verify verify --zk", "sessions": []}
+        return {"of_record": True, "accepted": None, "verifier": "lean verity-verify-proof verify --zk", "sessions": []}
     v = lines[0] if len(lines) == 1 else lines
     return {"of_record": True, "accepted": all(bool(x.get("accepted")) for x in lines),
-            "why": next((x.get("why", "") for x in lines if not x.get("accepted")), ""), "verifier": "lean flock-verify verify --zk",
+            "why": next((x.get("why", "") for x in lines if not x.get("accepted")), ""), "verifier": "lean verity-verify-proof verify --zk",
             "digest": hashlib.sha512(canonical_json(v)).hexdigest(), "sessions": [_session_digest(x.get("session")) for x in lines]}
 
 
@@ -826,7 +826,7 @@ def _signed_coins(path: str | os.PathLike | None, key: Ch.ChallengerKey | None) 
 
 def _pd():
     sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pearl_c_vllm"))
-    from verity_vllm.protocols.pouw import pearl_c as PD
+    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD
     return PD
 
 
@@ -1408,13 +1408,13 @@ def cmd_edit(a) -> int:
 
 
 def lean_sampler(lean: str, log: Path | None = None) -> Sampler:
-    """The execution phase's sample by Lean ``flock-verify draw --stream``: the units of a subset sampling design over N, on the key's stream."""
+    """The execution phase's sample by Lean ``verity-verify-proof draw --stream``: the units of a subset sampling design over N, on the key's stream."""
     def sample(law: Mapping[str, Any], n: int, src: bytes) -> list[int]:
         p = subprocess.run([lean, "draw", "--population", str(n), "--k", str(law["k"]), "--stream", src.hex()],
                            capture_output=True, text=True)
         lines = [x[5:] for x in p.stdout.splitlines() if x.startswith("DRAW ")]
         if p.returncode != 0 or len(lines) != 1:
-            raise _refused("sampler", f"flock-verify draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
+            raise _refused("sampler", f"verity-verify-proof draw: exit {p.returncode}: {(p.stderr or p.stdout)[-300:]}")
         if log is not None:
             with open(log, "a") as f:
                 f.write(lines[0] + "\n")
@@ -1657,7 +1657,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("challenger")
     p.add_argument("params")
     p.add_argument("log")
-    p.add_argument("--lean", help="Lean flock-verify, whose sample over the sampling challenge's key is the "
+    p.add_argument("--lean", help="Lean verity-verify-proof, whose sample over the sampling challenge's key is the "
                                   "challenger's (default: its Python twin, stream_subset)")
     p.add_argument("--epoch", type=int, default=0, help="the epoch whose coins the challenger holds (default 0)")
     p.add_argument("--state", help="the file holding the challenger's entropy, the one the serving controller's challenges "
@@ -1669,7 +1669,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("replay")
     for x in ("params", "log", "out"):
         p.add_argument(x)
-    p.add_argument("--lean", help="Lean flock-verify, the sample's sampler (default: its Python twin)")
+    p.add_argument("--lean", help="Lean verity-verify-proof, the sample's sampler (default: its Python twin)")
     p.add_argument("--python-record", action="store_true", help=PYTHON_RECORD)
     p = sub.add_parser("coin-variant")
     for x in ("manifest", "coins", "opening", "out"):

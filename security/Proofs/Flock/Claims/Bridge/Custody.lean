@@ -47,7 +47,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # `Deploy.V`'s custody checks, as the old theorems' `RecordsLiveZKJ`
 
-The old `--zk` theorems bound flock-verify `--zk`'s acceptance of the transcript a writer `wr` makes of the live
+The old `--zk` theorems bound verity-verify-proof `--zk`'s acceptance of the transcript a writer `wr` makes of the live
 session's outcome, under `RecordsLiveZKJ I dj Jf wr` (`DefsJ.lean`, the record half of the `live-verifier` assumption
 `RecordCustodyZKJ`): the record `verify --zk` accepts carries the sample, the outcome's proof files, link points, roots
 and rounds. `Deploy.V` takes the record in its last message (`Final`) and checks its custody (`checks`, `custody`):

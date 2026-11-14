@@ -11,7 +11,8 @@ registered circuit is inference, not training).
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
-premise until proved at remote.
+premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), on the Program its check judges,
+and the composed statement still takes it.
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Dampener*` means
@@ -33,7 +34,7 @@ overhead, `*Horizon` a monitoring period's pooled bound, `Session*` a run of a s
   proof blocks behind the ZK server. Nothing it runs or hosts is trusted, and neither is the audited hardware or its
   vendor.
 - **The auditor** has two parts, both on auditor devices that the developer doesn't control: its **challenger** (the
-  live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `flock-verify` for each sampled
+  live coins, which sample what must be proved) and its **verifier** (the Lean verifier: `verity-verify-proof` for each sampled
   proof block, and `remote check` for the verdict). The challenger is the one auditor-trusted device remote relies on
   (`trusted-device`); the verifier is the auditor's own check. The verifier may also use its own coins
   (`IO.getRandomBytes`) instead of the challenger's.
@@ -87,7 +88,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
+      `verity-verify-proof` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
       receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
@@ -410,7 +411,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Vocab.SpotSound`, `Vocab.PouwSound` and `Vocab.InferenceOnlySound` aren't proved at remote.
+  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote. `Vocab.InferenceOnlySound` is, on the Program its
+    check judges; `Vocab.Holds` lists what that leaves unsaid of the committed files.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `Nci.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
@@ -488,7 +490,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`security/Properties/Pouw/Perio
 - `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
 - `Accounting.Assumptions.TS.AcceptedLive`, a premise of the proofs behind PoUW's credit (`SessionSoundAt`'s), not of the period credit: an
-  accepted proof's check words are `1` as `flock-verify --zk --registered` reads them. No served path meets it yet.
+  accepted proof's check words are `1` as `verity-verify-proof --zk --registered` reads them. No served path meets it yet.
 - `Accounting.Assumptions.TS.ExecutionPhaseDesign`, `ServedChecksHold` and `ServedRootsLinked`, `SessionSoundAt`'s other premises:
   the sample follows its stated sampling design, the served checks hold, and the served roots are linked to the
   registered ones.

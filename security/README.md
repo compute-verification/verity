@@ -60,9 +60,9 @@ incorrect set of the trace the extractor recovers.
      `UniformRandomBytesTest`.
    - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
      `FillRoundEq`; and `OuterViewZK`.
-4. **Composed soundness.** `Verity.Soundness` and `Verity.RemoteSoundness` (`Properties/Verity/Soundness.lean`),
-   proved as `Verity.soundness_of_subprotocols` and `Verity.remote_soundness_of_subprotocols`
-   (`Proofs/Properties/Verity/Soundness.lean`): if each of the composite's subprotocols meets its target, then
+4. **Composed soundness.** `Verity.SoundnessOf` (`Properties/Verity/Soundness.lean`) at any list of ids, proved
+   as `Verity.soundness_at_of_targets` (`Proofs/Properties/Verity/Soundness.lean`); `Verity.Soundness` and
+   `Verity.RemoteSoundness` are it at onsite's and remote's: if each subprotocol meets its target, then
    Pr[the composite's verifier accepts files that passed the commit phase's check ∧ some subprotocol's claim fails]
    ≤ Σ_a error_a, where error_a is a's δ plus ε_forge plus its loss at the probability that a's finder outputs a
    SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
@@ -528,7 +528,7 @@ the statement's named assumptions, not the conditions on its inputs and setup (t
 | Subprotocol | Guarantee | Status |
 |---|---|---|
 | SPOT | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
-| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
+| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `verity-verify-proof --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean`; in the shared coin game, `Pous.Period.PeriodHeldSha512`, `Properties/Pous/PeriodGame.lean` | Proved under named assumptions: the device model `DeviceModel`, the instantiation `Instantiates` (`pous-ring-instantiation`), and `P2RingAuditSecure`, an open conjecture; the coin-game form adds `Hash.Assumptions.Sha512Prf` at the memory challenger's two tests, its `ε_prf` in the bound, and names the certificate's fit (`Fits`) and the run's not reading the primitive (`ReadsNoPrimitive`) |
 | Bandwidth audit, PoUB's per-pass lemma | `Accounting.Guarantees.Remote.AuditRO`, `Definitions/Accounting/Guarantees/RemotePass.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean` | Proved under named assumptions: `TrustedDevice`, and sampled proofs' `Claims.SamplingGeneric.Compiled.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
@@ -550,7 +550,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
 - **Guarantees:** the table's SPOT row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. Neither is stated yet as its target in
   `Verity.remote_soundness_of_subprotocols`, so the two compose by hand. At remote, SPOT's one-stage form is
-  v2, which runs `flock-verify --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
+  v2, which runs `verity-verify-proof --zk` on the sessions' files and reads the challenger's signed coins (v1, which takes
   verdicts as evidence, is refused); where v2 accepts, its session is in V5's event
   (`Verity.Sampled.checkBlobs_event`), which has a coupling.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,

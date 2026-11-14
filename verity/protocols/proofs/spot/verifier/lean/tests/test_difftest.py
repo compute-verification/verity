@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "compiler")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -614,6 +614,7 @@ def decode_params(j) -> dict:
         raise D.Reject(str(e)) from None
     try:
         R._seed_salt(j.get("seed_salt"), window)
+        R._registered_compiler(j.get("compiler", R.UNREAD))
     except ValueError as e:
         raise D.Reject(str(e)) from None
     if "challenger" in j:
@@ -674,7 +675,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   compiler=p.get("compiler", R.UNREAD))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -737,7 +739,7 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
         return "reject", "coins"
     out = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                              e["verdicts"], p["delta"], e["sessions"], e["served"], e["session_roots"],
-                             audit.session_registered(e["verdicts"], rec))
+                             audit.less_own_reads(audit.session_registered(e["verdicts"], rec), rec))
     if not out["accepted"]:
         if not all(x["ok"] for x in out["checks"].values()):
             return "reject", "checks"
@@ -1435,13 +1437,9 @@ REGISTRATION_KEYS = ("anchors", "law", "partition", "population", "program", "pr
 
 
 def _record_input(j) -> Fraction:
-    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does, `own_reads` a boolean
-    when given; δ."""
+    """`RecordType.inputOf`'s domain, where `audit_record` reads its inputs as the Lean does; δ."""
     ints = lambda x: isinstance(x, list) and all(map(_int, x))  # noqa: E731
-    _exactly(j, RECORD_INPUT_KEYS | ({"own_reads"} if isinstance(j, dict) and "own_reads" in j else set()),
-             "the record's input")
-    if not isinstance(j.get("own_reads", False), bool):
-        raise D.Reject("own_reads is not a boolean")
+    _exactly(j, RECORD_INPUT_KEYS, "the record's input")
     reg, draw_ = j["registration"], j["draw"]
     if not (isinstance(reg, dict) and all(k in reg for k in REGISTRATION_KEYS) and _int(reg["population"])
             and isinstance(reg["anchors"], list) and isinstance(reg["roots"], list)
@@ -1468,13 +1466,10 @@ def _record_input(j) -> Fraction:
 
 def audit_record_of(j) -> dict:
     """`audit_record` on the record piece's input, δ the float it names (`Fraction(delta)` is one), and the registered
-    roots the verdicts' own for the registration's values, with `own_reads` less those of its own ports at their own
-    roots (`Record.lessOwnReads`)."""
+    roots the verdicts' own for the registration's values less those of its own ports at their own roots
+    (`Record.lessOwnReads`)."""
     delta = _record_input(j)
-    opened = audit.session_registered(j["verdicts"], j["registration"])
-    if j.get("own_reads") and opened is not None:
-        roots = {r["port"]: r["root"] for r in j["registration"]["roots"]}
-        opened = {v: r for v, r in opened.items() if not (v in roots and SS._jeq(roots[v], r))}
+    opened = audit.less_own_reads(audit.session_registered(j["verdicts"], j["registration"]), j["registration"])
     return audit.audit_record(j["registration"], j["receipt"], j["draw"], j["law"], j["proved_units"], j["instances"],
                               j["statement"], j["verdicts"], float(delta), j["sessions"], j["served"], j["session_roots"],
                               opened)
@@ -1615,7 +1610,7 @@ def run(j):
     out = audit_record_of({"delta": j.get("delta"), "draw": drawn["draw"], "instances": instances, "law": derived,
                            "proved_units": proved, "receipt": receipt, "registration": rec, "served": j.get("served"),
                            "session_roots": j.get("session_roots"), "sessions": sessions, "statement": j.get("statement"),
-                           "verdicts": verdicts, "own_reads": inner is not None})
+                           "verdicts": verdicts})
     accepted = out["accepted"] is True
     staged = {}
     if inner is not None:
@@ -1624,7 +1619,7 @@ def run(j):
             "delta": j.get("delta"), "draw": inner["draw"], "law": inner["law"], "proved_units": proved2,
             "instances": len(proved2) if it["instances"] is None else it["instances"], "receipt": inner["receipt"],
             "registration": it["record"], "served": it["served"], "session_roots": it["session_roots"],
-            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts, "own_reads": True})
+            "sessions": sessions, "statement": j.get("statement"), "verdicts": verdicts})
         try:
             strata = P.strata(it["decoded"]["program"], it["decoded"]["query"])
         except (P.QueryRefused, ValueError) as e:
@@ -2240,14 +2235,15 @@ REGISTERED_PARAMS = [
 
 def _other_reads(r: dict, x: int) -> dict:
     """The verdict of record's registered reads, changed: one port's root another (so its value's two ports disagree), every
-    root upper case, a value missing or added (one the record names as a root port, or one it doesn't name), only one
-    port's, none."""
+    root upper case, a value missing or added (one the record names as a root port, at that port's root or another, or
+    one it doesn't name), only one port's, none."""
     ports = sorted(r)
     p = ports[x % len(ports)]
     v = r[p]["value"]
     return [{**r, p: {**r[p], "root": "12" * 64}}, {k: e for k, e in r.items() if e["value"] != v}, {},
             {**r, "extra.0": {"root": "ab" * 64, "value": "extra"}}, {**r, "x.0": {"root": ROOTS["x"], "value": "x"}},
-            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 7]
+            {**r, "x.0": {"root": "12" * 64, "value": "x"}},
+            {k: {**e, "root": e["root"].upper()} for k, e in r.items()}, {p: r[p]}][x % 8]
 
 
 REGISTERED_EVIDENCE = [
@@ -2788,7 +2784,8 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     one = {"sessions": [x for st_ in pe["statements"] for x in st_["sessions"]]}
     assert why(e=e2 | {"proofs": one}) == "evidence: the keys of the evidence's proofs are not statements"
     assert why(p=params | {"proofs": {"circuit": ms[0].circuit_sha512, "public": ms[0].public_sha512,
-                                      "registered": None}}) == "params: the keys of proofs are not members"
+                                      "registered": None}}) == ("params: the keys of proofs are not members, or "
+                                                         "members and wiring")
     again = pm["members"] | {"z/c0": {**pm["members"][ms[0].name], "units": [[1, 2]]}}
     assert why(p=params | {"proofs": {"members": again}}) == (
         "params: proofs: unit 1 is in two members' units: a unit is one member's")
@@ -3971,8 +3968,8 @@ def _record_case(a: dict, delta: str) -> dict:
 
 
 def _own_reads_case(a: dict, x: int) -> dict:
-    """`_record_case` with `own_reads` (or one not a boolean), its first verdict also reporting a read of one of the
-    registration's ports, at that port's root or another."""
+    """`_record_case` with its first verdict also reporting a read of one of the registration's ports, at that port's
+    root or another."""
     c = _record_case(a, "1/4")
     reg, vs = c["registration"], c["verdicts"]
     if isinstance(reg, dict) and isinstance(reg.get("roots"), list) and reg["roots"] and isinstance(vs, dict) and vs:
@@ -3981,7 +3978,7 @@ def _own_reads_case(a: dict, x: int) -> dict:
             got = vs[name].get("registered") if isinstance(vs[name].get("registered"), dict) else {}
             read = {"value": r.get("port"), "root": r.get("root") if x % 3 else "cd" * 64}
             c["verdicts"] = {**vs, name: {**vs[name], "registered": {**got, "own": read}}}
-    return {**c, "own_reads": [True, True, False, 1, None][x % 5]}
+    return c
 
 
 #: δ as the exact ratio of a double (`str(Fraction(delta))`), as the switch passes it.
@@ -4208,7 +4205,7 @@ def _second_statement(rec: dict, part: SS.Part, q: int, drawn, named: bool, regi
 
 
 def _checked_names(s) -> dict:
-    """What `flock-verify verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
+    """What `verity-verify-proof verify`'s verdict names of the session of statement `s` it checked (`second_stage.verified_of`):
     its public file's header and its registered reads by the SHA-512 of their canonical JSON, its sample, and one table,
     as the verifier runs it."""
     if not isinstance(s, dict):
@@ -4551,8 +4548,9 @@ def _second_own(j):
     for none) and the registered reads the params give it, taken as given (`ref_reads`, `{template: registered}`, each
     null for none, null for no template's), and its own copies of the interior registration's values it fills, with
     their sources (`supplied`, `second_stage.supplied_of`), and the names of those it pinned or holds to an earlier
-    record (`fixed`), each null for none, and the templates the auditor's params record as table reads with their
-    tables' rows (`reads`, `{template: V}`, null for none)."""
+    record (`fixed`), each null for none, the templates the auditor's params record as table reads with their
+    tables' rows (`reads`, `{template: V}`, null for none), and the words of the rows each wire joins (`widths`, null
+    for none). The wired key's switch is `second_stage.WIRED_KEY`'s: no input sets it."""
     j = _json(j)
     if not (isinstance(j, dict) and isinstance(j.get("allow"), bool)):
         raise D.Reject("allow is not a boolean")
@@ -4596,10 +4594,13 @@ def _second_own(j):
     reads = j.get("reads")
     if not (reads is None or (isinstance(reads, dict) and all(map(_nat, reads.values())))):
         raise D.Reject("reads is null or an object of naturals")
+    widths = () if j.get("widths") is None else SS.widths_of(j["widths"])
+    if widths is None:
+        raise D.Reject("widths is null or a list of {template, port, reads, writes}, two strings and two naturals")
     own = SS.Own(tuple(j["sample"]), SS.parts(len(j["sample"]), strata), j.get("interior"), j.get("boundary"),
                  tuple(j["drawn"]), links, audit.session_registered(verdicts), SS.verified_of(verdicts),
                  tuple((refs or {}).items()), tuple((ref_reads or {}).items()), wires, rows, returns, supplied,
-                 tuple(fixed or ()), tuple((reads or {}).items()))
+                 tuple(fixed or ()), tuple((reads or {}).items()), widths)
     return j["allow"], own, statements
 
 
@@ -5599,6 +5600,25 @@ REPLAY_ROWS = D.Port(PIECES, "replay_rows", replay_rows,
                      st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
 
 
+def replay_widths(j):
+    """`Pieces.replayWidths`: the words of the rows the design's wires join (`second_stage.replay_widths`), from the
+    replay block of descriptor id `replay` in `program`; none for none."""
+    desc = _obj(j.get("program") if isinstance(j, dict) else None, "program")
+    if not isinstance(j.get("replay"), str):
+        raise D.Reject("replay is not a string")
+    if not desc:
+        raise D.Reject("not a program descriptor")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    return [w.to_json() for w in SS.replay_widths(PROGRAMS[sha], j["replay"])]
+
+
+#: The replay_widths piece's input: replay_links' (`replay_link_inputs`), whose boundary record it doesn't read.
+REPLAY_WIDTHS = D.Port(PIECES, "replay_widths", replay_widths,
+                       st.integers(0, 3).flatmap(lambda i: JSON if i == 3 else replay_link_inputs()), package=PACKAGE)
+
+
 def replay_returns(j):
     """`Pieces.replayReturns`: the names the return of the replay block of descriptor id `replay` in `program` has in
     the `boundary` record (`second_stage.replay_returns`); none for none."""
@@ -6066,7 +6086,7 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATE
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
               (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (POP_ORDER, 300), (PUBLIC_UNITS, 300),
               (LINK_POINTS, 500), (SELECT_SECOND, 300), (SECOND_STATEMENTS, 400), (SECOND_INTERIOR_READS, 200),
-              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
+              (REPLAY_LINKS, 300), (REPLAY_WIRES, 300), (REPLAY_WIDTHS, 300), (REPLAY_RETURNS, 200), (REPLAY_RETURNED, 300),
               (SECOND_SCHEDULE, 300), (FITS, 400), (TEMPLATE_CIRCUITS, 300)]
 
 
@@ -6698,6 +6718,45 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
     assert codes(rec["window"], {**params, "window_root": None}) == "reject"
 
 
+def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
+    """Lean and Python agreeing on the registered compiler (`compiler`, the registration log's item, with the public
+    length ℓ of the advice it reads): a window naming it by its digest with advice of at most ℓ bits is accepted, one
+    naming another compiler or none is refused by name (`R6-compiler`), and advice over ℓ, in another form or none too
+    (`R6-advice-length`). Where the log registers none (`compiler` null), a window naming a compiler or advice is refused
+    (`R6-compiler`); a verifier that reads no log's compiler holds the window to nothing. A compiler in another form
+    refuses the verifier's inputs."""
+    s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
+    design = {"k": 1, "law": "subset"}
+    digest, other = "c1" * 64, "c2" * 64
+    item = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
+
+    def named(d, bits):
+        return {**WINDOW, "compiler": {"digest": d, "name": "c"}, "advice": {"bits": bits, "root": "ad" * 64}}
+
+    rec = _record_of(s, values, design, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
+    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": design, "leaf_layer": LEAF, "log": [],
+              "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+              "registered": values, "scheme": SCHEME, "window_root": WROOT, "work_table": None}
+    unread = {k: v for k, v in params.items() if k != "compiler"}
+    none = {**params, "compiler": None}
+
+    def codes(window, p=params):
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    cases = [(named(digest, b), params, []) for b in (0, 32)]
+    cases += [(named(digest, b), params, ["R6-advice-length"]) for b in (33, -1, "8", None, True)]
+    cases += [(named(other, 8), params, ["R6-compiler"]), (WINDOW, params, ["R6-compiler", "R6-advice-length"]),
+              (named(digest, 8), none, ["R6-compiler"]),
+              ({**WINDOW, "advice": {"bits": 0, "root": "ad" * 64}}, none, ["R6-compiler"]), (WINDOW, none, []),
+              (named(other, 99), unread, []), (WINDOW, unread, [])]
+    for window, p, want in cases:
+        assert codes(window, p) == want, (window, p.get("compiler"))
+    for bad in ({**item, "kind": "theta"}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
+                {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
+        assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
+
+
 def test_a_window_opens_the_pool_its_chain_left(pieces):
     """Lean and Python agreeing on the pool chain: a window opens the pool the previous window of record left, of the
     same program, `pin` the previous record's `pout` entry, its domain and root, whatever the verifier made of that
@@ -6912,17 +6971,21 @@ def test_every_public_items_code_is_reached(pieces):
 
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
     """A v2 audit of each program accepts when the verifier reports the sessions' registered reads opened against
-    the registered roots (and a value the registration doesn't name is not its to read), and rejects them opened against
-    another root, a value's reads missing, a root port's value read as registered, or none reported."""
+    the registered roots (and a value the registration doesn't name is not its to read, and a root port's read at that
+    port's own root is its own), and rejects them opened against another root, a value's reads missing, a root port's
+    read at another root, or none reported. Where the registration also registers a value under a root port's name, a
+    read at the port's root in place of one of that value's is rejected: the value's reads no longer agree."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
         opened = a["evidence"]["verdicts"]["lean"]["registered"]
         p = sorted(opened)[0]
         v = opened[p]["value"]
+        own = "reject" if "x" in s.values[1] else "accept"
         for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
                           ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
                           ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
-                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
+                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, own),
+                          ({**opened, "x.0": {"root": "12" * 64, "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
             lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
             case = _json(_case({**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}))
             assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, got)

@@ -116,7 +116,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : Law n)
   (acc : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZ S R).length mPts → Prop)
 
-/-- **`RunsOnZCJ` at the verdict `acc`** on the live outcomes, for flock-verify `--zk`'s acceptance of what a writer
+/-- **`RunsOnZCJ` at the verdict `acc`** on the live outcomes, for verity-verify-proof `--zk`'s acceptance of what a writer
 writes. -/
 def RunsOnZCJV : Prop :=
   ∀ ω R (o : LiveOutJ (planZ (L.draw ω) R).length mPts), acc (L.draw ω) R o →

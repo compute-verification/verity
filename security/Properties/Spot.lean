@@ -19,8 +19,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
-  registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
-  (`Receipt`);
+  registered values' reads against the registered roots, a read named by one of the record's own ports taken only at
+  that port's root (`UnitsProved`), and the receipt names the commitment's digest (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
 * the sampling design has a profile's sample and the population is a natural number;
@@ -32,9 +32,9 @@ evidence that keeps the caller's facts too is completeness, `Properties.Spot.acc
 
 **The caller's facts** (`CallerHeld`) are not `AcceptMeans`'s. The registration check also holds the record to what
 SPOT's caller hands the verifier beside the record and SPOT's own log: the day's declared program (`DeclaredDay`), the
-window's stream and prover, its seed salt, its pool's reset, once a week, and its window opening the pool the previous
-window of record left, or the empty pool where the public rule or its reset restarts it, for a verifier with a pool
-(`PoolChained`). They are stated where SPOT is called, of the case the caller's check accepted
+window's stream and prover, its seed salt, its registered compiler and advice length, its pool's reset, once a week,
+and its window opening the pool the previous window of record left, or the empty pool where the public rule or its
+reset restarts it, for a verifier with a pool (`PoolChained`). They are stated where SPOT is called, of the case the caller's check accepted
 (`Properties.Remote.StageHeld`), and proved of this check as `Properties.Spot.callerHeld_of_accept`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
@@ -169,6 +169,13 @@ def RunPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
 (`Registration.Pool.spentBefore`). -/
 def PoolResetOnce (v : Registration.Verifier) : Prop :=
   (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
+
+/-- The record's window names the registration log's compiler by its digest and advice of at most its public length ℓ in
+bits, and neither a compiler nor advice where the log registers none (`Registration.Verifier.compiler`); anything when
+the verifier reads no log's compiler. -/
+def RunCompiler (rec : Json) (v : Registration.Verifier) : Prop :=
+  Registration.compilerOk (getD rec "window") v.compiler = true ∧
+    Registration.adviceOk (getD rec "window") v.compiler = true
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), and no earlier record has its window. -/
@@ -307,14 +314,15 @@ def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
 beside the record and SPOT's own log. The record names its day's declared program (`DeclaredDay`, the registration
 log's declarations); its window names the stream and the prover a verifier is bound to (`binding`), the seed salt the
 verifier read from the challenger's log (`RunSeedSalt`) and its pool's reset, week and spent mark (`RunPoolReset`,
-`RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`); and, when the verifier expects values
-registered, the window opens the pool the previous window of record left (`PoolChained`). -/
+`RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`), and the registration log's compiler and
+advice within its length (`RunCompiler`); and, when the verifier expects values registered, the window opens the pool
+the previous window of record left (`PoolChained`). -/
 def CallerHeld (rec : Json) (v : Registration.Verifier) : Prop :=
   DeclaredDay rec v ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
   RunSeedSalt rec v ∧ RunPoolReset rec v ∧ RunPoolWeek rec v ∧ RunPoolSpent rec v ∧ PoolResetOnce v ∧
-  (ExpectsV2 v → PoolChained rec v)
+  RunCompiler rec v ∧ (ExpectsV2 v → PoolChained rec v)
 
 /-! ## The sample: the registered law over the registered population -/
 
@@ -378,11 +386,12 @@ def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
 /-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
-record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
-to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
-`Record.ownRegistered` compute from the verdicts). -/
+record's own values (its roots' ports and its registered values), less the reads of its own ports at their own roots
+(each port's last root, `Record.byPort`): `{value: root}`, a value reported under two roots mapped to null; none when no
+such verdict reports any (`audit.session_registered` and `audit.less_own_reads`, which `Record.sessionRegistered`,
+`Record.ownRegistered` and `Record.lessOwnReads` compute from the verdicts). -/
 def openedRoots (rec : Json) (vs : Array (String × Json)) : Option (Array (String × Json)) :=
-  Record.ownRegistered rec (Record.sessionRegistered vs)
+  Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered vs))
 
 /-- Two `{value: root}` dicts with distinct keys are equal (Python's `==`): the same size, and each entry of the first has
 the same key and root in the second. -/
@@ -394,8 +403,8 @@ exactly the units the sample proves (its units and a work sample's closure, asce
 digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
 each port); and, when the record registers values or the verifiers report reads of the record's own values,
-those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
-entry). -/
+those reads, less those of its own ports at their own roots (`openedRoots`), were opened against exactly the record's
+`{value: root}` (`Record.registeredRoots`, each value's last entry). -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧

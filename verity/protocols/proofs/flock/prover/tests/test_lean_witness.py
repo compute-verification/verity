@@ -411,7 +411,7 @@ def test_f1_the_session_is_accepted_as_the_verifiers_statement(f1, part):
 
 @pytest.mark.parametrize("part", [pytest.param("L3", marks=UNREGISTERED_ROWS), "cap"])
 def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):
-    """`flock-verify verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
+    """`verity-verify-proof verify --zk`, the verifier, accepts level 3 (`rec-open/l16-h4`, 106 units, the smallest
     level) and RecCap (`rec-cap/n128`, `RecCoins.checkCap`) with the verifier's own V* inputs, the inner statement and
     session its coefficients are checked against, the verifier's full sample of that session (`_f1_draw`), and the challenger's
     live-coin part's inner transcript (`inner/s0/public.json`), whose link points, level-3 tops and `root_B` the unit is held to
@@ -425,7 +425,7 @@ def test_f1_verify_accepts_the_session(built, f1_gate, f1, once, part):
     names = [nm for nm, _ in F1_STATEMENTS]
 
     def run():
-        p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "flock-verify"), "verify", "--zk", "--statement", STATEMENT,
+        p = keyed.run([str(LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"), "verify", "--zk", "--statement", STATEMENT,
                        "--circuit", str(v / "circuit.txt"), "--public", str(v / "pub.bin"), "--partition",
                        str(v / "partition.json"), "--program", str(v / "program.json"), "--registered",
                        str(v / "registered.json"), "--rec-inner", str(d / "inner.json"), "--rec-part",

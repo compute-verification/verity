@@ -1,4 +1,4 @@
-# Dither-C's P.V a MMA as measured: pv_l7qs (benchmarks/pouw/edited_gemm/cpv.cu), e_l7qs's mainloop over one unit (a
+# Dither-C's P.V a MMA as measured: pv_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cpv.cu), e_l7qs's mainloop over one unit (a
 # 128-query tile x 128 channels over one 256-key block B, p_block = 256) with the tail stage P_A = [-U | U | -U M_d |
 # 127 M_d] against DG's [A_0 | A_1 | X_diag | 0] (O' = T_last - U A_0 - (U M) X_diag, D_1 = U A_1, each absorbed) and
 # the served epilogue f = float(2 O + 127 S) s_q s_ch, Llama-3.1-8B's attention at 2,048 tokens (32 query heads, 8 KV
@@ -8,7 +8,7 @@
 # time is 1.402x pv_plain's (1.371x at 4,096 tokens).
 name = "pv-l7qs"
 status = "measured"
-source = "BC-KERNEL's pv_l7qs (benchmarks/pouw/edited_gemm/cpv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's pv_words and pv_served, cpv_ref.py)"
+source = "BC-KERNEL's pv_l7qs (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cpv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --toml`, census VF3n-16's classes (bit-exact against checked_strip's pv_words and pv_served, cpv_ref.py)"
 L = 32
 
 [mma]

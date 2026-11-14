@@ -72,11 +72,11 @@ This file states, on words, what the 33 statements check and what one unit's ser
   SHA-512 inputs with one digest, both in hand). Each opening opens its root there (`ReadsX.committed`), so one of the
   two holds (`Accounting.TS.Lanes.rowsAgree_or_leafColl`);
 * `KnownHeld`, `LeafKnownColl`: the known-content tie (at every port the verifier registers at known content:
-  each lane's `admit` and `pub`, every statement's `o0`). Where flock-verify's known-content check
+  each lane's `admit` and `pub`, every statement's `o0`). Where verity-verify-proof's known-content check
   (`Registered.checkKnownAll`) accepts a session's `own` at its known content, the registrant's row at every read of
   such a port is the bytes of the known row at its position (`KnownHeld`), or the registrant's openings exhibit a
   SHA-512 collision (`Accounting.TS.Held.OkColl` at that port's name and rows; `LeafKnownColl` at one of the 33);
-* `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where flock-verify `--zk --registered`
+* `leafLayer`: the unit's proof layer. Proof `i` of round `w` is accepted where verity-verify-proof `--zk --registered`
   accepts every one of its 33 sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the combine's), its
   known-content check (`known x w i k`, the session's registered file's known content), its complete check
   (`Registered.checkComplete`, run whenever `--registered` is given) and its check that each known port, and each port the file marks
@@ -235,10 +235,10 @@ rows `ks`, the known-content extractor outputs two different SHA-512 inputs with
 def LeafKnownColl {ι : Type} (sess : ι → RowsSession) (known : ι → Known) : Prop :=
   ∃ k nm ks, (nm, ks) ∈ known k ∧ Accounting.TS.Held.OkColl (sess k) nm ks
 
-/-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where flock-verify
+/-- **The leaf's proof layer through its 33 sessions**: proof `i` of round `w` is accepted where verity-verify-proof
 `--zk --registered` accepts every one of its sessions (`sess x w i (some l)` lane `l`'s, `sess x w i none` the
 combine's), its known-content check at the session's known content `known x w i k` included
-(`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), its complete check
+(`Registered.checkKnownAll`, which `verity-verify-proof` runs on `--registered F`), its complete check
 (`Registered.checkComplete`, which it runs on every statement of `--registered F`: every port of the circuit is a port
 of `own`) and
 its known-read check (`KnownRead.check`, which it runs on every statement at `F`'s known content, then at each port

@@ -1,4 +1,4 @@
-# The adopted P.V with P~ formed in registers, a useful MMA as measured: apv_fu (benchmarks/pouw/edited_gemm/apv.cu),
+# The adopted P.V with P~ formed in registers, a useful MMA as measured: apv_fu (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv.cu),
 # apv_l7qs's units, words and served f (gated equal, receipts and f) reading the masked P and forming P~ = (P + V_u) ^
 # 0x80 a byte after each A fragment's ldmatrix (V_u = U + 64 from a fragment-ordered table, 2 ops a register: 2.0 a
 # MMA at 4 n-tiles a fragment), so no P~ pass writes P~ to memory. Llama-3.1-8B's attention at 2,048 tokens (32 query
@@ -8,7 +8,7 @@
 # as apv_l7qs), and the whole P.V with its producers (U, V, the X sums) 3.32x (apv_l7qs with its P~ pass 5.95x).
 name = "apv-fu-l7qs"
 status = "measured"
-source = "BC-KERNEL's apv_fu (benchmarks/pouw/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --json`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (receipts and f equal to apv_l7qs's, which is bit-exact against checked_strip's pv_words and pv_served)"
+source = "BC-KERNEL's apv_fu (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv.cu) at s = 2048, H = 32, rep = 4, `eps_profile.py OUT --json`, census VF3n-16's classes, scaled by 2,490,368 / 2,228,224 MMAs to a useful MMA (receipts and f equal to apv_l7qs's, which is bit-exact against checked_strip's pv_words and pv_served)"
 L = 32
 
 [mma]

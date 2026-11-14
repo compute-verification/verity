@@ -2,7 +2,9 @@
  "format": 1,
  "roots": ["VStarRecursive"],
  "exempt": {
-  "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.Sampled.main, audited under VStarRecursive"
+  "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.Sampled.main, audited under VStarRecursive",
+  "SampledTwoMain": "the sampled-two executable's entry point, one line; its command is VStar.Recursive.SampledTwo.protocol.main, audited under VStarRecursive",
+  "SampledTwoOnMain": "a test's executable, sampled-two-on: the two-stage form's check at its switch on, which the form's accept test drives; no party runs it and nothing dispatches to it, and the check it calls is audited under VStarRecursive"
  },
  "layers": {
   "VStarRecursive": {

@@ -93,7 +93,7 @@ Usage::
         --challenger local --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] \\
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
-        --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out OUT2 [--proofs PARAMS.json] \\
+        --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
         [--rids IDS.json] [--firewall F] [--unlinked] [--stop RULE]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
@@ -127,6 +127,7 @@ A ``local`` session's challenger reads its coins through
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import sys
@@ -941,8 +942,8 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
     sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
-    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports,
-    `verifier.audit_record`'s ``own_reads``), the codes of round 2's check in the interior's (``statements``), and
+    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports at
+    their own roots, `audit.less_own_reads`), the codes of round 2's check in the interior's (``statements``), and
     whether the outcome is complete (`second_stage.complete`): the two-stage form allowed, the replay block the
     registered request Definition (`REQUEST_DEFINITION`) and both audit records accepted and complete, so never
     here. A reader that wants a complete audit of the boundary stream reads that, never ``accepted`` alone."""
@@ -1067,7 +1068,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
         return _unopened(pubs, early, twice)
     manager, turns, finisher = AC.start(a.challenger, root, sorted([*ranks.values(), *stops.values()]),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
-                                        key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR))
+                                        key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR),
+                                        deployed=getattr(a, "deployed_key", False))
     ours = AC.held(turns)
     out: list[dict] = [{} for _ in pubs]
     stop_design = a.stop_design or a.replay
@@ -1092,6 +1094,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
                 planner.start()
             coins.plan(need)
             got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop, **ours)
+            if getattr(a, "first_tree", False) and k == 0:
+                turns.tree(FIRST_TREE_SPEC)
             out[k] = {**got.stage1(), "window_root": root}
         except caught as e:  # its stage1.json says why; the others go on
             out[k] = _refusal(pubs[k], e)
@@ -1153,6 +1157,8 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
 
 
 HOST_DIR = "challenger-host"
+#: `first --first-tree`'s coin tree: one stream of one round of one coin, which nothing opens
+FIRST_TREE_SPEC = {"block": 1, "rounds_log": 0, "scheme": Ch.CT.SCHEME, "streams": [Ch.CT.SESSION]}
 NO_HOST = ("--challenger local: --challenger-host names the directory the first stage kept its challenger in, and the "
            "second stage reopens it there. One challenger serves both stages, under one key the verifier holds; a "
            "challenger of this command's own would sign under another, and the first stage's coins are refused under it")
@@ -1230,7 +1236,7 @@ def _second(a: argparse.Namespace) -> int:
         (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         r2, o = summary.get("round_two"), summary.get("outcome") or {}
         print("TWO " + json.dumps({**{x: summary.get(x) for x in ("refused", "sample", "second_stage", "pins", "held",
-                                                                  "proof_server_refused")},
+                                                                  "proof_server_refused", "form_case")},
                                    "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
                                    "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                      "refused")}}, default=str))
@@ -1254,11 +1260,15 @@ def _second(a: argparse.Namespace) -> int:
     if not sample:
         return done(0, refused="the first stage sampled no span: there is no interior to register")
     root = IR.interior_run(again.registration.digest, sample)
+    trees = bool(getattr(a, "interior_trees", False))
     manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
-                                        peer=a.peer, key_record=a.challenger_key, host=host)
+                                        peer=a.peer, key_record=a.challenger_key, host=host,
+                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False))
     ours = AC.held(turns)
     again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
     coins = AC.RankCoins(turns, 0)
+    if trees:
+        turns.hold(0)
     try:
         why = first_coins(again, handoff.get("evidence"), first_root(handoff), AC.lms_verify)
         if why is not None:
@@ -1272,7 +1282,9 @@ def _second(a: argparse.Namespace) -> int:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
             segment = coins.drawn()
-            turns.skip(0)
+            if not trees:
+                turns.skip(0)
+        a.stage = {"coins": turns, "segment": segment, "family": coins.label, "window_root": root} if trees else None
         w = r.interior.committed.window
         summary.update(second_stage={"registration": r.registration.digest, "law": dict(r.draw.law), "draw": r.draw.units,
                                      "window_root": root},
@@ -1283,13 +1295,18 @@ def _second(a: argparse.Namespace) -> int:
                                  "returns": [[x.template, x.port, x.value] for x in r.design.returns]})
         s, got, stmts, proofs = prove(a, r, out, json.loads(Path(a.proofs).read_text()) if a.proofs else None)
         summary.update(got)
+        turns.release(0)
         published = turns.evidence()
         summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
         evidence = [handoff.get("evidence"), AC.evidence(published, segment)]
         (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [handoff["read"], coins.read.hex()]},
                                                    indent=1, sort_keys=True))
         if "handed" in s:
-            summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            import sampled_two_case as SC
+            with SC.capture(out / "run-input.json") if getattr(a, "form_case", False) else contextlib.nullcontext():
+                summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
+            if getattr(a, "form_case", False):
+                summary["form_case"] = SC.from_run(out)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
         return done(0 if ok else 1, held=ok)
     finally:
@@ -1333,6 +1350,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--challenger-host", help="--challenger local: the directory its challenger is kept in for the "
                                              f"second stage to reopen (default: OUT/{HOST_DIR})")
     f.add_argument("--ssh-key")
+    f.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
+                        "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
+    f.add_argument("--first-tree", action="store_true",
+                   help="a negative play: the first class's rank samples a coin tree on the first stage's session after "
+                        "its sample, so the session's log holds a coin tree's line, which the two-stage form refuses "
+                        "on two windows; nothing else of the play changes")
     f.add_argument("--out", required=True)
     g = sub.add_parser("second", help="one class's interior registration, second stage, proofs and outcome")
     g.add_argument("--stage1", required=True, help="the class's stage1.json (first)")
@@ -1348,7 +1371,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                                     "are built after the sample (references)")
     g.add_argument("--m0-pythonpath", required=True)
     g.add_argument("--bin", required=True, help="flock-circuit")
-    g.add_argument("--lean", required=True, help="flock-verify")
+    g.add_argument("--lean", required=True, help="verity-verify-proof")
     g.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
     g.add_argument("--stop", help=STOP_HELP)
@@ -1364,6 +1387,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                                              "(first's --challenger-host), required and reopened: both stages' coins "
                                              "are one challenger's, read under its one key")
     g.add_argument("--ssh-key")
+    g.add_argument("--deployed-key", action="store_true", help="--challenger local: its key at the deployed LMS parameters (a5_coins.start's deployed), "
+                        "as SPOT's v2 and the two-stage form read keys; the first stage makes it, the second reopens it")
+    g.add_argument("--interior-trees", action="store_true",
+                   help="the interior's sessions take their coin trees from this stage's challenger session, whose "
+                        "families carry the second stage's tag (a5_coins.SECOND), as the two-stage form's check reads "
+                        "two windows; needs FLOCK_CHALLENGER=1 and two members or more (a5.stage_trees)")
+    g.add_argument("--form-case", action="store_true",
+                   help="write the two-stage form's case of this run under OUT/form (sampled_two_case.from_run)")
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "second":

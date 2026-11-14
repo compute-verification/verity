@@ -1225,7 +1225,7 @@ def test_a_pr_whose_merge_onto_next_puts_a_markdown_file_over_its_limit_joins_ne
     assert [m.pr for m in members] == [1, 2, 3] == world.on_next(q) and q.load_state()["conflicts"] == {}
     (said,) = [w["why"] for n, w in q.load_state()["warned"].items() if (n, w["head"]) == ("2", h2)]
     assert said == (f"the warn gate {SIZE_GATE} at `main` {main[:12]} on its merge onto `next`: doc.md is 60058 bytes at "
-                    f"{members[1].commit[:12]}, over its 49152-byte cap (tests/test_repository.py), and was 30064 bytes at "
+                    f"{members[1].commit[:12]}, over its 49152-byte limit (tests/test_repository.py), and was 30064 bytes at "
                     f"{members[0].commit[:12]} below; trim doc.md to 49152 bytes or fewer (10906 over): move detail to the notes "
                     f"store (cite it by note:<id>) (`python3 {SIZE_GATE} origin/main HEAD` on the branch merged with `origin/next` "
                     "runs it)"), said
@@ -1262,7 +1262,7 @@ def test_a_file_already_over_its_limit_below_warns_only_of_a_pr_whose_merge_grow
     doc = json.loads(subprocess.run([sys.executable, str(Path(__file__).resolve().parents[3] / SIZE_GATE), "origin/main", merge, "--json"], cwd=q.workdir,
                                     capture_output=True, text=True).stdout)
     assert doc["below"] == members[2].commit and doc["failures"] == [] and doc["notes"] == [
-        f"doc.md is 60063 bytes, over its 49152-byte cap, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
+        f"doc.md is 60063 bytes, over its 49152-byte limit, but was 60068 bytes at {members[2].commit[:12]} below: not this change's"]
 
 
 def test_status_names_a_ready_pr_that_conflicts_with_main_without_a_sync_here(world):
@@ -4961,9 +4961,9 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
     clock[0] = 0.0
-    tier.max_wait_s = Q.waitcap.WAIT_CAP_S
+    tier.max_wait_s = Q.waitcap.WAIT_LIMIT_S
     _, why = tier._wait(d, "vy-test")
-    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_CAP_S <= clock[0] <= Q.waitcap.WAIT_CAP_S + 900
+    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_LIMIT_S <= clock[0] <= Q.waitcap.WAIT_LIMIT_S + 900
 
 
 def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):
