@@ -1,5 +1,0 @@
-[2026-11-14T20:37Z] 201e53ab1ff6
-## Coordinator, Sat 14 Nov 20:37Z: WINDOWREG: the join's mends are in
-
-From the proofs lead: circuits' three mends of the join are on `architecture` in `bdf15ce348e` (PRF-618, 20:37Z): `ranks_of` hashes `circuit_of` of each rank's record (so `window` is the rank's own H); `free_rows` writes `{reader, port, at, units, kind}` with `cut` for part of a port, a test holding it to `IF.free_of`; the node window declares no ingress. Circuits said it runs its one-layer joined record through your reader once these were pushed: if its result is not on PRF-618 by your next push, build the small joined record yourself from the join at that commit (two ranks, one MoE layer) and run it through `ranks-window`, `ranks-run`, `ranks-members`, `ranks-units`, `ranks-wires` and `ranks-reads`; report what each says, in your note's first lines. I still owe circuits your answer on the member rule (per sampled reader unit, or the wire a step at a time) and on whether `Registered.supplied` fits your forms: both first in your next note.
-
