@@ -130,9 +130,9 @@ def _part(answer: dict) -> dict:
 
 def test_a_small_periods_answers_agree(server) -> None:
     """The hook's own answer (the live session's) is the Python verifier's of its case and the Lean's: accepted with the
-    reads its openings certify, rejected for the dropped chunks' paths, and undecided with a window unverified. The
-    accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtComponent`'s term, though its windows of
-    3 receipts drew fewer."""
+    receipts its openings don't show wrong, rejected for the dropped chunks' paths, and undecided with a window
+    unverified. The accepted one's ε is its two openings coins' at `samples` each, `LineHeldAtSubprotocol`'s term, though
+    its windows of 3 receipts drew fewer."""
     got = {}
     for name, p in periods().items():
         assert _part(protocol(copy.deepcopy(p.case))) == _part(p.answer), name
@@ -142,7 +142,7 @@ def test_a_small_periods_answers_agree(server) -> None:
     honest = got["honest"]
     assert honest["public"]["q_bytes"] == honest["profile"]["receipts"] * 4096 > 0 and honest["profile"]["gaps"] == []
     assert sum(s for _, s in honest["profile"]["windows"]) < 2 * audit.SAMPLES, honest
-    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64), honest
+    assert Fraction(honest["public"]["eps"]) == Fraction(audit.DELTA) + Fraction(2 * audit.SAMPLES, 2 ** 64), honest
 
 
 def _covered(kw: dict) -> bool:

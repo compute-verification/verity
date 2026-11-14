@@ -24,13 +24,13 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
 * `SketchBoundRun`: at every parameter.
 * `SketchBoundDeployed`: at the deployed receipts (`remote_bandwidth.receipts`: 4096-byte blocks of `m = 128` sectors,
   16 sign rows, SHA-512 tags, `h = 512`) and rank `r = 12`, with `Q` the SHA-512 compressions the prover can make over
-  the session, the node's `C` times the outside-compute factor `F` (grinding a seed reads no block, so it can run off
-  the node): at most `Q + P` candidate seeds and `Q` queries in all give, with the keys within the 256-bit sign keys'
-  birthday `(Q + P)²/2^257` of uniform,
+  the session, its budget `2^80` (`audit.QUERIES_LOG2`) on any hardware it reaches (grinding a seed reads no block, so
+  it can run off the node): at most `Q + P` candidate seeds and `Q` queries in all give, with the keys within the
+  256-bit sign keys' birthday `(Q + P)²/2^257` of uniform,
 
     `δs = Q/2^96 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^257`,
 
-  `timing.sketch_failure(C, P, 16, blocks=N, outside=F)`, the error `ledger.sketch` puts in the memory line's δ.
+  `timing.sketch_failure(P, 16, blocks=N, queries=Q)`, the error `ledger.sketch` puts in the memory line's δ.
 
 What stays assumed: SHA-512's keys at the candidate seeds are within `ε_ro` of uniform (`SketchHashRandom`, claim
 `random-oracle`), the

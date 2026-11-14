@@ -30,16 +30,17 @@ the difftest's `session` reads (`Difftest.sessionFn`):
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
   session's parameters and g.
 
-On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
-session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
-draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
-openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
-advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
-commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
-proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the draws a session made
+On acceptance it publishes the receipts not shown wrong and the error that holds at, `{"eps", "q_bytes"}` (`certify`):
+the session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each sample's
+receipts and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
+openings coins at its `samples` s each (the per-sample term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
+advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records read
+no commitment): the sample term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol` proves at
+`Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
-not taken off: `q_bytes` is the reads the session's openings certify. When the pooled bound refuses the windows,
-`q_bytes` and `eps` are 0 and the profile says why.
+not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which
+`Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
+the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says why.
 -/
 
 @[expose] public section
@@ -53,8 +54,8 @@ open Flock
 
 def ID : String := "verity/remote-bandwidth/v0"
 
-/-- `audit.DELTA`: the pooled bound's δ, `2^-40`. -/
-def DELTA : Rat := 1 / (2 ^ 40 : Nat)
+/-- `audit.DELTA`: PoUB's δ, the pooled bound's, `2^-101`. -/
+def DELTA : Rat := 1 / (2 ^ 101 : Nat)
 
 private def natJ (n : Nat) : Json := .num (JsonNumber.fromNat n)
 
@@ -114,7 +115,7 @@ def windowsOf (sm : Session.Summary) (g : Nat) : Array (Nat × Nat) :=
 
 def ratio (q : Rat) : Core.Ratio := ⟨q.num.toNat, q.den⟩
 
-/-- The public outputs: the error and the reads certified, in bytes. -/
+/-- The public outputs: the error and the receipts not shown wrong, in bytes. -/
 structure Public where
   eps : Core.Ratio
   qBytes : Nat
@@ -126,7 +127,7 @@ a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
-/-- The error an accepted session's reads are certified at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and the
+/-- The error an accepted session's `q_bytes` holds at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and the
 draw's rejection at the session's `samples` s a draw. -/
 def eps (params : Session.Params) (g : Nat) : Rat :=
   DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
@@ -170,9 +171,9 @@ def protocol : Core.Protocol where
 
 #guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
   some "params: params: the keys must be [not_before_ns, params], not []"
-#guard (ratio DELTA).toString == "1/1099511627776"
+#guard (ratio DELTA).toString == "1/2535301200456458802993406410752"
 private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
-#guard (ratio (eps three 2)).toString == "8388613/9223372036854775808"
+#guard (ratio (eps three 2)).toString == "1374389534721/2535301200456458802993406410752"
 
 end RemoteAudit.Protocol

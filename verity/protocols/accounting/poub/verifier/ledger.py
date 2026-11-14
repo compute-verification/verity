@@ -92,11 +92,9 @@ class Tier:
 class Node:
     """The verifier's capacities for the node a session audits, each protocol structure, never the prover's report: its
     read bandwidth R at spec, the headline, and measured (every GPU's HBM and the host's DRAM, bytes a second), its
-    on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), its SHA-512
-    compressions a second and the outside-compute factor F over them (the sketch's term, `timing.SKETCH_OUTSIDE`: the
-    prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
-    its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
-    beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
+    on-chip storage S_chip (bytes), its squaring ceiling at each codec width (squarings a second), and the read
+    ceilings of its own disks and of its boundary links (bytes a second, 0 charging none).  Each way back into node
+    memory also has a burst, the bytes it can bring at once beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
     maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
@@ -108,7 +106,6 @@ class Node:
     read_bytes_per_s: float
     chip_bytes: int
     squarings_per_s: Mapping[str, float]
-    sha512_per_s: float = timing.SHA512_PER_S
     disk_bytes_per_s: float = 0.0
     link_bytes_per_s: float = 0.0
     rebuild_burst_bytes: float = 0.0
@@ -116,7 +113,6 @@ class Node:
     link_burst_bytes: float = 0.0
     gpu_write_bytes_per_s: float = timing.GPU_WRITE_BYTES_PER_S
     host_write_bytes_per_s: float = timing.HOST_WRITE_BYTES_PER_S
-    sketch_outside: int = timing.SKETCH_OUTSIDE
     tiers: Mapping[str, Tier] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -125,9 +121,7 @@ class Node:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
-        if type(self.sketch_outside) is not int or self.sketch_outside < 1:
-            raise ValueError("sketch_outside, the outside-compute factor F, is a positive integer")
-        for name in ("sha512_per_s", "disk_bytes_per_s", "link_bytes_per_s", "rebuild_burst_bytes",
+        for name in ("disk_bytes_per_s", "link_bytes_per_s", "rebuild_burst_bytes",
                      "disk_burst_bytes", "link_burst_bytes"):
             _rate(getattr(self, name), name)
         squarings = dict(self.squarings_per_s)
@@ -142,7 +136,7 @@ class Node:
     @classmethod
     def stated(cls, *, reported_read_bytes_per_s: float = 0.0, disk_bytes_per_s: float = 0.0,
                link_bytes_per_s: float = 0.0, disk_burst_bytes: float | None = None,
-               link_burst_bytes: float | None = None, sketch_outside: int = timing.SKETCH_OUTSIDE) -> Node:
+               link_burst_bytes: float | None = None) -> Node:
         """`timing`'s node: R measured is the larger of `timing.READ_BYTES_PER_S` and the prover's reported read, R
         at spec the larger of `timing.SPEC_BYTES_PER_S` and that, so a prover reporting a slower read can't shrink
         a term.  Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one
@@ -155,8 +149,8 @@ class Node:
                              timing.GPU_CHIP_BYTES),
                  "dram": Tier(1, timing.HOST_SPEC_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S, timing.HOST_CHIP_BYTES)}
         return cls(max(timing.SPEC_BYTES_PER_S, measured), measured, timing.CHIP_BYTES, timing.SQUARINGS_PER_S,
-                   timing.SHA512_PER_S, disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
-                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, sketch_outside, tiers)
+                   disk_bytes_per_s, link_bytes_per_s, float(timing.CHIP_BYTES), disk, link,
+                   timing.GPU_WRITE_BYTES_PER_S, timing.HOST_WRITE_BYTES_PER_S, tiers)
 
     def rebuild(self, codec: audit.Codec) -> audit.Rebuild:
         """μ_rebuild's model at the record's codec: the node's squaring ceiling at its width."""
@@ -169,21 +163,19 @@ class Node:
                 "disk_bytes_per_s": self.disk_bytes_per_s, "gpu_write_bytes_per_s": self.gpu_write_bytes_per_s,
                 "host_write_bytes_per_s": self.host_write_bytes_per_s, "link_burst_bytes": self.link_burst_bytes,
                 "link_bytes_per_s": self.link_bytes_per_s, "read_bytes_per_s": self.read_bytes_per_s,
-                "rebuild_burst_bytes": self.rebuild_burst_bytes, "sha512_per_s": self.sha512_per_s,
-                "sketch_outside": self.sketch_outside, "spec_bytes_per_s": self.spec_bytes_per_s,
+                "rebuild_burst_bytes": self.rebuild_burst_bytes, "spec_bytes_per_s": self.spec_bytes_per_s,
                 "squarings_per_s": dict(self.squarings_per_s)}
 
 
-def sketch(record: audit.Record, node: Node) -> float:
+def sketch(record: audit.Record) -> float:
     """`SketchBound`'s δ for a sketch-sha512 record (`Accounting.Guarantees.Remote.SketchBoundDeployed`), every
-    compression the prover could make over the span a guess or a key: Q = F·C, C the node's over the span and F its
-    `sketch_outside` (`timing.sketch_failure`); 0 for another receipt kind. It is the δs of the memory line's
+    compression of the prover's budget a guess or a key: Q = 2^`audit.QUERIES_LOG2` (`timing.sketch_failure`); 0 for
+    another receipt kind. It is the δs of the memory line's
     `SketchBoundAt` premise (`LineHeld`): `SketchBoundDeployed` gives the sketch bound at it on the line's trace read on
     the sketch outcomes, and `Accounting.Guarantees.Remote.SketchBoundLine` carries it to the line's coins."""
     if record.receipt != receipts.SKETCH_SHA512:
         return 0.0
-    return float(timing.sketch_failure(compressions(record, node), record.passes, record.rows, blocks=record.blocks,
-                                       outside=node.sketch_outside))
+    return float(timing.sketch_failure(record.passes, record.rows, blocks=record.blocks))
 
 
 OPENING_HASHES = 64 + 5
@@ -207,8 +199,8 @@ def rejection(record: audit.Record) -> float:
 def hiding(record: audit.Record) -> float:
     """The coin commitment's hiding terms over the record's n windows, `LineHeld`'s Σ_t hide_t (`Committed.hide`):
     window t's two distances between coin t's hm96 leaf and a leaf committing zeros, each within 2^-192 under the
-    pinned key, n·2^-191 in all (claims `statistical-hiding`, `common-reference-string`, `hash-derived-key`).  The
-    prover is sent the commitment only at the session's end (`coins.py`), so `PooledSample` reads no hiding term and
+    pinned key, n·2^-191 in all for all but a 2^-64 fraction of keys (claims `statistical-hiding`,
+    `common-reference-string`, `hash-derived-key`).  The prover is sent the commitment only at the session's end (`coins.py`), so `PooledSample` reads no hiding term and
     `draw` charges none; the memory line's δ keeps it while `LineHeld` states it."""
     return hiding_over(len(record.windows))
 
@@ -216,11 +208,6 @@ def hiding(record: audit.Record) -> float:
 def hiding_over(windows: int) -> float:
     """`hiding` over a session of `windows` windows."""
     return 2 * 2.0 ** receipts.HM96.statistical_distance_log2(windows, key_failure_log2=64)
-
-
-def compressions(record: audit.Record, node: Node) -> int:
-    """C, the node's SHA-512 compressions over the record's span, at its stated rate."""
-    return math.ceil(node.sha512_per_s * record.span_ns / 1e9)
 
 
 def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max_blocks: int) -> int:
@@ -236,17 +223,17 @@ def window_receipts(pace: audit.Pace | None, blocks: int, append_coins: int, max
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> float:
     """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
-    the span."""
+    the session."""
     s = min(samples, receipts)
     return draws * math.sqrt(receipts * s) * (2 * queries + 2 * s * OPENING_HASHES) / 2 ** 256.5
 
 
-def binding(record: audit.Record, node: Node) -> float:
+def binding(record: audit.Record) -> float:
     """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
-    prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·F·C +
-    2·s_t·`OPENING_HASHES` SHA-512 calls, F·C the most compressions the prover makes over the span (`sketch`'s); under
+    prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·Q +
+    2·s_t·`OPENING_HASHES` SHA-512 calls, Q = 2^`audit.QUERIES_LOG2` the prover's budget (`sketch`'s); under
     claim `cr/sha-512` it finds a collision with probability ε_t ≤ q_t²/2^513.
     `Accounting.Guarantees.Remote.ReceiptsBindingOfCR` proves the term at most Σ_t √(|L_t|·s_t·(ε_t + split_t)),
     L_t a set holding every receipt window t opens at every outcome, s_t the session's sample cap and split_t the chance
@@ -264,8 +251,7 @@ def binding(record: audit.Record, node: Node) -> float:
                          "which a record no session made doesn't state")
     g = record.groups_per_coin
     L = window_receipts(record.pace, record.blocks, record.append_coins, record.codec.max_blocks)
-    return binding_over(coins.openings_coins(len(record.windows), g), g * L, record.samples,
-                        node.sketch_outside * compressions(record, node))
+    return binding_over(coins.openings_coins(len(record.windows), g), g * L, record.samples, 2 ** audit.QUERIES_LOG2)
 
 
 @dataclass(frozen=True, slots=True)
@@ -286,9 +272,9 @@ class SamplingTerms:
         return {"binding": self.binding, "rejection": self.rejection, "named": NAMED_TERMS}
 
 
-def draw(record: audit.Record, node: Node) -> SamplingTerms:
-    """The record's sampling terms on `node`."""
-    return SamplingTerms(rejection(record), binding(record, node))
+def draw(record: audit.Record) -> SamplingTerms:
+    """The record's sampling terms."""
+    return SamplingTerms(rejection(record), binding(record))
 
 
 def windows(record: audit.Record) -> list[tuple[int, int]]:
@@ -387,7 +373,7 @@ def gamma(record: audit.Record, node: Node, capacity_bytes_per_s: float, *,
     lg = audit.ledger(record, capacity_bytes_per_s=capacity_bytes_per_s, chip_bytes=node.chip_bytes,
                       rebuild=node.rebuild(record.codec), wrong=wrong)
     ws = lg.windows if record.pace is None else _fixed(record, lg, node.chip_bytes, capacity_bytes_per_s)
-    return Gamma(capacity_bytes_per_s, lg, ws, sketch(record, node), draw(record, node))
+    return Gamma(capacity_bytes_per_s, lg, ws, sketch(record), draw(record))
 
 
 @dataclass(frozen=True, slots=True)
@@ -452,13 +438,13 @@ def _paced(record: audit.Record) -> str | None:
     return None
 
 
-def delta_parts(record: audit.Record, node: Node) -> dict[str, float]:
+def delta_parts(record: audit.Record) -> dict[str, float]:
     """The memory line's δ (`memory`'s `Line.delta`, its parts added in `DELTA_PARTS`' order) in its six parts: the
     windows' profile δ, AuditRO's 2^-SLACK_LOG2 a pass over the record's passes, the coin commitment's hiding terms
     (`hiding`), the receipts' binding term at the session's bounds (`binding`), SketchBound's δs (`sketch`) and the
     sample's rejection (`rejection`).  The windows' PRF advantages are no part of it (`DELTA_FORM`)."""
     return {"profile": record.windows[0].profile.delta, "slack": record.passes * 2.0 ** -audit.SLACK_LOG2,
-            "hiding": hiding(record), "binding": binding(record, node), "sketch": sketch(record, node),
+            "hiding": hiding(record), "binding": binding(record), "sketch": sketch(record),
             "rejection": rejection(record)}
 
 
@@ -467,8 +453,8 @@ def memory(record: audit.Record, node: Node) -> tuple[Line, Line, Line]:
     `line.session_lost`'s, in floats."""
     N, b, P = record.blocks, record.block_bytes, record.passes
     W = audit.pooled(record)[0]
-    delta = (record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + binding(record, node)
-             + sketch(record, node))
+    delta = (record.windows[0].profile.delta + P * 2.0 ** -audit.SLACK_LOG2 + hiding(record) + binding(record)
+             + sketch(record))
     S = -(-node.chip_bytes // b)
     c = line.charges_of(node.rebuild(record.codec).squarings_per_s / record.codec.encode_squarings,
                         node.disk_bytes_per_s, node.link_bytes_per_s, node.rebuild_burst_bytes, node.disk_burst_bytes,

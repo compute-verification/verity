@@ -47,7 +47,7 @@ def LIFETIME_NS : Nat := 30 * 10 ^ 9
 /-- `audit.lifetime_windows(window_ns)`: the session's lifetime cap, which nothing in a P2 session reaches (it appends
 nothing), and which its record states. -/
 def lifetime (windowNs : Nat) : Nat := max 1 (LIFETIME_NS / windowNs)
-/-- `audit.DELTA`, 2^-40: the pooled bound's δ. -/
+/-- `p2_party.DELTA`, 2^-40: PoUB-P2's δ, the pooled bound's. -/
 def DELTA : Rat := 1 / ((2 ^ 40 : Nat) : Rat)
 
 /-- What the verifier holds of the store: its registration and the plan every pass reads. -/

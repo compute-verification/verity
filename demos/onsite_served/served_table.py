@@ -77,7 +77,8 @@ def _law(law: str, params: Mapping[str, Any]) -> None:
 
 
 def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
-    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 2^-20)."""
+    """PoUS's served piece: ``challenges``, the memory challenger's reads in the period (320: ε = 1% + 2^-128,
+    ``period.certify``'s, since more reads than a certificate's keep its ε)."""
     if extra := sorted(set(params) - {"challenges"}):
         raise Refused("unknown-key", f"[params.\"{SP.IDS['pous']}\"]: {', '.join(extra)} (known: challenges)")
     k = params["challenges"]
