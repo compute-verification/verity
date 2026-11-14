@@ -16,7 +16,7 @@ each as often.
 
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 variable {α : Type}
 
@@ -84,4 +84,4 @@ theorem qsort_perm (as : Array α) (lt : α → α → Bool) : (as.qsort lt).Per
 theorem qsort_toList_perm (as : Array α) (lt : α → α → Bool) : (as.qsort lt).toList.Perm as.toList :=
   Array.perm_iff_toList_perm.1 (qsort_perm as lt)
 
-end Properties.RemoteAudit
+end Properties.Poub

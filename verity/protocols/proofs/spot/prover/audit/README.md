@@ -8,7 +8,7 @@ they sit in `prover/`: a file under `verifier/` loads none under `prover/`.
 - `window_audit.py`, `window_audit.sh`: a deferred Commit's window, a stand-in, or a TP Commit's windows, one per rank,
   registered over the Commit's own values, the sampled proof blocks proved and held by the Lean verifier.
 - `stop_audit.py`: a stop class's stop population audited to its record, after the two-stage audit's first stage
-  (`../../device/two_stage.py`).
+  (`two_stage.py`).
 - `prove_bundle.py`, `prove_bundle.sh`: a sampled-proof-block replay bundle proved and decided by Lean.
 - `prove_path.py`, `prove_path.sh`: the prove path, below.
 - `class_size.py`: a class circuit's padded size (`../cost/README.md`).

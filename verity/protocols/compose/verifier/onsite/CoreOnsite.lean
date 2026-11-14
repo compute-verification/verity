@@ -8,7 +8,7 @@ inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's executionPhases credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
-by PoUB's P2 session on PoUS's store (`RemoteAudit.P2Protocol.protocol`,
+by PoUB's P2 session on PoUS's store (`Poub.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network certifier over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-executionPhases certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
@@ -47,7 +47,7 @@ public import NetworkCheck.Period
 public import NetworkCheck.Span
 public import PousCheck.RunProtocol
 public import PouwCheck.Period
-public import RemoteAudit.P2Protocol
+public import Poub.P2Protocol
 public import Spot.OneStage
 public import Spot.OneStageZk
 public import VStarRecursive.Sampled
@@ -62,7 +62,7 @@ meta import NetworkCheck.Period
 meta import NetworkCheck.Span
 meta import PousCheck.RunProtocol
 meta import PouwCheck.Period
-meta import RemoteAudit.P2Protocol
+meta import Poub.P2Protocol
 meta import Spot.OneStage
 meta import Spot.OneStageZk
 meta import VStarRecursive.Sampled
@@ -76,7 +76,7 @@ open Composition
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
-    RemoteAudit.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
+    Poub.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
 def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
@@ -88,8 +88,8 @@ def store : Tie :=
   ⟨"store",
     [(PousCheck.RunProtocol.protocol.id,
         fun k => (PousCheck.RunProtocol.decodeCommitment k.commitment).toOption.map ([·.root])),
-      (RemoteAudit.P2Protocol.protocol.id,
-        fun k => (RemoteAudit.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
+      (Poub.P2Protocol.protocol.id,
+        fun k => (Poub.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
 /-- Onsite's ties: every window of PoUW's period on the policy's record (remote's, `Core.Remote.executionPhases`), and PoUS and
 PoUB on one store. -/

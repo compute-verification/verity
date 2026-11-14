@@ -22,7 +22,7 @@
     "NetworkCheck.Span",
     "PousCheck.RunProtocol",
     "PouwCheck.Period",
-    "RemoteAudit.P2Protocol",
+    "Poub.P2Protocol",
     "Spot.OneStage",
     "Spot.OneStageZk",
     "VStarRecursive.Sampled"

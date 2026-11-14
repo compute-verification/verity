@@ -115,7 +115,7 @@ def test_the_second_stages_word_is_its_commands_and_its_rate_the_boundary_record
         "no outcome": "refuse"}
     for name, got in words.items():
         assert (got["rate"], got["class"], got["registration"]) == ("1/3", "w7/p256-o64", first["registration"])
-        assert got["verifier"]["module"] == "verity/protocols/proofs/spot/device/two_stage.py" and got["proved_by"] is None
+        assert got["verifier"]["module"] == "verity/protocols/proofs/spot/prover/audit/two_stage.py" and got["proved_by"] is None
         assert got["open"] == "the two-stage form's soundness is not proved"
         assert (got["stream_registration"], got["stream_names_boundary"]) == (
             (None, None) if name in ("not held, no interior", "no outcome") else (R.digest(interior), True))

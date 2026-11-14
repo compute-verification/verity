@@ -32,7 +32,7 @@ theorem leafOf_eq (data : ByteArray) (h : 4 ≤ data.size) :
   match l, h with
   | a :: b :: c :: d :: rest, _ =>
     unfold leafOf
-    rw [Properties.RemoteAudit.bytes_toList, ByteArray.data_extract, Array.toList_extract,
+    rw [Properties.Poub.bytes_toList, ByteArray.data_extract, Array.toList_extract,
       List.extract_eq_take_drop]
     simp [ByteArray.get!, List.range_succ]
 

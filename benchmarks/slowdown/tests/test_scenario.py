@@ -120,7 +120,7 @@ def test_the_draft_bounds_set_these_scenarios_and_no_other(monkeypatch):
 def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alone():
     """With the draft bounds admitted and E1's activation rate refuted past its credible 1.1·10⁹ bits, fanout-priced on
     its own binds onsite H200's serving cut (`k_S` past that) at a standing of refuted, its padded size ratio about 290
-    times the lower bound's. Every bound at once takes no cap from it at that block, its standing doesn't reach the
+    times the lower bound's. Every bound at once takes no yield from it at that block, its standing doesn't reach the
     lower bound's, and the lower bound is still at least every bound alone whose premises aren't refuted."""
     premise = "premise.e1-activation-rate"
     f = evaluate_named(DRAFTS_TOO.override({f"{premise}.beyond": "refuted"}), "reference-onsite-h200").families[0]
@@ -252,7 +252,7 @@ def test_the_slowdown_and_the_time_to_the_target_do_not_depend_on_gates_per_flop
 def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise():
     """`structure.reference` is `s_×` at the reference's gates per counted product (`2G/κ`, so `u = w` and the overhead
     is what it was), and every bound that counts uncertified or unregistered gates there cites `draft:no-straddle`. The
-    elementary cap (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower
+    elementary yield (one operation a gate) needs no such premise; it leaves the attacks as they are, takes remote's lower
     bound down by `2G/κ` (inference is 0.0% of it), and is what `upto("conditional")` falls back to."""
     r, e = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-remote-h200-elementary")
     st, f = r.scenario.structure, r.families[0]

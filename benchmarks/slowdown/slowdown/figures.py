@@ -122,9 +122,9 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
-    """Each class's per-block overhead `w c / q_T(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
+    """Each class's per-block overhead `w c / q(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
     inference block's gates `c` and (for a regime with server blocks) at the server block's `c_S`, where a bound's is
-    the serving cut's argument, `w c_S / (q_T(c_S, k) + ω_max μ k)` with its boundary term, with the declared
+    the serving cut's argument, `w c_S / (q(c_S, k) + ω_max μ k)` with its boundary term, with the declared
     policy's `k` and the server block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
     points = 6 * grid + 1
@@ -145,7 +145,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
-                  "overhead": "w c / q_T(c, k) at c, and w c_S / (q_T(c_S, k) + ω_max μ k) at c_S, the serving cut's "
+                  "overhead": "w c / q(c, k) at c, and w c_S / (q(c_S, k) + ω_max μ k) at c_S, the serving cut's "
                               "argument with its boundary term; 0 where the statement's premise fails (no yield bound), ∞ where "
                               "it is 0",
                   "panels": []}
@@ -225,7 +225,7 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
         ax.grid(True, which="major", alpha=0.3)
         data["panels"].append(panel)
     axes[0][0].set_ylim(1e-2, top * 3)
-    axes[0][0].set_ylabel("per-block overhead w c / q_T(c, k)")
+    axes[0][0].set_ylabel("per-block overhead w c / q(c, k)")
     fig.legend(lines.values(), [h.get_label() for h in lines.values()], loc="lower center",
                ncol=min(4, len(lines)), fontsize=8, bbox_to_anchor=(0.5, -0.02 - 0.035 * math.ceil(len(lines) / 4)))
     fig.suptitle(f"Training classes per block: {s.model.name}, family {fam.name} (× = premise fails, ○ = vacuous)",

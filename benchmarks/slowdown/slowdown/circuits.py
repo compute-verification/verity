@@ -4,7 +4,7 @@ A `Circuit` (`data/circuits.toml`) is one optimizer step of a run (`instances.Ru
 Definition it is, the circuits census's count of its gates, ANDs and counted products (`products_steps` of them in dot
 steps, the K steps of a split-K or batched GEMM, and `padded` of those padding), and `circuit_properties`' measure of
 those products: `s_x`, the fewest gates in a counted product's subcircuit (`s_x_unsplit` outside the dot steps), `a_out`
-and `a_in`. Its `structure` (`data/exclusion.toml`) is `s_x` as the uncertified cap's `s_×`, on the design's basis.
+and `a_in`. Its `structure` (`data/exclusion.toml`) is `s_x` as the free-compute yield's `s_×`, on the design's basis.
 
 `compare` sets it beside the FLOP model at a family's `κ`: `units.gates_per_flop` against the step's gates (and ANDs)
 over its run's FLOPs, and the reference's gates per counted product, `2G / κ`, which `structure.reference` takes as
