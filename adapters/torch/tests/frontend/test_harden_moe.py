@@ -37,7 +37,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from verity_vllm.definitions.numerics.serve3_reference import materialize
 
-from verity_vllm.program.frontend import derive_examples as ex
+from verity_torch.frontend import derive_examples as ex
 from verity_torch.frontend.derive import derive_report
 
 REF = dict(mode="reference")
