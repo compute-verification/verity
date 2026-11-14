@@ -25,7 +25,7 @@ git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:
   > "$O/env.txt" 2>&1
 STEPS_ASKED=${STEPS:-tests check bench}
 CC=$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader | head -1 | tr -d ' ')
-$PY -c "import slots_gpu as G, torch_engine as T; print(G.build('$CC', T.BUILD, T.VARIANT))" > "$O/build.txt" 2>&1
+$PY -c "from verity.commitments.cuda.commit_slots import slots_gpu as G; import torch_engine as T; print(G.build('$CC', T.BUILD, T.VARIANT))" > "$O/build.txt" 2>&1
 echo "build rc $?" > "$O/rc.txt"
 # the fetched fixture the tests read, which a fresh clone lacks (commitments' layouts): fetched here, outside the lease,
 # where this Python runs the store's command and reaches the store or its public export; where it doesn't, the test that
