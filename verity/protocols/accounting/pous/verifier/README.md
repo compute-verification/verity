@@ -165,7 +165,8 @@ except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shar
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
 `wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.runtime`), the
 reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
-`wipe_party.serve` signs.
+`wipe_party.serve` signs. It refuses (`clock`) a clock source that reads a real clock other than the raw one its header
+names, the runtime's own included.
 On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
