@@ -200,7 +200,7 @@ theorem ownRootBTables_one {tags0 : Flock.Tags}
   have htab : _root_.Spot.OneStageZk.sessionTables = #[tags0.table] := by
     simp only [_root_.Spot.OneStageZk.sessionTables, ht, Option.map_some, Option.getD_some]
     rfl
-  unfold _root_.Spot.OneStageZk.ownRootBTables
+  unfold _root_.Spot.OneStageZk.ownRootBTables _root_.Spot.OneStageZk.rootBTablesAt
   simp only [htab, Array.mapIdx_singleton]
   exact ⟨_, rfl⟩
 

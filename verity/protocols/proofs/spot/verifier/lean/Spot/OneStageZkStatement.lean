@@ -670,27 +670,26 @@ def rootBLen (st : Flock.Setup) : V Nat := do
   pure (2 ^ (sch.levels.getD 0 default).cap * st.merkle.digestLen)
 
 /-- The session's tables (`sessionTables`), each with its `root_B`'s byte length (`rootBLen`) at the session `record`
-sets up: `setupAt` at the record's sample on the verifier's own files `p`, as `run` sets it up. None where it sets up no
-table, and then `run` sets up none either, so the session's own verdict rejects. -/
-def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+sets up: `setupAt` at the record's sample on what `inputs` makes of the statement's tags and the circuit and public
+files of the verifier's own files `p`. None where it sets up no table. -/
+def rootBTablesAt (inputs : Flock.Tags → ByteArray → ByteArray → V Flock.Witness.Inputs) (p : Own) (bs : Core.Blobs)
+    (record : String) : Array (String × Option Nat) :=
   let tabs : Option (Array Flock.Setup) := (do
     let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
-    let I := inputsOf tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") bs
+    let I ← inputs tags0 (← bs.get p.circuit "circuit") (← bs.get p.pub "public file")
     let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
     pure tabs : V (Array Flock.Setup)).toOption
   sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
 
-/-- `rootBTables` for a member's session: the session `setupAt` sets up on the member's own files `p` at its own lookup
-tables (`ownTables`), the inputs its statement holds (`Member.statement`), whatever other pinned table the blobs
-hold. -/
+/-- `rootBTablesAt` on `inputsOf`, every pinned table the blobs hold, as `run` sets the session up. None where it sets
+up no table, and then `run` sets up none either, so the session's own verdict rejects. -/
+def rootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
+  rootBTablesAt (fun tags circuitB pubB => pure (inputsOf tags p circuitB pubB bs)) p bs record
+
+/-- `rootBTablesAt` for a member's session: on the member's own files `p` at its own lookup tables (`ownTables`), the
+inputs its statement holds (`Member.statement`), whatever other pinned table the blobs hold. -/
 def ownRootBTables (p : Own) (bs : Core.Blobs) (record : String) : Array (String × Option Nat) :=
-  let tabs : Option (Array Flock.Setup) := (do
-    let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
-    let tables ← ownTables p bs
-    let I := inputsAt tags0 p (← bs.get p.circuit "circuit") (← bs.get p.pub "public file") tables
-    let (_, tabs, _) ← setupAt I (← readsOf p.registered) (Flock.Witness.recordDraw record)
-    pure tabs : V (Array Flock.Setup)).toOption
-  sessionTables.mapIdx fun i t => (t, tabs.bind fun ts => ts[i]?.bind fun st => (rootBLen st).toOption)
+  rootBTablesAt (fun tags circuitB pubB => do pure (inputsAt tags p circuitB pubB (← ownTables p bs))) p bs record
 
 /-- The evidence's sessions held to the challenger's trees `ts` (module docstring, **trees**): each session's record
 on the blobs, refused as `verdicts` refuses it when no blob holds it or it isn't UTF-8, read as `Flock.Record.decode`
