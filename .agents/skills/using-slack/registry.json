@@ -313,9 +313,9 @@
         "verity/protocols/accounting/pouw/prover/",
         "security/Definitions/Pouw/",
         "security/Proofs/Pouw/",
-        "security/Definitions/Nci.lean",
-        "security/Definitions/Nci/",
-        "security/Proofs/Nci/",
+        "security/Definitions/InferenceOnly.lean",
+        "security/Definitions/InferenceOnly/",
+        "security/Proofs/InferenceOnly/",
         "benchmarks/pouw/",
         "verity/protocols/accounting/pouw/prover/clear/",
         "benchmarks/machine_model/",
@@ -413,7 +413,7 @@
         "security/Properties/Pouw/",
         "security/Properties/Accounting/Compose.lean",
         "security/Properties/Accounting/RegisteredCircuit.lean",
-        "security/Proofs/Nci.lean"
+        "security/Proofs/InferenceOnly.lean"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -485,7 +485,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
+        "verity/config.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -664,7 +664,7 @@
       ],
       "linear": "NET",
       "owns": [
-        "verity/protocols/policy/inference_only/verifier/nci/",
+        "verity/protocols/policy/inference_only/verifier/",
         "verity/protocols/accounting/certifier/",
         "verity/protocols/accounting/certifier/prover/",
         "verity/protocols/accounting/certifier/device/",
@@ -690,10 +690,10 @@
         "security/Properties/NetworkPeriod.lean",
         "security/Properties/NetworkScan.lean",
         "security/Properties/NetworkScan/",
-        "security/Properties/Nci.lean",
-        "security/Properties/Nci/",
-        "security/Proofs/Properties/Nci.lean",
-        "security/Proofs/Properties/Nci/"
+        "security/Properties/InferenceOnly.lean",
+        "security/Properties/InferenceOnly/",
+        "security/Proofs/Properties/InferenceOnly.lean",
+        "security/Proofs/Properties/InferenceOnly/"
       ],
       "branch_suffixes": [
         "728f",
@@ -960,7 +960,7 @@
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
-        "benchmarks/rho/",
+        "benchmarks/slowdown/",
         "benchmarks/circuit_properties/",
         "benchmarks/inference_only/",
         "benchmarks/training_slowdown/",
@@ -974,12 +974,12 @@
         "security/Proofs/Accounting/Coverage.lean",
         "security/Proofs/Accounting/ServingBlocks.lean",
         "security/Proofs/Accounting/ServingBlocks/",
-        "security/Properties/Nci/Threads.lean",
-        "security/Properties/Nci/Desc/Cover.lean",
-        "security/Properties/Nci/Desc/Verdict.lean",
-        "security/Properties/Nci/Record.lean",
-        "security/Proofs/Properties/Nci/DescVerdict.lean",
-        "security/Proofs/Properties/Nci/Agrees.lean"
+        "security/Properties/InferenceOnly/Threads.lean",
+        "security/Properties/InferenceOnly/Desc/Cover.lean",
+        "security/Properties/InferenceOnly/Desc/Verdict.lean",
+        "security/Properties/InferenceOnly/Record.lean",
+        "security/Proofs/Properties/InferenceOnly/DescVerdict.lean",
+        "security/Proofs/Properties/InferenceOnly/Agrees.lean"
       ],
       "branch_suffixes": [
         "4207"

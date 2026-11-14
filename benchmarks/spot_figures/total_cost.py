@@ -650,7 +650,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     tables against `TABLE_LIMITS`; the lines of session coins its sessions write, at least 2 a session and
     `TABLE_LINES` a table, against one challenger session's `LOG_LINES` (`lines`); and the bytes of live coins its
     second sample reads, a stream of 2 k width(n) + 64 bytes for each block type in each sampled replay block
-    (`Flock.Draw.Stratum.need`, one stratum a cell of `Spot.Select.secondLaw`), against one layout's `DRAW_BYTES`
+    (`Flock.Draw.Stratum.need`, one stratum a cell of `Spot.Select.secondSamplingDesign`), against one layout's `DRAW_BYTES`
     (`draw_bytes`).  A block type of fewer than one proof block a replay block counts at the chance a replay block
     has it.  A design that meets one is one no deployment runs today, whatever its bound.  The verifier's refusal of
     several sessions a template is not among them: it is the form, said beside the line."""
@@ -1443,7 +1443,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
 
 
 #: `--serving`'s help, here and in figures.py
-SERVING_HELP = ("where serving's rate comes from: rho's fleet utilization (assumed, the default), or the model's "
+SERVING_HELP = ("where serving's rate comes from: the slowdown calculator's fleet utilization (assumed, the default), or the model's "
                 "serving_rate card (measured)")
 
 

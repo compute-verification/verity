@@ -158,7 +158,7 @@ def verdict(session_dir: Path) -> dict:
 
 def ref_sample(q: int, n_t: int, k: int) -> dict:
     """The second stage's sample of template ``t``'s part at its first units: ``q·min(k, n_t)`` of its ``q·n_t``, the size
-    of every sample the second stage takes there (`select.second_law`'s subset in each cell)."""
+    of every sample the second stage takes there (`select.second_sampling_design`'s subset in each cell)."""
     size = q * min(k, n_t)
     return {"k": size, "law": "subset", "population": q * n_t, "units": list(range(size))}
 

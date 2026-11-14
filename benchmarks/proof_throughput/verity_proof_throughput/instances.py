@@ -5,7 +5,7 @@ core's ``population_program``), each instance one unit of ``Q_template_instance`
 one stratum. Its lanes are the ones ``verity_flock.class_statement.class_lanes`` gives that one size class: uniform words sampled
 from ``partition_units.derive(SOURCE, DOMAIN, {program digest, seed 0})``, each instance its own x and weight row. The point
 job stages exactly these (``--program-module``, ``--batch fixed --n n_max``, seed 0) once, whatever B, and each session proves
-the B units the verifier samples by the stratified sampling design (``law``: core's ``one_stage.draw.derive`` of ``stratified:B`` over the
+the B units the verifier samples by the stratified sampling design (``sampling_design``: core's ``one_stage.draw.derive`` of ``stratified:B`` over the
 program and query, which every verifier derives for itself). The words are uniform 16-bit encodings, non-finite ones
 included (the statement's domain is ``total``): a Boolean circuit's proving cost doesn't depend on the values it carries.
 
@@ -106,9 +106,9 @@ def program_file(w: Workload) -> bytes:
     return canonical_json(encode_program(w.population()))
 
 
-def law(w: Workload, b: int) -> dict[str, Any]:
+def sampling_design(w: Workload, b: int) -> dict[str, Any]:
     """The verifier's stratified sampling design for B: ``stratified:B`` expanded over the population's program and query (core's
-    ``one_stage.draw.derive``), the object ``flock-circuit serve --draw-law`` samples each session's units by."""
+    ``one_stage.draw.derive``), the object ``flock-circuit serve --sample-design`` samples each session's units by."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     us = units(w)

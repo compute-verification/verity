@@ -173,8 +173,8 @@ def window(at: dict[str, SimpleNamespace], n: int, rest: int) -> CS.Binding:
 
     members = tuple(CS.Member(tid, n=n, base=j * n, tables=(("row", n),), name=f"{tid}/{c}", **ports(WR.row_bytes(params) // 2))
                     for j, (c, _p) in enumerate(LINKS.values())) + (CS.Member(rid, n=rest, base=2 * n, **ports(params.cell_bytes)),)
-    law, table = S.params_law(RULE, program, query, SRW.work_table_of(SRW.law_of(RULE), {tid: 2 * n, rid: rest}, [tid]))
-    return CS.Binding(program, query, law, f"{ROOT}/rank0", members, work_table=table)
+    sampling_design, table = S.params_sampling_design(RULE, program, query, SRW.work_table_of(SRW.sampling_design_of(RULE), {tid: 2 * n, rid: rest}, [tid]))
+    return CS.Binding(program, query, sampling_design, f"{ROOT}/rank0", members, work_table=table)
 
 
 def chunks(mine: CS.Binding) -> dict[str, CS.Member]:

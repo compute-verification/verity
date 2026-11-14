@@ -42,7 +42,7 @@ from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MA
 from verity.protocols.proofs.spot.verifier.one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
-_LAW_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
+_SAMPLING_DESIGN_KEYS = {"subset": {"law", "k"}, "bernoulli": {"law", "p"}, "stratified": {"law", "k", "strata"},
              "work": {"law", "k", "strata"}}
 _HEX = re.compile(r"[0-9a-f]+")
 
@@ -58,26 +58,26 @@ def _ratio(p: Any) -> tuple[int, int] | None:
     return None
 
 
-def law_problem(law: Mapping[str, Any], population: int) -> str | None:
-    """Why `law` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockLaw`): exactly its keys,
+def sampling_design_problem(sampling_design: Mapping[str, Any], population: int) -> str | None:
+    """Why `sampling_design` is no one-stage sampling design over `population` proof blocks, or None (Lean `Draw.flockSamplingDesign`): exactly its keys,
     a subset's k a natural number from one to the population, a Bernoulli p NUM/DEN in [0, 1], and an expanded stratified
     or work design's strata well formed (`strata_problem`)."""
-    kind = law.get("law")
-    if not isinstance(kind, str) or kind not in _LAW_KEYS:
+    kind = sampling_design.get("law")
+    if not isinstance(kind, str) or kind not in _SAMPLING_DESIGN_KEYS:
         return "a one-stage law is subset, bernoulli, stratified or work"
-    if set(law) != _LAW_KEYS[kind]:
-        return f"a {kind} law is exactly {sorted(_LAW_KEYS[kind])}"
+    if set(sampling_design) != _SAMPLING_DESIGN_KEYS[kind]:
+        return f"a {kind} law is exactly {sorted(_SAMPLING_DESIGN_KEYS[kind])}"
     if kind == "bernoulli":
-        return None if _ratio(law["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
-    if not _int(law["k"]) or law["k"] < 0:
+        return None if _ratio(sampling_design["p"]) else "a bernoulli law's p is NUM/DEN with 0 <= NUM <= DEN and DEN > 0"
+    if not _int(sampling_design["k"]) or sampling_design["k"] < 0:
         return f"a {kind} law's k is a natural number"
     if kind == "subset":
-        if law["k"] < 1:
+        if sampling_design["k"] < 1:
             return "a subset law draws at least one unit"
-        return f"a subset draw of {law['k']} exceeds the population of {population}" if law["k"] > population else None
-    if not isinstance(law["strata"], list):
+        return f"a subset draw of {sampling_design['k']} exceeds the population of {population}" if sampling_design["k"] > population else None
+    if not isinstance(sampling_design["strata"], list):
         return f"a {kind} law is expanded: its strata are a list (one_stage.draw.derive)"
-    return strata_problem(law, population)
+    return strata_problem(sampling_design, population)
 
 
 #: Lean `Draw.RAN_OUT`: the refusal of a sample whose source runs out before it ends.
@@ -503,7 +503,7 @@ def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> li
     return sorted({c for u in units for c in closure.get(u, ()) if c not in drawn})
 
 
-def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: int,
+def draw_first(randomness: OwnRandomness, sampling_design: Mapping[str, Any], population: int,
                closure: Mapping[int, Sequence[int]] | None = None) -> dict[str, Any]:
     """A sample under a one-stage sampling design: the one-stage sample object over the positions [0, population) (`one_stage.draw`;
     `check_draw` holds it to the docket and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
@@ -511,27 +511,27 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
     verifier's closure map (a work sampling design only, as `verity-verify-proof draw --closure`), the sample carries its `closure`
     (`closure_of`) when that is not empty."""
-    problem = law_problem(law, population)
+    problem = sampling_design_problem(sampling_design, population)
     if problem:
         raise ValueError(problem)
-    kind = law["law"]
+    kind = sampling_design["law"]
     if closure is not None and kind != "work":
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
-        k = law["k"]
+        k = sampling_design["k"]
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))
     elif kind == "bernoulli":
-        num, den = _ratio(law["p"])
+        num, den = _ratio(sampling_design["p"])
         units = randomness.stream(2 * population * _width(den) + 64, lambda read: _bernoulli(num, den, population, read))
     else:
         units = []
-        for s in law["strata"]:
+        for s in sampling_design["strata"]:
             ranges, k_s = s["units"], s["k"]
             n_s = sum(hi - lo for lo, hi in ranges)
             local = randomness.stream(2 * k_s * _width(n_s) + 64, lambda read: _subset(k_s, n_s, read))
             units += [_nth(ranges, j) for j in local]
         units.sort()
-    out = {**dict(law), "population": population, "units": units}
+    out = {**dict(sampling_design), "population": population, "units": units}
     if closure is not None:
         extra = closure_of(closure, units)
         if extra:
@@ -539,8 +539,8 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
     return out
 
 
-def ran_out(law: Mapping[str, Any], population: int, src: bytes) -> bool:
-    """Whether `draw_first` under `law` over `population` runs out of `src`, read in order, before it ends (Lean
+def ran_out(sampling_design: Mapping[str, Any], population: int, src: bytes) -> bool:
+    """Whether `draw_first` under `sampling_design` over `population` runs out of `src`, read in order, before it ends (Lean
     `Draw.ranOutOf`, the difftest's `ran_out` piece); ValueError where it refuses otherwise."""
     at = 0
 
@@ -549,7 +549,7 @@ def ran_out(law: Mapping[str, Any], population: int, src: bytes) -> bool:
         at += k
         return src[at - k:at]
     try:
-        draw_first(OwnRandomness(source), law, population)
+        draw_first(OwnRandomness(source), sampling_design, population)
     except ValueError as e:
         if str(e) == RAN_OUT:
             return True

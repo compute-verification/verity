@@ -196,6 +196,7 @@ def test_a_boolean_version_whose_statics_no_word_call_binds_is_not_a_candidate(m
     from types import SimpleNamespace
 
     from verity_vllm.definitions import boolean as BV
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     TG.load_registries()
     exact, by_name, errors = BV._load()
@@ -239,6 +240,7 @@ def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatc
     """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
     registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
     from verity_vllm.definitions import boolean
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     asked: list[str] = []
     monkeypatch.setattr(boolean, "made_on_demand", asked.append)

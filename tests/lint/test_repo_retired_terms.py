@@ -5,7 +5,7 @@ with no change to this module, and its fix is the row's term: ``'X' is retired; 
 What a row retires:
 
 * each quoted old name of its first cell (``"C-Flock"``, ``"draw law"``), as a word or as one part of an identifier, in
-  any spelling of its parts: ``draw law``, ``draw_law``, ``drawLaw``, ``DRAW_LAW``.  A lower-case part may start upper
+  any spelling of its parts: ``draw law``, ``sample_design``, ``sampleDesign``, ``SAMPLE_DESIGN``.  A lower-case part may start upper
   case; a part spelled with capitals (``IR``, ``C-Flock``) matches as spelled or all upper case.  Plurals count, and so do
   a verb's forms where the row says ``(noun, verb)``.  A quote is not enforced where the row narrows it to a sense
   the lint can't tell apart: a quote followed by ``for``, ``meaning``, ``naming``, ``in``, ``as`` or ``of`` narrows every
@@ -508,8 +508,8 @@ def test_what_is_a_retired_term() -> None:
 
     def olds(text: str) -> list[str]:
         return [w.split(" is retired")[0].strip("'\"") for _, w in sites_of(text, by)]
-    assert olds("C-Flock's draw law; its drawLaw, draw_law and DRAW_LAW; drawn units, draws, drawing") == [
-        "C-Flock", "draw law", "drawLaw", "draw_law", "DRAW_LAW", "drawn units", "draws", "drawing"]
+    assert olds("C-Flock's draw law; its sampleDesign, sample_design and SAMPLE_DESIGN; drawn units, draws, drawing") == [
+        "C-Flock", "draw law", "sampleDesign", "draw_law", "SAMPLE_DESIGN", "drawn units", "draws", "drawing"]
     assert olds("withdraw, drawback, flaw, lawful, Lawrence, unit, a unit of work, one-stage, stage, units_per_vu") == []
     assert olds("a power law, Amdahl's law, the power draw; parse_law, LAW, Law.stratified, lawOf") == [
         "law", "LAW", "Law", "law"]

@@ -130,10 +130,10 @@ def test_with_no_accept_of_record_the_value_is_one_and_measured(case, stand_in, 
     assert lines[0] == ("FROM RUN made's RECORD: 1 (measured), no PoUW accept of record, so s = 1, and every limit at "
                         "s = 1 is 1 (min_cut.capped)")
     assert (rec["run"], rec["block"]["value"], rec["block"]["mark"], rec["pouw"]["share"]) == (RUN, 1, "measured", 1.0)
-    assert rec["check"] == {"check": {"rule": "the rate rule", "public_form": "NciCheck.Record.check", "complies": True},
-                            "count": {"rule": "the count", "public_form": "NciCheck.RecordCount.check", "complies": True}}
-    assert "              the rate rule (NciCheck.Record.check): complies: true" in lines
-    assert "              the count (NciCheck.RecordCount.check): complies: true" in lines
+    assert rec["check"] == {"check": {"rule": "the rate rule", "public_form": "InferenceOnlyCheck.Record.check", "complies": True},
+                            "count": {"rule": "the count", "public_form": "InferenceOnlyCheck.RecordCount.check", "complies": True}}
+    assert "              the rate rule (InferenceOnlyCheck.Record.check): complies: true" in lines
+    assert "              the count (InferenceOnlyCheck.RecordCount.check): complies: true" in lines
     assert f"  PoUW      of record by {R.VERDICT} = 'missing'" in lines
     assert any(x.startswith("            no accept of record (a development accept counts as none): " + SV.DEV_VERDICT)
                for x in lines)
@@ -209,7 +209,7 @@ def test_a_record_a_rule_refuses_is_one_and_measured_and_names_only_the_rule(cas
     out = capsys.readouterr().out
     rec = doc["record"]
     assert {line: rec["check"][line]["complies"] for line in R.PUBLIC} == complies
-    assert rec["check"]["count"]["public_form"] == "NciCheck.RecordCount.check"
+    assert rec["check"]["count"]["public_form"] == "InferenceOnlyCheck.RecordCount.check"
     assert (rec["block"]["value"], rec["block"]["mark"], rec["tied"]) == (1, "measured", None)
     assert rec["block"]["reading"].startswith(f"the check refused the record ({which}), ")
     assert {r["reading"] for r in rec["periods"]} == {f"{which} refused"}

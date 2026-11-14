@@ -89,7 +89,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     rec = json.loads((served / "registration.json").read_text())
     n = int(rec["population"])
-    law = D.parse_design(f"subset:{a.k}")
+    sampling_design = D.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
     program = P.population_program(template, n)
     query = P.template_instance_query(template)
@@ -127,7 +127,7 @@ def main() -> int:
     want = {port: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), port, schema, leaves, run_id)}
             for port, (schema, leaves) in a0.ports(st["meta"], n).items()}
     leaf_layer = a0.sha512_file(st_dir / f"pub-{n}.bin")
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part).to_json(),
               "public": V.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json(),
               "circuit": {"ok": header.get("circuit_sha512") == mine["pin"], "codes": [] if header.get("circuit_sha512") == mine["pin"] else ["pin"],
                           "detail": {"public": header.get("circuit_sha512"), "verifier": mine["pin"]}},
@@ -150,7 +150,7 @@ def main() -> int:
     t = time.time()
     record, live = a0.session(a.bin, st, n, f"subset:{a.k}", a.port, out / "session")
     summary["session_s"] = round(time.time() - t, 1)
-    result = a0.audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean, out / "session", a.delta)
+    result = a0.audit_session(rec, receipt, st, header, sampling_design, record, live, a.lean, a.lean, out / "session", a.delta)
     result["checks_before_draw"] = checks
     result["n_from"] = "registration (the served index); the verifier does not yet derive N from the served row's program"
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
@@ -160,22 +160,22 @@ def main() -> int:
     nl = body.index(b"\n") + 1
     flipped = body[:nl] + bytes([body[nl] ^ 1]) + body[nl + 1:]
     import hashlib
-    v = V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=hashlib.sha512(flipped).hexdigest(), partition=part)
     neg["public-file-b||c-byte-flipped (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, law, a0.SCHEME,
+    v = V.check(rec, program, query, sampling_design, a0.SCHEME,
                 {p_: {**w, "domain": R.window_domain(part["program"], P.digest(part), p_, s_, w["leaves"], run_id + "-other")}
                  for p_, w, s_ in ((p_, w, a0.ports(st["meta"], n)[p_][0]) for p_, w in want.items())}, leaf_layer=leaf_layer,
                 partition=part)
     neg["domains-of-another-run (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
     draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
-    v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, law)
+    v = V.check_draw({**draw, "units": draw["units"][:-1] + [n]}, rec, sampling_design)
     neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
+    v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer, partition=part)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
     if "registration" in result:
-        neg.update(a0.audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))
+        neg.update(a0.audit_negatives(result, sampling_design, a.delta, (live or {}).get("roots") or {}))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "wrong_units", "checks")}
