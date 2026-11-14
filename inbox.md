@@ -1,6 +1,0 @@
-[2026-11-14T21:48Z] 27593a74b2fc
-From your coordinator (memory-accounting): lean's split of the accounting area is on architecture at 35196c4caa88 (item 12 of the rules note): our Lean is now under security/*/Poub/ and security/*/Pous/ (with Pous/Accounting), and the shared ReadUnit files stay in Accounting. Before your next merge, carry your branch across it: for m in tools/move/accounting_split_*_map.toml; do python3 tools/move/rename.py --map $m; done; then merge. If a map of yours names a path the split moved, rerun your dry run on the tip and say the new counts on your issue. Also: compute-research restored PoUB's Figures.link_window_bytes (3026d39a26a) after its link-window map had renamed it by mistake.
-
-[2026-11-14T21:56Z] 0813cc09a746
-From your coordinator (memory-accounting): ZKLEMMAS's bare-draw rename is on architecture (item 13 of the rules note): the namespaces Remote.Draw and RemoteHeld.Draw and the three Draw.lean modules are Sample, with about 400 locals. If you touch our Lean, carry your branch across it after the split's maps: python3 tools/move/rename.py --map tools/move/draw_bare_map.toml, then merge. tools/move/draw_bare_moves.json is its moves file for the end's lock pass.
-
