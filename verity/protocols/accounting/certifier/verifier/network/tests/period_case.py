@@ -729,10 +729,10 @@ def params(j) -> Params:
         raise D.Reject("windows: a period has at least one link-window")
     if schedule is not None and not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
-    if schedule is not None and list(cells) != schedule.caps(windows):
-        raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
+    if schedule is not None and list(cells) != schedule.rows_cells(windows):
+        raise D.Reject(f"cells: the rows form's cells are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
-                       f"schedule can carry (Schedule.caps), not these {len(cells)}")
+                       f"schedule can carry (Schedule.rowsCells), not these {len(cells)}")
     circuit = None
     if "circuit" in j and not DIGEST.fullmatch(circuit := _of(j["circuit"], str, "circuit")):
         raise D.Reject("circuit: not a SHA-512 digest")
@@ -1183,8 +1183,8 @@ UNPINNED = "the scan's state's row 0 is not the empty state"
 
 
 def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
-    """`stateCheck`'s refusal of a link-window's scan: none when its state is tied (`_state_tied`) and its row 0
-    opened to the empty state (`_state_empty`)."""
+    """`stateCheck`'s refusal of the scan of an execution phase's transfer blocks: none when its state is tied
+    (`_state_tied`) and its row 0 opened to the empty state (`_state_empty`)."""
     if not _state_tied(p, audits, reg):
         return UNSTATED if _state_read(p, reg) else MISREAD
     return None if _state_empty(p, reg) else UNPINNED
@@ -1692,14 +1692,14 @@ WINDOW_PROGRAM = "stand-in/window"
 #: execution phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
-#: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
-#: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
-#: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
+#: How `rows-state-misindexed` puts the state reads of its transfer blocks' scan off the chain while its state stays
+#: tied by root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the
+#: state before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
 #: another name, or a field no natural
 MISREADS = ("sin-leaf", "o1-leaf", "units", "swapped", "missing", "untyped")
-#: How `rows-state-unpinned` leaves its link-window's scan's row 0 unopened while its reads and its tie hold: a state
-#: tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name, its
-#: salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
+#: How `rows-state-unpinned` leaves row 0 of its transfer blocks' scan unopened while its reads and its tie hold: a
+#: state tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name,
+#: its salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
 UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
 #: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
@@ -2019,7 +2019,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
-    # each audit's `SCAN_STATE`, the state tree of the link-window tied to it, whose leaf 0 the scan opens
+    # each audit's `SCAN_STATE`, the state tree of the transfer blocks tied to it, whose leaf 0 the scan opens
     trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
              for i in range(n_audits)} if rows else {}
     states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
@@ -2366,7 +2366,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
                    "lms": {"H": H, "N": N, "W": W, "toy": toy}, "program": program, "session": session.hex(),
                    "windows": n_windows}
     if rows:
-        case_params |= {"cells": bound.caps(n_windows), "circuit": circuit, "scan": scan,
+        case_params |= {"cells": bound.rows_cells(n_windows), "circuit": circuit, "scan": scan,
                         "schedule": schedule_json(bound)}
         if unhold == "params":
             case_params["circuit"] = r.choice([hashlib.sha512(b"another class circuit").hexdigest(), program, *untied])
@@ -2379,7 +2379,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     elif m == "count-windows":
         case_params["windows"] = n_windows + r.choice([1, -1] if n_windows > 1 else [1])
         if rows:
-            case_params["cells"] = bound.caps(case_params["windows"])
+            case_params["cells"] = bound.rows_cells(case_params["windows"])
     elif m == "count-audits":
         case_params["audits"] = r.choice([audit_params[1:], [*audit_params, {
             "free": 0, "program": json.loads(audit_descriptor(((1, 2),))), "steps": 0}]])
@@ -2430,11 +2430,11 @@ def _bad_params(p: dict, n: int) -> list:
 
 
 def bad_cells(p: dict) -> list[dict]:
-    """Rows-form parameters whose `cells` aren't the schedule's caps (`Schedule.caps`), each one change to `p`: none,
-    one connection short, one more, and one cap below `egress_cells`."""
-    caps = p["cells"]
-    return [p | {"cells": []}, p | {"cells": caps[1:]}, p | {"cells": [*caps, caps[0]]},
-            p | {"cells": [caps[0] - 1, *caps[1:]]}]
+    """Rows-form parameters whose `cells` aren't the schedule's (`Schedule.rowsCells`), each one change to `p`: none,
+    one connection short, one more, and one below `egress_cells`."""
+    cells = p["cells"]
+    return [p | {"cells": []}, p | {"cells": cells[1:]}, p | {"cells": [*cells, cells[0]]},
+            p | {"cells": [cells[0] - 1, *cells[1:]]}]
 
 
 def _bad_caps(s: dict, p: dict) -> list[dict]:

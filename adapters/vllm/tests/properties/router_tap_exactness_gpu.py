@@ -1,4 +1,4 @@
-"""GPU run of the router-tap exactness property (`verity_vllm.properties.router_tap_exactness`): check the tap build on this GPU against
+"""GPU run of the router-tap exactness property (`tests.properties.router_tap_exactness`): check the tap build on this GPU against
 the installed `_moe_C.topk_softmax` and the circuit's ordered router, the router-softmax source on vLLM's routing path, and live on vLLM
 engines serving tiny random-weight models of the two served router shapes (OLMoE's, Qwen3-MoE's); write the sealed record `<out>/router_tap_exactness.json`.  Exit status 1 unless ok; `--verify RECORD` re-derives a record's
 digest and verdict without a GPU.
@@ -27,7 +27,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.properties import router_tap_exactness as X
+from tests.properties import router_tap_exactness as X
 from verity_vllm.query import router_softmax as RS
 
 LAYERS_TOY = {3: (64, 8, 8, False), 1: (128, 8, 8, True)}

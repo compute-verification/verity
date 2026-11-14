@@ -662,9 +662,10 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     that names none, at the state tie (`period_case.UNSTATED`), and a registration whose window states its units'
     ``sin`` off the chain (`period_case.MISREAD`), or opens leaf 0 under another leaf's salt (`period_case.UNPINNED`),
     each with its own answer; the honest registration's window states the members' reads (`state_reads`) and row 0's
-    opening (`state_empty`). A group of two link-windows, and a run in the bytes egress form, are refused by name. Slow
-    (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no stand-in
-    can stand for."""
+    opening (`state_empty`). A group of two execution phases' transfer blocks, and a run in the bytes egress form, are
+    refused by name.
+    Slow (the test class's Program, about 30 s): the period check reads the scan's templates' signatures, which no
+    stand-in can stand for."""
     import scan_period as SP
 
     PC = SP.mirror(PERIOD_CASE)
@@ -741,8 +742,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
     assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
-    caps = PC.params(p).schedule.caps(1)
-    assert p["cells"] == caps == [sz.TEST.params.egress_cells] * (sz.TEST.params.lanes * T) and caps
+    cells = PC.params(p).schedule.rows_cells(1)
+    assert p["cells"] == cells == [sz.TEST.params.egress_cells] * (sz.TEST.params.lanes * T) and cells
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
     digest = PC.slot_entry_digest(encode_program(block), key)
