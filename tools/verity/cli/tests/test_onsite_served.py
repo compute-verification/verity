@@ -50,7 +50,8 @@ VARIABLES = {
                  f"start-side --trusted-sha512 {KEY}",
     "POUS_CMD": 'bash benchmarks/pous/served_piece.sh "$@"', "PRECISION": "verity_int8",
     "REPO": "verity-int8/Llama-3.2-1B-INT8", "REV": "15b0976d400d796ee589e7737d03a919526bf800",
-    "SERVE_ARGS": "--remote-verifier 192.0.2.2:7002", "SLOTS": "4", "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
+    "SERVE_ARGS": "--remote-verifier 192.0.2.2:7002 --protocol ids --id-payload 503", "SLOTS": "4",
+    "V3C_LAW": "rate:1/3481648", "WINDOW_STEPS": "16",
     "WIPE_ADDRESS": "192.0.2.1:7001", "WIPE_CHALLENGER": "auditor-1",
     "WIPE_CMD": 'bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"', "WIPE_COMMAND": "start-wipe",
     "WIPE_KEY_SHA512": "1" * 128,
@@ -95,8 +96,18 @@ def test_the_configuration_states_no_host_or_address():
     cfg = K.parse(CONFIG.read_text())
     assert not [(p["name"], f) for p in cfg["party"] for f in p if f in K.TRANSPORT]
     assert not [(c["from"], c["to"], f) for c in cfg["channel"] for f in c if f in K.TRANSPORT]
+    assert all(set(p) == set(K.PIN) for p in cfg["pin"])
     assert {p["machine"] for p in cfg["party"]} == {T.PROVER_NODE, T.GATE_HOST, T.AUDITOR_HOST}
     assert all(p["machine"] == T.PROVER_NODE for p in cfg["party"] if p["principal"] == "developer")
+
+
+def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
+    cfg = R.load(CONFIG, REG)
+    assert [(p["party"], p["protocol"], p["scheme"], p["key-sha512"]) for p in cfg["pin"]] == [
+        ("memory-challenger", "pous", K.SCHEMES[0], T.PINS["pous"]),
+        ("memory-challenger", "wipe", K.SCHEMES[0], T.PINS["wipe"])]
+    bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
+    assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
 
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
@@ -133,7 +144,8 @@ def test_a_dry_run_resolves_every_party_channel_and_piece(tmp_path, capsys):
     assert {c for _, c in pieces} == {*T.PROTOCOLS, T.SERVED_WINDOW}
     hooks = {k: v for x in got["plan"] for e in x["entries"] for k, v in e["hooks"].items()}
     assert hooks["POUS_ARGS"].startswith("--rounds 320 --challenger-host auditor-1 --challenger-address 192.0.2.1:7000")
-    assert hooks["SERVE_ARGS"] == "--remote-verifier 192.0.2.2:7002"
+    assert {e["component"]: e["hooks"]["SERVE_ARGS"] for x in got["plan"] for e in x["entries"]
+            if "SERVE_ARGS" in e["hooks"]} == {"bandwidth": "--remote-verifier 192.0.2.2:7002", "certifier": T.ID_FORM}
     assert (hooks["WIPE_CHALLENGER"], hooks["WIPE_ADDRESS"], hooks["WIPE_COMMAND"], hooks["WIPE_KEY_SHA512"]) == (
         "auditor-1", "192.0.2.1:7001", "start-wipe", "1" * 128)
     assert (hooks["H1_GATE"], hooks["H1_PEER"], hooks["H1_KEY_SHA512"]) == ("gate-command", "peer-1", KEY)
@@ -170,7 +182,8 @@ def test_the_certifiers_script_is_its_developer_sides_and_no_gate_piece_names_on
     side, device = REG.parties["certifier"][NC.WORKERS], REG.parties["certifier"][NC.NETWORK_CERTIFIER]
     assert (side.runs, side.scripts, side.reaches, side.binds) == (T.SERVED_WINDOW, (T.CERTIFIER_PIECE,),
                                                                     NC.NETWORK_CERTIFIER, ("gate",))
-    assert set(side.variables(cfg, BINDINGS)) == {"CERTIFIER_FRONT", "CERTIFIER_CMD"} and device.runs == T.GATE
+    assert set(side.variables(cfg, BINDINGS)) == {"SERVE_ARGS", "CERTIFIER_FRONT", "CERTIFIER_CMD"}
+    assert device.runs == T.GATE
     gates = [e for ps in REG.parties.values() for e in ps.values() if e.runs == T.GATE]
     assert len(gates) == 6
     assert all((e.scripts, e.binds, e.optional, e.variables(cfg, BINDINGS)) == ((), (), (), {}) for e in gates)
@@ -292,6 +305,51 @@ def test_the_served_window_runs_once_with_every_piece_s_hooks(tmp_path, capsys, 
     assert hooks["WIPE_KEY_SHA512"] == "1" * 128
     assert json.loads((state / "bindings.json").read_text()) == BINDINGS
     assert "auditor-1" not in json.dumps(json.loads((state / "run.json").read_text()))
+    assert hooks["SERVE_ARGS"] == "--remote-verifier 192.0.2.2:7002 --protocol ids --id-payload 503"
+
+
+def test_serve_openais_flags_are_every_listed_pieces():
+    cfg = R.load(CONFIG, REG)
+    poub, ids = "--remote-verifier 192.0.2.2:7002", "--protocol ids --id-payload 503"
+    assert T.ID_FORM == ids and T.variables(cfg, BINDINGS)["SERVE_ARGS"] == f"{poub} {ids}"
+    listing = {without: {**cfg, "protocols": [c for c in cfg["protocols"] if c != without]}
+               for without in ("bandwidth", "certifier")}
+    assert T.variables(listing["bandwidth"], BINDINGS)["SERVE_ARGS"] == ids
+    assert T.variables(listing["certifier"], BINDINGS)["SERVE_ARGS"] == poub
+    neither = {**cfg, "protocols": [c for c in cfg["protocols"] if c not in listing]}
+    assert "SERVE_ARGS" not in T.variables(neither, BINDINGS)
+    # the runner's own preflight of the front reads the id form's flag as a word of SERVE_ARGS
+    assert " --protocol ids " in f" {T.variables(cfg, BINDINGS)['SERVE_ARGS']} "
+
+
+COMPOSITE = """mkdir -p "$OUT"
+echo "${COMPOSITE-unset}|${COMPOSE_OFF_NODE-unset}" > "$OUT/composite.txt"
+"""
+
+
+@pytest.mark.parametrize("named, sets, got", [
+    ({}, {"COMPOSITE": ""}, "|unset"),
+    ({"COMPOSE_OFF_NODE": "1"}, {"COMPOSITE": ""}, "|1"),
+    ({"COMPOSITE": "1"}, {}, "1|unset"),
+    ({"COMPOSITE": ""}, {}, "|unset"),
+    ({"COMPOSE_OFF_NODE": "0"}, {}, "unset|0"),
+])
+def test_the_served_window_asks_for_no_composite_unless_its_caller_names_one(tmp_path, capsys, monkeypatch, named,
+                                                                             sets, got):
+    """The runner composes off the node by default and refuses onsite's composite there, so the table hands it
+    ``COMPOSITE`` empty; a caller that names ``COMPOSITE``, or ``COMPOSE_OFF_NODE=0`` for a development composite on
+    the node, gets the runner what it named and nothing more."""
+    for name in ("COMPOSITE", "COMPOSE_OFF_NODE"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in named.items():
+        monkeypatch.setenv(name, value)
+    assert T.composite(named) == sets
+    monkeypatch.setattr(T, "RUNNER", stand_in(tmp_path, "runner.sh", COMPOSITE))
+    state = tmp_path / "state"
+    rc = R.run_main([str(CONFIG), "--on", T.PROVER_NODE, "--bindings", bindings(tmp_path), "--state", str(state)],
+                    REG)
+    assert rc == 0, capsys.readouterr().err
+    assert (state / "out" / "composite.txt").read_text().strip() == got
 
 
 def test_the_served_window_with_a_binding_missing_never_starts(tmp_path, capsys, monkeypatch):

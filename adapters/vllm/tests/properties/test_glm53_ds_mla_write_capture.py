@@ -8,6 +8,7 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -28,7 +29,7 @@ def _case(seed: int, weight: np.ndarray) -> dict[str, np.ndarray]:
     rng = np.random.default_rng(seed)
     kv = np.concatenate([X.tile_rows(rng, ROWS), np.stack([X.FR.bf16_row(rng, X.R, 1.0) for _ in range(ROWS)])], axis=1)
     cs = np.stack([X.FR.bf16_row(rng, X.R, 0.5) for _ in range(ROWS)])
-    slots = np.arange(ROWS, dtype=np.int64)
+    slots: np.ndarray = np.arange(ROWS, dtype=np.int64)
     slots[-1] = -1
     fn = _fn()
     refs = [[int(v) for v in evaluate(fn, kv[t].tolist(), weight.tolist(), cs[t].tolist())] for t in range(ROWS)]
@@ -41,7 +42,7 @@ def _case(seed: int, weight: np.ndarray) -> dict[str, np.ndarray]:
 
 
 def _write(out: Path, cases: dict[str, dict[str, np.ndarray]]) -> None:
-    gpu = {"gate": {"ok": True}, "errors": {}, "ptx": {"ok": True}, "cases": []}
+    gpu: dict[str, Any] = {"gate": {"ok": True}, "errors": {}, "ptx": {"ok": True}, "cases": []}
     for case, arrays in cases.items():
         paths = X.DS._save(out / "words" / case, **arrays)
         gpu["cases"].append({"case": case, "tokens": ROWS, "slotted": ROWS - 1, "checks": {"modes_equal": True},
@@ -50,7 +51,7 @@ def _write(out: Path, cases: dict[str, dict[str, np.ndarray]]) -> None:
 
 
 def test_the_planted_rows_reach_every_corner_and_the_definition_writes_its_rows(tmp_path):
-    served = np.full(X.KVL, 0x3F80, dtype=np.uint16)
+    served: np.ndarray = np.full(X.KVL, 0x3F80, dtype=np.uint16)
     cases = {"served": _case(1, served), "corner": _case(2, X.corner_weight())}
     rows = np.concatenate([c["indexer_rows"][c["slots"] >= 0] for c in cases.values()])
     got = X.corners(rows)

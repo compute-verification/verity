@@ -644,7 +644,7 @@ def _shared_rotary_match(tmp: str, n_layers: int = 3):
 
 def _shared_rotary_bmap(vals: dict, *, tensor_bytes: dict | None = None):
     """The collector's shape: every invocation is a meta NAMED `<ROT>/query` (ordinal 10+k), bound under the canonical path at invocation k;
-    the reader is the PRODUCTION OpenedReader over those metas, committed on the per-tensor host path (ordinals 0-9: other tensors)."""
+    the reader is the library's OpenedReader over those metas, committed on the per-tensor host path (ordinals 0-9: other tensors)."""
     from tests.check.opened import commit_host_steps
     n = ROWS[U0]
     entries = []
@@ -753,7 +753,7 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
                               "pairs": 2, "steps": [1, 2], "pair_list": [[1, "r0"], [2, "r0"]], "rule": res["padding"]["rule"]}
     assert "bot_word" in res["padding"]["rule"]
     # with a manifest, a no-oracle family's `identities` is the FULL-cap count; on a padded record the live count is
-    # stated beside it (manifest minus the padding stated apart), labelled -- leg (b): moe_block_stream 6,144 manifest = 4,224 live + 1,920 inactive
+    # stated beside it (manifest minus the padding stated apart), labelled -- part (b): moe_block_stream 6,144 manifest = 4,224 live + 1,920 inactive
     manifest = {"identities": [{"family": "fa2_hidden_m1_stream"}] * 3 + [{"family": "instance_outputs"}] * 40}
     resq = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed), query_families=OC.query_families_of(manifest))
     q = resq["not_compared_by_query_family"]["fa2_hidden_m1_stream"]
@@ -765,3 +765,38 @@ def test_a_padded_records_bot_by_enablement_entries_are_stated_apart_never_unver
     res0 = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
     assert res0["result"] is None and res0["grade"] == "partial" and res0["not_compared"]["identity without a byte range (dtype/range)"] == 4
     assert "padding" not in res0 and len(res0["attribution"]["unverified"]) == 2
+
+
+SUPERSCRIPT_TWO = "\u00b2"   # str.isdigit() says yes to it and str.isdecimal() no; int() does not read it
+
+
+def test_a_port_int_does_not_read_is_no_port_view(tmp_path):
+    """A member of a several-output op whose port is a digit `int` does not read is read as a member with no port is (view 0),
+    whether the port is the member's last part or its manifest row's `port`.  A port `int` reads, in any script, is still that view."""
+    d, vals = make_match(str(tmp_path))
+    oracle, op = OC.MatchOracle(d), "model.layers.0.post_attention_layernorm"
+    r0 = slice(ROWS[U1] * H * 2, None)              # r0's rows follow r1's in the engine's row order; a bf16 row is H * 2 bytes
+    view0, view1 = (vals[(op, "0")][r0], None, ROWS[U0]), (vals[(op, "1")][r0], None, ROWS[U0])
+    assert oracle.member_bytes(0, op, "x", "r0") == view0 and oracle.member_bytes(0, op, "1", "r0") == view1
+    assert oracle.member_bytes(0, op, SUPERSCRIPT_TWO, "r0") == view0
+    assert oracle.member_bytes(0, op, "norm." + SUPERSCRIPT_TWO, "r0") == view0
+    assert oracle.member_bytes(0, op, "x", "r0", producer={"port": SUPERSCRIPT_TWO}) == view0
+    assert oracle.member_bytes(0, op, "\u0661", "r0") == view1        # ARABIC-INDIC DIGIT ONE: a decimal, which int() reads as 1
+
+
+def test_a_request_id_int_does_not_read_sorts_with_those_of_no_number(tmp_path):
+    """`attribution.requests` is sorted by the number after an id's first letter, with 0 for an id that has none.  An id whose tail
+    is a digit `int` does not read is one that has none: the compare the walk finished is reported with it, where `int` raised
+    after the walk and the pair's whole compare was recorded as not run."""
+    d, vals = make_match(str(tmp_path))
+    bmap, committed = make_bmap(vals)
+    odd = ["r" + SUPERSCRIPT_TWO, "rx"]
+    for lab in odd:
+        bmap["entries"].append({"identity": {"program_digest": "p" * 64, "request_id": lab, "step": 0, "invocation": 0, "op_path": "model.embed_tokens",
+                                             "output_member": "out", "element_range": [0, H], "rank": 0}, "kind": "leaf", "name": "model.embed_tokens",
+                                "element_offset": 0, "encoding": {"dtype": "bfloat16", "shape": [sum(ROWS.values()), H]}})
+    res = OC.oracle_compare(OC.MatchOracle(d), bmap, reader(committed))
+    assert res["compared"] == 2 * len(vals) + 2 and res["equal"] == res["compared"] and res["mismatch_n"] == 0, res
+    assert res["result"] is None and all(res["not_compared"][f"request {lab} not in the Match record's request table"] == 1 for lab in odd), res
+    reqs = res["attribution"]["requests"]
+    assert set(reqs[:3]) == {"r0", *odd} and reqs[3:] == ["r1"], reqs      # the three that sort as 0 hold no order among themselves

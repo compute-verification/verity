@@ -20,7 +20,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   flips from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). The theorems are about
   `drawWith`, and `drawOS_def` states that `Flock.Draw.drawOS` is `drawWith` with every stream's bytes from
   `IO.getRandomBytes`. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
-  That the challenger releases the coins only after the registration they sample is recorded rests on `trusted-host`,
+  That the challenger releases the coins only after the registration they sample is recorded rests on `trusted-device`,
   not on A3.
 - **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
   `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of
@@ -48,10 +48,10 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `n` leaves), `hides_os` and `hides_leaves_os` (a registration, at one event), and, for the recursive audit,
   `Flock.SecurityProofs.recursiveZK_os_gap` (`Recursive/OsSalts.lean`).
 - **Its scope: the masks and the Reed–Solomon padding** are the operating system's bytes too (`live/src/zk_hooks.rs`),
-  read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-firewall
+  read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-zk-server
   frame`; `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.drawsWith` refuses a read of any other length):
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
-  (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
+  (`flock-zk-server tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
   salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_draws` (the
   frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for a unit sample;
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream

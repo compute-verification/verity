@@ -163,11 +163,11 @@ def hits_off(advice: Any, engine: Mapping[str, Any]) -> list[tuple[int, str]]:
     prefix cache off (`off`), as (request, why): its advice has none there."""
     gone, out = off(engine), []
     for s, step in enumerate(advice.steps):
-        out += [(r.request, f"request {r.request}: a prefix-cache hit of {r.cache_hit} tokens, and the registration states the "
-                            f"prefix cache off ({PREFIX_CACHE} False), at step {s}: a hit is advice charged at its width only with "
-                            f"the prefix cache on") for r in step.rows if r.cache_hit and ("row", "cache_hit") in gone]
-    return out + [(i, f"request {i}: carried in on a prefix-cache hit of {c.C} tokens, and the registration states the prefix "
-                      f"cache off ({PREFIX_CACHE} False)") for i, c in enumerate(advice.carried) if c.C and ("carried", "C") in gone]
+        out += [(r.request, (f"request {r.request}: a prefix-cache hit of {r.cache_hit} tokens, and the registration states the "
+                             f"prefix cache off ({PREFIX_CACHE} False), at step {s}: a hit is advice charged at its width only with "
+                             f"the prefix cache on")) for r in step.rows if r.cache_hit and ("row", "cache_hit") in gone]
+    return out + [(i, (f"request {i}: carried in on a prefix-cache hit of {c.C} tokens, and the registration states the prefix "
+                       f"cache off ({PREFIX_CACHE} False)")) for i, c in enumerate(advice.carried) if c.C and ("carried", "C") in gone]
 
 
 def refusals(table: tuple[Field, ...] = READS) -> list[str]:

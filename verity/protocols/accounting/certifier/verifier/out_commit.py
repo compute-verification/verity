@@ -1,7 +1,7 @@
 """The network certifier's output value: the output it relayed, committed by the certifier as a registered value
 (`one_stage.registered`) and its head signed with its key, never by the prover. The verifier pins the value's root from
 that certificate alone (`check_out`), so every output proof block's row is a registered read of it, opened against
-the certifier's signed root by the Lean verifier's registered reads (`flock-verify --registered`), not compared in the
+the certifier's signed root by the Lean verifier's registered reads (`verity-verify-proof --registered`), not compared in the
 clear.
 
 **The commitment** is the reading program's registered value `value` (``out`` by default), as the prover would commit

@@ -59,7 +59,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     h = sz.host(tmp_path / "warden", draw=k, setup=setup)
     at = h.at
     M = sz.WZ._one_stage()
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     pg = sz.program(M, setup.cls, sz.TEMPLATES, at.G, at.T, tmp_path / sz.PROGRAMS[sz.TEMPLATES])
     members = [sz.stage(M, pg, mr, tmp_path / "honest" / f"stage-{mr.name}") for mr in h.rounds["honest"]]

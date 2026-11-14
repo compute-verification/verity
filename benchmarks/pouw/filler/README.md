@@ -60,7 +60,8 @@ a machine with no GPU.
 
 ## Reading a run
 
-These run on any machine, on a job's out directory.
+These run on any machine, on a job's out directory. `psum.py` reads the GPU's card through `verity.device`, so it runs
+in the workspace's environment.
 
 ~~~text
 python3 benchmarks/pouw/filler/score.py report OUT [--json] [--as v4] [--coins X]   # score a measured run again
@@ -68,7 +69,7 @@ python3 benchmarks/pouw/filler/score.py tp-report OUT... --bin|--nvd X          
 python3 benchmarks/pouw/filler/score.py --leaderboard [--refresh] [--local DIR...]  # every scored attempt, best first
 python3 benchmarks/pouw/filler/share.py OUT [--fill OUT] [--dfill OUT...] [--fstep OUT...] [--json F] # dcap.sh's tables
 python3 benchmarks/pouw/filler/capacity_of.py [OUT] [--lfill|--dfill|--fstep F.jsonl] [--json]   # σ of a run or a probe
-python3 benchmarks/pouw/filler/psum.py OUT... [--limit 1.05]                        # psched.sh's rows by point and arm
+uv run python3 benchmarks/pouw/filler/psum.py OUT... [--limit 1.05]                 # psched.sh's rows by point and arm
 python3 benchmarks/pouw/filler/psched_probe.py OUT...                               # psched_probe.sh's rows
 python3 benchmarks/pouw/filler/pfill_phase_screen.py NAME                           # psched_probe.sh's PROBES, by name
 python3 benchmarks/pouw/filler/pfill_proved.py OUT [--json]                         # its SCORE at each proved fraction
@@ -93,4 +94,5 @@ The tests are one suite, `uv run tools/verity/check/suites.py benchmarks/pouw/fi
 A test imports the directory's modules and the harness's `ledger` by name: the suite's `pyproject.toml` puts both
 directories on pytest's `pythonpath`. The harness has a `report.py` too, so `test_comm_report.py` takes
 `comm/report.py` from `load` in the suite's `tests/conftest.py`, as the module `comm_report`.
-`../tests/test_budget.py`, `test_eps_budget.py` and `test_lean_headline_dc.py` test `benchmarks/pouw`'s own modules.
+`../tests/test_budget.py` and `test_eps_budget.py` test `benchmarks/pouw`'s own modules, and
+`test_lean_headline_dc.py` tests `verity_machine_model.lean_headline_dc`.

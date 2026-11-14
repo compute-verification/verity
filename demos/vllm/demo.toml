@@ -14,7 +14,7 @@ proof = "none"
 [placement]
 endpoint = "gpu-node"                # the endpoint's H200 node
 prover = "gpu-node"                  # the endpoint's node
-challenger = "auditor-host"          # the challenger's auditor host, through its gate: PoUW's coins, and sampled
+challenger = "auditor-host"          # the challenger's auditor device, through its gate: PoUW's coins, and sampled
                                      # proofs' with PP_CHALLENGER (else a local development session's)
 verifier = "gpu-node"                # NOT PLACED: the Lean verifier, on the endpoint's node
 certifier = "gpu-node"               # NOT PLACED: the network certifier, onsite's, may run on the endpoint's node

@@ -8,7 +8,7 @@ layouts:
 * ``read``: a table read (`gates.embedding.EmbeddingRead_v1{V=E, H}`), a unit a block of a pair: ``in0`` the pair's expert (the
   read's key), ``in1`` and ``in2`` the table's root and domain id, ``in3``, ``in4`` and ``in5`` the table's row at the expert, its
   salt and its path -> ``o0`` the row and ``o1`` its verdict;
-* ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
+* ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)_v3`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
   ``ws``, the block's rows of the pair's expert and their G-block's scale row -> ``o0`` the pair's output words of those rows;
 * ``fused``: a block GEMM that reads its block's rows itself (`boolean_fp8_moe.MoeExpertFp8ReadGemm(W)_v1`), a unit a block of a
   pair: a read's six ports (``in0`` .. ``in5``), then ``xq``, ``sx``, (``g``,) and ``ws`` -> ``o0`` the pair's output words of
@@ -395,7 +395,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
     held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
     parameter.  Refused for a table the registration names no nonce for."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     out: dict[str, Any] = {}
     nonces, key = committer["nonces"], bytes(committer["key"])
@@ -432,7 +432,7 @@ def commit_bnk(committer: Mapping[str, Any], label: str, K: int, field: Callable
     served), committed as core's ``registered.Registered`` of ``hm96-sha512/row/v2`` rows with its rows held, under
     ``committer``'s key at the program and nonce its registration names, once a process: a value this process committed is
     handed back as held and ``field`` is not called.  Refused for a parameter the registration names no nonce for."""
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     param = bnk_param(label, K)
     if param not in committer["nonces"]:
@@ -453,7 +453,7 @@ def commit_shard(committer: Mapping[str, Any], label: str, H: int, shard: Callab
     registration holds the shard's tables at its one width, and a table at any other is none of its."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-    from verity_vllm.protocols.pouw.h1 import registered as H1R
+    from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
     nonces, key, W = committer["nonces"], bytes(committer["key"]), shard_block(H)
     out: dict[str, Any] = {}

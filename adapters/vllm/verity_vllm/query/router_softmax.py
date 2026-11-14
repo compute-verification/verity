@@ -18,9 +18,7 @@ from functools import cache
 from typing import Any
 
 from verity_vllm.query.manifest import format as fmt
-from verity_vllm.query.manifest.format import identity_rows
-
-from verity_vllm.query.manifest.format import query_id_digest
+from verity_vllm.query.manifest.format import identity_rows, query_id_digest
 
 FAMILY = "router_softmax"
 MEMBER = "router_softmax"

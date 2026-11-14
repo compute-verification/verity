@@ -31,7 +31,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names sampled proofs missing. a5
   writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
-  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's law is
+  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
   `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
   and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
@@ -58,7 +58,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   Both composites name the policy among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`), and
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
-  case is asked for; on a tree that leaves the policy out (the public release) the case is refused saying so.
+  case is asked for; on a tree that leaves the policy out the case is refused saying so.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -121,7 +121,7 @@ from typing import Any
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
@@ -129,7 +129,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/recursion/verifier/recursive", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
@@ -137,8 +137,7 @@ ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
-#: (``LEAN``) and the Python that check is held to (``reference``). The public release leaves the policy out, and that
-#: module with it, so `policy` loads it by name
+#: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
 PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"

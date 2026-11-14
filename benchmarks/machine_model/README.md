@@ -43,11 +43,11 @@ own and changes with it.
   `floor_skip`, `floor_eps`, `prices`, `pv_ts`, the models' shapes (`MODELS`, `Shape`) and the rates (`RATES`).
 - **`verity_machine_model.lean_headline`**, sm_120's headline instances as exact data, which `lean-headline` writes as
   Lean: `instance()` and `measured()`, with `stars`, `load`, `mload`, `price`, `coef`, `branches` and the constants
-  its `__all__` lists. `benchmarks/pouw/lean_headline.py` gives the same names to the files that load that path.
+  its `__all__` lists.
 - **`verity_machine_model.dc_reading`**, the H200's and B200's headline instances as exact data:
   `reading(family, vector, full, q)` with `FAMILIES` and `SM90`, and the constants its `__all__` lists; and
   **`verity_machine_model.lean_headline_dc`**, which `lean-headline` writes them as Lean with: `render_measured`,
-  `write` and `main`. `benchmarks/pouw/lean_headline_dc.py` gives both modules' names to the files that load that path.
+  `write` and `main`.
 - **`verity_machine_model.headline`**, what the Lean headline files are exported from: `spec(data)` and
   `row(family, reading, data)`, with `READINGS`, `OPERANDS` and `CREDIT`.
 - **`verity_machine_model.capacity`**, certified capacity: `Work`, `Cell` and `cell(pi, groups)`, `tensor_filler`,
@@ -219,7 +219,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../pouw/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 
@@ -474,14 +474,14 @@ tcgen05.ld.32x32b.x32 that brings each committed word to registers, 1024/L a MMA
 
 ## The opcode table
 
-The card assumption (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op (`Accel.Op`)
-at no fewer units of the same resource. `data/cover/` is its evidence on the H200 (sm_90) and the RTX PRO 6000 (sm_120):
-evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it as Markdown, a table
-a card, with the counts by mark and every hole.
+The card assumption (`CardWithinAccel`) is that every instruction a card executes is dominated by an ACCEL op
+(`Accel.Opcode`) at no fewer units of the same resource. `data/cover/` is its evidence on the H200 (sm_90) and the RTX
+PRO 6000 (sm_120): evidence, not trusted base, since no verifier and no Lean reads it. `machine-model cover` prints it
+as Markdown, a table a card, with the counts by mark and every hole.
 
-- **The envelope** (`envelope.toml`) is `Accel.Op` with its pipes and formats: `mma`, `mmaSp`, `lane` (a lane opcode on
-  a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. Each card's numbers (ρ
-  a SM-clock, format weights) are its card file's (`hardware/cards/`, read by `cover.load`). What the table
+- **The envelope** (`envelope.toml`) is `Accel.Opcode` with its pipes and formats: `mma`, `mmaSp`, `lane` (a lane opcode
+  on a pipe: at most the pipe's `n_in` words in, 2 out), `move`, `atom`, `red`, `branch` and none. Each card's numbers
+  (ρ a SM-clock, format weights) are its card file's (`hardware/cards/`, read by `cover.load`). What the table
   needs that `Accel` lacks is marked `proposed`: the `collective` op and resource, `tex`, and the formats `e3m2`,
   `e2m3`, `mxf8` and `mxf6`.
 - **The pipes**: an opcode goes on the pipe a run or the CUDA Programming Guide places it on, else on `fma`, which
@@ -500,7 +500,7 @@ a card, with the counts by mark and every hole.
 - **The marks**: `covered` (dominated at the rate), `coarse` (dominated at a coarser bound: a pipe's share, the issue
   slot, the data sheet's peak), `hole` (`low`, bounded at a few percent of a resource; `medium`, measured past a ρ;
   `open`, no rate known; or `outside the card`) and `absent`. An opcode's mark is its worst row's. A row resting on a
-  proposed entry is counted twice: with it, and as a hole on `Accel.Op` alone.
+  proposed entry is counted twice: with it, and as a hole on `Accel.Opcode` alone.
 - **The rule**: each rate of a covered or coarse row, in its op's units a SM-clock (tensor MACs at the format's weight,
   halved for `mmaSp`; a pipe's lanes, `fma`'s the issue slot's 128; fetches; a store's words), is at most its resource's
   ρ, and a lane's or collective's words at most its op's.

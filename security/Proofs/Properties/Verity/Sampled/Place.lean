@@ -17,13 +17,17 @@ A base's `Vocab.place` read off the committed files alone, so a deployed base ca
   key, the format of the port's registered schema), the port's root, the row's leaf, and the bit's place in its row.
 * `placeOfRead`: **the place the committed files register for a gate**: the files parsed as `verify --zk` parses them,
   and `placeFrom` at the deployed commitment's layout there, at the gate's claims position.
+* `placeOfFiles`: **the place a window's committed files register for a gate**: the gate's member's own
+  (`placeOfRead` at that member's files, so under that member's public file's roots), each member at its own gates of
+  the window's circuit (`placeOfWith`). No root is the window's own. At a window of one member it is that member's, by
+  definition.
 -/
 
 @[expose] public section
 
 namespace Verity.Sampled
 
-open Properties.NetworkCertifier.Bytes (bs)
+open Properties.Certifier.Bytes (bs)
 
 /-- **The place a commitment's layout registers for claims position `i`** (`Flock.Bridge.commitDepL`'s `C`, `rows`,
 `c`, `L` and `roots`): the registered port whose root is the position's row's root, as the deployed path check finds it
@@ -61,5 +65,19 @@ noncomputable def placeOfRead (r : Verity.FileRead) (g : Fin r.circuit.N) : Opti
           placeFrom C rows D.unroll L (Flock.Bridge.rootsOfL D.unroll L) (Flock.Bridge.posOf C ⟨g.val, h⟩)
         else none
       else none
+
+/-- **The place a first member's files and the rest's register for a gate of their circuits side by side**: the
+gate's member's own (`placeOfRead`), each member at its own gates. -/
+noncomputable def placeOfWith : (r : Verity.FileRead) → (rs : List Verity.FileRead) →
+    Fin (Verity.FileRead.circuitWith r rs).N → Option Place
+  | r, [] => placeOfRead r
+  | r, s :: rs =>
+    Fin.addCases (m := r.circuit.N) (n := (Verity.FileRead.circuitWith s rs).N) (placeOfRead r) (placeOfWith s rs)
+
+/-- **The place a window's committed files register for a gate**: the gate's member's own (`placeOfRead`, under that
+member's public file's roots), each member at its own gates of the window's circuit. No root is the window's own. At a
+window of one member it is that member's, by definition. -/
+noncomputable def placeOfFiles (R : Verity.WindowFiles) : Fin R.circuit.N → Option Place :=
+  placeOfWith R.first R.rest
 
 end Verity.Sampled

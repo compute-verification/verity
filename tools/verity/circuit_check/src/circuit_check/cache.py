@@ -9,7 +9,7 @@ the task list's build, nor an earlier target's check):
   name and content stand for), every path it only probed (``os.stat``: whether it was a file, a directory or absent; when
   `inspect` or `linecache` probes a loaded module's source file, the module, by its name), every library built in the tree
   that it loaded (``ctypes.dlopen``: by its bytes), and the sources of every C++ model it called (`MODEL`, which each call of a
-  `verity.definitions.numerics._jit.Model` raises: by their content, wherever the library was built and whichever check
+  C++ model raises: by their content, wherever the library was built and whichever check
   loaded it), and of every one its process, or one it was forked from, called before it ended (`_CALLED`): a process-wide memo
   of a model's result, filled by another target's check or a binding's build, hands it the result without a call;
 - the module of every function that ran (``sys.monitoring``: the first start or resume of each code object in the recording),
@@ -65,10 +65,10 @@ it lists by their names, each module's content used only to follow a move (`_chi
 pinned to their names.  A module whose source `inspect` looked for is held by its name and content (``present``), unless it is
 the checker's own: those, like the checker code that ran, are held by the checker's version alone.  The checker's
 own version is the digest of this package's code (each module's AST without its docstrings, `_code`, so an edit to its prose or
-comments reruns no target) less `targets.py`, ``pins/``, `heavy.json` (`HEAVY`: the scheduler's
-peaks, which decide which targets run beside which, never what a check computes, and which no recording holds either,
-`cli.heavy`) and `SHARD` (which targets a shard checks and how
-shards' records are joined).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
+comments reruns no target) less `targets.py`, ``pins/``, `SHARD` (which targets a shard checks and how
+shards' records are joined) and `TASK_LIST` (whether a run starts at all, `cli.task_list_guard`); the scheduler's peaks, which
+decide only which targets run beside which, are beside their owners, outside this package, and no recording holds them
+(`cli.heavy`, read under `internal`).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
 entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment, less the variables no check or build reads
 (`UNKEYED`, `UNKEYED_PREFIXES`); the task list's, whose build finds the sidecars
@@ -174,7 +174,7 @@ _LINKS: dict[str, str] = {}
 #: what the tracer cannot see: a program started from here, or a repository library loaded by the dynamic loader
 UNTRACEABLE = ("subprocess.Popen", "os.system", "os.exec", "os.posix_spawn", "os.spawn", "os.fork")
 #: the audit event each call of a C++ model raises with the files its library is built from
-#: (`verity.definitions.numerics._jit.CALLED`, named rather than imported: this module imports nothing of the tree at its import)
+#: (named rather than imported from the module that raises it: this module imports nothing of the tree at its import)
 MODEL = "verity.numerics.model"
 #: the sources in the tree of every C++ model this process, or one it was forked from, called while tracing (`MODEL`): a
 #: process-wide memo of a model's result hands it to a later check or build without a call, so every recording holds them all
@@ -184,14 +184,13 @@ _INTERNAL: list[bool] = []
 _HERE = Path(__file__).resolve().parent
 #: the checker's files that are no input of every target: each target holds its own parts of them
 TARGETS, PINS = _HERE / "targets.py", _HERE / "pins"
-#: the targets' measured peaks `cli.run` schedules by, and beside them the catalog bindings' (by binding name) the circuit_check
-#: suite's build schedules by (`units.built_apart`): no input of any target, since they decide only which targets run beside
-#: which, and a target whose process the OOM killer took is never stored
-HEAVY = _HERE / "heavy.json"
 #: which targets a ``--shard`` checks and how ``--combine`` joins the shards' records (`circuit_check.shard`): no input of any
 #: target, since no check imports it
 SHARD = _HERE / "shard.py"
-#: a sidecar's name beside its module's (`sidecars`): ``fp8.circuit-check.py`` and ``.json`` of ``fp8.py``
+#: the task list's guard's reference (`cli.task_list_guard`): no input of any target, since it decides only whether a run
+#: starts
+TASK_LIST = _HERE / "task_list.json"
+#: a sidecar's name beside its module's (`sidecars`): ``widget.circuit-check.py`` and ``.json`` of ``widget.py``
 SUFFIX = ".circuit-check"
 #: the binding files beside `targets.py` (each Definition module's sidecar, `sidecars`), absolute; the pins files (``pins/``'s
 #: and the sidecars'), and where a pin is or would be (`sidecars.pin_reads`)
@@ -327,15 +326,14 @@ def _rel(path: Any) -> str | None:
 
 
 def _rel_of(path: Any) -> str | None:
-    try:
-        p = Path(os.fsdecode(path))
-        p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
-        rel = os.path.relpath(p, _ROOT[0])
-        if rel.startswith("..") and _LINKS:            # a file through a link into the tree is the tree's (`_LINKS`)
-            rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
-                        if p == k or p.startswith(k + os.sep)), rel)
-    except (TypeError, ValueError):
-        return None
+    if not isinstance(path, (str, bytes, os.PathLike)):
+        return None                                    # an audit event's argument that names no file
+    p = Path(os.fsdecode(path))
+    p = os.path.normpath(p if p.is_absolute() else Path.cwd() / p)
+    rel = os.path.relpath(p, _ROOT[0])
+    if rel.startswith("..") and _LINKS:                # a file through a link into the tree is the tree's (`_LINKS`)
+        rel = next((os.path.relpath(t + p[len(k):], _ROOT[0]) for k, t in _LINKS.items()
+                    if p == k or p.startswith(k + os.sep)), rel)
     if rel.startswith("..") or "__pycache__" in rel.split(os.sep) or rel.split(os.sep)[0] == ".venv":
         return None
     return rel
@@ -348,13 +346,9 @@ def _links(root: Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for e in sys.path:
         d = os.path.abspath(e or os.getcwd())
-        if not os.path.relpath(d, root).startswith(".."):
+        if not os.path.relpath(d, root).startswith("..") or not os.path.isdir(d):
             continue
-        try:
-            names = os.listdir(d)
-        except OSError:
-            continue
-        for n in names:
+        for n in os.listdir(d):
             p = os.path.join(d, n)
             if os.path.islink(p) and not os.path.relpath(t := os.path.realpath(p), root).startswith(".."):
                 out[p] = t
@@ -734,15 +728,10 @@ def _instrument() -> None:
         return m
 
     builtins.__import__, importlib.import_module = __import__, import_module
-    try:
-        from verity.circuits import defs as D
-    except ImportError:
-        return
-    try:
-        from verity.circuits.evaluation import batch
-    except ImportError:
-        batch = None
-    if batch is not None and not isinstance(batch._KERNELS, _RecordedKernels):
+    from verity.circuits import defs as D
+    from verity.circuits.evaluation import batch
+
+    if not isinstance(batch._KERNELS, _RecordedKernels):
         batch._KERNELS = _RecordedKernels(batch._KERNELS)
     if not isinstance(D.REGISTRY.defs, _RecordedDefs):
         D.REGISTRY.defs = _RecordedDefs(D.REGISTRY.defs)
@@ -857,16 +846,19 @@ def _stale_bytecode() -> list[str]:
             path, cached = getattr(spec, "origin", None), getattr(spec, "cached", None)
             if not (isinstance(path, str) and path.endswith(".py") and cached and (rel := _rel(path)) is not None):
                 continue
+            if not (os.path.isfile(cached) and os.path.isfile(path)):
+                continue                               # no bytecode, so Python compiled it from its source
+            with open(cached, "rb") as fh:
+                head, body = fh.read(16), fh.read()
+            with open(path, "rb") as fh:
+                st, source = os.fstat(fh.fileno()), fh.read()
+            if not _taken(head, st, source):
+                continue                               # Python compiled this one from its source
             try:
-                with open(cached, "rb") as fh:
-                    head, body = fh.read(16), fh.read()
-                with open(path, "rb") as fh:
-                    st, source = os.fstat(fh.fileno()), fh.read()
-                if not _taken(head, st, source):
-                    continue                           # Python compiled this one from its source
                 code = marshal.loads(body)
-            except (OSError, EOFError, ValueError, TypeError):
-                continue                               # none, or one Python would not take either
+            except (EOFError, ValueError, TypeError):
+                out.append(rel)                        # a header that vouches for a body that doesn't load vouches for nothing
+                continue
             if code != compile(source, path, "exec", dont_inherit=True):
                 out.append(rel)
     finally:
@@ -1351,7 +1343,7 @@ def _where(fn: Any) -> str | None:
     return f"{_parsed(p)[0]}:{code.co_qualname}:{_defined_at(p, code.co_firstlineno)}"
 
 
-_TREES: dict[str, ast.Module | None] = {}
+_TREES: dict[str, ast.Module] = {}
 #: `_defined_at` by the file's content digest and the line
 _DEFINED: dict[tuple[str, int], str] = {}
 
@@ -1370,11 +1362,11 @@ def _defined_in(h: str, data: bytes, line: int) -> str:
     if h not in _TREES:
         try:
             _TREES[h] = ast.parse(data)
-        except (SyntaxError, ValueError):
-            _TREES[h] = None
+        except (SyntaxError, ValueError) as e:
+            return f"unparseable ({type(e).__name__}): {h}:{line}"      # the whole file's digest, so any edit is a change
     tree = _TREES[h]
     defs = ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda
-    nodes = [] if tree is None else [
+    nodes = [
         n for n in ast.walk(tree) if isinstance(n, defs)
         and min([n.lineno, *(d.lineno for d in getattr(n, "decorator_list", ()))]) == line]
     if not nodes:
@@ -1384,10 +1376,8 @@ def _defined_in(h: str, data: bytes, line: int) -> str:
 
 def _kernels_now(key: str) -> str | None:
     """What is registered now for ``key`` (``*``: for every Definition), digested; None when nothing is."""
-    try:
-        from verity.circuits.evaluation import batch
-    except ImportError:
-        return None
+    from verity.circuits.evaluation import batch
+
     reg = batch._KERNELS
     keys = sorted(dict.keys(reg)) if key == "*" else [key]
     got = {k: {n: [kn.domain, kn.version, kn.partial, _where(kn.fn), _where(kn.sample)] for n, kn in sorted(dict.get(reg, k, {}).items())}
@@ -1766,11 +1756,10 @@ def _top_imports(path: str, name: str) -> list[str]:
     ``from`` import may name, absolute."""
     if path in _IMPORTS:
         return _IMPORTS[path]
-    try:
-        tree = ast.parse(Path(path).read_text())
-    except (OSError, SyntaxError, ValueError):
-        _IMPORTS[path] = []
+    if not (path.endswith(".py") and os.path.isfile(path)):
+        _IMPORTS[path] = []                            # an extension module, or a source since deleted: no statement to read
         return []
+    tree = ast.parse(Path(path).read_text())
     pkg = name if os.path.basename(path) == "__init__.py" else name.rpartition(".")[0]
     out: list[str] = []
 
@@ -2031,10 +2020,7 @@ def _dist(root: Path, top: str) -> str | None:
     names = _packages().get(top)
     if not names:
         return None
-    try:
-        return ",".join(sorted(f"{d}=={metadata.version(d)}" for d in set(names)))
-    except metadata.PackageNotFoundError:
-        return None
+    return ",".join(sorted(f"{d}=={metadata.version(d)}" for d in set(names)))
 
 
 class _Prose(ast.NodeTransformer):
@@ -2082,10 +2068,10 @@ def _stat(p: str | Path) -> tuple[int, ...] | None:
 
 def version() -> str:
     """The checker's own version: the digest of this package's code (`_code`: no docstring or comment), less `targets.py` and
-    ``pins/`` (each target holds its own parts of them), `HEAVY` and `SHARD` (no target's input).  Computed once a process
+    ``pins/`` (each target holds its own parts of them), `SHARD` and `TASK_LIST` (no target's input).  Computed once a process
     (`key` asks for it once for every target), and again only when a directory or file it read has another stat now (an
     edit in this process, as a test makes), or had one that changed within `RACY_NS` of when it was read."""
-    where = (_HERE, TARGETS, PINS, HEAVY, SHARD)
+    where = (_HERE, TARGETS, PINS, SHARD, TASK_LIST)
     _INTERNAL.append(True)
     try:
         if _VERSION and _VERSION[0][0] == where and all(_stat(p) == s for p, s in _VERSION[0][1]):
@@ -2099,7 +2085,7 @@ def version() -> str:
             files += [Path(d, n) for n in names]
         h = hashlib.sha512()
         for p in sorted(files):
-            if p not in (TARGETS, HEAVY, SHARD):
+            if p not in (TARGETS, SHARD, TASK_LIST):
                 seen.append((str(p), _stat(p)))
                 h.update(p.relative_to(_HERE).as_posix().encode() + b"\0" + _code(p) + b"\0")
         _VERSION[:] = [] if any(s is None or max(s[2], s[3]) >= at - RACY_NS for _p, s in seen) else \

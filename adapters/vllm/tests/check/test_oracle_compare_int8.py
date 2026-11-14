@@ -8,6 +8,7 @@ from collections import defaultdict
 import pytest
 
 from verity_vllm.check import oracle_compare as OC
+from verity_vllm.records.fields import RecordError
 
 U0 = "aaaaaaaa-0000-0000-0000-000000000000"
 LIN, ATTN = "model.layers.0.self_attn.qkv_proj", "model.layers.0.self_attn.attn"
@@ -55,15 +56,28 @@ def test_a_views_byte_range_is_its_storage_span_and_none_where_it_has_no_storage
 
 
 @pytest.mark.parametrize("field", ["alloc", "offset"])
-@pytest.mark.parametrize("stated", ["", [], {}, "third", [1], {"a": 1}, "2.5"])
-def test_a_view_whose_allocation_or_offset_is_no_number_is_skipped(field, stated):
-    assert OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), field: stated}) is None
+@pytest.mark.parametrize("stated", ["", [], {}, "third", [1], {"a": 1}, "2.5", float("nan"), float("inf"), float("-inf")])
+def test_a_view_whose_allocation_or_offset_is_no_number_is_refused_by_name(field, stated):
+    with pytest.raises(RecordError) as e:
+        OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), field: stated})
+    assert (e.value.where, e.value.field) == ("a fold instance's view", field)
+    assert e.value.why.startswith(f"is {stated!r}, not a number (the view: {{")
 
 
 @pytest.mark.parametrize("field", ["shape", "strides"])
-@pytest.mark.parametrize("stated", [1, 2.5, True, -1])
-def test_a_view_whose_shape_or_strides_is_a_number_is_skipped(field, stated):
-    assert OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), "strides": [1], field: stated}) is None
+@pytest.mark.parametrize("stated", [1, 2.5, True, -1, "24", {"a": 1}, ["two"], [None], [[2]], [float("inf")], [2, float("-inf")]])
+def test_a_view_whose_shape_or_strides_is_no_list_of_numbers_is_refused_by_name(field, stated):
+    with pytest.raises(RecordError) as e:
+        OC.MatchOracle._view_bytes_range({**_view(3, 2, [K], "int8"), "strides": [1], field: stated})
+    assert (e.value.where, e.value.field) == ("a fold instance's view", field)
+    assert e.value.why.startswith(f"is {stated!r}, not a list of numbers (the view: {{")
+
+
+@pytest.mark.parametrize("stated,read", [(3, 3), ("3", 3), (3.9, 3), (True, 1), (0, 0), (False, 0)])
+def test_a_views_allocation_and_offset_are_numbers_as_int_reads_them(stated, read):
+    rng = OC.MatchOracle._view_bytes_range
+    assert rng({**_view(3, 2, [K], "int8"), "alloc": stated}) == (read, 2, 2 + K)
+    assert rng({**_view(3, 2, [K], "int8"), "offset": stated}) == (3, read, read + K)
 
 
 def test_a_call_boundary_member_is_read_at_its_modules_producer_instances():

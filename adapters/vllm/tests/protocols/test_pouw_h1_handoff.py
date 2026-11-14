@@ -3,13 +3,19 @@ challenger challenge phase's stream handed to a holder, and the window closed an
 challenge phase, with the verifier's checks as they are for a window closed where it served."""
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import pickle
+import re
 import shlex
 import socket
 import subprocess
 import sys
+import tempfile
+import threading
+from pathlib import Path
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -38,18 +44,73 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.engine import int8_ops
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import handoff as HO
-from verity_vllm.protocols.pouw.h1 import kept as KP
-from verity_vllm.protocols.pouw.h1 import prover as PV
-from verity_vllm.protocols.pouw.h1 import served as SV
-from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
+from verity.protocols.accounting.pouw.prover.serving.h1 import kept as KP
+from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
+from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
 
 @pytest.fixture(autouse=True)
 def _linear_is_the_stand_in(monkeypatch):
     monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
+
+
+class _Host(CH.Host):
+    """`challenger_host.Host` with `hang_up`, which ends its session from the host's end of the stream. `Host` serves
+    the session on a thread that is not a daemon and returns only once the client's end of the stream is closed, and a
+    test that raises can leave that end where nothing it holds closes it (a descriptor handed on): pytest then waits on
+    the thread and never exits."""
+
+    #: the hosts made and not yet hung up (`host`)
+    made: list[_Host] = []
+
+    def __init__(self, *args, **kwargs):
+        self._serving = threading.Event()
+        super().__init__(*args, **kwargs)
+        self.made.append(self)
+
+    def _serve(self, sock, session):
+        self._stream = sock
+        self._serving.set()
+        super()._serve(sock, session)
+
+    def hang_up(self):
+        """Shut the stream down at the host's end, unless the session has ended and closed it, close the client's end
+        and join the session's thread."""
+        self._serving.wait()
+        with contextlib.suppress(OSError):
+            self._stream.shutdown(socket.SHUT_RDWR)
+        self.client._wire.sock.close()
+        self._thread.join()
+
+
+@pytest.fixture
+def host(tmp_path, monkeypatch):
+    """`_host`'s challenger host, a `_Host` as its sample session's is once that opens, each hung up however the test
+    ends (`_Host.hang_up`), the last made first."""
+    monkeypatch.setattr(CH, "Host", _Host)
+    yield _host(tmp_path, monkeypatch)
+    while _Host.made:
+        _Host.made.pop().hang_up()
+
+
+@pytest.fixture
+def opened():
+    """An exit stack for what a test opens, unwound however the test ends, the last opened first."""
+    with contextlib.ExitStack() as stack:
+        yield stack
+
+
+@pytest.fixture
+def socket_dir():
+    """A directory made for the test under ``/tmp`` and removed after it, to bind a `Holder`'s socket in: a Unix
+    socket's path is at most 107 bytes, which one under `tmp_path`, or in a directory `tempfile` makes under ``TMPDIR``,
+    is past when the temporary directory's own path is long."""
+    with tempfile.TemporaryDirectory(prefix="h1-", dir="/tmp") as d:
+        yield Path(d)
 
 
 class ZyArm(Int8Arm):
@@ -74,36 +135,36 @@ def _served(settings, n=40, arm=Int8Arm):
     model, runner = Model(Linear(32, 1), Linear(n, 2)), settings["pouw"]["runner"]
     for layer in model.layers:
         layer.quant_method = arm()
-    comp = PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings))
-    g = torch.Generator().manual_seed(9)
-    for so, rows in ((_so(("a", [5], 4)), (1, 5)), (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
-                                                    (33, 2))):
-        runner.execute_model(so)
-        for m, layer in zip(rows, model.layers):
-            layer.quant_method.apply(layer, (torch.randn(m, K, generator=g) * 3).bfloat16())
-    run = pouw.h1_run(_entry())
-    comp.installed[0].release = None
-    comp.close()
+    with PO.install(model, PO.Context(stage="serve", enabled=(_entry(),), settings=settings)) as comp:
+        g = torch.Generator().manual_seed(9)
+        for so, rows in ((_so(("a", [5], 4)), (1, 5)), (_so(("b", [7], 2), ("c", list(range(8, 39)), 3), running={"a": 1}),
+                                                        (33, 2))):
+            runner.execute_model(so)
+            for m, layer in zip(rows, model.layers):
+                layer.quant_method.apply(layer, (torch.randn(m, K, generator=g) * 3).bfloat16())
+        run = pouw.h1_run(_entry())
+        comp.installed[0].release = None
     return run
 
 
-def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_path, monkeypatch):
+def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_path, host, opened, socket_dir):
     """The serving process saves its window and hands its challenge phase's stream to a holder, and its own end of the
     stream goes; the window resumed from the file on that descriptor closes, opens its last round's coin, and closes the
     challenge phase, then opens its sampling challenge phase through the gate it is given, withheld on its sample root,
     and takes its sample: the record is one manifest under the coins the auditor's challenge phases released, in order,
     and each call's A table is under its round's root."""
-    host = _host(tmp_path, monkeypatch)
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64))))
     assert len(run.round_log) == 2 and not run.closed
     path = HO.suspend(run, tmp_path / "state")
     assert path.stat().st_mode & 0o777 == 0o600
-    holder = HO.Holder(tmp_path / "stream.sock")
+    holder = HO.Holder(socket_dir / "stream.sock")
+    opened.callback(holder.take)
     client = run.rounds.challenger
     HO.send_stream(client, holder.path)
     fd = holder.take()
     client._wire.sock.close()
     resumed, rclient = HO.resume(tmp_path / "state", fd, _gate)
+    opened.callback(rclient._wire.sock.close)
     assert resumed.round_log == run.round_log and [c.index for c in resumed.calls] == [c.index for c in run.calls]
     resumed.listen(lambda call, a, s_a, w, s: {"listener": "close"} if call.m == 0 and tuple(a.shape) == (0, call.k) else None)
     PHW.finish(resumed, rclient)
@@ -117,14 +178,13 @@ def test_a_window_closed_by_another_process_is_the_one_its_session_served(tmp_pa
                                      draw_directory=host.draw.directory) is None
 
 
-def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_refused(tmp_path, monkeypatch):
+def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_refused(tmp_path, host, opened):
     """Only a window open on the auditor's challenge phase and not yet closed hands off, a tensor left in its state isn't saved,
     and a saved window whose round's slot owners were changed rebuilds a slot table its round's root isn't over, which
     `resume` refuses."""
-    host = _host(tmp_path, monkeypatch)
     run = _served(_remote())
     HO.suspend(run, tmp_path / "a")
-    a, _b = socket.socketpair()
+    a, _b = map(opened.enter_context, socket.socketpair())
     run.owners[1][0] = None
     HO.suspend(run, tmp_path / "b")
     with pytest.raises(ValueError, match="round 1's request or slot table, rebuilt, is not the one its root is over"):
@@ -142,12 +202,12 @@ def test_a_window_hands_off_once_open_and_unclosed_and_a_table_off_its_root_is_r
 
 
 @pytest.mark.slow
-def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch):
+def test_the_close_stage_completes_the_serving_stages_record(tmp_path, monkeypatch, host):
     """`pouw_h1_gpu.py --close-from` on a handed-off window and the record its serving phase left: the window closed,
     measured and released on the challenge phase's stream, its sample's challenge phase opened through ``--gate``, and the
     record (``pouw_h1_gpu.json``) completed with its commitment, the challenge phase closed and each call's A table under
     its round's root."""
-    host, out = _host(tmp_path, monkeypatch), tmp_path / "out"
+    out = tmp_path / "out"
     run = _served(_remote(transcript_dir=str(out), served=SV.Served(window=bytes(64))), n=64, arm=ZyArm)
     HO.suspend(run, tmp_path / "state")
     fd = os.dup(run.rounds.challenger._wire.sock.fileno())
@@ -178,13 +238,47 @@ def test_a_gate_verb_reaches_the_gate_over_ssh_word_for_word():
     assert GPU.gate_argv(["python", "-I", "local_gate.py", "d"], verb) == ["python", "-I", "local_gate.py", "d", *verb]
 
 
-def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
+def test_the_harness_gate_runs_each_verb_as_its_command_and_reads_what_the_gate_answers(monkeypatch):
+    """`pouw_h1_gpu.gate_command` over a stand-in command. An open whose answer has no commitment yet reads it from the
+    challenge phase's status, and a withheld open must say withheld and signed and carry none. A reserve names the scheme
+    and the families of its rounds, withheld when it has no rounds, and raises on a refusal or on a withheld one the gate
+    reserved plain. ``ended`` is the status that has its end entry."""
+    answers = {"open": {"session": "s0", "commitment": None}, "reserve": {"session": "s1"},
+               "status": {"commitment": "c0", "open": {}, "end": {"rc": 0}}}
+    ran: list[list[str]] = []
+
+    def run(argv, **_kw):
+        ran.append(argv)
+        return SimpleNamespace(returncode=0, stdout=json.dumps(answers[argv[1]]), stderr="")
+
+    monkeypatch.setattr(GPU.subprocess, "run", run)
+    gate = GPU.gate_command(["gate"])
+    assert gate.argv == ["gate"]
+    assert gate("s0", "aa") == {"session": "s0", "commitment": "c0"}
+    assert ran == [["gate", "open", "--session", "s0", "--root", "aa"], ["gate", "status", "s0"]]
+    assert gate.ended("s0") == answers["status"]
+    with pytest.raises(ValueError, match=re.escape(f"the gate's open of s0: {PHW.WITHHELD_OPEN}")):
+        gate("s0", "aa", withhold=True)
+    answers["open"] = {"session": "s0", "withheld": True, "signed": True}
+    assert gate("s0", "aa", withhold=True) == answers["open"]
+    assert gate.reserve("peer", 3) == {"session": "s1"}
+    assert ran[-1] == ["gate", "reserve", "--peer", "peer", "--scheme", PHC.SCHEME, "--families", PHC.families(3)]
+    with pytest.raises(ValueError, match=re.escape(f"s1 plain: {PHW.WITHHELD_OPEN}")):
+        gate.reserve("peer", None)
+    assert ran[-1][-2] != PHC.families(3) and ran[-1][-1] == "--withhold"
+    answers["reserve"] = {"refused": "no slot"}
+    with pytest.raises(ValueError, match=r"the gate refused the reserve \(exit 0\)"):
+        gate.reserve("peer", 3)
+
+
+def test_the_stream_outlives_the_process_that_handed_it_over(opened, socket_dir):
     """A child process hands a stream's descriptor to the holder and exits; the holder's descriptor still reaches the
     stream's other end, so the challenge phase isn't closed by the serving process's exit."""
-    here, there = socket.socketpair()
-    holder = HO.Holder(tmp_path / "stream.sock")
+    here, there = map(opened.enter_context, socket.socketpair())
+    holder = HO.Holder(socket_dir / "stream.sock")
+    opened.callback(holder.take)
     child = ("import socket, sys\nfrom types import SimpleNamespace as N\n"
-             "from verity_vllm.protocols.pouw.h1 import handoff as HO\n"
+             "from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO\n"
              "s = socket.socket(fileno=int(sys.argv[1]))\n"
              "HO.send_stream(N(_wire=N(sock=s)), sys.argv[2])\n")
     subprocess.run([sys.executable, "-c", child, str(here.fileno()), str(holder.path)], check=True,
@@ -197,14 +291,14 @@ def test_the_stream_outlives_the_process_that_handed_it_over(tmp_path):
 
 
 @pytest.mark.slow
-def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path, monkeypatch):
+@pytest.mark.usefixtures("host")
+def test_every_served_row_of_a_saved_window_rebuilds_from_the_provers_directory(tmp_path):
     """The served trees a window saves keep no rows, and `pouw_h1_kept.kept_row` rebuilds every row of each
     of its step A tables, z tables and its ``b/<K>`` from the prover's directory and the saved state, each committing to
     its tree's ``b || c`` under the tree's own salt; a kept A code changed afterwards rebuilds a row that isn't.
 
     Slow, about two minutes on a check node: it holds every leaf of every tree, which a sample of rows would not, so a
     rebuild that is right for a tree's first rows and wrong past a call's or a step's boundary is caught."""
-    _host(tmp_path, monkeypatch)
     prover = tmp_path / "prover"
     run = _served(_remote(transcript_dir=str(tmp_path / "w"), served=SV.Served(window=bytes(64), prover=str(prover))),
                   n=64, arm=ZyArm)

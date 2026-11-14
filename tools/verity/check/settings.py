@@ -91,7 +91,7 @@ SETTINGS: dict[str, Setting] = _declare(
       "no grant of CHECK_SLOT_MEM_GB passes it (`check.slot_mem_gb`)", "it sizes how much runs at once, never what a step "
       "computes"),
     S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: the verified queue's checks "
-      "of a candidate and its records run's (`research.landing.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: "
+      "of a candidate and its records run's (`research.landing.AFTER_LANDING_SLOT_RANK`), none for a hand `train.sh`", "placement: "
       "the order the verified queue's checks take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
@@ -152,6 +152,10 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TRAIN_CARRY_FROM", str, None, WHERE, "run ids, comma-separated, whose verdict packs a recorded launch sends first, held "
       "to no GATHER_BYTES (`check.carried_packs`): the shards a rebuilt candidate of the verified queue replaces",
       "each pack is held to its sha256, and a pass to its key"),
+    S("TRAIN_SUITES_FROM", str, None, WHERE, "the commit whose check answers for the suites a recorded `--deferred` launch's "
+      "run leaves out (`check.lender`, `suites.py --lend-from`): the candidate of the verified queue that the launched "
+      "candidate is built on", "a suite is left out only where its key in that commit's tree is its key here, and the queue "
+      "lands the candidate only after that commit"),
     S("AWS_ACCESS_KEY_ID", str, None, WHERE, "the parent store key, which train.sh requires to mint the run's custody key",
       "a credential, never what a step computes", secret=True),
     S("AWS_SESSION_TOKEN", str, None, WHERE, "a temporary credential's token, which train.sh refuses: it cannot mint the "

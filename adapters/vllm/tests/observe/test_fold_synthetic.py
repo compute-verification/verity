@@ -1,9 +1,6 @@
 """Synthetic end-to-end fold: a toy configuration (H=16, NH=2, KVH=1, D=8, I=16, V=16, NL=1; LP=2, STEPS=1) of the REAL
 `b1` definitions, hand-written raw observation events (prefill step with 2 rows, decode step with a StepLink) and a
-toy pattern set, folded into `Captured_v1{PROFILE, WORKLOAD}` and compared with `Serve_v4` by `match_program`.
-
-When `memory.py` / `views.py` raise `NotImplementedError` the test installs a small in-file stub memory model
-through monkeypatching (`fold.MemoryModel`, `fold.row_view`); otherwise it uses them."""
+toy pattern set, folded into `Captured_v1{PROFILE, WORKLOAD}` and compared with `Serve_v4` by `match_program`."""
 
 from __future__ import annotations
 
@@ -12,7 +9,7 @@ from dataclasses import dataclass
 
 import pytest
 from verity.circuits.defs import bind
-from verity.circuits.refs import Affine, Explicit, concat
+from verity.circuits.refs import Affine
 from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry import value_inputs as VI
@@ -32,7 +29,7 @@ from verity_vllm.observe.events import (
 )
 from verity_vllm.observe.fold import fold as fold_mod
 from verity_vllm.observe.fold.fold import FoldError, fold
-from verity_vllm.observe.fold.memory import MemoryStats, Unresolved
+from verity_vllm.observe.fold.memory import Unresolved
 from verity_vllm.observe.fold.patterns.norms import eps_input
 from verity_vllm.observe.fold.resolver import (
     Compute,
@@ -366,115 +363,9 @@ def toy_profile(accepted=False, registered_values=False):
     return Profile("toy", PATTERNS, dict(C), weight_field, accepted, registered_values=registered_values)
 
 
-# ---------------------------------------------------------------------------------------------------------
-# stub memory model (only when the real one raises NotImplementedError)
-# ---------------------------------------------------------------------------------------------------------
-
-
-def stub_row_view(v: ViewDesc, i: int) -> ViewDesc:
-    if not v.shape:
-        raise ValueError("rank-0 view has no rows")
-    if not (0 <= i < v.shape[0]):
-        raise ValueError(f"row {i} outside {v!r}")
-    return ViewDesc(v.alloc, v.offset + i * v.strides[0], v.shape[1:], v.strides[1:], v.dtype, v.device)
-
-
-def stub_rows_view(v: ViewDesc, lo: int, hi: int) -> ViewDesc:
-    if not (0 <= lo <= hi <= v.shape[0]):
-        raise ValueError(f"rows [{lo}, {hi}) outside {v!r}")
-    return ViewDesc(v.alloc, v.offset + lo * v.strides[0], (hi - lo,) + v.shape[1:], v.strides, v.dtype, v.device)
-
-
-def _elements(v: ViewDesc):
-    for idx in itertools.product(*(range(n) for n in v.shape)):
-        yield v.offset + sum(i * s for i, s in zip(idx, v.strides))
-
-
-def _compact(refs):
-    parts: list[Affine] = []
-    for r in refs:
-        if parts and parts[-1].space == r[0] and parts[-1].idx == r[1] and parts[-1].base + parts[-1].count == r[2]:
-            parts[-1] = Affine(r[0], r[1], parts[-1].base, parts[-1].count + 1)
-        else:
-            parts.append(Affine(r[0], r[1], r[2], 1))
-    return concat(parts) if parts else Explicit(())
-
-
-class StubMemory:
-    def __init__(self):
-        self.cells: dict[int, dict] = {}
-        self.writes = self.reads = 0
-
-    def alloc(self, ev):
-        self.cells[ev.alloc] = {}
-
-    def free(self, a):
-        self.cells.pop(a)
-
-    def write(self, view, refs):
-        if refs.count != view.numel:
-            raise ValueError(f"write of {refs.count} refs into {view!r}")
-        cells = self.cells[view.alloc]
-        for j, e in enumerate(_elements(view)):
-            cells[e] = (refs[j], view.bits)
-        self.writes += 1
-
-    def read(self, view):
-        cells = self.cells.get(view.alloc)
-        if cells is None:
-            raise Unresolved(view, [(0, view.numel)], "unknown or freed allocation")
-        out, missing = [], []
-        for j, e in enumerate(_elements(view)):
-            c = cells.get(e)
-            if c is None or c[1] != view.bits:
-                missing.append((j, j + 1))
-            else:
-                out.append(c[0])
-        if missing:
-            raise Unresolved(view, missing)
-        self.reads += 1
-        return _compact(out)
-
-    def read_rows(self, view, indices):
-        return concat([self.read(stub_row_view(view, i)) for i in indices])
-
-    def move(self, src, dst):
-        self.write(dst, self.read(src))
-
-    def coverage(self, view):
-        cells = self.cells.get(view.alloc, {})
-        return sum(1 for e in _elements(view) if e in cells) / max(view.numel, 1)
-
-    def stats(self):
-        return MemoryStats(len(self.cells), len(self.cells), self.writes, self.reads, 0, sum(len(c) for c in self.cells.values()))
-
-
-def _real_memory_available() -> bool:
-    try:
-        from verity_vllm.observe.fold.memory import MemoryModel
-        from verity_vllm.observe.fold.views import row_view
-        MemoryModel()
-        row_view(V(1, (2, 3)), 1)
-        return True
-    except NotImplementedError:
-        return False
-
-
-def install_stub_memory() -> None:
-    """Point fold.py at the in-test memory model / view helpers (only when the real ones raise NotImplementedError)."""
-    fold_mod.MemoryModel = StubMemory
-    fold_mod.row_view = stub_row_view
-    fold_mod.rows_view = stub_rows_view
-
-
 @pytest.fixture
-def memory(monkeypatch):
-    if _real_memory_available():
-        return "real"
-    monkeypatch.setattr(fold_mod, "MemoryModel", StubMemory)
-    monkeypatch.setattr(fold_mod, "row_view", stub_row_view)
-    monkeypatch.setattr(fold_mod, "rows_view", stub_rows_view)
-    return "stub"
+def memory():
+    return "real"
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -535,12 +426,31 @@ def test_a_header_without_requests_is_refused(memory, workload):
 
 def test_a_weight_root_ahead_of_the_run_header_is_refused(memory):
     """`_Fold._weight_root`: the weights parameter is made by the run header, so a weight root logged ahead of it has no field to
-    bind and the fold refuses it by the root's name and path."""
+    bind and the fold refuses it by the root's name and path, as a lookup in no parameter."""
     evs = toy_log()
     alloc, root = evs[1], evs[2]
     assert isinstance(root, Root) and root.name == "model.embed_tokens.weight"
-    with pytest.raises(FoldError, match=r"weight field path \('embed',\) for 'model.embed_tokens.weight' is not in None"):
+    with pytest.raises(FoldError) as refused:
         fold([alloc, root, evs[0], *evs[3:]], toy_profile(), strict=True, with_program=False)
+    assert str(refused.value) == ("weight field path ('embed',) for 'model.embed_tokens.weight' is not in None: "
+                                  "'NoneType' object is not subscriptable")
+
+
+def test_a_weight_root_after_a_refused_run_header_is_refused():
+    """`_Fold._weight_root`: a run header refused for its workload has set the fold's header and its weights type and made no weights
+    parameter.  `fold` gives that fold no further event; a caller that holds the `_Fold` can, and a weight root is then refused as the
+    fold's own error, by the root's name and path and the weights type."""
+    import dataclasses
+
+    evs = toy_log()
+    root = evs[2]
+    assert isinstance(root, Root) and root.name == "model.embed_tokens.weight"
+    held = fold_mod._Fold(toy_profile(), True)
+    with pytest.raises(FoldError, match="RunHeader.workload has no requests"):
+        held._header(dataclasses.replace(evs[0], workload={"requests": []}))
+    with pytest.raises(FoldError) as refused:
+        held._weight_root(root)
+    assert str(refused.value).startswith(f"weight field path ('embed',) for 'model.embed_tokens.weight' is not in {held.weights_type!r}: ")
 
 
 def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_note(memory):
@@ -557,6 +467,31 @@ def test_a_header_reads_alike_without_children_sampling_and_a_tensor_parallel_no
             evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
             r = fold(evs, toy_profile(), strict=True, with_program=False)
             assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, (more, notes)
+
+
+@pytest.mark.parametrize("place", ["sampling", "tp2"])
+def test_a_header_copies_its_sampling_and_its_tensor_parallel_note_as_dict_reads_them(memory, place):
+    """A workload's `sampling` and the notes' `tp2` that are not empty are copied with `dict`: pairs read as the mapping they spell,
+    and `dict` itself refuses what is neither."""
+    import dataclasses
+
+    hdr = toy_log()[0]
+    own = fold(toy_log(), toy_profile(), strict=True, with_program=False)
+
+    def folded(value):
+        more, notes = ({"sampling": value}, None) if place == "sampling" else ({}, {"tp2": value})
+        evs = toy_log()
+        evs[0] = dataclasses.replace(hdr, workload={"requests": hdr.workload["requests"], **more}, notes=notes)
+        return fold(evs, toy_profile(), strict=True, with_program=False)
+
+    pairs: list | tuple
+    for pairs in ([("world_size", 1)], (("world_size", 1),)):
+        r = folded(pairs)
+        assert r.tp is None and [n for n, _ in r.params] == ["prompt", "weights"] and r.report.by_spec == own.report.by_spec, pairs
+    refused: tuple = ((7, TypeError, "'int' object is not iterable"), ("no", ValueError, "dictionary update sequence element #0 has length 1"))
+    for value, error, text in refused:
+        with pytest.raises(error, match=text):
+            folded(value)
 
 
 def test_registered_values_are_inputs_of_the_program(memory):

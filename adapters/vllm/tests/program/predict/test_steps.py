@@ -12,10 +12,11 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
-from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
+from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine, workload_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import launch_context as LC
@@ -263,7 +264,7 @@ def test_the_compiler_is_total_on_every_truncation_and_bit_flip_of_an_advice():
     inputs += [rng.randbytes(rng.randrange(64)) for _ in range(200)]
     planned = 0
     for x in inputs:
-        outcomes = []
+        outcomes: list[tuple[Any, ...]] = []
         for _ in range(2):
             try:
                 plan = plan_steps(reg, x, ingress, partial=False)
@@ -301,7 +302,7 @@ def _stops(body: dict = GREEDY) -> tuple[I1.Advice, dict]:
 def _spec(LP: int, T: int, m: int, finish: int | None = None, stops: tuple[int, ...] = (255,), M: int = 64) -> dict:
     """The length rule's config of a TINY request Program with outputs 1..T + 1 under max_tokens `m`, finishing as `_session` has
     it (on a stop id below `m` outputs, on length at `m`) unless `finish` (a `stop_rule.FINISH` code) says."""
-    f = finish if finish is not None else 2 if T + 1 == m else 1
+    f = finish if finish is not None else 2 if m == T + 1 else 1
     return SR.spec(stops, max_tokens=m, prompt_len=LP, max_model_len=M, outputs=T + 1, finish=f)
 
 
@@ -573,6 +574,7 @@ def test_a_resume_reads_its_own_kv_past_its_prompt():
     """Request 0 (LP 20) is preempted at position 33 and resumes on a hit of 32 tokens of its own KV, past its prompt: I1's replay
     holds that run (the request computed those positions), its resume recomputes position 32 and computes 33 anew."""
     reg = _registered()
+    rows: list[list[tuple[Any, ...]]]
     rows = [[(0, 0, 20)]] + [[(0, 20 + k, 1)] for k in range(13)] + [[(0, 32, 2, {"cache_hit": 32, "preempted": True,
                                                                                "sources": (I1.Source(0, 32),)})], [(0, 34, 1)]]
     c = compile_steps(reg, *_session([(20, 16, {**GREEDY, "max_tokens": 16})], rows))
@@ -682,6 +684,7 @@ def test_dead_gates_are_counted_as_circuit_check_counts_them():
     `_dead_gates` counts them as circuit-check does and says under which definitions. The second session's prefill has a row of
     16 keys, where `Attention_v5` has 2 dead gates a head."""
     from verity.circuits.liveness import dead_gates
+
     from verity_vllm.program.prune import dead_units
     sixteen = _session([(16, 2, {**GREEDY, "max_tokens": 2})], [[(0, 0, 16)], [(0, 16, 1)]])
     for advice, ingress in (_mixed(), sixteen):
@@ -745,7 +748,7 @@ def _class_g(hf_home: Path, rank: int = 0, engine: dict | None = None, layers: i
     """GLM-5.3's B8 row of record at `rank` as `score.phi_of` makes its φ (the checkpoint's config.json the package's byte copy, or
     with `layers` its first `layers` decoder layers), registered with class G's engine limits (`engine` over them, None dropping
     one; `edit` over φ's other parts)."""
-    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())
     cp = Path(S.hf_config_path(str(hf_home), w["model"], RowEngine.of(w).revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cfg = (HF_CONFIG_DIR / "GLM53.config.json").read_bytes()
@@ -760,7 +763,7 @@ def _b8_window() -> tuple[I1.Advice, dict, dict]:
     """The B8 row's recorded schedule as one window's advice and certified bodies, and the launch context its Build traced each
     request shape at (`launch_context.shape_contexts`): its requests at their realized arrivals, each engine step's rows in
     admission order (the scheduler's, which the launch keeps for its decodes), each request to its max_tokens (ignore_eos), greedy."""
-    w = json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text())
+    w = json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text())
     reqs = LC._requests(w)
     order = sorted(range(len(reqs)), key=lambda i: reqs[i]["arrive_step"])
     steps = [[(i, LC.start_at(reqs[i], e), LC.rows_at(reqs[i], e)) for i in order if LC.rows_at(reqs[i], e)]
@@ -777,6 +780,7 @@ def _scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, se
     left; a request leaves once it has its max_tokens outputs. Steps with nothing to run are dropped, as the idle engine brings the
     next arrival forward."""
     done, outs = [0] * len(reqs), [0] * len(reqs)
+    running: list[int]
     waiting, running, steps, e = sorted(range(len(reqs)), key=lambda i: reqs[i][0]), [], [], 0
     while waiting or running:
         left, rows = budget, []
@@ -801,7 +805,7 @@ def _scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, se
 def _chunked_b8(budget: int, threshold: int) -> tuple[I1.Advice, dict, list]:
     """The B8 row's requests (their realized arrivals, prompts and max_tokens, greedy, ignore_eos) as one window's advice under a
     scheduler of `budget` tokens a step and a long-prefill threshold of `threshold` (`_scheduled`), its bodies and its steps."""
-    reqs = LC._requests(json.loads((WORKLOADS / f"{GLM53_B8}.json").read_text()))
+    reqs = LC._requests(json.loads(workload_file(WORKLOADS / f"{GLM53_B8}.json").read_text()))
     steps = _scheduled([(r["arrive_step"], r["prompt_len"], r["max_tokens"]) for r in reqs], budget, threshold)
     advice, ingress = _session([(r["prompt_len"], r["max_tokens"], {**GREEDY, "max_tokens": r["max_tokens"], "ignore_eos": True})
                                 for r in reqs], steps)
@@ -830,6 +834,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
         assert B._unit(a) == B._unit(u) and len(a.launch) == len(u.launch)
     assert cut and [u.chunks for u in plan.requests] == [(), (), (64, 64, 64, 39), (64, 1), (64, 64, 59), (), (22, 64, 64, 64, 42),
                                                          (33, 64, 4)]
+    summary: dict[str, Any]
     summary = {"compiler": "c", "requests": [{"LP": u.LP, "T": u.T, "C": u.C, "policy": u.policy, "launch": u.batch(),
                                               "chunks": list(u.chunks), "digest": f"d{u.request}", "stop": u.stop} for u in plan.requests]}
     (long,) = trace_commands({"requests": [{**summary["requests"][0], "LP": 2300, "T": 16}]}, reg, "/t")
@@ -875,9 +880,10 @@ def test_the_builds_chunked_request_wrapper_runs_drives_forwards_at_its_launch_s
     chunk at its launch step and positions, the sample after the last chunk only, then each decode at the step after, as `drive`
     builds it; a chunked request with a cached prefix or another policy is refused by name."""
     import torch
+
     from verity_vllm.program.frontend import vllm_meta as vm
     from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
-    seen = []
+    seen: list[tuple[Any, ...]] = []
 
     class Toy(torch.nn.Module):
         def forward(self, ids, positions):
@@ -956,8 +962,9 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
     `prune`'s dead-free versions of the two at its vocabulary are the bindings `dead_free.circuit-check.py` holds for it."""
     import runpy
 
-    from verity_vllm.program.predict.common import kind
     from verity.definitions.registry import dead_free as DF
+
+    from verity_vllm.program.predict.common import kind
 
     reg = _class_g(tmp_path)
     V = reg.phi.hf_config["vocab_size"]
@@ -1076,8 +1083,8 @@ def _past_its_outputs() -> tuple[WA.Advice, dict]:
      "step 0 runs 3 sequences, over the registered max_num_seqs 2"),
     (_session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]]), {},
      "request 0: step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"),
-    (_past_its_outputs(), CACHE_ON, "request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
-                                    "are past its last kept output)"),
+    (_past_its_outputs(), CACHE_ON, ("request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
+                                     "are past its last kept output)")),
 ])
 def test_class_g_refuses_a_request_whose_program_misses_a_launch_it_ran_in(session, engine, fact, tmp_path):
     with pytest.raises(Unexpressible, match=re.escape(fact)):
@@ -1148,10 +1155,10 @@ def _two_producers(split: bool) -> tuple[I1.Advice, dict]:
 
 
 @pytest.mark.parametrize("session,fact", [
-    (_two_producers(False), "request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
-                            "before them"),
-    (_two_producers(True), "request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
-                           "rows than the hit holds"),
+    (_two_producers(False), ("request 2: its hit's positions 16 … 31 are request 1's rows from position 0 at step 0, a row that starts "
+                             "before them")),
+    (_two_producers(True), ("request 2: its hit's positions 16 … 31 are request 1's rows at step 1, computed over a history of other "
+                            "rows than the hit holds")),
     (_past_its_outputs(), "request 0's KV at positions below 16 has no row of the window that computed it (the window carries it in)"),
 ])
 def test_class_g_refuses_a_hit_no_one_chain_of_its_rows_recomputes(session, fact, tmp_path):
@@ -1302,11 +1309,19 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
     advice, ingress = _session([(20, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}),
                                 (6, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})], steps)
     reg = _class_g(tmp_path, engine={"long_prefill_token_threshold": 8, "max_num_batched_tokens": 16})
+    seen: list[tuple[Any, ...]]
     seen, tokens, keys = [], CM._Launch.tokens, CM._Launch.keys
-    monkeypatch.setattr(CM._Launch, "tokens", lambda self, own, sampled=False: (
-        seen.append((self.step, own, sampled)), tokens(self, own, sampled))[1])
-    monkeypatch.setattr(CM._Launch, "keys", lambda self, own, without=(): (
-        seen.append((self.step, tuple(own), "keys")), keys(self, own, without))[1])
+
+    def seen_tokens(self, own, sampled=False):
+        seen.append((self.step, own, sampled))
+        return tokens(self, own, sampled)
+
+    def seen_keys(self, own, without=()):
+        seen.append((self.step, tuple(own), "keys"))
+        return keys(self, own, without)
+
+    monkeypatch.setattr(CM._Launch, "tokens", seen_tokens)
+    monkeypatch.setattr(CM._Launch, "keys", seen_keys)
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.chunks, u.T, sorted(c.refused), c.batch_rule) == ((8, 8, 4), 2, [1], None)
@@ -1370,6 +1385,7 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     got = compare(s, str(tmp_path))
     assert (got["equal"], got["different"], got["no_trace"], got["mismatches"]) == (1, 0, 1, 1)
     assert got["units"][1]["trace_error"] == "boom"
+    assert (s["schema"], got["schema"]) == ("verity-vllm/compiled-steps/v2", "verity-vllm/compiled-steps/v2/comparison")
 
 
 @pytest.mark.slow

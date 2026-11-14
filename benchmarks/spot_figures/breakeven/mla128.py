@@ -9,7 +9,9 @@ prefill is one launch and each decode step a launch of one token, the census req
 count and its later ones at `BN` keys; at one split the head's end; above it each split's end in its column blocks
 and, per head, the combine of each column block. A row of so few keys that the card holds it whole stays whole. A
 key block's scores unit and each of its values units are the key block's unit, and a unit cut into column blocks
-(`COLUMNS`) is `DV` over a block's columns of them, so each takes its unit's factor.
+(`COLUMNS`) is `DV` over a block's columns of them, so each takes its unit's factor; a block that names its column
+block (`C`) is a type of its own, one a unit. Where the card holds the key rows' writers
+(`SparseMlaHeadKeysWire_v1`), each key block's writers are one unit for all the heads, by its keys (`keys`).
 
 `volume` counts each block type's units a computed token over the serve plan's requests (`requests`: a long
 request's prefix hit is not computed) and over the card's own request, and gives their ratio: the factor on the
@@ -35,11 +37,13 @@ PLAN_BLOCK = 64
 TOPK, SMS = 2048, 132
 FAMILY = "SparseMla"
 #: a unit by its block's prefix and the statics that tell one type of the kind from another: a key block whole, or its
-#: scores unit and its values units (the partition card `head-scores-values`), each the key block's unit
+#: scores unit and its values units (the partition card `head-scores-values`), each the key block's unit, and its key
+#: rows' writers, one unit a key block for all the heads, by its keys
 KEY_BLOCK = (r"NVIS=(\d+),FIRST=(true|false)", lambda m: ("first" if m[2] == "true" else "later", int(m[1])))
 KINDS = (("SparseMlaHeadBlock_v1{", *KEY_BLOCK),
-         ("SparseMlaHeadScores_v1{", *KEY_BLOCK),
+         ("SparseMlaHeadScoresCols_v1{", *KEY_BLOCK),
          ("SparseMlaHeadValues_v1{", *KEY_BLOCK),
+         ("SparseMlaHeadKeysWire_v1{", r"NVIS=(\d+)", lambda m: ("keys", int(m[1]))),
          ("SparseMlaHeadEnd_v1{", "", lambda m: ("end", 0)),
          ("SparseMlaSplitEndCols_v1{", "", lambda m: ("cols", 0)),
          ("SparseMlaSplitEnd_v1{", "", lambda m: ("cols", 0)),
@@ -68,10 +72,11 @@ def decode_splits(T: int) -> int:
     return launch_num_splits([T], SMS, TOPK)[0]
 
 
-def units(T: int, NS: int, heads: int, whole: frozenset = frozenset()) -> Counter:
+def units(T: int, NS: int, heads: int, whole: frozenset = frozenset(), writers: bool = False) -> Counter:
     """The units of one row of T keys at NS splits, {(kind, parameter): count}: `first` and `later` key blocks by
-    their keys, a head's `end`, a split's end in each column block (`cols`, counted once for all of them), the
-    `combine` of a column block by its splits, or the `whole` row where T is in `whole` at one split."""
+    their keys, with `writers` each key block's writers by its keys (`keys`, once for all the heads), a head's `end`,
+    a split's end in each column block (`cols`, counted once for all of them), the `combine` of a column block by its
+    splits, or the `whole` row where T is in `whole` at one split."""
     from verity.definitions.registry.sparse_mla_split import combine_cols, split_blocks
 
     if NS == 1 and T in whole:
@@ -80,8 +85,12 @@ def units(T: int, NS: int, heads: int, whole: frozenset = frozenset()) -> Counte
     BN, splits, out = S["BN"], split_blocks(T, NS, S["BN"]), Counter()
     for _b0, b1 in splits:
         out[("first", min(T, b1 * BN) - (b1 - 1) * BN)] += heads
-    if later := heads * sum(b1 - b0 - 1 for b0, b1 in splits):
-        out[("later", BN)] += later
+        if writers:
+            out[("keys", min(T, b1 * BN) - (b1 - 1) * BN)] += 1
+    if later := sum(b1 - b0 - 1 for b0, b1 in splits):
+        out[("later", BN)] += heads * later
+        if writers:
+            out[("keys", BN)] += later
     if NS == 1:
         out[("end", 0)] += heads
     else:
@@ -111,7 +120,7 @@ def rows_of(p: int, o: int, h: int = 0) -> Counter:
     return out
 
 
-def count(reqs: list[tuple[int, int, int]], heads: int, whole: frozenset) -> tuple[Counter, int]:
+def count(reqs: list[tuple[int, int, int]], heads: int, whole: frozenset, writers: bool = False) -> tuple[Counter, int]:
     """The units of every row of `reqs` a (layer, rank), and their computed tokens."""
     rows, tokens = Counter(), 0
     for p, o, h in reqs:
@@ -119,7 +128,7 @@ def count(reqs: list[tuple[int, int, int]], heads: int, whole: frozenset) -> tup
         tokens += p - h + o
     out = Counter()
     for (T, NS), n in rows.items():
-        for u, k in units(T, NS, heads, whole).items():
+        for u, k in units(T, NS, heads, whole, writers).items():
             out[u] += n * k
     return out, tokens
 
@@ -136,7 +145,9 @@ def unit_of(block: str) -> tuple | None:
 
 def columns(block: str) -> int:
     """How many blocks of `block`'s type make one of its unit: the row's columns over the block's for a kind cut into
-    column blocks (`COLUMNS`), else one."""
+    column blocks (`COLUMNS`), else one; one for a block that names its column block (`C`), a type of its own."""
+    if re.search(r"[{,]C=\d+[,}]", block):
+        return 1
     for prefix, static in COLUMNS:
         if block.startswith(prefix):
             return glm53()["DV"] // int(re.search(rf"[{{,]{static}=(\d+)", block)[1])
@@ -150,8 +161,9 @@ def volume(card: dict, reqs: list[tuple[int, int, int]] | None = None, heads: in
     nh = glm53()["NH"]
     blocks = {x["block"]: (u, x["per_token"]) for x in card["strata"] if (u := unit_of(x["block"])) is not None}
     whole = frozenset(u[1] for u, _n in blocks.values() if u[0] == "whole")
+    writers = any(u[0] == "keys" for u, _n in blocks.values())
     own = [(card["request"]["prefill"], card["tokens"] - card["request"]["prefill"], 0)]
-    census, tokens = count(own, nh, whole)
+    census, tokens = count(own, nh, whole, writers)
     if tokens != card["tokens"]:
         raise ValueError(f"the card's request computes {tokens} tokens, not its {card['tokens']}")
     held = {u for u, _n in blocks.values()}
@@ -165,7 +177,7 @@ def volume(card: dict, reqs: list[tuple[int, int, int]] | None = None, heads: in
                          f"`sparse_mla_split.split_chain` cuts it: {len(bad)} of {len(rows)} block types differ, the "
                          f"first `{bad[0]}`. The lever counts the 128k workload by that rule, so it would misstate "
                          "this card's blocks")
-    plan, computed = count(requests() if reqs is None else reqs, nh if heads is None else heads, whole)
+    plan, computed = count(requests() if reqs is None else reqs, nh if heads is None else heads, whole, writers)
     combines = {u[1]: b for b, (u, _n) in blocks.items() if u[0] == "combine"}
     target: Counter = Counter()
     for u, n in plan.items():

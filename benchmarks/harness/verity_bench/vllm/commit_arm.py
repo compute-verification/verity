@@ -1,9 +1,9 @@
-"""The Commit, sampled proofs' commitment of every served value, as experimental arms: a spec names
+"""The Commit, SPOT's commitment of every served value, as experimental arms: a spec names
 ``verity_bench.vllm.commit_arm:COMMIT`` (``commit``, eager) or ``verity_bench.vllm.commit_arm:COMMIT_COMPILED``
 (``commit@compiled``, at vLLM's compiled serving defaults) in ``arm_modules`` and the arm's id in ``arms``.
 
-``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
-proofs refuses (`protocol_options.spot.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
+``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where SPOT
+refuses (`protocol_options.spot.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
 committer on the served engine themselves, configured as a row's Commit phase runs it (`config.CommitConfig`,
 `pipeline.commit.make_committer`): ``native_collect_v2b`` (gather windows, size-adaptive blocks, native worker, GPU tree, fast
 copy) over a ring of 8 x 256 MiB device windows, with bounded learning, under the committer's default scheme, which each arm
@@ -42,7 +42,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine.env import apply_target
+from verity_bench.adapter import apply_target, native_collect_committer
 
 #: the row Commit's staging (`config.CommitConfig`): 256 MiB windows, 8 slots; learning bounded, nothing raw retained
 ENV = {"VERITY_WINDOW_MB": "256", "VERITY_WINDOW_SLOTS": "8", "VERITY_STAGING_BOUNDED": "1", "VERITY_RETAIN": "none"}
@@ -57,20 +57,18 @@ CGROUP_ROOT = Path("/sys/fs/cgroup")
 
 def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/cgroup")) -> tuple[int, int] | None:
     """The tightest ``memory.max`` on this process's cgroup v2 path and that cgroup's anonymous memory (page cache, which
-    the checkpoint's load leaves behind, is reclaimable); None without one."""
-    try:
-        rel = next(line.split("::", 1)[1].strip() for line in self_cgroup.read_text().splitlines() if line.startswith("0::"))
-    except (OSError, StopIteration):
+    the checkpoint's load leaves behind, is reclaimable); None without one. A cgroup on the path with no ``memory.max`` (the
+    root's) sets no limit; a limit whose files don't read as the kernel writes them raises."""
+    lines = self_cgroup.read_text().splitlines() if self_cgroup.is_file() else []
+    rel = next((line.split("::", 1)[1].strip() for line in lines if line.startswith("0::")), None)
+    if rel is None:
         return None
     best, path = None, root / rel.lstrip("/")
     while True:
-        try:
-            limit = (path / "memory.max").read_text().strip()
-            if limit != "max" and (best is None or int(limit) < best[0]):
-                stat = dict(line.split() for line in (path / "memory.stat").read_text().splitlines())
-                best = (int(limit), int(stat["anon"]))
-        except (OSError, ValueError, KeyError):
-            pass
+        limit = (path / "memory.max").read_text().strip() if (path / "memory.max").is_file() else "max"
+        if limit != "max" and (best is None or int(limit) < best[0]):
+            stat = dict(line.split(maxsplit=1) for line in (path / "memory.stat").read_text().splitlines())
+            best = (int(limit), int(stat["anon"]))
         if path == root or root not in path.parents:
             return best
         path = path.parent
@@ -109,12 +107,12 @@ class CommitArm:
         return committer_engine(target.engine)
 
     def ready(self, target: Any) -> None:
-        from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+        collector = native_collect_committer()
 
         apply_target(ENV)
         engine = self.engine(target)
-        com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
-                                     native_hooks=True, auto_blocks=True, native_worker=True)
+        com = collector(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
+                        native_hooks=True, auto_blocks=True, native_worker=True)
         if not (com.windowed and com.bounded and com.retain == "none"):
             raise RuntimeError(f"{self.id} arm: the committer did not take the row Commit's staging {ENV}")
         if com.commit_scheme != SCHEME:

@@ -27,7 +27,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # Recursion: the verifier's check that a session is one of V*'s (gap 8, check 1 in the model)
 
-`flock-verify verify --rec-inner F --rec-part J --rec-bindings F` runs `RecVStar.checkStmt` on each statement after
+`verity-verify-proof verify --rec-inner F --rec-part J --rec-bindings F` runs `RecVStar.checkStmt` on each statement after
 `buildSession` (`FlockVerify.lean`'s `setupOf`): the verifier's own bindings are its partition object's and program's,
 the circuit's META binds exactly those, its unit is V*'s statement `J` at the inner shape, its population is that
 statement's instance count, and the circuit file is byte for byte the one `vstar stage` writes for that statement under
@@ -35,7 +35,7 @@ the verifier's bindings. `AcceptsZKR` doesn't read that check. This file states 
 to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in its event (`AcceptsVRV`).
 
 * `innerAt spec st`: the verifier's own inner shape at the inner statement, the value `RecVStar.innerOf` returns.
-* `AcceptsZKV i j f rows I own t`: flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F
+* `AcceptsZKV i j f rows I own t`: verity-verify-proof `--zk --registered F --rec-inner F --rec-part J --rec-bindings F
   --rec-rows F` accepts: `AcceptsZKR`, and each statement passes `checkStmt` at the inner shape `i`, as statement `j`
   under the bindings `f`, against the inputs' tags, lookup tables, circuit file, partition object and program, `own`
   and the shared rows `rows`.
@@ -75,7 +75,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 def innerAt (spec : Flock.SessionSpec) (st : Flock.Stmt) : RecVStar.Inner :=
   { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size }
 
-/-- **flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the
+/-- **verity-verify-proof `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the
 transcript**, at the inner shape `i`, as V*'s statement `j` under the verifier's own bindings `f`: `AcceptsZKR`, and each
 statement the session sets up passes `RecVStar.checkStmt` at `i`, against the inputs' tags and lookup tables, circuit
 file, partition object and program, the verifier's own registered reads `own`, `j`, `f` and its shared rows `rows`
@@ -86,7 +86,7 @@ def AcceptsZKV (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Optio
     sts.forM (RecVStar.checkStmt (some i) I.tags I.tables · I.circuitFile I.partition I.program (some own) (some j)
       (some f) rows) = .ok ()
 
-/-- flock-verify `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the live audit's
+/-- verity-verify-proof `--zk --registered F --rec-inner F --rec-part J --rec-bindings F --rec-rows F` accepts the live audit's
 transcript (`AcceptsZKV`). -/
 def LiveAcceptsZKV {n : ℕ} {Reg : Type} (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings)
     (rows : Option (Array Flock.Registered.Port)) (I : Inputs) (own : Array Flock.Registered.Port)

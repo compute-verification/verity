@@ -105,7 +105,7 @@ def _has_unit_cut():
 @pytest.mark.skipif(shutil.which("lake") is None or not _has_unit_cut(), reason="no Lean toolchain or no validate_unit_cut")
 def test_unit_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "unit_cut_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
@@ -113,21 +113,21 @@ def test_unit_cut_agrees_with_the_reference(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_circuit_type_agrees_with_the_reference(tmp_path):
-    """`flock-verify circuit-type` gives `verity_flock.circuit_types`' digest and verdict on every type (random types, call
+    """`verity-verify-proof circuit-type` gives `verity_flock.circuit_types`' digest and verdict on every type (random types, call
     trees and one mutation per rule; `circuit_type_agree.py`)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "circuit_type_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "circuit_type_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--n", "200"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_layout_agrees_with_the_reference(tmp_path):
-    """`flock-verify layout` gives `verity_flock.layouts`' verdict, layout digests and own-region sizes on every archive
+    """`verity-verify-proof layout` gives `verity_flock.layouts`' verdict, layout digests and own-region sizes on every archive
     (random types and call trees, placed and inline calls and reads, nested units, one mutation per rule;
     `layout_agree.py`)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "layout_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "layout_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--n", "150"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -185,13 +185,13 @@ def _with_coins(args):
 
 
 def _lean_draw_obj(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+    p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", *_with_coins(args)], capture_output=True,
                        text=True)
     return json.loads(p.stdout[5:]) if p.stdout.startswith("DRAW ") else None
 
 
 def _lean_draw(args):
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *_with_coins(args)], capture_output=True,
+    p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", *_with_coins(args)], capture_output=True,
                        text=True)
     return json.loads(p.stdout[5:])["units"] if p.stdout.startswith("DRAW ") else None
 
@@ -222,7 +222,7 @@ def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", *args], capture_output=True, text=True)
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", *args], capture_output=True, text=True)
 
     for args in (["--population", "1000", "--k", "10"], ["--population", "8", "--p", "1/2"],
                  ["--population", "8", "--k", "7"]):
@@ -240,14 +240,14 @@ def test_the_verdict_of_record_refuses_upstreams_plain_files(tmp_path):
     verdict: each line says whether the checks pass exactly when upstream accepted (a legacy statement's sessions fail
     before any check runs)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    files = [str(LEAN / ".lake/build/bin/flock-verify"), "--circuit", str(tmp_path / "none"), "--public", str(tmp_path / "none")]
+    files = [str(LEAN / ".lake/build/bin/verity-verify-proof"), "--circuit", str(tmp_path / "none"), "--public", str(tmp_path / "none")]
     p = subprocess.run([files[0], "verify", *files[1:], "--upstream-plain", "--session", "a", "b"], capture_output=True, text=True)
     got = [json.loads(ln[8:]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]
     assert p.returncode == 1 and [(v["session"], v["accepted"]) for v in got] == [("a", False), ("b", False)], p
     assert all(v["why"].startswith("refused: upstream's plain proof files (--upstream-plain): ") for v in got), got
     upstream = tmp_path / "upstream-verdicts.json"
     upstream.write_text(json.dumps({"a": False, "b": True}))
-    for extra, err in ((["--upstream-plain"], "usage: flock-verify agree"),
+    for extra, err in ((["--upstream-plain"], "usage: verity-verify-proof agree"),
                        (["--upstream-verdicts", str(upstream)], "--upstream-plain is required"),
                        (["--upstream-plain", "--upstream-verdicts", str(upstream), "--zk"], "verify --zk's")):
         p = subprocess.run([files[0], "agree", *files[1:], *extra, "--session", "a"], capture_output=True, text=True)
@@ -283,7 +283,7 @@ def test_unit_draw_check(tmp_path):
     ]
     f = tmp_path / "cases.json"
     f.write_text(json.dumps([c for c, _ in cases]))
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(f)], capture_output=True, text=True, check=True)
+    p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw-test", str(f)], capture_output=True, text=True, check=True)
     got = [json.loads(line[10:]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK ")]
     assert len(got) == len(cases)
     for (case, want), g in zip(cases, got):
@@ -301,7 +301,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
         regs[k].write_text(json.dumps({"law": {"law": "subset", "k": k}, "population": 512, "program": "x"}))
 
     def draw(k, reg, population=512):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", str(population), "--k", str(k),
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", "--population", str(population), "--k", str(k),
                             "--registration", str(reg), "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
@@ -321,7 +321,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
     for k, d, want in cases:
         f = tmp_path / "cases.json"
         f.write_text(json.dumps([{"record": d, "statement": d, "instances": len(d["units"])}]))
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(f), "--registration", str(regs[k])],
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw-test", str(f), "--registration", str(regs[k])],
                            capture_output=True, text=True, check=True)
         g = json.loads(p.stdout.splitlines()[-1][10:])
         assert g["ok"] == (want == "") and g["why"].startswith(want), (k, d, g)
@@ -334,7 +334,7 @@ def test_a_draw_over_several_tables_has_a_count_they_split():
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw", "--population", "8", *args,
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw", "--population", "8", *args,
                             "--stream", "a5" * 512], capture_output=True, text=True)
         return p.returncode, p.stdout, p.stderr
 
@@ -409,7 +409,7 @@ def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
            {**d, "strata": [{**d["strata"][0], "units": [[0, 1], [1, 2], [5, 6]]}, d["strata"][1]]},
            {**d, "strata": [{**d["strata"][0], "k": True}, d["strata"][1]]}]
     (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": len(x["units"])} for x in [d, *bad]]))
-    p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *flags,
+    p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw-test", str(tmp_path / "cases.json"), *flags,
                         "--stratified", "4"], capture_output=True, text=True)
     got = [json.loads(line[10:]) for line in p.stdout.splitlines()]
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
@@ -478,14 +478,14 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
 
     def check(cases, *extra):
         (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": len(x["units"])} for x in cases]))
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw-test", str(tmp_path / "cases.json"), *extra],
                            capture_output=True, text=True)
         return [json.loads(line[10:]) for line in p.stdout.splitlines()]
 
     got = check([d, *bad], *flags, "--work", "2")
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
     assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
-    # another table's law, or the stratified sampling design, is not this verifier's
+    # another table's sampling design, or the stratified one, is not this verifier's
     other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
@@ -543,7 +543,7 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     at1 = session("k1", _lean_draw_obj([*flags, "--work", "1"]))
 
     def why(s, *extra):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
                             "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
                            capture_output=True, text=True)
         (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
@@ -597,7 +597,7 @@ def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     swapped = session("swapped", {**d4, "strata": [{**s0, "template": s1["template"]}, {**s1, "template": s0["template"]}, s2]})
 
     def why(s, *extra):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
                             "--public", str(tmp_path / "pub.bin"), *extra, "--session", str(s)],
                            capture_output=True, text=True)
         (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
@@ -635,7 +635,7 @@ def test_verify_refuses_an_archived_circuit_that_does_not_hash_to_its_key(tmp_pa
     (tmp_path / "s" / "session.json").write_text("{}")
 
     def run(circuit):
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--archive", str(tmp_path / "archive"),
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--archive", str(tmp_path / "archive"),
                                "--circuit", circuit, "--public", pub, "--session", str(tmp_path / "s")],
                               capture_output=True, text=True)
 
@@ -681,7 +681,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
 
     def check(cases, *extra):
         (tmp_path / "cases.json").write_text(json.dumps([{"record": x, "statement": x, "instances": i} for x, i in cases]))
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "draw-test", str(tmp_path / "cases.json"), *extra],
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "draw-test", str(tmp_path / "cases.json"), *extra],
                            capture_output=True, text=True)
         return [json.loads(line[10:]) for line in p.stdout.splitlines()]
 
@@ -709,7 +709,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
         return s
 
     def why(s, *extra):
-        p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
+        p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--circuit", str(tmp_path / "circuit.txt"),
                             "--public", str(tmp_path / "pub.bin"), *flags, "--work", "2", *extra, "--session", str(s)],
                            capture_output=True, text=True)
         (v,) = [json.loads(line[8:]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
@@ -738,14 +738,14 @@ def _one_stage_draw():
                     reason="no Lean toolchain or no stratified law in core")
 def test_stratified_draw_agrees_with_core(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(Path(__file__).resolve().parent / "stratified_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--random", "20", "--draws", "100"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
 @pytest.mark.skipif(shutil.which("lake") is None or _template_vectors() is None, reason="no Lean toolchain or no template vectors")
 def test_template_queries_agree_with_the_vectors(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "template_query_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--vectors", str(_template_vectors()), "--out", str(tmp_path)], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -761,7 +761,7 @@ def _has_check_cut():
 @pytest.mark.skipif(shutil.which("lake") is None or not _has_check_cut(), reason="no Lean toolchain or no verity.circuits.cut")
 def test_check_cut_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "cut_check_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--n", "300"], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     assert json.loads(p.stdout.strip().splitlines()[-1])["v2"]["refused_by_v1_alone"] > 0       # Q_word v2's rule is exercised
@@ -782,7 +782,7 @@ def test_qword_cuts_agree_with_core_verify(tmp_path):
     `partition_object.verify`: its pinned cut refusals, and each of its programs at several (X, W), under `Q_word` v1 and v2
     (v2's evaluations, refusals, the program it accepts that v1 refuses, and the recompute it reports)."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--qword-vectors", str(_qword_vector_file())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
     r = json.loads(p.stdout.strip().splitlines()[-1])["qword_vectors"]
@@ -802,7 +802,7 @@ def _qword_vectors():
 @pytest.mark.skipif(shutil.which("lake") is None or _qword_vectors() is None, reason="no Lean toolchain or no Q_word evaluator")
 def test_qword_evaluator_agrees_with_the_reference(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--n", "300", "--vectors", str(_qword_vectors())], capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
 
@@ -830,7 +830,7 @@ def test_the_reference_vectors_exist():
 def test_qword_over_programs_agrees_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qword_program_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--vectors", str(ir / "partition_vectors.json"),
                         "--format", str(ir / "format_vectors.json")]
                        + (["--qword-vectors", str(ir / "qword_vectors.json")] if (ir / "qword_vectors.json").exists() else []),
@@ -842,7 +842,7 @@ def test_qword_over_programs_agrees_with_the_reference(tmp_path):
 def test_qcall_and_input_bindings_agree_with_the_reference(tmp_path):
     ir = _format_vectors()
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    p = subprocess.run(["python3", str(VERIFIER / "qcall_agree.py"), "--lean", str(LEAN / ".lake/build/bin/flock-verify"),
+    p = subprocess.run(["python3", str(VERIFIER / "qcall_agree.py"), "--lean", str(LEAN / ".lake/build/bin/verity-verify-proof"),
                         "--out", str(tmp_path), "--qcall", str(ir / "qcall_vectors.json"), "--format", str(ir / "format_vectors.json")],
                        capture_output=True, text=True)
     assert p.returncode == 0, p.stdout + p.stderr
@@ -926,7 +926,7 @@ def test_hm96_range_slots_are_words_inside_the_block(tmp_path):
     def statement(circuit):
         f = tmp_path / "c.circuit"
         f.write_text(circuit)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", FC.STATEMENT,
                                "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True, text=True)
 
     p = statement(text)
@@ -969,7 +969,7 @@ def test_hm96_header_sizes_are_refused_before_their_powers(tmp_path):
     def statement(circuit):
         f = tmp_path / "c.circuit"
         f.write_text(circuit)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", FC.STATEMENT,
                                "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True,
                               text=True, preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
 
@@ -1045,7 +1045,7 @@ def test_row_nets_are_the_verifiers(tmp_path):
     def statement(circuit):
         f = tmp_path / "c.circuit"
         f.write_text(circuit)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", FC.STATEMENT,
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", FC.STATEMENT,
                                "--circuit", str(f), "--public", str(tmp_path / "st" / "pub-4.bin")], capture_output=True, text=True)
 
     p = statement(text)
@@ -1081,7 +1081,7 @@ def test_rec_open_unit_of_other_bits_is_refused_before_its_net_is_built(tmp_path
 
     def statement(circuit):
         (d / "c.txt").write_text(circuit)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit",
                                "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin")], capture_output=True, text=True,
                               preexec_fn=lambda: resource.setrlimit(resource.RLIMIT_AS, (8 << 30, 8 << 30)))
 
@@ -1264,7 +1264,7 @@ def test_bit_row_statements_are_the_rust_verifier_s_and_a_meta_that_differs_is_r
 
     def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit",
                                "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
 
     digests = {}
@@ -1338,7 +1338,7 @@ def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differ
 
     def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit",
                                "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
 
     digests = {}
@@ -1376,7 +1376,7 @@ def test_segmented_row_statements_are_the_rust_verifier_s_and_a_meta_that_differ
         assert p.returncode != 0 and why in p.stdout + p.stderr, (name, p.stdout + p.stderr)
 
 
-#: `flock-verify statement`'s coin flags: a seeded statement's, and one on the challenger's coin tree, whose identity, and so
+#: `verity-verify-proof statement`'s coin flags: a seeded statement's, and one on the challenger's coin tree, whose identity, and so
 #: whose statement digest, is the seeded one's
 COINS = {"seed": (), "tree": ("--coins", "tree")}
 
@@ -1417,7 +1417,7 @@ def test_a_segmented_row_written_as_several_output_ports_is_the_row_its_reader_c
 
     def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit",
                                "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
 
     for vid, (out_words, want) in ROW_SEG_PAIRS.items():
@@ -1504,7 +1504,7 @@ def test_an_exact_v2_output_row_of_one_or_several_ports_is_the_row_its_reader_co
 
     def statement(d, text, *extra):
         (d / "c.txt").write_text(text)
-        return subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "statement", "--statement", "verity/flock-circuit",
+        return subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "statement", "--statement", "verity/flock-circuit",
                                "--circuit", str(d / "c.txt"), "--public", str(d / "pub.bin"), *extra], capture_output=True, text=True)
 
     def digest(row, words):
@@ -1596,7 +1596,7 @@ def test_net_parser_refuses_rows_out_of_order(tmp_path):
     for name, (text, _) in cases.items():
         (tmp_path / f"{name}.net").write_text(text)
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
-    out = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "net-check", *(str(tmp_path / f"{n}.net") for n in cases)],
+    out = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "net-check", *(str(tmp_path / f"{n}.net") for n in cases)],
                          capture_output=True, text=True).stdout
     got = {Path(j["file"]).stem: j for j in (json.loads(l.split(" ", 1)[1]) for l in out.splitlines() if l.startswith("NETCHECK "))}
     for name, (_, why) in cases.items():
@@ -1625,7 +1625,7 @@ def test_a_legacy_statement_is_refused_at_every_session(tmp_path):
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     for name in (n for ns in LEGACY.values() for n in ns):
         for zk in ((), ("--zk",)):
-            p = subprocess.run([str(LEAN / ".lake/build/bin/flock-verify"), "verify", "--statement", name, *zk, "--circuit",
+            p = subprocess.run([str(LEAN / ".lake/build/bin/verity-verify-proof"), "verify", "--statement", name, *zk, "--circuit",
                                 str(tmp_path / "c.txt"), "--public", str(tmp_path / "pub.bin"), "--session",
                                 str(tmp_path / "a"), str(tmp_path / "b")], capture_output=True, text=True)
             vs = [json.loads(ln.split(" ", 1)[1]) for ln in p.stdout.splitlines() if ln.startswith("VERDICT ")]

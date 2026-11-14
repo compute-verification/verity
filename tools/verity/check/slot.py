@@ -70,7 +70,7 @@ where it doesn't.
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
-(the verified queue's checks of a candidate and its records run, rank 0: `research.landing.POSTLAND_SLOT_RANK`), priority
+(the verified queue's checks of a candidate and its records run, rank 0: `research.landing.AFTER_LANDING_SLOT_RANK`), priority
 waiters go by rank, then arrival, and a priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked:
 the runs `main` waits on take the next slot, ahead of priority checks that came first.
 
@@ -269,9 +269,9 @@ def lane_pools(slots_file: Path) -> list[Path]:
 SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
 
 
-def session_cap(dropins: Path | None = None) -> str | None:
+def session_limit(dropins: Path | None = None) -> str | None:
     """The MemoryMax= every login session scope gets here (the last one set, as systemd reads the drop-ins), or None."""
-    cap = None
+    limit = None
     try:
         files = sorted((dropins or SESSION_DROPINS).glob("*.conf"))
     except OSError:
@@ -284,8 +284,8 @@ def session_cap(dropins: Path | None = None) -> str | None:
         for line in lines:
             k, _, v = line.strip().partition("=")
             if k.strip() == "MemoryMax":
-                cap = v.strip() or None
-    return None if cap in (None, "infinity") else cap
+                limit = v.strip() or None
+    return None if limit in (None, "infinity") else limit
 
 
 def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
@@ -297,8 +297,8 @@ def scoped(cmd: list[str], slot: str, run_id: str) -> tuple[list[str], str]:
     to start a workload from an uncapped cgroup, which failed every test of the research suite that runs one locally inside
     a scoped check (exit 75)."""
     unit = f"check-{slot}-{run_id}"
-    cap = session_cap()
-    props = [f"--property=MemoryMax={cap}"] if cap else []
+    limit = session_limit()
+    props = [f"--property=MemoryMax={limit}"] if limit else []
     return ["systemd-run", "--user", "--scope", "--quiet", "--collect", f"--unit={unit}", *props, "--", *cmd], unit
 
 

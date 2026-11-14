@@ -37,7 +37,7 @@ namespace NciCheck.Properties.Record.SecurityProofs
 
 open NciCheck.Record (Case Front read finish unwhole rolesOf sameSlot isTheta openingHeld)
 open NciCheck.Record.SecurityProofs (read_front finish_text)
-open NciCheck.RecordText (Row Tmpl Decl Fill Inputs inputsOf rowWords fillAt tmplIn rowIn rect)
+open NciCheck.RecordText (Row Tmpl Decl Fill Inputs inputsOf rowWords fillAt tmplIn rowIn rect widthOf)
 open Lean (Json)
 
 /-! ## What `inputsOf` returns -/
@@ -163,6 +163,8 @@ theorem inputsOf_decls {W : Spot.Wires.Wiring} {ts : List Tmpl} {doc : Json} {x 
         · split at h
           · cases h
           · split at h
+            · cases h
+            split at h
             · split at h
               · cases h
               · rename_i d1 h1
@@ -283,7 +285,7 @@ theorem finish_case {f : Front} {pin : String → Option String} {c : Case} (h :
     Spot.Wires.check c.W = .ok c.wired ∧ unwhole f.ts f.leaves c.wired.wires = none ∧
       rolesOf f.P f.ts pin c.x = .ok c.pins ∧
       c.inside = (c.wired.wires.map fun w => sameSlot c.S (c.gridsAt w.reader) (c.gridsAt w.writer) w).toArray ∧
-      c.theta = c.x.params.map (fun (p, leaves) => (p, isTheta f.T leaves p)) ∧
+      c.theta = c.x.params.map (fun (p, leaves) => (p, isTheta f.T leaves (widthOf f.doc p) p)) ∧
       c.held = (c.x.openings.map (openingHeld (fun tid => (c.pins.lookup tid).isSome) c.isTheta c.x)).toArray := by
   unfold finish at h
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
@@ -299,6 +301,8 @@ theorem finish_case {f : Front} {pin : String → Option String} {c : Case} (h :
           split at h
           · cases h
           · split at h
+            · cases h
+            split at h
             · cases h
             · split at h
               · cases h

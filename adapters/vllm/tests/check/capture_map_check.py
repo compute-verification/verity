@@ -44,7 +44,7 @@ from verity_vllm.commit.capture_map import (
     tap_layers,
 )
 from verity_vllm.commit.identity import NAMED_LAYERS
-from verity_vllm.properties.record import REGISTRY as PROPERTIES
+from verity_vllm.records.property_record import REGISTRY as PROPERTIES
 
 
 def _walk(rec: dict[str, Any], path: str) -> Any:

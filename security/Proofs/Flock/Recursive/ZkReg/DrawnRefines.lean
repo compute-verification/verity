@@ -39,7 +39,7 @@ simulation keeps both (`simAuditZKOn`):
   of `J` tables, and `simZHJ` the simulation it reads at hidden-output tables;
 * `zk_flock_drawnC_cr`: the compiled audit's sampled bound, `Pr[accept ∧ a drawn unit is wrong] ≤ ε_ks + δ_link`
   (`extraction_audit_drawn` at `analysisZC`), every term on the accepted assumptions;
-* `zk_session_drawnR`: `hwrong` for `flock-verify verify --zk --registered F` sessions: no sampled proof block is wrong in the
+* `zk_session_drawnR`: `hwrong` for `verity-verify-proof verify --zk --registered F` sessions: no sampled proof block is wrong in the
   committed values `XplurZC` decodes from the rows `rsZAtS` at `simZ … τ`, except with probability `ε_ks + δ_link`.
 -/
 
@@ -99,7 +99,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
 
 /-- **The `--zk` headline at an event of the registration and the sample**: a bound on the compiled batched audit's
-`Pr[accept ∧ Q R S]` at `simZ … τ` bounds flock-verify `--zk`'s `Pr[accept ∧ Q o.1 o.2.1]`
+`Pr[accept ∧ Q R S]` at `simZ … τ` bounds verity-verify-proof `--zk`'s `Pr[accept ∧ Q o.1 o.2.1]`
 (`zk_headline_exec_on` for a `Q` that reads the outcome). -/
 theorem zk_headline_exec_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (Q : Reg → Finset (Fin n) → Prop) (B : ℝ≥0∞)
@@ -245,7 +245,7 @@ end Drawn
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- **No sampled proof block of a `--zk --registered` session is wrong, except with probability `ε_ks + δ_link`**: in
-`flock-verify verify --zk --registered F` sessions, `own` F's ports, at the committed values `XplurZC` decodes from the
+`verity-verify-proof verify --zk --registered F` sessions, `own` F's ports, at the committed values `XplurZC` decodes from the
 rows `rsZAtS` (the `--zk` rows without `pub.tables = none`) at `simZ … τ`, `Pr[accept ∧ some drawn unit is wrong] ≤
 ε_ks + δ_link`, on `Composed.zk_session_sound`'s assumptions without A3 (the sampling design's count curve is not read). This is the
 `hwrong` a registered-reads core theorem takes. -/

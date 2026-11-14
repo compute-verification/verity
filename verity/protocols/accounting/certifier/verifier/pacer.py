@@ -19,7 +19,7 @@ started; then, once every part is written or its link refused it, when its last 
 link took its part. `Pacer.behind` counts the buckets whose time has come and whose bytes aren't all written, as a
 transport's backlog does on the loop. The pacer still shares its host's scheduler: at an ordinary priority, a task
 that wakes on its CPU near a bucket's time, the handing process's own reads among them, can hold the release back by a
-scheduler slice, which a real-time class or a core of its own on the auditor's host takes away.
+scheduler slice, which a real-time class or a core of its own on the auditor's device takes away.
 
 The input is each bucket as its index, its time and its parts' count (`HEAD`), then each part as its link's key, its
 length and whether the link closes once it is written (`PART`), then its bytes. The output is a ready byte (`READY`),
