@@ -3,7 +3,7 @@ bound, `Achievability`'s rates at zero statement cost, the frontier under Flock'
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
 admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
-block serves, its proving price with its statements a replay block's or a registration's padded to its public cap, and the
+block serves, its proving price with its statements a replay block's or a docket's padded to its public cap, and the
 width-stratified design against the uniform one."""
 
 from __future__ import annotations

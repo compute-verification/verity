@@ -129,9 +129,9 @@ uv run python verity/protocols/proofs/spot/prover/cost/recursion.py --result rec
 their SHA-512 compressions (`--probe S,NP,O` lowers one Program at a small class). `window_cost.py` prices a
 window's commit from that census, or from a probe projected to a class (`--project 8,1024,64`, which reproduces the exact
 census unit for unit), against its target of 0.20 to 0.25 of the served window. It reports in ANDs (58,120 a
-compression) and in seconds (the window's rows on the GPU's hashing rates, the registration on the CPU's, which
+compression) and in seconds (the window's rows on the GPU's hashing rates, the docket on the CPU's, which
 `--measure-cpu` measures). It covers each lever alone and the plan stacked, the pad pass at three traffics, the
-registration's bytes and files, and totals over a week, a month and a year. With `--stream SIZING` it also prices serving's
+docket's bytes and files, and totals over a week, a month and a year. With `--stream SIZING` it also prices serving's
 own stream commit (rows-sha512, made while it serves, before the window's commit) and its seal, from serving's stream of
 record (`native_host.schedule_stream_bound`), whole and without the attention interiors (`fa*.m1`, lever F), which nothing
 reads after the seal:

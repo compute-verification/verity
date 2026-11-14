@@ -20,12 +20,12 @@ it.
   file's tables, refs and registered reads to `UnitStager.stage` for units that read registered values.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
-* **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
+* **The docket** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
   leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
 * **The sample** (``coins``): ``"lean"``, the verifier's Lean (`verity-verify-proof draw --stratified K`) on a development
-  challenger's coins opened after the registration (`a0.challenger_sample`);
+  challenger's coins opened after the docket (`a0.challenger_sample`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
-  callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
+  callable that takes the docket and returns that mapping (a `service.Stream`'s register and select).
 * **Proving.** Each sampled member's units are one `--zk` session on SPOT's proof server (`verity_flock.proof_server`):
   one long-lived streaming prover a device and one queued verifier a block type, ``FC_VERIFY_AHEAD`` 2, every member's
   session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every leg
@@ -45,7 +45,7 @@ Negatives (`negatives`), each refused at the proof layer:
     tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped: the
                       ZK server's Lean recheck stops it; unserved, Lean `verify --zk` refuses the proof that reaches it
     tampered-public   a unit staged on a held row other than the verifier's copy: its proof verifies, its opening fails
-    tampered-root     a registration whose first root is not the statement's: refused before the sample
+    tampered-root     a docket whose first root is not the statement's: refused before the sample
     incorrect-block        a member's session checked against another member's circuit (that stratum's committed pin)
     tampered-registered-root  (members with registered reads) the verifier's --registered file with a root changed
 
@@ -292,7 +292,7 @@ def stage(m: Member, base: int, bound: dict, out: Path, salt_key: bytes, files: 
 def _draw(coins, rec: dict, program_file: Path, partition_file: Path, k: int, lean: str, out: Path,
           bases: dict[str, tuple[int, int]]) -> dict:
     """The verifier's sample as one sample object over global units: its Lean's on a development challenger's coins
-    opened after the registration (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
+    opened after the docket (``coins == "lean"``, `a0.challenger_sample`), or the caller's."""
     if coins == "lean":
         p = a0.challenger_sample(lean, ["--program", str(program_file), "--partition", str(partition_file),
                                       "--stratified", str(k)], rec["law"], rec["population"], R.digest(rec),
@@ -385,7 +385,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     (``verity/prove-leg/v0``): per member its sampled proof blocks, each unit's verdict, the session's verdicts and timing; the
     audit record; and ``accepted``. ``registered``: the verifier's own ``--registered`` file. ``k``: the stratified rule's
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
-    registration's window (default a stand-in's). ``mutate``: the registration record as the verifier is handed it (a
+    docket's window (default a stand-in's). ``mutate``: the docket as the verifier is handed it (a
     negative's), from the honest one. ``server``: the proof server to prove on (default the run's, `proof_server`, else
     one of the leg's own on the CPU; under FLOCK_CHALLENGER=1 always the leg's own, with challengers)."""
     out = Path(out)

@@ -3,16 +3,16 @@ run recorded.
 
     python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE --out DIR [--only RUN ...]
 
-* **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage registration or audit
-  records): each run's art, the registration formats it holds and the Python verdicts it recorded.
+* **Index.** `one-stage-run/v0` rows (the store's selection of every run that holds one-stage docket or audit
+  records): each run's art, the docket formats it holds and the Python verdicts it recorded.
 * **Case.** For each recorded audit, the case `sampled-proofs-one-stage serve` reads: the verifier's parameters as
   `OneStage.paramsOfJson` reads them (its own program descriptor, query, sampling design, scheme, ports, leaf layer, log, partition,
-  delta), the registration record as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
+  delta), the docket as `commitmentOf` reads it, and the evidence as `evidenceOf` reads it (the sample, the
   proved units, the instance count, the receipt, the statement, the verdicts, the sessions and their roots, the served
   sample), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
   names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
   found (`provenance`). Floats in verdicts and statements, which neither side reads, are written as strings. The
-  registered roots the record's `registered` check reads are the verdicts' own, for the registration's own values
+  registered roots the record's `registered` check reads are the verdicts' own, for the docket's own values
   (`audit.session_registered(verdicts, registration)`), less the reads of its own ports at their own roots
   (`audit.less_own_reads`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
@@ -24,14 +24,14 @@ run recorded.
   bindings, a tampered set before the verifier) is listed as outside, with the reason, and where the protocol
   has a check of the same kind its analog is replayed and counted apart.
 * **Verdicts.** Lean (`serve`), the current Python (`registration.check`, `draw.check_draw`, `audit.audit_record`, written
-  as `OneStage.check` writes its outcome) and the recorded verdict, compared by verdict, stage (registration, sample,
+  as `OneStage.check` writes its outcome) and the recorded verdict, compared by verdict, stage (docket, sample,
   checks, verdict; public) and codes.
-* **The whole record.** Where the registration passes and the sample is an object, the audit record itself by the
+* **The whole record.** Where the docket passes and the sample is an object, the audit record itself by the
   verifier (`one_stage.verifier.audit_record`: the Lean's `record` beside Python's `audit_record`, equal under
   canonical JSON), on the case's evidence with its floats; whether they agree, and the fields where they don't.
 * **No recorded verdict.** A run that recorded no verdict (a serving bundle no verifier audited in its own run, an A2
   or A4 run that stopped before its audit record) compares Lean with the current Python on the stages it holds: the whole
-  audit where it kept the session, else the registration alone (its `stages`; each outcome read up to them, one that
+  audit where it kept the session, else the docket alone (its `stages`; each outcome read up to them, one that
   got past them a pass). Its own line in the counts (`no_recorded_verdict`); a run that holds nothing either side reads
   is listed with why.
 
@@ -82,7 +82,7 @@ SERVED_TAGS = (R.WINDOW_DOMAIN, "verity/one-stage/served-domain/v0")
 STAGES = ("registration", "draw", "checks", "verdict")
 REGISTRATION = ("registration",)
 CHECKS = ("proved", "receipt", "served", "roots", "registered")
-#: the evidence of a case that holds the registration alone: no sample, so both sides stop at the sample's check
+#: the evidence of a case that holds the docket alone: no sample, so both sides stop at the sample's check
 NO_DRAW = {"draw": None, "instances": 0, "proved_units": [], "receipt": {}, "served": None, "session_roots": None,
            "sessions": [], "statement": {}, "verdicts": {}}
 
@@ -132,7 +132,7 @@ def decode(desc: dict):
 
 def decode_opaque(desc: dict) -> tuple[Any, list[str]]:
     """`decode`, each primitive the descriptor names that the current registry lacks standing in by the descriptor's own
-    signature, never evaluated (the registration's checks and the sample read the program's shape only); and their ids."""
+    signature, never evaluated (the docket's checks and the sample read the program's shape only); and their ids."""
     from verity.circuits.defs import REGISTRY, PrimitiveDefinition
     from verity.circuits.types import type_from_json
 
@@ -220,7 +220,7 @@ class Sets:
 
 
 class Records:
-    """Registration records by digest, from every `audit.json` and `registration.json` the runs stored."""
+    """Docket records by digest, from every `audit.json` and `registration.json` the runs stored."""
 
     def __init__(self) -> None:
         self.by_digest: dict[str, tuple[dict, str]] = {}
@@ -513,7 +513,7 @@ def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None,
            log: list | None = None, anchors: list | None = None, work_table: dict | None = None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
            schemas: dict | None = None) -> dict:
-    """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
+    """``outputs`` and ``schemas`` (a docket reusing an earlier record's values, `registration.check`'s) appear only
     when given, ``schemas`` under the Lean's name ``row_schemas``; with ``registered``, ``parameters`` (the program
     function's, which the descriptor doesn't carry), which `OneStage.paramsOfJson` requires of a verifier expecting values
     registered."""
@@ -625,7 +625,7 @@ def whole_record(c: Case) -> dict | None:
     """The audit record by the verifier (`verifier.audit_record`, Lean beside Python), on the case's evidence
     with its floats, the sampling design the verifier derives and the run's δ: whether the two records agree, each side's acceptance
     and failed checks, and where they disagree the fields and both sides' values. None where `OneStage.check` never
-    reaches the record: a public-file case, a case that holds the registration alone, a registration R1-R7 refuse, a sampling design
+    reaches the record: a public-file case, a case that holds the docket alone, a docket R1-R7 refuse, a sampling design
     that doesn't derive, a sample that isn't an object."""
     p, rec, e = c.params, c.rec, c.evidence
     if c.public is not None or c.stages != STAGES or not isinstance(e["draw"], dict):
@@ -829,7 +829,7 @@ def a0(run: Run) -> Iterator[Case]:
 
 
 def a0_lean(run: Run) -> Iterator[Case]:
-    """A0 with the auditor's Lean program driving (`a0_lean.py`): A0's registration of a generated set (its name and
+    """A0 with the auditor's Lean program driving (`a0_lean.py`): A0's docket of a generated set (its name and
     content digest in `generate.log`), the sample `flock-audit`'s own, the session served at it (`served-draw.json`), and
     the audit record with `flock-audit` the verifier, taking the sessions, the served sample and the sessions'
     roots. The run kept neither the public file (its leaf layer is the record's, which the run's R4 matched against the
@@ -1115,7 +1115,7 @@ def _proved_check(v: dict, src: str) -> dict:
 def a3(run: Run) -> Iterator[Case]:
     """A3 (`a3.py`): every template of one decoder layer as one population (`mixed_population_program` over
     `Q_template_instances`), each member a stand-in staged from its selection of the set (`stage_subset.py`), one
-    registration (ports `<set>/<port>`, the leaf layer the SHA-512 of the map from set to its public file's SHA-512) and
+    docket (ports `<set>/<port>`, the leaf layer the SHA-512 of the map from set to its public file's SHA-512) and
     one sample over the union. With `--draw-file` the audited sample is the verifier's Lean sample and the sessions' union is
     the served sample; before it the audited sample is the union, and the audit took neither the served sample nor the
     sessions' roots."""
@@ -1292,7 +1292,7 @@ def a4_copies(run: Run, base: str, summary: dict, rec: dict) -> tuple[Any, dict,
 
 def a4(run: Run) -> Iterator[Case]:
     """A4 (`a4.py`): the Llama-3.2-1B row's layer 0 on serving's own roots: the layout of record's members as one population (the
-    canonical `Q_template_instances` partition), serving's registration (or, with `--reaudit`, a new record naming it under
+    canonical `Q_template_instances` partition), serving's docket (or, with `--reaudit`, a new record naming it under
     the agreement's sampling design, the served record in the log), the served domains under `<template>/<port>`, the leaf layer the
     SHA-512 of the map from template to its public file's SHA-512, one sample by the verifier's sampling design with each member served
     its share. Before 9515b4d4f the audit took neither the served sample nor the sessions' roots (and the run recorded no
@@ -1391,8 +1391,8 @@ def a4(run: Run) -> Iterator[Case]:
 
 def a4_unaudited(run: Run) -> Iterator[Case]:
     """An A4 run refused before its sample: the record served it (`inputs/served.tar`'s `registration.json`, the
-    receipt's) under A4's copies (`summary.json`'s layout, members, k and δ), the registration alone, since the run holds
-    no sample. The run's own registration check (`summary.json`'s `checks.registration`) is the recorded result of that
+    receipt's) under A4's copies (`summary.json`'s layout, members, k and δ), the docket alone, since the run holds
+    no sample. The run's own docket check (`summary.json`'s `checks.registration`) is the recorded result of that
     stage; its other refusals before the sample are M0's checks of each member's served files (pin, classes, bindings),
     which the protocol does not make."""
     base = "out/a4"
@@ -1435,7 +1435,7 @@ def bundle_leaf_layer(run: Run) -> tuple[str, str | dict]:
 def serving_bundle(run: Run) -> Iterator[Case]:
     """A serving bundle (`vllm-serving-commit`'s files: `registration.json`, `window.json`, `index.json`, and
     `compare.json` for one template or `members.json` and the members' public files for the Llama-3.2-1B row's layers) that no verifier
-    audited in its own run: the registration alone, under the copies of each replayed audit of the same record (its
+    audited in its own run: the docket alone, under the copies of each replayed audit of the same record (its
     digest) with the leaf layer from the bundle itself, and no sample. Its `registration-v0.json`, the window's record in
     `verity/one-stage/registration/v0`, is a format neither side reads."""
     rec = run.json("registration.json")
@@ -1625,12 +1625,12 @@ SERVED_OUTSIDE = (
 
 
 def served_window(run: Run) -> Iterator[Case]:
-    """served_zk's window through the proof system (`verity/protocols/accounting/pouw/prover/kernels/served_zk`): the request's registration of PoUW's
+    """served_zk's window through the proof system (`verity/protocols/accounting/pouw/prover/kernels/served_zk`): the request's docket of PoUW's
     tiles (`population_program` of the tile template over the registered level's N, `Q_template_instance`), received
     under the verifier's own copies (its `params.json`: the program at the record's level, the sampling design of `pouw.window.sampling`,
     the window's served domain and W's domain, no leaf layer, no anchors, the stream's empty log), then one outcome per case
     (`outcome-<case>/`: honest, the selftest build's cases, the other request's proof), each its own audit record of the
-    request's registration (a stream of its own, order 0). Before the proof system (`verity/one-stage/audit/v0`) the
+    request's docket (a stream of its own, order 0). Before the proof system (`verity/one-stage/audit/v0`) the
     scheme is `served_commit.SCHEME` and the audit took no sessions; in it (`verity/proof-service/outcome/v0`) the scheme
     is the service's and the audit took the delivered sessions. Neither took the served sample or the sessions' roots, and
     no verdict of record reports registered reads."""
@@ -1775,12 +1775,12 @@ SERVED_ZK_V0_DELTA = 0.05
 
 def served_audit(run: Run) -> Iterator[Case]:
     """served_zk's first window (`served_commit.py` and `job.sh` before the verifier's `params.json`): each side's
-    (`request`, `other`) commitment of one served call, its registration received under the verifier's copies of that
+    (`request`, `other`) commitment of one served call, its docket received under the verifier's copies of that
     commitment (the tile template's population over the statement's tiles, `Q_template_instance`, `subset:1`, the scheme,
     each side's served domain over its row count and the request's run, no leaf layer), one Lean sample (`draw.json`), and
-    `audit-<case>.json`, the audit record of the request's registration (`foreign-commit`: the other's), with one instance,
+    `audit-<case>.json`, the audit record of the request's docket (`foreign-commit`: the other's), with one instance,
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
-    domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
+    domains bind from the record's own window, not the request's binding, so the other request's docket passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
     from verity.protocols.accounting.pouw.prover.circuit import leaves as L, pc8
     from verity.commitments.rowleaf import ROLE_W, ROLE_X
@@ -1906,7 +1906,7 @@ A6_OUTSIDE = {"statement-binds-another-partition": "A6's statement checks (`stat
 
 def a5(run: Run) -> Iterator[Case]:
     """A5 (`a5.py`), and each rank's A5 of a TP Commit's stand-in (`out/standin-<I>/rank<r>/`): a deferred
-    Commit's window, its registration over serving's rows of the Commit's values. The verifier's copies are its window of
+    Commit's window, its docket over serving's rows of the Commit's values. The verifier's copies are its window of
     record as the run wrote it: the program its `program.json` defines (the record's; each template rebuilt from it into
     the population program, a primitive the current registry lacks an opaque stand-in), the canonical query over the members
     `summary.json` names, its sampling design and δ, the served domains over the record's ports under the run root of record

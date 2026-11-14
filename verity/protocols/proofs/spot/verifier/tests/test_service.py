@@ -125,7 +125,7 @@ def test_round_trip_register_select_deliver_outcome():
 
 def test_a_provers_stream_binds_each_registration_to_itself_and_the_prover():
     """A stream given the identity its challenger registered the prover under names it in its digest and binds every
-    registration to the stream and the prover (`Stream.binding`, `registration.check`'s): a record whose window names
+    docket to the stream and the prover (`Stream.binding`, `registration.check`'s): a record whose window names
     both runs round to an accepted outcome, by both verifiers, while the same record in another prover's
     stream, in the same window, is refused (`R6-stream`, `R6-prover`), as is one whose window names neither. A prover
     identity that is not lowercase hex bytes makes no stream."""
@@ -345,8 +345,8 @@ def test_a_bernoulli_law_is_refused_at_register():
 
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
-    """`rate:1/3:2` samples `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
-    a registration padded tenfold (N = 60 for 6) samples K = 20 and every proof block is still sampled with probability K/N ≥ 1/3,
+    """`rate:1/3:2` samples `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each docket's N, so
+    a docket padded tenfold (N = 60 for 6) samples K = 20 and every proof block is still sampled with probability K/N ≥ 1/3,
     where `subset:2`, which a rule can't state, would fall to 2/60. The sample, the Lean verifier's sample of record and
     the outcome's run (`verifier.run`, which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
@@ -361,8 +361,8 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
 
 
 def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pads_n():
-    """`stratified-rate:1/3` and `work-rate:1/3` size each stratum's k over the registration's own strata, at least
-    ⌈n_s/3⌉ (Lean's `Rate.stratK_ge`, `Rate.workK_ge`), so a registration padded tenfold (N = 60 for 6) samples 20 of its one stratum and
+    """`stratified-rate:1/3` and `work-rate:1/3` size each stratum's k over the docket's own strata, at least
+    ⌈n_s/3⌉ (Lean's `Rate.stratK_ge`, `Rate.workK_ge`), so a docket padded tenfold (N = 60 for 6) samples 20 of its one stratum and
     every proof block is still sampled with probability k/n_s ≥ 1/3, where `stratified:2` or `work:2`, which a rule can't
     state, would fall to 2/60."""
     for text, table in (("stratified-rate:1/3", None), ("work-rate:1/3", WORK)):
@@ -500,7 +500,7 @@ def test_a_late_proof_is_a_reject():
 
 def test_a_proof_that_never_arrives_ends_late():
     """A sampled proof block whose proof is never delivered is pending until the proof deadline and a reject (`late`) after it:
-    no sample stays pending forever, and the stream receives the next registration only once it ends."""
+    no sample stays pending forever, and the stream receives the next docket only once it ends."""
     clock = Clock()
     stream = _stream(clock=clock)
     draw = stream.select(stream.register(_record(), _ports(6)))
@@ -583,7 +583,7 @@ def test_a_registration_before_the_salt_is_late():
 
 
 def test_no_registration_deadline_changes_nothing():
-    """Unset, the registration deadline reads no clock and logs nothing, salted or not; the Check states it either way."""
+    """Unset, the docket deadline reads no clock and logs nothing, salted or not; the Check states it either way."""
     reads: list[float] = []
     stream = _stream(clock=lambda: reads.append(0.0) or 0.0)
     reg = stream.register(_record(), _ports(6))
@@ -666,8 +666,8 @@ def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
 
 def test_a_windows_seed_salt_is_sampled_once_before_it_serves_and_named_by_each_registration():
     """The stream samples the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
-    the window's open root, logged on the challenger's clock, sampled once and before the window's first registration.
-    Both verifiers hold each registration of the window to it: a window naming it runs round to an accepted outcome, and
+    the window's open root, logged on the challenger's clock, sampled once and before the window's first docket.
+    Both verifiers hold each docket of the window to it: a window naming it runs round to an accepted outcome, and
     one naming another or none is refused (`R6-seed-salt`); where the stream drew no salt, a window naming one (a salt
     the server chose) is refused by name. The Spec declares the salt public, of kind `coins`, or a seeded window is
     refused as undeclared."""
@@ -721,7 +721,7 @@ def test_a_sampler_samples_instead_and_is_held_to_the_law():
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
     """A one-stage outcome on a sample from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
-    from the registration, the bytes the sample read, the sessions and the verdicts: one run per outcome, agreeing on an
+    from the docket, the bytes the sample read, the sessions and the verdicts: one run per outcome, agreeing on an
     accepted and a rejected round. A run the Python doesn't make alike (here, a sample said to read one byte more) rejects
     the round, its audit record failing `run`; a sampler's sample isn't run."""
     run, ran = S.V.run, []
