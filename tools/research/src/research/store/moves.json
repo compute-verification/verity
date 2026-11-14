@@ -4132,6 +4132,30 @@
       "paths": {
         "adapters/vllm/verity_vllm/pipeline/window_law.py": "adapters/vllm/verity_vllm/pipeline/window_sampling_design.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot_flock/verifier/lean/VStarRecursive/Protocol.lean": "verity/protocols/proofs/spot_flock_recursion/verifier/lean/VStarRecursion/Protocol.lean"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_link_window_lean.py": "verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_transfer_blocks_lean.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/poub/verifier/lean/tests/test_drawn.py": "verity/protocols/accounting/poub/verifier/lean/tests/test_sampled.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/one_stage/prove_leg.py": "benchmarks/one_stage/prove_subprotocol.py",
+        "benchmarks/one_stage/prove_leg.sh": "benchmarks/one_stage/prove_subprotocol.sh",
+        "benchmarks/one_stage/tests/test_prove_leg_served.py": "benchmarks/one_stage/tests/test_prove_subprotocol_served.py",
+        "security/Proofs/Properties/Verity/Sampled/Window/Leg.lean": "security/Proofs/Properties/Verity/Sampled/Window/Subprotocol.lean",
+        "security/Proofs/Properties/Verity/SampledTwo/Leg.lean": "security/Proofs/Properties/Verity/SampledTwo/Subprotocol.lean"
+      }
     }
   ]
 }

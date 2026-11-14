@@ -155,7 +155,7 @@ end SamplingBlock
 
 /-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, how many of its units are
 incorrect (`SamplingBlock.incorrectSet`), and whether a sampled proof block is one of them. -/
-structure WindowRec where
+structure SamplingBlockRec where
   idx : ℕ
   accepted : Prop
   incorrect : ℕ
@@ -167,7 +167,7 @@ open Classical
 
 /-- Sampling block `t`'s record, at the strategy `τ` that played it and its output `o`. -/
 noncomputable def record (w : SamplingBlock) (t : ℕ) (τ : Strategy w.game)
-    (o : w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) : WindowRec :=
+    (o : w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) : SamplingBlockRec :=
   ⟨t, LiveAcceptsZK w.I o, (w.incorrectSet τ).card, ∃ u ∈ o.2.1, u ∈ w.incorrectSet τ⟩
 
 end SamplingBlock
@@ -179,7 +179,7 @@ prover. -/
 noncomputable def game (W : ℕ → SamplingBlock) (T : ℕ) : Game Unit := monitoringPeriodG (fun t => (W t).game) 0 T
 
 /-- The period's run at the prover strategy `s`: each sampling block's record, in order. -/
-noncomputable def run (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) : Game (List WindowRec) :=
+noncomputable def run (W : ℕ → SamplingBlock) (T : ℕ) (s : Strategy (game W T)) : Game (List SamplingBlockRec) :=
   monitoringPeriodRun (fun t => (W t).game) (fun t => (W t).record t) 0 T s
 
 /-- **The strategies the period plays sampling block `t` with**: `τ` plays sampling block `t` on some run of the period
@@ -262,7 +262,7 @@ def IntegrityPooled : Prop :=
     (∀ t (τ : Strategy (W t).game), Period.Plays W T s t τ →
       LinkCRZC execArith hs512 (W t).P (planZHJ (W t).dj (W t).y₀) (tabZHJ (W t).dj (W t).y₀) (W t).vb
         (reg ((W t).sim τ)) (cont ((W t).sim τ)) (W t).k (W t).Rw (W t).M (W t).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ))
+    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ))
         (Period.run W T s) ≤
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ((W t).ks + (W t).link)
 

@@ -4,5 +4,5 @@ and tie, the ingress-ids tie, the scan's ingress and egress, the lengths rows' p
 records in `verity.protocols.accounting.certifier.verifier`.  The Definitions core's service, tie service and served rows read stay
 there with the ones they build on (`advised`, `io_request`, `io_tie`, `compile_slice`, `replay_step`, `replay_chain`,
 `cache_step`, `charge_chain`, `arith_encode`), and so do the head check (`head_check`) and the served counts (`served`),
-since the link-window verdict reads `served`'s admission rule.
+since the execution phase verdict reads `served`'s admission rule.
 """

@@ -2,10 +2,11 @@
 
 Today's setup check (`setup.verifier_key_from_encoding`, `PousCheck.SetupProtocol`) reads all of C* and decodes it.  In
 proofs it reads none of it: the store's blocks are committed and their root registered, the challenger samples
-`SAMPLE` blocks on its live coins after that (`law`), each sampled block is proved to decode to the registered rows of W
-at its place (`verity/protocols/accounting/pous/prover/window.py`, one instance of `PousP2SetupCheck_v1` a block),
-and the check takes the `Claim`: the parameters and commitment as today, the store's root, the unit's Program digest
-and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only carries the claim.
+`SAMPLE` blocks on its live coins after that (`sampling_design`), each sampled block is proved to decode to the
+registered rows of W at its place (`verity/protocols/accounting/pous/prover/window.py`, one instance of
+`PousP2SetupCheck_v1` a block), and the check takes the `Claim`: the parameters and commitment as today, the store's
+root, the unit's Program digest and SPOT's outcome.  The Lean check `PousCheck.SetupInProofs.check` decides; Python only
+carries the claim.
 
 Each sampled block's base and slot are rows the verifier makes from its own `expand_prefix` and the sample (`supplied`),
 which SPOT's one-stage verifier takes as its ``supplied`` values (`BASE`, `SLOT`), so a sampled block is tied to its
@@ -31,7 +32,7 @@ BASE, SLOT, OK = "setup/base", "setup/slot", "setup/ok"
 SAMPLE = 8828
 
 
-def law(blocks: int) -> str | None:
+def sampling_design(blocks: int) -> str | None:
     """The sampling design over a store of `blocks` blocks: `rate:SAMPLE/B`, which samples `SAMPLE` of them; None, every
     block, when there are no more than `SAMPLE`."""
     if not (isinstance(blocks, int) and not isinstance(blocks, bool) and blocks >= 1):
@@ -78,8 +79,8 @@ def register(stream: Any, record: Mapping[str, Any], ports: Mapping[str, Mapping
 class Claim:
     """What the setup's check reads in place of C*: `params`, the codec's manifest, and `commitment`, the server's
     `w_commitment ‖ salt`, as today's check reads them; `store`, the store's registered root; `unit`, the setup unit's
-    Program digest, which the auditor pins; `law`, the sampling design (`law`); `outcome`, SPOT's outcome record of the
-    sampled audit."""
+    Program digest, which the auditor pins; `law`, the sampling design (`sampling_design`); `outcome`, SPOT's outcome
+    record of the sampled audit."""
 
     params: dict[str, Any]
     commitment: bytes
@@ -101,4 +102,5 @@ class Claim:
         return json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()
 
 
-__all__ = ["BASE", "Claim", "GOAL", "OK", "SAMPLE", "SLOT", "base", "law", "leaf_bytes", "register", "supplied"]
+__all__ = ["BASE", "Claim", "GOAL", "OK", "SAMPLE", "SLOT", "base", "leaf_bytes", "register", "sampling_design",
+           "supplied"]

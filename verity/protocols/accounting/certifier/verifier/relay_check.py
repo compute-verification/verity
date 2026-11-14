@@ -75,7 +75,7 @@ def read_cells(run: Path) -> list[tuple[dict, list[bytes], bytes]]:
 
 
 def check_cells(run: Path, dep: dict, params: WardenParams, records: dict[str, list[BlockGrid]]) -> tuple[dict, list]:
-    """Every link-window of the wire's two records has a registration that `warden_rows.check_registration` accepts
+    """Every execution phase of the wire's two records has a registration that `warden_rows.check_registration` accepts
     under the network certifier's key and session, whose head is the record's rows and wiring under their salts; the
     per-window cost."""
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])

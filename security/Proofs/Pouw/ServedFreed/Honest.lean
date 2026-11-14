@@ -44,7 +44,7 @@ import Proofs.Pouw.ServedWork
 
 The twins of `Properties.Pouw.Served.ServedFreed`, over `Proofs.Pouw.ServedWork.Honest`'s flat machine and honest
 inventory at the honest J10-R period, conditional as `served_honest` is on `Credit.window`'s verdict on the
-executionPhases' inputs (`hacc`, `hsalt`, `hdraw`).
+execution phases' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `pd c H`: the registered devices' period on the flat machine: `H` seconds of its one resource, all of it the honest
   use and worth `H`, beside one other job worth 1 a unit at one unit of the resource. `pd_dualOpt`: price 1 is its
@@ -175,10 +175,10 @@ theorem servedFreed_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAc
     (certified_fa _ (work (tileCount σ sT)) fun x w => ((), saltCoin (hr1 _) x w))
 
 /-- **`ServedFreed` is false without `SAKServed`.** On the free machine (`fa 0`), at the honest J10-R period of
-`n ≥ 17` executionPhases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts, the honest inventory, the
+`n ≥ 17` execution phases, `δ_s = e^{−1}`, price 1 a word, no luck allowance, no degenerate salts, the honest inventory, the
 period `pd 0 H` at `H = N_p·n`, `β = K = δ = 0` and a certifier that accepts every period, every other premise of
 `ServedFreed` holds, in its order (`j10r_meets`, `served_rest`, `pd_dualOpt`, `outsource_fa`, `certified_fa`), and
-`SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path's executionPhases use nothing, so
+`SAKServed` fails (`not_sakServed_free`). The conclusion fails with it: every accepted path's execution phases use nothing, so
 the other job fits the whole period (`z = H`), worth `2H` against an honest strategy's `H`, and `ε(x) < 1` since its
 credit is positive (`creditPrefix_pos`). So its event has probability 1, past the bound `e^{−1}`. -/
 theorem servedFreed_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
