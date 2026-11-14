@@ -7,7 +7,6 @@ has a Python counterpart here."""
 
 from __future__ import annotations
 
-import json
 import sys
 from dataclasses import replace
 from fractions import Fraction
@@ -129,10 +128,10 @@ def test_gamma_is_the_pinned_linear_and_layout_twins(twin):
 
 @pytest.mark.parametrize("pin,n", H100_PINS.items(), ids=list(H100_PINS))
 def test_h100_gamma_is_rev1s_pin(pin, n):
-    """`pearl-c-h100-v1`'s gap at the cap is `DeviceRev1Gap.lean`'s, read off the repository's pin (its lifted
-    guarantee's statement)."""
-    audit = json.loads(P.REPO_AUDIT.read_text())
-    sig, lifted = P._statement(pin, P.guarantees(audit)[pin], P.lifted_definitions(audit, P.REPO_AUDIT.parent))
+    """`pearl-c-h100-v1`'s gap at the cap is `DeviceRev1Gap.lean`'s, read off the repository's lemma at the H100 record
+    (`REPO_LEMMAS`)."""
+    pins, defs = P.lemmas(P.REPO_AUDIT.parent)
+    sig, lifted = P._statement(pin, pins[pin], defs)
     lit = P._GAMMA_LITERAL.search(sig) or P._GAMMA_SOURCE.search(sig)
     assert lifted and lit, sig
     s = get("pearl-c-h100-v1")
