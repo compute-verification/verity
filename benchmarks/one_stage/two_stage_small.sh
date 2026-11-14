@@ -14,7 +14,7 @@
 # written window, a challenger host's ledger) is not kept, and large.txt lists its SHA-512, size and path.
 #   research run --on auto --cwd clone --cpus 16 --mem-gb 64 --max-min 120 -- bash benchmarks/one_stage/two_stage_small.sh
 #   SMALL_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); SMALL_ARGS, if given, is the
-#   serve's arguments, not the play's; SMALL_FIRST and SMALL_SECOND="--firewall PATH" pass `first` and `second` more;
+#   serve's arguments, not the play's; SMALL_FIRST and SMALL_SECOND="--zk-server PATH" pass `first` and `second` more;
 #   SMALL_INLINE=1 runs the class as a served vocabulary's is, its block the check's body inlined, with `second
 #   --unlinked`: exit 0 when everything holds but round 2's wires (second-wires)
 #   SMALL_NEGATIVE=second-inputs runs that negative case on the class of whole instances (serve with no arguments), and
@@ -52,7 +52,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"

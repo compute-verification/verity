@@ -5,9 +5,9 @@ registered values), opens the rows the verifier holds its own copy of, and recor
 record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
 it.
 
-    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
+    python benchmarks/one_stage/prove_leg.py standin --bin flock-circuit --lean verity-verify-proof [--zk-server flock-zk-server] \\
       --out DIR [--n 4] [--negatives] [--registered] [--gpus 0,1] [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
-    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean verity-verify-proof [--firewall flock-firewall] \\
+    python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean verity-verify-proof [--zk-server flock-zk-server] \\
       --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots] [--gpus 0,1] \\
       [--structural iv/hybrid/4 --tmpl-unit-bin flock-tmpl-unit]
 
@@ -31,8 +31,8 @@ it.
   session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every leg
   inside it; a leg outside one runs its own CPU server. Under ``FLOCK_CHALLENGER=1`` a leg runs a server of its own whose
   verifiers take their coin trees from challengers, and closes it before its verdicts, since a challenger's audit holds
-  every session it served at once. Behind the ZK server (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``, when
-  `Tools.firewall` names one) a session is one `serve --zk --draw-file` / `prove --zk` process pair instead
+  every session it served at once. Behind the ZK server (``FC_ZK_SERVER=1``, its Lean frame ``FC_ZK_SERVER_LEAN``, when
+  `Tools.zk_server` names one) a session is one `serve --zk --draw-file` / `prove --zk` process pair instead
   (`a0.session`).
 * **The verdict of record** is Lean's `verify --zk --archive --partition --program [--registered]` on the session, run on the
   server's verdict pool as each session ends, off the provers' path. A unit is accepted when its session's Lean and M0
@@ -130,14 +130,14 @@ class Member:
 @dataclass(frozen=True)
 class Tools:
     """The binaries: M0's ``flock-circuit`` (the proving build), the Lean ``verity-verify-proof``, the Lean ZK server's frame
-    ``flock-firewall`` (None: proved without the ZK server), and with ``structural`` (a layout mode, ``iv/hybrid/4``)
+    ``flock-zk-server`` (None: proved without the ZK server), and with ``structural`` (a layout mode, ``iv/hybrid/4``)
     ``tmpl_unit``, `flock-tmpl-unit`, which places a templated statement's unit rows for its prover: each member is then
     staged as `struct_lower`'s template (`UnitStager`'s ``structural``) where it lowers, and flat where it doesn't, its
     record's ``form`` saying why."""
 
     bin: str
     lean: str
-    firewall: str | None = None
+    zk_server: str | None = None
     delta: float = 2.0 ** -20
     structural: str | None = None
     tmpl_unit: str | None = None
@@ -361,7 +361,7 @@ def _session(m: Member, s: dict, h: Any, local: list[int], tools: Tools, sdir: P
     (``h``, the session submitted there), else one serve/prove process pair behind the ZK server or a challenger of its
     own (`a0.session`), verified then."""
     if h is None:
-        env = {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": tools.firewall, **a0.firewall_env(s)} if tools.firewall else {}
+        env = {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": tools.zk_server, **a0.zk_server_env(s)} if tools.zk_server else {}
         if m.forge:
             env["FC_ZK_SELF_CHECK"] = "skip"
         t = time.time()
@@ -409,7 +409,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         bases[tid] = (b0, c0 + cnt)
     population = P.units(program, query)
     leg: dict[str, Any] = {"format": FORMAT, "population": population, "partition": bound["partition"],
-                           "program": bound["program"], "firewall": tools.firewall is not None, "members": {},
+                           "program": bound["program"], "firewall": tools.zk_server is not None, "members": {},
                            "_out": str(out)}
 
     salt_key = os.urandom(32)
@@ -460,7 +460,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                  {s["name"]: (s["base"], s["n"]) for s in staged})
     (out / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
-    pairs = tools.firewall is not None
+    pairs = tools.zk_server is not None
     chall = not pairs and a0.own_challenger(zk=True)
     with contextlib.ExitStack() as stack:
         if chall:
@@ -609,7 +609,7 @@ def negatives(members: list[Member], coins, registered: Path | None, tools: Tool
     kw = {"tools": tools, "program": program, "query": query, "k": k}
     forge = tuple(range(m.n)) if k is not None and k < m.n else (0,)
 
-    for name, t in (("tampered-unit", tools), ("tampered-unit-unfirewalled", replace(tools, firewall=None) if tools.firewall else None)):
+    for name, t in (("tampered-unit", tools), ("tampered-unit-unserved", replace(tools, zk_server=None) if tools.zk_server else None)):
         if t is None:
             continue
         leg = prove_units([replace(m, forge=forge)], coins, registered, out=out / name, **{**kw, "tools": t})
@@ -1089,7 +1089,7 @@ def main(argv=None) -> int:
     s = sub.add_parser("standin", help="the stand-in members through the leg, and the negatives")
     s.add_argument("--bin", required=True)
     s.add_argument("--lean", required=True)
-    s.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
+    s.add_argument("--zk-server", default=None, help="flock-zk-server: prove behind the ZK server")
     s.add_argument("--out", required=True, type=Path)
     s.add_argument("--n", type=int, default=4)
     s.add_argument("--ks", default="128,256")
@@ -1099,7 +1099,7 @@ def main(argv=None) -> int:
     d = sub.add_parser("defs", help="vLLM's served Definitions at Llama shapes through the leg (`served`), and the negatives")
     d.add_argument("--bin", default=None)
     d.add_argument("--lean", default=None)
-    d.add_argument("--firewall", default=None, help="flock-firewall: prove behind the ZK server")
+    d.add_argument("--zk-server", default=None, help="flock-zk-server: prove behind the ZK server")
     d.add_argument("--out", required=True, type=Path)
     d.add_argument("--shape", action="append", required=True, help="family:model[:arg] (`served`); repeatable")
     d.add_argument("--negatives", action="store_true")
@@ -1124,14 +1124,14 @@ def main(argv=None) -> int:
     gpus = [int(x) for x in a.gpus.split(",")] if a.gpus else None
 
     def server(tools: Tools | None):
-        if tools is None or tools.firewall:
+        if tools is None or tools.zk_server:
             return contextlib.nullcontext()
         return proof_server(tools, a.out / "proof-server", gpus, a.verify_ahead)
 
     if a.command == "defs":
         if not a.census and not (a.bin and a.lean):
             ap.error("defs: --bin and --lean, or --census")
-        tools = None if a.census else Tools(a.bin, a.lean, a.firewall, structural=a.structural, tmpl_unit=a.tmpl_unit_bin)
+        tools = None if a.census else Tools(a.bin, a.lean, a.zk_server, structural=a.structural, tmpl_unit=a.tmpl_unit_bin)
         with server(tools):
             summary = defs(a.shape, tools, a.out, a.negatives, a.seed, a.mem_gb * 2**30 // 700, a.lower_refused, a.reads)
         ok = all("error" not in r for r in summary.values()) if a.census else all(defs_ok(r) for r in summary.values())
@@ -1139,7 +1139,7 @@ def main(argv=None) -> int:
                                                                         else "sized" if a.census else defs_ok(r))
                                                                     for k, r in summary.items()}))
         return 0 if ok else 1
-    tools = Tools(a.bin, a.lean, a.firewall, structural=a.structural, tmpl_unit=a.tmpl_unit_bin)
+    tools = Tools(a.bin, a.lean, a.zk_server, structural=a.structural, tmpl_unit=a.tmpl_unit_bin)
     ks = [int(x) for x in a.ks.split(",")]
     program = query = reg = None
     if a.registered:

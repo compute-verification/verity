@@ -25,7 +25,7 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-zk-server) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"

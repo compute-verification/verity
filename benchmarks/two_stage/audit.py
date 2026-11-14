@@ -20,7 +20,7 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The second stage** (`two_stage.second_stage`, the served driver's, over any interior window of word-row members, its
   two records, the verifier's reads and the replay block): `a5.audit` of the stream's second sample: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
-  ``--firewall`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
+  ``--zk-server`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
   port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
   wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them). Each
   session's circuit file is held to the one the params name for its template (`two_stage.pins`), and its statement as round 2
@@ -197,7 +197,7 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True, help="flock-circuit")
     ap.add_argument("--lean", required=True, help="verity-verify-proof")
-    ap.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
+    ap.add_argument("--zk-server", help="Lean's flock-zk-server: every session behind the ZK server; without it each runs "
                     "prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--altered", action="store_true", help="span S[0] replayed on an ingress one bit off")
     ap.add_argument("--out", required=True, type=Path)

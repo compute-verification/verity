@@ -26,10 +26,10 @@ setup
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 ARMS=${A8_ARMS:-fw,nofw}
 if [[ ,$ARMS, == *,fw,* ]]; then
-  export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-    > "$OUT/build-firewall.log" 2>&1
-  [ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "a8: no firewall frame, arms nofw only"; ARMS=nofw; }
+  export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+  (exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+    > "$OUT/build-zk-server.log" 2>&1
+  [ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "a8: no ZK server frame, arms nofw only"; ARMS=nofw; }
 fi
 log "a8: blocks ${A8_BLOCKS:-default}, plan ${A8_PLAN:-default}, samples ${A8_SAMPLES:-default}, points ${A8_POINTS:-1,4,16}, arms $ARMS"
 "$PY" benchmarks/one_stage/a8.py --bin "$BIN" --lean "$LEAN" --out "$W/a8" ${A8_BLOCKS:+--blocks "$A8_BLOCKS"} \
