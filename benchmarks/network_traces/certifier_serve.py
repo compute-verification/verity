@@ -83,7 +83,7 @@ or ignore_eos. `--requests` requests arrive as a Poisson process at `--rate` a s
 the middle of the bucket before the one its arrival falls in. Each prompt is a list of the endpoint's token ids, a chat
 turn (a question that the model answers in a word or at length, and filler) cut to a length log-uniform in
 `--prompt-range`, with `max_tokens` uniform in 1 … `--tokens`, a seed of its own, temperature 0 and the model's own
-EOS; with `--prompts-file` (a JSON array of prompts of token ids, the gate's `certifier-rehearse --prompts`) request
+EOS; with `--prompts-file` (a JSON array of prompts of token ids) request
 j's prompt is the (j mod n)-th of the file's n instead, at the same seed's arrivals, `max_tokens` and seeds. Its
 session is the body's `user`, the request's id, `--name`.j (j its index, five digits), which the shim forwards the
 endpoint, so a run named apart from every other one the endpoint served names each of its requests there as the
@@ -1702,7 +1702,7 @@ def parser() -> argparse.ArgumentParser:
         q.add_argument("--prompt-range", default="16:1024", help="varied: LO:HI, the prompts' lengths in tokens")
         q.add_argument("--prompts-file", type=Path,
                        help="varied: a JSON array of prompts of token ids, request j's the (j mod n)-th of the n "
-                            "(in place of --prompt-range's chat turns); the gate's certifier-rehearse --prompts")
+                            "(in place of --prompt-range's chat turns)")
         q.add_argument("--name", default="varied",
                        help="varied: the users' prefix: request j's user, its session, is NAME.j (j five digits)")
         q.add_argument("--seed", type=int, default=0, help="varied: the traffic's seed")
@@ -1710,8 +1710,7 @@ def parser() -> argparse.ArgumentParser:
                                          "of the probe's responses that stopped)")
         q.add_argument("--compact", type=int, metavar="B",
                        help="varied: compact egress records (`active.compact_record`) in cells of B >= 8 bytes, "
-                            "the shim writing each token's record (default: id events in 4096-byte frames); the "
-                            "gate's certifier-rehearse --traffic varied --compact B runs it on the auditor's host")
+                            "the shim writing each token's record (default: id events in 4096-byte frames)")
         q.add_argument("--margin", type=float, default=2.0,
                        help="varied: the plan's margin over the probed rates and latencies (an endpoint that slows "
                             "under load the probes didn't meet needs more)")
