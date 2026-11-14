@@ -6203,10 +6203,8 @@ def _workspace_reach(*modules: str) -> dict[str, str]:
 
     def root(top: str) -> Path | None:
         if top not in roots:
-            try:  # `__main__` has no spec where pytest runs as a script
-                spec = None if top in sys.stdlib_module_names else importlib.util.find_spec(top)
-            except ValueError:
-                spec = None
+            # `__main__` has no spec where pytest runs as a script, and find_spec refuses it
+            spec = None if top in sys.stdlib_module_names or top == "__main__" else importlib.util.find_spec(top)
             where = (Path(spec.origin).parent if spec and spec.origin else None)
             where = where.parent if where and spec.submodule_search_locations else where
             roots[top] = where if where and where.is_relative_to(repo) and "site-packages" not in where.parts else None
