@@ -597,10 +597,10 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     cls = SimpleNamespace(NR=2, EVERY=every, KO=1, IDB=1)
     G, T, NE = 1, 8, sz.IS.entry_bits(cls)
     nb = G * T // every
-    defs = {"first": _lanes("ScanZkTestScanFirst", ("row",), cls.NR, NE),
+    defs = {"start": _lanes("ScanZkTestScanStart", ("sin",), 0, NE),
             "ingress": _lanes("ScanZkTestScanBucket", ("row", "sin"), cls.NR, NE),
             "egress": _lanes("ScanZkTestScanEgress", ("state",), 0, NE)}
-    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     N, design = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
