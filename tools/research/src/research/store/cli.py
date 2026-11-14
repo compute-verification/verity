@@ -179,7 +179,7 @@ def _select_parser() -> argparse.ArgumentParser:
 
 def _select(st: LocalStore, ns: argparse.Namespace, idx=None) -> tuple[list[dict], dict]:
     """The catalog's matches, or with ``idx`` (`bucket_index.reader`) the index's plus the catalog's the index lacks (pending here)."""
-    from . import bucket_index as BI  # noqa: PLC0415
+    from . import bucket_index as BI
 
     labels = [tuple(next(iter(_kv([x], "--label").items()))) for x in ns.label]
     query = {k: v for k, v in (("kind", ns.kind), ("where", _kv(ns.where, "--where") or None), ("tool", ns.tool), ("derivation", ns.derivation),
@@ -224,8 +224,8 @@ def cmd_put(argv: list[str]) -> int:
     st = LocalStore(ns.store)
     meta = _meta(ns.meta)
     if ns.tree and ids.is_run_id(run_id := meta.get("run_id")):
-        from . import withdraw  # noqa: PLC0415
-        from .local import _rel_files  # noqa: PLC0415
+        from . import withdraw
+        from .local import _rel_files
 
         tree = Path(ns.tree)
         rels = [p.relative_to(tree).as_posix() for p in _rel_files(tree)] if tree.is_dir() else []
@@ -372,7 +372,7 @@ def cmd_evict(argv: list[str]) -> int:
     also removes what it is pointed at that nothing else removes (`leftovers.py`): request directories whose run dir is gone, the
     clones of runs that are over or whose run dir is gone, the store's free lock files and a uv cache's idle editable shards and
     build directories.  One of these passes that fails is its report's `error` and stops no other."""
-    from . import evict as EV  # noqa: PLC0415
+    from . import evict as EV
     from . import leftovers as LO
 
     ap = _ap("evict")
@@ -424,7 +424,7 @@ def cmd_evict(argv: list[str]) -> int:
         rep["store"] = EV.evict_store(st, target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes, keep_trees=ns.keep_trees,
                                       keep=keep, log=say)
         if ns.runs:
-            from ..runs import runs_root  # noqa: PLC0415
+            from ..runs import runs_root
 
             rep["runs"] = EV.evict_runs(st, runs_root(ns.runs_dir), target_free_bytes=target, dry_run=ns.dry_run, min_bytes=min_bytes,
                                         quiet_s=ns.quiet_min * 60, log=say, remote_check=ns.verify_remote)
@@ -521,7 +521,7 @@ def cmd_select(argv: list[str]) -> int:
     (text, `--ids`, `--json`) ends with one stderr line naming the source and, for the index, the time it is complete as of: a
     stale build answers only for what it had listed.  With no index that ever listed the bucket and a catalog holding no artifact,
     an empty answer would mean nothing, so it exits 1 naming what is missing (as in a `research run` job's store)."""
-    from . import bucket_index as BI  # noqa: PLC0415
+    from . import bucket_index as BI
 
     ns = _select_parser().parse_args(argv)
     st = LocalStore(ns.store)
@@ -616,7 +616,7 @@ def cmd_labels(argv: list[str]) -> int:
     ns = ap.parse_args(argv)
     shown = (lambda v: v) if ns.with_tokens else _hide_tokens
     if ns.remote:
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         st = LocalStore(ns.store)
         rows = [x for x in LS.compare(st, ns.target)
@@ -635,7 +635,7 @@ def cmd_labels(argv: list[str]) -> int:
             print(f"{ns.target}: {n['both']} on both, {n['local']} local only, {n['remote']} remote only ({st.remote.describe()})"
                   + ("  -- NOT durable: `research data push` repairs" if n["local"] else ""), file=sys.stderr)
         return 1 if n["local"] else 0
-    from . import labels_sync as LS  # noqa: PLC0415
+    from . import labels_sync as LS
 
     st = LocalStore(ns.store)
     LS.read_through(st, [ns.target], lambda s: print(f"research data labels: {s}", file=sys.stderr))
@@ -700,7 +700,7 @@ def _run_file(st: LocalStore, run_id: str, rel: str) -> object:
 def _label_write_through(st: LocalStore, target: str) -> tuple[str, bool]:
     """Upload the target's assertions the remote lacks, in the command that wrote one (README §7.2); the local write stands either way,
     and a write that stays local says so. Also whether write-through was on and the upload failed (the caller exits 1)."""
-    from . import labels_sync as LS  # noqa: PLC0415
+    from . import labels_sync as LS
 
     pending = "pending: `research data push --pending` uploads it"
     if not st.write_through:
@@ -720,7 +720,7 @@ def cmd_vocab_check(argv: list[str]) -> int:
     """Read-only audit of labels/ against the vocabulary (`vocab_check.py`): unknown keys, old spellings of keys and values, bool / int /
     number keys holding strings, enum values off the set, refs written as labels, unreadable files -- each with counts, asserters and
     example targets.  Exit 0 always (it is a report); `--strict` exits 1 when anything is found."""
-    from . import vocab_check as VC  # noqa: PLC0415
+    from . import vocab_check as VC
 
     ap = _ap("vocab-check")
     ap.add_argument("--json", action="store_true")
@@ -736,7 +736,7 @@ def cmd_labels_sync(argv: list[str]) -> int:
     (`labels/<target>/<sha256>.json`, immutable, so two machines never overwrite each other), and every remote assertion we lack comes
     down into the store's own layout.  `--from-backup ART` unions a `labels-backup/v1` tarball instead; `--from-dir DIR` any directory of
     assertion files (another store's labels/).  Read-only for the remote with `--pull-only`; nothing is ever deleted or rewritten."""
-    from . import labels_sync as LS  # noqa: PLC0415
+    from . import labels_sync as LS
 
     ap = _ap("labels-sync")
     g = ap.add_mutually_exclusive_group()
@@ -807,7 +807,7 @@ def cmd_reindex(argv: list[str]) -> int:
     st = LocalStore(ns.store)
     pulled = None
     if ns.remote and st.remote is not None:                         # labels first: the rebuild below then indexes them with everything else
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         pulled = len(LS.sync(st, push=False, pull=True, log=None if ns.json else (lambda s: print(s, file=sys.stderr)))["pulled"])
     n = st.reindex(remote=ns.remote)
@@ -820,8 +820,8 @@ def cmd_reindex(argv: list[str]) -> int:
 
 def cmd_index(argv: list[str]) -> int:
     """The derived index (README §5.1).  Exit 1 when a record failed its check (it is left out and read again next pass)."""
-    from . import bucket_index as BI  # noqa: PLC0415
-    from .remote import FsRemote, load_export  # noqa: PLC0415
+    from . import bucket_index as BI
+    from .remote import FsRemote, load_export
 
     ap = _ap("index")
     ap.add_argument("--db", type=Path, help="the private index (default <store>/index.sqlite)")
@@ -926,7 +926,7 @@ def cmd_refresh(argv: list[str]) -> int:
 def cmd_parity(argv: list[str]) -> int:
     """Content parity of this store against a store built from the remote alone (`parity.py`): artifacts, attempts, labels, replica
     rows.  Read-only for the store under test.  Exit 0 iff every difference is explained."""
-    from . import parity as PA  # noqa: PLC0415
+    from . import parity as PA
 
     ap = _ap("parity")
     ap.add_argument("--fresh", required=True, metavar="DIR", help="where to build the store from the remote alone (a new directory)")
@@ -949,7 +949,7 @@ def cmd_reconcile_attempts(argv: list[str]) -> int:
     """Local attempt documents that differ from the remote's copy of the same write-once key (`reconcile.py`): listed (dry run), or
     with `--apply` superseded by the remote's copy, the local one kept under attempts/.superseded/ and each change logged in
     <store>/reconcile.log.  Exit 1 when divergent attempts remain (dry run) or one could not be reconciled."""
-    from . import reconcile as RC  # noqa: PLC0415
+    from . import reconcile as RC
 
     ap = _ap("reconcile-attempts")
     ap.add_argument("runs", nargs="*", help="run ids (default with --all: every local attempt the remote also holds)")
@@ -1038,7 +1038,7 @@ def cmd_sql(argv: list[str]) -> int:
 
 
 def _sql_index(ns: argparse.Namespace) -> int:
-    from . import bucket_index as BI  # noqa: PLC0415
+    from . import bucket_index as BI
 
     st = LocalStore(ns.store)
     idx = BI.reader(st.root)
@@ -1111,9 +1111,9 @@ def cmd_push(argv: list[str]) -> int:
     if ns.jobs < 1:
         raise ValueError("--jobs must be >= 1")
     st = LocalStore(ns.store)
-    from .local import attempt_key  # noqa: PLC0415
+    from .local import attempt_key
 
-    r = st._require_remote()  # noqa: SLF001  (names the missing credentials when the remote is configured but unusable here)
+    r = st._require_remote()  # names the missing credentials when the remote is configured but unusable here
     arts: list[str] = []
     runs: list[str] = []
     for t in ns.targets:
@@ -1125,7 +1125,7 @@ def cmd_push(argv: list[str]) -> int:
     reports: list[dict] = []
     record_less: list[str] = []
     label_targets: dict[str, list[str]] = {}                       # report id -> the label targets its durability covers
-    from . import labels_sync as LS  # noqa: PLC0415
+    from . import labels_sync as LS
 
     for rid in dict.fromkeys(runs):
         if not ids.is_run_id(rid):
@@ -1207,7 +1207,7 @@ def cmd_mint_credential(argv: list[str]) -> int:
     (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
     CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file.  `--job` mints
     what a cluster job holds (`custody.job_env`): the key `research run` stages for a run's custody, or its `--store-read` key."""
-    from . import credentials as C  # noqa: PLC0415
+    from . import credentials as C
     from . import custody as CU
 
     ap = _ap("mint-credential")
@@ -1252,7 +1252,7 @@ def cmd_refresh_fixtures(argv: list[str]) -> int:
     """Re-register every `artifacts.json` entry whose bytes changed (`fixtures.refresh`): put under the new id (content-only
     identity, as the entries were registered), `--preserve` pushes it, the entry is rewritten and the old id kept under `previous`.
     Prints `old -> new  path` per changed entry.  Exit 1 when an entry's path is missing, conflicts, or was not PRESERVED."""
-    from . import fixtures as F  # noqa: PLC0415
+    from . import fixtures as F
 
     ap = _ap("refresh-fixtures")
     ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
@@ -1286,7 +1286,7 @@ def cmd_refresh_fixtures(argv: list[str]) -> int:
 
 
 def _fixture_repo(st: LocalStore, cmd: str, repo: str | None) -> Path | None:
-    from . import fixtures as F  # noqa: PLC0415
+    from . import fixtures as F
 
     root = Path(repo).expanduser().resolve() if repo else st.repo
     if root is None or not F.replica_map_file(root).is_file():
@@ -1325,7 +1325,7 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
     (`--public-url`, `$RESEARCH_PUBLIC_URL`, else the built-in URL), `--jobs` at a time, every byte checked.  A tracked entry is
     left alone.  `--check` only reports (exit 1 if any is missing or differs).  `--stubs` also restores the history stubs in
     tracked files (an old commit's checkout)."""
-    from . import fetchset, fixtures as F  # noqa: PLC0415
+    from . import fetchset, fixtures as F
 
     ap = _ap("fetch-fixtures")
     ap.add_argument("paths", nargs="*", metavar="PATH", help="only entries under these paths (default: all)")
@@ -1374,8 +1374,8 @@ def cmd_export(argv: list[str]) -> int:
     public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
-    from . import fetchset, fixtures as F  # noqa: PLC0415
-    from .remote import load_export  # noqa: PLC0415
+    from . import fetchset, fixtures as F
+    from .remote import load_export
 
     ap = _ap("export")
     ap.add_argument("--repo", default=None, metavar="DIR", help="repository root (default $RESEARCH_REPO or the nearest ancestor of cwd with artifacts.json)")
@@ -1448,7 +1448,7 @@ def cmd_doctor(argv: list[str]) -> int:
     """Run dirs with a `store_publish_error.json` (README §10) whose run *is* now an attempt in this store -- a stale record of a publish
     that later succeeded (a back-fill, a retry) -- versus those whose run is not (a real failure, or a run still going).  Read-only;
     `--clean` deletes the stale files and nothing else.  Local attempts only: `reindex --remote` first if an attempt may live only on the vault."""
-    from ..runs import runs_root  # noqa: PLC0415  (the run registry is the runner's half of the package)
+    from ..runs import runs_root  # the run registry is the runner's half of the package
 
     ap = _ap("doctor")
     ap.add_argument("--runs-dir", default=None, metavar="DIR", help="runs root (default $RESEARCH_RUNS or ~/.research/runs)")
@@ -1488,7 +1488,7 @@ def cmd_doctor(argv: list[str]) -> int:
 def cmd_gc(argv: list[str]) -> int:
     """README §7.4 (`gc.py`): which blobs only uncited artifacts past their kind's TTL hold; `--apply` marks them and deletes those
     marked at least `gc.GRACE_S` ago that still are.  Read-only without `--apply`."""
-    from . import gc  # noqa: PLC0415
+    from . import gc
 
     ap = _ap("gc")
     ap.add_argument("--cite", action="append", default=[], metavar="DIR", required=True,
@@ -1512,7 +1512,7 @@ def cmd_gc(argv: list[str]) -> int:
     try:
         linear = None
         if ns.cite_linear:
-            from ..linear import Linear  # noqa: PLC0415
+            from ..linear import Linear
             linear = Linear().gql
         p = gc.plan(st.remote, Path(ns.cache), [Path(c) for c in ns.cite], now=gc.clock(), jobs=ns.jobs,
                     work=Path(ns.work) if ns.work else None, linear=linear, log=say)

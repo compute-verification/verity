@@ -766,7 +766,7 @@ def _newest(tree: Path) -> float:
 def _own_reasons(src_root: Path, sha: str, now: float, keep_s: float) -> tuple[set[str], float]:
     """What the tree itself says, and its `_newest` mtime: its READY.json must name its commit (condition 3), it must not have
     changed within `keep_s`, and a `research keep` record leaves it to `research retention`."""
-    from .. import retention as RT  # noqa: PLC0415
+    from .. import retention as RT
 
     tree, why = src_root / sha, set()
     try:
@@ -1016,7 +1016,7 @@ def evict_src(src_root: Path, *, origin: str | None = None, dry_run: bool = Fals
     tree kept with its reasons, each prefixed by what it is: `1:`/`2:`/`3:` (root's conditions), `recent:`, `record:`, `budget:`;
     `error` says what could not be established, and then nothing more was deleted.  `<root>` is `src_root`'s parent: its
     `git/verity.git` (also `origin`, condition 1's repository), `runs/` and `runs-aside/`, `requests/` and `locks/` unless given."""
-    from .. import retention as RT  # noqa: PLC0415
+    from .. import retention as RT
 
     say = log or (lambda s: None)
     src_root = Path(src_root)

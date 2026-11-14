@@ -435,7 +435,7 @@ def brief_mode(root: Path, campaign: str) -> tuple[str | None, str | None]:
 
 def orphaned(root: Path, a: Approach) -> str | None:
     """Why a live approach has no live owner (its lane, or the lane that took it over, is done), or None."""
-    from . import notes  # noqa: PLC0415
+    from . import notes
 
     lane = notes.latest(a.owner, notes.successors(root))
     if not (root / "lanes" / lane).is_dir():
@@ -443,7 +443,7 @@ def orphaned(root: Path, a: Approach) -> str | None:
     rep = notes.report_for(root, lane)
     if rep is None:                                         # a coordinator's folder: handoffs, no report
         return None
-    st = notes.lane_status(rep, notes._utcnow(), 30)  # noqa: SLF001
+    st = notes.lane_status(rep, notes._utcnow(), 30)
     return f"owner lane {lane} is {st['state']}" if st["state"] in notes.DONE else None
 
 
@@ -525,7 +525,7 @@ def render(store: LocalStore, root: Path, campaign: str | None = None) -> list[P
 def steward_lines(root: Path, now: dt.datetime, state: dict, config: Path | None = None) -> list[str]:
     """The steward's `[approaches]` rule (steward.toml: `store`, `every_min` = 10): refresh that store from the remote, then render
     every campaign's APPROACHES.md for the watch's `--sync` to commit.  A line only when a file changed or the rule failed."""
-    import tomllib  # noqa: PLC0415
+    import tomllib
 
     path = config or root / "steward.toml"
     try:

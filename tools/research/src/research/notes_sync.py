@@ -583,9 +583,9 @@ def missing_citations(cited: list[str], remote=None, workers: int = 8, wait_s: f
     """(the ids among `cited` the store's remote does not have, why the answer is partial or None), `workers` lookups at a time
     for at most `wait_s` (daemon threads: a remote that hangs never holds up the exit).  (set(), None) with no usable remote: none
     configured, or its credentials absent here."""
-    from .store.labels_sync import remote_labels_for  # noqa: PLC0415
-    from .store.local import attempt_key  # noqa: PLC0415
-    from .store.remote import ConfigError, load_remote  # noqa: PLC0415
+    from .store.labels_sync import remote_labels_for
+    from .store.local import attempt_key
+    from .store.remote import ConfigError, load_remote
 
     if remote is None:
         try:

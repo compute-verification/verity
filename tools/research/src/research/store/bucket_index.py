@@ -625,7 +625,7 @@ def not_indexed(idx: SqliteIndex | PostgresIndex, wanted: Iterable[str], batch: 
 
 def local_records(store) -> list[str]:
     """The index ids of every record this store holds: its artifacts, its runs and `label:<hash>` for each assertion."""
-    from . import labels_sync as LS  # noqa: PLC0415
+    from . import labels_sync as LS
 
     return [*store.artifact_ids(), *store.attempt_ids(), *(f"label:{h}" for h in LS.local_labels(store))]
 

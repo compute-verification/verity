@@ -559,7 +559,7 @@ def check_line_of_record(value: Any, doc: Any) -> str | None:
 
 def suggest(name: str) -> list[str]:
     """Up to two known keys (or old spellings, as their canonical key) close to `name`, case-insensitively."""
-    import difflib  # noqa: PLC0415
+    import difflib
 
     pool = {k.lower(): k for k in KEYS} | {a.lower(): c for a, c in KEY_ALIASES.items()}
     out: list[str] = []

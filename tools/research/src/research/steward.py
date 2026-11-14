@@ -128,7 +128,7 @@ class S3LeaseBackend:
 
     def read(self) -> tuple[dict, str] | None:
         try:
-            with self.remote._request("GET", self.key) as r:  # noqa: SLF001
+            with self.remote._request("GET", self.key) as r:
                 body, etag = r.read(), r.headers.get("ETag")
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -143,7 +143,7 @@ class S3LeaseBackend:
     def write(self, doc: dict, etag: str | None) -> None:
         cond = {"if-none-match": "*"} if etag is None else {"if-match": etag}
         try:
-            with self.remote._request("PUT", self.key, body=_encode(doc), headers=cond):  # noqa: SLF001
+            with self.remote._request("PUT", self.key, body=_encode(doc), headers=cond):
                 pass
         except urllib.error.HTTPError as e:
             if e.code in (409, 412):

@@ -812,7 +812,7 @@ class LocalStore:
     def push_labels(self, targets: list[str], *, jobs: int = 16) -> dict:
         """Push the assertions about `targets` (art / drv / run ids) the remote lacks, each under `labels/<target>/<content sha256>.json`
         (`labels_sync.push_targets`).  Per-assertion failures are in the report's `failed`, never raised; a missing remote is."""
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         return LS.push_targets(self, targets, jobs=jobs)
 
@@ -821,7 +821,7 @@ class LocalStore:
         `artifacts` without a verified remote replica whose manifest the remote lacks, or whose blobs are all here to verify
         cheaply (an artifact pulled from the remote without its blobs is the remote's already: `preserved` verifies it on demand);
         `attempts` the remote lacks; `labels` (content hashes) the remote lacks."""
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         r = self._require_remote()
         on_remote = {k[len("manifests/"):-len(".json")] for k in r.list("manifests/") if k.endswith(".json")}
@@ -854,7 +854,7 @@ class LocalStore:
         here yet -- what a reader of payloads (a render) needs; the count is `payloads`.  `attempts_only`: the attempts alone (what
         `research merge` reads), one listing instead of three.  `since` (a run id or its prefix, `rYYYYMMDD-HHMMSS`): only the
         attempts whose ids sort after it, listed from there (`research lean-times`)."""
-        from . import labels_sync as LS  # noqa: PLC0415
+        from . import labels_sync as LS
 
         t0 = time.monotonic()
         r = self._require_remote()

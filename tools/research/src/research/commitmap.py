@@ -203,7 +203,7 @@ def remap(repo: Path, maps: Maps, branches: list[str] | None = None, *, dry_run:
 def _maps(path: str | None, store_root: str | None) -> Maps:
     if path:
         return Maps.from_file(path)
-    from .store.local import LocalStore  # noqa: PLC0415
+    from .store.local import LocalStore
 
     return Maps.load(LocalStore(store_root))
 
