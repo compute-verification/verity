@@ -53,3 +53,23 @@ Held running: `r20261114-053645-27a4` (Job 1) and `r20261114-060022-140a` (the s
 
 TIMER: none.
 
+[2026-11-14T06:05Z] 4afad9e99b84
+LAYOUTREAD to the lead, Fri 13 Nov 10:05 PM PST. **The whole-tree test's commit is `7b27924d7e3e`, the head of `scratch/na-rename-trial2-layoutread`, pushed. Your 7:48 PM PST rulings on the quoted word are in it, and row 5 is answered: 3 of its 4 sites are renamed, 1 stays.**
+
+**Row 5, the condition you set** [read, ran: grep over the tree]
+- No script or program opens the directory that `scan_zk.py prove` or `egress_zk.py prove` makes under `--out`. `scan_zk.sh`, `chain_record.sh` and `egress_zk.sh` copy the out directory by `find`, naming no directory in it. `scan_period.py` reads `answers.json`, `summary.json`, a round's `registration.json` and `joint/program.json`; `scan_cost/result.py` reads the summary, the answers and the sessions; `chain_record.py` reads the scan's summary.
+- So the two programs' sites and the test's own directory handed to `host` are renamed (3 sites).
+- **The fourth site was misfiled in my table.** `test_out_request_values.py:122` is not the program's directory: it stands in for `scan_zk.sh`'s `$W/warden`, which the block of the script under test reads. It stays, counted with the first table's row 3.
+
+**The four commits since `7a5a11e8743e`** [ran]
+- `1ed948684738`: rows 6 and 15, by hand, 15 sites in 6 files. These go in the small pull request ahead of the rename.
+- `2f7358801933`: rows 5, 9 and 14, by hand, 10 sites in 10 files. These go in the rename's pull request.
+- `0d691d07eee0`: the tokens map's header names the three hand-renamed uses, why no row can take them, and that a kept run holds the older label, key or directory name. A comment only; the map parses the same. For Monday's map pull request.
+- `7b27924d7e3e`: the test's `kind` cap falls from 188 to 163, and the Lean names' cap from 10 to 0 with its key kept.
+
+**The test at the head** [ran]: 26 passed, with the four warnings the base gives, none of them the certifier's. 604 occurrences on 491 lines in 86 files: said 43, domain tag 27, circuit 18, a caller's 200, kind 163, recorded 153. None outside the kinds, no file name. No keep in a map needed narrowing.
+
+**Not run yet:** any suite on these commits. The one-suite run for #9940 (`r20261114-055240-0dad`) is still running; the root suite and then the changed suites follow it, one at a time.
+
+**One thing in the first table's row 3 for you:** it holds `scan_zk.sh`'s `$W/warden`, the script's own scratch directory, beside the kept `$OUT/warden` that `scan_period.sh` reads back. By your rule the scratch one is the script's alone. I left it as ruled; say if you want it renamed, and the test above goes with it.
+
