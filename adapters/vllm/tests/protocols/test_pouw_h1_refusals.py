@@ -1351,7 +1351,8 @@ def test_a_receipt_producer_takes_a_launch_a_run_and_each_calls_own_codes_and_we
             RC.Receipts(served, weight=lambda _call, held=held: held()).weight_of(call, None)
         assert str(refused.value) == (f"call 4: its weight is {what} on cpu, not its 32 × {K} contiguous int8 codes on "
                                       "cpu")
-    for given in (codes.astype(np.int16), codes[0], codes[:, :K // 2], np.zeros((33, K), np.int8)):
+    others: list[np.ndarray] = [codes.astype(np.int16), codes[0], codes[:, :K // 2], np.zeros((33, K), np.int8)]
+    for given in others:
         with pytest.raises(ValueError) as refused:
             made.operands(call, given, weight)
         assert str(refused.value) == (f"call 4: its codes are {given.dtype} {given.shape}, not at most 32 rows of {K} "
@@ -1452,8 +1453,9 @@ def test_a_windows_record_is_read_under_its_declared_programs_layout_and_only_wi
     _layout, why = CR.layout_of(b"no descriptor")
     assert why is not None and CR.layout_of(declared)[1] is None
     assert refusal({}, b"no descriptor") == f"the declared Program's layout: {why[1]}"
-    for trees in ({}, {"served": None}, {"served": [{"value": "v"}]}, {"served": {"refused": []}},
-                  {"served": {"entries": {"value": "v"}}}):
+    without: list[dict[str, Any]] = [{}, {"served": None}, {"served": [{"value": "v"}]}, {"served": {"refused": []}},
+                                     {"served": {"entries": {"value": "v"}}}]
+    for trees in without:
         assert refusal(trees) == "the window's record names no served trees: drawn rebuilds the values they registered"
     refused = ["call 0: its weight is not its 32 × 64 int8 codes and 32 scales"]
     assert refusal({"served": {"entries": [], "refused": refused}}) == f"the window's served trees were refused: {refused}"
