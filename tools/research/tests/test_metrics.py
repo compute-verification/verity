@@ -268,7 +268,7 @@ def test_a_failure_reading_a_refusals_body_is_one_line_too(monkeypatch):
             raise http.client.IncompleteRead(b"")
 
     def http_open(*a):
-        raise urllib.error.HTTPError(metrics.METRICS, 502, "bad gateway", None, Cut())
+        raise urllib.error.HTTPError(metrics.METRICS, 502, "the site failed", None, Cut())
     monkeypatch.setattr(metrics, "http_open", http_open)
     assert metrics.send_json("POST", metrics.METRICS, {}, "k", "w") == "w: IncompleteRead: IncompleteRead(0 bytes read)"
 
