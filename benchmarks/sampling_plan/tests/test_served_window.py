@@ -107,7 +107,7 @@ def test_a_code_commitment_hashes_1_over_rho_the_bytes_and_no_row_in_circuit(out
             assert code["lean"]["prove"] < base["lean"]["prove"], (r["scheme"], code["rung"])
 
 
-def test_the_replay_reruns_each_drawn_request_and_moves_no_optimum(out):
+def test_the_replay_reruns_each_sampled_request_and_moves_no_optimum(out):
     """Serving keeps no values, so each request a sampled proof block lies in is re-run from its prompt: at one window every
     request of the step (the samples far outnumber them), one stock step; pooled over a period about one request a sample; and
     the cheapest fitting rung is the one it is without the replay."""
