@@ -7,7 +7,7 @@ digests; then the exact W8A8 GEMM on one layer's loaded matrices.
 
 `LAYOUT`, `M`, `ENC`, the coin and the commitment are `layer.py`'s: the store's layout, the weights manifest with
 each stream tensor's SHA-256 (`manifest --digests`, the digests memory-accounting held W to), and memory-accounting's
-encoded store, read only, under the salt `setup.draw_salt` of the coin and commitment its `setup.json` is held to.
+encoded store, read only, under the salt `setup.sample_salt` of the coin and commitment its `setup.json` is held to.
 
 - **stage**, each tensor of `--layers` in block order (a layer's QKV, O, up and down; the head is the last layer):
   - its rows from the store's segment files onto the GPU (`Segments`: each file read once, in order, `readers` ahead in
@@ -54,7 +54,7 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "s8_linear"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import gemm as G  # noqa: E402
 import layout as L  # noqa: E402
 import stage as S  # noqa: E402

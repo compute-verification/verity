@@ -10,7 +10,7 @@ public import NetworkCertifier.Rows
 The audit of a run of the active network certifier (`warden_serve`, the serving module below) over the records it
 signed: each of the run's `W` windows' requests (the link's ingress), responses (its egress) and fails (`<link>-fails`,
 egress) records, each held to its certified record, then the certifier program's `NetworkCertifier.Rows.audit` over
-their grids, the executable form of `security/Definitions/NetworkCertifier/RecordRows.lean`. That audit accepts only
+their grids, the executable form of `security/Definitions/Certifier/RecordRows.lean`. That audit accepts only
 when the egress record is the schedule it shows rendered over the lanes, so a run whose cells the network certifier
 cut, clocked or ordered otherwise than the schedule is refused here, not taken on trust.
 

@@ -12,19 +12,23 @@ from __future__ import annotations
 import json
 import stat
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
 import torch
 
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.types import Array, Value as Bits
+from verity.circuits.types import Array
+from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, boundary_windows as BW
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import boundary_windows as BW
 from verity_vllm.records.boundary_tables import ROOTS
 
 RUN = "a" * 128
@@ -82,8 +86,10 @@ class Runner:
     batch as the runner pads its buffers."""
 
     def __init__(self, model: Model) -> None:
-        self.model, self.blocks, self.free, self.gen = model, {}, list(range(16)), {}
-        self.execute_model_state = None
+        self.model, self.free = model, list(range(16))
+        self.blocks: dict[str, list[int]] = {}
+        self.gen: dict[str, int] = {}
+        self.execute_model_state: NS | None = None
 
     def preempt(self, request: str) -> None:
         self.free += self.blocks.pop(request)
@@ -308,7 +314,8 @@ class Scheduler:
     """vLLM's V1 scheduler as `BoundaryWindows` wraps it: the step's outputs are ``outputs``."""
 
     def __init__(self) -> None:
-        self.cache_config, self.outputs = NS(enable_prefix_caching=False), {}
+        self.cache_config = NS(enable_prefix_caching=False)
+        self.outputs: dict[int, NS] = {}
 
     def add_request(self, request):
         return None
@@ -324,11 +331,12 @@ class Scheduler:
         return []
 
 
-def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None, check=PAIR, verdicts: bool = False):
+def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None, check=PAIR, verdicts: bool = False,
+            ids: bool = False):
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
     bw = BW.BoundaryWindows(out, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                             tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP,
-                            verdicts=verdicts)
+                            verdicts=verdicts, inline=ids, ids=ids)
     return bw.install(sched, hooks), sched, hooks
 
 
@@ -349,7 +357,8 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
     alone names and places every table, and both verifiers accept the registration against it, which lists every root
     before any coin. The class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines)
     try:
         finish(sched)
@@ -385,7 +394,8 @@ def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_pat
     block's return under the block's id, a verdict an output, then its tables; both verifiers accept the registration
     against the challenger's copy of the layout, and the class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, _tables, lines = *built(), []
+    make, _tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=SAME, verdicts=True)
     try:
         finish(sched)
@@ -407,6 +417,38 @@ def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_pat
         assert BR.reopen(d, SAME).roots == {k: bytes.fromhex(v["root"]) for k, v in pub["values"].items()}
 
 
+def test_a_serve_of_ids_commits_the_ids_served_as_its_blocks_return_beside_its_tables(tmp_path):
+    """The two-stage serve with no stop rule: the greedy select in units inlined, the ids served committed as what its
+    replay block returns (``ids``), and history tables. Each class lists ``b.ingress``, ``b.egress``, that return under
+    the block's id, one row an output, then its tables; both verifiers accept the registration against the challenger's copy of the
+    layout, and the class's files reopen to the same roots."""
+    check = BR.check_template("GreedySelect_v1{V=160,N=8}")
+    _runner, hook, _hooks = serve()
+    make, tables, lines = *built(), []
+    bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=check, ids=True)
+    try:
+        finish(sched)
+        bw.stop()
+    finally:
+        hooks.uninstall()
+    assert all("error" not in x for x in lines) and sorted((x["prompt"], x["outputs"]) for x in lines) == [(4, 4), (8, 4)]
+    made = {t.value: t for t in tables}
+    for line in lines:
+        p, o = line["prompt"], line["outputs"]
+        d, run = tmp_path / "w0" / f"p{p}-o{o}", BR.run_root("s", 0)
+        pub = json.loads((d / BR.COMMIT).read_text())
+        mine, names = BR.layout_of(pub, check), [BT.name(run, p, o, 0, x) for x in (0, 3)]
+        assert pub["ids"] is True and pub["inline"] is True and pub["tables"] == {"layers": [0, 3], "capacity": bw.capacity}
+        name = f"{P.template_id(mine.replay)}/{BR.RETURN}"
+        assert list(pub["values"]) == [*BR.PORTS, name, *names] == list(mine.ports())
+        assert mine.return_rows == (o, 32) and pub["values"][name]["leaves"] == o
+        assert [pub["values"][n]["root"] for n in names] == [made[n].root.hex() for n in names]
+        rec = BR.record(pub, check, DESIGN)
+        for verify in (R.check, V.check):
+            assert verify(rec, mine.program, mine.grain, DESIGN, CS.SCHEME, mine.ports()).codes == ()
+        assert BR.reopen(d, check).roots == {k: bytes.fromhex(v["root"]) for k, v in pub["values"].items()}
+
+
 def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other_ones(tmp_path):
     _runner, hook, _hooks = serve()
     hook.latents.fail("step 9: ValueError: no slot")
@@ -417,8 +459,8 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
         bw.stop()
     finally:
         hooks.uninstall()
-    assert [x["error"] for x in lines] == ["ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
-                                           "are incomplete: step 9: ValueError: no slot"] * 2
+    assert [x["error"] for x in lines] == [("ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
+                                            "are incomplete: step 9: ValueError: no slot")] * 2
     assert not list(tmp_path.rglob(BR.COMMIT))
     L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=CAP)
     entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]
@@ -442,7 +484,8 @@ def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
     start past what it holds: every class committed after the first hit would register nothing. So the hook is refused
     on a caching scheduler before it serves a request, and nothing is wrapped; without tables it is installed
     (`test_boundary_rows`)."""
-    sched, hooks, lines = Scheduler(), Hooks(tag="test-boundary-tables-caching"), []
+    sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables-caching")
+    lines: list[dict] = []
     sched.cache_config.enable_prefix_caching = True
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                             tables=BT.LocalChannel(BT.Builder(BT.Latents([0, 3]))), layers=(0, 3))
@@ -457,7 +500,7 @@ def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
 
 
 def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
-    cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
+    cfg: dict[str, Any] = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
     bw = BW.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
     bw.stop()
     assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), CAP, 5.0, tmp_path / "node" / "channel")
@@ -477,7 +520,8 @@ def modes(root) -> set[tuple[str, int]]:
 def kept_window(tmp_path) -> tuple[BT.Kept, list]:
     """`finish`'s window served with rank 0 keeping its tables under ``tmp_path``/node: the kept files and the tables."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     kept = BT.Kept(tmp_path / "node" / "tables")
     bw, sched, hooks = windows(tmp_path / "out", hook.latents, make, lines, kept)
     try:

@@ -128,7 +128,7 @@ def deployment(run: Path) -> tuple[dict, W.WardenParams]:
 def deployment_of(run: Path, record: dict) -> tuple[dict, W.WardenParams]:
     """The run's deployment (`deployment`) held to ``record``, the auditor's record of it (`RECORD`), never the kept
     fetch's: the prover's node holds that, and could rewrite it and re-sign the records under another key
-    (`trusted-host` covers the device and its host, not a file there). The record's key and session must be its
+    (`trusted-device` covers the device and its host, not a file there). The record's key and session must be its
     deployment's, and every ``deployment.json`` the run holds (its own, its ``witness/``'s, its ``out/``'s) must be
     that deployment: the copy the record is read off (`recorded`) in the bytes the record hashes, and the others with
     at most the auditor's device's keys more (`relay_check.DEVICE_KEYS`, which the gate's ``out/`` withholds), else

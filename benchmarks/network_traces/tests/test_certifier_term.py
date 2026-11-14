@@ -38,7 +38,7 @@ from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
+HERE = (Path(__file__).resolve().parents[1])
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 import leak_bounds as LB  # noqa: E402
@@ -416,7 +416,7 @@ def test_only_the_lengths_change_reads_the_stop_block():
 def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     inp = LB.inputs(requests="census")
     assert all(i.mark in LB.MARKS and i.source for i in inp.values())
-    fleet = tomllib.loads((ROOT / LB.RHO).read_text())["fleet"]["world-h200"]
+    fleet = tomllib.loads((ROOT / LB.SLOWDOWN).read_text())["fleet"]["world-h200"]
     card = json.loads((ROOT / LB.WORKLOAD).read_text())
     census = next(e for e in json.loads((ROOT / LB.ADVERSARY).read_text()) if e["id"] == "world-inference-2027")
     peak = next(e for e in json.loads((ROOT / LB.HARDWARE).read_text()) if e["id"] == LB.PEAK)
@@ -426,7 +426,7 @@ def test_the_scale_is_read_from_the_files_and_every_input_is_marked():
     assert inp["machine_gpus"].mark == inp["peak_flops"].mark == "assumed" and inp["world_machines"].mark == "modeled"
     assert inp["weights"].value == LB.WEIGHTS.bits == card["value"]["params"] * 4
     assert (inp["token_macs"].mark, inp["weights"].mark) == (card["status"], card["status"]) == ("measured", "measured")
-    for name, path in (("world_machines", LB.RHO), ("machine_gpus", LB.RHO_HARDWARE), ("mfu_serve", LB.RHO),
+    for name, path in (("world_machines", LB.SLOWDOWN), ("machine_gpus", LB.SLOWDOWN_HARDWARE), ("mfu_serve", LB.SLOWDOWN),
                        ("datacenter_machines", LB.DEPLOYMENTS), ("request_tokens", LB.ADVERSARY),
                        ("peak_flops", LB.HARDWARE), ("token_macs", LB.WORKLOAD), ("weights", LB.WORKLOAD)):
         assert inp[name].source.startswith(path) and (ROOT / path).is_file()
@@ -452,7 +452,7 @@ def test_the_counts_schedule_is_the_cost_runners_by_default_and_each_part_is_an_
     defaults are that runner's own, read here from its parser: six classes and a delay of 30 buckets, which its
     ingress buckets equal; its 16 lanes and its execution phase of 600 buckets are the schedule the command prints
     the count at beside its own."""
-    import connection_rows_run as CR
+    from verity.protocols.accounting.certifier.device import connection_rows_run as CR
     cost = CR.parser().parse_args(["cost", "--out", "x"])
     assert (len(CR.CLASSES), cost.delay, cost.lanes, cost.window) == (6, 30, 16, 600)
     assert (LB.CLASSES, LB.DELAY, LB.COST_LANES, LB.COST_BUCKETS) == (6, 30, 16, 600)
@@ -623,7 +623,7 @@ def test_the_set_time_card_is_an_input_marked_simulated_and_the_documents_figure
     carries, with the clause the figure rests on as its source. The document's figure at D_j = 1 carries that mark
     beside its label, whatever the command asks, and the term of record carries none: it rests on no card."""
     assert LB.MARKS == ("measured", "modeled", "assumed", "simulated") and LB.SIMULATED == "simulated"
-    clause = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the tick its "
+    clause = ("`trusted-device`, set-time card clause: the network certifier's card releases each bucket at the tick its "
               "record names, whatever the host and the server send it. It holds only of a calibrated hardware card; no "
               "such card is deployed, and the software pacer that stands in for it does not meet it.")
     assert LB.SET_TIME_CLAUSE == clause and LB.SET_TIME == "with a simulated set-time card"

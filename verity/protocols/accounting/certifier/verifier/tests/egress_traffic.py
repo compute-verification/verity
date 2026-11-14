@@ -1,5 +1,5 @@
 """A fake upstream's egress served through the network certifier, and the slot state each egress bucket reads: the
-egress tests' traffic (`test_network_certifier_egress.py`) and `benchmarks/network_traces/egress_zk.py`'s. It imports no
+egress tests' traffic (`test_network_certifier_egress.py`) and `verity/protocols/accounting/certifier/prover/egress_zk.py`'s. It imports no
 test framework, so a node's bare venv runs it."""
 
 from __future__ import annotations

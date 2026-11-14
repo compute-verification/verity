@@ -1,4 +1,4 @@
-"""The Python of PoUB's verifier held to the Lean's pieces (`remote-audit-difftest`, the definition), each on
+"""The Python of PoUB's verifier held to the Lean's pieces (`poub-difftest`, the definition), each on
 sampled inputs that include what both sides must refuse: the codec's decode (`codec.decode`, under the seed's key, a bound key
 and an append's coin), a plan (`receipts.Plan`: its length, digest and chunks) and its change (`Plan.changed`), a receipt
 (`receipts.receipter`, both kinds and both row counts), a frame-v3-sha512 opening (`verity.commitments.verify_opening`
@@ -336,7 +336,7 @@ def draws(v) -> list:
 
 
 @st.composite
-def draws_inputs(take) -> dict:
+def samples_inputs(take) -> dict:
     """A coin of one or more bytes (`derive` refuses an empty one, which no session has), and lengths now and then
     empty or with a pass of none."""
     lengths = take(mostly(st.lists(st.integers(1, 40), min_size=1, max_size=4),
@@ -346,8 +346,8 @@ def draws_inputs(take) -> dict:
             "samples": take(mostly(st.integers(1, 60), st.just(0), 9)), "lengths": lengths}
 
 
-def test_draws(server) -> None:
-    stats = D.run(port("draws", draws, draws_inputs()), examples=200, server=server)
+def test_samples(server) -> None:
+    stats = D.run(port("draws", draws, samples_inputs()), examples=200, server=server)
     assert stats.outputs > 120, stats
 
 

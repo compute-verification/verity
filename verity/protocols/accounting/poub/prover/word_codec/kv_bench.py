@@ -302,14 +302,14 @@ def gate_bound(lib: Lib, torch, log) -> dict:
 
 
 def gate_coin(lib: Lib, torch, log) -> dict | None:
-    """The append coin's form of the bound key (remote_bandwidth's PROTOCOL.md §3), for a library at
+    """The append coin's form of the bound key (poub's PROTOCOL.md §3), for a library at
     PoUB's codec (`codec.DEFAULT`; None for another): `vectors.json`'s `codec.coin` blocks, each encoded by
     `kv_encode_bound` at its own indices under b_j(c_a), equal the pinned words (their SHA-512 and first word), decode
     back, and don't decode under the form without the coin."""
     for p in (str(Path(__file__).resolve().parents[6]), str(REMOTE_VECTORS)):
         if p not in sys.path:
             sys.path.append(p)
-    import remote_bandwidth_vectors as RV
+    import poub_vectors as RV
     from verity.protocols.accounting.poub.verifier import codec as RC
 
     rc, f = RC.DEFAULT, lib.field
@@ -686,7 +686,7 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
-    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
+    ms = [{"name": "memory-accounting/kv-codec.read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
     for b, nat in res.get("native", {}).items():
         ms.append({"name": f"native70b_m{b}_step", "value": nat["step_s"], "unit": "s"})
     for lib in libs:

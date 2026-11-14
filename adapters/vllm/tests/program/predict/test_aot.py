@@ -12,10 +12,16 @@ from pathlib import Path
 import pytest
 from verity.circuits.types import RecordType
 
-from tests.program.predict.test_predict import TINY, _phi
+from tests.program.predict.test_predict import (
+    GLM53,
+    HF_CONFIG_DIR,
+    TINY,
+    _phi,
+    _row_phi,
+)
 from verity_vllm.config import UsageError
-from verity_vllm.correspondence.runtime import SCHEMA as CORRESPONDENCE
-from verity_vllm.correspondence.runtime import correspondence_digest
+from verity_torch.correspondence.runtime import SCHEMA as CORRESPONDENCE
+from verity_torch.correspondence.runtime import correspondence_digest
 from verity_vllm.program.predict import aot as A
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import build_program
@@ -146,6 +152,13 @@ def test_a_descriptor_without_node_hints_names_no_call(tmp_path):
         assert hints == {} and dict(params)[name] == str(RecordType(*((f"inner.{n}", t) for n, t in rec.fields)))
 
 
+def test_phi_at_is_the_rows_phi_at_the_rank_under_the_config_named(tmp_path):
+    """`phi_at`, which each command below reads its φ by: φ of the row's declared inputs (`score.phi_of`) at the rank asked for,
+    the checkpoint's `config.json` the file named.  For GLM-5.3's row it is the φ the pinned snapshot's copy of that file gives."""
+    phi = A.phi_at(GLM53, 5, str(HF_CONFIG_DIR / "GLM53.config.json"))
+    assert phi.tp == {"world": 8, "rank": 5} and phi.to_json() == _row_phi(GLM53, "GLM53", tmp_path, rank=5).to_json()
+
+
 def test_the_emit_command_prints_the_dir_its_digest_and_its_timings(tmp_path, monkeypatch, capsys):
     """`predict emit`'s stdout is one JSON line: the derive dir it wrote, the predicted Program's digest and `emit`'s timings."""
     trace, out = _trace(tmp_path / "trace"), tmp_path / "out"
@@ -201,8 +214,8 @@ def test_the_compare_command_prints_a_line_a_rank_and_its_verdict_last(tmp_path,
 
 
 def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(tmp_path, monkeypatch):
-    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
-                      for i, (lp, cap) in enumerate([(5, 3), (7, 2), (5, 3)])])
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": mt, "arrive_step": i}
+                      for i, (lp, mt) in enumerate([(5, 3), (7, 2), (5, 3)])])
     monkeypatch.setattr(A, "phi_at", lambda row, rank, config: phi)
     (tmp_path / "result.json").write_text(json.dumps({"M": 1, "pos0": 8}))
     names = [f"build_request_LP{lp}_T{t}" for lp, t in phi.request_shapes()]
@@ -217,8 +230,8 @@ def test_a_predicted_rows_workload_is_one_gm01_verifies_by_its_descriptor(tmp_pa
     the descriptor beside it and holds the `lag` block to the Program's `lag` static, and refuses either edited."""
     from verity_vllm.check.match.declaration import from_gprog
     from verity_vllm.pipeline.global_program import request_id_of
-    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
-                      for i, (lp, cap) in enumerate([(5, 3), (7, 2)])])
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": mt, "arrive_step": i}
+                      for i, (lp, mt) in enumerate([(5, 3), (7, 2)])])
     wl, p = A.write_workload(phi, {}, str(tmp_path)), tmp_path / "workload_program.json"
     g = from_gprog(str(p))
     assert g["workload_digest"] == wl.digest == S.predict_workload(phi)["digest"]

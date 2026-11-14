@@ -48,9 +48,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parents[1] / "benchmarks" / "network_traces"))
 
-import window_chain as WC  # noqa: E402
+from verity.protocols.accounting.certifier.prover import window_chain as WC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as I1  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.commitments import advice as AC  # noqa: E402
@@ -297,7 +296,7 @@ def served_advice(ep: Path, adv_dir: Path, deployment: dict, io: list[dict], T: 
             return last[rid]
 
         try:
-            adv = WC.join([(w, a) for w, a, _ in chained], released)
+            adv = WC.join([(w, a) for w, a, _ in chained], released, WA)
         except I1.MalformedAdvice as err:
             problems.append(str(err))
             for w, a, row in chained:
@@ -682,10 +681,10 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    "Commit and the warden's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
     if where.startswith("off the developer's node"):
-        out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
-                   "the auditor host (--from takes a gate run's fetch).")
+        out.append("Auditor device: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
+                   "the auditor device (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):
-        out.append("Auditor host: the certifier ran off the gate (--from takes a gate run's fetch).")
+        out.append("Auditor device: the certifier ran off the gate (--from takes a gate run's fetch).")
     return out
 
 
@@ -798,7 +797,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path", "",
                       f"`prove_path.py audit --serve-run`'s output adopted from {p['dir']}: each arm a Commit window of "
                       f"the endpoint's served run ({b['served']}), its step units compiled from that window's advice by "
-                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean firewall "
+                      "the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean ZK server "
                       f"and verified by Lean. Bound to these runs: {_cell(p['bound'])}"
                       + (" (every arm's Commit the endpoint's, its run root the one sealed while serving, its advice "
                          "root registered under that Commit and opened to the report's advice of its window, and an "
@@ -819,7 +818,7 @@ def markdown(c: dict) -> list[str]:
             lines += ["", "## Prove path" + (" (from the fixed workload, not this run)" if served else ""), "",
                       f"`prove_path.py audit`'s output adopted from {p['dir']}: each rank's step units compiled from the "
                       "advice by the registered compiler, drawn on the auditor's challenger's coins, proved --zk behind the Lean "
-                      "firewall and verified by Lean. The advice each arm committed is the --advice file: "
+                      "ZK server and verified by Lean. The advice each arm committed is the --advice file: "
                       f"{_cell(p['committed_is_the_advice_file'])}. Bound to these runs: {_cell(p['bound'])}"
                       + ("" if p["bound"] else f" ({p['bound_why']}), so its ok is not the report's")
                       + "".join(f"; {n} held by {a['advice_held_by']}" for n, a in p["arms"].items()

@@ -21,7 +21,7 @@ no serving settings is refused (`UNLABELLED`).
 **Verdicts** (`VERDICTS`), each ``{protocol, verdict, from}`` with the answer's ``reason`` or ``refusal``, or, where the
 run wrote no answer, ``missing`` and ``why``:
 
-* sampled proofs: its leg in the composite of record, the outcome of remote's sampled proofs case there
+* SPOT: its subprotocol in the composite of record, the outcome of remote's SPOT case there
   (`SAMPLED_ID`: VStar.Recursive.Sampled on OneStageZk's case, the proofs themselves), never ``record/verdicts.json``'s
   ``integrity`` row, the records audit's one-stage v1 answer, which is no verdict (`V1_UNREAD`): where the composite of
   record has no such case, not established, the row's answer beside it (``answer``), and missing where the row is too;
@@ -44,11 +44,11 @@ established``, its Lean answer's accept beside it (``answer``), and its bound co
 where `auditor-listing` doesn't hold (`LISTING_UNMET`, `FILES_UNMET`) or `scan-state-pinned` doesn't
 (`STATE_UNPINNED`), with no bound. Where `scan-state-pinned` doesn't hold, so is the composite of record's accepted
 verdict, and where the registered-files condition doesn't, so is the accepted verdict of remote's composite and of the
-composite of record where it reads remote's sampled proofs case, sampled proofs' among them. A verdict withheld on two counts names both
-(``open``). Sampled proofs' ``credit`` (`CREDIT`) names the drawn members it credits, those
+composite of record where it reads remote's SPOT case, SPOT's among them. A verdict withheld on two counts names both
+(``open``). SPOT's ``credit`` (`CREDIT`) names the drawn members it credits, those
 whose --registered file the audit completed at the window's committed roots and whose Lean verdict accepted it
 reporting exactly its reads (the audit's published record, `AUDIT`), and lists every other drawn member as not
-credited, by name, with why; ``missing`` where the record states no completion, and where sampled proofs' verdict is
+credited, by name, with why; ``missing`` where the record states no completion, and where SPOT's verdict is
 not established, which credits none (`UNESTABLISHED_CREDIT`). ``of_record`` holds when every verdict it reads accepted
 and every drawn member is credited, the condition for the demo's run of record, naming its composite of record by id (``composite``), the verdicts not established, the
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
@@ -65,10 +65,10 @@ inputs, each named by its SHA-512 (``from``), and the period's parameters, held 
 (the composite of record's), never the prover's node or its deployment.json; `certifier-key` closes only where it
 holds and the lock holds that guarantee taking them. The registration's link figures (beta, latency) are stated, not
 measured, and nothing here reads them; that the node has no egress but the uplink the network certifier splits, which
-the registration asserts, is the auditor's placement under trusted-host (`STANDING`), which no file establishes.
+the registration asserts, is the auditor's placement under trusted-device (`STANDING`), which no file establishes.
 `auditor-listing` (`auditor_listing`): each circuit file the period lists is, by SHA-512, the file its audit's
 sessions were verified against (`PERIOD`); and the remote theorem's registered-files condition (`registered_files`):
-each statement's circuit file is, by SHA-512, the one remote's sampled proofs case's (``--sampled-proofs-case``) params
+each statement's circuit file is, by SHA-512, the one remote's SPOT case's (``--sampled-proofs-case``) params
 θ name for it (proofs.circuit, or its member's under proofs.members), θ held to the params each composite that reads the
 case states, the files hashed here, and each statement's public file one a5 pinned (``--public-pin``,
 `pinned`): as staged before the draw, the pin's staged bodies held to the registration the challenger's coins committed
@@ -78,18 +78,18 @@ reads of it at that entry's root and domain (`AUDIT_SUMMARY`'s registered.own), 
 sampled member's registered reads (`AUDIT`): one-stage's registration checks read nothing of the window, so the audit's
 driver pins it, and the record checks that it did.
 
-**Sampled proofs' guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
+**SPOT's guarantee** (``sampled_proofs``, `SAMPLED`), from its accepted row's answer, else ``missing``: what
 its draw establishes, ε at δ, per window (``per_window``: its bound at its profile's δ over the window's n proof blocks) and
 pooled (``pooled``, `POOLED`): at most ⌊ln(1/δ)/q⌋ incorrect proof blocks over any number of windows, each drawing k of
 its n proof blocks (q = k/n), by `Flock.Guarantees.IntegrityHorizon`, and for each monitoring period of
 `leak_bounds.PERIODS` that count for the serving node, a datacenter's and the world's links (each link's at δ / links,
 summed), each with its share of the period's proof blocks at a window an execution phase (`WINDOW_S`), scaled from the
-run's window by its rule (`POOLED_RULES`); a law other than a k-subset has no pooled figure (`NOT_POOLED`). ``refused``
+run's window by its rule (`POOLED_RULES`); a sampling_design other than a k-subset has no pooled figure (`NOT_POOLED`). ``refused``
 names the draws a run of record doesn't make (`MULTI`), and it is conditional on the coins while they are open.
 
-**Coins** (``coins``, `COINS`): sampled proofs' coins as the run's COINS lines in verdicts.txt name them (the served
+**Coins** (``coins``, `COINS`): SPOT's coins as the run's COINS lines in verdicts.txt name them (the served
 run's, or the follow-on's where it audits), and the network certifier's chain draws as its published report states
-each one's law (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
+each one's sampling_design (``draws``, `CHAIN_DRAWS`); ``open`` unless each COINS line names the live challenger (`LIVE_COINS`) and,
 where the network certifier accepted, each chain draw takes everything, naming each draw that doesn't
 (``open_draws``), and ``missing`` where the run published no COINS line. While they are open, live-coins is named
 wherever a figure rests on that draw: the sampled-proofs verdict's, ``of_record``'s and the composite's error's
@@ -105,7 +105,7 @@ signed registration log. Beside it, the day each of the run's ADVICE-LINEs says 
 total here. Beside it, ``served``, the PoUW piece each COINS line says the run served.
 
 **The composite's error** (``composite_error``, `COMPOSITE`): the sum over the composite of record's subprotocols
-(``composite``) of each one's error, each subprotocol's δ with where the run states it: sampled proofs' and, where the
+(``composite``) of each one's error, each subprotocol's δ with where the run states it: SPOT's and, where the
 composite has it, PoUW's from their rows (their answers' integrity-profile δ), the network certifier's from its bound
 (its eps), and inference-only's missing
 (`NO_NCI_DELTA`). ``stated`` sums the δs the run states, a lower bound on the error, which is ``vacuous`` at 1 or
@@ -357,7 +357,7 @@ NO_VERIFIED_COMPUTE = "none"
 NO_COMPUTE_CLAIM = "no verified compute is credited: {}'s verdict is no compute claim"
 #: the PoUW clause of the run's COINS line (served_verdicts.sh's H1_COINS), which runs up to the bandwidth audit's
 POUW_SAID = re.compile(r"; (PoUW.*?); the bandwidth audit's")
-#: where sampled proofs' audit publishes its record (`served_integrity.public_copy`)
+#: where SPOT's audit publishes its record (`served_integrity.public_copy`)
 AUDIT = Path("v3c-audit") / "window" / "audit.json"
 #: V3c's audit as the network certifier's period reads it, as the run publishes it (`records_audit.py period`): its
 #: registration, and each root template's circuit file by the SHA-512 a5 held every session of its members to
@@ -385,8 +385,8 @@ NO_COMPLETION = ("the audit's record states no registered-file completion (check
 UNCOMPLETED = "the audit couldn't complete its --registered file, and refused it"
 UNREPORTED = "its Lean verdict of record didn't accept its completed file reporting exactly that file's reads"
 UNLISTED = "the audit's record lists its Lean verdict but no completion of its --registered file"
-#: where the window report keeps the records audit's answer, whose profile and public, the draw's n, law and δ and the
-#: bound there, sampled proofs' guarantee reads once its verdict, the composite's leg (`sampled_verdict`), accepted
+#: where the window report keeps the records audit's answer, whose profile and public, the draw's n, sampling_design and δ and the
+#: bound there, SPOT's guarantee reads once its verdict, the composite's subprotocol (`sampled_verdict`), accepted
 SAMPLED_FROM = f"record/verdicts.json protocols.{ROWS['sampled proofs']}.answer"
 SAMPLED = ("sampled proofs' guarantee, what its draw establishes, ε at δ, per window and pooled over each monitoring "
            "period, never the window's alone. A window (``per_window``): its answer's bound at its integrity profile's δ "
@@ -414,7 +414,7 @@ WINDOW_S = ("a stated parameter: a window an execution phase, T buckets of τ (t
             "windows lower each share and leave the count, which no window count enters")
 NO_GATES = ("in AND gates: missing. A proof block's AND gates are its partition's, which is private, so each share is "
             "of the monitoring period's proof blocks")
-NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the law IntegrityHorizon pools, so no "
+NOT_POOLED = ("its draw isn't a uniform k-subset of the window's proof blocks, the sampling_design IntegrityHorizon pools, so no "
               "pooled figure is stated for it")
 MULTI = ("a window of more than one member, whatever its draw: its case of verity/sampled-proofs/v1 names each "
          "member's circuit and registered file (`a5.v2_proof`'s per-member form, proofs.members), and Lean refuses "
@@ -425,12 +425,12 @@ MULTI = ("a window of more than one member, whatever its draw: its case of verit
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
 CHAIN_DRAWS = (f"the network certifier's chain draws on no live coins. Its period draw (N2's, `TransferBlocks.period_draw`) "
-               "takes every window (law all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
+               "takes every window (sampling_design all: k None, no coins) or K of them on the verifier's own coins (n2_zk.py's); "
                "its scan's draw takes every proof block or K of them on the verifier's or the gate's coins, which the "
-               "published report doesn't say. So each draw whose law isn't all is open under "
+               "published report doesn't say. So each draw whose sampling_design isn't all is open under "
                f"{COINS_OPEN}, by its name (``open``), and the network certifier's bound and figures are conditional on "
                "the coins")
-NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's law"
+NO_CHAIN_REPORT = f"the run published no chain report ({CHAIN_REPORT}), whose steps state each draw's sampling_design"
 CHARGED = ("MonitoringPeriodLeakAccepted's ℓ_{a,j}: the free inputs of each compute audit tied to execution phase j's scan, those "
            "its Program neither registers at a pinned root nor ties (NetworkCheck.Period's tiedAudits sums the "
            "parameters' audits[].free, #(freeInputs \\ reg); `records_audit.py period`'s free for V3c's window audit). "
@@ -460,10 +460,10 @@ RESTATE_TIED = ("to be restated before any pin of it counts, and never a dischar
 #: PeriodLeakRegistered, a property of the period check's acceptance, by its name in `LOCKS`
 PERIOD_REGISTERED = "Properties.NetworkPeriodLeak.periodLeakRegistered"
 AUDITOR_RECORD, AUDITOR_LISTING, SCAN_STATE_PINNED = "auditor-record", "auditor-listing", "scan-state-pinned"
-#: remote's sampled proofs case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
+#: remote's SPOT case (`served_cases.SAMPLED`), whose params θ the remote theorem's registered-files condition
 #: reads (`registered_files`)
 SAMPLED_ID = "verity/sampled-proofs/v1"
-V1_UNREAD = (f"sampled proofs' verdict is its leg in the composite of record, the outcome of {SAMPLED_ID}'s case there "
+V1_UNREAD = (f"sampled proofs' verdict is its subprotocol in the composite of record, the outcome of {SAMPLED_ID}'s case there "
              "(VStar.Recursive.Sampled on OneStageZk's case, which verifies the proofs themselves), never the window "
              "report's integrity row: that is the records audit's one-stage v1 answer (served_integrity.answer), and a "
              "v1 verdict is no verdict of record")
@@ -486,7 +486,7 @@ CHECKED = {
                      "registration's link figures (each link's beta and latency) are the auditor's stated parameters, "
                      "not measured, and nothing here reads them. That the network certifier splits the node's uplink "
                      "is what the registration asserts; that the node has no other egress is the auditor's placement, "
-                     "under trusted-host (`STANDING`), and no file establishes it"),
+                     "under trusted-device (`STANDING`), and no file establishes it"),
     AUDITOR_LISTING: ("each circuit file the period lists, an audit's (circuits) or the scan's (scan_circuits), is by "
                       "SHA-512 the file its audit's sessions were verified against: a5's per-template pin, which "
                       "records_audit.py period publishes in V3c's period.json (`PERIOD`) for the audit whose "
@@ -494,7 +494,7 @@ CHECKED = {
                       "and that period.json are both the auditor's own outputs in OUT. It holds where the period lists "
                       "none, and not where the run has no case of the period to say what it lists. No published record "
                       "states the files the scan's sessions were verified against, so it doesn't hold where the period "
-                      "lists the scan's. With it, the remote theorem's registered-files condition on its sampled leg "
+                      "lists the scan's. With it, the remote theorem's registered-files condition on its sampled subprotocol "
                       f"(``registered_files``, `registered_files`): for each statement of remote's sampled proofs case "
                       f"({SAMPLED_ID}, --sampled-proofs-case), the one statement or a drawn member's, the circuit file "
                       "its params θ name for it (proofs.circuit, or its member's under proofs.members) is, by SHA-512, "
@@ -516,13 +516,13 @@ CHECKED = {
                       "holds its fields to what was fixed before the coin, publicHeld its scheme, roots, domains, "
                       "population and units.indices to the registration, a member's statement's units.indices to "
                       "exactly the units θ names for it (proofs.members), and "
-                      "flock-verify its circuit_sha512 to the "
+                      "verity-verify-proof its circuit_sha512 to the "
                       "circuit file θ names, its classes to that circuit's class and its shared_rows to the roots "
                       "publicHeld holds. It holds where no "
                       "composite of the "
                       "run reads the case. Where either doesn't hold the network verdict is not established and there "
                       "is no bound (`LISTING_UNMET`, `FILES_UNMET`), and where the registered-files condition doesn't, "
-                      "neither is the verdict of a composite that reads the case, nor sampled proofs', its leg there"),
+                      "neither is the verdict of a composite that reads the case, nor sampled proofs', its subprotocol there"),
     SCAN_STATE_PINNED: (f"that V3c's audit opened its reads of the scan's state where the period ties them: for each "
                         f"audit of the case's commitment whose window commits {SCAN_STATE} in its activations "
                         "(window.activations.values, the entry NetworkCheck.Period's auditStateEntries reads and "
@@ -554,7 +554,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
         "statement": "41de25b3444487593edcbd858f2daee2767204c6475b0aa1ae05516f315d1772",
         "takes": {"Claims.SamplingGeneric.Compiled.KS": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
-                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "hPw": "windows-placed", "hβ": "windows-placed", "hcap": "schedules-held",
                   "hfit": "schedules-held", "hs": "schedules-covered", "hdz": "client-decodes",
                   "NetTiming.ScopeAcc": "wires-fit", "NetTiming.CertifierRegisters": "certifiers-open"}},
@@ -562,7 +562,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
         "statement": "808274afd667f0e04b4758786bf29fedb31a024e4a2a92147a7003fa9cc4d59f",
         "takes": {"Claims.Sampling.KSBy": "sampled-leg-bridge", "Claims.Flock.ListWithin": "sampled-leg-bridge",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge",
-                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.SchedulesCovered": "schedules-covered",
                   "NetTiming.SenderDecodes": "client-decodes", "NetTiming.ScopeAcc": "wires-fit",
                   "NetTiming.RegOpensAt": "reg-opens-at", "NetTiming.CertifiersOpen": "certifiers-open",
@@ -572,7 +572,7 @@ RESTS_ON: dict[str, dict[str, Any]] = {
         "restate": RESTATE_TIED,
         "takes": {"NetTiming.SharedRootsParsed": "shared-roots-parsed",
                   "Claims.Sampling.CommitmentScheme.Binds": "sampled-leg-bridge", "NetTiming.RWired": "sampled-leg-bridge",
-                  "Verity.Assumptions.TrustedHost": "Verity.Assumptions.TrustedHost",
+                  "Verity.Assumptions.TrustedDevice": "Verity.Assumptions.TrustedDevice",
                   "NetTiming.RowsTiesOrdered": "rows-ties-ordered", "NetTiming.CircuitCounts": "free-count",
                   "NetTiming.WindowsPlaced": "windows-placed", "NetTiming.TiedExposed": "tied-exposed",
                   "NetTiming.SchedulesHeld": "schedules-held", "NetTiming.SchedulesCovered": "schedules-covered",
@@ -590,14 +590,14 @@ PREMISES: dict[str, dict[str, Any]] = {
                         "which its scope check gives where ScopeMatches holds of the deployment) and the layout's fit "
                         "(BoundaryGates.Fits, every clause), through the decoder link and the period check running "
                         "Circuit.check; what each discharge takes of the deployment is its pin's (`DISCHARGES`)",
-                  "discharged_by": ("Properties.NetworkCertifier.wiredScopeAcc",
-                                    "Properties.NetworkCertifier.circuitWiresFit",
+                  "discharged_by": ("Properties.Certifier.wiredScopeAcc",
+                                    "Properties.Certifier.circuitWiresFit",
                                     "Properties.NetworkPeriod.rowsWiresChecked")},
     "session-wires": {"is": "SessionWires: each sampled proof block's wired inputs equal their writers' committed rows, "
                             "proved inside its own session, whose statement reads the writer's committed leaf by path and "
                             "whose circuit equates it with the wired input, so no opening reaches the verifier; "
                             "OneStageZk.verdicts accepting only where each sampled reader's wire is the layout's, at the "
-                            "registered position, root and path; and SessionOpens and the binding from the sampled leg's "
+                            "registered position, root and path; and SessionOpens and the binding from the sampled subprotocol's "
                             "bridge (`sampled-leg-bridge`), never a named assumption. Open until the theorem that "
                             "OneStageZk.verdicts' acceptance gives it is named and in the lock",
                       "discharged_by": ()},
@@ -605,7 +605,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                          "registered gates are read at a template's first unit, so it holds only of templates of one "
                          "unit per VU (units_per_vu 1): its discharge counts only at a statement that takes no premise "
                          "on units_per_vu, which the period check's circuit read gives once it refuses every other",
-                   "discharged_by": ("Properties.NetworkCertifier.circuitCounts",)},
+                   "discharged_by": ("Properties.Certifier.circuitCounts",)},
     "tied-padding-reads": {"is": "CircuitCounts' tied-audit half: that no unit of a tied audit's circuit file reads "
                                  "into its padding (FilesOf's readsWhy at no reads is none). The period check reads "
                                  "the scan's circuit files whole, so the scan's half follows from its acceptance, but "
@@ -646,28 +646,28 @@ PREMISES: dict[str, dict[str, Any]] = {
                           "discharged_by": ("Properties.NetworkPeriod.phaseTiesOrdered",)},
     "shared-roots-parsed": {"is": "SharedRootsParsed: at the deployment, two gates the registrations commit at one "
                                   "position under one root open to one value, or their H calls collide; the sampled "
-                                  "leg's bridge proves it of the deployed parse. Open until that theorem is named",
+                                  "subprotocol's bridge proves it of the deployed parse. Open until that theorem is named",
                             "discharged_by": ()},
     "reg-opens-at": {"is": "RegOpensAt: at each window's statement the registration's openings open its registered "
                            "inputs under the statement's roots (RegOpens). The run's reg holds per-window values (the "
                            "window's tied activations and the scan's state) and pinned ones (the weights, at their "
                            "registration's roots): the per-window part by a restatement of the finder per window, the "
-                           "pinned part by the sampled leg's bridge with a coverage Property of the registration check at "
+                           "pinned part by the sampled subprotocol's bridge with a coverage Property of the registration check at "
                            "OneStageZk's record. Open until both are named",
                      "discharged_by": ()},
     "certifiers-open": {"is": "CertifiersOpen, PeriodLeakRegistered's antecedent and MonitoringPeriodLeakAccepted's CertifierRegisters: at "
                               "every window's statement the network certifier's openings register its observations at "
                               "the window's operator. The period check's half: on an accepted rows-form execution phase "
                               "the scan's rows/<d> root and domain are those the network certifier signed for its "
-                              "link, d and window; the device's, under trusted-host: its rows at the transfer gates are "
+                              "link, d and window; the device's, under trusted-device: its rows at the transfer gates are "
                               "its observations, its ingress values its operator on the earlier ones",
-                        "discharged_by": ("Properties.NetworkCertifier.certifiersOpen",)},
+                        "discharged_by": ("Properties.Certifier.certifiersOpen",)},
     "certifier-key": {"is": "that the network certifier's key, LMS parameters and session every check reads are the "
                             "auditor's record of its own device (certifier-key/v1, `warden_chain.RECORD`), whose key the "
                             "auditor's registration holds for the network certifier it placed (Registration.Auditor.key), "
                             "never the evidence's or the prover's copy. PeriodLeakRegistered states it (``stated_by``) as "
                             "its hA, hr and hkey, which the run checks of the auditor's inputs (``checked``, "
-                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-host, until the lock holds that "
+                            f"`{AUDITOR_RECORD}`). Open, by this name, beside trusted-device, until the lock holds that "
                             "guarantee at the statement `RESTS_ON` pins, taking them by that name, and the run's check "
                             "holds (``unchecked``: why it doesn't); while it is open the network verdict is not "
                             "established (`NOT_ESTABLISHED`), and its bound is conditional on it (`UNCHARGED`)",
@@ -687,8 +687,8 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "(countBound at the code's strata and δ), from the design's miss at a well-formed design whose "
                            "rules are strata draws. Open, by this name, until a theorem stating it at the deployed draw is "
                            "in the lock. Three of its parts are in no lock: RegMatches, that the registration matches the "
-                           "design the bound reads, assumed and the sampled leg's bridge's to give (`sampled-leg-bridge`); "
-                           "the law identity, that OneStage.check's derived v.law is g.rule.lawOver n, which today meet "
+                           "design the bound reads, assumed and the sampled subprotocol's bridge's to give (`sampled-leg-bridge`); "
+                           "the sampling_design identity, that OneStage.check's derived v.law is g.rule.samplingDesignOver n, which today meet "
                            "only through R1's Draw.sameLaw, an equality of canonical texts (jeq); and the population "
                            "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
                            "bound reads",
@@ -701,13 +701,13 @@ PREMISES: dict[str, dict[str, Any]] = {
     "schedules-covered": {"is": "SchedulesCovered, MonitoringPeriodLeakAccepted's hs: each secret K counts runs on a schedule of "
                                 "Ss, whose number k_sched counts, so Ss must hold every schedule the network "
                                 "certifier's signed records can show, the union over their arrivals. A property of "
-                                "the compiled Lean audit the verification runs over those records, which trusted-host "
+                                "the compiled Lean audit the verification runs over those records, which trusted-device "
                                 "makes the traffic that crossed, never of the device's code. Open, by this name, "
                                 "until k_sched's count bounds that union and the Property that gives it, stated over "
                                 "that audit, is in the lock at the statement `DISCHARGES` pins; SenderDecodes, the "
                                 "decoder, is what K counts (`COUNTS`)",
-                          "discharged_by": ("Properties.NetworkCertifier.schedulesCoveredAt",)},
-    "sampled-leg-bridge": {"is": "the sampled leg's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
+                          "discharged_by": ("Properties.Certifier.schedulesCoveredAt",)},
+    "sampled-leg-bridge": {"is": "the sampled subprotocol's bridge, from its guarantee Verity.Vocab.SampledProofsSound at "
                                  "one-stage v2 to OneStageZk's Lean record: the sampled facts the period takes (KSBy at "
                                  "the wired check at the layout's wires, KS where it has none, from KS_of's hypotheses "
                                  "and the record's check of each session's wired reads, WiredReads; "
@@ -738,7 +738,7 @@ FILES_UNMET = (f"{AUDITOR_LISTING}'s {REGISTERED_FILES} condition doesn't hold (
                "proofs case registers isn't, by SHA-512, the one its params θ name, or its public file the one pinned "
                "at staging before the draw, or the run can't say, so a Lean "
                "accept (``answer``) establishes no verdict of the network certifier, of a composite that reads that "
-               "case or of sampled proofs, its leg there, and the record states no bound")
+               "case or of sampled proofs, its subprotocol there, and the record states no bound")
 STATE_UNPINNED = (f"{SCAN_STATE_PINNED} doesn't hold (``checked``): the run doesn't show that V3c's audit opened its "
                   "reads of the scan's state at the root and domain its window's activations entry commits, the one the "
                   "period ties to the scan's state, so a Lean accept (``answer``) establishes no verdict of the network "
@@ -754,14 +754,14 @@ NOT_CHECKED = "no run's inputs were checked"
 DISCHARGES: dict[str, dict[str, Any]] = {}
 #: the named assumptions that may stand under the figure of record, each on an auditor-trusted device or the auditor's
 #: placement of one, named beside the bound
-STANDING = {"Verity.Assumptions.TrustedHost": "trusted-host: the network certifier and its host are the auditor's, "
+STANDING = {"Verity.Assumptions.TrustedDevice": "trusted-device: the network certifier and its host are the auditor's, "
                                               "which covers that the records it signs are the traffic that crossed, "
                                               "at the times it crossed, not what the device's code computes, and, "
                                               "with the auditor's placement of it (certifier-coverage), that the "
                                               "node has no egress but through it",
             "Accounting.Covered": "certifier-coverage: the links in the room are the registered ones, each through the "
                                   "network certifier (a listed physical premise, the auditor's placement, under "
-                                  "trusted-host). The site registration asserts that the network certifier splits the "
+                                  "trusted-device). The site registration asserts that the network certifier splits the "
                                   "node's uplink; that the node has no other egress is this placement, which the "
                                   "registration doesn't establish"}
 #: what K counts: the hypotheses on the covert sender's strategy that its guarantee quantifies, which no deployment
@@ -1019,7 +1019,7 @@ def case_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], product: str, 
 
 def sampled_verdict(found: Mapping[str, tuple[str, dict[str, Any]]], composite: str,
                     rows: Mapping[str, Any]) -> dict[str, Any]:
-    """Sampled proofs' verdict (`V1_UNREAD`): the outcome of `SAMPLED_ID`'s case in the composite of record
+    """SPOT's verdict (`V1_UNREAD`): the outcome of `SAMPLED_ID`'s case in the composite of record
     ``composite``; where it has none, not established, the window report's row's answer beside it (``answer``), or
     missing where that row is missing too."""
     v = case_verdict(found, composite, SAMPLED_ID)
@@ -1081,7 +1081,7 @@ def composite_error(rows: Mapping[str, Any], eps: Fraction | None, why: str = "n
     """The error of ``composite``, the composite of record, term by term (`COMPOSITE`): each subprotocol's δ with where
     the run states it, or why it doesn't (the network certifier's eps from its bound, else ``why``), PoUW's only where
     the composite has it (``pouw``); ``stated`` sums those stated (None where none is), ``vacuous`` at 1 or more;
-    ``conditional_on`` the conditions sampled proofs' δ and eps rest on where any is open (`COINS`)."""
+    ``conditional_on`` the conditions SPOT's δ and eps rest on where any is open (`COINS`)."""
     terms: list[dict[str, Any]] = []
     for name in ("sampled proofs", "PoUW")[:1 + pouw]:
         t = {"subprotocol": name, "from": f"record/verdicts.json protocols.{ROWS[name]}.delta: its answer's "
@@ -1165,10 +1165,10 @@ def horizon(q: Fraction, delta: Fraction, links: int = 1) -> int:
 
 def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why: str,
             conditional: Sequence[str] = ()) -> dict[str, Any]:
-    """Sampled proofs' guarantee (`SAMPLED`) from its accepted row's answer: its window's, and pooled over each
+    """SPOT's guarantee (`SAMPLED`) from its accepted row's answer: its window's, and pooled over each
     monitoring period (`POOLED`) for the serving node and, by the links of each (`census`), a datacenter and the world,
     at a window an execution phase of ``phase_s`` seconds (`WINDOW_S`; where it is None the periods are missing,
-    ``why``); a draw of another law has no pooled figure (`NOT_POOLED`). ``refused`` names the draws a run of record
+    ``why``); a draw of another sampling_design has no pooled figure (`NOT_POOLED`). ``refused`` names the draws a run of record
     doesn't make (`MULTI`), and ``conditional_on`` the coins' condition while it is open (`COINS`)."""
     g = {"is": SAMPLED, "refused": MULTI, "from": SAMPLED_FROM} | (
         {"conditional_on": list(conditional)} if conditional else {})
@@ -1178,14 +1178,14 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
     try:
         a = row["answer"]
         levels, b = a["profile"]["levels"], int(a["public"]["bound"])
-        n, law, delta = int(levels[-1]["size"]), levels[-1]["draw"], exact_delta(a["profile"]["delta"])
+        n, sampling_design, delta = int(levels[-1]["size"]), levels[-1]["draw"], exact_delta(a["profile"]["delta"])
     except (IndexError, KeyError, TypeError, ValueError) as e:
         return g | {"error": f"its answer's profile or public lacks a field: {type(e).__name__}: {e}"}
     if not (0 < n and 0 <= b <= n and 0 < delta < 1):
         return g | {"error": f"its answer's bound {b} over {n} proof blocks at δ {delta} states no ε"}
-    g["per_window"] = {"units": n, "law": law, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
+    g["per_window"] = {"units": n, "law": sampling_design, "delta": str(delta), "bound": b, "epsilon": str(Fraction(b, n)),
                      "statement": "Flock.Guarantees.EndToEndHidden"}
-    k = law.get("subset") if isinstance(law, Mapping) and len(levels) == 1 else None
+    k = sampling_design.get("subset") if isinstance(sampling_design, Mapping) and len(levels) == 1 else None
     if not (isinstance(k, int) and 0 < k <= n):
         return g | {"pooled": {"missing": NOT_POOLED}}
     q = Fraction(k, n)
@@ -1314,7 +1314,7 @@ def lines(out: Path, name: str) -> list[str]:
 
 
 def coins(out: Path) -> dict[str, Any]:
-    """Sampled proofs' coins as the run's COINS lines name them (`COINS`): each line's sampled-proofs part, None where
+    """SPOT's coins as the run's COINS lines name them (`COINS`): each line's sampled-proofs part, None where
     it names none, and ``open`` unless every part names the live challenger (`LIVE_COINS`); ``missing`` where the run
     published no COINS line."""
     said = [m[1].strip() if (m := re.search(r"sampled proofs: ([^;]*)", x)) else None
@@ -1341,7 +1341,7 @@ def pouw(out: Path) -> dict[str, Any]:
 
 
 def credit(out: Path) -> dict[str, Any]:
-    """Sampled proofs' drawn members as its audit's published record credits them (`CREDIT`): ``credited``, each by
+    """SPOT's drawn members as its audit's published record credits them (`CREDIT`): ``credited``, each by
     name, and ``not_credited``, each other drawn member with why; ``missing`` where the record states no completion or
     the run published none."""
     try:
@@ -1365,14 +1365,14 @@ def credited(c: Mapping[str, Any]) -> bool:
 
 
 def chain_draws(out: Path) -> dict[str, Any]:
-    """The network certifier's chain draws as its published report states each one's law (`CHAIN_DRAWS`), by name, and
-    ``open``, each whose law isn't all; ``missing`` where the run published no report, every draw then open."""
+    """The network certifier's chain draws as its published report states each one's sampling_design (`CHAIN_DRAWS`), by name, and
+    ``open``, each whose sampling_design isn't all; ``missing`` where the run published no report, every draw then open."""
     try:
         steps = json.loads((out / CHAIN_REPORT).read_text()).get("steps") or {}
     except FileNotFoundError:
         return {"missing": NO_CHAIN_REPORT, "open": list(DRAWS.values()), "is": CHAIN_DRAWS}
-    laws = {name: ((steps.get(s) or {}).get("eps_at_delta") or {}).get("law") for s, name in DRAWS.items()}
-    return {"laws": laws, "open": [n for n, law in laws.items() if law != "all"], "from": str(CHAIN_REPORT),
+    sampling_designs = {name: ((steps.get(s) or {}).get("eps_at_delta") or {}).get("law") for s, name in DRAWS.items()}
+    return {"laws": sampling_designs, "open": [n for n, sampling_design in sampling_designs.items() if sampling_design != "all"], "from": str(CHAIN_REPORT),
             "is": CHAIN_DRAWS}
 
 
@@ -1627,7 +1627,7 @@ def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
 
 
 def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) -> str | None:
-    """Why the public file remote's sampled proofs case registers, ``public``, isn't one a5 pinned (``pin``, a5's
+    """Why the public file remote's SPOT case registers, ``public``, isn't one a5 pinned (``pin``, a5's
     ``public-pin.json``: by member key, each public file's SHA-512 and its body's as staged before the draw, their leaf
     layer, and a drawn member's as completed once the tie held, its ``completed``), else None. The pin's staged bodies
     are, by their leaf layer, those the registration the case commits to holds (``commitment``, which each composite
@@ -1679,7 +1679,7 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
     completing the member re-lays it (the staged entry's ``relaid``: an instance-major member's), the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its ``instances`` read off its header: either way by SHA-512
     the staged ``body`` R4 holds to the registration. Its header v2 holds to its member's slice of the registration (``publicHeld``)."""
-    from verity.commitments.windows import flock_inputs as FI
+    from verity.commitments.periods import flock_inputs as FI
 
     if not isinstance(relaid := entry.get("relaid"), bool):
         return (f"--public-pin doesn't say whether completing {key} re-lays its body (its relaid), so its completed file "
@@ -1703,7 +1703,7 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
 
 
 def statements(theta: Mapping[str, Any], evidence: Mapping[str, Any]) -> list[tuple[str, Any, Any]]:
-    """Each statement of remote's sampled proofs case as v2 reads it (`OneStageZk.paramsOfJson`, `evidenceOfJson`), by
+    """Each statement of remote's SPOT case as v2 reads it (`OneStageZk.paramsOfJson`, `evidenceOfJson`), by
     name, with the circuit file θ names for it and the public file its evidence names: the one statement (θ's
     ``proofs.circuit``, the evidence's ``proofs.public``), named ``statement``, or, under θ's ``proofs.members``, each
     drawn member's (the evidence's ``proofs.statements``; its circuit its member's in θ). KeyError or TypeError where
@@ -1716,7 +1716,7 @@ def statements(theta: Mapping[str, Any], evidence: Mapping[str, Any]) -> list[tu
 
 def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path | None,
                      pin: Path | None = None) -> dict[str, Any]:
-    """`CHECKED`'s auditor-listing, its registered-files condition: for each statement of remote's sampled proofs case at
+    """`CHECKED`'s auditor-listing, its registered-files condition: for each statement of remote's SPOT case at
     ``case`` (`SAMPLED_ID`'s, ``{"params", "evidence", "commitment", "blobs"}``; `statements`), the circuit file its
     params θ name for it is by SHA-512 one of the files the case registers, θ held by SHA-512 to the params each
     composite in ``found`` that reads the case states for it, and its public file, found among the case's files by the
@@ -1902,7 +1902,7 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     (`reproof`, ``tie`` where H1_TIE ties the window), the run's ``serving`` settings, S and MAX_TOKENS, where its
     caller states them (`SERVING`), the auditor's inputs the run's checks read, its ``certifier_key`` record and its
     ``site_registration`` (`auditor_record`), the inference-only case's private policy.json, ``case_policy``
-    (`alpha_gamma`), and remote's sampled proofs case, ``sampled_case``, with a5's ``public_pin`` of its public file
+    (`alpha_gamma`), and remote's SPOT case, ``sampled_case``, with a5's ``public_pin`` of its public file
     (`registered_files`); FileNotFoundError where
     `served_verdicts.py record` wrote no report."""
     report = json.loads((out / "record" / "verdicts.json").read_text())
@@ -2034,7 +2034,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     claim (`DAY`, `POUW`), the drawn members it
     doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's split and connections,
     the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
-    composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
+    composite's stated error, the year's datacenter cell, SPOT's guarantee per window and pooled
     (`guarantee`), and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
@@ -2064,7 +2064,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def guarantee(g: Mapping[str, Any] | None) -> Any:
-    """Sampled proofs' guarantee (`sampled`) as its window's ε at δ beside each pooled cell's count and share, and its
+    """SPOT's guarantee (`sampled`) as its window's ε at δ beside each pooled cell's count and share, and its
     ``missing`` or ``error`` where it states none; None for a record that has none."""
     if not isinstance(g, Mapping):
         return None

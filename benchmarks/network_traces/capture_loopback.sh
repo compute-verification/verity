@@ -56,7 +56,7 @@ until grep -q "listening on" "$W/tcpdump.log"; do
   sleep 0.2
 done
 
-"$PY" "$HERE/warden_serve.py" rehearse --fake --watermark --out "$OUT/run" ${form[@]+"${form[@]}"} "$@"
+"$PY" -m verity.protocols.accounting.certifier.device.warden_serve rehearse --fake --watermark --out "$OUT/run" ${form[@]+"${form[@]}"} "$@"
 rehearsed=$?
 
 # tcpdump gets its packets a little after they pass: the last are in the file only once it has stopped growing

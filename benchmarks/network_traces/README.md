@@ -10,16 +10,16 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a job whose resources are in the script's header.
 - Every other `.sh` here is a job on a node, its command and resources in its header (`capture_loopback.sh`, on a
-  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `flock-verify` and the
+  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `verity-verify-proof` and the
   Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
-- The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
+- The tests: `uv run tools/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
 
 ## Entry points
 
-- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and `stall_probe.py`
-  finds what makes a tick late.
+- **Calibration and the honest path.** `record.py` records per-token timing of real vLLM serving, and
+  `verity/protocols/accounting/certifier/device/stall_probe.py` finds what makes a tick late.
 - **Endpoints besides vLLM.** `demo_stub.py` stands in for the H200 demo's serving endpoint, and `demo_endpoint.py` is
   the OpenAI endpoint in front of a decoder that isn't vLLM, whose scheduler and records the stub serves through.
 - **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.accounting.certifier.verifier.warden`, the network certifier
@@ -34,7 +34,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
   system.
 - **Proofs in zero knowledge.** Each driver proves its proof blocks with Flock `prove --zk` behind the Lean ZK server
-  and holds them by the Lean `flock-verify verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
+  and holds them by the Lean `verity-verify-proof verify --zk`: `n2_zk.py` (N2's registered proof block, N2's verdict of
   record), `n2_tie_zk.py` (the ingress tie), `egress_zk.py` (N2's egress bucket), `scan_zk.py` (the step-indexed
   scan), `scan_period.py` (the scan's answers held by `NetworkCheck.Period`) and `compile_slice_zk.py` (the compile
   slice). `leak_scan.py` is the scan of what the verifier received that every one of them runs.
@@ -97,7 +97,7 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/v
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`demos/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+`adapters/vllm/tools/served_run/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
@@ -143,7 +143,7 @@ published beside the answer as `certificates.json`, each certificate with its ow
 rejecting the served window is a reject: with no fetch kept, a rehearsal the gate's check didn't pass (each request
 late, say) or a step that can't run, the piece refuses (`refused.txt`), which leaves the certifier missing. An accept's
 profile names its placement, as labels read from the run: the machine the certifier ran on, and the machine that ran
-each of the piece's steps; the piece establishes no `trusted-host` and gives no bound on that ground. The chain's endpoint report,
+each of the piece's steps; the piece establishes no `trusted-device` and gives no bound on that ground. The chain's endpoint report,
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ): report.md, the report's
 other keys and the steps' summaries count the window's requests and outputs and the advice's bits, and the scan's
@@ -361,7 +361,7 @@ binding and the two provers, and writes `out/report/report.json` and `report.md`
 | endpoint | the endpoint's own advice bound to the run (each Commit period opened to its registered root, rebuilt from the certified I/O off the network certifier's cells: `chain_record.py endpoint`) | none: in the clear | all of it |
 | N2 | each execution phase's N2 proof block, proved `--zk` and decided by N2's verifier (`n2_zk.py`); not run on the advice profile, whose egress counts no N2 proof block holds | Selection All: no execution phase unsampled; a sample of k of n execution phases hides at most b incorrect ones except with probability δ (the report's `incorrect_at_delta`) | the registration, the sample, the certificates' public fields, the syncs, the pub row opened to the verifier's copy, the output word |
 | scan | the scan's ingress and egress proof blocks of an execution phase, one registration, `verify --zk --registered` | the audit's `wrong_units` at the sample's sampling design | each proof block's output bit; the I/O tie stays outside the proofs |
-| Lean | every proof of both steps is the verifier's own `flock-verify verify --zk` run | per proof, ε_ks + ε_bind | nothing |
+| Lean | every proof of both steps is the verifier's own `verity-verify-proof verify --zk` run | per proof, ε_ks + ε_bind | nothing |
 
 The job's environment picks what it runs: N2's sample on the relay path is `CR_N2_DRAW` (`n2_zk.py prove
 --warden-run --draw K`, on the verifier's coins) and any other N2 command is `CR_N2_CMD`, the scan of the gate's own
@@ -438,11 +438,11 @@ one link, one network certifier on one uplink, certifying a request rate of one 
 or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
 ε. The terms are those of
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`, proved in
-`security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
-failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean`); the
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`, proved in
+`security/Proofs/Certifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
+failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/Certifier/MonitoringPeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
+(`security/Definitions/Certifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
@@ -490,14 +490,14 @@ state isn't a wired audit's `SCAN_STATE` by root and domain (`stateTied`). `EVER
 one-stage's registration check lets through only with each lane's `prog<j>` named tied (`lane_kinds`), and its answer
 then names them (`rests_on_period_check`); the check refuses, after that, by name, an execution phase whose scan's
 answer names under that key anything that is no lane's `prog<j>` (`tiedInputWired`), since `wired` ties no other
-Input. scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the empty state, leaf t S_{t−1}),
+Input. scan_zk's state tree is the window state (`ingress_scan.window_state`: leaf 0 the start's state, leaf t S_{t−1}),
 each leaf but the first the o1 of the proof block that computes it and the sin of the next, both registered reads, so
 a state tree that skips or alters a transition is refused at that proof block's o1; the block round's registration
 names it as `scan/state`.
 A scan proof block's public word, o0, is its ok bit. scan_zk commits a member's o0 rows under the verifier's public
 salts (`ok_salts`, `scan_ok.salt`: row i's from its index alone), so the o0 root of a member whose every proof block is
 ok is a constant of its template and count, and one execution phase's members are a function of the schedule's T
-(`scan_ok.members`: `first`, `ingress-0`, `last` and `egress-0`). The check computes those constants once a period
+(`scan_ok.members`: `ingress-0`, `last` and `egress-0`; the start unit, `start`, has no ok bit). The check computes those constants once a period
 (`scan_ok.constants`, Lean `ScanOk.consts`) and refuses, last, by name, an execution phase whose scan's registration
 names a member's `<member>/o0` at another root, leaf count or domain, names none for it, or names another port ending
 `/o0` (`held`): comparisons alone, no hash an execution phase. An ok bit is then the verifier's own computation from
@@ -523,7 +523,7 @@ The two forms:
 The scale:
 - A week, a month and a year of one link, and of as many links as the census's reference datacenter
   (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
-  machines: the world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`), the census's
+  machines: the world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`), the census's
   inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
 - Every link has one network certifier in front of all its machine's compute, serving at the run's rate

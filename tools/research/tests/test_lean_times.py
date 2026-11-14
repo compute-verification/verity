@@ -12,7 +12,7 @@ from research.store.local import LocalStore
 
 T = datetime(2026, 10, 28, 12, 0, tzinfo=UTC)
 ARGV = ["python3", "tools/verity/lean/lean_changed.py", "--records", "security", "--update"]
-CHECK_ARGV = ["python3", "tools/verity/check/slot.py", "--", "uv", "run", "python", "tools/verity/check/check.py", "--keep-going"]
+CHECK_ARGV = ["python3", "tools/check/slot.py", "--", "uv", "run", "python", "tools/check/check.py", "--keep-going"]
 STDOUT = """lean-records: taking the slot path: check.py on /c/lean-records/build-1
 AUDIT /c/lean-records/build-1/Security: PASS  24170 declarations in 646 modules; axioms propext; 1003 guarantees; {'build': 46.3}
 AUDIT /c/lean-records/build-1/Security/Proofs: PASS  160227 declarations in 3191 modules; axioms propext; 0 guarantees; {}

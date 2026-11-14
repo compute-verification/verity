@@ -3,7 +3,7 @@ module
 public import Batteries.Data.ByteArray
 public import Definitions.Core.CoinBytes
 public import Proofs.Flock.Soundness.Assumptions
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Properties.Challenger
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -48,8 +48,8 @@ In the causal game (`Verity.releases`) the challenger releases each coin as `8 *
 `Challenger.COIN_BYTES`), and a sample reads the concatenation of the coins it was released as bytes, bit `t` of a coin's
 bits being bit `t mod 8` of its byte `⌊t/8⌋` (`Properties.Challenger.bitsOf`). So over the game's bits for `k`
 coins, `Ω = Fin k → Fin (8 * B) → Bool`, the sample's byte source is `coinBytes k B`: one stream of `k * B` bytes, coin
-`c`'s byte `q` at `c * B + q`. It is a bijection (`coinBytesEquiv`), so it carries the uniform law on the bits to the
-uniform law on the bytes, which is `Assumptions.UniformRandomBytes` at it (`uniformRandomBytes_coinBytes`): A3 holds
+`c`'s byte `q` at `c * B + q`. It is a bijection (`coinBytesEquiv`), so it carries the uniform distribution on the bits to the
+uniform distribution on the bytes, which is `Assumptions.UniformRandomBytes` at it (`uniformRandomBytes_coinBytes`): A3 holds
 there as a theorem, with no premise on the operating system.
 
 `bitsAt_coinBytes` and `testBit_coinBytes` say what the bytes are; `bitsOf_streamOf_coinBytes` that their bits, as
@@ -65,7 +65,7 @@ those bits (`bitsOf_injective`), so the bytes a sample reads, when their bits ar
 namespace Verity.Sampled
 
 open FlockSoundness
-open FlockSoundness.Audit.Law (streamOf)
+open FlockSoundness.Audit.SamplingDesign (streamOf)
 open Properties.Challenger (bitsOf)
 
 variable {k B : ℕ}

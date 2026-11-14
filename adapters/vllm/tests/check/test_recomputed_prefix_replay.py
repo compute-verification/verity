@@ -3,18 +3,24 @@ the sampled replay's CPU-served world (`tests.check.test_sampled_replay`): r1 se
 (C = 1), so serving committed its first step's per-position members from position 1 on and embedded prompt[1:]. Its prefix
 rows leave its population, every sampled VU replays bit for bit, a read below C is its replay's and never a committed word
 (with attention, a later position's and every decode's key and value reads of position 0), and without the recompute the
-same record doesn't pass."""
+same record doesn't pass. A hit its Program takes (a prefix layout beside the Program) is recomputed by nothing: the
+population binds the request to its producers. A plane a row's output is committed under a second time is a position's
+too, the replay's to read, and a second address of its row in the population."""
 from __future__ import annotations
 
 import copy
+import json
 
 import numpy as np
 import pytest
 
+from verity_vllm.check.replay import cached_prefix as CP
 from verity_vllm.check.replay import driver as SR
 from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import population as POP
 from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.request_replay import Replay
 
 C = 1
 #: the weights field only the world with attention registers
@@ -82,13 +88,19 @@ def test_a_read_below_c_is_the_replay_s_and_one_past_it_is_serving_s_c_rows_earl
         RP.RecomputedPrefix(CommittedStore(bmap, committed), pi, "r1", 2, world.prompts["r1"], _weights(world))
 
 
-def test_a_replay_needs_the_weights_and_a_plan_runs_none_whatever_it_is_given(world):
+def test_a_replay_given_no_weights_fails_at_the_first_it_reads_and_a_plan_runs_none_whatever_it_is_given(world):
     pi = IX.ProgramIndex(world.inst)
     bmap, committed = _warm(world)
     store = CommittedStore(bmap, committed)
-    with pytest.raises(TypeError, match="none are given"):
-        RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], None)
     op, w = "model.layers.0.mlp.down_proj", RP.positions(pi)[("model.layers.0.mlp.down_proj", "out")]
+    unweighted = RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], None)
+    assert unweighted.replay is not None and unweighted.replay.weights is None
+    got, _ = unweighted.words("r1", 0, op, "out", w, 2 * w)                       # past C: serving's, no weight read
+    assert np.array_equal(got, world.blocks[(0, "r1", op, "out")][w:])
+    ids, _ = unweighted.words("r1", 0, pi.embed_op_path(), "in", 0, 1)           # below C, of the prompt: no weight read either
+    assert list(ids) == world.prompts["r1"][:C]
+    with pytest.raises(LookupError, match=r"of request r1: .*'NoneType' object is not callable"):
+        unweighted.words("r1", 0, op, "out", 0, w)
     for weights in (None, _weights(world)):
         plan = RP.RecomputedPrefix(store, pi, "r1", C, world.prompts["r1"], weights, plan=True)
         got, _ = plan.words("r1", 0, op, "out", 0, w)
@@ -124,3 +136,62 @@ def test_the_warm_request_replays_bit_for_bit_with_its_prefix_out_of_its_populat
     with pytest.raises(ValueError, match="needs its certified prompt"):
         SR.sampled_replay(progs, bmap, committed, _weights(world), per_stratum=8, seed=1, workers=0,
                           cached_prefixes={"r1": {"cached": C, "producers": ["r0"]}})
+
+
+def test_a_hit_its_program_takes_is_bound_to_its_producers_and_recomputed_by_nothing(tmp_path):
+    """r1's Program has a prefix layout beside it (`prefix_cache.json`, a build with `--cached 4`), r0's has none."""
+    import tests.check.test_sampled_replay as T
+
+    cold, warm = T._program()[0], T._program()[0]
+    layout = {"input": 1, "C": 4, "row_leaves": 4, "layers": ["model.layers.0.self_attn.attn"]}
+    (tmp_path / CP.PREFIX_FILE).write_text(json.dumps(layout))
+    arrivals = {"r0": 0, "r1": 2}
+
+    def indices(cached: int, producers: list[str]) -> dict:
+        return SR.populate({"r0": cold, "r1": warm}, [0], arrivals, None, None, attention_paths=None, tp=None,
+                           program_dirs={"r1": str(tmp_path)}, manifest=None,
+                           cached_prefixes={"r1": {"cached": cached, "producers": producers, "prompt": [5, 3]}})[3]
+
+    got = indices(4, ["r0", "r0"])
+    taken = got["r1"].cached_prefix["r1"]
+    assert got["r1"].kv_prefix == layout and got["r1"].recomputed == {} and got["r0"].cached_prefix == {}
+    assert (taken.C, taken.rl, taken.layers, taken.producers, taken.block) == (4, 4, [0], ["r0", "r0"], 2)
+    assert taken.indices is got and taken.arrivals is arrivals
+    assert indices(0, ["r0"])["r1"].cached_prefix == {}                           # served no cached row: no hit to bind
+    with pytest.raises(ValueError, match="^r1 is served 5 cached prompt rows but its Program of record takes a cached prefix of 4$"):
+        indices(5, ["r0"])
+
+
+class _Described(IX.ProgramIndex):
+    """An index over rows described here, the first of which reads a prompt id."""
+
+    def __init__(self, described: list[dict]) -> None:
+        self.rows = [{"i": i, "spec": "X_v1{}", "name": f"x{i}", "args": [[["p", 0, i, i + 1]]] if i == 0 else []} for i in range(len(described))]
+        self.by_i, self._described = {r["i"]: r for r in self.rows}, described
+        self.pnames, self.kv_prefix, self.segs = ["prompt"], None, [None]
+        self.supplied: set[int] = set()
+
+    def describe(self, r: dict) -> dict | None:
+        return self._described[int(r["i"])]
+
+
+def test_a_plane_a_row_s_output_is_committed_under_a_second_time_is_a_position_s_the_replay_s_to_read_and_an_address_of_the_row():
+    """Two positions of a first step: at each, an embedding row and a row whose four words are also a plane's."""
+    def described(row: int) -> list[dict]:
+        plane = {"op_path": "moe/L0", "member": "sum", "width": 4, "dtype": "f32", "row": row}
+        return [{"step": 0, "row": row, "op_path": "embed", "members": [("out", 8, "bf16")]},
+                {"step": 0, "row": row, "op_path": "moe", "members": [("out", 4, "bf16")], "copies": [plane]}]
+
+    pi = _Described(described(0) + described(1))
+    assert RP.positions(pi) == {("embed", "out"): 8, ("moe", "out"): 4, ("moe/L0", "sum"): 4, ("embed", IX.IDS_MEMBER): 1}
+    replay = Replay(pi, "r0", [1, 2], None)
+    assert replay.words("r0", 0, "moe/L0", "sum", 8, 12) == (None, "no row 2 of (moe/L0/sum) at request r0's step 0")
+    assert replay.words("r0", 0, "moe/L1", "sum", 0, 4) == (None, "no row of request r0 commits (moe/L1/sum) at its step 0, and nothing gives it")
+    addresses: dict[tuple, dict] = {}
+    POP.population(pi, "r0", addresses=addresses)                                 # each row at both its addresses, the plane's under the plane's family
+    assert {k: (a["manifest_family"], a["rows"]) for k, a in addresses.items()} == {
+        ("r0", 0, "embed", "out"): ("instance_outputs", 2), ("r0", 0, "moe", "out"): ("instance_outputs", 2),
+        ("r0", 0, "moe/L0", "sum"): ("moe_block_stream", 2)}
+    twice = _Described(described(0) + described(0)[1:])
+    with pytest.raises(ValueError, match=r"rows 1 and 2 both commit \(moe/out\) row 0 at step 0"):
+        Replay(twice, "r0", [1], None)

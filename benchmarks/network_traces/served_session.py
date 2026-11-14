@@ -120,7 +120,7 @@ the gate takes the challenger host's address from where it is launched, ``--env`
     research run --on AUDITOR --source . --project verity --as network-accounting --cwd clone --timeout 270m \\
       --store-read --send challenger-key.json --env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST \\
       -- env CHECK_SLOTS=/workspace/research/locks/network/slots python3 \\
-      tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
+      tools/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 -- nice -n 19 bash -c \\
       'python3 benchmarks/network_traces/served_session.py chain --run RUN --endpoint ART \\
       --draw 8 --coins gate --challenger-key "$RESEARCH_RUN_DIR/inputs/challenger-key.json"'
 
@@ -157,6 +157,8 @@ from datetime import datetime, UTC
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+#: the record's leak guard, which chain_record.sh runs on its way out and `release` runs on a session's record
+LEAK_GUARD = "verity.protocols.accounting.certifier.device.leak_guard"
 TREE = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(TREE / "verity/protocols/compose/device/live_challenger"))
 import auditor as A  # noqa: E402
@@ -208,7 +210,7 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not adapters/vllm/tools/served_run/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
@@ -319,7 +321,7 @@ def plan(a: argparse.Namespace, data: bytes) -> dict:
                 "chain": f"research run --on {on} --source . --project verity --as network-accounting "
                          f"--cwd clone --timeout 270m --store-read --send challenger-key.json {host} -- "
                          "env CHECK_SLOTS=/workspace/research/locks/network/slots "
-                         "python3 tools/verity/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
+                         "python3 tools/check/slot.py --by network-accounting --wait-max 1200 --run-max 14400 "
                          "-- nice -n 19 bash -c 'python3 benchmarks/network_traces/served_session.py chain --run RUN "
                          f"--endpoint ART --draw 8 --coins gate{coin_peer} "
                          "--challenger-key \"$RESEARCH_RUN_DIR/inputs/challenger-key.json\"'"}}
@@ -503,7 +505,7 @@ def _session(a: argparse.Namespace, data: bytes, ps: list[list[int]], keep: Path
 def release(out: Path, hold: Path, quarantine: Path, kept: Path | None) -> int:
     """The record's leak guard on `out` and `hold` against the kept fetch, which releases the hold to `out` once it
     passes (0 when it found nothing, 3 when it moved a find to `quarantine`)."""
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(out), str(quarantine),
+    got = subprocess.run([sys.executable, "-m", LEAK_GUARD, str(out), str(quarantine),
                           *(["--gates", str(kept)] if kept is not None and kept.is_file() else []),
                           "--hold", str(hold), "--release-to", str(out), "--report", str(out / "leak-guard.json")],
                          capture_output=True, text=True)
@@ -760,8 +762,8 @@ def endpoint(a: argparse.Namespace) -> int:
 
 
 def chain(a: argparse.Namespace) -> int:
-    if not (HERE / "leak_guard.py").is_file():
-        raise Refused("this tree has no record leak guard (leak_guard.py), which chain_record.sh runs on its "
+    if importlib.util.find_spec(LEAK_GUARD) is None:
+        raise Refused(f"this tree has no record leak guard ({LEAK_GUARD}), which chain_record.sh runs on its "
                       "way out: run the chain from a tree with it")
     fetch = a.keep / a.run / "fetch.tar.gz"
     if not fetch.is_file():

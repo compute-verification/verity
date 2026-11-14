@@ -1,5 +1,5 @@
 """The inference-only policy's check in rows as a core protocol (`RowsProtocol.lean`, `inference-only-rows`,
-`verity/inference-only/rows/v1`) against `nci_record_reference` behind the protocol's decoders.
+`verity/inference-only/rows/v1`) against `inference_only_record_reference` behind the protocol's decoders.
 
 The reference decodes the protocol's parts (`RowsProtocol.lean`'s module docstring), rebuilds the record check's
 instance and trusted input (the params' log with the run's own record, the commitment, appended, and that record's
@@ -17,7 +17,7 @@ Two kinds of case:
   is tens of megabytes, so only one random case in `SERVE_FILE_ONE_IN` reads one (`SERVE_FILE_CASES`): one honest
   case of two templates on a file of Flock's fixtures, at its limits and one past each.
 * Through `inference-only-rows check PARAMS COMMITMENT EVIDENCE BLOB...` (`CHECK_CASES`): that honest case on two
-  files of two values of a unit's rows: the accept at `Γ` and `α`, `size` and `nci` one past each, a template's file
+  files of two values of a unit's rows: the accept at `Γ` and `α`, `size` and `inference_only` one past each, a template's file
   swapped for one of more rows, a file missing, and each file the Lean refuses.
 
 The harness compares everything but a reject's reason; each test here also holds the reason's name, its text before
@@ -42,7 +42,7 @@ from verity_difftest import Reject
 from verity_difftest import protocol as P
 
 PROTOCOLS = Path(__file__).resolve().parents[5]
-LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "nci" / "lean"
+LEAN = PROTOCOLS / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
 FIXTURES = PROTOCOLS / "proofs" / "flock" / "prover" / "tests" / "fixtures"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -177,7 +177,7 @@ def check(p: dict, c: tuple[dict, str], e: dict, blobs: list[bytes], refused: fr
     if out["failure"] == "size":
         return "reject", "size: a block has more than Γ rows"
     if out["failure"] == "nci":
-        return "reject", "nci: a block reads more than α fresh bits a row"
+        return "reject", "inference_only: a block reads more than α fresh bits a row"
     return "accept", {}, {"blocks": detail["blocks"], "chosen": ref.chosen(inst, tr)["chosen"],
                           "fresh": out["fresh"], "rows": out["rows"]}
 
@@ -410,7 +410,7 @@ def test_the_rows_protocol_agrees_with_the_reference(server):
     """Lean and the reference agree on every case, and every change and every case of `SERVE_FILE_CASES` takes its
     path at least once. Slow: one case in `SERVE_FILE_ONE_IN` reads a real circuit file of tens of megabytes, its hex
     a line of over 100 MB, a few seconds a case on each side. What it catches that the name-by-name test above cannot:
-    an accept and its profile, and `size` and `nci`, the rule in rows, decided on a real file's rows through `serve`
+    an accept and its profile, and `size` and `inference_only`, the rule in rows, decided on a real file's rows through `serve`
     beside the reference, on random record cases rather than the first honest splits."""
     SEEN.clear()
     stats = D.run(PORT, examples=300, server=server)

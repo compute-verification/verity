@@ -10,10 +10,14 @@ SHA-512 calls of the world's GPUs and of the datacenter's, and as a share of the
 `figures.py`'s docstring states every figure.
 
 ~~~text
-python benchmarks/recursion_figures/figures.py RESULT.json          # the table
-python benchmarks/recursion_figures/figures.py RESULT.json --json   # the figures
-python benchmarks/recursion_figures/figures.py --from RUN           # a recorded run's records, from the evidence store
+PYTHONPATH=benchmarks/recursion_e2e uv run python benchmarks/recursion_figures/figures.py RESULT.json          # the table
+PYTHONPATH=benchmarks/recursion_e2e uv run python benchmarks/recursion_figures/figures.py RESULT.json --json   # the figures
+PYTHONPATH=benchmarks/recursion_e2e uv run python benchmarks/recursion_figures/figures.py --from RUN           # a recorded
+                                                                                    # run's records, from the evidence store
 ~~~
+
+`benchmarks/recursion_e2e`, whose reader (`rec_profile`) it imports, is no package, so the command puts it on the path;
+the rest it imports as the workspace installs it.
 
 `--from RUN` fetches the `out/` of the run's record and reads it with this tree's reader, so a run recorded before
 `session_times` gives its figures too. Under a research run (`metrics.toml`'s command, from the run of record) the

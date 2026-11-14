@@ -12,25 +12,30 @@ from __future__ import annotations
 import hashlib
 import json
 import struct
+from collections.abc import Callable
 from types import SimpleNamespace as NS
+from typing import Any
 
 import numpy as np
 import pytest
 
 from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R, verifier as V
 from verity.circuits.codec import definitions, descriptor_id
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.population import population
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
-from verity.circuits.types import Array, Value as Bits
+from verity.circuits.types import Array
+from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
-from verity.commitments.windows import rows as CS
-from verity.definitions.registry import stop_check, stop_rule
+from verity.commitments.periods import rows as CS
+from verity_vllm.definitions.registry import stop_check, stop_rule
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_stop as BS, boundary_windows as BW
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_stop as BS
+from verity_vllm.pipeline import boundary_windows as BW
 
 XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -379,14 +384,14 @@ def test_beside_a_history_table_the_return_is_named_under_its_replay_block():
 
 class Request:
     def __init__(self, rid: str, prompt: list[int], max_tokens: int = 4, **sampling):
-        self.request_id, self.prompt_token_ids = rid, prompt
+        self.request_id, self.prompt_token_ids, self.num_cached_tokens = rid, prompt, 0
         self.sampling_params = NS(**{**GREEDY, "max_tokens": max_tokens, **sampling})
 
 
 class Scheduler:
     """vLLM's V1 scheduler as the hook wraps it."""
 
-    def __init__(self, caching: bool = False, max_model_len: int = 64):
+    def __init__(self, caching: bool = False, max_model_len: int | None = 64):
         self.cache_config, self.max_model_len = NS(enable_prefix_caching=caching), max_model_len
         self.added: list[str] = []
         self.outputs: dict = {}
@@ -416,7 +421,8 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
     """Three requests: at the first schedule a window's length after it opened, window 0 closes with the two finished,
     by class, and carries the third; the third's finish, the only one running, closes window 1; each class's files
     reopen to the roots its sink line holds; and an abort finishes a request."""
-    now, lines = [0.0], []
+    now = [0.0]
+    lines: list[dict] = []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows")
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: now[0], serve="s").install(sched, hooks)
     try:
@@ -484,7 +490,8 @@ def test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts(tmp
         assert bw.verdicts is want
     got = {}
     for name, check, verdicts in (("on", SAME, True), ("off", SAME, False), ("refused", PAIR, True)):
-        lines, sched, hooks = [], Scheduler(), Hooks(tag=f"test-boundary-verdicts-{name}")
+        lines: list[dict] = []
+        sched, hooks = Scheduler(), Hooks(tag=f"test-boundary-verdicts-{name}")
         bw = BW.BoundaryWindows(tmp_path / name, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                                 verdicts=verdicts).install(sched, hooks)
         try:
@@ -569,9 +576,9 @@ def test_the_stop_block_is_the_stop_rule_over_a_spans_request_row_and_served_ids
         BS.Stop((3,), 64, 5)
     with pytest.raises(ValueError, match="which the stop word's n holds"):
         BS.Stop((3,), 1 << 20, 1 << stop_rule.N_BITS)
-    for bad in ({"ids": [3]}, {**RULE.to_json(), "ignore_eos": True}):
+    for wrong in ({"ids": [3]}, {**RULE.to_json(), "ignore_eos": True}):
         with pytest.raises(ValueError, match="a stop rule is"):
-            BS.Stop.of(bad)
+            BS.Stop.of(wrong)
 
 
 def test_the_stop_block_reads_ignore_eos_off_the_request_row_and_takes_no_stop_id_for_that_request():
@@ -827,7 +834,7 @@ def test_a_class_is_laid_out_under_the_verifiers_own_stop_rule_and_never_the_one
     plain = json.loads(json.dumps(BR.commit(_spans(3), _layout(n=3), 0).public()))
     others = (BS.Stop((3,), 64, 4), BS.Stop((3, 7), 128, 4), BS.Stop((3, 7), 64, 8), NO_IDS, None)
     for doc, mine in [*((pub, o) for o in others), (plain, RULE)]:
-        calls = [lambda doc=doc, mine=mine: BR.layout_of(doc, PAIR, mine),
+        calls: list[Callable[..., Any]] = [lambda doc=doc, mine=mine: BR.layout_of(doc, PAIR, mine),
                  lambda doc=doc, mine=mine: BR.record(doc, PAIR, DESIGN, stop=mine)]
         if doc is pub:
             calls.append(lambda mine=mine: BR.reopen(d, PAIR, stop=mine))

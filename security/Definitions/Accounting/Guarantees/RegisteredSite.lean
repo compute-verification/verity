@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Accounting.Records
 public import Definitions.Core.SiteSubtree
 public import Mathlib.Data.String.Basic

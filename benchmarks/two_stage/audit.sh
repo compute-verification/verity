@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The two-stage toy's audit on a CPU node (audit.py): flock-circuit, flock-verify and SPOT's Lean verifier (the
+# The two-stage toy's audit on a CPU node (audit.py): flock-circuit, verity-verify-proof and SPOT's Lean verifier (the
 # stream's samples) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
 # (never a circuit, a prover file, a private body, or a challenger's key or secret: its *-work/).
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
@@ -21,7 +21,7 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 
 # under FLOCK_CHALLENGER=1 each session's challenger is audited in Lean too (the difftest's challenger pieces)
 SPD=; [ "${FLOCK_CHALLENGER:-0}" = 1 ] && SPD=sampled-proofs-difftest
-{ (cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) \
+{ (cd verity/protocols/proofs/flock/verifier && lake build verity-verify-proof flock-firewall) \
     && (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier $SPD); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
@@ -30,7 +30,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protoco
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
-LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 sha256sum "$BIN" "$LEAN" | tee "$O/binaries.sha256"
 
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm

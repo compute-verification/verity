@@ -15,6 +15,7 @@ from verity.commitments.crypto import lms
 from verity import channel as wire
 from verity.protocol import Role, place, site_of
 from verity.channel import Message, Refused
+from verity.runtime.framing import HEADER, decode, encode, parse
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
@@ -56,12 +57,12 @@ def test_the_certifier_sends_the_opening_to_the_workers_and_the_record_to_the_ve
     m = NC.MANIFEST
     assert [(c.sender, c.receiver, c.messages, c.after, c.carries_coins, c.latency_ms) for c in m.channels] == [
         ("network-certifier", "workers", ("out-opening", "records", "cells-salts"), (), False, None),
-        ("network-certifier", "verifier", ("out-record", "certificate", "registration", "load", "deployment", "groups"), (),
+        ("network-certifier", "verifier", ("out-record", "certificate", "registration", "deployment", "groups"), (),
          False, None)]
     assert m.peers(NC.NETWORK_CERTIFIER) == ("verifier", "workers")
     assert {t: m.registry.kind(t) for t in m.registry.types} == {
         "out-opening": "private", "records": "private", "cells-salts": "private", "out-record": "commitment",
-        "certificate": "commitment", "registration": "commitment", "load": "commitment", "deployment": "structure",
+        "certificate": "commitment", "registration": "commitment", "deployment": "structure",
         "groups": "structure"}
     assert not m.sends(NC.WORKERS, NC.VERIFIER).types and not m.sends(NC.VERIFIER, NC.NETWORK_CERTIFIER).types
 
@@ -86,16 +87,16 @@ def test_an_output_value_goes_as_its_two_messages(out) -> None:
     value, key = out
     to_workers = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, NC.WORKERS)
     to_verifier = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, NC.VERIFIER)
-    opening = to_workers.decode(to_workers.encode(Message(NC.OUT_OPENING, HEAD, value.witness)))
+    opening = decode(to_workers, encode(to_workers, Message(NC.OUT_OPENING, HEAD, value.witness)))
     assert opening.fields == HEAD and O.read_witness(opening.body) == list(value.salts)
-    record = to_verifier.decode(to_verifier.encode(Message(NC.OUT_RECORD, HEAD, wire.canonical(value.public))))
+    record = decode(to_verifier, encode(to_verifier, Message(NC.OUT_RECORD, HEAD, wire.canonical(value.public))))
     assert record.fields == HEAD
-    assert O.check_out(wire.parse(record.body), key, S.SESSION, SHAPE, window=record.fields["window"],
+    assert O.check_out(parse(record.body), key, S.SESSION, SHAPE, window=record.fields["window"],
                        link=record.fields["link"]) == value.root
     for channel, message in ((to_verifier, Message(NC.OUT_OPENING, HEAD, value.witness)),
                              (to_workers, Message(NC.OUT_RECORD, HEAD, wire.canonical(value.public)))):
         with pytest.raises(Refused) as e:
-            channel.encode(message)
+            encode(channel, message)
         assert e.value.name == "unknown-type"
 
 
@@ -108,14 +109,13 @@ RUN = {NC.WORKERS: [Message(NC.RECORDS, {**HEAD, "record": r}, bytes(range(256))
        + [Message(NC.CELLS_SALTS, HEAD, bytes(3 * WR.SALT_BYTES + WR.WIRING_SALT_BYTES))],
        NC.VERIFIER: [Message(NC.CERTIFICATE, HEAD, b'{"refused": ["node0/uplink0", "egress", 3]}'),
                      Message(NC.REGISTRATION, HEAD, b'{"cost": {"row_bytes": 512, "rows": 4}, "registration": {}}'),
-                     Message(NC.LOAD, {}, b'{"values": []}'),
                      Message(NC.DEPLOYMENT, {}, b'{"digest": "00", "params": {}, "windows": 2}'),
                      Message(NC.GROUPS, {}, b'{"groups": [{"group": 0, "requests": [0, 1], "windows": [0, 2]}]}')]}
 
 
 def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrations_to_the_verifier() -> None:
     """The records and the rows' salts reach the workers alone, the certificates, the rows' registrations, the
-    load, the deployment and the groups the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
+    deployment and the groups the verifier alone, each as it was sent; the salts read back as the rows' and the wiring's."""
     for receiver, other in ((NC.WORKERS, NC.VERIFIER), (NC.VERIFIER, NC.WORKERS)):
         to, wrong = (NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, p) for p in (receiver, other))
         for message in RUN[receiver]:
@@ -141,22 +141,21 @@ def test_a_message_past_its_schema_is_refused_by_name(out) -> None:
                           (Message(NC.CELLS_SALTS, HEAD, bytes(WR.SALT_BYTES + 1)), "schema"),
                           (Message(NC.CERTIFICATE, {"link": LINK}, b"{}"), "schema"),
                           (Message(NC.REGISTRATION, HEAD, bytes(NC.MAX_RECORD + 1)), "oversized"),
-                          (Message(NC.LOAD, HEAD, b"{}"), "schema"),
                           (Message(NC.DEPLOYMENT, HEAD, b"{}"), "schema"),
                           (Message(NC.DEPLOYMENT, {}, bytes(NC.MAX_RECORD + 1)), "oversized"),
                           (Message(NC.GROUPS, HEAD, b"{}"), "schema"),
                           (Message(NC.GROUPS, {}, bytes(NC.MAX_RECORD + 1)), "oversized")):
         with pytest.raises(Refused) as e:
-            types.encode(message)
+            encode(types, message)
         assert e.value.name == name, message.type
-    types.encode(Message(NC.OUT_OPENING, {**HEAD, "window": (1 << 64) - 1}))
+    encode(types, Message(NC.OUT_OPENING, {**HEAD, "window": (1 << 64) - 1}))
 
 
 def test_the_bounds_are_the_frames_and_the_deployed_signatures() -> None:
-    frame = wire.HEADER.unpack(b"\xff" * wire.HEADER.size)[1]
+    frame = HEADER.unpack(b"\xff" * HEADER.size)[1]
     assert NC.MAX_OPENING % O.SALT_BYTES == 0 and NC.MAX_OPENING <= frame < NC.MAX_OPENING + O.SALT_BYTES
     assert wire.MAX_HEAD < 2 * lms.DEPLOYED.signature_bytes() < NC.MAX_RECORD
-    assert NC.MAX_PACKED == frame and 1024 * NC.MAX_RECORD <= NC.MAX_LOAD <= frame
+    assert NC.MAX_PACKED == frame
     assert WR.SALT_BYTES % WR.WIRING_SALT_BYTES == 0 and NC.MAX_SALTS % WR.SALT_BYTES == 0
     assert NC.MAX_SALTS <= frame < NC.MAX_SALTS + WR.WIRING_SALT_BYTES
 

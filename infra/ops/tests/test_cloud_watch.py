@@ -165,7 +165,7 @@ R2_ENV = {"R2_BUCKET": "dummy-bucket", "R2_ENDPOINT": "https://dummy.r2.example"
 
 def r2_pass(tmp_path, state, now, bucket, pages=2):
     cfg = config(tmp_path)
-    cfg["r2"] = {**cfg["r2"], "page_cap": pages, "bucket": cfg["r2"]["bucket"][:1]}
+    cfg["r2"] = {**cfg["r2"], "page_limit": pages, "bucket": cfg["r2"]["bucket"][:1]}
     rep = W.Report()
     W.check_r2(ctx(cfg, state, now, R2_ENV, http=bucket, clock=lambda: now), rep)
     return rep
@@ -263,11 +263,11 @@ def test_a_neon_failure_names_no_host_address_or_user(tmp_path, monkeypatch):
 
 BUDGETS = """
 [budgets]
-"vy-cpu-" = { cap_usd = 100, expires = "2026-10-12T17:00Z" }
-"vy-dc-" = { cap_usd = 100, expires = "2026-10-19T06:00Z" }
-"vy-nebius-cpu-" = { cap_usd_per_day = 500, expires = "2026-10-21T21:00Z" }
-"vy-nebius-" = { cap_usd = 8500, expires = "2026-10-18T10:00Z" }
-"vy-glm53-" = { cap_usd = 1000, expires = "2026-10-24T21:00Z" }
+"vy-cpu-" = { limit_usd = 100, expires = "2026-10-12T17:00Z" }
+"vy-dc-" = { limit_usd = 100, expires = "2026-10-19T06:00Z" }
+"vy-nebius-cpu-" = { limit_usd_per_day = 500, expires = "2026-10-21T21:00Z" }
+"vy-nebius-" = { limit_usd = 8500, expires = "2026-10-18T10:00Z" }
+"vy-glm53-" = { limit_usd = 1000, expires = "2026-10-24T21:00Z" }
 """
 
 
@@ -312,7 +312,7 @@ def test_a_nebius_vm_on_no_line_past_its_line_or_over_a_daily_limit_is_an_anomal
     rep = W.Report()
     run = lambda argv, env, stdin="": (0, json.dumps(vms), "")  # noqa: E731
     W.spend_nebius(ctx(config(tmp_path), {}, T0, env, run=run), rep, tomllib.loads(BUDGETS)["budgets"])
-    assert sorted(f.key for f in rep.findings) == ["spend|nebius|stray|uncovered", "spend|nebius|vy-glm53-|cap",
+    assert sorted(f.key for f in rep.findings) == ["spend|nebius|stray|uncovered", "spend|nebius|vy-glm53-|limit",
                                                    "spend|nebius|vy-nebius-1|expired", "spend|nebius|vy-nebius-cpu-|day"]
     assert rep.lines[0].startswith("Nebius: 5 VMs running, $79.60/h known") and "no rate registered for `stray`" in rep.lines[0]
 
@@ -322,7 +322,7 @@ def test_a_missing_credential_is_a_gap_in_the_digest_and_never_an_anomaly(tmp_pa
     W.one_pass(ctx(cfg, state, T0 + 4 * 3600), out=open(os.devnull, "w"))
     (digest, thread), = posts.sent
     assert thread is None and digest.startswith("*Cloud health and spend, 2026-10-18T16:00Z*") and "Nothing open." in digest
-    gaps = [ln for ln in digest.split("*Unmonitored* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
+    gaps = [ln for ln in digest.split("*Unwatched* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
     assert len(gaps) == len(set(gaps))
     for need in ("needs R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_ENDPOINT: R2 bucket `store`",
                  "needs STORE_INDEXER_DATABASE_URL", f"needs {tmp_path}/gh_read_token.sh: the GitHub API rate limit",
@@ -436,3 +436,19 @@ def test_a_state_file_that_does_not_parse_starts_the_watch_from_none_and_says_so
     (tmp_path / "state.json").write_text("{")
     assert W.load_state(tmp_path / "state.json") == {}
     assert "state.json: unreadable, so the watch starts from no state (JSONDecodeError" in capsys.readouterr().err
+
+
+def test_budgets_with_the_old_keys_and_a_finding_kept_under_its_old_key_are_read_as_the_new(tmp_path, capsys, monkeypatch):
+    monkeypatch.setattr(W, "_said", set())
+    (tmp_path / "budgets.toml").write_text(BUDGETS.replace("limit_usd", "cap_usd"))
+    for _ in range(2):
+        lines, _where = W.budget_lines(ctx(config(tmp_path), {}, T0))
+    assert lines["vy-nebius-cpu-"]["limit_usd_per_day"] == 500 and lines["vy-glm53-"]["limit_usd"] == 1000
+    assert capsys.readouterr().err.count("names cap_usd, cap_usd_per_day, read as limit_usd, limit_usd_per_day") == 1
+    old = "spend|nebius|vy-glm53-|cap"
+    (tmp_path / "state.json").write_text(json.dumps({"open": {old: {"since": T0, "text": "t", "ts": "1.0", "posted": True}},
+                                                     "gone": {old: 1}}))
+    state = W.load_state(tmp_path / "state.json")
+    new = "spend|nebius|vy-glm53-|limit"
+    assert state["open"] == {new: {"since": T0, "text": "t", "ts": "1.0", "posted": True}} and state["gone"] == {new: 1}
+    assert W.transitions(ctx(config(tmp_path), state, T0), {new: W.Finding(new, "t")}) == [], "the same finding: no second page"

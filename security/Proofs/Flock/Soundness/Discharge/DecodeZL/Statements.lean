@@ -21,7 +21,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The message half of the decoder premise, and the decoder at the headline: statements
 
-`flock_headline_exec`'s open guarantee is `hdec : DecodesOn …`: at every outcome of the live session flock-verify
+`flock_headline_exec`'s open guarantee is `hdec : DecodesOn …`: at every outcome of the live session verity-verify-proof
 accepts, each rep's tape (its rounds' messages, decoded from their bytes, and coins) plays the rep's game, and the table's
 verdict accepts. The statements here:
 
@@ -29,7 +29,7 @@ verdict accepts. The statements here:
 * `ProofSizes`, `DecodeSizes`: the lengths `decodeProof` checks, which make the message-carrying frames well formed.
 * `OPCarries`, `LIGCarries`: the same chunk lemma for the opening's ring switches and for Ligerito, at a decoded
   proof of a `fast100` statement (owners: dec-open, dec-lig).
-* `TagsOk`, `RecordsLive`, `DrawOk`: what `DecodesOn` needs past the plain headline's hypotheses. `wr` is a free
+* `TagsOk`, `RecordsLive`, `SampleOk`: what `DecodesOn` needs past the plain headline's hypotheses. `wr` is a free
   parameter of the headline, and at a `wr` constant at an accepted transcript `DecodesOn` is false (an outcome with no
   rounds can't play `repC`, which starts with a coin); `RecordsLive` says `wr` is the challenger's record of the
   outcome.
@@ -107,7 +107,7 @@ def TagsOk (I : Inputs) : Prop :=
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`wr` is the challenger's record of the live session**: whenever flock-verify accepts what `wr` writes for the
+/-- **`wr` is the challenger's record of the live session**: whenever verity-verify-proof accepts what `wr` writes for the
 outcome `o` at sample `S`, the record carries the sample `dj S`, the proof files are `o`'s, and the record decodes to a
 session whose table's `root_B`, link points and rep streams' rounds are `o`'s. -/
 def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
@@ -121,8 +121,8 @@ def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
           some s ∧ s.rounds.toList = pick (o.rep0, o.rep1) r
 
 /-- **The challenger's sample at `S`**: it proves `S`, and setupH sets up at it with `mPts` link points. -/
-def DrawOk (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
-  (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
+def SampleOk (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
+  (∀ D, Draw.UnitSample.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program = .ok st →
       st.mPts = mPts
 
@@ -153,10 +153,10 @@ holds at the plain headline's tables with the decoder `decAt`, single coins as f
 def DecodesOnExec : Prop :=
   ∀ {c : Flock.Circuit} {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     (_hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (_ho : c.outNet = c.unitNet) {mPts : ℕ}
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {Reg : Type}
-    (L : Law n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (wOP : ℕ → List (List Wire))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) {Reg : Type}
+    (L : SamplingDesign n) (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) (wOP : ℕ → List (List Wire))
     (wLIG : Accounting.Schedule → List (List Wire)),
-    OPCarries wOP → LIGCarries wLIG → TagsOk I → RecordsLive I dj wr → (∀ ω, DrawOk I dj mPts (L.draw ω)) →
+    OPCarries wOP → LIGCarries wLIG → TagsOk I → RecordsLive I dj wr → (∀ ω, SampleOk I dj mPts (L.draw ω)) →
     DecodesOn H512 enc512 leaf512 (tablesAt (Reg := Reg) ht dj x₀) I wr (opnAt (tablesAt ht dj x₀) I dj)
       (decAt (tablesAt ht dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) L
 

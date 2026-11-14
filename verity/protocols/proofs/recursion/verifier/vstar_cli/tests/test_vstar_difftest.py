@@ -1,9 +1,9 @@
 """V*'s circuits in Lean (`VStar`, served by `vstar-difftest`) against `verity_flock`'s builders, part by part on sampled
-parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out netlists, the algebra's structure and its
-parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's shape
-(`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
+parameters: the SHA-512 gadget, the climb and the GF(2^128) residuals as laid-out circuit descriptions, the algebra's structure
+and its parts (`rec_algebra.structure`, `rec_residuals.spec`, `rec_residuals.parts`), V*'s statements over an inner session's
+shape (`rec_vstage.stage`'s), each statement's unit (`rec_outer.lowering`, `rec_residuals.lowering`) as its lowering text, and its
 whole `flock-circuit` file (`circuit.compose`) under sampled bindings, and the prover's reading of an inner session's sample
-(`rec_live.inner_draw`) against the verifier's (`RecSetup.innerDrawn`). Big outputs are compared as digest and size;
+(`rec_live.inner_draw`) against the verifier's (`RecSetup.innerSampled`). Big outputs are compared as digest and size;
 `test_*_file_is_byte_equal` compares whole files.
 
 The bindings (`partition`, `program`, `program_digests`) are core's descriptor codec's and are inputs here: the reference's
@@ -504,7 +504,7 @@ RECORDS = st.one_of(
     st.builds(lambda d, rest: json.dumps({**rest, "unit_draw": d}, ensure_ascii=False), JSON, _REST),
     _REST.map(lambda rest: json.dumps(rest, ensure_ascii=False)), JSON.map(lambda j: json.dumps(j, ensure_ascii=False)),
     st.sampled_from(["", "{", "not json", "NaN", '{"unit_draw": NaN}']))
-INNER_DRAW = st.fixed_dictionaries({"record": RECORDS}) | st.fixed_dictionaries({"record": JSON}) | JSON
+INNER_SAMPLE = st.fixed_dictionaries({"record": RECORDS}) | st.fixed_dictionaries({"record": JSON}) | JSON
 
 
 def port(fn: str, reference, inputs) -> D.Port:
@@ -625,7 +625,7 @@ def test_holo_statements_agree(server, shape):
 
 
 @pytest.mark.slow
-def test_holo_statements_agree_on_drawn_shapes(server):
+def test_holo_statements_agree_on_sampled_shapes(server):
     for fn, ref in (("spec_holo", spec_holo), ("statements_holo", statements_holo)):
         stats = D.run(port(fn, ref, _shapes(14)), examples=24, seed=SEED, server=server)
         assert stats.outputs >= 6 and stats.rejects >= 3, (fn, stats)
@@ -691,14 +691,14 @@ def test_rec_open_unit_agrees(server):
     assert stats.outputs >= 1 and stats.rejects >= 10, stats
 
 
-def test_inner_draw_agrees(server):
+def test_inner_sample_agrees(server):
     """`rec_live.inner_draw`, by which `rec_vstage stage` refuses an unsampled inner session, reads an inner session's record
-    as the verifier does (`RecSetup.innerDrawn`): the same sample, or the same refusal word for word."""
-    p = port("inner_draw", inner_draw, INNER_DRAW)
+    as the verifier does (`RecSetup.innerSampled`): the same sample, or the same refusal word for word."""
+    p = port("inner_draw", inner_draw, INNER_SAMPLE)
     drawn = {"law": "subset", "population": 2, "k": 2, "units": [0, 1]}
     assert D.replay(p, {"record": json.dumps({"unit_draw": drawn})}, server) == ("output", D.canonical({"draw": drawn}))
     for r in ("{}", json.dumps({"unit_draw": None}), "[]", "not json"):
-        assert D.replay(p, {"record": r}, server) == ("output", D.canonical({"refused": RL.NO_INNER_DRAW})), r
+        assert D.replay(p, {"record": r}, server) == ("output", D.canonical({"refused": RL.NO_INNER_SAMPLE})), r
     stats = D.run(p, examples=80, seed=SEED, server=server)
     assert stats.outputs >= 20 and stats.rejects >= 3, stats
 

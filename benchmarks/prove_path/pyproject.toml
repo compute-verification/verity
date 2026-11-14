@@ -7,11 +7,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "tests/test_kept_scan.py",
-    "tests/test_prove_path.py",
-    "tests/test_records_audit.py",
-    "tests/test_run_keep.py",
-    "tests/test_run_request_values.py",
 ]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
@@ -19,8 +14,8 @@ untraced = [
 # warden_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
 # `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
 # `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
-inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
-          "benchmarks/network_traces/scan_zk.py", "benchmarks/network_traces/warden_zk.py",
+inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "verity/protocols/accounting/certifier/prover/leak_scan.py",
+          "verity/protocols/accounting/certifier/prover/scan_zk.py", "verity/protocols/accounting/certifier/prover/warden_zk.py",
           "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "benchmarks/census/deployments.json",
@@ -34,12 +29,12 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           # signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
-          "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/warden_serve.py",
-          "benchmarks/network_traces/connection_rows_run.py",
-          "benchmarks/network_traces/runner_parts.py", "benchmarks/network_traces/certifier_key.py",
-          "benchmarks/network_traces/runner_cli.py",
+          "benchmarks/network_traces/warden_chain.py", "verity/protocols/accounting/certifier/device/warden_serve.py",
+          "verity/protocols/accounting/certifier/device/connection_rows_run.py",
+          "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/certifier_key.py",
+          "verity/protocols/accounting/certifier/device/runner_cli.py",
           "benchmarks/network_traces/replay.py",
-          "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
+          "verity/protocols/accounting/certifier/device/load_relay.py", "verity/protocols/accounting/certifier/device/stall_probe.py",
           "benchmarks/network_traces/site.json", "verity/protocols/compose/device/live_challenger/auditor.py",
           "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
@@ -49,14 +44,3 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "tools/config/verity_config",
           # verity_difftest, which test_prove_path imports: under `verity` until the difftest map moved it
           "tools/difftest"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_prove_path.py"]
-paths = ["verity"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_records_audit.py"]
-paths = ["verity/circuits/ops"]

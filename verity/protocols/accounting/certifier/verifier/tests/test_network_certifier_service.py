@@ -25,7 +25,7 @@ from verity.commitments.rowleaf import row_leaf, sha512_row_v2_digest
 from verity.protocols.accounting.certifier.verifier.service import (HEADS, OUTPUTS, PUBLIC, SCHEMA, VALUE, TransferBlocks, encode,
                                                                       rows)
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import Finding
 
@@ -276,7 +276,7 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
 def test_the_proof_block_is_the_registered_template(tmp_path):
     """The proof block a proof's circuit lowers has the registered proof block's id, signature and descriptor id, so the
     registered query names it as its template; it is bound without tracing, since each gate's expansion traces the head
-    check (`head_check.expand`, minutes), which the proving run (`benchmarks/network_traces/n2_zk.py`) lowers and checks
+    check (`head_check.expand`, minutes), which the proving run (`verity/protocols/accounting/certifier/prover/n2_zk.py`) lowers and checks
     against the IR reference."""
     lw = Run(tmp_path).lw
     assert lw.proof_block.id == lw.unit.id and lw.proof_block.signature() == lw.unit.signature()

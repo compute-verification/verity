@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The served-rows tie in zero knowledge (served_tie_zk.py, or served_statics_zk.py) on a sealed served window, on a CPU machine, on
-# hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean
+# hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean
 # frame and the sampled-proofs verifier built in the tree. From a clone, the outputs in $RESEARCH_RUN_DIR/out, in up to
 # 180 minutes:
 #   STZK_MEM_GB=56 STZK_RUN=RUN_DIR STZK_WINDOW=5 bash benchmarks/prove_path/served_tie_zk.sh
@@ -21,10 +21,10 @@ export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/ada
 setup
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "stzk: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "stzk: no ZK server frame"; exit 7; }
 
 DRIVER=benchmarks/prove_path/served_${STZK_FORM:-tie}_zk.py
 [ -f "$DRIVER" ] || { log "stzk: no driver $DRIVER (STZK_FORM is tie or statics)"; exit 2; }

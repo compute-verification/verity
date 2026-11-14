@@ -7,7 +7,7 @@
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (a ref on origin whose tree
 # has them) in a worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
-#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py \
+#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_period.sh
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (needed when the tree has no period)
 #      SC_CLASS (default test; w63k4 with SC_PROMPT_MAX=32, SC_MAX_TOKENS=4 and SC_LATE_MS past its 2.7 s delay)
@@ -45,7 +45,7 @@ for run in honest late; do
   log "period: the $run run, scan_zk.sh rc ${rc[$run]}: $(grep -h '^SCZK .*answers:' "$OUT/$run/sczk.log" | cut -c1-600)"
 done
 NP=$P/verity/protocols/accounting/certifier/verifier/lean/.lake/build/bin/network-period
-PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" benchmarks/network_traces/scan_period.py \
+PYTHONPATH=$PYTHONPATH:$SRC/tools/difftest/python "$PY" -m verity.protocols.accounting.certifier.prover.scan_period \
   --mirror "$P/verity/protocols/accounting/certifier/verifier/network/tests/period_case.py" --lean "$NP" --out "$OUT/period" \
   "honest=$OUT/honest/warden,$OUT/honest/sczk" "late=$OUT/late/warden,$OUT/late/sczk" \
   "tampered=$OUT/honest/warden,$OUT/honest/sczk,tampered" "chain=$OUT/honest/warden,$OUT/honest/sczk,chain" \

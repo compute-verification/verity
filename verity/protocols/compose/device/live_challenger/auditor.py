@@ -1,4 +1,4 @@
-"""The auditor host's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
+"""The auditor device's challenger service: `serve.py` runs only as the `auditor` user, from a pinned
 tree, one session a window, each recorded in a signed append-only ledger before its first coin.
 
     vy-challenger-gate reserve --peer NAME --scheme S --families JSON [--epoch E] [--minutes M] [--for LANE] [--withhold]
@@ -82,7 +82,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   writes `coin-link.json`, which the `end` entry's `files` seals. The hop from the certifier to the server crosses the
   prover's NIC, so it is the certifier's counted ingress, not a path this side trusts. The challenger side rests on the
   premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`; here the stream reaches the certifier only on
-  this auditor host) and `OneClock` (one clock for both, this host's), named in
+  this auditor device) and `OneClock` (one clock for both, this host's), named in
   `verity/protocols/proofs/spot/verifier/README.md`.
 
   `serve.py --peer`, its own `ssh -R` to the peer, which the prover's sshd decrypts, is the development path alone
@@ -111,8 +111,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   registration θ is read from, all four or none (part of them is refused): `--policy ID` (`policy`), the id of the
   protocol whose params read α and Γ, which names their form and unit (`POLICIES`; another id is refused);
   `--alpha N/D` (`alpha`, ``[N, D]``) and `--gamma G` (`gamma`), naturals as those params read them
-  (`NciCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
-  the deployment's first registration record (`NciCheck.Baseline.digest`), the one θ's provenance cites. The open's
+  (`InferenceOnlyCheck.Protocol`), signed as given, with no default; and `--registration SHA512` (`registration`), the digest of
+  the deployment's first registration record (`InferenceOnlyCheck.Theta.digest`), the one θ's provenance cites. The open's
   `by` is who gave them, the lane's key or vy-admin; an open with none of the four commits no policy. With
   `--policy-name NAME` in place of the first three, the open signs the id, α and Γ of the policy vy-admin registered
   under that name (the policy registry) and the name (`policy_name`), which no open carries otherwise: the auditor's
@@ -160,7 +160,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   auditor's own, fixed before any lane's open. `policies` reads the registry.
 
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
-  (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
+  (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `verity/protocols/accounting/certifier/device/warden_serve.py
   rehearse`, with the network certifier and its client here and the server the peer's endpoint, reached through a
   tunnel: client ──cells──▶ network certifier (here) ──tunnel──▶ the peer's 127.0.0.1:PORT. The gate validates `--peer`
   (one of /etc/vy/peers), `--port` (the endpoint's on the peer's loopback), `--minutes` (1 to 170),
@@ -276,7 +276,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
     it starts the ssh and holds it until the ssh has exited (`held_listener`), so the forward never ends at a port
     another process could take: a connection made while no relay accepts waits at the session's own socket, where the
     relay takes it as it starts, or the unit closes it unread, in no record, with the ssh. It then runs
-    `benchmarks/network_traces/warden_serve.py session` on that socket (`--listen-fd`): the key, the relay for exactly
+    `verity/protocols/accounting/certifier/device/warden_serve.py session` on that socket (`--listen-fd`): the key, the relay for exactly
     `--windows` execution phases, and the check.
   - *Where a client connects.* 127.0.0.1:CLIENT_PORT on the peer, one TCP connection a request, speaking the
     relay's cells both ways (the relay's module, named above: `cells` sending, `Shim` reading) at the schedule the
@@ -415,7 +415,7 @@ LEAF_FILE = re.compile(r"(lane|combine)([1-9][0-9]{0,7})")
 #: beside a lanes-form K's files, each one's leaf Program's descriptor digest, PoUW's `credit.LEAF_PROGRAMS`
 LEAF_PROGRAMS = "leaf_programs"
 #: the inference-only policies a period-open may name, each the id of the protocol whose params read its α and Γ
-#: (`NciCheck.Protocol.protocolId`): the id fixes their form and their unit, so another form or unit is another id
+#: (`InferenceOnlyCheck.Protocol.protocolId`): the id fixes their form and their unit, so another form or unit is another id
 POLICIES = ("verity/inference-only/v0",)
 #: a natural as an inference-only policy's α and Γ are given: plain decimal, at most 39 digits, no sign or leading zero
 NATURAL = re.compile(r"0|[1-9][0-9]{0,38}")
@@ -630,7 +630,7 @@ class Refused(Exception):
     """A request the gate or the session refuses, with why."""
 
 
-#: the auditor host's name, which its records give it
+#: the auditor device's name, which its records give it
 HOST_NAME: str = json.loads((HERE / "host.json").read_text())["name"]
 
 
@@ -878,8 +878,8 @@ def policy_name_of(s: str) -> str:
 
 
 def alpha_of(s: str) -> list[int]:
-    """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most novel bits a gate the inference-only
-    policy lets an isolation unit read, as its check's params read it (`NciCheck.Protocol`: naturals, D at least 1). It
+    """A period-open's α (`--alpha N/D`, written as `alpha`, ``[N, D]``): the most fresh input bits a gate the inference-only
+    policy lets an inference block read, as its check's params read it (`InferenceOnlyCheck.Protocol`: naturals, D at least 1). It
     is signed as given, never reduced; or Refused."""
     n, slash, d = s.partition("/")
     if not (slash and NATURAL.fullmatch(n) and NATURAL.fullmatch(d) and int(d)):
@@ -889,8 +889,8 @@ def alpha_of(s: str) -> list[int]:
 
 
 def gamma_of(s: str) -> int:
-    """A period-open's Γ (`--gamma`, written as `gamma`): the most gates the inference-only policy lets an isolation
-    unit hold, a natural as its check's params read it (`NciCheck.Protocol`), or Refused."""
+    """A period-open's Γ (`--gamma`, written as `gamma`): the most gates the inference-only policy lets an inference
+    block hold, a natural as its check's params read it (`InferenceOnlyCheck.Protocol`), or Refused."""
     if not NATURAL.fullmatch(s):
         raise Refused(f"--gamma {s[:200]!r}: the inference-only policy's Γ, a natural in plain decimal of at most 39 "
                       "digits with no sign or leading zero")
@@ -899,7 +899,7 @@ def gamma_of(s: str) -> int:
 
 def registration_of(s: str) -> str:
     """A period-open's registration (`--registration`, written as `registration`): the digest of the deployment's first
-    registration record, the one that registers θ and that θ's provenance cites (`NciCheck.Baseline.digest`: SHA-512
+    registration record, the one that registers θ and that θ's provenance cites (`InferenceOnlyCheck.Theta.digest`: SHA-512
     of the record's format, a zero byte and its canonical JSON), in lowercase hex, or Refused."""
     if not ROOT.fullmatch(s):
         raise Refused(f"--registration {s[:200]!r}: the digest of the deployment's first registration record, which "
@@ -1744,8 +1744,8 @@ def _after_load(spent: int) -> str:
 
 
 def _load_relay():
-    """`benchmarks/network_traces/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
-    from benchmarks.network_traces import load_relay
+    """`verity/protocols/accounting/certifier/device/load_relay.py`, the load's store, relay and commit, imported when a verb needs it."""
+    from verity.protocols.accounting.certifier.device import load_relay
     return load_relay
 
 
@@ -2581,7 +2581,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     grouped = ["--window-per-group"] if req.get("window_per_group") else []
     watermark = ["--watermark"] if req.get("watermark") else []
     if "client_port" in req:
-        return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "session",
+        return [sys.executable, str(tree / "verity" / "protocols" / "accounting" / "certifier" / "device" / "warden_serve.py"), "session",
                 "--upstream", url.removeprefix("http://"), "--listen", f"127.0.0.1:{listen}",
                 *([] if listen_fd is None else ["--listen-fd", str(listen_fd)]), "--out", str(out),
                 *height_argv(req), "--windows", str(req["windows"]), *scan[1:], *watermark]
@@ -2590,7 +2590,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
     loaded = [] if not load else ["--load-store", str(store), "--load-shape", load["shape"], "--load-sinks",
                                   ",".join(f"{h}:{p}" for h, p in sinks), "--load-program", load["program"],
                                   "--load-ready-s", str(LOAD_READY_S)]
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "warden_serve.py"), "rehearse",
+    return [sys.executable, str(tree / "verity" / "protocols" / "accounting" / "certifier" / "device" / "warden_serve.py"), "rehearse",
             "--upstream", url.removeprefix("http://"), "--out", str(out), *height_argv(req),
             "--requests", str(req["requests"]),
             "--rate", str(WARDEN_RATE), "--seed", str(WARDEN_SEED), "--tail", str(WARDEN_TAIL_S), *sampling_argv(req),
@@ -2600,7 +2600,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
     """`load_relay.py write` of a `weights-write` request: its shape's stream into `store` over every core, its record
     (less the digests) to `store.json` in `out`, which the unit makes the run's `witness/` (`_weights_run`)."""
-    return [sys.executable, str(tree / "benchmarks" / "network_traces" / "load_relay.py"), "write", "--store",
+    return [sys.executable, str(tree / "verity" / "protocols" / "accounting" / "certifier" / "device" / "load_relay.py"), "write", "--store",
             str(store), "--shape", req["shape"], "--workers", str(os.cpu_count() or 1),
             "--out", str(out / "store.json")]
 

@@ -28,5 +28,5 @@ under ids of their own that accept only the test signers' schemes, for the difft
 lake build                                       # here: the library and every executable
 # from the root:
 python3 tools/verity/lean/check.py --build verity/protocols/accounting/pous/device/lean   # the Lean check (lean-audit.json)
-uv run tools/verity/check/suites.py verity/protocols/accounting/pous/device/lean          # the difftests in tests/
+uv run tools/check/suites.py verity/protocols/accounting/pous/device/lean          # the difftests in tests/
 ~~~

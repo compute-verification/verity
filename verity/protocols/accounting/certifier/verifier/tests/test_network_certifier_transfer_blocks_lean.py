@@ -144,7 +144,7 @@ def test_the_lean_verdict_is_the_pythons(tmp_path):
     """On every case the Lean gives the Python's accept bit, public outputs and digest; the honest proof is accepted,
     with both bits proved."""
     c = _warden(tmp_path)
-    rng = random.Random("execution phase/warden")
+    rng = random.Random("link-window/warden")
     lean, python = c.both()
     assert lean == python and python["accepted"] and python["public"]["verdict"] == 1 == python["public"]["deadline"]
     cases = [{"delivered": c.public(d)} for d in _public_files(c, rng)]

@@ -40,7 +40,7 @@ ACCEPTED = [359, 253, 1123, 1183, 282, 253, 1772, 338, 553, 7527, 288, 11492, 35
 REQ = "7cc7c3bb-adf5-58cd-87fc-9f1b8e7c34d6"
 FA2_RE = re.compile(r"(_vllm_fa2_C\.|flash_attn|fa2|varlen_fwd)", re.I)
 
-pytestmark = pytest.mark.skipif(not LOG.exists(), reason=f"{LOG} absent (run bench/m1_capture.py on the pod)")
+pytestmark = pytest.mark.skipif(not LOG.exists(), reason=f"{LOG} absent (run bench/match_capture.py on the pod)")
 
 
 @pytest.fixture(scope="module")
@@ -207,7 +207,6 @@ def test_every_view_alloc_has_a_preceding_storage_alloc(log_events):
     known: set[int] = set()
     for ev in log_events:
         if isinstance(ev, StorageAlloc):
-            assert ev.alloc not in known or True     # re-allocation after a free gets a NEW id; ids never repeat
             known.add(ev.alloc)
             continue
         refs: list[ViewDesc] = []

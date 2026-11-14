@@ -516,10 +516,10 @@ def test_a_command_that_needs_git_is_refused_at_launch_from_a_tree_git_cannot_re
     monkeypatch.setattr(remote, "launch", launched)
     run = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--source", str(repo), "--no-custody-r2", "--no-sampler"]
     for said in (shipped, later):
-        rc = main([*run, "--cwd", "source", "--", "bash", "-lc", "uv run tools/verity/check/suites.py --changed HEAD --quick"])
+        rc = main([*run, "--cwd", "source", "--", "bash", "-lc", "uv run tools/check/suites.py --changed HEAD --quick"])
         err = capsys.readouterr().err
         why = "RESEARCH_SHIP=stream" if cause == "stream" else "the line above says why"
-        assert rc == 3 and f"has no .git, as git couldn't reach m ({why}), and tools/verity/check/suites.py needs a git checkout" in err
+        assert rc == 3 and f"has no .git, as git couldn't reach m ({why}), and tools/check/suites.py needs a git checkout" in err
         assert "Relaunch once a git push reaches m (RESEARCH_SHIP unset, git installed there)" in err and said in err
     assert main([*run, "--cwd", "clone", "--", PY, "-c", "pass"]) == 3 and "so it has no .git to clone" in capsys.readouterr().err
     assert refusals == [fault] * 3, "the launch that shipped the tree, the next, and one that needs a clone of it"

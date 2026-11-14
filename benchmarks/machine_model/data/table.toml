@@ -12,4 +12,4 @@ q = 1.22
 bytes = 3.5
 l2 = 7.244e12
 sms = 188
-mhz = 2092
+mhz = 2092                # the clock this route's numbers were measured at (the node's lock), not the card's clock.sm

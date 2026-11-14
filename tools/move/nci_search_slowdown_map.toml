@@ -1,0 +1,15 @@
+# benchmarks/nci: `bracket.py`'s `search()` returns the slowdown under the key "slowdown", which held the older name
+# "rho". No stored file holds the key; its readers are `bracket.py`, `library.py` and the two tests below. The other
+# `rho`s in the directory are look-alikes and stay: the certificate's rate in `tests/test_tiers.py` and the loss law's
+# ratio in `tests/test_fit.py`.
+
+[words]
+
+[[words_in]]
+files = ["benchmarks/nci/bracket.py", "benchmarks/nci/library.py", "benchmarks/nci/tests/test_bracket.py",
+         "benchmarks/slowdown/tests/test_attacks.py"]
+
+[words_in.words]
+rho = "slowdown"
+
+[keep]

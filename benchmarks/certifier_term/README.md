@@ -33,7 +33,7 @@ under the label: the row's own `with_set_time_card` is the label, where every ot
 print the row's name with the label.
 
 The card is an input of the document, `set_time_card`, the one input marked `simulated`. Its source is what a
-figure under the label rests on, a clause of `trusted-host`: the network certifier's card releases each bucket at
+figure under the label rests on, a clause of `trusted-device`: the network certifier's card releases each bucket at
 the tick its record names, whatever the host and the server send it. The clause holds only of a calibrated hardware
 card; no such card is deployed, and the software pacer that stands in for it does not meet it.
 
@@ -43,11 +43,12 @@ With `--out DIR` the runner also writes its result, through the harness kit's wr
 and through nothing else. The kit says where the file is, `DIR/result.json` outside a research run
 (`benchmarks/harness/README.md`). The result holds the amounts every resource's benchmark reports, for the row the
 term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints. What
-it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
+it prints doesn't change. Every measurement is the model's, and its mark (`modeled`) and every name but the metric's
+say so; none is computed from a run's K.
 
-- `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
-  Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
-  scan's over the world's year, whichever rows the command prints.
+- `network-accounting/certifier-term`, the metric's id: the term of record, the document's `value`, in GB, against
+  the document's target. Its verdict, `within target` or `over target`, is the document's multiple of the target in
+  words. Its row is the scan's over the world's year, whichever rows the command prints.
 - `certifier_term/modeled/simulated/metric`: the card's figure, the same row's term at D_j = 1, which the document
   gives as `with_set_time_card`, in GB, against the same target. It is no term of record. Its name says `simulated`,
   the card's mark, and its `inputs` open with the row it is of and the card as the document states it, whose source
@@ -55,7 +56,7 @@ it prints doesn't change. Every measurement is the model's and its name says so;
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
   so this is the network's amount of record. It stands against the same target, in bits.
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
-  the period, the scope's machines × a registered uplink's `beta` × the period's ticks. `beta` is bits a tick each
+  the period, the scope's machines × a registered uplink's `beta` × the period's seconds. `beta` is bits a second each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
   registration log, `--registration FILE`
   (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the boundary link of its
@@ -100,7 +101,7 @@ it. No term depends on it: only the errors move with it.
 `--scan-delta D` gives another δ, as a fraction or a decimal. No error is then set (`eps_target` is null), a row's ε
 is what `D` sums to, and a row whose ε is 1 or more has no bound at its period, since a union bound of 1 bounds
 nothing. In the result its `free` and `verified` are written with no value and the reason, `no bound at this period`,
-in their `inputs`, and so are `metric` and the card's figure where the row is the term of record's. Its `error` is
+in their `inputs`, and so are the metric and the card's figure where the row is the term of record's. Its `error` is
 written with its value, and its `capacity`, which no error enters. What the command prints is the calculator's
 still, those rows' terms among it.
 
@@ -160,7 +161,7 @@ from the signed head of an execution phase and the verdict records on a class of
   line says the schedule was not handed;
 - a class with a count of 0 owes none.
 
-`benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
+`verity/protocols/accounting/certifier/prover/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
 The records are in the evidence store, in the run files of the runs that carry
 `run_of_record=exfiltration-glm53-stop-verdicts`, each file one JSON object a line:
 
@@ -174,7 +175,7 @@ The records are in the evidence store, in the run files of the runs that carry
   below);
 - `out/registrations.jsonl`: the registration of each execution phase's connection rows that the verdicts name by
   its head's digest, from which a class's count is read. Its one writer is the offline check of the network
-  certifier's run, `benchmarks/network_traces/warden_serve.py check` with `--key-sha512 HEX --session HEX` and
+  certifier's run, `verity/protocols/accounting/certifier/device/warden_serve.py check` with `--key-sha512 HEX --session HEX` and
   `--registrations FILE`. The auditor hands that check the SHA-512 of the network certifier's public key and its
   session, and the check holds the run's deployment record to them: a run made under another key or session, a
   rehearsal's own, gets no file, and that problem is the first the check lists. The file's first line says what
@@ -350,7 +351,7 @@ with none given it moves only as the least lanes that serve them do.
   - R is the most connections the schedule releases in an execution phase of T buckets: lanes · ⌈(T + ingress
     buckets − 1) / (D + 1)⌉, D being the delay. It is a bound: at some schedules no load releases as many.
   - The classes, the delay and the ingress buckets are inputs (`--classes`, `--delay`, `--ingress-buckets`), by
-    default those of the lengths rows' cost runner (`benchmarks/network_traces/connection_rows_run.py cost`): six
+    default those of the lengths rows' cost runner (`verity/protocols/accounting/certifier/device/connection_rows_run.py cost`): six
     classes and a delay of 30 buckets, which its ingress buckets equal.
   - The lanes are the input the entries read (`--lanes`). With none given the schedule is not known, so the count
     is at the least lanes whose schedule releases what a link serves in an execution phase: any schedule that
@@ -415,7 +416,7 @@ Each row holds its own `count`, in bits and GB.
 
 ## Where the scale comes from
 
-- The world is rho's world fleet (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`): the census's inference
+- The world is the slowdown calculator's world fleet (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`): the census's inference
   (`benchmarks/census/adversary.json`) on eight-GPU machines at the fleet's serving MFU. The datacenter is the census's
   reference datacenter (`benchmarks/census/deployments.json`).
 - The requests are counted of one request, by the rule `benchmarks/spot_figures/figure1.py` plans with, at the

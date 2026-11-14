@@ -8,7 +8,7 @@ import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 import VCVio.Prelude.Core
@@ -31,7 +31,7 @@ schedule, so every other table's coins are part of its strategy.
 * `flock_inputs_sound`: the input unit, an always-proved table, likewise (`InputsLoweringSound`);
 * `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
   `δ(K) = miss K + 2^-205`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-205`;
-* `flock_oracle_drawn`, `flock_oracle_cone`: sampled proof blocks, and a consumer's value through its cone;
+* `flock_oracle_sampled`, `flock_oracle_cone`: sampled proof blocks, and a consumer's value through its cone;
 
 Mutual correlated agreement is proved (`mcaError_le_bchks25`), so there is no other hypothesis.
 Of `Audit/`, only this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`)
@@ -115,13 +115,13 @@ noncomputable def flockSession (plan : Finset (Fin n) → (Fin C.N → Bool) →
     (S : Finset (Fin n)) (tr : Fin C.N → Bool) : Game Bool :=
   (batch ((plan S tr).map FlockTable.game)).map fun outs => decide (∀ o ∈ outs, o.1 = true)
 
-/-- **The lowering** (named hypothesis): a sampled proof block that is wrong in the transcript lies in a
+/-- **The lowering** (named hypothesis): a sampled proof block that is incorrect in the transcript lies in a
 table of the plan whose statement no committed table satisfies. At the oracle layer a unit's
 statement carries its committed inputs and outputs, so this is the lowering theorem's content: the
 statement is satisfiable only if the unit's gates map its committed inputs to its committed
 outputs. -/
 def LoweringSound (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) : Prop :=
-  ∀ S tr u, u ∈ S → u ∈ P.wrong tr → ∃ T ∈ plan S tr, ∀ C₀, ¬ Committed execArith T.S T.sch C₀
+  ∀ S tr u, u ∈ S → u ∈ P.incorrect tr → ∃ T ∈ plan S tr, ∀ C₀, ¬ Committed execArith T.S T.sch C₀
 
 /-- **The input unit's lowering** (named hypothesis): when the transcript's inputs are not the
 anchors' values `a`, some table of the plan (the always-proved input statement) is satisfied by no
@@ -145,7 +145,7 @@ theorem flockSession_le
   exact (value_mono (fun out h => ⟨h, hno out.2⟩) _).trans (T.value_le)
 
 /-- **Flock's batched session is `SessionSound` at `2^-205`**, given the lowering: the first
-wrong sampled proof block's table bounds the whole session. -/
+incorrect sampled proof block's table bounds the whole session. -/
 theorem flock_session_sound
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan) :
     P.SessionSound (flockSession plan) (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := by
@@ -164,8 +164,8 @@ theorem flock_inputs_sound
 /-- **The Flock audit's count curve, at the oracle layer**: `δ(K) = miss K + 2^-205`. -/
 theorem flock_oracle_count
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
-    (L : Law n) (K : ℕ) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (reg σ)).card) (audit L _ (flockSession plan)) σ ≤
+    (L : SamplingDesign n) (K : ℕ) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (reg σ)).card) (audit L _ (flockSession plan)) σ ≤
       L.miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   P.oracle_count (P.flock_session_sound plan hlow) K σ
 
@@ -173,28 +173,28 @@ theorem flock_oracle_count
 theorem flock_oracle_count_subset
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
     {k : ℕ} (hk : k ≤ n) {K : ℕ} (hK : K ≤ n)
-    (σ : Strategy (audit (Law.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (reg σ)).card)
-        (audit (Law.subset n k hk) _ (flockSession plan)) σ ≤
+    (σ : Strategy (audit (SamplingDesign.subset n k hk) (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (reg σ)).card)
+        (audit (SamplingDesign.subset n k hk) _ (flockSession plan)) σ ≤
       ((n - K).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
-  have := P.flock_oracle_count plan hlow (Law.subset n k hk) K σ
-  rwa [Law.subset_miss hk hK] at this
+  have := P.flock_oracle_count plan hlow (SamplingDesign.subset n k hk) K σ
+  rwa [SamplingDesign.subset_miss hk hK] at this
 
 /-- **Sampled proof blocks of the Flock audit** are correct up to `2^-205`, even for a consumer who looks
 after the sample. -/
-theorem flock_oracle_drawn
+theorem flock_oracle_sampled
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
-    (L : Law n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ (flockSession plan)) σ ≤
+    (L : SamplingDesign n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (reg σ)) o.2) (audit L _ (flockSession plan)) σ ≤
       ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  P.oracle_drawn (P.flock_session_sound plan hlow) σ
+  P.oracle_sampled (P.flock_session_sound plan hlow) σ
 
 /-- **A consumer's value in the Flock audit**: for committed wires `T` fixed before the sample, the
-audit accepts with a wrong wire of `T` with probability at most the largest miss probability in
+audit accepts with a incorrect wire of `T` with probability at most the largest miss probability in
 `T`'s cone, plus `2^-205` for the sampled proof blocks and `2^-205` for the input unit. -/
 theorem flock_oracle_cone
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
-    {a : Fin C.N → Bool} (hin : InputsLoweringSound plan a) (L : Law n) (T : Finset (Fin C.N))
+    {a : Fin C.N → Bool} (hin : InputsLoweringSound plan a) (L : SamplingDesign n) (T : Finset (Fin C.N))
     (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ ∃ t ∈ T, t ∈ P.committed ∧ reg σ t ≠ C.eval a t)
         (audit L _ (flockSession plan)) σ ≤
