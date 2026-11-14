@@ -390,7 +390,7 @@ def select (j : Json) : V Json := do
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
 /-- The sampling design of a `Flock.Draw.Law` at its sizes: each stratum named by its template, its size
-its ranges' total. `none` for a Bernoulli law of denominator 0. -/
+its ranges' total. `none` for a Bernoulli sampling design of denominator 0. -/
 private def designOfLaw : Flock.Draw.Law → Option Core.SamplingDesign
   | .subset k => some (.subset k)
   | .bernoulli a b => (Core.Ratio.mk' a b).map .bernoulli
@@ -398,7 +398,7 @@ private def designOfLaw : Flock.Draw.Law → Option Core.SamplingDesign
   | .work k strata => some (.work k (strata.map fun s =>
       { name := s.template, size := s.size, k := s.k, work := s.work, floor := s.floor }))
 
-/-- `select`'s input to `{"design"}`: the sampling design (`designOfLaw`) of the challenger's sample's law,
+/-- `select`'s input to `{"design"}`: the sampling design (`designOfLaw`) of the challenger's sample's sampling design,
 as the profile writes it (`Core.SamplingDesign.toJson`); refused where `select` is. -/
 def design (j : Json) : V Json := do
   let d ← Flock.Draw.UnitSample.ofJson (getD (← select j) "draw")

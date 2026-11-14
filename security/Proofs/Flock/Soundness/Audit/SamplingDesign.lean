@@ -9,15 +9,15 @@ import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.Fin
 
 /-!
-# Draw laws
+# Sampling designs
 
-A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws, core's `Verity.Law`
-(`Definitions.Core.Draw`) over `Fin n`. What a law gives a consumer is its escape function: the probability that a draw
+A sampling design is the verifier's coin space `Ω`, uniform, and the set of units each coin draws, core's `Verity.Law`
+(`Definitions.Core.Draw`) over `Fin n`. What a sampling design gives a consumer is its escape function: the probability that a draw
 misses a set `B` of units.
 
 * `escape L B`: the draw is disjoint from `B`;
 * `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
-  curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a law that draws every unit (`miss_eq_zero_of_sample_univ`);
+  curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a sampling design that draws every unit (`miss_eq_zero_of_sample_univ`);
 * `incl L u`: the probability that `u` is drawn; a single unit escapes with `1 - incl L u`
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).
@@ -88,7 +88,7 @@ theorem miss_le_one (L : Law n) (K : ℕ) : L.miss K ≤ 1 :=
 theorem miss_anti (L : Law n) {K K' : ℕ} (h : K ≤ K') : L.miss K' ≤ L.miss K :=
   iSup₂_le fun _ hB => L.escape_le_miss (h.trans hB)
 
-/-- **A law that draws every unit has no sampling term**: no non-empty set escapes it, so `miss K = 0` for `K ≥ 1`. -/
+/-- **A sampling design that draws every unit has no sampling term**: no non-empty set escapes it, so `miss K = 0` for `K ≥ 1`. -/
 theorem miss_eq_zero_of_sample_univ (L : Law n) (hL : ∀ ω, L.draw ω = Finset.univ) {K : ℕ} (hK : 1 ≤ K) :
     L.miss K = 0 := by
   refine le_antisymm (iSup₂_le fun B hB => ?_) (zero_le)
@@ -264,7 +264,7 @@ theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Fin
 /-! ## The uniform subset is optimal
 
 Averaging `escape B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
-law (`avg_escape_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
+sampling design (`avg_escape_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
 `drop_anti`), so it lies above its supporting line at `k` (`choose_support`), and Jensen's
 inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset's value. -/
 
@@ -281,7 +281,7 @@ theorem avg_sum {C ι : Type} [Fintype C] (s : Finset ι) (f : ι → C → ℝ�
   simp only [Finset.mul_sum]
   exact Finset.sum_comm
 
-/-- A law's mean draw size is the sum of its inclusion probabilities. -/
+/-- A sampling design's mean draw size is the sum of its inclusion probabilities. -/
 theorem avg_card (L : Law n) : avg (fun ω => ((L.draw ω).card : ℝ≥0∞)) = ∑ u, L.incl u := by
   classical
   have h : ∀ ω, ((L.draw ω).card : ℝ≥0∞) = ∑ u, if u ∈ L.draw ω then (1 : ℝ≥0∞) else 0 := by
@@ -291,7 +291,7 @@ theorem avg_card (L : Law n) : avg (fun ω => ((L.draw ω).card : ℝ≥0∞)) =
   rw [avg_sum]
   exact Finset.sum_congr rfl fun u _ => avg_ite_eq_prCoin _
 
-/-- **Averaging over `K`-sets.** For any law, the escape of a uniformly random `K`-set is the mean
+/-- **Averaging over `K`-sets.** For any sampling design, the escape of a uniformly random `K`-set is the mean
 of `C(n - |S|, K) / C(n, K)` over the draw `S`. -/
 theorem avg_escape_subsets (M : Law n) {K : ℕ} (hK : K ≤ n) :
     avg (fun B : (subset n K hK).Ω => M.escape B.1) =
@@ -371,7 +371,7 @@ theorem choose_support (n K k s : ℕ) :
           omega
     exact key (k - s) s (by omega)
 
-/-- **Uniform is optimal.** No law that proves `k` units on average has a smaller count curve than
+/-- **Uniform is optimal.** No sampling design that proves `k` units on average has a smaller count curve than
 the uniform `k`-subset, at any `K`. -/
 theorem subset_minimax (L : Law n) {k : ℕ} (hk : k ≤ n) (hmean : ∑ u, L.incl u = k) {K : ℕ}
     (hK : K ≤ n) : (subset n k hk).miss K ≤ L.miss K := by
