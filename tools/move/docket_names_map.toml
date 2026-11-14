@@ -66,6 +66,8 @@ patterns = [
   '(?:weights|advice|tables\x27?|[Cc]ommitter\x27s|rank\x27s|own window) registration\w*',
   'registration (?:of the per-expert|of the values|as the first record)',
   'first registration record',
+  'step registration\w*',
+  'registration (?:of step|without it)',
   'registrations, sessions',
   # the message type and a verdict record's key
   'Registration \{block\}',
@@ -101,8 +103,8 @@ exclude = ["**/*.json", "**/*.jsonl", "**/*.toml", "**/*.yaml", "**/*.yml", "**/
            "benchmarks/prove_path/**", "benchmarks/rate_squaring/**", "benchmarks/recursion_e2e/**",
            "benchmarks/recursion_figures/**", "benchmarks/remote_session/**", "benchmarks/replay_determinism/**",
            "benchmarks/replay_ladder/**", "benchmarks/rho/**", "benchmarks/route_capture/**",
-           "benchmarks/sampling_plan/**", "benchmarks/scan_cost/**", "benchmarks/serve_tax/**",
-           "benchmarks/served_commit/**", "benchmarks/served_errors/**", "benchmarks/served_units/**",
+           "benchmarks/sampling_plan/**", "benchmarks/scan_cost/**",            "benchmarks/serve_tax/**",
+           "benchmarks/slowdown/**", "benchmarks/served_commit/**", "benchmarks/served_errors/**", "benchmarks/served_units/**",
            "benchmarks/spot_figures/**", "benchmarks/spot_proved/**", "benchmarks/stacked_share/**",
            "benchmarks/tc_probe/**", "benchmarks/tc_probe_fp4/**", "benchmarks/tensor_duty/**",
            "benchmarks/torch_gpu/**", "benchmarks/training_slowdown/**", "benchmarks/tree/**",
@@ -115,4 +117,7 @@ exclude = ["**/*.json", "**/*.jsonl", "**/*.toml", "**/*.yaml", "**/*.yml", "**/
            "verity/protocol.py", "verity/protocols/__init__.py", "verity/protocols/accounting/**",
            "verity/protocols/compose/**", "verity/protocols/experimental/**", "verity/protocols/interface/**",
            "verity/protocols/policy/**", "verity/protocols/proofs/__init__.py", "verity/protocols/proofs/flock/**",
-           "verity/protocols/proofs/recursion/**", "verity/protocols/tests/**", "verity/runtime/**", "verity/tests/**"]
+           "verity/protocols/proofs/recursion/**", "verity/protocols/tests/**", "verity/runtime/**", "verity/tests/**",
+           # a window's committed rows, which `RegistrationSize` prices
+           "verity/protocols/proofs/spot/prover/cost/window_cost.py",
+           "verity/protocols/proofs/spot/prover/tests/test_window_cost.py"]
