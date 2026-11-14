@@ -1,7 +1,7 @@
-# The card files (`verity.hardware.cards`)
+# The card files (`hardware/cards/`, read by `verity.device`)
 
-One TOML file per SKU in `hardware/cards/`, read by `verity/hardware/cards.py`, the one source of that card's numbers. A
-card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
+One TOML file per SKU in `hardware/cards/`, read by the Site's module (`verity/device.py`), the one source of that
+card's numbers. A card is a GPU's (`kind = "gpu"`), a host's (`kind = "host"`: a server's CPUs and DRAM, apart from the GPUs it carries,
 so the same GPU in another host needs no second card), a server's (`kind = "server"`: what a server model's own
 documents state of it apart from those, its network ports) or a time base's (`kind = "timebase"`: the clock an
 auditor's device reads, apart from the host it runs in). Each number is an entry `{ value, unit, mark, source }`:
@@ -25,16 +25,20 @@ auditor's device reads, apart from the host it runs in). Each number is an entry
 
 Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
-device memory's),
+device memory's, and `default`, the name of the reading of `readings(card)`, `sm` or `tensor`, that every figure
+is stated at unless it names the other: the higher tensor ceiling, `sm` on every card (CMP-438)),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
 kernel can make shared memory, a part of `smem` that no store's size adds; `dram` is the device memory a program gets
 and `dram_installed` the memory on the board, a second reading at or above it; and, only where a run found them, the
 caches an SM serves code and constants from, `l15`, `l1i`, `l0i` and `const_l0`, which the RTX PRO 6000's card has),
 `rate` (each resource's units a SM-clock), `memory` (device memory's bus, transfers and bandwidth, and `read`, the
 fastest read of it measured, which stands at the bandwidth as a placeholder where none is), `weight` (the tensor
-units a MAC of each format uses), `price` (what an operation costs in tensor units in a timed loop: `fp32_loop`, an FP32
-add in a loop of 64 adds and 3 loop instructions, at or above the add's price at the card's ceilings, `rate.tensor` over
-32 lanes of `rate.issue`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
+units a MAC of each format uses), `price` (what an operation costs in tensor units, each operation charged in seconds at
+its own pipe's data-sheet ceiling (CMP-438): `fp32`, an FP32 add under each reading, keyed by its name: `fp32.sm`,
+both pipes at `clock.sm`, `rate.tensor` over 32 lanes of `rate.issue`, the default reading; `fp32.tensor`, the same
+with the tensor at `clock.tensor`, which differs only on the H200, 29.58 there and holding only if its tensor pipe
+never exceeds 1830 MHz; and `fp32_loop`, an FP32 add in a loop of 64 adds and 3 loop instructions, at or above
+`fp32.sm`) and `model` (`Accel.Card`'s `exact` and code space). A host card's are `cpu` (the
 server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM gives: a measurement of our nodes, not a
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
@@ -50,13 +54,13 @@ node's host card has it and the H200 nodes' has no entry rather than an invented
 allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
-machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
-the card's `link.cluster` and `link.storage`, the twelve ConnectX-7 ports it counts. A time base's card's is `drift`:
+machine the inference-only policy's `h200-hgx` location is, whose `links` `benchmarks/rho` reads from the card: its
+`link.rate`, and its `link.cluster` as the low. A time base's card's is `drift`:
 `max`, the most the clock's rate may differ from the SI second's (`s/s`), and `read`, the largest reading of it on
 record, a `measurement`, which `max` is never below.
 
 **A device's drift.** The auditor's figure for its device's drift is `drift.max` of the card of the clock that device
-reads (`number(load(sku)["drift"]["max"])`), and a row is of record only where that entry's mark is `ceiling`. Where
+reads (`number(load_card(sku)["drift"]["max"])`), and a row is of record only where that entry's mark is `ceiling`. Where
 it is `premise`, as on the one time base with a card (the raw clock of a provider's virtual machine, which no page
 bounds), the row prints the premise for the device's host, which the registration names and the card does not, and
 `tests/test_cards.py` lists every entry so marked, in a card or a node file.
@@ -71,31 +75,33 @@ while it is the declared board and vBIOS, which the named assumptions `accountin
 likewise its guest's CPUID.
 
 ~~~python
-from verity.hardware.cards import load, number, skus
+from verity.device import load_card, number, skus
 skus("host")                                    # ['xeon-6776p-2s', 'xeon-platinum-8468-2s']
-load("xeon-6776p-2s")["rate"]["ops"]            # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
-drift = load("nebius-vm-monotonic-raw")["drift"]["max"]   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
+load_card("xeon-6776p-2s")["rate"]["ops"]       # {'value': 1045299200000000.0, 'unit': 'op/s', 'mark': 'ceiling', ...}
+drift = load_card("nebius-vm-monotonic-raw")["drift"]["max"]   # {'value': 0.0005, 'unit': 's/s', 'mark': 'premise', ...}
 number(drift)                                   # Fraction(1, 2000)
 ~~~
 
-**The interface.** Other code reads a card through `verity.hardware.cards` and imports from nowhere else: the functions
-`load`, `skus`, `rate`, `number` (an entry's value as an exact `Fraction`) and `check` (the rule `load` holds a card
-to, for another file that states numbers as entries), and the constants `KINDS` (a card's
-kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit word) and `CARDS` (the
-directory the card files are in). The module imports the standard library and `verity.errors` only. The package file,
-`verity/hardware/__init__.py`, holds a docstring and nothing else: no import and no re-export. The record
-(`verity.hardware.record`), the registration log (`verity.hardware.registration`) and the Site (`verity.device`)
-share the package, so importing one of them, in a verifier too, runs no card-loading code; `tests/test_package.py` holds
-both.
+**The interface.** Other code reads a card through the Site's module, `verity.device`, and imports from nowhere
+else: the functions `load_card`, `skus`, `rate`, `number` (an entry's value as an exact `Fraction`) and `check_card`
+(the rule `load_card` holds a card to, for another file that states numbers as entries), and the constants
+`CARD_KINDS` (a card's kinds), `MARKS` (an entry's marks), `ENTRY` (an entry's keys), `WORD` (the bytes in a 32-bit
+word) and `CARDS` (the directory the card files are in, found from the `verity` package's directory). The module
+imports the standard library, the wire and `verity.errors` only. The package file, `verity/hardware/__init__.py`,
+holds a docstring and nothing else: no import and no re-export. Importing the Site or the wire, in a verifier too,
+reads no card file and no node file: the readers run only when called. `tests/test_package.py` holds both.
 
-`load(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
+`load_card(sku) -> dict` returns the parsed file and refuses a number without its unit, mark and source, and a card without
 its kind. `skus(kind=None)` lists the cards, or those of one kind.
 
 `rate(card, resource="tensor", *, fmt=None, mhz=None) -> Fraction` is the one calculator of a GPU card's peak rates:
 Lean's `card.ρ`, the SMs times the resource's rate times its clock (for the tensor `clock.tensor` where the card has one
 and `clock.sm` where it doesn't, for the rest `clock.sm`, or the clock `mhz` names), in MACs of operand format `fmt` when
 given, and device memory's `memory.bandwidth` in words. A benchmark that quotes a peak calls it rather than multiplying
-the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table.
+the card's numbers itself, and `tests/test_lean.py` holds it to each Lean table. `readings(card, *, fmt=None) -> dict`
+is the tensor peak under each reading of its clock the card states (`READINGS`: `clock.tensor`, the card's own, then
+`clock.sm`), so a figure quoted under every reading names no clock itself, and the card's default is
+`readings(card)[card["clock"]["default"]]`.
 
 **The Lean tables are generated** (`verity/hardware/lean.py`). A GPU card file that names a Lean table (`lean`) gives
 that module: `render(card)` is its text, the card file's numbers (`table(card)`) under the namespace, `clock`,
@@ -116,9 +122,9 @@ of the generator, and fails on any number that differs from the card file's, and
 `security/Definitions/Core/Accel/Isa.lean` that either side lacks. A new SKU is a new card file, whose `lean` names its
 table.
 
-## The node files (`verity.hardware.nodes`)
+## The node files (`hardware/nodes/`, read by `verity.device`)
 
-One TOML file per kind of node in `hardware/nodes/`, read by `verity/hardware/nodes.py`: what a node's registration
+One TOML file per kind of node in `hardware/nodes/`, read by the Site's module: what a node's registration
 states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, and each
 number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
 kind's, read on one node of it, and its sources cite what read it by `art:` id.
@@ -165,17 +171,17 @@ disks all ride it. A server whose drives are all its own has no `storage` table 
 A node file holds no clock or peak of a card, which are the cards', and no network certifier or memory challenger:
 those are the auditor's devices, whose ids and keys are a run's, not a kind of node's.
 
-`nodes.load(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
-card of its kind. `nodes.kinds()` lists the files.
+`load_node(kind) -> dict` returns the parsed file and refuses a number that is no entry, and a `sku` that names no
+card of its kind. `node_kinds()` lists the files.
 
-`nodes.leaves(node, host, card=None) -> (leaves, together)` is the one reader of the leaves' rates. `leaves` is each
+`leaves(node, host, card=None) -> (leaves, together)` is the one reader of the leaves' rates. `leaves` is each
 `memory.NAME` in the file's order as a `Leaf`: its `id`, `host/NAME`, its `tier`, its `bytes` and `bw`, its rate in
 whole bits a second, rounded up. `together` gives, for `dram` and for `disk`, the rate that bounds the host's leaves
 of the tier together, in the same unit: the host card's `memory.bandwidth_max` and `disk.read_max` (`card` is that
 card's table, loaded by the file's `host.sku` when none is given). It refuses a leaf with no `rate`, a rate that is no
 ceiling in `B/s` above 0, a rate above its tier's, and a DRAM rate that is not its tier's.
 
-`nodes.ways_out(node, host, card=None) -> tuple[Way, ...]` is the one reader of the ways out. Each is a `Way`: its
+`ways_out(node, host, card=None) -> tuple[Way, ...]` is the one reader of the ways out. Each is a `Way`: its
 `id`, `host/NAME` for an interface and `host/storage` for the storage path; `bw`, its rate in whole bits a second,
 rounded up, or `None` for an interface that states none; and `split`, whether a network certifier may split it, which
 is so of an interface and not of the storage path. The interfaces come first, in the file's order. The storage path's
@@ -183,14 +189,14 @@ is so of an interface and not of the storage path. The interfaces come first, in
 states neither a rate nor its read, a storage path that does not name disk leaves of the file's, each once, and a
 leaf or an interface named `storage`.
 
-`Registration.node_entry(node, card, host, ways=nodes.ways_out(node, host))`, in the Site
-(`site/__init__.py`), gives the entry a node file's table, its GPU card's table and its ways out register, under the
+`Registration.node_entry(node, card, host, ways=ways_out(node, host))`, in the Site's module beside the readers,
+gives the entry a node file's table, its GPU card's table and its ways out register, under the
 host id its caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the
 sheet's device memory, the host's leaves `host/NAME`, and for each way out that has a rate a link under its id from
 the host to the outside. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
 It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host
-with less memory than the node has. Its message gives the commands that read both on the node. The Site imports
-neither the cards nor the node files, so its caller hands it the ways out, and it holds them to the file's tables:
+with less memory than the node has. Its message gives the commands that read both on the node. `node_entry` reads
+no file itself, so its caller hands it the ways out, and it holds them to the file's tables:
 each by name and in order, with a rate exactly where the file states one. A rate's value is `ways_out`'s reading.
 
 A way out's link is a boundary link that no certifier splits, at the bits its rate moves in a tick, rounded up. That
@@ -209,12 +215,11 @@ the entry would not say how the node reaches the outside, and neither does a fil
 Each message says what to read or state.
 
 ~~~python
-from verity.hardware import cards, nodes
-from verity.device import Auditor, Registration, check
-node = nodes.load("rtx-pro-6000-server-x8")
-gpu = cards.load(node["device"]["sku"])
+from verity.device import Auditor, Registration, check, load_card, load_node, ways_out
+node = load_node("rtx-pro-6000-server-x8")
+gpu = load_card(node["device"]["sku"])
 log = Registration("remote")
-entry = log.node_entry(node, gpu, host="node0", ways=nodes.ways_out(node, "node0"))
+entry = log.node_entry(node, gpu, host="node0", ways=ways_out(node, "node0"))
 site = check(log.append(entry), Auditor.of_files([gpu]))
 ~~~
 

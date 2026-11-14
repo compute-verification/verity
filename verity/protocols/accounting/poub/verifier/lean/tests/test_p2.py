@@ -18,15 +18,15 @@ import shutil
 from pathlib import Path
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
-from ra_cases import Entropy
 import verity_difftest as D
-from verity.protocols.accounting.pous.verifier.verifier import MerkleTree, leaf_hash
+from hypothesis import strategies as st
+from ra_cases import Entropy
+
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_party, receipts
 from verity.protocols.accounting.poub.verifier.codec import P2_EXPANDER, P2_POINT, P2Codec
 from verity.protocols.accounting.poub.verifier.receipts import Plan
+from verity.protocols.accounting.pous.verifier.verifier import MerkleTree, leaf_hash
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -44,9 +44,9 @@ def expand(seed: bytes, n: int) -> bytes:
     return b"".join(hashlib.sha512(seed + c.to_bytes(4, "big")).digest() for c in range(-(-n // 64)))[:n]
 
 
-def fault(draw, n: int) -> int:
+def fault(take, n: int) -> int:
     """Which of `n` faults an input carries, 1 … `n`, or 0 for none, about half the time."""
-    f = draw(st.integers(0, 2 * n))
+    f = take(st.integers(0, 2 * n))
     return f if f <= n else 0
 
 
@@ -103,38 +103,38 @@ def registration_digest(v) -> str:
 
 
 @st.composite
-def registration_inputs(draw) -> dict:
-    bps, segments = draw(st.sampled_from([(4, 1), (3, 3), (1, 4), (1 << 16, 1038), (1 << 16, (1 << 32) - 1), (2, 2)]))
-    v = {"node": expand(draw(st.binary(max_size=8)), draw(st.integers(1, 64))).hex(),
+def registration_inputs(take) -> dict:
+    bps, segments = take(st.sampled_from([(4, 1), (3, 3), (1, 4), (1 << 16, 1038), (1 << 16, (1 << 32) - 1), (2, 2)]))
+    v = {"node": expand(take(st.binary(max_size=8)), take(st.integers(1, 64))).hex(),
          "codec": {"blocks_per_segment": bps, "c0": P2_POINT[1], "expander": P2_EXPANDER, "segments": segments,
                    "w": P2_POINT[0]},
-         "commitment": expand(draw(st.binary(max_size=8)), 64).hex(), "salt": expand(draw(st.binary(max_size=8)), 24).hex(),
-         "root": expand(draw(st.binary(max_size=8)), 64).hex(), "rows": draw(st.sampled_from([16, 64]))}
+         "commitment": expand(take(st.binary(max_size=8)), 64).hex(), "salt": expand(take(st.binary(max_size=8)), 24).hex(),
+         "root": expand(take(st.binary(max_size=8)), 64).hex(), "rows": take(st.sampled_from([16, 64]))}
     c = v["codec"]
-    edit = fault(draw, 10)
+    edit = fault(take, 10)
     if edit == 1:
-        v["node"] = draw(st.sampled_from(["", "00" * 65]))
+        v["node"] = take(st.sampled_from(["", "00" * 65]))
     elif edit == 2:
-        k, x = draw(st.sampled_from([("w", P2_POINT[0] - 8), ("w", 1024), ("c0", P2_POINT[1] + 2),
+        k, x = take(st.sampled_from([("w", P2_POINT[0] - 8), ("w", 1024), ("c0", P2_POINT[1] + 2),
                                      ("expander", "chacha8-v2")]))
         c[k] = x
     elif edit == 3:
-        c["blocks_per_segment"] = draw(st.sampled_from([0, (1 << 16) + 1]))
+        c["blocks_per_segment"] = take(st.sampled_from([0, (1 << 16) + 1]))
     elif edit == 4:
-        c["segments"] = draw(st.sampled_from([0, 1 << 32]))
+        c["segments"] = take(st.sampled_from([0, 1 << 32]))
     elif edit == 5:
-        c["blocks_per_segment"], c["segments"] = draw(st.sampled_from([(1, 3), (3, 1), (1, 1)]))
+        c["blocks_per_segment"], c["segments"] = take(st.sampled_from([(1, 3), (3, 1), (1, 1)]))
     elif edit == 6:
-        v["commitment"] = draw(st.sampled_from(["", "00" * 63]))
+        v["commitment"] = take(st.sampled_from(["", "00" * 63]))
     elif edit == 7:
-        v["salt"] = draw(st.sampled_from(["00" * 23, "00" * 32]))
+        v["salt"] = take(st.sampled_from(["00" * 23, "00" * 32]))
     elif edit == 8:
         v["root"] = "00" * 63
     elif edit == 9:
-        v["rows"] = draw(st.sampled_from([0, 32]))
+        v["rows"] = take(st.sampled_from([0, 32]))
     elif edit == 10:
-        target = draw(st.sampled_from([v, c]))
-        del target[draw(st.sampled_from(sorted(target)))]
+        target = take(st.sampled_from([v, c]))
+        del target[take(st.sampled_from(sorted(target)))]
     return v
 
 
@@ -161,22 +161,22 @@ def sketch(v) -> dict:
 
 
 @st.composite
-def sketch_inputs(draw) -> dict:
-    v = {"seed": expand(draw(st.binary(max_size=8)), 64).hex(), "rows": draw(st.sampled_from([16, 16, 64])),
-         "g": draw(st.one_of(st.integers(0, 40), st.integers(0, 2 ** 64 - 1))),
-         "blocks": [draw(p2_blocks()).hex() for _ in range(p2.UNIT_BLOCKS)]}
-    edit = fault(draw, 5)
+def sketch_inputs(take) -> dict:
+    v = {"seed": expand(take(st.binary(max_size=8)), 64).hex(), "rows": take(st.sampled_from([16, 16, 64])),
+         "g": take(st.one_of(st.integers(0, 40), st.integers(0, 2 ** 64 - 1))),
+         "blocks": [take(p2_blocks()).hex() for _ in range(p2.UNIT_BLOCKS)]}
+    edit = fault(take, 5)
     if edit == 1:
-        v["seed"] = draw(st.sampled_from(["", "00" * 63, "00" * 65]))
+        v["seed"] = take(st.sampled_from(["", "00" * 63, "00" * 65]))
     elif edit == 2:
-        v["rows"] = draw(st.sampled_from([0, 32]))
+        v["rows"] = take(st.sampled_from([0, 32]))
     elif edit == 3:
         v["g"] = 2 ** 64
     elif edit == 4:
         bs = v["blocks"]
-        v["blocks"] = draw(st.sampled_from([bs[:3], bs + bs[:1], bs[:3] + [bs[3][:-2]], bs[:3] + [bs[3] + "00"]]))
+        v["blocks"] = take(st.sampled_from([bs[:3], bs + bs[:1], bs[:3] + [bs[3][:-2]], bs[:3] + [bs[3] + "00"]]))
     elif edit == 5:
-        del v[draw(st.sampled_from(sorted(v)))]
+        del v[take(st.sampled_from(sorted(v)))]
     return v
 
 
@@ -239,17 +239,17 @@ def flip(h: str, k: int = 0) -> str:
 
 
 @st.composite
-def opening_inputs(draw) -> dict:
+def opening_inputs(take) -> dict:
     """An opening of a sampled pass over a sampled store, honest, from a prover that committed a wrong receipt, or with one
     field of the opening, the pass or the registration changed."""
-    k, rows = draw(st.integers(0, len(GEOMETRIES) - 1)), draw(st.sampled_from([16, 16, 64]))
+    k, rows = take(st.integers(0, len(GEOMETRIES) - 1)), take(st.sampled_from([16, 16, 64]))
     store = drawn_store(k, rows)
     reg = store.registration
-    order = draw(st.permutations(range(reg.blocks)))[:draw(st.integers(1, reg.blocks))]
+    order = take(st.permutations(range(reg.blocks)))[:take(st.integers(1, reg.blocks))]
     plan = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
-    seed, i, p = expand(draw(st.binary(max_size=8)), 64), draw(st.integers(0, 3)), draw(st.integers(0, plan.length - 1))
+    seed, i, p = expand(take(st.binary(max_size=8)), 64), take(st.integers(0, 3)), take(st.integers(0, plan.length - 1))
     prover = p2.Prover(store, entropy=Entropy(b"salts %d" % k))
-    edit = fault(draw, 16)
+    edit = fault(take, 16)
     if edit == 1:
         sk, unit = p2.Sketcher(seed, rows), store.unit(plan.block(p))
         other = bytes([unit[0] ^ 1]) + unit[1:]
@@ -260,45 +260,45 @@ def opening_inputs(draw) -> dict:
     v = {"registration": registration_json(reg), "seed": seed.hex(), "runs": canonical_runs(order),
          "root": ps.tree.commitment.root.hex(), "i": i, "p": p, "opening": opening_json(prover.open(ps, p))}
     o, r = v["opening"], v["registration"]
-    b = draw(st.integers(0, p2.UNIT_BLOCKS - 1))
+    b = take(st.integers(0, p2.UNIT_BLOCKS - 1))
     if edit == 2:
-        o[draw(st.sampled_from(["pass", "position"]))] += draw(st.sampled_from([1, -1]))
+        o[take(st.sampled_from(["pass", "position"]))] += take(st.sampled_from([1, -1]))
     elif edit == 3:
-        c = draw(st.integers(0, p2.UNIT_BLOCKS - 1))
+        c = take(st.integers(0, p2.UNIT_BLOCKS - 1))
         o["blocks"][b], o["blocks"][c] = o["blocks"][c], o["blocks"][b]
     elif edit == 4:
-        o["blocks"][b] = flip(o["blocks"][b], draw(st.integers(0, p2.BLOCK_BYTES - 1)))
+        o["blocks"][b] = flip(o["blocks"][b], take(st.integers(0, p2.BLOCK_BYTES - 1)))
     elif edit == 5:
         x = o["paths"][b]
-        o["paths"][b] = draw(st.sampled_from(
+        o["paths"][b] = take(st.sampled_from(
             [x[:-1], x + ["00" * 64], [flip(x[0])] + x[1:] if x else ["00" * 64], ["00" * 63] + x[1:]]))
     elif edit == 6:
-        o[draw(st.sampled_from(["blocks", "paths"]))].pop()
+        o[take(st.sampled_from(["blocks", "paths"]))].pop()
     elif edit == 7:
-        o["blocks"][b] = o["blocks"][b][:draw(st.sampled_from([0, 2 * p2.BLOCK_BYTES - 2]))]
+        o["blocks"][b] = o["blocks"][b][:take(st.sampled_from([0, 2 * p2.BLOCK_BYTES - 2]))]
     elif edit == 8:
-        o["leaf"] = draw(st.sampled_from([flip(o["leaf"], 64 * (p % receipts.PER_LEAF)), o["leaf"][:-128],
+        o["leaf"] = take(st.sampled_from([flip(o["leaf"], 64 * (p % receipts.PER_LEAF)), o["leaf"][:-128],
                                           o["leaf"] + "00" * 64]))
     elif edit == 9:
-        o["leaf_salt"] = draw(st.sampled_from([flip(o["leaf_salt"]), o["leaf_salt"][:-2]]))
+        o["leaf_salt"] = take(st.sampled_from([flip(o["leaf_salt"]), o["leaf_salt"][:-2]]))
     elif edit == 10:
-        o["receipt_path"] = draw(st.sampled_from(
+        o["receipt_path"] = take(st.sampled_from(
             [[flip(o["receipt_path"][0])] + o["receipt_path"][1:] if o["receipt_path"] else ["00" * 64],
              o["receipt_path"] + ["00" * 64]]))
     elif edit == 11:
-        v[draw(st.sampled_from(["root", "seed"]))] = draw(st.sampled_from([flip(v["root"]), "00" * 63]))
+        v[take(st.sampled_from(["root", "seed"]))] = take(st.sampled_from([flip(v["root"]), "00" * 63]))
     elif edit == 12:
-        key = draw(st.sampled_from(["salt", "root"]))
+        key = take(st.sampled_from(["salt", "root"]))
         r[key] = flip(r[key])
     elif edit == 13:
         r["rows"] = 80 - rows
     elif edit == 14:
-        v["runs"] = draw(st.sampled_from([[[0, reg.blocks]], [[reg.blocks, 1]], []]))
+        v["runs"] = take(st.sampled_from([[[0, reg.blocks]], [[reg.blocks, 1]], []]))
     elif edit == 15:
         r["node"] = flip(r["node"])
     elif edit == 16:
-        target = draw(st.sampled_from([v, o, r]))
-        del target[draw(st.sampled_from(sorted(target)))]
+        target = take(st.sampled_from([v, o, r]))
+        del target[take(st.sampled_from(sorted(target)))]
     return v
 
 
@@ -498,34 +498,34 @@ def p2_held(reg: p2.Registration, data: bytes, line: bytes, auditor: dict):
 
 
 @st.composite
-def p2_session_inputs(draw) -> dict:
+def p2_session_inputs(take) -> dict:
     """A session over a sampled store under every unit or a sampled plan, held to sampled session parameters, recorded from
     the prover (`p2_events`), honest or with one deviation: the registration or the request refused or near its form
     (1, 2), one of `p2_events`'s (3 … 7), or its events changed after: a fail inserted, the events cut short, one
     repeated, dropped or swapped with the next, one's clock changed, a field missing or out of form, or a start too
     early first (8 … 15); or the request off the auditor's session, in a sampled set of its values (16), or the sampled
     session's request under `SESSION` (17)."""
-    k, rows = draw(st.integers(0, len(GEOMETRIES) - 1)), draw(st.sampled_from([16, 64]))
+    k, rows = take(st.integers(0, len(GEOMETRIES) - 1)), take(st.sampled_from([16, 64]))
     store = drawn_store(k, rows)
     reg = store.registration
     stated = None
-    if draw(st.booleans()):
-        order = draw(st.permutations(range(reg.blocks)))[:draw(st.integers(1, reg.blocks))]
+    if take(st.booleans()):
+        order = take(st.permutations(range(reg.blocks)))[:take(st.integers(1, reg.blocks))]
         stated = Plan([tuple(r) for r in canonical_runs(order)], reg.blocks)
     doc = p2_party.registration_json(reg, stated)
-    windows, passes, samples = draw(st.integers(1, 3)), draw(st.integers(1, 2)), draw(st.integers(1, 3))
-    window_ns, deadline_ns = draw(st.sampled_from([(2 * P2_STEP_NS, P2_STEP_NS), (P2_STEP_NS, 3 * P2_STEP_NS)]))
+    windows, passes, samples = take(st.integers(1, 3)), take(st.integers(1, 2)), take(st.integers(1, 3))
+    window_ns, deadline_ns = take(st.sampled_from([(2 * P2_STEP_NS, P2_STEP_NS), (P2_STEP_NS, 3 * P2_STEP_NS)]))
     session = {"deadline_ns": deadline_ns, "passes": passes, "samples": samples, "window_ns": window_ns,
                "windows": windows}
     req = p2_party.request_of(reg.node, **session)
-    committed = [expand(b"coin %d " % j + draw(st.binary(max_size=4)), coins.COIN_BYTES) for j in range(2 * windows)]
-    not_before = draw(st.sampled_from([0, 0, 10 ** 6]))
-    edit, pick = fault(draw, 17), draw(st.integers(0, 1 << 16))
-    at = (draw(st.integers(0, windows - 1)), draw(st.integers(0, passes - 1)))
+    committed = [expand(b"coin %d " % j + take(st.binary(max_size=4)), coins.COIN_BYTES) for j in range(2 * windows)]
+    not_before = take(st.sampled_from([0, 0, 10 ** 6]))
+    edit, pick = fault(take, 17), take(st.integers(0, 1 << 16))
+    at = (take(st.integers(0, windows - 1)), take(st.integers(0, passes - 1)))
     data, line = None, None
     if edit == 16:
-        for key in draw(st.lists(st.sampled_from(sorted(session)), min_size=1, unique=True)):
-            req[key] = draw(st.sampled_from([x for x in (session[key] - 1, session[key] + 1, 2 * session[key] + 1)
+        for key in take(st.lists(st.sampled_from(sorted(session)), min_size=1, unique=True)):
+            req[key] = take(st.sampled_from([x for x in (session[key] - 1, session[key] + 1, 2 * session[key] + 1)
                                              if x >= 1]))
     if edit == 1:
         f = pick % 8
@@ -569,7 +569,7 @@ def p2_session_inputs(draw) -> dict:
     data = json.dumps(doc).encode() if data is None else data
     line = p2_line("request", req) if line is None else line
     v = {"registration": data.hex(), "request": line.hex(), "session": None if edit == 17 else session,
-         "coins": [c.hex() for c in committed], "chunk": draw(st.sampled_from([1, 2, 3, 64])),
+         "coins": [c.hex() for c in committed], "chunk": take(st.sampled_from([1, 2, 3, 64])),
          "not_before_ns": not_before, "events": []}
     held = p2_held(reg, data, line, p2_party.SESSION if edit == 17 else session)
     if isinstance(held, Exception):

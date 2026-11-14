@@ -62,7 +62,7 @@ def results(record: Path) -> dict[str, dict[str, dict]]:
         for f in sorted(rd.glob("*.json")):
             try:
                 doc = resolver.read_json(f)
-            except (OSError, ValueError) as e:
+            except (OSError, RecursionError, ValueError) as e:
                 print(f"[rebaseline] unreadable {f}: {e}", file=sys.stderr)
                 continue
             if doc.get("schema") != "verity-vllm/regression-result/v1":

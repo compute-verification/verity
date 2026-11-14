@@ -11,17 +11,20 @@ import os
 import sys
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline.tp import rank_worker as RW
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
 pytest.importorskip("torch")
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, fp8_block_gemm="cutlass", moe_backend="triton")
-WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}], "sampling": {"max_tokens": 2}, "sha256": "w",
+WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 2}], "sampling": {"variant": "greedy"}, "sha256": "w",
             "accepted": {"q0": [5, 6]}, "engine_args_required": {"max_model_len": 288, "tensor_parallel_size": 8}, "execution": "eager",
             "engine": {"reasons": {"VLLM_USE_DEEP_GEMM": "the target's CUTLASS block-FP8 GEMM", "moe_backend": "the target's Triton experts"}}}
 RUN = {"wall_s": 0.5, "iterations": 2, "step_wall_s": [0.2, 0.3], "generated_tokens": 2, "prompt_tokens": 3, "tokens": {"q0": [5, 6]}}
@@ -38,7 +41,9 @@ class _LLM:
     what `served.read_rank` reads back on every rank."""
 
     def __init__(self, mismatches: dict[int, list[str]] | None = None, stop: str | None = None, switches: dict | None = None) -> None:
-        self.mismatches, self.stop, self.kw, self.rpcs = mismatches or {}, stop, None, []
+        self.mismatches, self.stop = mismatches or {}, stop
+        self.kw: dict[str, Any] = {}
+        self.rpcs: list[tuple[str, dict[str, Any]]] = []
         self.switches = SERVED if switches is None else switches
         self.llm_engine = SimpleNamespace()
 
@@ -62,7 +67,14 @@ class _LLM:
 
 
 @pytest.fixture
-def stand_ins(monkeypatch):
+def vllm(monkeypatch) -> fake_vllm.FakeVllm:
+    """vLLM for the test: the one stand-in, on which a test sets what its engine reads.  The rank worker is imported above, before
+    any stand-in is installed: its import arms the serving switches on the vLLM modules it finds."""
+    return fake_vllm.install(monkeypatch)
+
+
+@pytest.fixture
+def stand_ins(monkeypatch, vllm):
     """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test; ``use(llm, target)``
     returns the profiles the Commit's guard was given."""
     from verity_vllm import protocols as PO
@@ -78,16 +90,19 @@ def stand_ins(monkeypatch):
 
     def use(llm: _LLM, target) -> list:
         guarded: list = []
-        vllm = ModuleType("vllm")
-        vllm.LLM = llm
-        monkeypatch.setitem(sys.modules, "vllm", vllm)
+
+        def commit_guard(profile, **k):
+            guarded.append(profile)
+            return profile
+
+        vllm.set("vllm:LLM", llm)
         for owner, name, value in [(prof, "apply_env", lambda: {"VLLM_BATCH_INVARIANT": "1"}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                    (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (handle, "model_runner", lambda llm: 1 / 0),
                                    (va, "load_workload", lambda path, max_tokens: json.loads(json.dumps(WORKLOAD))),
                                    (va, "target_of_workload", lambda wl, *a: target), (va, "case_of", lambda wl, case: case),
                                    (va, "throwaway_requests", lambda eng, reqs, seed=0: reqs), (va, "versions_doc", lambda eng: {}),
                                    (va, "run_requests", lambda eng, reqs, sampling: ({"q0": [5, 6]}, {"wall_s": 0.5, "engine_steps": 2})),
-                                   (PO, "commit_guard", lambda profile, **k: guarded.append(profile) or profile),
+                                   (PO, "commit_guard", commit_guard),
                                    (PC, "git_head", lambda: None), (PC, "run_workload", lambda eng, reqs, sampling: dict(RUN)),
                                    (TPCM, "tree_of_record", lambda: {}), (GL, "_ENVIRON", []), (GL, "_HELD", [])]:
             monkeypatch.setattr(owner, name, value)
@@ -120,7 +135,8 @@ def test_tp_capture_builds_checks_and_attests_the_declared_target(tmp_path, stan
 def test_tp_capture_without_a_declared_target_changes_nothing(tmp_path, stand_ins):
     llm = _LLM()
     out = _capture(tmp_path, llm, None, stand_ins)
-    assert os.environ["VLLM_USE_DEEP_GEMM"] == "1" and "moe_backend" not in llm.kw
+    # the engine was built (its arguments name the world) and no target's backend is among them
+    assert os.environ["VLLM_USE_DEEP_GEMM"] == "1" and "tensor_parallel_size" in llm.kw and "moe_backend" not in llm.kw
     assert llm.methods()[:2] == ["tp2_probe", "tp2_install"] and llm.rpcs[1][1]["target"] is None
     assert json.loads((out / "versions.json").read_text())["target"] is None
 
@@ -152,7 +168,7 @@ def test_an_int8_targets_ranks_register_its_parts_through_their_extension(tmp_pa
     seen: list[str] = []
     for part, mod in (("linears", "int8_vllm"), ("attention", "int8_attention_vllm")):
         stand_in = ModuleType(f"verity_vllm.engine.{mod}")
-        stand_in.register = lambda part=part: seen.append(part)
+        monkeypatch.setattr(stand_in, "register", lambda part=part: seen.append(part), raising=False)
         monkeypatch.setitem(sys.modules, stand_in.__name__, stand_in)
         monkeypatch.setattr(pkg, mod, stand_in, raising=False)
     monkeypatch.delenv(IR.ENV, raising=False)
@@ -212,10 +228,10 @@ def _built_config(gpu_util: float) -> SimpleNamespace:
 
 
 @pytest.mark.parametrize("driver", ["tp-capture", "tp-commit"])
-def test_the_record_carries_the_engines_read_back_gpu_memory_utilization_not_the_flag(tmp_path, stand_ins, monkeypatch, driver):
+def test_the_record_carries_the_engines_read_back_gpu_memory_utilization_not_the_flag(tmp_path, stand_ins, vllm, driver):
     """The job asks 0.92 and the built engine's `vllm_config` holds 0.88: the capture's topology.json and the Commit's versions.json
     record 0.88 as `effective_execution`, beside the 0.92 asked in `engine_kwargs`."""
-    monkeypatch.setitem(sys.modules, "vllm.envs", SimpleNamespace(VLLM_BATCH_INVARIANT=False))
+    vllm["vllm.envs"].VLLM_BATCH_INVARIANT = False
     llm = _LLM(stop="tp2_commit_make")
     llm.llm_engine = SimpleNamespace(vllm_config=_built_config(0.88))
     if driver == "tp-capture":
@@ -245,21 +261,23 @@ class _Worker:
 
 
 def _extension(monkeypatch, model):
-    from verity_vllm.pipeline.tp import rank_worker as RW
     monkeypatch.setattr(RW, "_tp_facts", lambda worker: {"tp": {"rank": 1, "world_size": 2}})
     w = _Worker(model)
     w.__class__ = type("Worker", (_Worker, RW.TP2CaptureWorkerExtension), {})
     return RW, w
 
 
-def test_a_rank_checks_its_own_engine_against_the_declared_target(monkeypatch):
+def test_a_rank_checks_its_own_engine_against_the_declared_target(monkeypatch, vllm):
     from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.tp import target as TT
-    seen = []
-    monkeypatch.setattr(va, "target_mismatches", lambda eng: seen.append(eng) or ["num_sms declared 132, device 114"])
-    distributed = ModuleType("vllm.distributed")
-    distributed.get_tensor_model_parallel_rank = lambda: 1
-    monkeypatch.setitem(sys.modules, "vllm.distributed", distributed)
+    seen: list[Any] = []
+
+    def target_mismatches(eng) -> list[str]:
+        seen.append(eng)
+        return ["num_sms declared 132, device 114"]
+
+    monkeypatch.setattr(va, "target_mismatches", target_mismatches)
+    vllm.set("vllm.distributed:get_tensor_model_parallel_rank", lambda: 1)
     model = object()
     w = _Worker(model)
     assert TT.rank_mismatches(w, H200) == {"rank": 1, "mismatches": ["num_sms declared 132, device 114"]}
@@ -268,11 +286,10 @@ def test_a_rank_checks_its_own_engine_against_the_declared_target(monkeypatch):
     assert eng.llm.collective_rpc(lambda worker: worker) == [w]
 
 
-def test_a_ranks_probe_reads_back_its_own_engines_execution(monkeypatch):
+def test_a_ranks_probe_reads_back_its_own_engines_execution(monkeypatch, vllm):
     """`tp2_probe` reads `effective_execution` from this rank's own `vllm_config`, so topology.json's and versions.json's `ranks`
     show what each rank's engine took, not the driver's copy."""
-    monkeypatch.setitem(sys.modules, "vllm", ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.envs", SimpleNamespace(VLLM_BATCH_INVARIANT=False))
+    vllm["vllm.envs"].VLLM_BATCH_INVARIANT = False
     _, w = _extension(monkeypatch, object())
     w.vllm_config = _built_config(0.88)
     eff = w.tp2_probe()["effective_execution"]

@@ -101,7 +101,7 @@ def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_com
     (audit / S.AUDIT_SUMMARY).write_text(json.dumps({"tie": {"record": w}}))
 
     def row() -> dict:
-        return S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
+        return S.piece_row("work", pieces, spot=audit, key_sha512=pin, lane=lane)
 
     before = row()
     assert before["verdict"] == "missing" and f"no Lean PouwCheck.PearlPlus verdict ({S.PEARLPLUS_LEAN}" in before["why"]

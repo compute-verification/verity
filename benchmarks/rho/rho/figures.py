@@ -123,7 +123,8 @@ def _targets(ax: Any, targets: Sequence[float], axis: str = "y") -> None:
 def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None,
                targets: Sequence[float] = (10.0, 100.0), grid: int = 30, family: int = 0) -> list[Path]:
     """Each class's per-block overhead `w c / q_T(c, k)` for `k` from 1e4 to 1e13 bits (`6 grid + 1` points), at the
-    inference block's gates `c` and (for a regime with server blocks) at the server block's `c_S`, with the declared
+    inference block's gates `c` and (for a regime with server blocks) at the server block's `c_S`, where a bound's is
+    the serving cut's argument, `w c_S / (q_T(c_S, k) + ω_max μ k)` with its boundary term, with the declared
     policy's `k` and the server block's input `k_S` marked. Below 1 a class is vacuous: it lets the block run
     unthrottled."""
     points = 6 * grid + 1
@@ -140,17 +141,20 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
     win = s.regime.budget(s.context) if hasattr(s.regime, "budget") else None
     panels = [("the inference block's gates c", c)]
     if win is not None:
-        panels.append(("the server block's gates c_S = ⌊Φ_s Δ_wipe⌋", win.gates))
+        panels.append(("the server block's gates c_S = ⌊Φ_s Δ_wipe⌋, a bound with ω_max μ k added", win.gates))
     ks = _logspace(1e4, 1e13, points)
     data: dict = {"scenario": name, "family": fam.name, "k": ks, "declared_k": k_policy,
                   "window_k": win.inputs if win else None,
-                  "overhead": "w c / q_T(c, k); 0 where the statement's premise fails (no cap), ∞ where q_T = 0",
+                  "overhead": "w c / q_T(c, k) at c, and w c_S / (q_T(c_S, k) + ω_max μ k) at c_S, the serving cut's "
+                              "argument with its boundary term; 0 where the statement's premise fails (no cap), ∞ where "
+                              "it is 0",
                   "panels": []}
     fig, axes = plt.subplots(1, len(panels), figsize=(6.4 * len(panels), 5.2), sharey=True, squeeze=False)
     lines: dict[str, Any] = {}
     top = 10.0
     for ax, (title, gates) in zip(axes[0], panels, strict=True):
         full = w * gates
+        per_bit = s.structure.per_bit if win is not None and gates == win.gates else 0.0
         panel: dict = {"title": title, "gates": gates, "classes": {}, "attacks": {}, "outside": {}}
         for i, arg in enumerate((*s.bounds, *s.attacks)):
             try:
@@ -159,8 +163,9 @@ def class_vs_k(registry: Registry, out: Path, names: Sequence[str] | None = None
                 panel["outside"][arg.name] = str(e)
                 continue
 
-            def overhead(k: float, cap: Any = cap, gates: float = gates, full: float = full) -> float:
-                n = cap(Budget(gates, k))
+            def overhead(k: float, cap: Any = cap, gates: float = gates, full: float = full,
+                         per_bit: float = per_bit if arg.side == "bound" else 0.0) -> float:
+                n = cap(Budget(gates, k)) + per_bit * k
                 return full / n if n > 0 else math.inf
 
             ys = [overhead(k) for k in ks]
@@ -246,7 +251,7 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
                          "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
                          "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "rho": e.rho}
                                     for e in f.bounds],
-                         "excluded": list(f.combined.excluded),
+                         "excluded": list(f.combined.excluded), "drafts": list(f.combined.drafts),
                          "attacks": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.attacks],
                          "contradictions": list(f.contradictions)})
     finite = [v for row in rows for v in (row["lo"], *row["lo_by_status"].values(),

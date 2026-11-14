@@ -278,9 +278,13 @@ plan of the case, is left out and listed under "Refused".
   proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's
   come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
-  pricing a block family covers (measured statements, computed, or both). The network certifier's are its
-  calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.
-  The advice and the output count are listed at 0, each with what it leaves out.
+  pricing a block family covers (measured statements, computed, or both). A family priced from measured statements
+  is timed alone, one session on a card, and the plan prices it with its provers sharing a GPU through the
+  planner's factor. Its share is marked `measured` only where the row's plan records what prices its proving and
+  none of it is at the planner's assumed default; else it is `modeled`, the input's source says so in words, and
+  the share of the plan's proving at that default is an input of its own, marked `assumed`. The network
+  certifier's are its calculator's own marks. The fleet, the request counted, a request of the plan and the weights
+  are read by both. The advice and the output count are listed at 0, each with what it leaves out.
 - **The compute audit's part**: each scope of record, with its run, its β at the share, its bound at λ = 1 and at the
   row's λ, the requests its rows are priced over, and each part of the total there. A β outside the pinned budgets is
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
@@ -313,19 +317,26 @@ null for a scope no run of record holds) and its `phases`, and an amount that ha
 
 ## Under a research run
 
-`run.py`'s `METRICS` are the rows of `benchmarks/metrics.toml` this benchmark is held to. Under a research run
-(`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each over the
-world's year at the share, in GB a world year at 10% of compute:
+`run.py`'s `METRICS` are the rows of `benchmarks/exfiltration/metrics.toml` this benchmark is held to. Under a research
+run (`RESEARCH_RUN_DIR` set) the command writes them into the run's `result.json` through the harness kit, each at the
+share over each monitoring period of the document it has a value over (a week, a month and a year of a datacenter's
+and of the world's compute), with its `period` and `over` (`year` and `world` for the world's year), in GB a world
+year at 10% of compute and so on for each period. A period it has no value over (one no run of record holds, or where
+the network certifier's ε is 1 or more) is left out, but the world's year, the figure each metric's title names, which
+is always written and written last, so a reader that keys a result's measurements by name alone, the last of a name
+winning, reads it:
 
-- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` (today the compute audit's
-  part, λ times the bound where row `(ii) honest`'s total is 10% of compute).
-- `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over the world's year.
-- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2,
-  with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
+- `benchmarks/exfiltration-gb-world-year`: the headline figure, the document's `value` over the world's year (today
+  the compute audit's part, λ times the bound where row `(ii) honest`'s total is 10% of compute), and that part over
+  each other period.
+- `benchmarks/exfiltration-compute-audit-gb`: the compute audit's part over each period.
+- `benchmarks/exfiltration-network-certifier-gb`: the network certifier's part of record, the `scan` row at D_j = 2;
+  over the world's year with no value and "no bound at this period" with its ε as its why where that ε is 1 or more.
 
-Each measurement's first input opens with its mark (`modeled`, and the network certifier's with the mark its
-calculator gives the `scan` row beside it), its second is its error over the world's year (the compute audit's δ, or
-the network certifier's ε at its scans' δ), and the rest are the runs of record it read. The document is kept as
+Each measurement's first input opens
+with its mark (`modeled`, and the network certifier's with the mark its calculator gives the `scan` row beside it), its
+second is its error over its period (the compute audit's δ, or the network certifier's ε at its scans' δ), and the
+rest are the runs of record it read. The document is kept as
 `out/exfiltration.json`, the run's measurement file and its validation's evidence, and the fingerprint holds what
 ran. The print is the same in a run as outside one.
 

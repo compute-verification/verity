@@ -21,7 +21,6 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.windows import rows as CS
 from verity.definitions import boolean as BB
-from verity.circuits.call_scope import specialization
 from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
@@ -32,6 +31,7 @@ from tests.pipeline.served_rope import HEADS, LAW, ROPE, D
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 
 ROPE_BITS = f"RoPEHead_v2{{D={D}}}"

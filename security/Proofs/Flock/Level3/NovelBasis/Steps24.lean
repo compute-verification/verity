@@ -1,10 +1,11 @@
-/-
-`NovelBasis`'s kernel checks of `svC`'s entries 24–27.
--/
 module
 
 public import Proofs.Flock.Level3.NovelBasis.Svc
 public import Flock.Ligerito
+
+/-!
+`NovelBasis`'s kernel checks of `svC`'s entries 24–27.
+-/
 
 @[expose] public section
 

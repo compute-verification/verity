@@ -10,7 +10,8 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
   (`proof_share`), where each accepted incorrect proof block injects the widest public size class of output bits;
 * **the slowdown's lower bound** and its range: each ranged parameter alone at either end of its plausible range, the
   rest at reference (`analysis.tornado`), and the corner, all of them at their worse ends at once (`analysis.corner`);
-  and the padded size ratio `|A| / T_0` it comes from;
+  and the padded size ratio `|A| / T_0` it comes from. Only a bound a lock states sets it (`bounds.lock_only`,
+  `LOCK_ONLY`);
 * **without the ruled assumptions**: the lower bound with every regime's host CPUs at their datasheet peak (without
   hosts carry no compute), with free compute at peak (without reference efficiency), and without both, sensitivities
   beside the headline (`sensitivities`);
@@ -19,7 +20,9 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
 * **what is scaled**: a server block's local minimum is a per-server-window bound (one server between two wipes,
   onsite; one server over the period, remote), its cuts' statements are per server block, and the bound sums them over
   every server and window; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
-  each server's capacity, neither a per-window bound;
+  each server's capacity, neither a per-window bound; on a remote row both are `DampenerRemotePeriod`'s terms over the
+  period, which a row cites with the premises it takes, each one's section of the lock's record and the terms it is on
+  (`PERIOD_PREMISES`), the escape's tail and the windows' knowledge errors (`pooled`);
 * **what sets it** (`analysis.attribution`);
 * **the premises ranked** by how far each alone moves the lower bound: each ranged parameter over its range, each
   assumption of `data/premises.toml` refuted, and `draft:no-straddle` dropped (`s_×` = 1, the elementary cap). A proof
@@ -49,9 +52,9 @@ from pathlib import Path
 import run
 from rho import analysis, circuits, lean, operating, params
 from rho.classes import CLASSES, premise_status, premises
-from rho.envelopes import ROUTES
+from rho.envelopes import ROUTES, Onsite, Remote
 from rho.params import Param, Registry
-from rho.scenario import Result, _binding_k
+from rho.scenario import Result, _binding_k, draft
 
 SCENARIOS = ("reference-onsite-h200", "reference-remote-h200", "reference-remote-h200-sampled",
              "reference-onsite-h200-today")
@@ -66,6 +69,17 @@ FIXED = ("datasheet", "measured", "declared", "ruled")
 #: the parameters whose range is a limit `verity` sets, not a premise, by the kind their row shows: a proof block's
 #: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
 LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
+#: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
+#: fleet's capacity over the period, and the premises it takes in place of `DampenerRemote`'s per-window ones, each
+#: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
+PERIOD_BOUND = "Nci.Guarantees.DampenerRemotePeriod"
+#: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
+PER_BLOCK_BOUND = Remote.CITES[0]
+PERIOD_PREMISES = {"Nci.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
+                   "Nci.Assumptions.SampledPerWindow": "the escape share and its tail",
+                   "Nci.Assumptions.IdentitySchedule": "same",
+                   "Nci.Assumptions.UnmonitoredAtMost": "`s`",
+                   "Nci.Assumptions.CheatingAtMost": "`χ`"}
 
 
 def choices(name: str, fleet: str, period: str) -> dict[str, str]:
@@ -96,6 +110,9 @@ def without_hosts(reg: Registry) -> dict[str, float]:
     return {f"regime.{r}.host": 1.0 for r in reg.names("regime") if f"regime.{r}.host" in reg}
 
 
+#: what the header says while `bounds.lock_only` holds
+LOCK_ONLY = (" Only a bound a lock states sets a row: a class one of whose own citations is a `draft:` statement sets "
+             "none, at any block size (`bounds.lock_only`), and `rho.md` lists it alone, labeled draft.")
 #: the overrides without the reference-efficiency assumption (`GLOSSARY.md`): a bound counts free compute at peak
 WITHOUT_REFERENCE_EFFICIENCY = {"task.reference_efficiency": False}
 
@@ -125,6 +142,43 @@ def parts(r: Result, reg: Registry) -> dict:
             "standings": {c: premise_status([c], k, table=table) for c in named}}
 
 
+def pooled(r: Result) -> dict | None:
+    """A remote row's period statement (`PERIOD_BOUND`): its premises with their sections of the lock's record of it,
+    the escape's tail against `p_evade`, and the windows' knowledge errors over each monitoring period. None onsite:
+    no onsite period statement exists."""
+    inner = operating._inner(r.scenario.regime)
+    if not isinstance(inner, Remote) or isinstance(inner, Onsite):
+        return None
+    record, shared = lean.premises(PERIOD_BOUND), lean.premises(PER_BLOCK_BOUND)
+    missing = [p for p in PERIOD_PREMISES if p not in record]
+    if missing:
+        raise ValueError(f"the lock's record of {PERIOD_BOUND} takes no {missing}: PERIOD_PREMISES names its premises")
+    stray = sorted(p for p in record if p not in PERIOD_PREMISES and p not in shared)
+    if stray:
+        raise ValueError(f"the lock's record of {PERIOD_BOUND} takes {stray}, which neither PERIOD_PREMISES nor the "
+                         f"record of {PER_BLOCK_BOUND} names: add each to PERIOD_PREMISES with the terms it is on")
+    d = inner.detection
+    windows = {name: math.ceil(seconds / inner.window_s) for name, seconds in params.PERIODS.items()}
+    return {"bound": PERIOD_BOUND, "premises": {p: [record[p], term] for p, term in PERIOD_PREMISES.items()},
+            "per_block": PER_BLOCK_BOUND, "shared": len(record) - len(PERIOD_PREMISES), "recorded": len(record),
+            "tail": d.tail(), "p_evade": d.p_evade if d.sampled else 0.0, "window_s": inner.window_s,
+            "window_ks": inner.window_ks, "windows": {k: [n, n * inner.window_ks] for k, n in windows.items()}}
+
+
+def pooled_md(p: dict) -> str:
+    fmt = run.fmt
+    premises = ", ".join(f"`{n.rsplit('.', 1)[-1]}` ({kind}; {term})" for n, (kind, term) in p["premises"].items())
+    sums = "; ".join(f"{k} {fmt(n)}{' windows' if i == 0 else ''}, {fmt(s)}"
+                     for i, (k, (n, s)) in enumerate(p["windows"].items()))
+    return (f": the terms of `{p['bound']}`, one statement pooled over the period, the premises it takes beyond "
+            f"`{p['per_block']}`'s, whose other {p['shared']} it shares ({p['recorded']} in the lock's record), on "
+            f"them {premises}; "
+            f"the escape's tail `J (1 − q)^(K+1)` {fmt(p['tail'])}, within δ's `p_evade` {fmt(p['p_evade'])}; the "
+            f"windows' knowledge errors `Σ_t ks_t`, in δ_crypto, at `window_ks` {fmt(p['window_ks'])} a window of "
+            f"{operating.human(p['window_s'])}, the deployment's rounds of live coins (both assumed, for knowledge "
+            f"errors with no value yet; the world read as one deployment): {sums}")
+
+
 def scaled(r: Result) -> dict:
     """The server blocks the bound sums a per-server-window bound over, and the share of the bound that isn't one."""
     s, part = r.scenario, r.scenario.regime.partition(r.scenario.context)
@@ -132,7 +186,7 @@ def scaled(r: Result) -> dict:
     blocks = [{"name": b.name, "count": b.count, "seconds": b.gates / phi,
                "cuts": {c.name: list(c.cites) for c in b.cuts}} for b in part.serving]
     terms = analysis.attribution(r)
-    return {"blocks": blocks,
+    return {"blocks": blocks, "period": pooled(r),
             "per_window_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ("serving", "inference")),
             "unreg_share": math.fsum(t.share for t in terms if t.name == "unregistered"),
             "routes_share": math.fsum(t.share for t in terms if t.name.split(".")[0] in ROUTES)}
@@ -221,16 +275,20 @@ def measured_md(reg: Registry, m: circuits.Comparison) -> list[str]:
              f"{fmt(m.s_x_unsplit)}) | — |"), ""]
 
 
-def alone_md(rows: list[dict], bounds: Sequence[str]) -> list[str]:
+def alone_md(reg: Registry, rows: list[dict], bounds: Sequence[str]) -> list[str]:
     """What rows bounded by the classes `bounds` alone cover (`only`): a figure is those classes' on the blocks they
-    bound and no class's on the rest, so the share on the blocks stands beside it."""
+    bound and no class's on the rest, so the share on the blocks stands beside it. A class left out as a draft
+    (`bounds.lock_only`) is named, with the setting that admits it."""
     shares = [x["scaled"]["per_window_share"] for x in rows]
     names = ", ".join(f"`{b}`" for b in bounds)
+    out = ", ".join(f"`{b}`" for b in bounds if reg["bounds.lock_only"] and draft(CLASSES[b].cites))
     return [(f"Each row is bounded by {names} alone (`--bounds`), every other class left out. A class bounds the "
              f"blocks its premises hold at, which hold {min(shares):.2g} to {max(shares):.2g} of a row's rate here; "
              "the rest is the uncertified routes and the unregistered pool at `q_U`, which no class sets, and a block "
              "no class bounds counts at its capacity. So a figure in these rows is a class's only on that share: "
-             "\"what sets it\" and \"Its parts\" name the rest."), ""]
+             "\"what sets it\" and \"Its parts\" name the rest."
+             + (f" A `draft:` statement is among the own citations of {out}, which so bounds no block in these rows "
+                "(`bounds.lock_only`); `--set bounds.lock_only=false` admits it." if out else "")), ""]
 
 
 def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.Comparison | None = None,
@@ -240,14 +298,15 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
            ("The slowdown's lower bound at the measured H200 inputs, for each monitoring period, over "
             + _fleet_md(reg, fleets) + ". Each row is the scenario with its `fleet` and `horizon` choices set "
             "(`scenario.<name>.fleet`, `.horizon`). The range is each ranged parameter alone at either end of its "
-            "plausible range, the rest at reference; the corner is all of them at their worse ends at once. The "
+            "plausible range, the rest at reference; the corner is all of them at their worse ends at once."
+            + (LOCK_ONLY if reg["bounds.lock_only"] else "") + " The "
             "slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀ (Lean's "
             "`hardwareMultiple`, at least 1, so no protocol gives 1); the padded size ratio `|A| / T_0` is the "
             "intermediate it comes from. The time to the target is wall-clock, at least the slowdown times "
             "`T_0 / (MFU₀ Φ_total)`. Each row says what it assumes about proofs: every unit proved, or proofs "
             "sampled at the regime's compute share (`regime.<name>.proof_share`), where each accepted incorrect proof "
             "block injects the widest public size class of output bits (`step_bits`)."), "",
-           *(alone_md(rows, bounds) if bounds else ()),
+           *(alone_md(reg, rows, bounds) if bounds else ()),
            *(measured_md(reg, measured) if measured else ()),
            "## The lower bound", "",
            ("| scenario | proofs | over | period | slowdown ≥ | range | corner | padded size ratio | status, premises | "
@@ -283,7 +342,9 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
                  else "; ".join(f"{g['where']}, {g['period']}" for g in group))
         out += [f"### {x['scenario']} ({where})", "",
                 (f"Set by **{p['setter']}** ({p.get('status')}; premises {p.get('premise') or '—'}), binding at "
-                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."), "", "| kind | parts |", "|---|---|"]
+                f"{fmt(p.get('binding_bits', math.nan))} novel bits a block."
+                + (f" The kinds are the per-block cuts' citations; the period statement, `{sc['period']['bound']}`, "
+                   "is the \"not scaled\" line's." if sc["period"] else "")), "", "| kind | parts |", "|---|---|"]
         for kind, names in p["kinds"].items():
             cells = [f"`{n}`" + (f" ({p['standings'][n]})" if n in p["standings"] else "") for n in names]
             out.append(f"| {kind} | {', '.join(cells) or '—'} |")
@@ -295,7 +356,8 @@ def markdown(reg: Registry, rows: list[dict], fleets=FLEETS, measured: circuits.
         out += [(f"| scaled | {sc['per_window_share']:.1%} of the slowdown's rate: each server block's local minimum is a "
                 f"per-server-window bound ({blocks}), summed over the blocks ({counts}) |"),
                 (f"| not scaled | the unregistered pool {sc['unreg_share']:.1%} (`ε_unreg` of the fleet, one pool), the "
-                f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`) |"),
+                f"uncertified routes {sc['routes_share']:.1%} (shares of each server's capacity at `q_U`)"
+                + (pooled_md(sc["period"]) if sc["period"] else "") + " |"),
                 "| what sets it | " + ", ".join(f"{t['name']} {t['share']:.1%}" for t in x["attribution"]) + " |", ""]
     out += ["## The premises, ranked", "",
             ("How far each alone moves the lower bound, the rest at reference, in decades: each ranged parameter "
@@ -369,6 +431,27 @@ def main() -> None:
             {"measured": asdict(measured) | {"u_over_w": measured.u_over_w(measured.s_x)}} if measured else {})
         (out / "periods.md").write_text(text + "\n")
         (out / "periods.json").write_text(json.dumps(_finite(doc), indent=1, allow_nan=False))
+        if not (args.set or args.bounds or args.measured):
+            write_metric(out, rows)
+
+
+#: the metric's id (`metrics.toml` beside this file), the scenario whose lower bound it is, and its unit
+METRIC, METRIC_SCENARIO = "training/slowdown-onsite-h200", "reference-onsite-h200"
+UNIT = ("the slowdown's lower bound over a year of the world's compute: the adversary's GPU-hours to the target over "
+        "the reference training algorithm's at MFU₀ (Lean's hardwareMultiple), at least 1")
+
+
+def write_metric(out: Path, rows: list[dict]) -> None:
+    """`METRIC_SCENARIO`'s lower bound over a year of the world's compute, written into the run's result under `METRIC`
+    as one measurement (`period` year, `over` world); the other fleets and periods stay in `periods.json`. Modeled:
+    the registry's parameters, fleets and periods, which no run measured. Written only for a run at the registry as it
+    is (no `--set`, `--bounds` or `--measured`), whose lower bound is the metric's."""
+    from verity_bench import kit
+
+    x = next((x for x in rows if (x["scenario"], x["fleet"], x["period"]) == (METRIC_SCENARIO, "world-h200", "year")),
+             None)
+    if x is not None:
+        kit.writer(out).measurement(METRIC, x["slowdown"], UNIT, mark="modeled", period="year", over="world")
 
 
 if __name__ == "__main__":

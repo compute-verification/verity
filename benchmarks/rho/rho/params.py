@@ -14,7 +14,9 @@ bits an incorrect proof block injects are the widest public size class of a bloc
 per-window δ is core's (`profile.WINDOW_DELTA`); and the incorrect-outputs row reports at core's reporting δs. From the
 inference-only policy's calibrations (`benchmarks/nci/calibrations.json`): the calibrated policy's `K`, its range, and
 `Γ`. The session policy's `K` is a ruling its layer states, and only its range is the calibrations' (`ranges`; a file
-that gives such a key a range is refused).
+that gives such a key a range is refused). From the cards (`verity.device`): the memory of the H200 servers' devices
+and their boundary links' line rate (`carded`, from each location's `devices` and `hosts`; a file that sets one is
+refused).
 
 The census's numbers are the exception, by the rule that `verity` takes the census's numbers as parameters and never
 reads it: nothing in this package reads the census. The layers state them, each naming the census entry it is (the
@@ -36,8 +38,9 @@ from pathlib import Path
 from typing import Any
 
 from verity.protocols.proofs.spot.verifier import profile
-from verity.protocols import reporting
+from verity.protocol import DELTAS, MONITORING_PERIODS
 from verity.circuits import partition_v2
+from verity.device import load_card, number
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 #: the inference-only policy's calibrations, in the directory beside this package's
@@ -45,8 +48,8 @@ CALIBRATIONS = Path(__file__).resolve().parents[2] / "nci" / "calibrations.json"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
 
-#: core's monitoring periods (`reporting`), seconds by name
-PERIODS = dict(reporting.PERIODS)
+#: core's monitoring periods (`verity.protocol`), seconds by name
+PERIODS = dict(MONITORING_PERIODS)
 #: the keys that hold the output bits an accepted incorrect proof block injects: a block's outputs fit its Definition's
 #: public size class, so the widest class (`partition_v2.UNIT_CLASS_MAX`), over the classes down to the smallest
 BLOCK_OUTPUT_BITS = ("regime.remote-sampled.step_bits", "incorrect.step_bits")
@@ -63,6 +66,10 @@ WORLD_MODEL = "deepseek-v4-pro"
 CALIBRATION = "kimi-k2-1m-raw"
 SESSION = "v4-pro-session"
 K_RANGE = ("kimi-k2-1m-coded", "kimi-k2-11mb-raw")
+#: the locations of DGX H200s, whose devices' memory and boundary links are their cards': the GPU card, the server
+#: card and the links' status (a server's ports are its data sheet's; a rack's uplinks are assumed to carry them all)
+CARDED = {"h200-hgx": ("h200-sxm-141gb", "dgx-h200", "datasheet"),
+          "h200-hgx-rack4": ("h200-sxm-141gb", "dgx-h200", "assumed")}
 
 
 @dataclass(frozen=True)
@@ -110,6 +117,10 @@ class Registry:
                             raise ValueError(f"{key}'s range is read from its source, not set (in {path.name})")
                         p = replace(p, low=spans[key][0], high=spans[key][1])
                     params[key] = p
+        for p in carded(params):
+            if p.key in params:
+                raise ValueError(f"{p.key} is read from its cards (params.CARDED), not set in data/")
+            params[p.key] = p
         return cls(params)
 
     def __contains__(self, key: str) -> bool:
@@ -180,7 +191,7 @@ def entry(path: Path, name: str) -> dict:
 def sourced() -> list[Param]:
     """The parameters another file states, read from it: no file under `data/` restates one (`Registry.load` refuses a
     key set twice). The census's numbers are not among them (module docstring)."""
-    periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.protocols.reporting PERIODS",
+    periods = [Param(f"horizon.{name}.seconds", s, "s", source="verity.protocol MONITORING_PERIODS",
                      status="declared") for name, s in PERIODS.items()]
     widest, smallest = partition_v2.UNIT_CLASS_MAX, partition_v2.UNIT_CLASSES[0]
     bits = [Param(key, widest, "bit", low=smallest, high=widest,
@@ -190,8 +201,29 @@ def sourced() -> list[Param]:
     return periods + bits + _deltas() + _policies()
 
 
+def carded(params: Mapping[str, Param]) -> list[Param]:
+    """The figures a location of `CARDED` reads from its cards: its devices' memory, each device the GPU card's
+    `store.dram`, and its boundary links, each host the server card's `link.rate` (every network port) and, low, the
+    location's at its server's `link.cluster` (the cluster ports alone; a rack's uplink oversubscribed by its hosts)."""
+    out = []
+    for name, (gpu, server, links) in CARDED.items():
+        t = f"location.{name}"
+        dram, link = load_card(gpu)["store"]["dram"], load_card(server)["link"]
+        units = (dram["unit"], link["rate"]["unit"], link["cluster"]["unit"])
+        if units != ("B", "bit/s", "bit/s"):
+            raise ValueError(f"{t}: {gpu}'s store.dram and {server}'s link.rate and link.cluster are in {units}; "
+                             "carded converts B and bit/s: convert the card's new unit here")
+        devices, hosts = params[f"{t}.devices"].value, params[f"{t}.hosts"].value
+        rate, cluster = float(hosts * number(link["rate"])), float(number(link["cluster"]))
+        out += [Param(f"{t}.memory", float(devices * number(dram) * 8), "bit", status="datasheet",
+                      source=f"hardware/cards/{gpu}.toml store.dram x {t}.devices"),
+                Param(f"{t}.links", rate, "bit/s", cluster, rate, status=links,
+                      source=f"hardware/cards/{server}.toml link.rate x {t}.hosts; low: link.cluster")]
+    return out
+
+
 def _deltas() -> list[Param]:
-    window, report = float(profile.WINDOW_DELTA), [float(d) for d in reporting.DELTAS]
+    window, report = float(profile.WINDOW_DELTA), [float(d) for d in DELTAS]
     core = "verity.protocols.proofs.spot.verifier.profile WINDOW_DELTA, the per-window delta"
     credit = "CircuitCredit's per-window failure p = delta_s + delta_bind + delta_ks (eps_agg's source)"
     return [
@@ -201,10 +233,13 @@ def _deltas() -> list[Param]:
               source=f"twice {core}: {credit}: delta_bind + delta_ks, commitment binding (SHA-512) and the proof "
                      "system's knowledge soundness, each assumed at delta_s: PoUW's binding has no deployed bound "
                      "and ProofSystemSound is undischarged"),
+        Param("regime.remote.window_ks", 2 * window, status="assumed",
+              source=f"twice {core}: a window's sampled-proofs knowledge error ks_t = eps_ks + delta_link "
+                     "(Nci.Guarantees.DampenerRemotePeriod), each assumed at delta_s: the statement gives it no value"),
         Param("regime.remote-sampled.p_evade", window, low=1e-15, high=2.0 ** -20, status="declared",
               source=f"{core}, the planner's (benchmarks/nci/tiers.py DEFAULTS p_evade); high: 2^-20"),
         Param("incorrect.delta", min(report), low=min(report), high=max(report), status="ruled",
-              source="verity.protocols.reporting DELTAS, the deltas a period's bounds are stated at: the smaller; "
+              source="verity.protocol DELTAS, the deltas a period's bounds are stated at: the smaller; "
                      "high: the larger (ruled: the reference datacenter, wherever a probabilistic term enters)"),
     ]
 

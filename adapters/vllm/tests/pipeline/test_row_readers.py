@@ -3,20 +3,26 @@
 the Match and Build records' fields
 (`missing_derived`, `fold_steps`, `served_shape`, `snapshot_steps_of_record`, `program_digest_of_record`, `manifest_verify_ok`),
 the workload's (`is_stochastic`, `tp_world`), a
-manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
-under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
+manifest build that fails and its wait for the derives (`verity_vllm.pipeline.row_build`: `required_manifest`, `wait_derived`), the
+launch contexts a workload's shapes are built under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`,
+`missing_batch`, `bad_chunks`), the card's line for a stage that is not ok
 (`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
 log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
-record of a row that
-ran nothing (`verity_vllm.pipeline.config_record.record`), the timeline report's window and its command, which report a file's
-last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
+record of a row that ran nothing and the circuit database's index (`verity_vllm.pipeline.config_record`: `record`, `load_index`),
+the timeline report's window and its command, which report a file's last attempt, its reading of a file, its categories, its
+engine counts and its table, and its writer, by a path or by the environment's, with what an event and a span carry
+(`verity_vllm.pipeline.timeline`: `report`, `main`, `read`, `report_md`, `Timeline`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
-a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`) and the one that writes the rows' digests
+a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs`: `main`, and `build_outputs` for a link, a failed
+replay and a stage it does not know) and the one that writes the rows' digests
 (`verity_vllm.pipeline.epoch`: `main` for `digests`).  The last tests are of a field its document may leave out, null or empty:
-a TP Build's rank blocks, a Commit's decision document, a job's inputs (`research_outputs`), a run's source identity
+a TP Build's rank blocks, a Build's correspondence digest, a Commit's decision document, a job's inputs (`research_outputs`), a
+run's source identity
 (`verity_vllm.pipeline.research_result.build_result`), the replay bundles a Commit's verdict names
 (`verity_vllm.pipeline.row_config`: `commit_verdict`, `replay`), and what `verity_vllm.pipeline.epoch` reads of a run's status, a
-row file, a manifest, a Build's summary and a verdict.
+row file, a manifest, a Build's summary and a verdict.  Beside the bundles are that module's word check that fails, its discard
+of a linked bundle, the config record's line, and a derive's device and its entry in the program cache (`word_check`,
+`discard_bundles`, `config_record`, `device_id`, `derive_cached`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -25,6 +31,8 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -46,7 +54,7 @@ import verity_vllm.pipeline.timeline as TL
 from tests.check.test_verdict import _base, _row_dir
 from tests.pipeline.test_row import STAGE_START, _summary_row
 from verity_vllm.check.gates import GateResult
-from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.config import CHECKPOINTS, WORKLOADS, UsageError, workload_file
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.program import prefix_plan as PP
@@ -61,7 +69,7 @@ def _put(path: Path, doc: Any) -> str:
 def test_a_row_that_samples_takes_its_first_requests_shape_and_snapshots_every_step(tmp_path):
     """A greedy row's default shape is its envelope and it snapshots two steps.  A row that samples takes the shape of its first
     declared request and snapshots every step; with no declared request it keeps the envelope and the two steps."""
-    wl = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
+    wl = workload_file(WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json")
     w = json.loads(wl.read_text())
     first, longest = w["requests"][0], max(w["sweep"]["input_lengths"])
     shape = R.row_shape(str(wl), str(CHECKPOINTS), str(tmp_path))
@@ -237,6 +245,38 @@ def test_the_launch_context_command_prints_each_shapes_context(tmp_path, capsys)
     assert capsys.readouterr().out == "\n"
 
 
+def test_a_request_program_is_refused_for_its_launch_batch_only_when_it_was_given_none():
+    declared = {"max_seqlen_q_by_step": {0: 8}, "conflict": False, "declared": True}
+    assert LC.missing_batch({**declared, "batch_by_step": {0: [(8, 0), (5, 0)]}}, 8, 3) is None
+    without: list[dict[str, Any] | None] = [None, {}, declared, {**declared, "batch_by_step": {}}]
+    for launch in without:
+        refusal = LC.missing_batch(launch, 8, 3)
+        assert refusal is not None and (refusal["reason"], refusal["phase"]) == ("launch_context", "applicability"), launch
+        assert f"was given {launch!r}, not its launch batch" in refusal["hint"] and "launch-context <workload> 8 3" in refusal["hint"]
+
+
+def test_the_manifest_waits_for_every_shape_and_gives_up_once_the_derives_end_without_one(tmp_path, monkeypatch):
+    """`wait_derived` is True once every shape is derived, whether or not the derives' end is marked yet, and False when they ended
+    without one, when one failed, or when the row was signalled; none of these waits."""
+    def never(seconds):
+        raise AssertionError("waited where the answer was already decided")
+    monkeypatch.setattr(RB, "time", SimpleNamespace(sleep=never))
+    done, stop, dirs = tmp_path / "done", tmp_path / "failed", [str(tmp_path / "a"), str(tmp_path / "b")]
+
+    def waited(signalled: bool = False) -> bool:
+        return RB.wait_derived(SimpleNamespace(signalled=signalled), dirs, str(done), str(stop))
+    _put(tmp_path / "a" / "result.json", {"ok": True})
+    _put(tmp_path / "b" / "result.json", {"ok": False})
+    done.touch()
+    assert waited() is False
+    _put(tmp_path / "b" / "result.json", {"ok": True})
+    assert waited() is True
+    done.unlink()
+    assert waited() is True and waited(signalled=True) is False
+    stop.touch()
+    assert waited() is False
+
+
 def test_the_card_names_each_stage_that_is_not_ok():
     def card(stages: dict[str, dict[str, Any]]) -> str:
         return CARD.summarize_md(CARD.ReportCard(schema="s", utc="u", config_id="c", model={}, C={}, engine_args={}, workload={}, kappa={},
@@ -247,14 +287,20 @@ def test_the_card_names_each_stage_that_is_not_ok():
 
 
 def test_the_card_reads_each_gates_detail_under_that_gates_id(tmp_path):
-    """The ambiguous count is G2's, tier a and the quarantine are G4's, and the sample is G5's: a detail under another id is not read."""
+    """The ambiguous count is G2's, tier a and the quarantine are G4's, the sample is G5's, non-interference is G1's status, the
+    partition's row is G8's and the holdout cases are G7's: a detail or a status under another id is not read."""
     sample = {"status": "pass", "k": 2, "strata": 4, "seed": 9}
-    detail: dict[str, dict[str, Any]] = {"G2": {"ambiguous": 7}, "G4": {"k": 3, "quarantine": {"specs": 1}}, "G5": {"sample": sample}}
+    detail: dict[str, dict[str, Any]] = {
+        "G2": {"ambiguous": 7}, "G4": {"k": 3, "quarantine": {"specs": 1}}, "G5": {"sample": sample},
+        "G7": {"holdouts": {"case-a": {"pass": True}}}, "G8": {"partition": {"status": "ok"}, "count": 5, "width": {"max_seen": 3, "w_max": 16}}}
     other = {"ambiguous": 99, "k": 99, "quarantine": {"specs": 99}, "sample": {"status": "fail"}}
-    card = CARD.build_card(tmp_path, [GateResult(id=g, name=g, status="pass", detail=detail.get(g, other))
+    card = CARD.build_card(tmp_path, [GateResult(id=g, name=g, status="fail" if g == "G1" else "pass", detail=detail.get(g, other))
                                       for g in ("G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8")])
     assert card.counts["ambiguous"] == 7 and card.counts["sampled_vus"] == "k=2 x 4 strata, seed 9 PASS"
     assert (card.replay["tier_a"]["k"], card.replay["quarantine"], card.replay["sample"]) == (3, {"specs": 1}, sample)
+    assert (card.counts["control_noninterference"], card.counts["vu_partition"]) == ("FAIL", "ok, 5 sets, max w_out 3/16 PASS")
+    top = CARD.top_section(card).splitlines()
+    assert top[top.index("HOLDOUTS") + 1].split() == ["case-a", "PASS"]
 
 
 def test_the_verdict_command_says_the_outcome_first_and_takes_the_commits_exit_code(tmp_path, capsys):
@@ -272,6 +318,16 @@ def test_the_verdict_command_says_the_outcome_first_and_takes_the_commits_exit_c
 def test_the_config_record_of_a_row_that_ran_nothing_fails_at_its_build(tmp_path):
     rec = CR.record(tmp_path, "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager")
     assert (rec["schema"], rec["outcome"], rec["why"]) == ("verity-vllm/config-record/v1", "FAIL", "build FAIL")
+
+
+def test_the_circuit_databases_index_is_empty_without_its_file_and_refused_under_another_schema(tmp_path):
+    index = tmp_path / "records.json"
+    assert CR.load_index(index) == {"schema": CR.INDEX_SCHEMA, "about": CR.INDEX_ABOUT, "rows": {}} and CR.aot_of("a-row", index) is None
+    CR.write_index({"schema": CR.INDEX_SCHEMA, "rows": {"b": {"aot": {"trace": "t"}}, "a": {}}}, index)
+    assert list(CR.load_index(index)["rows"]) == ["a", "b"] and (CR.aot_of("a", index), CR.aot_of("b", index)) == (None, {"trace": "t"})
+    _put(index, {"schema": "verity-vllm/records/v0", "rows": {}})
+    with pytest.raises(UsageError, match=f"records.json: schema 'verity-vllm/records/v0', not {CR.INDEX_SCHEMA}$"):
+        CR.load_index(index)
 
 
 def test_a_row_dispatches_by_batch_when_its_target_is_not_batch_invariant_and_it_has_several_requests(tmp_path):
@@ -297,6 +353,23 @@ def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes
     assert refused["hint"].startswith("prefill chunks [5, 3] at a launch batch of 5 steps") and refused["hint"].endswith("this is a request with C=0")
     for wrapper, T, C in (("step", 3, 0), ("request", 3, 2), ("request", 4, 0)):
         assert LC.bad_chunks(launch, wrapper, 8, T, C) is not None
+
+
+class _Clock:
+    """The clock the timeline's writer reads, at the reading a test sets; a reading is formatted as the real module formats it."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.strftime, self.gmtime = TL.time.strftime, TL.time.gmtime
+
+    def time(self) -> float:
+        return self.now
+
+
+def _span(stage: str, t0: float, t1: float, pid: int = 1, proc: str = "row", **fields: Any) -> list[dict[str, Any]]:
+    """A stage's `start` at `t0` and its `end` at `t1`, the fields on the `end`, as a process's writer leaves them."""
+    start = {"t": t0, "proc": proc, "pid": pid, "stage": stage, "ev": "start"}
+    return [start, {**start, "t": t1, "ev": "end", **fields}]
 
 
 def test_the_timeline_reports_its_window_or_none_without_a_timed_event():
@@ -325,9 +398,194 @@ def test_the_timeline_report_command_reports_the_files_last_attempt(tmp_path, ca
     assert capsys.readouterr().out == md.read_text() and "a-row" in md.read_text() and "attempt last of 2 in the file" in md.read_text()
 
 
+def test_a_timeline_file_gives_its_events_in_time_order_and_skips_a_line_that_is_none(tmp_path):
+    assert TL.read(tmp_path / "absent.jsonl") == []
+    path = tmp_path / "timeline.jsonl"
+    path.write_text('{"t": 2.0, "stage": "b"}\n\n   \nnot an event\n{"t": 1.0, "stage": "a"}\n{"stage": "untimed"}\n')
+    assert [e["stage"] for e in TL.read(path)] == ["untimed", "a", "b"]
+
+
+def test_the_timeline_report_adds_a_categorys_separate_spans_keeps_a_parallel_span_whole_and_names_what_never_ended():
+    """Two spans of one category that do not overlap add up; a stage under no category's prefix is `other`; a span marked `par` is
+    counted beside a span it contains, where an unmarked one is that span's wrapper and is left out; the row's span and a whole
+    stage's are the envelope, in no category; a start with no end is unclosed.  The table says both."""
+    span = _span
+
+    def category(rep: dict[str, Any], name: str) -> tuple[int, float, float]:
+        c = rep["categories"][name]
+        return c["spans"], c["sum_s"], c["union_s"]
+    rep = TL.report([*span("row", 0.0, 60.0), *span("stage.build", 0.0, 14.0),
+                     *span("build.derive_step", 0.0, 4.0), *span("build.derive_request", 10.0, 13.0), *span("mystery", 20.0, 21.0),
+                     *span("work.outer", 30.0, 40.0, par=True), *span("work.inner", 32.0, 35.0, pid=2),
+                     {"t": 50.0, "proc": "row", "pid": 3, "stage": "work.hung", "ev": "start"}])
+    assert list(rep["categories"]) == ["workload", "validation", "other"]
+    assert (category(rep, "validation"), category(rep, "other"), category(rep, "workload")) == ((2, 7.0, 7.0), (1, 1.0, 1.0), (2, 13.0, 10.0))
+    assert rep["envelope"] == [{"stage": "row", "s": 60.0, "proc": "row"}, {"stage": "stage.build", "s": 14.0, "proc": "row"}]
+    assert rep["unclosed"] == [{"proc": "row", "pid": 3, "stage": "work.hung", "t0": 50.0}]
+    table = TL.report_md(rep)
+    assert "envelope: row 60.0 s (row); stage.build 14.0 s (row)" in table
+    assert "unclosed spans (process died / still running): [('row', 'work.hung')]" in table
+    wrapped = TL.report([*span("work.outer", 30.0, 40.0), *span("work.inner", 32.0, 35.0, pid=2)])
+    assert category(wrapped, "workload") == (1, 3.0, 3.0) and (wrapped["envelope"], wrapped["unclosed"]) == ([], [])
+    assert "unclosed" not in TL.report_md(wrapped) and "envelope" not in TL.report_md(wrapped)
+
+
+def test_the_timeline_report_counts_engine_starts_and_reuses_and_its_table_has_a_line_for_each_category():
+    """An engine start is a span of `engine.build`, with the reason its `end` gives or `unrecorded`; a reuse is a mark or an `end`
+    of `engine.reuse`.  A category's seconds are its spans' added, and their union where two overlap; each span is listed with
+    the fields the report names and no other; an `end` with no `start` is a span of the seconds it carries.  The table is the
+    same figures, a category a line in the report's order, with its share of the window."""
+    events = sorted([
+        *_span("engine.build", 60.0, 80.0, pid=13, proc="commit", restart_reason="fresh process", hot=False),
+        *_span("engine.build", 100.0, 140.0, pid=11, proc="commit", restart_reason="fresh process", engine_reused=False, model="m",
+               build_s=39.5),
+        *_span("prep.warmup", 141.0, 141.1, pid=11, proc="commit", ok=True), *_span("prep.warmup", 142.0, 142.2, pid=11, proc="commit", ok=True),
+        {"t": 145.0, "proc": "commit", "pid": 11, "stage": "engine.reuse", "ev": "mark", "hot": True},
+        *_span("work.pair1", 150.0, 156.0, pid=11, proc="commit", arm="control", pair=1, n=8, rc=0),
+        *_span("work.pair2", 154.0, 160.0, pid=13, proc="commit", arm="capture", pair=2, n=8, rc=0),
+        *_span("engine.build", 300.0, 310.0, pid=12, proc="replay"),
+        *_span("engine.reuse", 320.0, 321.0, pid=12, proc="replay", hot=True, engine_reused=True),
+        *_span("validate.fold", 330.0, 334.0, pid=12, proc="replay", ok=False),
+        {"t": 350.0, "proc": "replay", "pid": 12, "stage": "closure.summary", "ev": "end", "s": 2.0}], key=lambda e: e["t"])
+    rep = TL.report(events)
+    assert (rep["events"], rep["spans"], rep["elapsed_s"], rep["unclosed"], rep["envelope"]) == (20, 10, 290.0, [], [])
+    assert rep["engine"] == {"starts": 3, "reuses": 2, "restart_reasons": {"fresh process": 2, "unrecorded": 1},
+                             "build_s": [20.0, 40.0, 10.0], "hot_values": [False, True], "processes": 3}
+    assert list(rep["categories"].items()) == [
+        ("startup", {"spans": 3, "sum_s": 70.0, "union_s": 70.0, "stages": {"engine.build": 70.0}}),
+        ("preparation", {"spans": 2, "sum_s": 0.3, "union_s": 0.3, "stages": {"prep.warmup": 0.3}}),
+        ("workload", {"spans": 2, "sum_s": 12.0, "union_s": 10.0, "stages": {"work.pair1": 6.0, "work.pair2": 6.0}}),
+        ("validation", {"spans": 1, "sum_s": 4.0, "union_s": 4.0, "stages": {"validate.fold": 4.0}}),
+        ("closure", {"spans": 1, "sum_s": 2.0, "union_s": 2.0, "stages": {"closure.summary": 2.0}}),
+        ("other", {"spans": 1, "sum_s": 1.0, "union_s": 1.0, "stages": {"engine.reuse": 1.0}})]
+    commit, replay = {"proc": "commit", "pid": 11}, {"proc": "replay", "pid": 12}
+    assert rep["spans_detail"] == [
+        {"proc": "commit", "pid": 13, "stage": "engine.build", "s": 20.0, "category": "startup", "t0_utc": "00:01:00",
+         "restart_reason": "fresh process", "hot": False},
+        {**commit, "stage": "engine.build", "s": 40.0, "category": "startup", "t0_utc": "00:01:40", "restart_reason": "fresh process",
+         "engine_reused": False, "model": "m"},
+        {**commit, "stage": "prep.warmup", "s": 0.1, "category": "preparation", "t0_utc": "00:02:21", "ok": True},
+        {**commit, "stage": "prep.warmup", "s": 0.2, "category": "preparation", "t0_utc": "00:02:22", "ok": True},
+        {**commit, "stage": "work.pair1", "s": 6.0, "category": "workload", "t0_utc": "00:02:30", "arm": "control", "pair": 1, "n": 8, "rc": 0},
+        {"proc": "commit", "pid": 13, "stage": "work.pair2", "s": 6.0, "category": "workload", "t0_utc": "00:02:34", "arm": "capture",
+         "pair": 2, "n": 8, "rc": 0},
+        {**replay, "stage": "engine.build", "s": 10.0, "category": "startup", "t0_utc": "00:05:00"},
+        {**replay, "stage": "engine.reuse", "s": 1.0, "category": "other", "t0_utc": "00:05:20", "hot": True, "engine_reused": True},
+        {**replay, "stage": "validate.fold", "s": 4.0, "category": "validation", "t0_utc": "00:05:30", "ok": False},
+        {**replay, "stage": "closure.summary", "s": 2.0, "category": "closure", "t0_utc": "00:05:48"}]
+    window = ("window 1970-01-01T00:01:00Z → 1970-01-01T00:05:50Z · elapsed 290.0 s · 10 spans in 3 processes · engine starts **3** "
+              "(build s [20.0, 40.0, 10.0]) · engine reuses **2** · restart reasons {'fresh process': 2, 'unrecorded': 1} · hot [False, True]")
+    assert TL.report_md(rep, "a-row").split("\n") == [
+        "### Runner timeline — a-row [measured]", "", window, "",
+        "| stage | spans | summed s | union s | share of elapsed | finest stages (s) |", "|---|---:|---:|---:|---:|---|",
+        "| startup | 3 | 70.0 | 70.0 | 24 % | engine.build 70.0 |", "| preparation | 2 | 0.3 | 0.3 | 0 % | prep.warmup 0.3 |",
+        "| workload | 2 | 12.0 | 10.0 | 3 % | work.pair1 6.0, work.pair2 6.0 |", "| validation | 1 | 4.0 | 4.0 | 1 % | validate.fold 4.0 |",
+        "| closure | 1 | 2.0 | 2.0 | 1 % | closure.summary 2.0 |", "| other | 1 | 1.0 | 1.0 | 0 % | engine.reuse 1.0 |", ""]
+
+
+def test_a_timeline_stage_is_of_the_category_its_name_holds_and_the_table_names_a_categorys_eight_longest_stages():
+    """A stage is of the first category one of whose prefixes it begins with, holds after a dot, or is but for the prefix's dot,
+    whatever its case; a name under none is `other`.  The table's line names a category's eight longest stages, longest first."""
+    named = [("commit.engine.build", "startup"), ("prep", "preparation"), ("Work.Pair1", "workload"), ("tp.validate.fold", "validation"),
+             ("summary", "closure"), ("mystery", "other")]
+    rep = TL.report([e for k, (stage, _) in enumerate(named) for e in _span(stage, 10.0 * k, 10.0 * k + 1)])
+    assert [(d["stage"], d["category"]) for d in rep["spans_detail"]] == named
+    nine = TL.report_md(TL.report([e for k in range(9) for e in _span(f"work.s{k}", 100.0 + 10 * k, 101.0 + 11 * k)])).split("\n")
+    window = ("window 1970-01-01T00:01:40Z → 1970-01-01T00:03:09Z · elapsed 89.0 s · 9 spans in 1 processes · engine starts **0** "
+              "(build s []) · engine reuses **0** · restart reasons {} · hot []")
+    line = ("| workload | 9 | 45.0 | 45.0 | 51 % | work.s8 9.0, work.s7 8.0, work.s6 7.0, work.s5 6.0, work.s4 5.0, work.s3 4.0, "
+            "work.s2 3.0, work.s1 2.0 |")
+    assert (nine[0], nine[2], nine[6:]) == ("### Runner timeline [measured]", window, [line, ""])
+
+
+def test_a_timeline_attempt_begins_at_the_rows_start_and_at_no_other_event_of_its_driver():
+    """The row's driver writes more than the row's start: its stages' spans and the row's end.  None of them begins an attempt,
+    so the report of a file of two attempts is of the whole of the second."""
+    def attempt(t: float, pid: int) -> list[dict[str, Any]]:
+        row = {"t": t, "proc": "row_pod", "pid": pid, "stage": "row", "ev": "start"}
+        rest = ((1.0, "stage.build", "start"), (4.0, "stage.build", "end"), (5.0, "row", "end"))
+        return [row, *({**row, "t": t + dt, "stage": stage, "ev": ev} for dt, stage, ev in rest)]
+
+    rep = TL.report([*attempt(100.0, 1), *attempt(500.0, 7)])
+    assert (rep["attempts_in_file"], rep["events"], rep["spans"], rep["elapsed_s"]) == (2, 4, 2, 5.0)
+    assert rep["envelope"] == [{"stage": "stage.build", "s": 3.0, "proc": "row_pod"}, {"stage": "row", "s": 5.0, "proc": "row_pod"}]
+
+
+def test_a_timeline_writers_event_carries_its_clocks_reading_and_an_end_the_seconds_since_its_start(tmp_path, monkeypatch):
+    """An event carries the clock's reading as `t` and as `utc`, the writer's process and its label, `?` when it was given none.
+    An `end` carries the seconds since its stage's `start` unless it was given its own; a mark between the two carries none and
+    leaves the stage open; an `end` with no `start` open, a second `end` among them, carries none.  The writer makes every
+    directory its file is under."""
+    clock = _Clock()
+    monkeypatch.setattr(TL, "time", clock)
+    path = tmp_path / "sweep" / "a-row" / "timeline.jsonl"
+    tl = TL.Timeline(path)
+    written = []
+    for now, stage, ev, fields in ((1000.25, "build", "start", {}), (1001.0, "build", "mark", {}), (1003.75, "build", "end", {}),
+                                   (1004.0, "build", "end", {}), (1010.0, "match", "start", {}), (1012.0, "match", "end", {"s": 99.5})):
+        clock.now = now
+        written.append(tl.event(stage, ev, **fields))
+    assert [json.loads(line) for line in path.read_text().splitlines()] == written
+    assert [(e["t"], e["utc"], e["stage"], e["ev"], e.get("s")) for e in written] == [
+        (1000.25, "1970-01-01T00:16:40Z", "build", "start", None), (1001.0, "1970-01-01T00:16:41Z", "build", "mark", None),
+        (1003.75, "1970-01-01T00:16:43Z", "build", "end", 3.5), (1004.0, "1970-01-01T00:16:44Z", "build", "end", None),
+        (1010.0, "1970-01-01T00:16:50Z", "match", "start", None), (1012.0, "1970-01-01T00:16:52Z", "match", "end", 99.5)]
+    assert {(e["proc"], e["pid"]) for e in written} == {("?", os.getpid())}
+
+
+def test_a_timeline_writer_from_the_environment_writes_the_file_its_setting_names_and_is_off_without_one(tmp_path, monkeypatch):
+    path = tmp_path / "timeline.jsonl"
+    monkeypatch.setenv("VERITY_TIMELINE", str(path))
+    on = TL.Timeline.from_env("commit", hot=False)
+    rec = on.event("engine.build", "start")
+    assert on.enabled is True and rec is not None and (rec["proc"], rec["hot"]) == ("commit", False)
+    assert [json.loads(line) for line in path.read_text().splitlines()] == [rec]
+    monkeypatch.delenv("VERITY_TIMELINE")
+    off = TL.Timeline.from_env("commit", hot=False)
+    assert off.enabled is False and off.event("engine.build", "start") is None
+
+
+def test_a_timeline_writer_with_no_path_is_off_and_one_that_cannot_append_gives_no_event(tmp_path):
+    off = TL.Timeline(None)
+    assert off.enabled is False and off.event("build", "start") is None
+    path = tmp_path / "attempt" / "timeline.jsonl"
+    on = TL.Timeline(path, proc="row", hot=False)
+    rec = on.event("build", rc=0, skipped=None)
+    assert on.enabled is True and rec is not None and "skipped" not in rec
+    assert (rec["proc"], rec["stage"], rec["ev"], rec["hot"], rec["rc"], rec["schema"]) == ("row", "build", "mark", False, 0, TL.SCHEMA)
+    assert [json.loads(line) for line in path.read_text().splitlines()] == [rec]
+    path.unlink()
+    path.mkdir()
+    assert on.event("build") is None
+
+
+def test_a_timeline_span_ends_with_what_its_block_set_and_raises_again_what_its_block_raises(tmp_path):
+    """A span's start carries the fields it is given, and its end carries `ok` and what the block set on the dict it was handed.
+    A block that raises, an exit among them, ends `ok=False` with what it had set, and what it raised comes out as it is: a
+    span swallows nothing, so the lines under one stop where they would stop outside it."""
+    path = tmp_path / "timeline.jsonl"
+    tl = TL.Timeline(path, proc="commit")
+    with tl.span("validate.fold", pair=1) as extra:
+        extra["n"] = 3
+    stop = SystemExit("no fold")
+    with pytest.raises(SystemExit) as raised, tl.span("work.pair1") as extra:
+        extra["arm"] = "control"
+        raise stop
+    assert raised.value is stop
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    assert [(e["stage"], e["ev"], e.get("pair"), e.get("ok"), e.get("n"), e.get("arm")) for e in events] == [
+        ("validate.fold", "start", 1, None, None, None), ("validate.fold", "end", None, True, 3, None),
+        ("work.pair1", "start", None, None, None, None), ("work.pair1", "end", None, False, None, "control")]
+    assert ["s" in e for e in events] == [False, True, False, True]
+
+
 def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):
     absent = EXP._transcript_values(tmp_path)
     assert absent["snapshot_index"] == {"path": "capture/snapshots.json", "present": False} and "snapshot_steps" not in absent
+    assert absent["values_dir"] == {"path": "capture/values", "present": False}
+    _put(tmp_path / "capture" / "values" / "a.bin", "abc")
+    _put(tmp_path / "capture" / "values" / "step0" / "b.bin", "de")
+    assert EXP._transcript_values(tmp_path)["values_dir"] == {"path": "capture/values", "present": True, "dir": True, "files": 2, "bytes": 5}
     entries = [{"step": 2, "path": "a"}, {"step": "0", "skipped": "oversize", "path": "b", "shape": [1]}, {"path": "c"}, "not an entry", {"step": 2}]
     for doc in ({"snapshots": entries}, {"entries": entries}, entries):
         _put(tmp_path / "capture" / "snapshots.json", doc)
@@ -464,6 +722,35 @@ def test_a_tp_builds_digests_read_a_summary_whose_rank_blocks_are_not_all_there(
         assert (got["program_digest"], got["step_digest"], got["rank_workload_digests"]) == (None, None, [None, "w" * 64]), rank0
 
 
+def test_a_builds_digests_carry_its_correspondence_digest_and_a_summary_that_is_no_document_has_none(tmp_path):
+    none = {"program_digest": None, "request_digest": None, "step_digest": None, "workload_digest": None}
+    _put(tmp_path / "build_summary.json", ["not a summary"])
+    assert RO.program_digest(tmp_path) == none
+    named: list[dict[str, Any]] = [{"correspondence_digest": "c" * 64}, {"correspondence": {"digest": "c" * 64}},
+                                   {"correspondence": {"correspondence_digest": "c" * 64}}]
+    for summary in named:
+        _put(tmp_path / "build_summary.json", summary)
+        assert RO.program_digest(tmp_path) == {**none, "correspondence_digest": "c" * 64}, summary
+
+
+def test_a_stages_outputs_leave_a_link_out_by_name_say_which_decision_document_a_failed_replay_lacks_and_refuse_an_unknown_stage(tmp_path):
+    """A listed file that is a link is never staged and is named as skipped.  A replay that did not pass and left no decision document
+    still declares the Commit's files, with the document it lacks named.  A stage with no outputs of its own is refused by name."""
+    row, d, run = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", tmp_path / "row", tmp_path / "run"
+    _put(d / "stages.txt", "build FAIL 2026-09-23T00:00:00Z rc=1\nreplay FAIL 2026-09-23T00:00:01Z rc=1\n")
+    _put(d / "tree.json", {})
+    (d / "build_summary.json").symlink_to(_put(tmp_path / "elsewhere.json", {}))
+    build = RO.build_outputs(d, row, "build", run, {})["outputs"][0]
+    assert (build["name"], build["meta"]["files"], build["meta"]["skipped"]) == ("build", 1, ["build_summary.json"])
+    assert [p.name for p in (run / "outputs" / "build").iterdir()] == ["tree.json"]
+    _put(d / "commit" / "commit.log", "no replay ran\n")
+    verdict = RO.build_outputs(d, row, "replay", run, {})["outputs"][0]
+    assert (verdict["name"], verdict["meta"]["verdict"], verdict["meta"]["decision_record"]) == ("verdict", "FAIL", "config_record.json")
+    assert verdict["meta"]["decision_record_missing"] == "config_record.json" and "outcome" not in verdict["meta"]
+    with pytest.raises(ValueError, match="^unknown stage 'serve'$"):
+        RO.build_outputs(d, row, "serve", run, {})
+
+
 def test_a_commits_verdict_entry_reads_a_decision_document_without_its_replay_or_its_runs(tmp_path):
     """A config record's `replay` and a verdict's `runs` may be absent, null or empty: the entry then states no replay and no runs."""
     row, run = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager", tmp_path / "run"
@@ -529,6 +816,101 @@ def test_a_commit_verdict_that_names_no_replay_bundle_is_not_pending_and_leaves_
     with pytest.raises(Stop):
         RCFG.replay(row)
     assert said[-1][:2] == ("replay", "FAIL") and "0 replay bundles named in commit/verdict.json" in said[-1][2]
+
+
+def test_a_word_check_that_fails_stops_the_row_at_20_and_says_where(tmp_path):
+    said: list[tuple[Any, ...]] = []
+    marks: list[tuple[Any, ...]] = []
+    logged: list[str] = []
+    _put(tmp_path / "strict_word.log", "violations: 3\n")
+    row = SimpleNamespace(env=SimpleNamespace(environ={}), d=str(tmp_path), row="a-row", cli=lambda *a: list(a), run_tl=lambda *a: 0,
+                          verdict=lambda *a: said.append(a), log=logged.append, tl=lambda *a: marks.append(a))
+    RCFG.word_check(row)
+    assert said[-1][:2] == ("word-check", "PASS") and (logged, marks) == ([], [])
+    row.run_tl = lambda *a: 1
+    with pytest.raises(Stop) as stop:
+        RCFG.word_check(row)
+    assert stop.value.rc == 20 and said[-1][:2] == ("word-check", "FAIL") and said[-1][2].startswith("rc=1 ") and "violations: 3" in said[-1][2]
+    assert logged == ["strict word check FAIL -> stop"] and marks == [("row", "end", ("ok", "false"), ("stopped_at", "word_check"))]
+
+
+def test_discarding_the_replay_bundles_removes_a_link_and_leaves_what_it_points_at(tmp_path):
+    sealed, commit = tmp_path / "elsewhere" / "replay_bundle_p0", tmp_path / "commit"
+    _put(sealed / "bundle.json", {})
+    _put(commit / "replay_bundle_p1" / "bundle.json", {})
+    _put(commit / "summary.json", {})
+    (commit / "replay_bundle_p0").symlink_to(sealed)
+    logged: list[str] = []
+    row = SimpleNamespace(d=str(tmp_path), log=logged.append)
+    gone = RCFG.discard_bundles(row)
+    assert gone == [str(commit / "replay_bundle_p0"), str(commit / "replay_bundle_p1")] and logged == [f"replay bundles deleted: {gone}"]
+    assert [p.name for p in commit.iterdir()] == ["summary.json"] and (sealed / "bundle.json").is_file()
+    assert RCFG.discard_bundles(row) == [] and len(logged) == 1
+
+
+def test_a_rows_config_record_is_written_beside_it_with_its_tree_and_device_and_its_line_says_why_or_what_replayed(tmp_path, monkeypatch):
+    """The tree is the run's source commit, else the tree's own code id; the device is the target-family record beside the row.  A
+    record that states no reason gives the replay's counts and the run root (the record is a stand-in there)."""
+    said: list[tuple[Any, ...]] = []
+    row = SimpleNamespace(d=str(tmp_path), row="a-row-outside-the-tree", env=SimpleNamespace(environ={}), code9="abcdef123",
+                          verdict=lambda *a: said.append(a))
+    rec = RCFG.config_record(row)
+    assert (rec["outcome"], rec["tree"], rec["device"]) == ("FAIL", "abcdef123", None) and said == [("config", "FAIL", rec["why"])] and rec["why"]
+    assert json.loads((tmp_path / CR.NAME).read_text())["why"] == rec["why"]
+    row.env.environ["RESEARCH_SOURCE_SHA"] = "f" * 40
+    _put(tmp_path / "target_family.json", {"declared": [8, 9]})
+    rec = RCFG.config_record(row)
+    assert (rec["tree"], rec["device"]) == ("f" * 40, {"declared": [8, 9]})
+    passed = {"outcome": "PASS", "why": None, "replay": {"equal": 4, "evaluated": 4, "k": 4, "strata_by": "layer"}, "commit": {"run_root": "ab" * 32}}
+    monkeypatch.setattr(RCFG.CR, "write", lambda d, r, **kw: passed)
+    assert RCFG.config_record(row) is passed and said[-1] == ("config", "PASS", "replay 4/4 equal (k=4, layer strata), run root abababababababab")
+
+
+def test_the_device_of_a_derives_key_is_the_first_gpu_nvidia_smi_names_asked_once(monkeypatch):
+    asked: list[list[str]] = []
+
+    def smi(argv: list[str], **kw: Any) -> subprocess.CompletedProcess:
+        asked.append(argv)
+        return subprocess.CompletedProcess(argv, 0, stdout="NVIDIA L40S, 8.9\nNVIDIA L40S, 8.9\n")
+    monkeypatch.setattr(RCFG.subprocess, "run", smi)
+    row = SimpleNamespace(tgt="")
+    assert RCFG.device_id(row) == {"name": "NVIDIA L40S", "compute_cap": "8.9"} and RCFG.device_id(row) is row._device_id
+    assert len(asked) == 1 and asked[0][0] == "nvidia-smi"
+    for rc, out in ((1, "NVIDIA L40S, 8.9\n"), (0, ""), (0, "NVIDIA L40S\n")):
+        monkeypatch.setattr(RCFG.subprocess, "run", lambda argv, rc=rc, out=out, **kw: subprocess.CompletedProcess(argv, rc, stdout=out))
+        assert RCFG.device_id(SimpleNamespace(tgt="")) is None, (rc, out)
+
+
+def test_a_derive_whose_key_has_an_entry_in_the_program_cache_is_restored_and_one_that_ran_and_said_ok_is_published(tmp_path):
+    """The key leaves the derive's `--out` out, so the same derive into another directory is the entry's; a derive that did not say
+    ok is not published, and without a cache every derive runs."""
+    wl = _put(tmp_path / "workload.json", {})
+    ran: list[list[str]] = []
+    marks: list[tuple[Any, ...]] = []
+
+    def derive(ok: bool) -> Any:
+        def run_tl(st: str, to: int, lf: str, cmd: list[str], *extra: Any) -> int:
+            ran.append(cmd)
+            _put(Path(cmd[cmd.index("--out") + 1]) / "result.json", {"ok": ok})
+            return 0
+        return run_tl
+
+    def cached(name: str, lp: int = 8) -> int:
+        out = str(tmp_path / name)
+        return RCFG.derive_cached(row, "build.derive_step", 60, f"{out}.log", ["verity-vllm", "build", "--workload", wl, "--lp", str(lp), "--out", out], out)
+    row = SimpleNamespace(cb=SimpleNamespace(program_cache=str(tmp_path / "cache")), env=SimpleNamespace(environ={"RESEARCH_SOURCE_SHA": "c" * 40}),
+                          wl="workload.json", path=lambda p: str(tmp_path / p), tgt="l40s", row="a-row", run_tl=derive(True),
+                          tl=lambda *a: marks.append(a))
+    assert cached("first") == 0 and len(ran) == 1
+    key = marks[-1][3][1]
+    assert marks == [("build.derive_step", "mark", ("cache", "published"), ("key", key))] and len(key) == 16
+    assert cached("again") == 0 and len(ran) == 1 and marks[-1] == ("build.derive_step", "mark", ("cache", "hit"), ("key", key))
+    assert json.loads((tmp_path / "again" / "result.json").read_text()) == {"ok": True}
+    assert (tmp_path / "again.log").read_text().startswith(f"program cache hit {key}: {tmp_path / 'cache' / key}")
+    row.run_tl = derive(False)
+    assert cached("other", lp=4) == 0 and len(ran) == 2 and len(marks) == 2
+    row.cb.program_cache = ""
+    assert cached("plain") == 0 and len(ran) == 3 and len(marks) == 2
 
 
 def test_a_runs_end_and_a_rows_tp_world_read_a_status_and_a_row_file_without_their_optional_blocks(tmp_path, monkeypatch):

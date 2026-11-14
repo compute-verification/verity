@@ -240,7 +240,7 @@ def test_the_links_form_is_what_windows_proves():
 def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest_delta_form():
     """The per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 27, KO 64, τ_b 100 ms,
     32-bucket link-windows), its `requestBits`, `bucketBits`, `windowRequests` and `windowBits`
-    (`Properties.NetworkCertifier.PerServerIngress`, `draft:per-server-ingress`). A request's head leaves 988 bits free
+    (`draft:per-server-ingress`). A request's head leaves 988 bits free
     (the ordinal, content-length, `max_tokens` and `seed` at 32 each, `temperature` and `top_p` at 24, `model` and
     `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
     4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
@@ -301,17 +301,24 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
-    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits and the
-    lower bound's padded size ratio, which an unregistered share of 1% caps near 100, rises from 98.7 to 99.8, with the best
-    attack's at 249 and 250; at line rate both fall to remote's (2.99, at the card table's clock). The cadence feeds the
-    serving this package credits only if outputs outnumber prompts more than 20:1, so it isn't the default."""
-    reg = REG.override({"fleet.world-h200.eps_unreg": 0.01})
-    ref, w63 = evaluate_named(reg, "reference-onsite-h200"), evaluate_named(reg, "onsite-w63")
+    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
+    bound a lock states limits a block of either size, so the lower bound's padded size ratio is remote's at both
+    (2.99, at the card table's clock), with the best attack's at 249 and 250. With the draft bounds admitted
+    (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% caps near 100, and at line
+    rate both fall to remote's. The cadence feeds the serving this package credits only if outputs outnumber prompts
+    more than 20:1, so it isn't the default."""
+    def padded(reg, digits):
+        return [(round(r.families[0].combined.padded, digits), round(r.families[0].best_attack.padded))
+                for r in (evaluate_named(reg, n) for n in ("reference-onsite-h200", "onsite-w63"))]
+
+    locked = REG.override({"fleet.world-h200.eps_unreg": 0.01})
+    ref, w63 = evaluate_named(locked, "reference-onsite-h200"), evaluate_named(locked, "onsite-w63")
     inputs = [r.scenario.regime.budget(r.scenario.context).inputs for r in (ref, w63)]
     assert inputs == [pytest.approx(3.193e11, rel=1e-3), pytest.approx(4.803e10, rel=1e-3)]
     assert w63.scenario.regime.certifier.intake_of(w63.scenario.context) == pytest.approx(0.02819, rel=1e-3)
-    padded = [(round(r.families[0].combined.padded, 1), round(r.families[0].best_attack.padded)) for r in (ref, w63)]
-    assert padded == [(98.7, 249), (99.8, 250)]
+    assert padded(locked, 2) == [(2.99, 249), (2.99, 250)]
+    reg = locked.override({"bounds.lock_only": False})
+    assert padded(reg, 1) == [(98.7, 249), (99.8, 250)]
     line = reg.override({"regime.onsite.intake": REG.param("regime.onsite.intake").high,
                          "regime.onsite-w63.declared_x": REG.param("regime.onsite-w63.declared_x").high})
     at_line = [evaluate_named(line, n) for n in ("reference-onsite-h200", "onsite-w63")]
@@ -395,18 +402,39 @@ def test_every_uncertified_term_is_keyed_by_the_route_it_escapes_by():
 def test_pouws_delta_splits_into_coins_and_cryptography():
     """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
     theorem's `δ = p/ε'` (2.7e-8 at `ε' = 10⁻⁴` with the cryptography's two terms assumed at `δ_s` each, so
-    `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`."""
+    `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`. The windows' knowledge errors `Σ_t ks_t`
+    (`DampenerRemotePeriod`) add `⌈period / window_s⌉ window_ks` to the cryptography, remote only."""
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)
     window = float(WINDOW_DELTA)
     assert d.coin == pytest.approx(window / remote.pouw.eps_agg)
-    assert d.crypto == pytest.approx(2 * d.coin)
-    assert d.coin + d.crypto == pytest.approx(3 * window / 1e-4)
+    assert d.by["pouw"][1] == pytest.approx(2 * d.coin)
+    assert d.coin + d.by["pouw"][1] == pytest.approx(3 * window / 1e-4)
+    windows = math.ceil(ctx.period.seconds / 3600)
+    assert (remote.window_s, remote.window_ks, remote.windows(ctx)) == (3600, 2 * window, windows)
+    assert d.by["windows"] == (0.0, pytest.approx(windows * 2 * window))
+    assert d.crypto == pytest.approx(d.by["pouw"][1] + windows * 2 * window)
+    assert "windows" not in envelopes.regime(REG, "onsite").delta(ctx).by
     assert sampled.detection.p_evade == window
     assert sampled.delta(ctx).coin == pytest.approx(d.coin + sampled.detection.p_evade)
     assert (envelopes.regime(REG, "unmonitored").delta(ctx).coin, envelopes.regime(REG, "unmonitored").delta(ctx).crypto) \
         == (0.0, 0.0)
+
+
+def test_detection_refuses_an_escape_tail_above_p_evade_and_names_the_cure():
+    """`J (1 − q)^(K+1)` at `K = luck ln(1/p_evade)/q`, about `J p_evade^luck`: at the registry's luck 8 it is far
+    below `p_evade`; at luck 1 with 1,000 identities it is above it, and `delta` refuses, naming the luck that cures
+    it, `1 + ln J / ln(1/p_evade)`, which passes."""
+    ctx = context("reference-h200")
+    d = envelopes.regime(REG, "remote-sampled").detection
+    assert 0 < d.tail() < d.p_evade ** 7 and d.delta(ctx) == (d.p_evade, 0.0)
+    assert envelopes.regime(REG, "remote").detection.tail() == 0.0
+    bad = dataclasses.replace(d, luck=1.0, identities=1000.0)
+    cure = 1 + math.log(1000) / math.log(1 / d.p_evade)
+    with pytest.raises(ValueError, match=f"luck to at least {cure:.3g}"):
+        bad.delta(ctx)
+    assert dataclasses.replace(bad, luck=cure).delta(ctx) == (d.p_evade, 0.0)
 
 
 @pytest.mark.parametrize(("scenario", "per"), [("reference-onsite-h200", "hosts"),
