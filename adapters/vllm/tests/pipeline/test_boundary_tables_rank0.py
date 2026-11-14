@@ -15,7 +15,7 @@ from verity.commitments import history as HT
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline import boundary_tables as BT
 
-RUN, PROGRAM, CAP = "a" * 128, "cd" * 64, 16
+RUN, PROGRAM, LEAVES = "a" * 128, "cd" * 64, 16
 LAYER = "model.layers.3.self_attn.attn"
 
 
@@ -24,10 +24,8 @@ LAYER = "model.layers.3.self_attn.attn"
     (lambda: BT.key(RUN, -1, 8, 0), "a table's prompt is a natural number, not -1"),
     (lambda: BT.key(RUN, 4, True, 0), "a table's outputs is a natural number, not True"),
     (lambda: BT.key(RUN, 4, 8, 1.0), "a table's slot is a natural number, not 1.0"),
-    (lambda: BT.class_rows(0, 8), "a class's prompt cap is a positive integer, not 0"),
-    (lambda: BT.class_rows(4, 8.0), "a class's outputs cap is a positive integer, not 8.0"),
     (lambda: BT.class_rows(4, 8, 3), "a table's capacity is a power of two of at least 2, not 3"),
-    (lambda: BT.fill(np.zeros((5, 2), np.uint16), 2, 2, CAP),
+    (lambda: BT.fill(np.zeros((5, 2), np.uint16), 2, 2, LEAVES),
      "a span's rows are at most the 4 its class (2, 2) holds at capacity 16, not shape (5, 2)"),
 ])
 def test_a_key_a_class_and_a_fill_say_what_they_refuse(call, why):
@@ -35,7 +33,13 @@ def test_a_key_a_class_and_a_fill_say_what_they_refuse(call, why):
         call()
 
 
-def test_a_class_holds_its_cap_on_positions_from_two_rows_up_to_the_tables_capacity():
+@pytest.mark.parametrize("args, which, given", [((0, 8), "prompt", "0"), ((4, 8.0), "outputs", "8.0")])
+def test_a_class_names_which_of_its_two_lengths_is_no_positive_integer(args, which, given):
+    with pytest.raises(ValueError, match=rf"^a class's {which} \w+ is a positive integer, not {re.escape(given)}$"):
+        BT.class_rows(*args)
+
+
+def test_a_class_holds_its_prompts_and_its_outputs_positions_from_two_rows_up_to_the_tables_capacity():
     assert BT.class_rows(1, 1) == 2 and BT.class_rows(3, 2) == 5
     assert BT.class_rows(4, 8, 8) == 8 and BT.class_rows(BT.CAPACITY, 1) == BT.CAPACITY
 
@@ -124,14 +128,14 @@ def one_layer(positions: int) -> tuple[BT.Latents, dict[str, Any]]:
     a two-id prompt and two ids served: three positions."""
     lat = BT.Latents((3,))
     lat.add("a", 0, {3: np.full((positions, BT.WORDS), 7, np.uint16)})
-    return lat, BT.assignment(0, RUN, PROGRAM, 2, 2, [3], CAP, [("a", 2, 2, "stop")])
+    return lat, BT.assignment(0, RUN, PROGRAM, 2, 2, [3], LEAVES, [("a", 2, 2, "stop")])
 
 
 def test_the_builder_builds_a_class_whose_tables_are_at_one_layer():
     lat, doc = one_layer(3)
     out = BT.Builder(lat, HT.HistoryTable).build(doc)
     assert "error" not in out
-    assert [(e["value"], e["leaves"], e["words"]) for e in out["tables"]] == [(BT.name(RUN, 2, 2, 0, 3), CAP, BT.WORDS)]
+    assert [(e["value"], e["leaves"], e["words"]) for e in out["tables"]] == [(BT.name(RUN, 2, 2, 0, 3), LEAVES, BT.WORDS)]
 
 
 def test_a_class_the_builder_refuses_is_answered_with_the_reason_though_nothing_of_it_was_kept(tmp_path):

@@ -12,14 +12,14 @@ from verity.commitments import history as HT
 
 from verity_vllm.pipeline import boundary_tables as BT
 
-RUN, PROGRAM, CAP, WORDS = "a" * 128, "cd" * 64, 16, 4
+RUN, PROGRAM, LEAVES, WORDS = "a" * 128, "cd" * 64, 16, 4
 #: a kept table's window, run, class, slot and layer
 AT = (0, RUN, 4, 8, 1, 3)
 
 
 def kept(tmp_path: Path) -> tuple[BT.Kept, HT.HistoryTable]:
     """A table of three rows, kept at `AT` under ``tmp_path``/tables."""
-    t = HT.HistoryTable(PROGRAM, BT.name(*AT[1:]), WORDS, CAP)
+    t = HT.HistoryTable(PROGRAM, BT.name(*AT[1:]), WORDS, LEAVES)
     t.append(np.arange(3 * WORDS, dtype=np.uint16).reshape(3, WORDS))
     k = BT.Kept(tmp_path / "tables")
     k.write(*AT, PROGRAM, t)
@@ -68,7 +68,7 @@ def test_a_served_table_prints_neither_its_rows_nor_its_salts(tmp_path):
     k, t = kept(tmp_path)
     s, e = k.load(t.value), t.entry()
     assert s.rows.tolist() == np.stack(t.rows).tolist() and s.salts == b"".join(t.salts) and s.strings() == t.bcs
-    assert repr(s) == (f"Served(value={t.value!r}, program={PROGRAM!r}, root={e['root']!r}, leaves={CAP}, words={WORDS}, "
+    assert repr(s) == (f"Served(value={t.value!r}, program={PROGRAM!r}, root={e['root']!r}, leaves={LEAVES}, words={WORDS}, "
                        f"domain={e['domain']!r})")
 
 
