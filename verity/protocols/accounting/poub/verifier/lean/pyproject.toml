@@ -6,7 +6,6 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "tests/test_binding.py",
     "tests/test_drawn.py",
     "tests/test_line.py",
     "tests/test_p2.py",
@@ -19,9 +18,8 @@ untraced = [
     "tests/test_session.py",
     "tests/test_units.py",
 ]
-# The references: the audit, its codec, receipts and coins, the store binding, the memory line and its pooled bound, on
-# the commitments, the randomness and the profile; core's pin (models.json),
-# which the binding's test reads as a pin; the difftest's Python half; and what `lake` builds: this package and,
+# The references: the audit, its codec, receipts and coins, the memory line and its pooled bound, on the commitments,
+# the randomness and the profile; the difftest's Python half; and what `lake` builds: this package and,
 # through its path requires, Flock's verifier's Lean, core's randomness, the difftest server and the core protocol
 # interface (`RemoteAudit.Protocol`, which `test_protocol.py` holds to the period hook, `period.py`). The schedule check
 # (`schedule.py`) is a reference too.
@@ -30,10 +28,9 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/protocols/accounting/poub/verifier/audit.py", "verity/protocols/accounting/poub/verifier/codec.py",
           "verity/protocols/accounting/poub/verifier/wire.py",
           "verity/protocols/accounting/poub/verifier/coins.py", "verity/protocols/accounting/poub/verifier/receipts.py",
-          "verity/protocols/accounting/poub/verifier/store.py", "verity/protocols/accounting/poub/verifier/line.py",
+          "verity/protocols/accounting/poub/verifier/line.py",
           "verity/protocols/accounting/poub/verifier/pooled.py", "verity/protocols/accounting/poub/verifier/schedule.py",
           "verity/protocols/accounting/poub/verifier/period.py", "verity/protocols/interface",
-          "verity/protocols/accounting/pouw/verifier/lean/check/models.json",
           "verity/claims/__init__.py",
           "verity/protocols/proofs/spot/verifier/__init__.py", "verity/protocols/proofs/spot/device/challenger.py",
           "verity/protocols/proofs/spot/device/remote.py", "verity/circuits", "verity/commitments", "verity/commitments/crypto",

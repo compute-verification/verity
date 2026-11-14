@@ -10,7 +10,7 @@ live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
 `codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV pages it wrote and freed, the audit's
-input from serving), `store.py` (a registered store bound to a pinned model, §3), `timing.py` (the honest schedule,
+input from serving), `store.py` (the store a pinned checkpoint lays out and its payload salts, §3), `timing.py` (the honest schedule,
 and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 store, §11). Every byte format below is
 pinned by
 `tests/vectors.json`. This is a reference implementation: pure Python, with openings checked in the clear. The clear
@@ -226,21 +226,14 @@ carry `window_ns`.
    binds it, and each session's chain starts from it, so a session's coins and seeds are bound to its kind, to whether
    it binds \(z\), to the block cut its kernels' sketch vectors follow and to the sketch's rows.
 
-**A store bound to a pinned model** (`store.py`). The payload root is the prover's choice unless the verifier holds it
-to a store it can recompute. Under a binding (`verifier.py --model ROLE`), the verifier reads the model's pin, its files'
-SHA-512s and the SHA-512 of their canonical JSON (`read_pin`), and holds every pinned file to its digest before reading
-any (`check`). It then lays out the store the checkpoint alone fixes: \(E\) arenas of \(A\) blocks, one an engine at
-one GPU, each holding the checkpoint's 2-D BF16 weights in vLLM's module order, each from a block boundary, zeros
-between and after, and then host filler of zeros (`arena`, `Store`). Before step 1 the verifier sends a fresh 32-byte
-salt key, and the prover takes block \(j\)'s 192-byte payload salt as `XOF(m)[0 : 192]`, `m = "verity/store/salt/v1\0"
-‖ key ‖ SHA512("verity/remote-session/payload-salts/v0") ‖ u64be j` and `XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖
-u32be 1) ‖ …` (`store_salt`, `codec.xof`'s SHA-512 in counter mode), so the payload root follows from the pin, the
-store's shape and the key (`expected_root`). A hello is refused before the registry derives a seed when its store is shorter
-than the arenas, its layout isn't the store's regions, or its payload root isn't that root (`Binding.hold`). The
-verifier's record keeps the binding: the model's name and `checkpoint_sha512`, the salts' format (`salt`,
-`store.SALT_VERSION`), the store's shape, both roots and `bound`. A period's circuit is this tree's git hash, so the
-circuit a period signs commits to this code. The binding's decision is also Lean (`lean/RemoteAudit/Store.lean`), and
-reading the files is Python only (§8).
+**The store and its salts** (`store.py`). The payload root is the prover's choice: the verifier holds no checkpoint,
+and what the store holds is the developer's. The served node lays its store out from its own checkpoint (`node.py
+--model-dir`): \(E\) arenas of \(A\) blocks, one an engine at one GPU, each holding the checkpoint's 2-D BF16 weights
+in vLLM's module order, each from a block boundary, zeros between and after, and then host filler of zeros (`arena`,
+`Store`). Before step 1 the verifier sends a fresh 32-byte salt key, and the prover takes block \(j\)'s 192-byte payload
+salt as `XOF(m)[0 : 192]`, `m = "verity/store/salt/v1\0" ‖ key ‖ SHA512("verity/remote-session/payload-salts/v0") ‖
+u64be j` and `XOF(m) = SHA512(m ‖ u32be 0) ‖ SHA512(m ‖ u32be 1) ‖ …` (`store_salt`, `codec.xof`'s SHA-512 in counter
+mode).
 
 **The codec** is Sloth over \(p = 2^{1024} - 105\), with the mask \(\sigma_K\) between rounds, at \(k = 3\): `p1024/k3/masked`,
 `codec.DEFAULT`. The fallback is \(k = 2\) at the same width, `p1024/k2/masked` (`codec.FALLBACK`).
@@ -1399,16 +1392,6 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   on it (`auditor_line.py`'s `CONDITIONAL_ON`). `PooledSample` already reads the session the prover plays, with no
   hiding term; `LineHeld` still reads the prover's records through the commitment (`Committed.play`), and charges
   its hiding terms.
-- **The binding's Lean.** The store binding's decision (`store.py`, §3) is ported to `lean/RemoteAudit/Store.lean`
-  and held to the Python by a difftest (`lean/tests/test_binding.py`), refusals compared word for word: the pin from
-  its file's bytes (`pinOf`, `modelPin`), `checkpoint_sha512`, the payload salts, the expected payload root from the
-  weights blocks' digests (`expectedRoot`) and `Binding.hold`'s decision (`hold`). Reading the files stays Python only:
-  the pin's bytes, every pinned file's SHA-512 (`check`), the safetensors headers and config.json, the arena's layout
-  from them (`tensors`, `arena`) and the weights blocks' digests (`weight_digests`). The verifier's Lean process
-  decides `bound`: it takes the pin's bytes and role and the weights digests at startup (`bind`: `modelPin`, then the
-  store's shape) and decides each hello (`hold`), `Binding` beside it as the reference, a disagreement refusing the
-  hello as the registry's does; the gate line credits `bound` only where the Lean held the root. The Lean's root is
-  per subtree of 2^16 leaves, the subtrees on `--layout-workers` threads, as `expected_root`'s are over processes.
 
 ## 9. Why the passes are chained
 
