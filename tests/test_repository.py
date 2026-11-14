@@ -156,7 +156,7 @@ def split_dir(path: str) -> str | None:
 
 
 def markdown_cap(path: str) -> int:
-    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/verity/check/gates/markdown_caps.py`)
+    """The markdown file ``path``'s cap in bytes.  The merge queue's landing gate (`tools/check/gates/markdown_caps.py`)
     reads it and `markdown_over_cap` from this file at `main`, so keep both importable with the standard library alone."""
     if os.path.basename(path) == "SKILL.md":
         return OVERSIZE_SKILLS.get(path, SKILL_SIZE_CAP)
@@ -238,7 +238,7 @@ def _testpaths(tracked: list[str]) -> list[str]:
 
 
 def test_every_test_file_is_in_a_suite() -> None:
-    """`tools/verity/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
+    """`tools/check/suites.py` runs suites, so a test file outside every suite's testpaths would never run. A suite is a
     directory whose pyproject.toml configures pytest; give a new package one, or put the test in the package it tests. A module
     named as a test file that defines no test (the graph's `test-file` family's lister and runner) is none."""
     tracked = _tracked()

@@ -41,7 +41,7 @@ meta import Lean.Meta.Tactic.NormCast
 namespace Population.Exfil
 
 open Finset
-open Verity.Game (iid piLaw_toReal prodLaw prodLaw_toReal)
+open Verity.Game (iid piDistribution_toReal prodDistribution prodDistribution_toReal)
 
 /-! ## Detection pressure from the sample and the cone -/
 
@@ -65,7 +65,7 @@ theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (p : U �
   have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then (indepSample p c).toReal else 0) = ∏ u, f u (c u) := by
     intro c
     by_cases hc : ∀ u ∈ B, c u = false
-    · rw [ite_eq_left hc, indepSample, piLaw_toReal]
+    · rw [ite_eq_left hc, indepSample, piDistribution_toReal]
       refine prod_congr rfl fun u _ => ?_
       have : ¬ (u ∈ B ∧ c u = true) := fun ⟨hu, hcu⟩ => by simp [hc u hu] at hcu
       simp only [f, this, ite_false]
@@ -188,9 +188,9 @@ theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω
     (hP : ∀ w, DetectionPressure μ κ (A w)) (hL : ∀ w, LeakBounded ℓ (A w)) (S : W → T)
     (hon : Dev Slot V × Y → W × (Fin n → Ω) → Slot → V) (dv : W × (Fin n → Ω) → Dev Slot V)
     (side : W × (Fin n → Ω) → Y) (hdv : ∀ w cs, ((dv (w, cs)).1.card : ℝ) ≤ (A w).cum n [] cs + Δ)
-    (hT : ∀ d, TrustedModel (prodLaw ρ (iid μ n)) (fun z => S z.1) (hon d) g)
+    (hT : ∀ d, TrustedModel (prodDistribution ρ (iid μ n)) (fun z => S z.1) (hon d) g)
     (dec : (Slot → V) × Y → T) :
-    Verity.Game.prPMFReal (prodLaw ρ (iid μ n))
+    Verity.Game.prPMFReal (prodDistribution ρ (iid μ n))
         (fun z => dec ((dv z).apply (hon (dv z, side z) z), side z) = S z.1) ≤
       Real.exp (-(κ * (K - Δ - ℓ))) +
         (∑ j ∈ range (K + 1), (Fintype.card Slot).choose j) * Fintype.card V ^ K * Fintype.card Y * g := by
@@ -198,14 +198,14 @@ theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω
   let 𝓓 : Finset (Dev Slot V × Y) := devBall Slot V K ×ˢ univ
   have hmem : ∀ z, (dv z, side z) ∈ 𝓓 ↔ (dv z).1.card ≤ K := fun z => by
     simp [𝓓, devBall, mem_product, mem_sigma, mem_filter]
-  have key := guess_le (prodLaw ρ (iid μ n)) (fun z => S z.1) 𝓓 hon (fun d e => (d.1.apply e, d.2))
+  have key := guess_le (prodDistribution ρ (iid μ n)) (fun z => S z.1) 𝓓 hon (fun d e => (d.1.apply e, d.2))
     (fun z => (dv z, side z)) (fun d _ => hT d) dec
   have hcard : (𝓓.card : ℝ) ≤
       (∑ j ∈ range (K + 1), (Fintype.card Slot).choose j) * Fintype.card V ^ K * Fintype.card Y := by
     rw [card_product, card_univ]
     exact_mod_cast Nat.mul_le_mul_right _ (card_devBall_le Slot V K)
   refine key.trans (add_le_add ?_ (mul_le_mul_of_nonneg_right hcard hg))
-  calc _ ≤ Verity.Game.prPMFReal (prodLaw ρ (iid μ n)) (fun z => (K : ℝ) - Δ ≤ (A z.1).cum n [] z.2) := by
+  calc _ ≤ Verity.Game.prPMFReal (prodDistribution ρ (iid μ n)) (fun z => (K : ℝ) - Δ ≤ (A z.1).cum n [] z.2) := by
         refine Verity.Game.prPMFReal_mono _ fun z hz => ?_
         have hK : (K : ℝ) < (dv z).1.card := by exact_mod_cast not_le.1 fun h => hz ((hmem z).2 h)
         have := hdv z.1 z.2
@@ -215,7 +215,7 @@ theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω
         refine sum_congr rfl fun w _ => ?_
         rw [prob_eq_ex, ex, mul_sum]
         refine sum_congr rfl fun cs _ => ?_
-        have hpr := prodLaw_toReal ρ (iid μ n) w cs
+        have hpr := prodDistribution_toReal ρ (iid μ n) w cs
         by_cases hc : (K : ℝ) - Δ ≤ (A w).cum n [] cs <;> simp [hc, hpr]
     _ ≤ ∑ w, (ρ w).toReal * Real.exp (-(κ * ((K : ℝ) - Δ - ℓ))) :=
         sum_le_sum fun w _ => mul_le_mul_of_nonneg_left (tail_cum hκ (hP w) (hL w) n [] ((K : ℝ) - Δ))
@@ -254,9 +254,9 @@ theorem exfiltration_bound_runs {Ω W T O V Y : Type} [Fintype Ω] [DecidableEq 
     (dv : W × (Fin n → Ω) → Dev (Fin n × O) V) (side : W × (Fin n → Ω) → Y)
     (lag : W × (Fin n → Ω) → Finset (Fin n × O)) (hlag : ∀ z, (lag z).card ≤ Δ)
     (hdv : ∀ w cs, (dv (w, cs)).1 ⊆ changedThrough (A w) (chg w) n [] cs ∪ lag (w, cs))
-    (hT : ∀ d, TrustedModel (prodLaw ρ (iid μ n)) (fun z => S z.1) (hon d) g)
+    (hT : ∀ d, TrustedModel (prodDistribution ρ (iid μ n)) (fun z => S z.1) (hon d) g)
     (dec : (Fin n × O → V) × Y → T) :
-    Verity.Game.prPMFReal (prodLaw ρ (iid μ n))
+    Verity.Game.prPMFReal (prodDistribution ρ (iid μ n))
         (fun z => dec ((dv z).apply (hon (dv z, side z) z), side z) = S z.1) ≤
       Real.exp (-(κ * (K - Δ - ℓ))) +
         (∑ j ∈ range (K + 1), (n * Fintype.card O).choose j) * Fintype.card V ^ K * Fintype.card Y * g := by

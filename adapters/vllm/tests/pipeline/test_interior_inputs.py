@@ -19,8 +19,8 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
-from verity.commitments.windows import links as LK
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import links as LK
+from verity.commitments.periods import rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P

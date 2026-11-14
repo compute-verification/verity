@@ -73,9 +73,11 @@ def verdict(resp: bytes) -> dict:
 
 
 class Auditor:
-    """A scripted auditor: each connection's frames, `Register` answered with a sample of none, anything else `Ok`."""
+    """A scripted auditor: each connection's frames, `Register` answered with a sample of none and then `known` (the
+    verifier's list of the statement's known trees; by default no byte), anything else `Ok`."""
 
-    def __init__(self):
+    def __init__(self, known: bytes = b""):
+        self.known = known
         self.got: list[list[bytes]] = []
         self.srv = socket.socket()
         self.srv.bind(("127.0.0.1", 0))
@@ -93,7 +95,7 @@ class Auditor:
     def _conn(self, c, mine):
         while (f := _read(c)) is not None:
             mine.append(f)
-            c.sendall(_bytes(b"\x06" + _bytes(b"null") if f[:1] == REGISTER else OK))
+            c.sendall(_bytes(b"\x06" + _bytes(b"null") + self.known if f[:1] == REGISTER else OK))
         c.close()
 
 

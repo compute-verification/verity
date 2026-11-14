@@ -173,8 +173,8 @@ theorem filesR_tied {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as as'
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
     (hne : filesAt (tabsOf sts) (pointsOf spec c₁) f.ps ≠ filesAt (tabsOf sts) (pointsOf spec c₁) f'.ps) :
     Claims.TiedColl sha512 (((nextR rd x as cs).eval sha512).2 ++ ((nextR rd x as' cs').eval sha512).2) := by
-  obtain ⟨-, hck, hsu, -, -⟩ := Claims.Bridge.PlainDraw.decideR_sha512 ha hacc
-  obtain ⟨-, hck', -, -, -⟩ := Claims.Bridge.PlainDraw.decideR_sha512 ha' hacc'
+  obtain ⟨-, hck, hsu, -, -⟩ := Claims.Bridge.PlainSample.decideR_sha512 ha hacc
+  obtain ⟨-, hck', -, -, -⟩ := Claims.Bridge.PlainSample.decideR_sha512 ha' hacc'
   exact filesJ_tied (verdictR_within (decideR_runs ha hacc)) (verdictR_within (decideR_runs ha' hacc')) hck hck'
     hsu hne
 
@@ -246,8 +246,8 @@ theorem colsR_of_files {rd : Claims.Msg → Option FinalP} {x : Claims.Msg} {as 
     (hacc : ((nextR rd x as cs).eval sha512).1 = .acc) (hacc' : ((nextR rd x as' cs').eval sha512).1 = .acc)
     (hF : filesAt (tabsOf sts) (pointsOf spec c₁) f.ps = filesAt (tabsOf sts) (pointsOf spec c₁) f'.ps) :
     colsR rd x as cs = colsR rd x as' cs' := by
-  obtain ⟨hv, hck, -, -, -⟩ := Claims.Bridge.PlainDraw.decideR_sha512 ha hacc
-  obtain ⟨hv', hck', -, -, -⟩ := Claims.Bridge.PlainDraw.decideR_sha512 ha' hacc'
+  obtain ⟨hv, hck, -, -, -⟩ := Claims.Bridge.PlainSample.decideR_sha512 ha hacc
+  obtain ⟨hv', hck', -, -, -⟩ := Claims.Bridge.PlainSample.decideR_sha512 ha' hacc'
   obtain ⟨-, lv, hlv, hcu⟩ := Claims.Bridge.Custody.checksAtJ_ok hck
   obtain ⟨-, lv', hlv', hcu'⟩ := Claims.Bridge.Custody.checksAtJ_ok hck'
   have hP : lv'.points = lv.points := by

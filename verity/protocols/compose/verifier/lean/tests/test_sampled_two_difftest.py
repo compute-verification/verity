@@ -214,3 +214,54 @@ def test_the_form_refuses_the_honest_play_on_one_window(tmp_path) -> None:
     on = subprocess.run([str(D.build(PORT.package, "sampled-two-on")), "check", *files],
                         capture_output=True, text=True, check=False)
     assert on.returncode == 1 and ONE_WINDOW in on.stdout, (on.stdout + on.stderr)[-4000:]
+
+
+def _evidence(d: Path) -> dict:
+    """The kept honest play's evidence, with its second-stage statements fetched."""
+    assert (d / "evidence.json").is_file(), (
+        f"{d} is not fetched: `uv run research data fetch-fixtures "
+        "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
+    return json.loads((d / "evidence.json").read_text())
+
+
+def _refuses(tmp_path: Path, d: Path, evidence: dict, reason: str) -> None:
+    """`sampled-two-on check` on the kept play with its evidence replaced by `evidence` refuses, by `reason`."""
+    evf = tmp_path / "evidence.json"
+    evf.write_text(canonical(evidence))
+    files = [str(d / "params.json"), str(d / "commitment.json"), str(evf)]
+    files += [str(b) for b in sorted((d / "blobs").iterdir())]
+    on = subprocess.run([str(D.build(PORT.package, "sampled-two-on")), "check", *files],
+                        capture_output=True, text=True, check=False)
+    assert on.returncode == 1 and reason in on.stdout, (on.stdout + on.stderr)[-4000:]
+
+
+@pytest.mark.slow
+def test_the_form_refuses_a_session_count_mismatch(tmp_path) -> None:
+    """The form reads one statement a session: the kept honest play (`CASE`) with one second-stage statement dropped —
+    so the statements are fewer than the sessions — is refused by `sampled-two-on` by `STMT_COUNT`, the reason the
+    twin's reference gives. The counts agree only at the honest play, which the accept test passes; no refusal case
+    above reaches this check, whose play's interior names no members."""
+    d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
+    ev = _evidence(d)
+    own = ev["statements"]
+    assert len(own) >= 1, ev
+    short = own[:-1]
+    reason = T.stmts_sessions(own, short)
+    assert reason == T.STMT_COUNT
+    _refuses(tmp_path, d, {**ev, "statements": short}, reason)
+
+
+@pytest.mark.slow
+def test_the_form_refuses_a_statement_that_is_not_its_session_s(tmp_path) -> None:
+    """The form reads each statement as its session's: the kept honest play (`CASE`) with its first second-stage
+    statement replaced by another — so the statement at a position is not the one its session makes — is refused by
+    `sampled-two-on` by `STMT_SESSION 0`, the reason the twin's reference gives."""
+    d = Path(VERITY_SETTINGS.VERITY_SAMPLED_TWO_CASE or CASE)
+    ev = _evidence(d)
+    own = ev["statements"]
+    assert len(own) >= 1, ev
+    swapped = [{"template": "not-the-session-s"}, *own[1:]]
+    assert canonical(swapped[0]) != canonical(own[0])
+    reason = T.stmts_sessions(own, swapped)
+    assert reason == T.STMT_SESSION(0)
+    _refuses(tmp_path, d, {**ev, "statements": swapped}, reason)

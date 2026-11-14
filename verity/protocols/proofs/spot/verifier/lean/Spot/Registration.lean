@@ -4,7 +4,7 @@ digest, and R1–R8 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
      "program": "<SHA-512 of the program>", "query": "<SHA-512 of the query>", "partition": "<partition digest>",
-     "population": <units the query derives>, "law": <the law, expanded>, "scheme": "<leaf and tree scheme>",
+     "population": <units the query derives>, "law": <the sampling design, expanded>, "scheme": "<leaf and tree scheme>",
      "roots": [{"port", "root", "leaves", "domain"}, ...], "leaf_layer": "<SHA-512 of the verifier's public file>" | null,
      "anchors": [], "window": {"kind": "served" | "stand-in", ...provenance}, "previous": null | "<digest>"}
 
@@ -85,6 +85,12 @@ windows, the one serving reset at or none, log₂(n + 1) bits a week (log₂ 100
 which leakage charges; the spent marks and weeks are a function of the resets and the verifier's clock. The caller
 refuses a record whose entry for `pin` is not the pool its window opens (`poolOpen`) by name (`R7-pool-chain`).
 
+A verifier may give its verdict log (`verdicts`, the pool's form: each record digest it ran, with whether that run
+accepted). The caller then refuses a record with an output value that reads a port of a record the log names refused
+(`portsAccepted`, `R7-output-refused`): no start is carried past a window the verifier refused, a window's history
+included. A record it holds no verdict for is not refused, as for the pool. A registered value an output value reuses
+(`Earlier.value`, the pool's `pin` among them) is not held to it: the pool restarts by its own lag (`Pool.refused`).
+
 Under a template query that applies, R8 refuses a run Input node whose leaves the proof blocks don't each read alone,
 unless it is a parameter's the verifier expects registered (`heldGates`), which is a registered value, or a tied value's
 (`tiedGates`) (`Partition.readAlone`, `R8-shared-input`): a value another proof block writes that the program takes as an
@@ -164,14 +170,18 @@ structure Pool where
   week : Nat
   deriving Inhabited
 
+/-- **Whether the verdict log `verdicts` names the verifier's run on the record with digest `d` refused**
+(`registration.refused`). A record it holds no verdict for is not refused. -/
+def refusedIn (verdicts : Array (String × Bool)) (d : String) : Bool := verdicts.any fun (r, a) => r == d && !a
+
 /-- **Whether the verifier refused the window `lag` windows of record before this one** (`registration.pool_refused`):
-its verdict log names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
-verdict for, is not refused, so where every run accepted the chain never restarts. -/
+its verdict log names its run on that record of the log refused (`refusedIn`). A log shorter than the lag, or a record
+it holds no verdict for, is not refused, so where every run accepted the chain never restarts. -/
 def Pool.refused (p : Pool) (log : Array Json) : Bool :=
   if p.lag ≤ log.size then
     match log[log.size - p.lag]? with
     | some e => match digestHex e with
-      | .ok d => p.verdicts.any fun (r, a) => r == d && !a
+      | .ok d => refusedIn p.verdicts d
       | .error _ => false
     | none => false
   else false
@@ -189,8 +199,8 @@ def Pool.spentBefore (p : Pool) (log : Array Json) : Bool :=
 structure Verifier where
   program : Program
   query : Json
-  /-- the agreed law: a rule, which `Draw.derive` expands -/
-  law : Json
+  /-- the agreed sampling design: a rule, which `Draw.derive` expands -/
+  samplingDesign : Json
   workTable : Option Json
   scheme : String
   /-- each port its layout derives, with its `{"leaves", "domain"}`, and, for a port whose rows are the leaves of another
@@ -233,6 +243,9 @@ structure Verifier where
   once a week; none for a
   program that carries none -/
   pool : Option Pool := none
+  /-- its verdict log, the pool's form: each record digest it ran, with whether that run accepted, which R7 holds an
+  output value's earlier port to (`portsAccepted`); empty when it gives none -/
+  verdicts : Array (String × Bool) := #[]
   /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
   through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
   tied : Array String := #[]
@@ -508,6 +521,14 @@ def certifiedHeld (rec : Json) (v : Verifier) : Bool :=
     | some e => jeq (getD e "root") (Json.str x.2)
     | none => false
 
+/-- The verdicts the caller's check holds (`VStar.Recursive.Caller.check`, `caller._ports_refused`), not `check`: no
+output value reads a port of a record the verifier's verdict log names refused (`refusedIn`); `R7-output-refused`
+otherwise. An output value that reuses a registered value is not held to it. -/
+def portsAccepted (v : Verifier) : Bool :=
+  v.outputs.all fun (_, d, e) => match e with
+    | .port _ => !refusedIn v.verdicts d
+    | .value _ => true
+
 /-- R3's index of the record's roots, each root's port canonicalized once: the last root naming each canonical port, and
 how many distinct ports the roots name, a port with no canonical form counting as one of its own (`jeq` equals it to
 nothing). -/
@@ -540,7 +561,7 @@ it ends, or some member's fewest and most sampled proof blocks under it, over th
 or its fewest is none, a sample that ends missing it (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
-    match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
+    match LinkPoints.samplingDesignOf v.program v.query v.samplingDesign v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with
     | .ok rs => !rs.isEmpty
     | .error _ => true
 
@@ -590,9 +611,9 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.law v.workTable with
+  match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2
@@ -658,9 +679,9 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   -- R1
   if !(jeq (get "format") (if v2 then FORMAT_V2 else FORMAT) && jeq (get "protocol") PROTOCOL) then
     c := addCode c "R1-protocol"
-  match Draw.derive v.program v.query v.law v.workTable with
+  match Draw.derive v.program v.query v.samplingDesign v.workTable with
   | .error _ => c := addCode c "R1-law"
-  | .ok mine => if !Draw.sameLaw (get "law") mine then c := addCode c "R1-law"
+  | .ok mine => if !Draw.sameSamplingDesign (get "law") mine then c := addCode c "R1-law"
   let w := get "window"
   if !(w matches .obj _) || !KINDS.any (jeq (getD w "kind") ·) then c := addCode c "window"
   -- R2

@@ -22,6 +22,15 @@ writer one step before its reader, as the decode's state is wired today. One uni
 the unit that decides the length reads every id, and each id comes from a select the bit switches, so it would be read
 by units it reads, a cycle the wire check's order refuses (circuits, PRF-618, 11:09 AM PST).
 
+**The count** runs beside the bit by the same rule (proofs, PRF-618, 11:26 AM PST): the ids written so far, committed,
+wired step to step by an ordinary wire, the first a constant inside `first_select` (1), never a boundary row. One
+template serves every decode step, so no static holds a step's index, and a select compares the limits only with the
+count the step before hands it. Its width is fixed by the class's O: an unsigned value of log2(O) + 1 bits, holding 0
+to O, with O a static of each select and of the check. The select refuses to count past O: it never wraps (below).
+Past the stop it holds still: a step off writes the count it read, not count + 1, so the steps past the stop are alike.
+The length check's n is tied to the last step's count: `class_check` reads that count and holds the rule's n equal to
+it, so the count the selects carried and the n the rule gives cannot be two numbers.
+
 **The limits** reach every step's select and the length check from one committed source, so the bit and the check
 cannot be given two different limits: the class's `b.request` row, its first four fields (`boundary_rows.FIELDS`: the
 prompt's length ``lp``, ``max_tokens``, ``min_tokens``, ``ignore_eos``), 8 sixteen-bit leaves from leaf 0, which each
@@ -33,7 +42,7 @@ zeros and writes zeros, and the first step off reads live rows, ignores them and
 its writer. A masked Definition is a new version with its own id, so its hash and its Lean verdict are its own; a class
 that always serves O ids keeps the unmasked ones. The prefill is not masked.
 
-**The length check** (`class_check`) keeps one bit and reads the last step's bit with the ids. Past n the selects are
+**The length check** (`class_check`) keeps one bit and reads the last step's bit and count with the ids. Past n the selects are
 off and the ids they write are zeros, so the served-ids boundary read of the combines' ``o0``
 (`node_window_reads.served_reads`) equals the `b.egress` row (`boundary_rows.egress_row` under a stop rule: the n ids,
 then O - n zeros, low word first) at every n, and the check needs no second output.
@@ -42,17 +51,19 @@ then O - n zeros, low word first) at every n, and the check needs no second outp
 a reader template of ``radix [steps, units]`` whose writer steps by one unit a step. Each rank holds its own select, so
 the bit a rank's units read is its own rank's, and `node_window_join.join` keeps it among that rank's own wires.
 
+**Refused until proofs rules on them** (proofs', PRF-618, 11:26 AM PST, after Sun 15 Nov): a request the rule does not
+end within O, a ``min_tokens`` other than 0, a span with no stop, and a prompt shorter than P. The interface refuses
+each: the first, second and fourth by the check's bit, 0 where the rule's finish is 0, where ``min_tokens`` is not 0
+and where ``lp`` is not P (`class_check`); a span with no stop has no stop class (`pipeline.boundary_stop`), so no
+class Program is built for it (`class_request`).
+
 **What is NOT decided here**, each named where it is met below:
 
-- the form of the count a select compares with the limits, since one template serves every decode step and so holds no
-  step's index as a static (`live_select` states one: the ids written so far, carried beside the bit);
-- a prompt shorter than P: which row the prefill samples, the decode steps' positions and the keys past the prompt
-  (`class_request`);
+- how a prompt shorter than P would be served, once proofs rules on it: which row the prefill samples, the decode
+  steps' positions and the keys past the prompt (`class_request`);
 - class G's launch context, which its kernels read and which is a request's own, not its class's (`class_request`);
 - whether a masked Definition is its family's next version or one registered combinator over any Definition
   (`masked`);
-- what the length check's bit asserts for a request the rule does not end within O (finish 0), and for a span the rule
-  does not read (an abort, an error, one still running): PRF-618's questions of 10:58 AM PST (`class_check`);
 - what the serve commits past the stop (vllm's) and the sampling design's weight on the steps past it (proofs'),
   which CIR-290 leaves out.
 """
@@ -61,7 +72,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .node_window import _GRAIN, NAME, Lowering, NodeWindow
 from .window_builder import Grain
@@ -106,9 +117,14 @@ def class_request(registered: Registered, P: int, O: int, policy: Mapping[str, A
     ``policy``: the sampling policy, greedy (`window_class.GREEDY`) and None alike; a stochastic one is refused, since
     the selects are the greedy select's. ``named``: its trace's names, as `steps.request_program` gives them.
 
-    NOT decided: a prompt shorter than P. Its sample is at row lp - 1, its decode step s at position lp + s, and its
-    decode keys past lp are the prompt's zero rows: each is a value's choice, which the Program at P must make in the
-    circuit (a select on lp), or else the class holds only prompts of exactly P ids. Nor class G's launch context
+    Refused (until proofs rules): a span with no stop class (`pipeline.boundary_stop`: an abort, an error, one still
+    running, a ``min_tokens`` other than 0), for which no class Program is built; and, by the check's bit, a prompt
+    shorter than P.
+
+    NOT decided: how a prompt shorter than P would be served. Its sample is at row lp - 1, its decode step s at
+    position lp + s, and its decode keys past lp are the prompt's zero rows: each is a value's choice, which the
+    Program at P must make in the circuit (a select on lp); until then the class holds only prompts of exactly P ids.
+    Nor class G's launch context
     (`steps.RequestUnit.launch`), which its kernels read and which is the request's batch, not its class's: a batched
     target's class Program needs the launch fixed by the class or read as a value."""
     raise NotImplementedError(TODO)
@@ -121,32 +137,40 @@ def masked(fn: SpecializedDefinition) -> SpecializedDefinition:
     own id, at ``fn``'s statics, so its hash and its Lean verdict are its own, and ``fn`` stays for a class that always
     serves O ids. A step's units read its bit by wire (`class_window`).
 
+    A unit whose outputs include a verdict a registration holds (a table read's ``o1``, `interface.TableOpening`) is
+    not masked whole: its opening reads the table's row at the step's key (0 past the stop), and its verdict must hold
+    there too.
+
     NOT decided: whether each family's masked Definition is that family's next version in the catalog
     (`verity/definitions/registry`, with its circuit-check sidecar), or one combinator registered once over any
-    Definition, whose property check covers every family; nor how a template whose rows are near
-    `interface.MAX_ROWS` takes the bit's row (CIR-290's plan counts them)."""
+    Definition, whose property check covers every family; whether a unit whose Definition maps rows of zeros to rows
+    of zeros, word for word, and that reads nothing from outside its step but weights keeps its unmasked version
+    (CIR-290's plan counts both); and how a template whose rows are near `interface.MAX_ROWS` takes the bit's row."""
     raise NotImplementedError(TODO)
 
 
 def first_select(V: int, N: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
     """The prefill's select, the first step's: `live_select` at a step whose bit is 1, a constant its Definition holds,
-    and whose ids written before are 0, so it has neither a ``live`` nor a ``count`` parameter:
+    and whose ids written before are 0, so it has neither a ``live`` nor a ``count`` parameter. Its statics are
+    `live_select`'s, the class's O among them (this function takes O when it is built):
 
         (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, request: Array<4, i32>)
-            -> (o0: Array<2, Value<16>>, o1: bit, o2: i32)
+            -> (o0: Array<2, Value<16>>, o1: bit, o2: Value<log2(O) + 1>)
 
     ``o0`` the token, ``o1`` the next step's bit (the token is none of the stop ids and the limit is not reached at one
-    id), ``o2`` = 1. A template of its own, one unit a request, beside `live_select`'s template of the O - 1 later
-    steps. Its chunks are `greedy_stages.GreedyChunk_v2` unmasked, the prefill's."""
+    id), ``o2`` = 1, the count's first value, a constant of the Definition. A template of its own, one unit a request,
+    beside `live_select`'s template of the O - 1 later steps. Its chunks are `greedy_stages.GreedyChunk_v2` unmasked,
+    the prefill's."""
     raise NotImplementedError(TODO)
 
 
 def live_select(V: int, N: int, stops: Sequence[int], max_model_len: int) -> SpecializedDefinition:
-    """`GreedyCombine_v3{V, N, STOP, MAX_MODEL_LEN}`, a decode step's select: `greedy_stages.GreedyCombine_v2{V, N}`'s
-    token over its logits and its chunks' results, taking its step's bit and writing the next step's:
+    """`GreedyCombine_v3{V, N, O, STOP, MAX_MODEL_LEN}`, a decode step's select: `greedy_stages.GreedyCombine_v2{V, N}`'s
+    token over its logits and its chunks' results, taking its step's bit and count and writing the next step's. O, the
+    class's, fixes the count's width (this function takes O when it is built):
 
-        (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, request: Array<4, i32>, count: i32, live: bit)
-            -> (o0: Array<2, Value<16>>, o1: bit, o2: i32)
+        (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, request: Array<4, i32>, count: Value<log2(O) + 1>,
+         live: bit) -> (o0: Array<2, Value<16>>, o1: bit, o2: Value<log2(O) + 1>)
 
     ``request`` is `b.request`'s first four fields (`LIMITS`), the ones the length check reads; ``count`` the ids
     written before this step (the step before's ``o2``); ``live`` this step's bit (the step before's ``o1``).
@@ -156,16 +180,15 @@ def live_select(V: int, N: int, stops: Sequence[int], max_model_len: int) -> Spe
     - ``o1``: ``live`` AND the token is none of STOP (none where ``ignore_eos`` is not 0, as
       `boundary_stop.egress_stop` reads it) AND the length limit is not reached at count + 1 ids as
       `stop_rule.StopRule_v1` reads it (below ``max_tokens`` and below MAX_MODEL_LEN - ``lp``, at the rule's edges as
-      it reads them). Once off, off: a step off writes 0 whatever it reads.
-    - ``o2``: count + 1.
+      it reads them), AND ``count`` + 1 is below O. Once off, off: a step off writes 0 whatever it reads.
+    - ``o2``: ``count`` + 1 where ``live`` is 1, ``count`` where it is 0: past the stop the count holds still. It never
+      counts past O: a live step reading a count of O (which no window of O selects reaches, step s reading at most s)
+      writes the bit 0 and holds O, so the count never wraps.
 
-    Its chunks are `masked` `GreedyChunk_v2`s on the same bit. Over logits that are all zero (a step whose LM head is
-    off) the token is 0 (the lowest index of the largest logit), so the check's recomputed token agrees on a step past
-    the stop too.
-
-    NOT decided: ``count``, which is this interface's and not CIR-290's. One template serves every decode step, so no
-    static holds the step's index, and the select can compare the limits only with a value the step before hands it;
-    the other form is one template a step, the index a static, which multiplies the select's templates by O."""
+    The count is proofs' agreed form (PRF-618, 11:26 AM PST), the same rule as the bit: committed, wired step to step,
+    the first a constant (`first_select`'s ``o2``). Its chunks are `masked` `GreedyChunk_v2`s on the same bit. Over
+    logits that are all zero (a step whose LM head is off) the token is 0 (the lowest index of the largest logit), so
+    the check's recomputed token agrees on a step past the stop too."""
     raise NotImplementedError(TODO)
 
 
@@ -173,24 +196,28 @@ def class_check(V: int, N: int, O: int, stops: Sequence[int], max_model_len: int
     """`GreedyStopCheck_v2{V, N, T, STOP, MAX_MODEL_LEN}` at T = ``O``, the next version of
     `greedy_stop.GreedyStopCheck_v1`, one bit:
 
-        (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, ids: Array<T, i32>, request: Array<4, i32>, live: bit)
-            -> bit
+        (logits: bf16[N], r0: Array<3, Value<16>>, .., r{K-2}, ids: Array<T, i32>, request: Array<4, i32>,
+         count: Value<log2(T) + 1>, live: bit) -> bit
 
-    ``request`` is `b.request`'s first four fields (`LIMITS`), the ones every select reads; ``live`` the last step's
-    next bit (`live_select`'s ``o1``). It is 1 exactly when `frontend.stop_rule.StopClass_v1{T, STOP, MAX_MODEL_LEN}`
-    over ``ids`` and the limits (no stop id where ``ignore_eos`` is not 0) gives (n, finish) with finish not 0, the ids
-    from n on are 0, ``live`` is 0, and ``ids[T - 1]`` is `GreedyCombine_v2{V, N}`'s token over the logits and results,
-    as v1 holds its last id. The ids come a row each from the steps' ``o0``; the logits row is what makes the unit a
+    ``request`` is `b.request`'s first four fields (`LIMITS`), the ones every select reads; ``count`` and ``live`` the
+    last step's next count and bit (`live_select`'s ``o2`` and ``o1``). It is 1 exactly when
+    `frontend.stop_rule.StopClass_v1{T, STOP, MAX_MODEL_LEN}` over ``ids`` and the limits (no stop id where
+    ``ignore_eos`` is not 0) gives (n, finish) with finish not 0 and n equal to ``count``, ``min_tokens`` is 0, ``lp``
+    is P, the ids from n on are 0, ``live`` is 0, and ``ids[T - 1]`` is `GreedyCombine_v2{V, N}`'s token over the
+    logits and results, as v1 holds its last id. Holding n equal to ``count`` ties the rule's n to the count the
+    selects carried, so they cannot be two numbers (proofs, PRF-618, 11:26 AM PST). P is a static of the check (the
+    class's), beside T. The ids come a row each from the steps' ``o0``; the logits row is what makes the unit a
     proof block (`interface.check_proof_block`), as in v1. It calls `StopClass_v1` (written, unregistered: its
     registration comes with this check), `GreedyCombine_v2` and the scalar ops v1 calls.
 
-    Its ids a row each, it has T + K + 2 rows and more, so near T = 240 it passes `interface.MAX_ROWS` (256): a larger
-    class reads its ids gathered first (`node_window.GATHER_ROWS`).
+    Its ids a row each, it has T + k + K + 3 rows: k its logits port's (cut as the combine's, 64 at GLM-5.3's select
+    at TP8) and K - 1 results. At GLM-5.3 it passes `interface.MAX_ROWS` (256) past T = 169, so its O = 128 class fits
+    and an O of 256 or more reads its ids gathered first (`node_window.GATHER_ROWS`).
 
-    NOT decided (PRF-618, 10:58 AM PST, proofs' to say): what the bit asserts for a request the rule does not end
-    within O (finish 0, ``live`` 1 after the last step), for a ``min_tokens`` other than 0, which the rule doesn't read
-    (`boundary_stop` files such a span with no stop class), and for a span the rule does not read (an abort, an error,
-    one still running), which has no rule n."""
+    Refused until proofs rules on them (PRF-618, 11:26 AM PST): the bit is 0 for a request the rule does not end within
+    O (finish 0, ``live`` 1 after the last step), for a ``min_tokens`` other than 0, which the rule doesn't read, and for
+    a prompt shorter than P; a span the rule does not read (an abort, an error, one still running) has no stop class
+    and no class Program. What the bit should assert for each is proofs'."""
     raise NotImplementedError(TODO)
 
 

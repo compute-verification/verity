@@ -302,35 +302,35 @@ theorem firstOf_of {i : Spot.Run.Input} {f : SampledTwoDesc.First} (h : SampledT
     firstOf i = some ⟨f.verifier, f.rule, f.closure⟩ := by
   unfold SampledTwoDesc.firstOf at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h
-  obtain ⟨n, hn, rule, hr, law, hl, wt, hwt, res, hres, rfl⟩ := h
+  obtain ⟨n, hn, rule, hr, samplingDesign, hl, wt, hwt, res, hres, rfl⟩ := h
   simp [firstOf, hn, hr, hl, hwt, hres]
 
 theorem cellsOf_eq (i : Spot.Run.Input) (it : Spot.Run.Interior) : SampledTwoDesc.cellsOf i it = cellsOf i it := rfl
 
-theorem oneStageOk_lawOk (ns : List ℕ) (law : Option _root_.Flock.Draw.Law) :
-    oneStageOk ns ((law.map oneStageOf).getD .all) = SampledTwoDesc.lawOk ns law := by
-  rcases law with _ | (_ | _ | _ | _) <;> rfl
+theorem oneStageOk_samplingDesignOk (ns : List ℕ) (samplingDesign : Option _root_.Flock.Draw.SamplingDesign) :
+    oneStageOk ns ((samplingDesign.map oneStageOf).getD .all) = SampledTwoDesc.samplingDesignOk ns samplingDesign := by
+  rcases samplingDesign with _ | (_ | _ | _ | _) <;> rfl
 
-/-- **The design `Select.select` samples**, from the check's first-stage law. -/
-theorem slotDesign_of_firstLaw {rule : Spot.Select.Rule} {d : Spot.Program} {q : Json} {tb : Option Json}
-    {law : Option _root_.Flock.Draw.Law} (h : SampledTwoDesc.firstLaw rule d q tb = .ok law) :
-    slotDesign rule d q tb = .ok ⟨[(law.map oneStageOf).getD .all, .all]⟩ := by
-  unfold SampledTwoDesc.firstLaw at h
+/-- **The design `Select.select` samples**, from the check's first-stage sampling design. -/
+theorem slotDesign_of_firstSamplingDesign {rule : Spot.Select.Rule} {d : Spot.Program} {q : Json} {tb : Option Json}
+    {samplingDesign : Option _root_.Flock.Draw.SamplingDesign} (h : SampledTwoDesc.firstSamplingDesign rule d q tb = .ok samplingDesign) :
+    slotDesign rule d q tb = .ok ⟨[(samplingDesign.map oneStageOf).getD .all, .all]⟩ := by
+  unfold SampledTwoDesc.firstSamplingDesign at h
   unfold slotDesign
   rcases h1 : Spot.Partition.units d q with e | n
   · simp only [h1, error_bind] at h; cases h
   simp only [h1, ok_bind] at h ⊢
-  rcases h2 : rule.lawOver n with e | named
+  rcases h2 : rule.samplingDesignOver n with e | named
   · simp only [h2, error_bind] at h; cases h
   simp only [h2, ok_bind] at h ⊢
-  rcases h3 : Spot.Draw.deriveLaw d q named tb with e | derived
+  rcases h3 : Spot.Draw.deriveSamplingDesign d q named tb with e | derived
   · simp only [h3, error_bind] at h; cases h
   simp only [h3, ok_bind] at h ⊢
   cases rule with
   | all => cases h; rfl
   | _ =>
     simp only at h ⊢
-    rcases h4 : Spot.Draw.flockLaw ((derived.map (·.toJson)).getD named) n with e | parsed
+    rcases h4 : Spot.Draw.flockSamplingDesign ((derived.map (·.toJson)).getD named) n with e | parsed
     · simp only [h4, error_bind] at h; cases h
     simp only [h4, ok_bind] at h ⊢
     cases h
@@ -341,11 +341,11 @@ theorem all_zip_two {α β : Type} (a b : α) (a' b' : β) (S : List (List ℕ))
     ([a, b].zip S).all (fun p => F p.2 p.1) = ([a', b'].zip S).all (fun p => G p.2 p.1) := by
   rcases S with _ | ⟨s₀, _ | ⟨s₁, S⟩⟩ <;> simp [ha, hb]
 
-theorem designOk_eq (law : Option _root_.Flock.Draw.Law) (l : Spot.Slots.SlotOrder) :
-    designOk ⟨[(law.map oneStageOf).getD .all, .all]⟩ l = SampledTwoDesc.designOk law l := by
+theorem designOk_eq (samplingDesign : Option _root_.Flock.Draw.SamplingDesign) (l : Spot.Slots.SlotOrder) :
+    designOk ⟨[(samplingDesign.map oneStageOf).getD .all, .all]⟩ l = SampledTwoDesc.designOk samplingDesign l := by
   unfold designOk SampledTwoDesc.designOk
   congr 1
-  exact all_zip_two _ _ _ _ _ (fun s => oneStageOk_lawOk s law) (fun s => oneStageOk_lawOk s none)
+  exact all_zip_two _ _ _ _ _ (fun s => oneStageOk_samplingDesignOk s samplingDesign) (fun s => oneStageOk_samplingDesignOk s none)
 
 /-! ## The clauses, at free held copies -/
 
@@ -427,8 +427,8 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   simp only at hd
   rcases hl : (Spot.Slots.layout f.verifier.program f.verifier.query).toOption with _ | l
   · rw [hl] at hd; cases hd
-  rcases hlaw : (SampledTwoDesc.firstLaw f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption
-    with _ | law
+  rcases hlaw : (SampledTwoDesc.firstSamplingDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption
+    with _ | samplingDesign
   · rw [hl, hlaw] at hd; cases hd
   rw [hl, hlaw] at hd
   simp only [Bool.and_eq_true] at hd
@@ -470,7 +470,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   rw [hfirst, show cellsOf i it = some (ns, ks) from hc]
   simp only [Reg.program, Reg.query, hl]
   rw [dif_pos hxsOk]
-  refine decided_of (l := l) (d := ⟨[(law.map oneStageOf).getD .all, .all]⟩) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
+  refine decided_of (l := l) (d := ⟨[(samplingDesign.map oneStageOf).getD .all, .all]⟩) ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_
   · -- as many reference statements as templates
     simp only [List.length_map, hlen]
     exact hT
@@ -479,7 +479,7 @@ theorem heldOkDesc_of_descOk {p : SampledTwo.Params} {bs : Core.Blobs} {i : Spot
   · exact hval
   · exact hl
   · show (slotDesign f.rule f.verifier.program f.verifier.query f.verifier.workTable).toOption = _
-    rw [slotDesign_of_firstLaw (ok_of_toOption hlaw)]
+    rw [slotDesign_of_firstSamplingDesign (ok_of_toOption hlaw)]
     rfl
   · -- every member fits
     unfold Held.ms

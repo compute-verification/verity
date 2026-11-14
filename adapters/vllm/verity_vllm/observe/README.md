@@ -10,7 +10,7 @@ a log back into a Program.
   `capture_types`, `observer`, `storage`, `pinned` and `triton_adapter`), the log as the Match reads it
   (`capture_log`), the device kernels of a profiler's trace (`kernel_trace`) and the runtime's module tree as a command
   (`runtime_tree`).
-- **Loaded by:** the integration's `pipeline`, `check`, `program` and `properties` packages, `fold/`, and
+- **Loaded by:** the integration's `pipeline`, `check` and `program` packages, `fold/`, and
   the benchmarks that read a log or a kernel trace.
 - **Loads:** the integration's `records`, `engine` and `config`, and `program` inside one function; torch and numpy in
   the modules that run beside the engine (`capture`, `observer`, `pinned`, `storage`), and Triton inside one function.

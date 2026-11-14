@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from verity.circuits.codec import canonical_json
-from verity.commitments.windows import flock_inputs as FI, links as LK, rows as CS
+from verity.commitments.periods import flock_inputs as FI, links as LK, rows as CS
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 from verity_vllm.pipeline import boundary_rows as BR, interior_rows as IR
@@ -115,7 +115,7 @@ def test_a_class_whose_block_makes_no_wires_has_no_second_stage_and_one_of_insta
 
 
 def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_sampled(run):
-    """The written record is the one registered: after the boundary registration, over the sampled spans in the
+    """The written record is the one registered: after the boundary docket, over the sampled spans in the
     sample's order, registering the block's ``logits`` and nothing round 1's record names; the second stage samples
     K proof blocks in each sampled span."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
@@ -133,7 +133,7 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
 
 def test_the_interiors_commitment_is_timed_by_the_callers_clock_read_twice(run):
     """`replayed` reads the clock it is handed once before the capture and once after the window's files are written,
-    and nowhere else: the registration and the sample, which wait on the challenger, are not in ``commit_s``. (The
+    and nowhere else: the docket and the sample, which wait on the challenger, are not in ``commit_s``. (The
     fixture's clock has two readings: a third would have stopped it.)"""
     assert run["r"].commit_s == 2.5
 

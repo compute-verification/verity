@@ -27,8 +27,8 @@ src/research/
 ├── env.py          conditions(): the one baseline of an attempt's conditions (source, runtime, hardware, execution); ONE SKU->family map
 ├── merge.py, queue.py, vqueue.py   landing: the merge gate, the merge queue and the verified queue, which
 │                   tools/verity/landq replays
-├── policy.py       the landing's policy over tools/verity/check/policy.toml: what is off the merge gate and what may stay red
-├── checkview.py    `research status RUN` on a check run; tools/verity/check's live view reads its targets
+├── policy.py       the landing's policy over tools/check/policy.toml: what is off the merge gate and what may stay red
+├── checkview.py    `research status RUN` on a check run; tools/check's live view reads its targets
 ├── goals.py        `research goals`: the Goals page (the writing-goals skill)
 ├── linear.py       asks as Linear issues, and the audit the control pod's top watch runs
 ├── response.py     `research msg linear response`: the minutes each lane takes to answer a Linear comment that rings it
@@ -131,7 +131,7 @@ and a clean source at REF's exact commit, and when the target's tip is an ancest
 The attempt's own record and result must agree with the target's declaration: its command (`Tool.command`, in a check slot or
 not, plus check.py's own flags only), a result kind it produces (`check/v1`, never `lean-fast/v1`), a passed verdict and no step
 listed twice. Anything else, unreadable included, passes no gate, and a refusal exits 3. The merge commit carries a `Check:
-<attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/verity/check`). `--canary` checks, in scratch
+<attempt id>` trailer; `research` only reads the attempts of the repository's tool (`tools/check`). `--canary` checks, in scratch
 stores, that every gate refuses each bad attempt in `CANARY` and admits a good one.
 
 `research merge --train A B C` merges the refs in order onto the target's tip in a scratch worktree, one `--no-ff` merge each
@@ -143,7 +143,7 @@ and fast-forwards to the longest prefix that passed.
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
 refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the Markdown size limits
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
-`tools/verity/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
+`tools/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
@@ -330,7 +330,7 @@ never a verdict, and `research merge --train` stops rather than bisecting. A
 declaration that exists but cannot be read also refuses. `--preflight TOOL`
 runs TOOL's preflight before a run of something else, such as a Lean record
 regeneration on a check pod, and refuses if the tree declares none. `check`
-declares `tools/verity/check/preflight.py`: the tools `pod_setup.sh` installs, the
+declares `tools/check/preflight.py`: the tools `pod_setup.sh` installs, the
 Lean dependencies (warm, or restorable from the store, never GitHub), one
 store read, `avx512f` when the run carries an upstream build that needs it,
 and free disk.

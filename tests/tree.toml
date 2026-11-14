@@ -1,5 +1,5 @@
-# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at five levels: the root,
-# verity/, verity/protocols/, each group's directory there and each protocol's directory.
+# The repository's layout of record, which tests/test_tree.py holds the tracked tree to at six levels: the root,
+# demos/, verity/, verity/protocols/, each group's directory there and each protocol's directory.
 #
 # [[tree]] is the tree: each entry's path and what it means.  An entry the tree has and main doesn't hold yet carries
 # the owner who brings it and the day, which top drops once it lands.  `protocol = true` marks the protocols,
@@ -31,7 +31,35 @@ means = "one directory per serving system, holding only what attaches Verity to 
 
 [[tree]]
 path = "demos/"
-means = "one directory per demo: its workload, placement, commands and doneness, and its configurations, a .toml each"
+means = "one file per demo, the configuration `verity run` reads, and nothing else: README.md (one table of them), remote.toml, onsite_network.toml, onsite_compute.toml (the default) and onsite_full.toml. A demo holds no code"
+
+[[tree]]
+path = "demos/README.md"
+means = "one table: the file, what it shows, its command, how far it runs and is proved"
+
+[[tree]]
+path = "demos/remote.toml"
+means = "the remote demo: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
+owner = "top"
+day = "2026-11-15"
+
+[[tree]]
+path = "demos/onsite_network.toml"
+means = "onsite, network only: the network certifier, SPOT and the memory wipe"
+owner = "top"
+day = "2026-11-15"
+
+[[tree]]
+path = "demos/onsite_compute.toml"
+means = "onsite, the default: those three, PoUW and the inference-only policy"
+owner = "top"
+day = "2026-11-15"
+
+[[tree]]
+path = "demos/onsite_full.toml"
+means = "onsite, whole: those five, PoUS and PoUB"
+owner = "top"
+day = "2026-11-15"
 
 [[tree]]
 path = "security/"
@@ -43,15 +71,11 @@ means = "the measuring side: reproducible workloads and measurements"
 
 [[tree]]
 path = "tools/"
-means = "the `verity` command, the check, and the team's own tooling"
+means = "the `verity` command, the check's steps and the test harnesses"
 
 [[tree]]
 path = "tests/"
 means = "invariants of the whole tree"
-
-[[tree]]
-path = "infra/"
-means = "the team's machines"
 
 [[tree]]
 path = "AGENTS.md"
@@ -222,8 +246,6 @@ protocol = true
 path = "verity/protocols/accounting/registration/"
 means = "the accounting protocol that runs once, before any challenge: the hardware against its data sheets, the circuit compiler, the commitments to other information, every device accounted for"
 protocol = true
-owner = "proofs"
-day = "2026-11-14"
 
 [[tree]]
 path = "verity/protocols/compose/"
@@ -293,16 +315,10 @@ means = "its tests, a suite of its own"
 # ---- not in the tree yet -------------------------------------------------------------------------------------------
 
 [[not_yet]]
-path = "verity/hardware/registration.py"
-to = "verity/protocols/accounting/registration/"
-owner = "top"
-day = "2026-11-15"
-
-[[not_yet]]
 path = "verity/hardware/lean.py"
 to = "deleted, once the Lean takes a card as a parameter"
 owner = "compute-research"
-day = "2026-11-24"
+day = "2026-11-15"
 
 [[not_yet]]
 path = "verity/definitions/"
@@ -315,19 +331,38 @@ note = "two Lake packages move with Sunday's chain; its served part waits for th
 path = "verity/claims/"
 to = "data generated from the locks: each named assumption's id in its lock, a generated table from id to Lean name, and the readers switched to it"
 owner = "soundness"
-day = "2026-11-18"
+day = "2026-11-15"
 
 [[not_yet]]
-path = "fixtures/"
-to = "beside its reader, each file"
-owner = "proofs"
-day = "2026-11-18"
+path = "demos/vllm/"
+to = "demos/remote.toml; its scripts to the vLLM adapter and `verity run`"
+owner = "top"
+day = "2026-11-15"
 
 [[not_yet]]
-path = "verity/protocols/proofs/flock/sigma/"
-to = "its protocol's verifier/, prover/ or device/, or out of verity/; proofs says which"
-owner = "proofs"
-day = "2026-11-18"
+path = "demos/onsite_served/"
+to = "demos/onsite_full.toml; its scripts to the vLLM adapter and `verity run`"
+owner = "top"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "demos/lifecycle/"
+to = "the small workload beside `verity run`'s tests: not a demo"
+owner = "top"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "demos/configurations.toml"
+to = "tests/, beside its reader tests/test_configurations.py"
+owner = "top"
+day = "2026-11-15"
+
+[[not_yet]]
+path = "infra/"
+to = "the platform repository, with tools/research, tools/agent-guard and tools/move"
+owner = "infra"
+day = "2026-11-20"
+note = "the day is top's, set 14 Nov: after the layout and the dashboard; infra confirms or corrects it"
 
 # ---- not ruled -----------------------------------------------------------------------------------------------------
 

@@ -107,7 +107,7 @@ def GenericSampledKSClaims : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (V : Verifier Coin) (Rl : Rel W)
     (E : Claims.Extractor Coin W V) (H : Claims.Msg → Claims.Msg) (err : Claims.Msg → Prover Unit → ℝ) (n : ℕ)
     (Reg Dh : Type)
-    (Hc : List UInt8 → Dh) (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (Hc : List UInt8 → Dh) (L : SamplingDesign n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
     (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening) (M : ℕ),
     (∀ S R (P : Prover Unit), PrBad H V Rl E (stmt S R) P ≤ err (stmt S R) P) →
@@ -130,7 +130,7 @@ at the inner loop bounds `mI` and the link's `Mo`. It follows from L1 (`Claims.R
 def RecursiveSampledKS : Prop :=
   ∀ (Coin W : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) (I : Proto Coin W)
     (Sv : Server) (K : Claims.RecGeneric.Comp Coin) (mI : Fin I.nT → ℕ) (Mo : ℕ) (n : ℕ) (Reg Dh : Type)
-    (Hc : List UInt8 → Dh) (L : Law n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
+    (Hc : List UInt8 → Dh) (L : SamplingDesign n) (B : Binding Reg Hc) (Correct : Reg → B.Trace → Fin n → Prop)
     (stmt : Finset (Fin n) → Reg → Claims.Msg)
     (reads : Fin n → Finset B.Pos) (opens : Finset (Fin n) → Reg → Fin n → W → B.Pos → B.Opening) (M : ℕ),
     I.WF → I.KSAbortLin H → I.LastCoinFree H → Sv.Binds →

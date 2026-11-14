@@ -601,7 +601,7 @@ theorem rank_of_prog (T : ZKMal.CoinLayer.TableData) (x : Msg) (hx : Masked.Live
     rw [hlay0]
     show _ - 6 + 6 = _
     omega
-  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofSamples_order _ _ _
   obtain ⟨hA', hcs, S, P, hco, hP, hrk, hp0, hp1⟩ := repState_rank hcc hal hsc
     (by rw [htm, hstj]; exact hm14) (by rw [htk, hstj]; exact y.wf.1.hk6) hmb hdg (placeholder_cap hph)
     (hdm ▸ hdom') hmask hlay he ho

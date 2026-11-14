@@ -10,7 +10,7 @@ the clear; it reads the outcomes of ``k + 2`` proofs, linked only by their commi
 
 (`pous.prover.session_circuit`). A unit's outcome is its program, whether its proof was accepted with its ok output 1,
 each parameter's committed row and then each output's as the proof system stages them (one ``hm96-sha512/row/v2`` row
-each, `windows.interface.unit_rows`), and the values of the parameters that are public in its proof, which this module
+each, `periods.interface.unit_rows`), and the values of the parameters that are public in its proof, which this module
 computes again from the commitment, the openings and the key. The links, which the window's wires make: unit 0's ``m``
 is unit 1's output m, and unit j + 2's records row is unit 1's records output ⌊j/2⌋. `check_session` is
 `memory_challenger.verdict` with the session's rows read only through those proofs; `run.check_at` calls

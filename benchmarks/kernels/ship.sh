@@ -81,7 +81,7 @@ ship_source() {
 }
 
 # each shared library named, its cubins (cuobjdump -xelf) beside it in <library>.cubins/: a library's own bytes differ from
-# build to build (nvcc's host-side registration names), its cubins don't
+# build to build (nvcc's host-side docket names), its cubins don't
 ship_cubins() {
   local so d
   for so in "$@"; do

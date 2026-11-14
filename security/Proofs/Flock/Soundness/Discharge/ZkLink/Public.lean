@@ -119,7 +119,7 @@ theorem wrongRegZ_congr {R R' : Reg} (h : ∀ p, vb.cs R p = vb.cs R' p) (Xv : F
   ext u
   simp only [mem_wrongRegZ, RightRegZ, h]
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 open Classical in
 /-- **The compiled `--zk` audit's analysis, "wrong" measured against the registration** (`analysisZC`'s, with

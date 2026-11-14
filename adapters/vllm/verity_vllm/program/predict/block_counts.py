@@ -56,7 +56,7 @@ from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.boolean import gate_table
 
 from verity_vllm.config import option

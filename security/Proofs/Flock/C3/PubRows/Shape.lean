@@ -321,7 +321,7 @@ def StmtsChecked (i : RecVStar.Inner) (j : ℕ) (f : VStar.Bindings) (rows : Opt
 /-- **A checked session's statement of its circuit**: where the session accepts and its record samples, the statement
 setting up a sampled proof block's part has the session's circuit and passes `checkStmt`. -/
 theorem stmt_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {i : RecVStar.Inner} {j : ℕ} {f : VStar.Bindings}
     {rows : Option (Array Flock.Registered.Port)} (hck : StmtsChecked i j f rows zo.I zo.own tr) {d : Lean.Json}
     (hd : recordDraw tr.record = some d) (u : Fin nv) :
@@ -421,7 +421,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL FlockC3.Compose
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n1) A rec-sparse unit the verifier checked is at the verifier's RecSparse shape**: `SparseAtShape` at `j` where
 `RecVStar.checkStmt` at the inner shape, `j` and `j`'s binding passes on a statement of `Vs j`'s circuit. -/

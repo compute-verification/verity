@@ -30,6 +30,7 @@ import pytest
 
 from pous_fakes import Clock
 import pous_test_signer as ts
+import wipe_judge
 import wipe_side
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.device import memory_challenger as mc
@@ -313,7 +314,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     carries the session's window on the challenger's clock."""
     monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
     period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
-    out = tmp_path / "out"
+    out, given = tmp_path / "out", wipe_judge.judge(period, monkeypatch)
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
@@ -323,7 +324,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert sorted(case) == ["commitment", "evidence", "params"]
     assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
     record = json.loads((out / "wipe.json").read_text())
-    assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
+    assert [record["lean"]] == given and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
     assert record["wipe"] == W.CONFIG | {"foreign_labels": 0, "k": W.READS, "links": [CONTROL], "memory_bits": M,
                                          "outside_bits": 0, "segments": W.SEGMENTS, "tier": W.TIER,
@@ -347,7 +348,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     s = W.summary(record)
     assert (s["t0"], s["t1"]) == (window["t0"], window["t1"]) and s["uncertified"] == gaps and s["k"] == W.READS
     key, = case["params"]["trusted"]
-    assert s["decided_by"] == record["decided_by"] == {"program": "python", "host": socket.gethostname()}
+    assert s["decided_by"] == record["decided_by"] == {"program": "wipe-protocol", "host": socket.gethostname()}
     assert s["key_sha512"] == record["report"]["key_sha512"] == hashlib.sha512(bytes.fromhex(key)).hexdigest()
     assert s["key_sha512"] == wipe_side.key_sha512() and s["key_pinned"] is record["report"]["key_pinned"] is True
 
@@ -360,6 +361,18 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
         "program": "wipe-protocol", "host": host}
     assert W.decided_by("pous-run-protocol") == {"program": "pous-run-protocol", "host": host}
     assert W.decided_by(None) == {"program": "python", "host": host}
+
+
+def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeypatch, capsys) -> None:
+    """The leg with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
+    nothing. The answer is undecided, with no public outputs and no profile, and `main` exits 1."""
+    period = _side(tmp_path, monkeypatch, {})
+    out = tmp_path / "out"
+    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0"]) == 1
+    s = json.loads(capsys.readouterr().out)
+    assert (s["verdict"], s["reason"], s["public"]) == ("undecided", W.NO_JUDGE, None)
+    record = json.loads((out / "wipe.json").read_text())
+    assert record["answer"]["profile"] is None and record["lean"] is None and record["report"]["ended"] == sw.COMPLETE
 
 
 def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
@@ -387,8 +400,9 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     holds and the count is 0, which no network certifier signed, so the wipe is accepted and not certified, and the
     record names the egress as the evidence writer's count."""
     monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
-    out = tmp_path / "out"
-    answer = W.leg(_side(tmp_path, monkeypatch, {"egress_bits": 0}), "n0", out)
+    out, period = tmp_path / "out", _side(tmp_path, monkeypatch, {"egress_bits": 0})
+    wipe_judge.judge(period, monkeypatch)
+    answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
@@ -402,6 +416,7 @@ def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_pa
     challenger runs, and the challenger's command names no egress. The check certifies nothing on it and the record
     names it as the evidence writer's count."""
     period = _side(tmp_path, monkeypatch, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
+    wipe_judge.judge(period, monkeypatch)
     extras, of = [], WP.side_of
     monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
     out = tmp_path / "out"
@@ -466,6 +481,7 @@ def test_a_run_that_pins_its_own_key_is_accepted_and_still_a_rehearsal(tmp_path,
     the verifier accepts its session; the challenger's host is not one `AUDITOR_KEYS` pins that key for, so the record
     says rehearsal, no bound, and leaves the key custody out of the bound."""
     period = _side(tmp_path, monkeypatch, {})
+    wipe_judge.judge(period, monkeypatch)
     assert W.main(["--period", str(period), "--out", str(tmp_path / "out"), "--node", "n0"]) == 0
     record = json.loads((tmp_path / "out" / "wipe.json").read_text())
     answer = record["answer"]

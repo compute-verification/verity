@@ -21,7 +21,7 @@ from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
 from verity.circuits.ops import gemm
 from verity.protocols.proofs.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
-                                                    Stratum, Subset, Work, WorkStratum, neg_log_escape, work_k)
+                                                    Stratum, Subset, Work, WorkStratum, neg_log_escape)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -785,7 +785,6 @@ def test_a_work_design_is_the_stratified_one_at_its_k():
     assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
     assert a.to_json()["levels"][0]["draw"] == {"law": "work", "k": 3, "strata": [
         {"name": "a", "size": 4, "k": 2, "work": 3, "floor": 1}, {"name": "b", "size": 6, "k": 1, "work": 1, "floor": 1}]}
-    assert [work_k(3, w, n, 18, 1) for w, n in ((3, 4), (1, 6))] == [2, 1]
     with pytest.raises(ValueError):
         IntegrityProfile((Level("unit", "q"),), (9,), {"unit": WORK}, 0.1)
 
@@ -797,9 +796,19 @@ def test_a_work_design_is_the_stratified_one_at_its_k():
     (3, (WorkStratum("a", 4, 1, 0, 1),)),                                                # no work
     (3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("a", 6, 1, 1, 1))),                   # a name twice
     (3, (WorkStratum("a", 4, 2, 3, 0), WorkStratum("b", 6, 1, 1, 1))),                   # a floor of 0
-    (3, (WorkStratum("a", 4, 1, 3, 1), WorkStratum("b", 6, 1, 1, 1))),                   # a k not the rule's
     (3, (Stratum("a", 4, 2),)),                                                          # not a work stratum
 ])
 def test_ill_formed_work_designs_are_refused(k, strata):
     with pytest.raises(ValueError):
         Work(k, strata)
+
+
+def test_a_work_design_keeps_each_k_as_recorded():
+    """`Work` holds no stratum's `k` to the work rule (Lean `Core.WorkStratum.problem`): `WORK` with stratum a's `k` at
+    1, where the rule gives 2, is a work design, written with that `k`, and its sample is the stratified one at it.  The
+    rule is the draw's own check's (`one_stage.draw.strata_problem`)."""
+    off = Work(3, (WorkStratum("a", 4, 1, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
+    assert off.stratified == Stratified((Stratum("a", 4, 1), Stratum("b", 6, 1)))
+    assert [s["k"] for s in off.to_json()["strata"]] == [1, 1]
+    a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": off}, 0.1, drawn={"unit": 2})
+    assert a.strata() == off.stratified and a.bound() == off.stratified.count_bound(0.1)

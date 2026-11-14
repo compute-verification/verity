@@ -117,7 +117,7 @@ theorem periodReg_of (H : Msg → Msg) (Lv : ℕ → Compiled Coin A) {x : ℝ} 
       τ).trans (ENNReal.ofReal_le_ofReal hτ))
     (fun t τ _ => ⟨oneRegCount H (Lv t) τ.2.1.1 τ.2.1.2, fun _ => rfl,
       oneRegRec_missed_le H (Lv t) (hS t) hx0 (hpa t) τ⟩)
-    T 0 s M (periodGood_of_plays _ _ T 0 s herr)
+    T 0 s M (monitoringPeriodGood_of_plays _ _ T 0 s herr)
   simp only [Nat.zero_add] at h
   rw [← ENNReal.ofReal_pow hx0] at h
   exact h

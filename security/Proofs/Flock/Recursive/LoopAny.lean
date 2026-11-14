@@ -57,7 +57,7 @@ inner session or of V*'s statements.
   where their witnesses satisfy their circuits and simulated elsewhere: `ZkServerZK.recursiveZK_salted` over
   `LoopSessions.view_le` at `OuterZK.loop_zkmalR`.
 * `LoopAny.anyReal_eq`, `LoopAny.prCoin_anyReal`: the real view is that view cut at the session's stop, at every coin
-  and so in law at the split coins (`LoopAny.splitSalts`), the two stops joined (`LoopAny.anyStop`).
+  and so in distribution at the split coins (`LoopAny.splitSalts`), the two stops joined (`LoopAny.anyStop`).
 * `LoopAny.sumCut_toSum`, `LoopAny.prCoin_anyReal_sum`: where the release reads no stop at an unfinished session's
   view (`ReleaseReadsNoStop`), the joined stop is one of the inner session's or one of the audit's (`LoopAny.toSum`),
   a finished session stopping after its last send (`LoopAny.anyStop_last`).
@@ -176,7 +176,7 @@ def sentCommits (s : Flock.ZkServer.Schedule) (sent : List Flock.ZkServer.Sent) 
 
 /-- The salts' bytes, in order. -/
 def saltsOf {n : ℕ} (b : Fin n → Fin 192 → Fin 256) : List ByteArray :=
-  List.ofFn fun i => FlockSoundness.Audit.Law.streamOf (b i)
+  List.ofFn fun i => FlockSoundness.Audit.SamplingDesign.streamOf (b i)
 
 /-- **One worker's context at the live session** at the salt bytes `b`: the tape, the commitments the ZK server sent
 (`sentCommits`), the worker's randomness and the salts of the transcript's commit strings, `b`'s first
@@ -697,7 +697,7 @@ theorem anyReal_eq {Ωa Ωp Θ : Type} (vs : Claims.ZKServer.Loop.finS.SwVals) (
     unfold OuterZK.anyOuter
     rw [ite_eq_left hh]
 
-/-- **The real view's law is `anySent`'s cut at the joint stop**: `anyReal_eq` at every coin, read at the split coins
+/-- **The real view's sampling design is `anySent`'s cut at the joint stop**: `anyReal_eq` at every coin, read at the split coins
 (`splitSalts`), the stop at them `anyStop`. -/
 theorem prCoin_anyReal {Ωa Ωp Θ St Ωk W : Type} [Fintype Ωa] [Fintype Ωp] [Fintype Ωk]
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ)

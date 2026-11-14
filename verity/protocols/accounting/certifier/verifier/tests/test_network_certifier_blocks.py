@@ -15,7 +15,7 @@ import random
 import pytest
 
 from verity.commitments.crypto import lms
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.accounting.certifier.verifier import blocks as BK
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
 from verity.protocols.accounting.certifier.verifier import transfer_rows as TR

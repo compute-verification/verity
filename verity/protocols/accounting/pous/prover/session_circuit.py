@@ -12,7 +12,7 @@ B<n> is n bytes, ``Array<n, Array<8, Value<1>>>`` (`octets`), each byte's bits l
 are in byte order, bit t being bit t mod 8 of byte ⌊t/8⌋ (a ``sha512/row/v2`` row's order,
 `verity.commitments.rowleaf.bit_row`); an integer (j, i) is its bytes little-endian, so its bits least significant first.
 Flock stages a Definition as one ``hm96-sha512/row/v2`` row per parameter and one per output
-(`verity.commitments.windows.interface.unit_rows`), whole u16 words of one element width, so each parameter here is one
+(`verity.commitments.periods.interface.unit_rows`), whole u16 words of one element width, so each parameter here is one
 row, holding the bytes as the memory challenger writes them.
 
 **The signature's unit.** `PousSessionSig_v1{N, W, H}` is 1 iff ``sig`` is an LMS signature (`lms.Signature.encode`:

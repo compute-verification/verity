@@ -23,7 +23,7 @@ the claim reads of it (`WindowInstance.ClaimReads`). This module states it at th
   `Spot.OneStageZk.inputsAt` hands them, and the member's units, a range of the window's population from its first.
   Its files are then read as `memberRead` reads them (`MemberOn.fileRead_eq`).
 * **The window** (`WindowOn`): the window's members are the parameters', in the order of their first units, each on
-  the registered files; the sample's law is the verifier's over the window's population, and its bytes `MAX_COINS`
+  the registered files; the sample's sampling design is the verifier's over the window's population, and its bytes `MAX_COINS`
   coins of the parameters' challenger family; the vocabulary's read is the members' files in that order; the
   published share is the window's and the files' units its population.
 * **A member's files pass the files check** (`FilesPass`): what `Flock.Guarantees.MemberV5.Checked` asks of a
@@ -141,7 +141,7 @@ theorem MemberOn.fileRead_eq {F : Array ByteArray} {vm : _root_.Spot.OneStageZk.
 
 /-- **The window `W` is the parameters' members on the registered files, read on the committed files `F`**: v2's
 parameters in `θ` name members, and `W`'s are those, in the order of their first units, each on the registered files
-(`MemberOn`); the sample's law is the verifier's over `W`'s population (`lawAt`) and its bytes `MAX_COINS` coins of
+(`MemberOn`); the sample's sampling design is the verifier's over `W`'s population (`samplingDesignAt`) and its bytes `MAX_COINS` coins of
 the parameters' challenger family, 64 bytes each; the vocabulary reads `F` as the members' files in that order; and
 the published share is `W`'s and `F`'s units `W`'s population. -/
 structure WindowOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop where
@@ -149,7 +149,7 @@ structure WindowOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : 
       (vms : List _root_.Spot.OneStageZk.Member),
     ParamsAt θ p ∧ p.members = some ms ∧ vms.Perm ms.toList ∧
       vms.Pairwise (fun a b => a.first < b.first) ∧ List.Forall₂ (MemberOn (V.registered θ)) vms W.ms ∧
-      lawAt p.base.verifier W.nJ = .ok W.law ∧
+      samplingDesignAt p.base.verifier W.nJ = .ok W.samplingDesign ∧
       ∃ key label, p.base.challenger = some (key, label) ∧
         (label, _root_.Spot.Challenger.MAX_COINS) ∈ V.families θ
   lb : W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64

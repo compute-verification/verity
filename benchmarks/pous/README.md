@@ -10,17 +10,15 @@ What code outside this directory may use. Everything else here is internal.
 
 | Entry point | What it is |
 |---|---|
-| `uv run tools/verity/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
+| `uv run tools/check/suites.py benchmarks/pous` | The suite, on the CPU: `bench.py` and the harness, P2 (its reference, wire, store and bandwidth session), the served pieces and cases, and the wipe's resume. It writes no result. |
 | `python benchmarks/pous/bench.py --impl IMPL --weight-set ID --hardware ID --out DIR [--scheme NAME] [--max-segments N]` | The harness: one command per scheme, implementation, weight set and hardware. It writes `bench-result.json` (`verity-pous/bench-result/v1`) to `--out`, and `result.json` to `$RESEARCH_RUN_DIR` when that is set. |
 | `bash benchmarks/pous/pod.sh IMPL=NAME [WS=ID] [OPTIONS]` | The harness on a GPU pod as one Attempt: it builds the implementation's kernels and runs `bench.py`. It writes to `$RESEARCH_RUN_DIR`. |
 | `bash benchmarks/pous/served_piece.sh SERVE_DIR WINDOW DIR` | PoUS's piece of the composed served run (`served_piece.py`): one run of PoUS over the served checkpoint's linear weights, held as P2's `C*` on the card that served, with the memory challenger on the auditor's device. It writes its core answer to `DIR/answer.json`. |
 | `bash benchmarks/pous/streamed_wipe/served_wipe.sh SERVE_DIR WINDOW DIR` | The wipe's piece of the same run: one streamed wipe of the card before its engine loads (`streamed_wipe/demo.sh`). It writes its core answer, `verity/wipe/v0`'s, to `DIR/answer.json`. |
 | `onsite_pieces.sh`, sourced | Two shell functions: `onsite_piece_commands` sets the two pieces above as a served run's defaults, each kept where its variable is already set, and `onsite_cases` names PoUS's and the wipe's cases for the composite as their pieces wrote them, each beside its Lean's answer, with no card and no case made, and writes each one's line (`CASE`, `NOT_WRITTEN` or `LEFT_OUT`) to the run's `verdicts.txt`. |
 
-Read from outside `benchmarks/`: P2's reference, wire and store layout (`p2_v1/reference.py`, `p2_v1/wire.py`,
-`p2_v1/store.py`), imported with this directory on `sys.path`; `band_gpu/harness.py`, imported by a test; and
-`served_piece.sh`, `streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is
-configured.
+Read from outside `benchmarks/`: `band_gpu/harness.py`, imported by a test; and `served_piece.sh`,
+`streamed_wipe/served_wipe.sh` and `onsite_pieces.sh`, named by their paths where a served run is configured.
 
 - `weight_sets.json` (`pous-weight-sets/v1`) is the dataset. It holds the weight sets as the serving engine holds them,
   with their checkpoint pins:
@@ -75,7 +73,9 @@ Implementations:
     CUDA and nvcc versions (`pod.sh` pins torch and records the CPU topology, the NVMe mount and the installed packages).
 
 - `p2-v1-gpu`: P2 v4 (`verity/protocols/accounting/pous/verifier/README.md`, "P2"), in `p2_v1/`, with
-  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`):
+  the same steps, controls and metrics as `band-gpu` so the two compare side by side (`side_by_side.py`). Its
+  reference, wire and vectors are the verifier's (`verity/protocols/accounting/pous/verifier/p2_v1/`), and its GPU library and
+  the store are P2's prover (`verity/protocols/accounting/pous/prover/p2/`: the package `p2_store`, with `p2_gpu/` beside it):
   - `reference.py`: the scheme on the CPU in its own setup framing (the counter-mode SHA-512 keys and the maps, both
     `schemes.p2`'s, and the RFC 6962 tree over v4's leaves, `verity.protocols.accounting.pous.verifier.verifier`'s; v4's leaves and the
     mode-0 audit derivation on `verity.commitments.randomness`), pinned by `vectors.json` (`VECTORS_SHA512`);

@@ -46,10 +46,10 @@ statement the prover staged. This file proves those refusals from the shipped co
   `RecCoins.checkAtC3`, on what `x` carries (`checkAtC3_staged`); `readX` has already run `RecVStar.statements` on that
   shape. So a session decision the compiled verifier doesn't refuse has the setup's checks accept the statement's inner
   shape (`RecScope.accepts`, on `readOf`).
-* **Sample.** At a decision, a record without a sample fails the custody checks (`checks_recordDraw`: `drawEq` against the
-  statement's sample, and `ProvedScope.drawLaw` refuses a draw-less statement), and the verdict's full-draw refusal
-  (`fullDrawO`, `RecSetup.fullDraw`) runs under the staged statement's inner shape, which is `x`'s. So the record's
-  sample passes `RecScope.fullDrawOk`, hence is `DrawRecord.Full` (`RecScope.fullDrawOk_iff`).
+* **Sample.** At a decision, a record without a sample fails the custody checks (`checks_recordSample`: `sampleEq` against the
+  statement's sample, and `ProvedScope.sampleDesign` refuses a draw-less statement), and the verdict's full-draw refusal
+  (`fullSampleO`, `RecSetup.fullSample`) runs under the staged statement's inner shape, which is `x`'s. So the record's
+  sample passes `RecScope.fullSampleOk`, hence is `DrawRecord.Full` (`RecScope.fullSampleOk_iff`).
 
 `decide_scope` is the two at one session decision; `decide_inScope` puts them, with the dense form below, in
 `RecScope`'s statement: `InScope` of what the verifier reads with the decided records (`RecScope.inScope_iff`).
@@ -57,7 +57,7 @@ statement the prover staged. This file proves those refusals from the shipped co
 of an accepted run: the last session's decision (`next_acc`), so `parse` reads the statement and it is in `InScope`.
 `DeployScopeRuns` puts the refusals on every session of an accepted run.
 
-* **Dense.** The verdict's last refusal (`RecSetup.denseOnly`, in `fullDrawO`) refuses a holo or sparse inner shape, so
+* **Dense.** The verdict's last refusal (`RecSetup.denseOnly`, in `fullSampleO`) refuses a holo or sparse inner shape, so
   a decision the compiled verifier doesn't refuse is at a dense one (`decide_dense`), which `InScope` asks; every
   statement it accepts parses at a dense form (`acc_dense`: `DenseAt`, the class `RecursiveKS` is stated at).
 -/
@@ -229,9 +229,9 @@ theorem insO_staged {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Clai
 
 /-! ## The sample at a decision -/
 
-/-- **The custody checks refuse a record without a sample**: its sample must be the statement's (`drawEq`), and a
-statement without one is refused (`ProvedScope.drawLaw`). -/
-theorem checks_recordDraw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
+/-- **The custody checks refuse a record without a sample**: its sample must be the statement's (`sampleEq`), and a
+statement without one is refused (`ProvedScope.sampleDesign`). -/
+theorem checks_recordSample {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg}
     {link : List ByteArray × List ByteArray} {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final}
     (h : checks zk s spec x link c₁ mids f = .ok ()) : (Witness.recordDraw f.record).isSome = true := by
   have he : Witness.recordDraw f.record = FlockSoundness.Discharge.Exec.recordDraw f.record := rfl
@@ -243,12 +243,12 @@ theorem checks_recordDraw {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims
     exfalso
     cases hd : s.read.draw with
     | some d =>
-      simp [hr, hd, FlockDeploy.drawEq, Record.check, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
+      simp [hr, hd, FlockDeploy.sampleEq, Record.check, bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
       split at h <;> simp_all
     | none =>
-      simp only [hr, hd, FlockDeploy.drawEq, Option.isNone_none, ite_true, bind, Except.bind] at h
+      simp only [hr, hd, FlockDeploy.sampleEq, Option.isNone_none, ite_true, bind, Except.bind] at h
       repeat' split at h
-      all_goals simp_all [ProvedScope.drawLaw]
+      all_goals simp_all [ProvedScope.sampleDesign]
 
 /-! ## The refusals -/
 
@@ -257,13 +257,13 @@ variable {IV : Claims.Verifier Coin} {st : Stage} {x : Claims.Msg} {as : List Cl
 /-- **The compiled verifier refuses a session decision out of scope.** Where session `s`'s outer verifier decides on
 the final message `f`, the compiled verifier answers other than `.rej` only where the setup's checks accept the inner
 shape `x` carries (`RecScope.accepts` on `readOf`: `RecVStar.statements` in `readX`, `RecCoins.checkAtC3` and
-`RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record samples every unit of its population (`RecScope.fullDrawOk` under that shape:
-`ProvedScope.drawLaw` in the custody checks, then `RecSetup.fullDraw`). -/
+`RecSetup.checkShape` in the staged statement's setup, whose readers refuse it without the inner statement's files) and `f`'s record samples every unit of its population (`RecScope.fullSampleOk` under that shape:
+`ProvedScope.sampleDesign` in the custody checks, then `RecSetup.fullSample`). -/
 theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} (h : ract IV st x as cs = .sess s j xO as' cs')
     (ha : actO xO as' cs' = .decide i spec sts link c₁ mids f) (hn : ((next IV st x as cs).eval H).1 ≠ .rej) :
-    ∃ r, readX x = some r ∧ RecScope.accepts (readOf r) = true ∧ RecScope.fullDrawOk r.shape f.record = true := by
+    ∃ r, readX x = some r ∧ RecScope.accepts (readOf r) = true ∧ RecScope.fullSampleOk r.shape f.record = true := by
   rw [next_sess H h] at hn
   have hacc : ((nextO xO as' cs').eval H).1 = .acc := by
     rcases nextO_decide_out H ha with ho | ho
@@ -286,10 +286,10 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
   · have hio : innerOfO xO = some r.shape := by
       rw [innerOfO, hxO, hins]
       exact hinner
-    replace hf := fullDrawO_fullDraw hf
-    rw [hio, RecScope.fullDraw_some_rec] at hf
-    unfold RecScope.fullDrawOk
-    have hd := checks_recordDraw hc
+    replace hf := fullSampleO_fullSample hf
+    rw [hio, RecScope.fullSample_some_rec] at hf
+    unfold RecScope.fullSampleOk
+    have hd := checks_recordSample hc
     cases hrd : Witness.recordDraw f.record with
     | none => rw [hrd] at hd; cases hd
     | some d => rw [hrd] at hf; exact hf
@@ -297,7 +297,7 @@ theorem decide_scope (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
 /-! ## The dense form -/
 
 /-- **The compiled verifier refuses a session decision at a holo or sparse inner shape**: the verdict's last refusal
-(`RecSetup.denseOnly`, in `fullDrawO`) runs under the staged statement's inner shape, which is `x`'s, so a decision the
+(`RecSetup.denseOnly`, in `fullSampleO`) runs under the staged statement's inner shape, which is `x`'s, so a decision the
 compiled verifier doesn't refuse has `x`'s inner shape neither holo nor sparse. -/
 theorem decide_dense (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Msg} {as' : List Claims.Msg}
     {cs' : List Coin} {i : Ins} {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray}
@@ -318,7 +318,7 @@ theorem decide_dense (H : Claims.Msg → Claims.Msg) {s j : ℕ} {xO : Claims.Ms
   have hio : innerOfO xO = some r.shape := by
     rw [innerOfO, hxO, hins]
     exact hinner
-  have hd := fullDrawO_denseOnly hf
+  have hd := fullSampleO_denseOnly hf
   rw [hio] at hd
   exact ⟨r, hr, RecSetup.denseOnly_some hd⟩
 
@@ -338,7 +338,7 @@ decision of `x` that the compiled verifier doesn't refuse, what the verifier rea
 theorem decide_inScope (H : Claims.Msg → Claims.Msg) {r : XR} (hr : readX x = some r) {recs : List String}
     (hne : recs ≠ []) (hd : ∀ rec ∈ recs, Decided H IV st x rec) :
     Claims.Recursion.InScope (RecScope.toStmt { readOf r with records := recs }) := by
-  have hrec : ∀ rec ∈ recs, RecScope.accepts (readOf r) = true ∧ RecScope.fullDrawOk r.shape rec = true ∧
+  have hrec : ∀ rec ∈ recs, RecScope.accepts (readOf r) = true ∧ RecScope.fullSampleOk r.shape rec = true ∧
       r.shape.holo = false ∧ r.shape.sparse = none := by
     intro rec hm
     obtain ⟨as, cs, s, j, xO, as', cs', i, spec, sts, link, c₁, mids, f, h, ha, rfl, hn⟩ := hd rec hm

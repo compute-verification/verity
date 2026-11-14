@@ -307,20 +307,20 @@ def test_former_modules_map_a_module_back_through_each_move():
     assert tools_registry.former_modules("tools.agree.tool", moves) == ["tools.lean_agreement.tool", "verity.protocols.proofs.flock.prover.agreement.tool"]
     assert tools_registry.former_modules("attic.gkr.gpu.tool", moves) == ["old.gkr.gpu.tool"]
     assert tools_registry.former_modules("attic.gkrx.tool", moves) == []
-    assert tools_registry.former_modules("tools.verity.check.tool", moves) == []
+    assert tools_registry.former_modules("tools.check.tool", moves) == []
     shipped = json.loads(tools_registry.MOVES.read_text())["moves"]
     assert all(isinstance(m["paths"], dict) for m in shipped)
     assert tools_registry.former_modules("archive.gkr.gpu.tool") == ["backends.gkr.gpu.tool"]
 
 
 def test_former_paths_and_resolve_find_a_file_an_older_tree_holds_under_its_old_name():
-    moves = [{"tools/verity/check/": "tools/verity/check/"}, {"tools/verity/check/ci.toml": "ci/jobs.toml"}]
-    assert tools_registry.former_paths("ci/jobs.toml", moves) == ["tools/verity/check/ci.toml", "tools/verity/check/ci.toml"]
-    assert tools_registry.former_paths("tools/verity/check", moves) == ["tools/verity/check"]
+    moves = [{"tools/check/": "tools/check/"}, {"tools/check/ci.toml": "ci/jobs.toml"}]
+    assert tools_registry.former_paths("ci/jobs.toml", moves) == ["tools/check/ci.toml", "tools/check/ci.toml"]
+    assert tools_registry.former_paths("tools/check", moves) == ["tools/check"]
     assert tools_registry.former_paths("tools/verity/checks/x", moves) == []
-    held = {"tools/verity/check/ci.toml"}
-    assert tools_registry.resolve("ci/jobs.toml", held.__contains__, moves) == "tools/verity/check/ci.toml"
-    assert tools_registry.resolve("tools/verity/check/ci.toml", held.__contains__, moves) == "tools/verity/check/ci.toml"
+    held = {"tools/check/ci.toml"}
+    assert tools_registry.resolve("ci/jobs.toml", held.__contains__, moves) == "tools/check/ci.toml"
+    assert tools_registry.resolve("tools/check/ci.toml", held.__contains__, moves) == "tools/check/ci.toml"
     assert tools_registry.resolve("ci/other.toml", held.__contains__, moves) is None
 
 
@@ -328,7 +328,7 @@ def test_declared_jobs_reads_a_commit_from_before_the_move_that_renamed_ci_toml(
     from research import merge
 
     moves = tmp_path / "moves.json"
-    moves.write_text(json.dumps({"moves": [{"paths": {"old/check/": "tools/verity/check/"}}]}))
+    moves.write_text(json.dumps({"moves": [{"paths": {"old/check/": "tools/check/"}}]}))
     monkeypatch.setattr(tools_registry, "MOVES", moves)
     repo = tmp_path / "repo"
     (repo / "old/check").mkdir(parents=True)

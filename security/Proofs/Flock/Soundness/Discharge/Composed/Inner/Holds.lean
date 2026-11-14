@@ -1140,7 +1140,7 @@ variable {mPts n : ℕ} {Reg : Type} (P : LigProver)
 
 /-- The `--zk` tables at a sample `verify --zk` sets up are its table. -/
 theorem tablesAtZK_eq {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S)) :
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S)) :
     tablesAtZK (Reg := Reg) dj y₀ S R = y.table := by
   show tableAtZK dj y₀ S = _
   rw [tableAtZK, dif_pos ⟨y⟩]
@@ -1360,7 +1360,7 @@ theorem innerOf_holds_of (Tz : TabZK FlockLevel3.GF128 mPts) (st : Stmt) (hwf : 
 valid witness whose registered values are the public ones satisfies `Table.InnerHolds` (§2.4 line 16's ten
 constraints). -/
 theorem innerOf_holds (I : Inputs) (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : DrawSetupZK I mPts S (dj S))
+    (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) (S : Finset (Fin n)) (R : Reg) (y : SampleSetupZK I mPts S (dj S))
     (ht : I.tags.typed = false) (hdm : avoidsMask y.x.st = true) :
     let C := coinedOf P (tablesAtZK (Reg := Reg) dj y₀ S R) y.x.st
     ∀ c, C.Admits c → ∀ w, C.Valid w → (C.T c).tab.sReg w = (C.T c).tab.pubReg → (C.T c).tab.InnerHolds w :=
