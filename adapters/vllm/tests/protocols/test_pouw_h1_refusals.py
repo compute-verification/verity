@@ -34,7 +34,17 @@ kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.
 it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
 (`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
 and its record's root (`drawn.leaf_stagers`, `FileStager.stage`, `stage_leaves`), and a saved window's Program
-(`pouw_h1_handoff.resume`)."""
+(`pouw_h1_handoff.resume`).
+
+And what a call's receipts are with no card: each lane's words, J10-R's from the call's one stream, a dead tile's
+under admit bits and the units kernel's seed record (`pouw_h1_receipts.call_receipts`, `call_stream`,
+`gated_receipts`, `seed_record`), and a producer that skips dead tiles, keeps a call, or is handed a step for the
+units kernel (`Receipts`, `prepare`); with stand-ins for the two kernels, what `noise_blocks` and `call_streams`
+read back from the noise kernel and what a producer hands the units kernel. Beside them, the one reserve after a
+period's close (`pouw_h1_window.after_close`), a host library that returns nonzero
+(`pouw_h1_registered_device.host_commit`, `host_zy`, `host_public_salts`, `pouw_h1_tables_device.host_roots`) and
+call tables whose kernels don't build (`pouw_h1_tables_device.available`,
+`pouw_h1_registered_device.zy_available`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -2147,3 +2157,362 @@ def test_a_saved_window_whose_program_declared_again_is_another_is_refused_at_it
         theirs.close()
         run.rounds.challenger._wire.sock.close()
     assert host.ended() is not None
+
+
+#: a call's operand roots, as its seeds take them
+RA, RB = hashlib.sha512(b"A").digest(), hashlib.sha512(b"B").digest()
+
+
+def _operands(rows=64, n=64):
+    """A call's A [rows, K] and B [n, K] s8 codes on the CPU: four tiles as given."""
+    rng = np.random.default_rng(3)
+    return RC.Call(*(torch.from_numpy(rng.integers(-127, 128, (r, K), dtype=np.int8)) for r in (rows, n)))
+
+
+def _declared(defn=TS.StandIn):
+    """A window opened under `test_pouw_h1_served`'s key whose Program declares, each step, a call of 32 weight rows
+    and one of 64 at K over 64 slots: two tiles and four."""
+    served = SV.Served(PH.TILE, TS._unit(defn=defn), window=TS.W1)
+    served.open(SimpleNamespace(commits={}, shapes_=[(32, K), (64, K)], modules={0: "q", 1: "o"}, rows=64, steps=2))
+    assert not served.refused, served.refused
+    return served
+
+
+def _asked(served, **made):
+    """A producer for `served` under `SALT` and, unless ``roots`` is given, the roots `RA` and `RB`; the window's
+    first call (20 served rows of its 64 slots, 32 weight rows), its codes and its weight."""
+    rng = np.random.default_rng(5)
+    codes, weight = (rng.integers(-127, 128, (rows, K), dtype=np.int8) for rows in (20, 32))
+    made.setdefault("roots", lambda _call: (RA, RB))
+    producer = RC.Receipts(served, SimpleNamespace(salt=SALT), **made)
+    return producer, SimpleNamespace(index=0, layer=0, n=32, k=K), codes, weight
+
+
+def _public(row):
+    """A public row's bytes as its seeds lay them out, from its 16-bit words: each 32 bits a u32, low byte first."""
+    raw = b"".join(int(word).to_bytes(2, "little") for word in row)
+    return b"".join(raw[i:i + 4][::-1] for i in range(0, len(raw), 4))
+
+
+def test_a_calls_receipts_are_the_xor_of_each_lanes_words():
+    """With ``lanes``, `call_receipts` gives each proof block's words a lane, before the XOR across lanes: their XOR
+    is the call's receipt, and no one lane's words are."""
+    call = _operands()
+    whole, per = (RC.call_receipts(call, SALT, 7, RA, RB, lanes=lanes) for lanes in (False, True))
+    assert per.dtype == np.uint32 and per.shape == (4, RC.LANES, whole.shape[1])
+    assert np.array_equal(np.bitwise_xor.reduce(per, axis=1), whole)
+    assert not any(np.array_equal(per[:, lane], whole) for lane in range(RC.LANES))
+
+
+def test_j10r_s_receipts_take_each_proof_blocks_noise_from_its_calls_one_stream():
+    """Under J10-R a call has one stream, its call seed's blocks at call scale, and each proof block's noise is the
+    blocks of it that its rows and columns read. The call's receipts are then `reference`'s under J10-R, proof block
+    by proof block, and not v1's; they are the same from a stream handed in, and for the proof blocks asked for
+    alone. A stream is refused for an A that is not whole row blocks, seeds for another count of calls are refused,
+    and J10-R's reference takes no admit bits."""
+    call = _operands()
+    got = RC.call_receipts(call, SALT, 9, RA, RB, j10r=True)
+    assert got.shape == (4, 2 * RC.layout(K).sets)
+    assert [list(row) for row in got] == [RC.reference(call, SALT, 9, RA, RB, u, j10r=True)[1] for u in range(4)]
+    assert not np.array_equal(got, RC.call_receipts(call, SALT, 9, RA, RB))
+    stream = RC.call_stream(call, SALT, 9, RA, RB)
+    assert tuple(stream.shape) == (RC.stream_blocks(64, 64, K), 16)
+    assert np.array_equal(RC.call_receipts(call, SALT, 9, RA, RB, j10r=True, stream=stream), got)
+    assert not np.array_equal(RC.call_receipts(call, SALT, 9, RA, RB, j10r=True, stream=stream.flip(0)), got)
+    assert np.array_equal(RC.call_receipts(call, SALT, 9, RA, RB, only=[3, 0], j10r=True), got[[3, 0]])
+    two = RC.call_streams([RA, RB], [3, 5], "cpu", None)
+    assert [tuple(s.shape) for s in two] == [(3, 16), (5, 16)]
+    assert np.array_equal(two[0].numpy(), RC.call_streams([RA], [5], "cpu", None)[0][:3].numpy())
+    with pytest.raises(ValueError, match="^a J10-R call's A is its slot, whole blocks of 32 rows, not 20$"):
+        RC.call_stream(_operands(rows=20), SALT, 9, RA, RB)
+    with pytest.raises(ValueError, match="^2 seeds for 1 calls$"):
+        RC.call_streams([RA, RB], [4], "cpu", None)
+    with pytest.raises(ValueError, match=r"^J10-R's unit \(PouwH1Tile_v5\) takes no admit bits$"):
+        RC.reference(call, SALT, 9, RA, RB, 0, gated=np.ones(32, np.uint8), j10r=True)
+
+
+def test_a_dead_tiles_receipt_under_admit_bits_is_zero_and_a_live_ones_is_the_calls():
+    """Under a call's admit bits a tile whose 32 rows admit nothing is dead: its receipt is the zero words, where
+    the ungated call gives it the receipt of its noise. A live tile's is the call's. `gated_reference` gives each
+    tile the same, and a call that admits nothing has no live tile."""
+    call = _operands()
+    admit: np.ndarray = np.arange(64) < 5
+    got, live = RC.gated_receipts(call, admit, SALT, 9, RA, RB)
+    whole = RC.call_receipts(call, SALT, 9, RA, RB)
+    assert live == [0, 1] and np.array_equal(got[:2], whole[:2])
+    assert not got[2:].any() and whole[2:].any(axis=1).all()
+    assert [list(row) for row in got] == [RC.gated_reference(call, admit, SALT, 9, RA, RB, u) for u in range(4)]
+    none, live = RC.gated_receipts(call, np.zeros(64, bool), SALT, 9, RA, RB)
+    assert live == [] and none.shape == whole.shape and not none.any()
+
+
+def test_the_kernels_seed_record_is_two_tags_then_the_salt_and_the_roots_in_big_endian_words():
+    """`seed_record` is the units kernel's seed data, 30 words: the seed's tag and the receipt's, 24 bytes each,
+    then the salt and the two roots, every 8 bytes a big-endian word. J10-R's has its call seed's tag in the seed's
+    place and is otherwise the same. A salt or a root that is not 64 bytes is refused by its name and length.
+    `seed_words` lays digests out the same way, a row each."""
+    def laid(words):
+        return b"".join(int(word).to_bytes(8, "big", signed=True) for word in words)
+
+    v1, j10r = (RC.seed_record(SALT, RA, RB, j10r=j10r) for j10r in (False, True))
+    assert v1.dtype == j10r.dtype == np.int64 and v1.shape == j10r.shape == (30,)
+    assert laid(v1)[48:] == SALT + RA + RB and laid(j10r)[24:] == laid(v1)[24:]
+    tags = {laid(v1)[:24], laid(v1)[24:48], laid(j10r)[:24]}
+    assert len(tags) == 3 and all(tag.rstrip(b"\0").isascii() and tag.rstrip(b"\0") for tag in tags)
+    assert laid(RC.seed_record(RB, SALT, RA))[48:] == RB + SALT + RA
+    for at, name in enumerate(("salt", "root(A)", "root(B)")):
+        given = [SALT, RA, RB]
+        given[at] = given[at][:63]
+        with pytest.raises(ValueError) as refused:
+            RC.seed_record(*given)
+        assert str(refused.value) == f"a unit's seeds take a 64-byte {name}, not 63 bytes"
+    words = RC.seed_words([RA, RB], "cpu")
+    assert words.dtype == torch.int64 and tuple(words.shape) == (2, 8)
+    assert [laid(row.tolist()) for row in words] == [RA, RB]
+
+
+def test_a_producer_that_skips_dead_tiles_gives_them_the_zero_receipt_and_refuses_under_j10r():
+    """Made with ``skip_dead``, the producer gives a row block wholly past the call's served rows the zero receipt
+    and every other tile the call's, where without it a dead row block has the receipt of its zero codes and its
+    noise. Under J10-R, whose proof block is ungated, it refuses by name."""
+    served = _declared()
+    producer, call, codes, weight = _asked(served)
+    plain = producer(call, codes, None, weight, None)
+    skipping, *_ = _asked(served, skip_dead=True)
+    got = skipping(call, codes, None, weight, None)
+    assert got.shape == plain.shape == (2, 2 * RC.layout(K).sets) and skipping.calls == 1
+    assert np.array_equal(got[0], plain[0]) and not got[1].any() and plain[1].any()
+    u0, _n = producer.start(call)
+    a, b = producer.operands(call, codes, weight)
+    assert [list(row) for row in plain] == [RC.reference(RC.Call(a, b), SALT, u0, RA, RB, u)[1] for u in range(2)]
+    under, *_ = _asked(_declared(TS.StandInJ10R), skip_dead=True)
+    with pytest.raises(ValueError) as refused:
+        under(call, codes, None, weight, None)
+    assert str(refused.value) == ("skip_dead under J10-R: its unit (PouwH1Tile_v5) is ungated, a dead tile has its "
+                                  "noise's receipt")
+    assert under.calls == 0
+
+
+@pytest.mark.parametrize("defn", [TS.StandIn, TS.StandInJ10R])
+def test_a_producer_keeps_the_calls_it_is_told_to_with_what_a_check_of_them_reads(defn):
+    """Made with ``keep``, the producer keeps each call that ``keep`` says, by its index: its A over the window's
+    slots and its B, the salt, its first position and its roots, its receipts, its served rows, its public rows,
+    and whether it skipped dead tiles and computed J10-R's receipts, which a J10-R window's Program says. Its
+    receipts are `reference`'s of what it kept. A public row is the salt, the proof block's position and the roots,
+    and under J10-R then the call's first position and the proof block's two blocks. A call ``keep`` declines is
+    computed and not kept."""
+    j10r = defn is TS.StandInJ10R
+    producer, call, codes, weight = _asked(_declared(defn), keep=lambda call: call.index == 0)
+    later = SimpleNamespace(index=2, layer=0, n=32, k=K)
+    got = [producer(c, codes, None, weight, None) for c in (call, later)]
+    assert list(producer.kept) == [0] and producer.calls == 2 and producer.j10r is j10r
+    kept = producer.kept[0]
+    (u0, n), (u2, _n) = producer.start(call), producer.start(later)
+    assert (n, u2 - u0) == (2, 2 + 4)
+    assert sorted(kept) == ["a", "b", "base", "j10r", "m", "pub", "receipts", "roots", "salt", "skip"]
+    assert (kept["salt"], kept["base"], kept["roots"], kept["m"]) == (SALT, u0, (RA, RB), 20)
+    assert (kept["skip"], kept["j10r"]) == (False, j10r)
+    assert np.array_equal(kept["a"][:20].numpy(), codes) and not kept["a"][20:].any() and tuple(kept["a"].shape) == (64, K)
+    assert np.array_equal(kept["b"].numpy(), weight)
+    assert np.array_equal(kept["receipts"], got[0]) and not np.shares_memory(kept["receipts"], got[0])
+    assert not np.array_equal(got[0], got[1])
+    kept_call = RC.Call(kept["a"], kept["b"])
+    assert [list(row) for row in got[0]] == [RC.reference(kept_call, SALT, u0, RA, RB, u, j10r=j10r)[1] for u in range(n)]
+    rows = [_public(row) for row in kept["pub"]]
+    assert [row[:200] for row in rows] == [SALT + (u0 + t).to_bytes(8, "big") + RA + RB for t in range(n)]
+    if j10r:
+        assert [(len(row), row[200:208]) for row in rows] == [(224, u0.to_bytes(8, "big"))] * n
+        assert rows[0][208:] != rows[1][208:]
+    else:
+        assert [len(row) for row in rows] == [200] * n
+    assert kept["pub"] == producer.public(call)
+
+
+class _NoLaunch:
+    """A units kernel that nothing may reach: a test that asks it for anything fails there."""
+
+    def __getattr__(self, name):
+        raise AssertionError(f"the units kernel's {name} was asked for")
+
+
+def test_a_step_prepared_for_the_units_kernel_refuses_codes_and_tiles_off_the_program_before_any_launch():
+    """`prepare`, with the units kernel and a run, computes a step's calls of one K together. Calls that serve
+    different rows are left to be asked each on its own, and nothing is launched for them. Before any launch it
+    refuses, by the calls' indices, codes that are not the step's rows of K int8 codes each, at most the window's
+    slots, and a call whose proof blocks in the window Program are not its slots' tiles by its weight's. The same
+    call asked on its own is refused the same way."""
+    served = _declared()
+    producer, call, codes, weight = _asked(served, units=_NoLaunch(), device="cpu")
+    wide = SimpleNamespace(index=1, layer=1, n=64, k=K)
+    wider: np.ndarray = np.ones((64, K), np.int8)
+    assert producer.prepare([(call, codes, None, weight, None), (wide, codes[:7], None, wider, None)]) is None
+    assert producer.prepare([(call, codes, None, weight, None)]) is None
+    off: list[np.ndarray] = [codes.astype(np.int16), codes[:, :K // 2], np.zeros((65, K), np.int8)]
+    for given in off:
+        with pytest.raises(ValueError) as refused:
+            producer.prepare([(call, given, None, weight, None), (wide, given, None, wider, None)])
+        assert str(refused.value) == (f"calls [0, 1]: their codes are not {len(given)} rows of {K} int8 codes each, at "
+                                      "most 64")
+    short = SimpleNamespace(index=1, layer=1, n=32, k=K)
+    with pytest.raises(ValueError) as refused:
+        producer.prepare([(call, codes, None, weight, None), (short, codes, None, weight, None)])
+    assert str(refused.value) == "call 1: 4 units in the window Program, not its 64 × 32 tiles"
+    alone, *_ = _asked(served)
+    with pytest.raises(ValueError) as refused:
+        alone(short, codes, None, weight, None)
+    assert str(refused.value) == "call 1: 4 units in the window Program, not its 64 × 32 tiles"
+    assert (producer.calls, alone.calls) == (0, 0)
+
+
+class _Hashlib:
+    """A stand-in for the noise kernel: it writes hashlib's halves as the device's 32-bit integers, and keeps the
+    shapes it was asked with."""
+
+    def __init__(self):
+        self.asked: list[tuple] = []
+
+    @staticmethod
+    def _digests(seeds):
+        return [b"".join(int(word).to_bytes(8, "big", signed=True) for word in row) for row in seeds.tolist()]
+
+    def launch(self, seeds, n, out):
+        self.asked.append(("launch", tuple(seeds.shape), n, tuple(out.shape)))
+        out.copy_(RC.noise_blocks(self._digests(seeds), n, "cpu", None).to(torch.int32))
+
+    def launch_calls(self, seeds, starts, out):
+        self.asked.append(("launch_calls", tuple(seeds.shape), starts.tolist(), tuple(out.shape)))
+        counts = (starts[1:] - starts[:-1]).tolist()
+        out.copy_(torch.cat(RC.call_streams(self._digests(seeds), counts, "cpu", None)).to(torch.int32))
+
+
+def test_a_noise_kernels_halves_are_read_back_unsigned_and_each_calls_stream_at_its_start():
+    """With a noise kernel, here a stand-in that writes hashlib's halves, `noise_blocks` and `call_streams` hand it
+    the seeds as rows of big-endian words and ask once: for every seed's blocks, or for every call's stream in one
+    launch, each at its start. What they read back is what they give with no kernel: each half unsigned, and each
+    call its own blocks, a call of no block none."""
+    seeds, kernel = [RA, RB, SALT], _Hashlib()
+    got, want = (RC.noise_blocks(seeds, 5, "cpu", cubin) for cubin in (kernel, None))
+    assert got.dtype == torch.int64 and torch.equal(got, want) and int(got.min()) >= 0 and int(got.max()) >= 1 << 31
+    streams, wanted = (RC.call_streams(seeds, [3, 0, 5], "cpu", cubin) for cubin in (kernel, None))
+    assert [tuple(s.shape) for s in streams] == [(3, 16), (0, 16), (5, 16)]
+    assert all(torch.equal(s, w) for s, w in zip(streams, wanted, strict=True))
+    assert kernel.asked == [("launch", (3, 8), 5, (3, 5, 16)), ("launch_calls", (3, 8), [0, 3, 3, 8], (8, 16))]
+
+
+class _Chain:
+    """A stand-in for the units kernel: it answers with the torch chain's receipts under `RA` and `RB`, as the
+    device's 32-bit integers, and keeps what it was handed."""
+
+    def __init__(self):
+        self.seeded: list[tuple] = []
+        self.asked: list[tuple] = []
+
+    def seeds(self, record, u0, n, call=None):
+        self.seeded.append((record, u0, n, call))
+        return u0
+
+    def receipts(self, a, b, seeds, live, j10r):
+        self.asked.append((seeds, None if live is None else live.tolist(), j10r))
+        return torch.from_numpy(RC.call_receipts(RC.Call(a, b), SALT, seeds, RA, RB, j10r=j10r).view(np.int32))
+
+
+@pytest.mark.parametrize("defn", [TS.StandIn, TS.StandInJ10R])
+def test_a_producer_hands_the_units_kernel_a_calls_seed_record_its_span_and_its_live_row_blocks(defn):
+    """With the units kernel, here a stand-in that answers with the torch chain's receipts, a call asked on its own
+    is one launch. The producer hands the kernel the seed record of the salt and the call's roots, the same one
+    while the roots are the same and another under other roots, then the call's first position and its proof
+    blocks, and under J10-R that position again as its call. Its receipts are read back unsigned, the torch
+    chain's. Made with ``skip_dead`` it hands over which row blocks hold a served row, and under J10-R it refuses."""
+    j10r = defn is TS.StandInJ10R
+    served, kernel = _declared(defn), _Chain()
+    producer, call, codes, weight = _asked(served, units=kernel, device="cpu",
+                                           roots=lambda call: (RA, RB) if call.index == 0 else (RB, RA))
+    chain, *_ = _asked(served)
+    got = producer(call, codes, None, weight, None)
+    assert got.dtype == np.uint32 and np.array_equal(got, chain(call, codes, None, weight, None))
+    later = SimpleNamespace(index=2, layer=0, n=32, k=K)
+    for c in (call, later):
+        producer(c, codes, None, weight, None)
+    (u0, n), (u2, _n) = producer.start(call), producer.start(later)
+    (record, *first), (again, *second), (other, *third) = kernel.seeded
+    assert first == second == [u0, n, u0 if j10r else None] and third == [u2, n, u2 if j10r else None]
+    assert again is record and record.dtype == torch.int64
+    assert np.array_equal(record.numpy(), RC.seed_record(SALT, RA, RB, j10r=j10r))
+    assert np.array_equal(other.numpy(), RC.seed_record(SALT, RB, RA, j10r=j10r))
+    assert kernel.asked == [(u0, None, j10r), (u0, None, j10r), (u2, None, j10r)] and producer.calls == 3
+    skipping, *_ = _asked(served, units=_Chain(), device="cpu", skip_dead=True)
+    if j10r:
+        with pytest.raises(ValueError, match="^skip_dead under J10-R: its unit "):
+            skipping(call, codes, None, weight, None)
+    else:
+        skipping(call, codes, None, weight, None)
+        assert skipping.units.asked == [(u0, [1, 0], False)]
+
+
+def test_the_one_reserve_after_a_periods_close_is_the_lanes_first():
+    """`after_close` says whether the ledger closes the period, and gives the first ``reserve`` after that close
+    whose prover, its ``for`` or else its ``by``, is the lane: none before the close or under another period's,
+    another lane's passed over, and a later one of the lane's not taken."""
+    def entry(kind, **body):
+        return json.dumps({"kind": kind, "body": body})
+
+    early, close = entry("reserve", by="vllm", session="s0"), entry("period-close", period="p1")
+    assert PHW.after_close([], "vllm", "p1") == (False, None)
+    assert PHW.after_close([entry("period-close", period="p0"), early], "vllm", "p1") == (False, None)
+    assert PHW.after_close([early, close], "vllm", "p1") == (True, None)
+    other = entry("reserve", by="other", session="s1")
+    assert PHW.after_close([early, close, other], "vllm", "p1") == (True, None)
+    mine = [entry("reserve", **{"for": "vllm", "by": "auditor", "session": "s2"}), entry("reserve", by="vllm", session="s3")]
+    assert PHW.after_close([early, close, other, *mine], "vllm", "p1") == (True, json.loads(mine[0]))
+    theirs = entry("reserve", **{"for": "other", "by": "vllm", "session": "s4"})
+    assert PHW.after_close([close, theirs, mine[1], mine[0]], "vllm", "p1") == (True, json.loads(mine[1]))
+
+
+def test_a_host_library_that_returns_nonzero_is_refused_by_what_it_was_asked(monkeypatch):
+    """Each of the host's twins of the device's hashing returns zero once it has written what it was asked for. A
+    library that returns anything else, here stand-ins that write nothing, is refused by what it was asked, so
+    what it did not write is never read as a tree, a root or salts."""
+    names = ("rr_commit_host", "rr_public_salts_host", "rr_ok_salts_host", "zy_commit_host", "rt_step_host")
+    refuses = SimpleNamespace(**dict.fromkeys(names, lambda *_layout: 3))
+    for module, name in ((RGD, "host_lib"), (RGD, "zy_host_lib"), (TBD.RTD, "host_lib")):
+        monkeypatch.setattr(module, name, lambda: refuses)
+    words: np.ndarray = np.zeros((3, 512), np.uint16)
+    with pytest.raises(ValueError, match=r"^rr_commit_host refused the value's layout \(3\)$"):
+        RGD.host_commit(words, KEY, 7, None, bytes(64))
+    with pytest.raises(ValueError, match=r"^zy_commit_host refused the records' layout \(3\)$"):
+        RGD.host_zy(words, KEY, 7, bytes(64), (bytes(64), 9))
+    for ok in (False, True):
+        with pytest.raises(ValueError, match="^the host's public salts refused the salt head$"):
+            RGD.host_public_salts(b"a salt head", 5, 3, ok)
+    codes: np.ndarray = np.zeros((2, K), np.int8)
+    with pytest.raises(ValueError, match=r"^rt_step_host refused the table's layout \(3\)$"):
+        TBD.host_roots([(bytes(64), 0, codes, np.zeros(2, np.uint32))], KEY)
+
+
+def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_their_kernels_dont_build(monkeypatch):
+    """`tables_device.available`: with no CUDA the call tables hash on the host and nothing is said. With CUDA and
+    kernels that don't build, here with no nvcc, a warning says that they hash with `hiding_rows` and why; once they
+    are built for the current device, the GPU path is taken. The z table's kernel is asked for only where the
+    values' kernels are there, and where it doesn't build a warning says that the z tables hash apart from their
+    values. Both build with `pouw_device`'s nvcc."""
+    built: list[tuple] = []
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    assert TBD.available.__wrapped__() is False and RGD.zy_available.__wrapped__() is False
+    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    assert TBD.nvcc() == RGD.nvcc() == "/a/toolchain/nvcc"
+    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: None)
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))
+    with pytest.warns(RuntimeWarning) as said:
+        assert TBD.available.__wrapped__() is False
+    assert [str(w.message) for w in said] == [("H1's call tables hash with hiding_rows: the GPU path doesn't build here "
+                                               "(RuntimeError: no nvcc on the path or configured)")]
+    monkeypatch.setattr(RGD, "available", lambda: True)
+    with pytest.warns(RuntimeWarning) as said:
+        assert RGD.zy_available.__wrapped__() is False
+    assert [str(w.message) for w in said] == [("H1's call z tables hash apart from their zy@<c> values: zy_commit.cu "
+                                               "doesn't build here (RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on "
+                                               "the path))")]
+    monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]

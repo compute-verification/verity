@@ -1,15 +1,19 @@
 """difftest.py (protected): the one-call evaluator agrees with a numpy reference on BiasAdd (bf16 add, RNE), is
 deterministic and refuses operands that are not its parameters; the word generators cover the required edge kinds in
 bf16 and in f32, give integers below one bound, and refuse what they have no generator for; `check` fails when an edge
-kind is missing, reports a case it cannot compare as an error, and seals its report as the property `difftest`'s record;
-`produce` takes a case's explicit words and a saved array's; and what `main` hands `produce`, writes for a `check`,
-prints and exits with."""
+kind is missing, takes an input that names no kind as random, passes one case that passes and fails a directory of none,
+reports a case it cannot compare as an error, and seals its report as the property `difftest`'s record; `produce` takes a
+case's explicit words and a saved array's, carries a word of each dtype it names to the operation and back, and
+writes its manifest and each case into directories it makes; and what `main` hands `produce`, writes for a `check`, prints
+and exits with."""
 from __future__ import annotations
 
 import json
 import sys
 import types
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pytest
@@ -28,8 +32,7 @@ def _bf16_add_ref(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     # round-to-nearest-even to bf16
     u = s.view(np.uint32).astype(np.uint64)
     lsb = (u >> 16) & 1
-    u = (u + 0x7FFF + lsb) >> 16
-    return u.astype(np.uint16)
+    return ((u + 0x7FFF + lsb) >> 16).astype(np.uint16)
 
 
 def test_evaluate_spec_bias_add_matches_numpy_reference():
@@ -67,11 +70,19 @@ def test_word_generators(kind):
         assert np.all((w & 0x7FFF) == 0)
 
 
+def test_the_bf16_zeros_are_of_both_signs() -> None:
+    w = difftest.words_for("zeros", [3, 5], "bfloat16", np.random.default_rng(1))
+    assert w.reshape(-1).tolist() == [0x8000 if i % 7 == 0 else 0 for i in range(15)]                      # -0 at every seventh word, +0 between
+
+
 class _Largest:
     """In a generator's place: every integer it gives is the largest its bounds allow."""
 
     def integers(self, low: int, high: int, n: int) -> np.ndarray:
         return np.full(n, high - 1)
+
+
+_LARGEST = cast(np.random.Generator, _Largest())                                                           # a `Generator` to mypy; the calls below reach its `integers` alone
 
 
 @pytest.mark.parametrize("kind", difftest.REQUIRED_EDGE_KINDS + ("random",))
@@ -89,7 +100,7 @@ def test_word_generators_of_f32(kind: str) -> None:
         assert set(w.reshape(-1).tolist()) == {0x7F7FFFFF, 0xFF7FFFFF, 0x43000000}                        # ±max finite, 128
     if kind == "subnormal":
         assert np.all(w != 0) and np.all(w < 0x00800000)
-        assert np.all(difftest.words_for(kind, [3], "float32", _Largest()) == 0x007FFFFF)
+        assert np.all(difftest.words_for(kind, [3], "float32", _LARGEST) == 0x007FFFFF)
     if kind == "alternating":
         assert np.all((f[0::2] <= -1) & (f[0::2] >= -2)) and np.all((f[1::2] >= 1) & (f[1::2] <= 2))
         bf16 = difftest.words_for(kind, [8, 8], "bfloat16", np.random.default_rng(1))                      # the same values, cut to bf16
@@ -99,9 +110,9 @@ def test_word_generators_of_f32(kind: str) -> None:
 @pytest.mark.parametrize("dtype, words, largest", [("int32", np.uint32, 2**31 - 2), ("int64", np.uint64, 2**62 - 1)])
 def test_word_generators_of_integers_stay_below_one_bound_whatever_the_kind_but_zeros(dtype: str, words: type, largest: int) -> None:
     for kind in ("random", "max", "subnormal", "alternating"):
-        w = difftest.words_for(kind, [2, 3], dtype, _Largest())
+        w = difftest.words_for(kind, [2, 3], dtype, _LARGEST)
         assert w.dtype == words and w.shape == (2, 3) and np.all(w == largest)
-    z = difftest.words_for("zeros", [2, 3], dtype, _Largest())
+    z = difftest.words_for("zeros", [2, 3], dtype, _LARGEST)
     assert z.dtype == words and z.shape == (2, 3) and not z.any()
     one = difftest.words_for("random", [], dtype, np.random.default_rng(1))                                # no shape: one word
     assert one.dtype == words and one.shape == () and one <= largest
@@ -155,12 +166,14 @@ def _adapter(monkeypatch: pytest.MonkeyPatch, name: str, **names: object) -> Non
     monkeypatch.setitem(sys.modules, name, mod)
 
 
-def _whole_adapter(monkeypatch: pytest.MonkeyPatch, name: str, inputs: list[list[dict[str, object]]] | None = None) -> None:
-    """The BiasAdd adapter whole, importable as `name`: torch's own sum as the pinned operation, on the operands `inputs`
-    gives each case, two random bf16 ones where it gives none."""
+def _whole_adapter(monkeypatch: pytest.MonkeyPatch, name: str, inputs: list[list[dict[str, object]]] | None = None, *,
+                   edge: dict[int, bool] | None = None, op: Callable[[list[Any]], list[Any]] = lambda ins: [ins[0] + ins[1]]) -> None:
+    """The BiasAdd adapter whole, importable as `name`: `op` as the pinned operation, torch's own sum where none is given, on
+    the operands `inputs` gives each case, two random bf16 ones where it gives none.  A case in `edge` says itself whether
+    it is an edge case."""
     two = [{"shape": [4], "dtype": "bfloat16", "kind": "random"}] * 2
-    _adapter(monkeypatch, name, SEMANTIC_ID="test/BiasAdd@v1", production=lambda st, ins: [ins[0] + ins[1]],
-             cases=lambda rng, i: {"statics": {"N": 4}, "inputs": inputs[i] if inputs else two})
+    _adapter(monkeypatch, name, SEMANTIC_ID="test/BiasAdd@v1", production=lambda st, ins: op(ins),
+             cases=lambda rng, i: {"statics": {"N": 4}, "inputs": inputs[i] if inputs else two, **({"edge": edge[i]} if edge and i in edge else {})})
 
 
 def _produced(d: Path, kinds: tuple[str, ...], wrong: tuple[int, ...] = ()) -> Path:
@@ -215,6 +228,75 @@ def test_produce_takes_a_cases_explicit_words_and_the_words_of_a_saved_array(tmp
         (2, inputs[2], [{"shape": [4], "dtype": "float32"}], True)]                                        # an edge case: a kind that is not random
     assert json.loads((tmp_path / "dt" / "manifest.json").read_text())["cases"] == man["cases"]
     assert [json.loads((tmp_path / "dt" / f"case_{i}" / "case.json").read_text()) for i in range(3)] == man["cases"]
+
+
+def test_produce_writes_its_manifest_and_each_case_into_directories_it_makes_and_takes_no_kind_as_random(
+        tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("torch")
+    bare: dict[str, object] = {"shape": [4], "dtype": "bfloat16"}                                          # names no kind
+    named: dict[str, object] = {**bare, "kind": "random"}
+    zeros: dict[str, object] = {**bare, "kind": "zeros"}
+    _whole_adapter(monkeypatch, "bare_adapter", [[bare, bare], [bare, bare], [zeros, bare]], edge={1: True, 2: False})
+    _whole_adapter(monkeypatch, "named_adapter", [[named, named], [named, named], [zeros, named]])
+    readings = iter(range(64))
+    monkeypatch.setattr(difftest, "time", types.SimpleNamespace(time=lambda: next(readings) / 4))          # a quarter second a reading
+    d = tmp_path / "not" / "there" / "yet"
+    man = difftest.produce("bare_adapter", 3, 3, d, device="cpu")
+    assert list(man) == ["schema", "adapter", "semantic_id", "seed", "n", "torch", "device", "cases"]
+    assert [man[k] for k in ("schema", "adapter", "semantic_id", "seed", "n", "device")] == [
+        "verity-gen/difftest-produce/v1", "bare_adapter", "test/BiasAdd@v1", 3, 3, "cpu"]
+    assert [list(c) for c in man["cases"]] == [["i", "statics", "inputs", "outputs", "seconds", "edge"]] * 3
+    assert [(c["i"], c["statics"], c["seconds"], c["edge"]) for c in man["cases"]] == [
+        (0, {"N": 4}, 0.25, False), (1, {"N": 4}, 0.25, True), (2, {"N": 4}, 0.25, False)]                 # a case's own word, over its kinds'
+    by_name = difftest.produce("named_adapter", 3, 3, tmp_path / "named", device="cpu")
+    assert [c["edge"] for c in by_name["cases"]] == [False, False, True]
+    for i in range(3):
+        for name in ("in_0", "in_1", "out_0"):
+            assert np.array_equal(np.load(d / f"case_{i}" / f"{name}.npy"), np.load(tmp_path / "named" / f"case_{i}" / f"{name}.npy"))
+    assert difftest.produce("bare_adapter", 3, 3, d, device="cpu") == man                                  # into the directories that are there now
+
+
+def test_produce_carries_a_word_of_each_dtype_it_names_to_the_operation_and_back(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    pytest.importorskip("torch")
+    words = {"float16": [0x3C00, 0xC000], "int32": [7, 2**32 - 1], "int64": [7, 2**64 - 1], "uint8": [0, 255], "int8": [1, 0x80], "bool": [0, 1]}
+    inputs: list[list[dict[str, object]]] = [[{"shape": [2], "dtype": dtype, "words": w} for dtype, w in words.items()]]
+    handed: list[list[str]] = []
+
+    def same(ins: list[Any]) -> list[Any]:
+        handed.append([str(t.dtype) for t in ins])
+        return list(ins)
+
+    _whole_adapter(monkeypatch, "each_dtype_adapter", inputs, op=same)
+    man = difftest.produce("each_dtype_adapter", 1, 3, tmp_path / "dt", device="cpu")
+    assert handed == [[f"torch.{dtype}" for dtype in words]]
+    assert man["cases"][0]["outputs"] == [{"shape": [2], "dtype": dtype} for dtype in words]
+    for j, (dtype, w) in enumerate(words.items()):
+        for name in (f"in_{j}", f"out_{j}"):
+            got = np.load(tmp_path / "dt" / "case_0" / f"{name}.npy")
+            assert got.dtype == np.dtype(f"uint{difftest.DTYPE_BITS[dtype]}") and got.tolist() == w
+
+
+def test_check_takes_an_input_that_names_no_kind_as_random(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _adapter(monkeypatch, "kindless_adapter", SEMANTIC_ID="test/BiasAdd@v1")
+    d = _produced(tmp_path / "dt", ("zeros", "random"))
+    man = json.loads((d / "manifest.json").read_text())
+    man["cases"][1]["inputs"] = [{"shape": [4], "dtype": "bfloat16"}] * 2
+    (d / "manifest.json").write_text(json.dumps(man))
+    rep = difftest.check("kindless_adapter", d)
+    assert [c["kinds"] for c in rep["cases"]] == [["zeros", "zeros"], ["random", "random"]]
+    assert rep["differential"] == {"passed": 2, "total": 2} and rep["edge_kinds_missing"] == ["max", "subnormal", "alternating"]
+    assert (rep["status"], rep["reason"]) == ("fail", "edge-kind inputs missing: ['max', 'subnormal', 'alternating']")
+
+
+def test_check_passes_one_case_that_passes_and_fails_a_directory_of_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    _adapter(monkeypatch, "lone_adapter", SEMANTIC_ID="test/BiasAdd@v1")
+    monkeypatch.setattr(difftest, "REQUIRED_EDGE_KINDS", ())                                               # no kind is asked for: the count alone decides
+    (tmp_path / "none").mkdir()
+    one = difftest.check("lone_adapter", _produced(tmp_path / "one", ("random",)))
+    none = difftest.check("lone_adapter", _produced(tmp_path / "none", ()))
+    assert (one["differential"], one["status"], one["ok"]) == ({"passed": 1, "total": 1}, "pass", True)
+    assert (none["differential"], none["status"], none["ok"], none["cases"]) == ({"passed": 0, "total": 0}, "fail", False, [])
+    assert "reason" not in one and "reason" not in none
 
 
 def test_check_reports_a_case_it_cannot_compare_as_an_error_and_goes_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
