@@ -1,12 +1,3 @@
-/-
-A row net's slot in the accepted template statement. At a row of a `sha512x3` or `hm96` slot past the net's input rows,
-the block matrices' row is the net's row placed in the slot plus Δ's first-loop pairs (`rowNet_entry`): Δ's other flat
-pairs are at the row nets' input bits (`TemplateLayout.deltaIn`), and the typed tail's at unit columns, which are in the
-root's and the parts' slots. So in every satisfying witness the slot holds its net's rows (`laidRows_of_sat`): the
-computed rows hold, and the constant column is 1 (its row is `pin · pin`, or the pin itself). With `HmNets.check`,
-template instance `g`'s `sha512x3` and `hm96` slots hold the verifier's layouts past their 8192 and 4096 input rows
-(`shaSlot_of_sat`, `hmSlot_of_sat`), `port_commit_rows`'s `hsha` and `hhm`.
--/
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Laid
@@ -29,6 +20,16 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Lowering
 import Proofs.Flock.Soundness.SparseRows
+
+/-!
+A row net's slot in the accepted template statement. At a row of a `sha512x3` or `hm96` slot past the net's input rows,
+the block matrices' row is the net's row placed in the slot plus Δ's first-loop pairs (`rowNet_entry`): Δ's other flat
+pairs are at the row nets' input bits (`TemplateLayout.deltaIn`), and the typed tail's at unit columns, which are in the
+root's and the parts' slots. So in every satisfying witness the slot holds its net's rows (`laidRows_of_sat`): the
+computed rows hold, and the constant column is 1 (its row is `pin · pin`, or the pin itself). With `HmNets.check`,
+template instance `g`'s `sha512x3` and `hm96` slots hold the verifier's layouts past their 8192 and 4096 input rows
+(`shaSlot_of_sat`, `hmSlot_of_sat`), `port_commit_rows`'s `hsha` and `hhm`.
+-/
 
 @[expose] public section
 

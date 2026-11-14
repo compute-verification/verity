@@ -15,6 +15,7 @@
   "Properties.Pouw.Credit",
   "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlus.Witnesses",
+  "Properties.Pouw.PearlPlusTie",
   "Properties.Pouw.PearlPlusDraw",
   "Properties.Nci",
   "Properties.Nci.Threads",
@@ -1424,6 +1425,18 @@
   "Pous.Component.SecurityProofs.wipeAccepts_complete": {
    "honest": ["Pous.Component.SecurityProofs.wipeAccepts_honest"],
    "nontrivial": "Pous.Component.SecurityProofs.wipeAccepts_complete_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.workIsTheCredit": {
+   "honest": ["Properties.Pouw.PearlPlus.workIsTheCredit_honest", "Properties.Pouw.PearlPlus.workIsTheCredit_drawn"],
+   "nontrivial": "Properties.Pouw.PearlPlus.workIsTheCredit_acceptAll"
+  },
+  "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": {
+   "honest": ["Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_nontrivial"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+   "honest": ["Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest"],
+   "nontrivial": "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial"
   }
  },
  "unwitnessed": {
@@ -2151,7 +2164,8 @@
     "Properties.Pouw.ServedValues",
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlus.Witnesses",
-    "Properties.Pouw.PearlPlusDraw"
+    "Properties.Pouw.PearlPlusDraw",
+    "Properties.Pouw.PearlPlusTie"
    ],
    "why": "the properties are stated against the code's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2597,6 +2611,16 @@
    "except": [],
    "why": "the circuit record's properties are stated over the code they are about (the record's text as NciCheck.RecordText reads it, the closure digest, Flock's template query, and SPOT's wiring check and bit counts) and the NCI properties they conclude, never over a proof",
    "sealed": true
+  },
+  "Properties.Pouw.PearlPlusTie": {
+   "imports": [
+    "Properties.Pouw.PearlPlus",
+    "Properties.Pouw.PearlPlusDraw",
+    "Definitions.Core.Interaction",
+    "Flock.Hash"
+   ],
+   "except": [],
+   "why": "the value tie is stated against Pearl+'s verdict's own functions through its properties (`Properties.Pouw.PearlPlus`, `Properties.Pouw.PearlPlusDraw`), and the play's collision finder as a `Claims.Finder` (`Definitions.Core.Interaction`) over the compiled SHA-512 (`Flock.Hash`)"
   }
  },
  "reads_exempt": {
@@ -7074,6 +7098,142 @@
    },
    "type_hash": "7532548f3a41c9d2ac203879f8d6f65222496282d062a35262f764f6c272b507"
   },
+  "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets : Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d05102df4dde1e92cd2881d81b7f02ced85950091d760d5f5c161d1ea61407bb",
+   "unfolded_hash": "72d13930b0a3032f69dea92d23dc9206c5216bd3c1bd586d6fabc2df57fe18d3"
+  },
+  "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_honest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_honest :",
+    "  And",
+    "    (instLTNat.lt 0",
+    "      (Fintype.card",
+    "        (Pouw.Ticket",
+    "          (Properties.Pouw.PearlPlus.weightsOf",
+    "            (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))",
+    "          (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)).length)))",
+    "    (instLTNat.lt 0",
+    "      (Properties.Pouw.PearlPlus.drawBytes",
+    "        (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "026a0503c6d8a73af8600660fd1ee98a3c314bbb88351876ddbddd6653cd663a"
+  },
+  "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_nontrivial": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Pouw.pr fun x =>",
+    "        Exists fun c =>",
+    "          And (∀ (j : Fin 1), Eq (Option.some 0) (Option.some (EquivLike.toFunLike.coe finSigmaFinEquiv (c j)).val))",
+    "            (Eq (EquivLike.toFunLike.coe finSigmaFinEquiv (c 0)).val 0))",
+    "      (Pouw.pr fun c => Eq (EquivLike.toFunLike.coe finSigmaFinEquiv (c 0)).val 0))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "6ec01e57310a86ffe9338892475b8ac130ab76e5e296ca2d1c199830267265a4"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.PearlPlus.drawIsOnItsStreams : Properties.Pouw.PearlPlus.DrawIsOnItsStreams"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e9c66af6f05b71cf08ef95a02b6537e53bad68f59da359685f8727a5f5f04d0b",
+   "unfolded_hash": "152052ec005f4064fc46356db414fa48561a19002641f794ee4a6233810f4a10"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.drawIsOnItsStreams_honest :",
+    "  instLTNat.lt 0",
+    "    (Properties.Pouw.PearlPlus.ticketTotal",
+    "      (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "3617140c0718b9faa1043556a6afd2df2407b0f625c43fccd59f3160d0325667"
+  },
+  "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.drawIsOnItsStreams_nontrivial :",
+    "  Not",
+    "    (Eq (Except.ok List.nil).toOption",
+    "      (ite",
+    "        (Eq",
+    "          (Properties.Pouw.PearlPlus.ticketTotal",
+    "            (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))",
+    "          0)",
+    "        (Option.some List.nil)",
+    "        (List.mapM",
+    "          (fun j =>",
+    "            (FlockSoundness.Randomness.uniformOn",
+    "                  (Properties.Pouw.PearlPlus.ticketTotal",
+    "                    (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)))",
+    "                  (FlockSoundness.Randomness.stream ByteArray.empty",
+    "                    (List.cons (FlockSoundness.Randomness.Part.str \"u\")",
+    "                      (List.cons (FlockSoundness.Randomness.Part.int j) List.nil))",
+    "                    (Properties.Pouw.PearlPlus.drawBytes",
+    "                      (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))))).bind",
+    "              fun r =>",
+    "              if h :",
+    "                  instLTNat.lt r",
+    "                    (Finset.univ.sum fun u =>",
+    "                      Properties.Pouw.PearlPlus.weightsOf",
+    "                        (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))",
+    "                        u.val) then",
+    "                Option.some",
+    "                  (Properties.Pouw.PearlPlus.tileOf",
+    "                    (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil))",
+    "                    (Properties.Pouw.PearlPlus.ticketAt",
+    "                      (PouwCheck.PearlPlus.tickets (List.cons Properties.Pouw.PearlPlus.honestPass List.nil)) ⟨r, h⟩))",
+    "              else Option.none)",
+    "          (List.range 1))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b9de4b365a7c611ee251e898b7e474417e89d5b95b779f8c1ad9e9e7f6c59174"
+  },
   "Properties.Pouw.PearlPlus.loadedGivesUp": {
    "owner": "@proofs",
    "signature": ["Properties.Pouw.PearlPlus.loadedGivesUp : Properties.Pouw.PearlPlus.LoadedGivesUp"],
@@ -7462,6 +7622,89 @@
     "reads": []
    },
    "type_hash": "2b6191f28ac6753de639a214d86d4b254eeb6594d2872a6c67a3b015f60bdf9f"
+  },
+  "Properties.Pouw.PearlPlus.workIsTheCredit": {
+   "owner": "@compute-accounting",
+   "signature": ["Properties.Pouw.PearlPlus.workIsTheCredit : Properties.Pouw.PearlPlus.WorkIsTheCredit"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "47c42ae4813978422a4d6d74a0ac37dd785203118385bfa9072fcc63ab846704",
+   "unfolded_hash": "fb8dea540d30295313529b718fc6118cd2e32928530aa0b3c82a89ea135ad2bf"
+  },
+  "Properties.Pouw.PearlPlus.workIsTheCredit_acceptAll": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.workIsTheCredit_acceptAll :",
+    "  Not",
+    "    (Eq",
+    "      (Properties.Pouw.PearlPlus.acceptAllCheck Properties.Pouw.PearlPlus.emptyRun",
+    "          Properties.Pouw.PearlPlus.noOpening).work",
+    "      (Option.some",
+    "        (PouwCheck.PearlPlus.testCredit Properties.Pouw.PearlPlus.emptyRun.testInstance",
+    "          (PouwCheck.PearlPlus.creditAtAssumption Properties.Pouw.PearlPlus.acceptAllPlan.passes",
+    "            Properties.Pouw.PearlPlus.emptyRun.draws",
+    "            (PouwCheck.PearlPlus.overCapDraws Properties.Pouw.PearlPlus.acceptAllPlan",
+    "              (Properties.Pouw.PearlPlus.acceptAllCheck Properties.Pouw.PearlPlus.emptyRun",
+    "                  Properties.Pouw.PearlPlus.noOpening).verdicts)",
+    "            PouwCheck.PearlPlus.DELTA))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b008d858feb715f6bc64dab21e020cf7c48652275a93bcd6e2b9430d497a60b6"
+  },
+  "Properties.Pouw.PearlPlus.workIsTheCredit_drawn": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.workIsTheCredit_drawn :",
+    "  And",
+    "    (Eq (PouwCheck.PearlPlus.check Properties.Pouw.PearlPlus.testRun Properties.Pouw.PearlPlus.testOpener).accept",
+    "      Bool.true)",
+    "    (Eq (PouwCheck.PearlPlus.check Properties.Pouw.PearlPlus.testRun Properties.Pouw.PearlPlus.testOpener).work",
+    "      (Option.some",
+    "        (PouwCheck.PearlPlus.testCredit Bool.true",
+    "          (PouwCheck.PearlPlus.creditAtAssumption (List.cons Properties.Pouw.PearlPlus.testPass List.nil) 1 0",
+    "            PouwCheck.PearlPlus.DELTA))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "587636a60568a0fd73a942b72fcc10027254aa6a637a176395f080a9edff914f"
+  },
+  "Properties.Pouw.PearlPlus.workIsTheCredit_honest": {
+   "owner": "@compute-accounting",
+   "signature": [
+    "Properties.Pouw.PearlPlus.workIsTheCredit_honest :",
+    "  And",
+    "    (Eq (PouwCheck.PearlPlus.check (Properties.Pouw.PearlPlus.honestRun 0) Properties.Pouw.PearlPlus.noOpening).accept",
+    "      Bool.true)",
+    "    (Eq (PouwCheck.PearlPlus.check (Properties.Pouw.PearlPlus.honestRun 0) Properties.Pouw.PearlPlus.noOpening).work",
+    "      (Option.some",
+    "        (PouwCheck.PearlPlus.testCredit Bool.false",
+    "          (PouwCheck.PearlPlus.creditAtAssumption (List.cons Properties.Pouw.PearlPlus.honestPass List.nil) 0 0",
+    "            PouwCheck.PearlPlus.DELTA))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "eeb754ec6ad3855a2214703a7584e0bf4c9573216c1788a514afbfa81853f9ee"
   },
   "Properties.Pouw.PearlPlus.yIsTheUnscale": {
    "owner": "@proofs",
@@ -13271,6 +13514,18 @@
    "Properties.Challenger.Drawn.familyOneCommitmentRead": {
     "function": "Spot.Challenger.coinsReason",
     "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.workIsTheCredit": {
+    "function": "PouwCheck.PearlPlus.check",
+    "outcome": "accept"
+   },
+   "Properties.Pouw.PearlPlus.coinBytesGiveUniformTickets": {
+    "function": "FlockSoundness.Randomness.uniformOn",
+    "outcome": "none"
+   },
+   "Properties.Pouw.PearlPlus.drawIsOnItsStreams": {
+    "function": "PouwCheck.PearlPlus.draw",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -13281,9 +13536,6 @@
    "Pous.EndToEnd.RunCertifies": "unstated: a step of periodHeld: it joins the composed check's runCheckAccepts with the setup check's acceptsDecodes and publishesRoot, all three proved, and runCertifies proves it from them",
    "Properties.Served.SeededScheduleNotLive": "unstated: Compose's UnitsOfLayout and LayerCommitted exclude each other on a circuit with a read run input, proved by Properties.Served.seededScheduleNotLive; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.Served.TieScope": "unstated: the served tie gives Compose's Scope, proved by Properties.Served.tieScope; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.WorkIsTheCredit": "unstated: the work an accepted run publishes is `creditAtAssumption` over the plan's passes at the run's draws, the draws that landed on a tile over its inert-work bound (X_O) and δ = 1/100, crediting nothing on a test instance's input, and a refused or rejected run publishes none; a draft statement, unproved, which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "unstated: Pearl+'s run draw names, for draw j, the tile of the ticket (Pouw.Ticket, in finSigmaFinEquiv's order) its key's stream j numbers, the law Pouw.MissBound reads, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
-   "Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets": "unstated: t independent streams of drawBytes uniform bytes number tickets in any event no more often than t uniform tickets do, unproved; PLUSCOMP's draft statement, which gets a guarantee entry once red team has read it",
    "Properties.Pouw.LiveSalt.epochRootBinding": "restatable: its hypotheses, 64-byte weights' roots and epochs below 2^64, are not an acceptance of `epochOpenRoot`, which returns on any input; stated over `PouwCheck.liveSaltCheck`'s acceptances, whose weights' roots are SHA-512 digests and whose `pass_index` is refused at 2^64 (`PASS_FORM`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.LiveSalt.rowSeedBinding": "restatable: its hypotheses, call indices and rows below 2^32 and two different pairs, are not an acceptance of `rowSeed`, which returns on any input; stated over the Pearl-C period's credit (CMP-82), which refuses a call index of 2^32 or more (`CALL_RANGE`), it fits, a restatement for CMP-81's coordinator to rule on. The salt's choice among a weights' root's epochs (the prover picks `pass_index`, so it can open several epochs over one `W` and present the salt it likes) rests on the grinding term over every epoch the prover can open, at most n·ε for n epochs, until CMP-82's period refuses a complete salt-only session that no accepted pass presents (ci's review of #3968)",
    "Properties.Pouw.Period.SecurityProofs.checkedWorkPeriod": "frozen (no-function,world-unlisted): E2E-POUW's bridge (#4363, red team at 28a6d49e15), CircuitWorkMonitoringPeriod at the period's proofs with the deployed check's verdict (Properties.Pouw.Period.checkedRun): a window is credited exactly when PouwCheck.protocol.check accepts it and every earlier window, so the accepted prefix and its live words are the check's (checkedLive); except with probability delta_s + n (delta_bind + delta_ks). The check is read inside the event, through the prefix, not as one acceptance hypothesis, and the event is a Pouw.RelativeSecurity.prob that shape.events does not list. Its premises off the premises list: CircuitWorkMonitoringPeriod's claims; RegisteredBeforeDraw, SampleIsCoin and ServiceSound (in place of JointSound) are listed under assumptions, each a named Prop with its own record (ASK-133, option A, decided by the lane): RegisteredBeforeDraw and SampleIsCoin protocol-code facts to prove (the record doesn't order registration before the draw coin, CMP-91's to fix; the check's draw is the model's), ServiceSound standard crypto (C-Flock's soundness under live coins); proved from CircuitWorkMonitoringPeriod (Proofs.Pouw.Period).",
@@ -13340,7 +13592,15 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
+   "Properties.Pouw.PearlPlus.TieMeans": "unstated: what `tieOf` establishes of W: its format and digest, one round a pass, its version against the tie's weights, and each call's A rows, y and weight rows registered once under the pass's roots; a draft statement, unproved",
+   "Properties.Pouw.PearlPlus.AcceptedIsHeldToW": "unstated: an accepted verdict on an input that names W is a run held to W whose opened tiles are accepted (`Run.Accepts`), read off `check` and `plan`; a draft statement, unproved",
+   "Properties.Pouw.PearlPlus.YAtWIsTheCall": "unstated: over t uniform work-weighted tickets, an accepted run whose table holds its openings has its untied tiles hold more than ε of its ticket weight with probability at most δ + q / 2^256, at (1 − ε)^t ≤ δ under ecr/sha-512 at the play's finder; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`), not one function's",
+   "Properties.Pouw.PearlPlus.PeriodYAtWIsTheCall": "unstated: each sequence's accepted prefix of a monitoring period's runs has ∏ (1 − wrong share) below 1 − ε with probability at most δ + q / 2^256, each run committed before its coin and each sample t tickets on its coin; a draft statement over the period's runs as functions of its coins, unproved",
+   "Properties.Pouw.PearlPlus.FleetYAtWIsTheCall": "unstated: the period's runs pooled convexly across sequences at ends fixed before the coins, at one δ; a draft statement over the period's runs as functions of its coins, unproved",
+   "Properties.Pouw.PearlPlus.UntiedCellsAtMost": "unstated: a run whose wrong share is at most ε has at most `cellsAt` ε untied credited cells, a fact of the run's passes and table with no probability in it, proved (`Properties.Pouw.PearlPlus.untiedCellsAtMost`, in `Proofs.Properties.Pouw.PearlPlus.Tie`) and stated by no guarantee yet: the step from `YAtWIsTheCall`'s share to a count of cells",
+   "Properties.Pouw.PearlPlus.UntiedCellsAtW": "unstated: `YAtWIsTheCall` as a count of cells: an accepted run whose table holds its openings has more than `cellsAt` ε untied credited cells with probability at most δ + q / 2^256; a draft statement, unproved, whose acceptance is an abstract run's (`Run.Accepts`)",
+   "Properties.Pouw.PearlPlus.PeriodUntiedCellsAtW": "unstated: `PeriodYAtWIsTheCall` as a count of cells: a sequence's accepted prefix holds more untied credited cells than `Runs.cellsUpTo` with probability at most δ + q / 2^256; a draft statement over the period's runs as functions of its coins, unproved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -17351,6 +17611,12 @@
     "Pouw.Dither.Period.rv": "93f43991f36cc320b6427edd201492a99b52a40724ab1bf581765b3b639ea96b",
     "Pouw.Dither.Period.val": "9fc5c3a6662ec4e34eac41e1cdd41a606ff1405d6233cc1fd3632e394f0af3cf",
     "Pouw.Dither.Period.value": "caf38c15514a505918eaa227960de6ca24a8f3fc303bb2eef524e01ad1908332"
+   }
+  },
+  "Definitions.Pouw.Game.Defs": {
+   "digest": "0af3bce19ef181d0c2712df86b9724ce890ced875dccaac515a60811e5b9672a",
+   "definitions": {
+    "Pouw.Ticket": "a81f53a80257aa19bfa51a5478e584c53a306455900598c9c9ab2f1498d67533"
    }
   },
   "Definitions.Pouw.PearlC.Sha512": {
@@ -25163,7 +25429,7 @@
    }
   },
   "Properties.Pouw.PearlPlus": {
-   "digest": "09cb42809d491f6ae593eafc43d3b58b2324db34bcd2ec680f462ab460aef459",
+   "digest": "7009449e696e1f924db8406f33c8fd08acd208fce6172832a1fd5e055e4fef8c",
    "definitions": {
     "Properties.Pouw.PearlPlus.AcceptMeans": "435c497d2018dd7e575720ecf7868e8139bef52b00bd09985b450b0f85ec33c3",
     "Properties.Pouw.PearlPlus.LoadedGivesUp": "8b0af154a9cedb29f081c72ae7bc31952aec4d5e94989d25ed0cfd2191a71533",
@@ -25172,6 +25438,7 @@
     "Properties.Pouw.PearlPlus.RefusedBeforeTheCoin": "6ed1ce3dc8d6d5b501c7a1030569614f745b81b8c360374da15ce9eb167b9ec2",
     "Properties.Pouw.PearlPlus.TileAcceptMeans": "2a58e2b374060347ee4e111b3bfd207404553bdf4e1b1632bf6cfadec635fc29",
     "Properties.Pouw.PearlPlus.TileKeepsTheCap": "e29d55f2d934f047e775d00bc2065b5939de82b2f4731c8f66665a27854431fd",
+    "Properties.Pouw.PearlPlus.WorkIsTheCredit": "84fa82f6fefee2c3a68fab209edc19e76c3e6a11772f9deb50fe624e99352b6d",
     "Properties.Pouw.PearlPlus.YIsTheUnscale": "56d4b9563eca3102b2afb37caf66d36cffd74ce63794c79fa179c5c1c89321a2",
     "Properties.Pouw.PearlPlus.formed": "7bf6769ad60757a9959ee99ac343e7eac97819cfe353436bb8b584ea1e83ca59",
     "Properties.Pouw.PearlPlus.noiseOf": "40bffdfb7ce740d2bd663434c7cd7011d28e211f2aa88fa766f75014dc3d1b15",
@@ -25235,6 +25502,18 @@
     "Properties.Pouw.PearlPlus.witnessDomain": "096f0846a472ab17d09d621e85eff9c5565860bd8f9966134fc66d219cfde694",
     "Properties.Pouw.PearlPlus.witnessOpening": "4a76903300edc927c7935306d168d0dd5c096fcb57ec64322b90de21f1e61a02",
     "Properties.Pouw.PearlPlus.zeroSalt": "94b51a277d1798ea1cde28ed566af521131dda1fbc1664558ec16fdd08c34d7c"
+   }
+  },
+  "Properties.Pouw.PearlPlusDraw": {
+   "digest": "8b266c8ee162fc896408f3ac9496396812e3f2885887f535daeda29a5106ac66",
+   "definitions": {
+    "Properties.Pouw.PearlPlus.CoinBytesGiveUniformTickets": "08b333b7ec64ede8ff7789ca89b75bc9a3990efbac8ca4e9a16af52e16dda32d",
+    "Properties.Pouw.PearlPlus.DrawIsOnItsStreams": "5192d78663acac5fddda0528a7ef5abf7e7418ade4c44e71cc485a6499587f87",
+    "Properties.Pouw.PearlPlus.drawBytes": "fdb8467cc42ffb52fdce08fd294df69988d3a92620a39f3cfbf442c1eefedbac",
+    "Properties.Pouw.PearlPlus.ticketAt": "bb08eae5ed1653aec57ca96c1cdbe79917af4698f2a4e90a59beb67a302d85ad",
+    "Properties.Pouw.PearlPlus.ticketTotal": "67c93fb7a48695ea8aede5d14efc4473ca6342e70b4a63ae8a477fcfc3be1580",
+    "Properties.Pouw.PearlPlus.tileOf": "2f9f0b57ebed4c02a39489dd85c0dafc3ce16a1d63e6caf535ba7650ff7b2a9f",
+    "Properties.Pouw.PearlPlus.weightsOf": "b6a0c4704d8ecb38007ff7ac5567ff5f5b0649f778204b16b528e65ae514102a"
    }
   },
   "Properties.Pouw.Period": {

@@ -2432,6 +2432,16 @@
         "benchmarks/hash/dither/h1sha.cuh": "verity/protocols/experimental/dither/prover/kernels/h1sha.cuh",
         "benchmarks/hash/dither/tests/test_h1u_domain.py": "verity/protocols/experimental/dither/tests/test_h1u_domain.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/dashboard/": "infra/dashboard/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
     }
   ]
 }

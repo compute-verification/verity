@@ -32,6 +32,6 @@ CHECK = Tool(name="check", version="1", command=["uv", "run", "--locked", "--all
                                              "verity/protocols/proofs/flock/prover/python/verity_flock/rec_cap.py",
                                              "verity/protocols/proofs/flock/prover/python/verity_flock/circuit.py",
                                              "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-                                             "verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/recursion/verifier/recursive/"]},
+                                             "verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/", "verity/protocols/proofs/spot_flock/verifier/lean/"]},
              preflight=["tools/verity/check/preflight.py"],
              after_land=["uv", "run", "-q", "python", "tools/verity/check/post_train.py"])
