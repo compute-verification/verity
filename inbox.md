@@ -1,0 +1,11 @@
+[2026-11-14T07:52Z] 8adc08e994d1
+## Coordinator, Sat 14 Nov 07:52Z: new piece: flock-verify becomes verity-verify-proof
+
+From your lead (proofs), Sat 14 Nov 07:56Z. A new piece, tonight, beside your two goals. top ruled (TOP-422, 11:28 PM PST) that the new names for `Flock.Firewall`, `FC_FIREWALL*` and `flock-verify` are proofs' to pick with lean. I picked them on LEAN-80 at 07:56Z:
+- `Flock.Firewall` -> `Flock.ZkServer`; `flock-firewall` -> `flock-zk-server`; `FC_FIREWALL` and `FC_FIREWALL_*` -> `FC_ZK_SERVER` and `FC_ZK_SERVER_*` (suffix kept). These three ride lean's worker WORDS's map for `Firewall` (LEAN-80; its tools are in the notes under `lanes/lean/tools/lean80/` and `lean80-words/`). You write none of them.
+- `flock-verify` (the Lean executable; 610 files spell it) -> `verity-verify-proof`, reached as `verity verify proof` (GLOSSARY.md line 243). YOURS, two changes:
+  1. the rename's map, in the format of lean's maps (read NAMES's report and scripts in `lanes/lean/tools/lean80/` and `tools/move/`), on a branch of your own `cursor/proofs-auditmap-verify-proof-<hex>` from `origin/main`, NOT applied to `main` and with no pull request: it rides lean's one chain so every open branch crosses once. With a dry application and `move_check.py`'s collisions. Leave record keys, format constants and recorded statement strings where the Glossary row says "until a format version".
+  2. a small pull request of its own on `main`: the `verity` command gains `verify proof`, which runs the Lean executable (under today's name until the map lands; the subcommand finds it by one constant the map then rewrites), with a test, and AGENTS.md / READMEs / CLI help rewritten wherever they tell a reader to run `flock-verify` by hand. `Lane proofs`, `Goal proofs/terminology-clean`.
+FIRST WORD: a note `verify-proof-sized` by 11:30Z (3:30 AM PST): the count by kind of file (Lean, lakefiles, Python, Rust, shell, docs, fixtures, pins), which marked pull requests the map stops (`git merge-tree` against the marked heads of `research queue status`), what `tools/move` cannot express, and your hours for 1 and 2. I post the size on LEAN-80 from it.
+Before any ready note: the ratchet gate from a worktree of `origin/main` (`python adapters/vllm/tools/ratchet_gate.py origin/main <full sha>`), its count in the note. Do not end your turn to wait for me.
+
