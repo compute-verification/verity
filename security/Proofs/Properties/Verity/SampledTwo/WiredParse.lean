@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.SampledTwo.PremisesAt
-public import Proofs.Properties.Verity.Sampled.Record.PartReadsBack
+public import Proofs.Core.CanonicalJson
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
 
 /-!
@@ -14,14 +14,14 @@ two-stage design (`SpotFlock.twoConnected`). At the statement a commitment carri
 * `partition_wired`: the partition, at every audit statement: the members' partition does not read it;
 * `two_wired`: the design, at every audit statement, where the held copies' design evaluates (`TwoHolds`), which one
   accepted play gives under `HeldOfAt` (`twoHolds_of_formAccepts`);
-* `decode_of_stmtOf`, `parse_wired`: the statement, where the commitment's record is a well-formed tree
-  (`Claims.Json.Wf`): `Flock.canon` printed it, and the proved verifier's reader reads back what `canon` prints of a
-  well-formed value (`FlockComplete.JsonRT.parse_canon`, `Flock.PartCong.good_of_canon`).
+* `recordGood`, `decode_of_stmtOf`, `parse_wired`: the statement, at every commitment. The commitment's record is what
+  `Core.canonicalJson` returned of the bytes, which is printable (`Claims.Json.Good`,
+  `Verity.CanonicalJson.canonicalJson_good`); `Flock.canon` printed the statement of it, and the proved verifier's
+  reader reads back what `canon` prints of a printable value (`FlockComplete.JsonRT.parse_canon`).
 
 ## What this does not show
 
-That the commitment's record is well formed: `Spot.OneStage.commitmentOf` parses with Lean's `Json.parse`, and no
-lemma says that parser builds well-formed trees. That the held copies' design evaluates where no play is accepted.
+That the held copies' design evaluates where no play is accepted.
 -/
 
 @[expose] public section
@@ -56,11 +56,22 @@ theorem two_wired {A : Live₂} (hT : SpotFlock.RunsAs.Round2.TwoHolds A.h) (s :
     rfl
   exact Option.isSome_iff_exists.1 h2
 
-/-- **The statement a commitment carries decodes**, where the commitment's record is a well-formed tree: the
-statement is what `Flock.canon` printed of the record, which the proved verifier's reader reads back. -/
-theorem decode_of_stmtOf {c : ByteArray} {x : Msg} (hx : stmtOf c = some x)
-    (hw : ∀ cm, Spot.OneStage.commitmentOf c = .ok cm → Claims.Json.Wf cm.record) :
-    ∃ st, SpotFlock.decode x = some st := by
+/-- **The record a commitment carries is printable**: every object in it a well-formed tree and every number an
+integer. `Spot.OneStage.commitmentOf` keeps what `Core.canonicalJson` returned of the bytes. -/
+theorem recordGood {c : ByteArray} {cm : Spot.OneStage.Commitment} (h : Spot.OneStage.commitmentOf c = .ok cm) :
+    Claims.Json.Good cm.record := by
+  unfold Spot.OneStage.commitmentOf at h
+  rcases hj : Core.canonicalJson c with e | j
+  · simp [hj, Bind.bind, Except.bind] at h
+  rcases hd : Spot.Registration.digest j with e | d
+  · cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
+  subst h
+  exact Verity.CanonicalJson.canonicalJson_good hj
+
+/-- **The statement a commitment carries decodes**: the statement is what `Flock.canon` printed of the commitment's
+record, which is printable (`recordGood`), so the proved verifier's reader reads it back. -/
+theorem decode_of_stmtOf {c : ByteArray} {x : Msg} (hx : stmtOf c = some x) : ∃ st, SpotFlock.decode x = some st := by
   unfold stmtOf at hx
   split at hx
   next cm hcm =>
@@ -72,8 +83,7 @@ theorem decode_of_stmtOf {c : ByteArray} {x : Msg} (hx : stmtOf c = some x)
     | ok s =>
       rw [hc] at hx
       obtain rfl : s.toUTF8.data.toList = x := Option.some.inj hx
-      obtain ⟨j', hp, -⟩ := FlockComplete.JsonRT.parse_canon cm.record s
-        (Flock.PartCong.good_of_canon cm.record (hw cm hcm) s hc) hc
+      obtain ⟨j', hp, -⟩ := FlockComplete.JsonRT.parse_canon cm.record s (recordGood hcm) hc
       refine ⟨⟨j', SpotFlock.portRoots j'⟩, ?_⟩
       unfold SpotFlock.decode SpotFlock.jsonMsg FlockDeploy.jsonOf
       have hb : (⟨s.toUTF8.data.toList.toArray⟩ : ByteArray) = s.toUTF8 := rfl
