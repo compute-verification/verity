@@ -1,0 +1,69 @@
+# The commitments' GPU code out of `benchmarks/`: what `tools/move/layout.py --map tools/move/commitments_gpu_map.toml`
+# moves and rewrites.
+#
+# `benchmarks/torch_gpu/sha512_rows/` holds the serve-time commit's SHA-512 engine (`rows.cu`, `rows.cuh`, its host twin
+# `rows_host.cpp`, its loader `engine.py` and the settings it reads), with its check against the CPU reference and that
+# check's tests; `benchmarks/torch_gpu/commit_slots/` holds the commit call (`slots.py`, the CPU reference, and
+# `slots_gpu.py`, the GPU run) and its tests. They become `verity/commitments/cuda/sha512_rows/` and
+# `verity/commitments/cuda/commit_slots/`, beside the GPU's SHA-512 and row commitment headers they compile, and keep
+# their places relative to each other, so `slots_gpu.py`'s join to the engine (`HERE.parent / "sha512_rows"`) is
+# unchanged. What measures them stays under `benchmarks/torch_gpu/`: `sha512_rows/{bench.py, sass.py, gpu.sh}` and
+# `commit_slots/{bench.py, check.py, step.py, gpu.sh}`. No file is added or deleted, and no Python file is renamed. The
+# format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/torch_gpu/sha512_rows/engine.py" = "verity/commitments/cuda/sha512_rows/engine.py"
+"benchmarks/torch_gpu/sha512_rows/rows.cu" = "verity/commitments/cuda/sha512_rows/rows.cu"
+"benchmarks/torch_gpu/sha512_rows/rows.cuh" = "verity/commitments/cuda/sha512_rows/rows.cuh"
+"benchmarks/torch_gpu/sha512_rows/rows_host.cpp" = "verity/commitments/cuda/sha512_rows/rows_host.cpp"
+"benchmarks/torch_gpu/sha512_rows/settings.py" = "verity/commitments/cuda/sha512_rows/settings.py"
+"benchmarks/torch_gpu/sha512_rows/check.py" = "verity/commitments/cuda/sha512_rows/check.py"
+"benchmarks/torch_gpu/sha512_rows/README.md" = "verity/commitments/cuda/sha512_rows/README.md"
+"benchmarks/torch_gpu/sha512_rows/pyproject.toml" = "verity/commitments/cuda/sha512_rows/pyproject.toml"
+"benchmarks/torch_gpu/sha512_rows/tests/" = "verity/commitments/cuda/sha512_rows/tests/"
+"benchmarks/torch_gpu/commit_slots/slots.py" = "verity/commitments/cuda/commit_slots/slots.py"
+"benchmarks/torch_gpu/commit_slots/slots_gpu.py" = "verity/commitments/cuda/commit_slots/slots_gpu.py"
+"benchmarks/torch_gpu/commit_slots/README.md" = "verity/commitments/cuda/commit_slots/README.md"
+"benchmarks/torch_gpu/commit_slots/pyproject.toml" = "verity/commitments/cuda/commit_slots/pyproject.toml"
+"benchmarks/torch_gpu/commit_slots/tests/" = "verity/commitments/cuda/commit_slots/tests/"
+
+[retired]
+# the map empties no directory
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`), records of what was (the earlier moves and their maps,
+# changelogs, research's recorded moves, the archive), files whose bytes a digest pins, and Lean sources.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[split]
+# A reference to `benchmarks/torch_gpu/sha512_rows/`, which the map splits, follows its larger part, the engine:
+# "old file: old directory" = why.
+"benchmarks/torch_gpu/commit_slots/tests/test_host_twin.py: benchmarks/torch_gpu/sha512_rows" = "the engine's host twin, which moves"
+
+[modules]
+# the renames [paths] and [roots] imply (`layout.py --modules`); the files load each other from their own directories by
+# bare name (`import slots`, `import engine`), so no import spells them
+"benchmarks.torch_gpu.commit_slots.slots" = "verity.commitments.cuda.commit_slots.slots"
+"benchmarks.torch_gpu.commit_slots.slots_gpu" = "verity.commitments.cuda.commit_slots.slots_gpu"
+"benchmarks.torch_gpu.commit_slots.tests" = "verity.commitments.cuda.commit_slots.tests"
+"benchmarks.torch_gpu.sha512_rows.check" = "verity.commitments.cuda.sha512_rows.check"
+"benchmarks.torch_gpu.sha512_rows.engine" = "verity.commitments.cuda.sha512_rows.engine"
+"benchmarks.torch_gpu.sha512_rows.settings" = "verity.commitments.cuda.sha512_rows.settings"
+"benchmarks.torch_gpu.sha512_rows.tests" = "verity.commitments.cuda.sha512_rows.tests"

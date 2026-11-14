@@ -60,8 +60,8 @@ from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered
 from verity_vllm.program.predict.window_class import PearlTables, WindowClass
-from verity_vllm.protocols.pouw.pearl_c import served_y as SY
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 from verity.protocols.accounting.pouw.verifier.audit import HM96, HM96_WEIGHTS, Workload, activation_binding, commit_rows, weight_binding
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape

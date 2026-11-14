@@ -413,11 +413,11 @@ one link, one network certifier on one uplink, certifying a request rate of one 
 or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
 one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
 ε. The terms are those of
-`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`, proved in
-`security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
-failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean`); the
+`NetTiming.Guarantees.MonitoringPeriodLeakAccepted` (`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`, proved in
+`security/Proofs/Certifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
+failures `NetTiming.monitoringPeriodLeak_le_sum` sums by a union bound (`security/Proofs/Certifier/MonitoringPeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
+(`security/Definitions/Certifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
