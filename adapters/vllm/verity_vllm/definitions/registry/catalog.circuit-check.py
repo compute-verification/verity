@@ -96,7 +96,10 @@ def operand_probes() -> dict[str, Any]:
 
 
 def callee_calls() -> dict[str, tuple[str, ...]]:
-    """The families a served Call calls where that Call's own partition goes unchecked, each with the Calls that pass it."""
+    """The families a served Call calls where that Call's own partition goes unchecked, each with the Calls that pass it.
+    `DsaRMSNormSumSq_v3` and `DsaLatentRowDsMlaTile_v2` are `DsaLatentRowDsMla_v4`'s proof blocks only under serving's `PARTS`
+    cut of `DsaLatentRowDsMla_v1` (`verity_vllm.pipeline.serving_templates`): its scale part, a tile part a tile and its rotary
+    part, each one unit; a row served whole is one unit, and these two entries are then not true."""
     return {
         "AllReduceMultimemVector_v1": ("AllReduceMultimem_v1",),
         "And2_v1": ("DsaButterflyTagBits_v1", "DsaRadixTies_v1", "MhcFusedSplit_v2"),
@@ -120,6 +123,7 @@ def callee_calls() -> dict[str, tuple[str, ...]]:
         "Const32[0x44060000]_v2": ("RMSNormFusedCudaVector8_v4",),
         "DsaButterflyCtl_v1": ("DsaButterflySettings_v2",),
         "DsaButterflyTagBits_v1": ("DsaButterflySettings_v2",),
+        "DsaLatentRowDsMlaTile_v2": ("DsaLatentRowDsMla_v4",),
         "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
         "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
         "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
@@ -128,6 +132,7 @@ def callee_calls() -> dict[str, tuple[str, ...]]:
         "DsaRMSNormScale_v1": ("DsaRMSNorm_v3",),
         "DsaRMSNormSquareFma_v1": ("DsaRMSNorm_v3",),
         "DsaRMSNormSquares_v1": ("DsaRMSNorm_v3",),
+        "DsaRMSNormSumSq_v3": ("DsaLatentRowDsMla_v4",),
         "DsaRadixPass_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
         "DsaRadixTies_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
         "DsaRowValid_v1": ("DsaTopKMaskCounted_v2",),

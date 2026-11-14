@@ -7,7 +7,7 @@ from typing import Any, Callable
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """`DsMlaFp8Tile_v2` at one warp's tile (32) and GLM-5.3's (128); `DsaLatentRowDsMla_v2` at the small row (256 in four tiles of
-    64, 8 rotary values) and at GLM-5.3's (512 in four tiles of 128, 64 rotary values); `DsaLatentRowDsMlaTile_v2` at each tile width."""
+    64, 8 rotary values) and at GLM-5.3's (512 in four tiles of 128, 64 rotary values); `DsaLatentRowDsMlaTile_v2` at each tile width; `DsaLatentRowDsMla_v4` at both rows."""
     from verity.circuits.defs import bind
     from verity_vllm.definitions.registry import boolean_dsa_ds_mla
 
@@ -18,4 +18,6 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("DsaLatentRowDsMla_v2/glm53", lambda: bind(boolean_dsa_ds_mla.DsaLatentRowDsMlaV2, KVL=512, R=64, TILE=128, EPS=1e-5)),
         ("DsaLatentRowDsMlaTile_v2/small", lambda: bind(boolean_dsa_ds_mla.DsaLatentRowDsMlaTileV2, TILE=64)),
         ("DsaLatentRowDsMlaTile_v2/glm53", lambda: bind(boolean_dsa_ds_mla.DsaLatentRowDsMlaTileV2, TILE=128)),
+        ("DsaLatentRowDsMla_v4/small", lambda: bind(boolean_dsa_ds_mla.DsaLatentRowDsMlaV4, KVL=256, R=8, TILE=64, EPS=1e-5)),
+        ("DsaLatentRowDsMla_v4/glm53", lambda: bind(boolean_dsa_ds_mla.DsaLatentRowDsMlaV4, KVL=512, R=64, TILE=128, EPS=1e-5)),
     ]

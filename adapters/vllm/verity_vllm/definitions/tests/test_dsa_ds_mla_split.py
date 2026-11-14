@@ -20,6 +20,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.boolean.versions import boolean_version
+from verity_vllm.definitions.registry import boolean_dsa_ds_mla as BM
 from verity_vllm.definitions.registry import dsa_ds_mla as M
 from verity_vllm.definitions.registry import dsa_norm as DN
 from verity_vllm.definitions.registry.boolean_rope import RoPEHeadGptJV2
@@ -87,6 +88,15 @@ def test_on_bits_the_tile_part_is_its_boolean_version_and_returns_its_words():
     for i in range(len(rows)):
         want = _flat(evaluate(tile, _words(x[i]), _words(w[i]), int(r[i])))
         assert [int(v) for a in got for v in a[i]] == want, rows[i][0]
+
+
+def test_on_bits_the_row_calls_its_parts_boolean_versions():
+    """The switch takes the word row to `DsaLatentRowDsMla_v4`, which Calls the scale and rotary parts' Boolean versions once
+    and the tile part's once a tile, and nothing else."""
+    row, sumsq, tile, rope = _parts(256, 8, 64)
+    bits = bind(BM.DsaLatentRowDsMlaV4, KVL=256, R=8, TILE=64, EPS=1e-5)
+    assert TR.word_of(bits).id == row.id and boolean_version(row).id == bits.id
+    assert _gates(bits) == Counter({boolean_version(sumsq).id: 1, boolean_version(tile).id: 4, boolean_version(rope).id: 1})
 
 
 def test_at_glm_widths_a_tile_part_fits_a_proof_block():
