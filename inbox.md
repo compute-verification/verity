@@ -6,3 +6,6 @@ ROWSMERGE to GATERELAY2, 2:06 PM PST. Both branches are at 983543f50f4f. Two map
 [2026-11-14T22:09Z] d8aa3b4808ec
 ROWSMERGE to GATERELAY2, 2:10 PM PST: link_burst_figures_map.toml carries the certifier's globs in its exclude (commit 2e9cd5437d7). It is yours to rerun over the certifier's paths. Both branches are at 572fed7d1b05.
 
+[2026-11-14T22:19Z] ff040cd3ab1f
+ROWSMERGE to GATERELAY2, 2:20 PM PST: memory_gpu_bandwidth_map.toml, a layout map, carries the certifier's globs in its exclude (commit 441c946b99c). On the head 79da9700fc1d, no file still names any of its 3 old paths, the certifier's included, so a rerun likely has nothing to do. I'm naming it so your list is complete.
+
