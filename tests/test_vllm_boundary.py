@@ -61,7 +61,7 @@ ALLOWED = {
     # served arms that replace a layer's kernels inside a stock engine
     **dict.fromkeys(("benchmarks/hash/dither/dither_a.py", "benchmarks/hash/dither/dither_fused.py",
                      "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/dither_so.py",
-                     "benchmarks/hash/dither/native.py", "benchmarks/hash/dither/sbench.py"),
+                     "benchmarks/hash/dither/sbench.py"),
                     "kernels: Dither's served arms, a stock vllm.LLM per arm with its int8 linears swapped in process"),
     **dict.fromkeys(("benchmarks/hash/exactlin/percall.py", "benchmarks/hash/exactlin/share.py"),
                     "kernels: sbench's served arms over stock vLLM int8 (TritonInt8ScaledMMLinearKernel)"),

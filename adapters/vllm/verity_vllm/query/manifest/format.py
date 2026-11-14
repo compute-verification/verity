@@ -93,7 +93,7 @@ def spec_statics(spec: str) -> dict[str, Any]:
             depth -= 1
         if ch == "," and depth == 0:
             if key is not None:
-                out[key] = int(buf) if buf.lstrip("-").isdigit() else buf
+                out[key] = int(buf) if buf.lstrip("-").isdecimal() else buf
             key, buf = None, ""
             continue
         if ch == "=" and depth == 0 and key is None:
@@ -413,7 +413,7 @@ def batch_launch_shortfall(geometry: Any, active_rows: list[int], members: Itera
             continue
         if len(parts) == 1 and (geo := hidden_stream_geometry(parts[0])):
             whole.append((member, geo, int(words)))
-        elif len(parts) == 3 and parts[0][:1] == "s" and parts[0][1:].isdigit() and parts[2] in M1_STREAM_ORDER and (geo := hidden_stream_geometry(parts[1])):
+        elif len(parts) == 3 and parts[0][:1] == "s" and parts[0][1:].isdecimal() and parts[2] in M1_STREAM_ORDER and (geo := hidden_stream_geometry(parts[1])):
             planes = seqs.setdefault(int(parts[0][1:]), {})
             if parts[2] in planes:
                 return f"{member} committed twice"
@@ -561,7 +561,7 @@ def request_label(rid: Any, workload: Mapping[str, Any] | None = None) -> str:
     s = str(rid)
     if REQ_RE.match(s):
         return s
-    if s.isdigit():
+    if s.isdecimal():
         return f"r{int(s)}"
     for i, r in enumerate(reqs):
         if isinstance(r, dict) and str(r.get("request_id")) == s:
