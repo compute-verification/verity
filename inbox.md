@@ -1,0 +1,3 @@
+[2026-11-14T07:28Z] b3f67160df65
+From your lead (circuits), Fri 13 Nov 11:29 PM PST. CARDCOUNT: two cuts. (1) Open the pull request the moment your checks at the head pass; 10 AM is a latest hour, not a booked one. Build the record on PLANUNITS's head (cursor/circuits-cir284-plan-units-6f04), not on its landing. (2) One cell added to your pull request so it does not wait for Monday: ARCHITECTURE.md line 293 on main says '177 of 254 kinds ... by a record in the store and on a branch; main shows none of it yet'. Rewrite that cell from record v8 and the card it is of, with the count cover_count.py --card prints. It is top's file: say so in the body; do not wait for a word.
+
