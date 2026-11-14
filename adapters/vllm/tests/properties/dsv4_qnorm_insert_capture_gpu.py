@@ -6,7 +6,7 @@ the `fp8_ds_mla` cache, attention.py:733-750; `Dsv4IndexerQ_v1` for `fused_index
 rank: 16 query heads padded to FlashMLA's 64, the 64-token SWA page, 64 indexer heads of 128.
 
 One GPU process writes `<out>/dsv4_qnorm_insert_capture.json`, the property record `dsv4_qnorm_insert_capture`
-(`properties.record`); it prints one line per launch and per case, then `DSV4-QNORM-INSERT GO` or `NO-GO`.  `ok` (GO) = every
+(`records.property_record`); it prints one line per launch and per case, then `DSV4-QNORM-INSERT GO` or `NO-GO`.  `ok` (GO) = every
 check below.  The device gate runs first and nothing else runs when it fails (exit 3).  A phase that raises records its error
 and fails the verdict without stopping the others.  The operands are random at the served shapes, so no model weights are read.
 
@@ -80,7 +80,7 @@ from verity.definitions.registry import flashmla as F
 from tests.properties import dsv4_flashmla_capture_gpu as M
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-qnorm-insert-capture/v1"
 RECORD = "dsv4_qnorm_insert_capture.json"

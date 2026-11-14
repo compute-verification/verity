@@ -11,7 +11,8 @@ registered circuit is inference, not training).
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
 verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
-premise until proved at remote.
+premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), on the Program its check judges,
+and the composed statement still takes it.
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `Dampener*` means
@@ -78,7 +79,7 @@ product's rule and its difftest are the composition's ([README](composition/READ
    blocks are B's output on the log's θ and the advice; the committed trace is `Verity.Committed`.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
-3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
+3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, section 3, "One period, step by step"):
    1. The developer reports its advice a_j, at most ℓ_a bits, committed. B(a_j) outputs the execution block E_j,
       partitioned into inference blocks, each of which is partitioned into proof blocks, with its placement. The
       developer proves through the ZK server that it ran B correctly on the committed advice of at most ℓ_a bits, and
@@ -299,7 +300,7 @@ PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/protocols/accounting/pouw/verifier
 failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
 proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
 neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 720 and 8,760,
-`reporting.PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
+`verity.protocol.MONITORING_PERIODS`), the total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): a year's total below 1% needs δ_bind + δ_ks below about
 1.1·10⁻⁶ a phase. A year's n·(δ_bind + δ_ks) below 2⁻¹⁰⁰ needs 2⁻¹¹³·¹ a phase; the total
 also needs δ_s below 2⁻¹⁰⁰.
 
@@ -410,7 +411,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Vocab.SpotSound`, `Vocab.PouwSound` and `Vocab.InferenceOnlySound` aren't proved at remote.
+  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote. `Vocab.InferenceOnlySound` is, on the Program its
+    check judges; `Vocab.Holds` lists what that leaves unsaid of the committed files.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `Nci.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
@@ -536,7 +538,7 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Their status.** Draft (`draft:no-straddle`). `min-cut` sets them, `reference-remote-h200-pouw`'s and
   `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, with `training-cut-hardness` and
-  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
+  `training-cut-exports` assumed. `cover` sets `reference-remote-h200-elementary`'s 1, conditional, premises assumed.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%): the figures are the composition's, and with PoUW crediting nothing the same scenario gives 1.
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all

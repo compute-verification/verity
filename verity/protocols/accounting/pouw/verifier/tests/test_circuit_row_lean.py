@@ -95,15 +95,15 @@ def chain8(code, col, gt: int, r: int):
     """`chain8`: gate `r` of a chain's 5·(K/128) gates at gate `gt`, the codes at `code t` and the other side at `col t`."""
     s = 32 * (4 * (r // 5) + r % 5)
     if r % 5 < 4:
-        return ("atom8", [c(0) if r % 5 == 0 else g(gt - 1)] + [g(code(s + l)) for l in range(32)]
-                + [g(col(s + l)) for l in range(32)])
+        return ("atom8", [c(0) if r % 5 == 0 else g(gt - 1)] + [g(code(s + p)) for p in range(32)]
+                + [g(col(s + p)) for p in range(32)])
     return ("add", [c(0) if r // 5 == 0 else g(gt - 5), g(gt - 1)])
 
 
 def chain4(code, col, scale, gt: int, r: int):
     """`chain4`: gate `r` of a chain's K/64 NVF4 atoms at gate `gt`."""
-    return ("atom4", [c(0) if r == 0 else g(gt - 1)] + [g(code(64 * r + l)) for l in range(64)]
-            + [g(col(64 * r + l)) for l in range(64)] + [g(scale(4 * r + l)) for l in range(4)] + [c(56)] * 4)
+    return ("atom4", [c(0) if r == 0 else g(gt - 1)] + [g(code(64 * r + p)) for p in range(64)]
+            + [g(col(64 * r + p)) for p in range(64)] + [g(scale(4 * r + p)) for p in range(4)] + [c(56)] * 4)
 
 
 # ---- pc8 ---------------------------------------------------------------------------------------------------------------
