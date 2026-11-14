@@ -20,7 +20,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row)
+open Spot.RecordText (Row)
 
 /-- **A gate is as wide as the leaf that names it**: a leaf of a reader row, and a leaf of a unit's output row, is
 a gate whose value has the leaf's bits. -/

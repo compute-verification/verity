@@ -168,14 +168,14 @@ def fit_rate(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = 
 
 
 def share(p: dict, rate: float) -> float:
-    """Counted multiplications per server-second as a share of server FLOP, the unit of ``tiers``' efficiency terms."""
+    """Counted multiplications per server-second as a share of server FLOP, the unit of ``tiers``' counted-share terms."""
     return rate * 2 / p["kappa"] / p["node_flops"]
 
 
 def left_out(p: dict, periods: int) -> float:
     """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
     over the horizon. That window builds its weights from a seed, so F1's weight half fails there, and
-    ``InferenceOnly.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
+    ``Slowdown.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
     it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
     first windows, of the threads started later, which do no work in a first window when every server starts with the
     run. A server that joins later, or a recipe that seeds weights after a server's first window (progressive growth),
@@ -184,7 +184,7 @@ def left_out(p: dict, periods: int) -> float:
 
 
 def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
-    """The fit bound's cap on registered efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    """The fit bound's cap on the registered counted share: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
     rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
     return share(p, rate) + left_out(p, periods)
 
@@ -198,23 +198,24 @@ def free_with_lag(p: dict) -> float:
 
 
 def slowdown(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
-    x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
+    """The slowdown under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
+    x = min(MFU_0 r + declared, m mu) + cheat, free compute training at MFU_0 (reference efficiency) and the rest counted
     multiplications."""
     x = min(p["mfu"] * free_with_lag(p) + declared, p["m"] * mu) + cheat
     return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
 
 
-def attack_slowdown(p: dict, efficiency: float) -> float:
-    """D of a developer whose only route to the target is an attack of this efficiency; ``inf`` when it never gets there."""
-    return multiple_bound(p["mfu"], 0.0, efficiency, reference_efficiency=False)
+def attack_slowdown(p: dict, counted_share: float) -> float:
+    """The slowdown of a developer whose only route to the target is an attack of this counted share; ``inf`` when it
+    never gets there."""
+    return multiple_bound(p["mfu"], 0.0, counted_share, reference_efficiency=False)
 
 
 def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu", gain: float = 1.0,
             multiplier: float = DILOCO, b_sync: float = 4.0) -> dict:
     """The replica attack: each server trains the largest model it holds at ``b_train`` bits per weight (worth ``gain``
     dense weights each, for a path composition) and syncs a pseudo-gradient of ``b_sync`` bits per weight through
-    intake, its residual capacity at MFU_0 (reference efficiency). Between syncs a replica trains
+    intake, its free compute at MFU_0 (reference efficiency). Between syncs a replica trains
     MFU_0 r F b_sync / (6 lambda_in) tokens, whatever its size."""
     N = S / b_train
     lam = intake(p)
@@ -224,7 +225,7 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
     return {
         "params": N, "dense_params": gain * N, "tokens": tokens_to_reach(fit, gain * N, L), "m": m,
         "sync_s": sync_s, "tokens_per_sync": p["mfu"] * r * p["node_flops"] * b_sync / (6 * lam),
-        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "efficiency": p["mfu"] * r * m,
+        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "counted_share": p["mfu"] * r * m,
     }
 
 
@@ -254,8 +255,8 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
         "fit_over_closed": mu["central"] / closed_form(p, R),
         "visits_train": visits(S, N, B_TRAIN["central"]), "periods_train": periods_train, "mu_fit_train": mu_train,
         "slowdown_fit_train": slowdown(p, mu_train, declared),
-        "replica": rep, "slowdown_replica": attack_slowdown(p, rep["efficiency"]),
-        "path": path, "slowdown_path": attack_slowdown(p, path["efficiency"]),
+        "replica": rep, "slowdown_replica": attack_slowdown(p, rep["counted_share"]),
+        "path": path, "slowdown_path": attack_slowdown(p, path["counted_share"]),
         "slowdown_none": slowdown(p, math.inf, declared),
     }
 

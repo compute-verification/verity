@@ -7,7 +7,7 @@ the count named as the evidence writer's (`certify` computes `StreamedWipeMeetsR
 an egress out of range rejected, a prover
 keeping one label past it and a late read rejected, a session the prover left undecided; the challenger chooses `k`
 (`wipe_party --reads`) and refuses a request that names it. The certificate is checked at `k = 2906`, the H200's
-(`StreamedWipeMeetsH200`), and against the streamed wipe's own bound. The leg runs
+(`StreamedWipeMeetsH200`), and against the streamed wipe's own bound. The subprotocol runs
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
 (the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
@@ -337,7 +337,7 @@ def test_a_configuration_nobody_committed_bounds_nothing() -> None:
 
 @pytest.fixture(autouse=True)
 def committed(monkeypatch) -> None:
-    """`CONF` the one committed configuration, so a leg under it reads its pins."""
+    """`CONF` the one committed configuration, so a subprotocol under it reads its pins."""
     monkeypatch.setattr(mc, "committed", lambda: frozenset({CONF}))
 
 
@@ -369,8 +369,8 @@ def _side(tmp_path, wipe: dict, pins: list | None = None) -> tuple[Path, Callabl
     return period, side_of
 
 
-def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
-    """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
+def test_the_subprotocol_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
+    """The subprotocol whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
     (`wipe_side.py`, its key here one the configuration pins for the wipe), its case and record written, the premise
     recorded as held. No network certifier counted the
     egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
@@ -378,7 +378,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     carries the session's window on the challenger's clock."""
     period, side_of = _side(tmp_path, {"links": [CONTROL]}, side_pin())
     out, given = tmp_path / "out", wipe_judge.judge(period, monkeypatch)
-    answer = wipe_run.leg(period, "n0", out, side_of=side_of)
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
     assert answer["profile"]["placement"]["trusted-device"] == (
@@ -428,7 +428,7 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
 
 
 def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeypatch, capsys) -> None:
-    """The leg with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
+    """The subprotocol with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
     nothing. The answer is undecided, with no public outputs and no profile, and `main` exits 1."""
     period, side_of = _side(tmp_path, {})
     out = tmp_path / "out"
@@ -439,9 +439,9 @@ def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeyp
     assert record["answer"]["profile"] is None and record["lean"] is None and record["report"]["ended"] == sw.COMPLETE
 
 
-def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
+def test_the_subprotocol_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None:
     """`wipe.reads` starts a challenger on this node with `--reads`; one on its own host chooses its own (here
-    `wipe_side.py`'s default), and the leg refuses a session at another count."""
+    `wipe_side.py`'s default), and the subprotocol refuses a session at another count."""
     period, of = _side(tmp_path, {"reads": 5231})
     extras = []
 
@@ -450,7 +450,7 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
         return of(doc, node, key, local, what)
 
     with pytest.raises(RuntimeError, match="ran 2152 reads, not period.json's wipe.reads 5231"):
-        wipe_run.leg(period, "n0", tmp_path / "out", side_of=side_of)
+        wipe_run.subprotocol(period, "n0", tmp_path / "out", side_of=side_of)
     assert extras == [("--reads", "5231")]
 
 
@@ -470,7 +470,7 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     period, side_of = _side(tmp_path, {"egress_bits": 0}, side_pin())
     out = tmp_path / "out"
     wipe_judge.judge(period, monkeypatch)
-    answer = wipe_run.leg(period, "n0", out, side_of=side_of)
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
     assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
     assert json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))["egress_mib"] == 0
@@ -492,7 +492,7 @@ def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_pa
         return of(doc, node, key, local, what)
 
     out = tmp_path / "out"
-    answer = wipe_run.leg(period, "n0", out, side_of=side_of)
+    answer = wipe_run.subprotocol(period, "n0", out, side_of=side_of)
     assert extras == [()]
     assert answer["verdict"] == "accept" and answer["public"] == VACUOUS
     evidence = json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))

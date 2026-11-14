@@ -13,11 +13,14 @@
   the width rule with the separator port pinned by the protocol.
 * `anchors`: the anchored inputs' anchors, which the verifier builds (the tile checks' derived noise too, `TileAnchors`, with
   each unit's public input regions), and the execution phase's refusal of a repeated call index.
-* `plan`: closure samples behind a draw-law seam (`CountLaw`, and `WorkLaw`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
-* `pc4`, `pc8`: Pearl-C4's and Pearl-C's (FP8, forming v1) tile checks as Programs, cut into row and tile units, and
-  their hiding Programs (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed
-  ports and the anchored inputs public input regions (`PORTS`).  No scheme of theirs is in `SCHEMES` yet.
-* `rowk`: their row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
+* `plan`: closure samples behind a sampling-design seam (`CountSamplingDesign`, and `WorkSamplingDesign`, `Commitments/Draw.lean`'s work sampling design), and the tile checks' layout.
+* `tile_units`: what the tile checks share: their emitter, the ok word, the digest families, the row cut's shape
+  (`RowK`), the unit roles and the cut of a root into units (`units`, `unit_cut`).
+* `pc8`: Pearl-C's (FP8, forming v1) tile check as a Program, cut into row and tile units, and its hiding Program
+  (``Shape.hidden``), whose tiles return only their tile digest; the rows are Flock-committed ports and the anchored
+  inputs public input regions (`PORTS`).  Its scheme has no entry in `SCHEMES` yet.  Pearl-C4's (`pc4`) is
+  `verity.protocols.experimental.pearl_c4.prover`'s.
+* `rowk`: the tile checks' row units cut along k into a head, one form per segment and a tail (``Shape.row_k``, opt-in), so each
   piece fits Flock's block.
 * `compile`: PoUW as one pass over a served Program: `compile(program, scheme,
   groups)` replaces every registered matmul's dots (`MATMULS`) with the scheme's r × c tile units, each deriving its seed

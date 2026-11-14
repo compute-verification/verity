@@ -22,7 +22,8 @@ its openings coin at W + t, and the append coins in the order sampled). Each eve
 * `close(t)`: the window's samples, once its roots are final (the next window's first root, `D_t` passed, or a paced
   window's k roots once its boundary has left); rejected `few` under `min_passes` roots, `coin` at the last window if an append's coin went unused;
 * `verify(t, openings)`: `verifyWindow`'s verdict (`checkWindow` on the samples); rejected `malformed` on a window with
-  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any window.
+  no samples, whatever its openings, so a frame that doesn't decode (`Wire.openingsOf`'s `#[]`) is refused on any
+  window.
 
 A call `Session` refuses with `SessionError` (out of turn, after the session ended, before a window's roots are final)
 is `refused`. After a rejection every later call but `start` is refused, as `_live` raises.
@@ -86,7 +87,7 @@ structure State where
   digest : ByteArray
   coins : Array ByteArray
   appendCoins : Array ByteArray
-  appendDrawn : Nat := 0
+  appendSampled : Nat := 0
   notBeforeNs : Nat
   windows : Array Win := #[]
   filling : Nat := 0
@@ -174,12 +175,12 @@ def append (s : State) (root : ByteArray) (count : Int) : Except String (Result 
     return s.fail s.filling .append
   if s.appends.any (·.root == root) || (s.windows.size == s.params.windows && (s.windows.back?.map (·.final)).getD false)
   then return s.fail s.filling .coin
-  let some coin := s.appendCoins[s.appendDrawn]? | throw "the append coins ran out"
+  let some coin := s.appendCoins[s.appendSampled]? | throw "the append coins ran out"
   let first := s.extent
   let n := count.toNat
   return (.appended first coin,
     { s with
-      appendDrawn := s.appendDrawn + 1
+      appendSampled := s.appendSampled + 1
       appends := s.appends.push ⟨first, n, root, coin⟩
       head := some (appendHead s.head first n root)
       extent := first + n })

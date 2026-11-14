@@ -110,8 +110,8 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/Slowdown/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/Slowdown/Guarantees/Remote.lean), which bounds the slowdown by it
+#: `Slowdown.Slowdown.remoteSlowdown` as security/Definitions/Slowdown/Remote.lean defines it, and the conclusion of
+#: `Slowdown.Guarantees.SlowdownRemote` (security/Definitions/Slowdown/Guarantees/Remote.lean), which bounds the slowdown by it
 REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteSlowdown mfu (unregisteredShare C U)"
 
@@ -239,11 +239,11 @@ def test_the_links_form_is_what_windows_proves():
 
 def test_the_declared_io_bound_at_w63_is_the_per_server_bounds_per_window_honest_delta_form():
     """The per-server bound at W63 (`regime.onsite-w63`: B 512, r 4, 4 lanes, C 47, IDB 17, D 27, KO 64, τ_b 100 ms,
-    32-bucket link-windows), its `requestBits`, `bucketBits`, `windowRequests` and `windowBits`
+    32-bucket execution phases), its `requestBits`, `bucketBits`, `windowRequests` and `windowBits`
     (`draft:per-server-ingress`). A request's head leaves 988 bits free
     (the ordinal, content-length, `max_tokens` and `seed` at 32 each, `temperature` and `top_p` at 24, `model` and
     `user` at 406), and its prompt is K0 + (C − 1) K = 12 + 46 · 45 = 2,082 ids: 36,382 bits in. A bucket is
-    4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). A link-window holds `4 ⌈32 / 28⌉ = 8`
+    4 ⌈log₂ 6⌉ = 12 bits, and a request 1,095 out (1,088 id bits and the count). An execution phase holds `4 ⌈32 / 28⌉ = 8`
     requests, so a server takes at most 291,440 bits in a 3.2 s window, 91.1 kbit/s in and 2.7 kbit/s out, against the
     network certifier's line rate of 655 kbit/s each way. That is never less than the rate over many windows, 52.1 kbit/s, which it
     equals only at T = D + 1. An incorrect ingress unit, which this honest-δ form excludes, would add 356,592 bits
@@ -301,7 +301,7 @@ def test_a_servers_certified_ingress_is_its_declared_inputs_and_line_rate_the_up
 
 def test_onsite_w63_beside_the_reference():
     """W63's cadence beside the reference H200 server (`reference-onsite-h200`, ingress α Φ = 3.23 Mbit/s): 91.1 kbit/s
-    a 32-bucket link-window, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
+    a 32-bucket execution phase, 0.028 α Φ at v4-pro-session, so a day's input drops from 3.19e11 to 4.80e10 bits. No
     bound a lock states limits a block of either size, so the lower bound's padded size ratio is remote's at both
     (2.99, at the card table's clock), with the best attack's at 249 and 250. With the draft bounds admitted
     (`bounds.lock_only` off) it rises from 98.7 to 99.8, which an unregistered share of 1% holds near 100, and at line

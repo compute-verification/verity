@@ -1,6 +1,6 @@
 """The memory line a paced session shows held over time, the line of record a gate run publishes: the conclusions of
 `Accounting.Guarantees.Remote.HeldOverTime` (time-held) and `HeldOverTimeLinks` (link-charged),
-`security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
+`security/Definitions/Compose/Guarantees/RemoteHeld.lean`, read over each stretch of a session's groups, in exact
 rationals.  It is computed here and in its Lean, `lean/Poub/Line.lean`, held to this by the difftest
 (`lean/tests/test_line.py`, every refusal compared word for word): `verity/protocols/accounting/poub/verifier/session/verifier.py`'s
 `paced_line` (its diagnostic, on the verifier's clock) and `auditor_line.py` (the line of record, on the challenger's
@@ -485,7 +485,7 @@ SHARED = ("a record drawn more than one window a coin (groups_per_coin) at one w
 (`audit.Pace.in_flight` 1) has no line: no property of the code covers its samples there (`LiveIsRun` is at two)."""
 
 
-def draws_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
+def samples_of(g: int, ws: Sequence[Mapping]) -> list[tuple[int, int]]:
     """The samples of a record sampled `g` windows a coin, as the pooled bound reads them (`audit.pooled_windows`): sample c is
     windows cg … min((c + 1)g, W) − 1, its receipts U and its samples theirs summed."""
     return [(sum(receipts(w) for w in ws[a:a + g]), sum(w["drawn"] for w in ws[a:a + g])) for a in range(0, len(ws), g)]
@@ -498,7 +498,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
     and its times and reads `seen[t]`'s, and window t's receipts and samples are the record's (Σ lengths_t, drawn_t).
     Refused unless the auditor saw each of the record's windows and each window drew min(s, U_t) of its receipts at
     the session's `samples` s, as the verifier's sample does. Sampled `g` > 1 windows a coin (`groups_per_coin`), the
-    windows are the record's samples (`draws_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
+    windows are the record's samples (`samples_of`), each refused unless it sampled min(s, U) of its U receipts and has fewer
     than `audit.RECEIPT_LIMIT` (2^64), as `receive` holds each window to: the memory model's sample reads at most
     2^64 − 1 receipts (`Properties.Poub.Line.receiptMax`), and a sample's windows' receipts need not be."""
     ws = record["windows"]
@@ -511,7 +511,7 @@ def of_summary(record: Mapping, samples: int, seen: Sequence[Seen],
                               f"min({samples}, {receipts(w)})")
         windows = [(receipts(w), w["drawn"]) for w in ws]
     else:
-        windows = draws_of(g, ws)
+        windows = samples_of(g, ws)
         for c, (u, d) in enumerate(windows):
             if d != min(samples, u):
                 raise Refused(f"draw {c} drew {d} of its {u} receipts, not min({samples}, {u})")

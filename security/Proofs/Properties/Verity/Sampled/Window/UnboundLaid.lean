@@ -6,7 +6,7 @@ public import Proofs.Properties.Verity.Sampled.Window.UnboundMember
 # The claim at a window: across its members
 
 `JointAuditV5.unboundIncorrect` proves the window's statement of `Proofs.Properties.Verity.Sampled.Window.Unbound`
-(`JointAuditV5.UnboundIncorrect`) for every window, and `Verity.Sampled.Window.unboundIncorrect` at every cost: where the
+(`JointAuditV5.UnboundIncorrect`) for every window, and `Verity.Sampled.ExecutionPhase.unboundIncorrect` at every cost: where the
 window's members are laid out in order and the window's read, openings and trace are its members' side by side
 (`JointAuditV5.ReadsAt`), every unit the trace doesn't bind is one of the window's incorrect proof blocks.
 
@@ -138,7 +138,7 @@ end Flock.Guarantees
 namespace Verity.Sampled
 
 /-- **Across a window's members, the units its trace doesn't bind are its incorrect proof blocks**, at every cost
-(`Window.UnboundIncorrect`). -/
-theorem Window.unboundIncorrect (W : Window) : W.UnboundIncorrect := fun t _ => (W.joint t).unboundIncorrect
+(`ExecutionPhase.UnboundIncorrect`). -/
+theorem ExecutionPhase.unboundIncorrect (W : ExecutionPhase) : W.UnboundIncorrect := fun t _ => (W.joint t).unboundIncorrect
 
 end Verity.Sampled

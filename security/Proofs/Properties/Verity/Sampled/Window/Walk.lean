@@ -642,18 +642,18 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 /-- **A window's members' decoders**, by a member's place in the window, at a strategy `σ` of the period's game. -/
-abbrev ExecutionPhaseDecoders (W : Window) (σ : Strategy (V.game θ F c)) : Type 1 :=
+abbrev ExecutionPhaseDecoders (W : ExecutionPhase) (σ : Strategy (V.game θ F c)) : Type 1 :=
   ℕ → PosDecoders (V.game θ F c) σ W.rounds ByteArray
 
 /-- **The registration the window's projection sends**: the first member's decoding of the record's most likely
 message, the joint registration every member's session reads. -/
-noncomputable def executionPhaseReg (W : Window) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseReg (W : ExecutionPhase) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) : ByteArray :=
   (D 0).reg ((recordCut V θ F c rd).cut.modeHere σ)
 
 /-- **The window's audit's outcome** at the widened coins `ω` and the transcripts `ts`: the decoded registration
 beside whether the sample ended at `ω`, the sample at `ω`, and `ts`. -/
-noncomputable abbrev executionPhaseOut (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable abbrev executionPhaseOut (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (ω : (W.extend M.widening).L.Ω) (ts : List FlockSoundness.Discharge.Exec.Transcript) : W.Out :=
   ((executionPhaseReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω), (W.extend M.widening).L.draw ω, ts)
@@ -662,7 +662,7 @@ noncomputable abbrev executionPhaseOut (W : Window) (t : ℕ) (rd : Reading W.ro
 `D` and the coin map `M`: the registration decoded from the record's most likely message; on the sample's widened
 coins `ω`, the sessions' projection in the members' order from the play's start on `M`'s tape at `ω`, at the rounds'
 cuts. -/
-noncomputable def executionPhaseP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseP (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) :
     FlockSoundness.Game.Strategy ((W.extend M.widening).joint t).game :=
   ⟨executionPhaseReg V θ F c W rd σ D, fun ω =>
@@ -672,7 +672,7 @@ noncomputable def executionPhaseP (W : Window) (t : ℕ) (rd : Reading W.rounds)
 
 /-- **The joint distribution the window's projection simulates**: over the window's audit's coins, the projected play's outcome
 beside the period's tape `σ` is played on. -/
-noncomputable def executionPhaseG (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseG (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) :
     Game (W.Out × CoinTape (V.game θ F c) σ) :=
   .coin (W.extend M.widening).L.Ω fun ω =>
@@ -681,7 +681,7 @@ noncomputable def executionPhaseG (W : Window) (t : ℕ) (rd : Reading W.rounds)
       fun o => (executionPhaseOut V θ F c W t rd σ D M ω o.1, o.2)
 
 /-- **The window's projected play's events have their probabilities under the joint distribution.** -/
-theorem prob_executionPhaseP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem prob_executionPhaseP (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (E : W.Out → Prop)
     (w : Strategy (executionPhaseG V θ F c W t rd σ D M)) :
     FlockSoundness.Game.prob E ((W.extend M.widening).joint t).game (executionPhaseP V θ F c W t rd σ D M) =
@@ -697,7 +697,7 @@ theorem prob_executionPhaseP (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ 
           (executionPhaseOut V θ F c W t rd σ D M ω o.1, o.2)) _ (w ω)).symm)
 
 /-- The joint distribution's strategy: it has no message to send. -/
-noncomputable def executionPhaseGS (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseGS (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) :
     Strategy (executionPhaseG V θ F c W t rd σ D M) :=
   fun ω => Strategy.map _ _ (seqWS D M ((W.extend M.widening).L.draw ω) (executionPhaseReg V θ F c W rd σ D) 0
@@ -706,7 +706,7 @@ noncomputable def executionPhaseGS (W : Window) (t : ℕ) (rd : Reading W.rounds
 /-- **The joint distribution's support off the held-off events**: the outcomes at the decoded registration and the sample of
 some widened coins `ω`, with the sessions' trace off them from the play's start on `M`'s tape at `ω`, ending on the
 outcome's transcripts and tape. -/
-def ExecutionPhaseReaches (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+def ExecutionPhaseReaches (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold)
     (B : ExecutionPhaseRoundHold) (o : W.Out × CoinTape (V.game θ F c) σ) : Prop :=
   ∃ ω : (W.extend M.widening).L.Ω,
@@ -717,7 +717,7 @@ def ExecutionPhaseReaches (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : S
 
 /-- **An event of the period's tape under the joint distribution off the held-off events**: over the widened coins, the
 sessions' share off them from the play's start (`seqOff`). -/
-noncomputable def executionPhaseOff (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+noncomputable def executionPhaseOff (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold)
     (B : ExecutionPhaseRoundHold) (Q : CoinTape (V.game θ F c) σ → Prop) : ℝ≥0∞ :=
   avg fun ω : (W.extend M.widening).L.Ω =>
@@ -726,7 +726,7 @@ noncomputable def executionPhaseOff (W : Window) (t : ℕ) (rd : Reading W.round
 
 /-- **The joint distribution off the held-off events gives an event of the tape at most `E`'s probability** wherever, on its
 support off them (`ExecutionPhaseReaches`), the event implies `E` of the outcome. -/
-theorem executionPhaseOff_le_prob (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+theorem executionPhaseOff_le_prob (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold)
     (B : ExecutionPhaseRoundHold) (Q : CoinTape (V.game θ F c) σ → Prop) (E : W.Out → Prop)
     (h : ∀ o, ExecutionPhaseReaches V θ F c W t rd σ D M BL B o → Q o.2 → E o.1)
@@ -747,7 +747,7 @@ theorem executionPhaseOff_le_prob (W : Window) (t : ℕ) (rd : Reading W.rounds)
 
 /-- **The coin map's premise at the window, off the held-off events**: at every event `Q` of the period's tape, the
 joint distribution's tape off them is within the hiding term of the uniform tape. -/
-def ExecutionPhaseCouples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
+def ExecutionPhaseCouples (W : ExecutionPhase) (t : ℕ) (rd : Reading W.rounds) (σ : Strategy (V.game θ F c))
     (D : ExecutionPhaseDecoders V θ F c W σ) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold)
     (B : ExecutionPhaseRoundHold) : Prop :=
   ∀ Q : CoinTape (V.game θ F c) σ → Prop, ENNReal.ofReal (Claims.Pr Q) ≤
@@ -757,7 +757,7 @@ def ExecutionPhaseCouples (W : Window) (t : ℕ) (rd : Reading W.rounds) (σ : S
 distribution's support off the held-off events, a tape whose play's sampled verdict accepts, that misses at no round and not at
 the record, and whose play `P` holds of, is beside an outcome the window's audit accepts: verity-verify-proof `--zk` accepts
 the transcript of every member with a proof block in the sample (`JointAuditV5.Accepts`). -/
-def ExecutionPhaseDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+def ExecutionPhaseDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold) : Prop :=
   ∀ o, ExecutionPhaseReaches V θ F c W t rd σ D M BL B o →
@@ -768,7 +768,7 @@ def ExecutionPhaseDecodes (k : Verity.Registration.Composite) (P : Exchange → 
 /-- **The logged coupling at the window's projection**: an accepted play `P` holds of, on a tape that misses at no
 round and not at the record, is at most as likely as the window's audit's acceptance at the projected strategy, plus
 the hiding term, wherever, off the held-off events, the coin map's premise and the decoders' hold. -/
-theorem executionPhaseLogged (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+theorem executionPhaseLogged (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (hC : ExecutionPhaseCouples V θ F c W t rd σ D M BL B) (hD : ExecutionPhaseDecodes V θ F c k P W t rd σ D M BL B) :
@@ -790,41 +790,41 @@ theorem executionPhaseLogged (k : Verity.Registration.Composite) (P : Exchange �
 /-! ## The coupling at the window -/
 
 /-- A reading of each window's rounds: every member's session's, in the members' order. -/
-abbrev ExecutionPhaseReadings := (W : Window) → ByteArray → Array ByteArray → ByteArray → Reading W.rounds
+abbrev ExecutionPhaseReadings := (W : ExecutionPhase) → ByteArray → Array ByteArray → ByteArray → Reading W.rounds
 
 /-- **A round's two-continuation finder at the window**: the round's cut's, at `2t + 2h` SHA-512 calls on every
 coin. -/
-noncomputable def executionPhaseMsgFinder (rd : ExecutionPhaseReadings) (W : Window) (θ : ByteArray) (F : Array ByteArray)
+noncomputable def executionPhaseMsgFinder (rd : ExecutionPhaseReadings) (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) (j : Fin W.rounds) : Claims.Finder :=
   (roundCut V θ F c (rd W θ F c) j).cut.finder σ (2 * V.cost θ F c σ + 2 * W.h)
 
 /-- **The record's two-continuation finder at the window**: the record's cut's, at `2t + 2h` SHA-512 calls on every
 coin. -/
-noncomputable def executionPhaseRecordFinder (rd : ExecutionPhaseReadings) (W : Window) (θ : ByteArray) (F : Array ByteArray)
+noncomputable def executionPhaseRecordFinder (rd : ExecutionPhaseReadings) (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) : Claims.Finder :=
   (recordCut V θ F c (rd W θ F c)).cut.finder σ (2 * V.cost θ F c σ + 2 * W.h)
 
 omit θ F c in
-theorem executionPhaseMsgFinder_calls (rd : ExecutionPhaseReadings) : ∀ (W : Window) (θ : ByteArray) (F : Array ByteArray)
+theorem executionPhaseMsgFinder_calls (rd : ExecutionPhaseReadings) : ∀ (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) (j : Fin W.rounds) (x : (executionPhaseMsgFinder V rd W θ F c σ j).S),
     ((executionPhaseMsgFinder V rd W θ F c σ j).cost x : ℝ) ≤ W.qM (V.cost θ F c σ) := fun W θ F c σ j _ => by
   show ((2 * V.cost θ F c σ + 2 * W.h : ℕ) : ℝ) ≤ W.qM (V.cost θ F c σ)
-  simp [Window.qM]
+  simp [ExecutionPhase.qM]
 
 omit θ F c in
-theorem executionPhaseRecordFinder_calls (rd : ExecutionPhaseReadings) : ∀ (W : Window) (θ : ByteArray) (F : Array ByteArray)
+theorem executionPhaseRecordFinder_calls (rd : ExecutionPhaseReadings) : ∀ (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) (x : (executionPhaseRecordFinder V rd W θ F c σ).S),
     ((executionPhaseRecordFinder V rd W θ F c σ).cost x : ℝ) ≤ W.qM (V.cost θ F c σ) := fun W θ F c σ _ => by
   show ((2 * V.cost θ F c σ + 2 * W.h : ℕ) : ℝ) ≤ W.qM (V.cost θ F c σ)
-  simp [Window.qM]
+  simp [ExecutionPhase.qM]
 
 /-- **The window's constructions with the projection and the messages' finders** at the readings `rd`, the members'
 decoders `D` and the coin maps `M`: the coins are `M`'s widening, the projection `executionPhaseP`, the rounds' and the
 record's finders their cuts'; `K`'s read finder, forger and bound digests' finder. -/
 noncomputable def ExecutionPhaseConstructions.withProject (K : ExecutionPhaseConstructions V) (rd : ExecutionPhaseReadings)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)
-    (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (M : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) : ExecutionPhaseConstructions V :=
   { K with
     coins := fun W θ F c σ => (M W θ F c σ).widening
@@ -841,7 +841,7 @@ omit θ F c in
 (`executionPhaseMsgFinder`, `executionPhaseRecordFinder`): an event of the period's game is at most as likely as the event on the
 tapes that miss at no round and not at the record, plus `ExecutionPhaseCouplingTarget`'s messages terms. -/
 theorem prob_le_executionPhaseMessages (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
-    (hM : K.msgFinder = executionPhaseMsgFinder V rd) (hR : K.recordFinder = executionPhaseRecordFinder V rd) (W : Window)
+    (hM : K.msgFinder = executionPhaseMsgFinder V rd) (hR : K.recordFinder = executionPhaseRecordFinder V rd) (W : ExecutionPhase)
     (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Strategy (V.game θ F c)) (E : Exchange → Prop) :
     prob E (V.game θ F c) σ ≤
       ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
@@ -858,7 +858,7 @@ no round and not at the record is at most as likely as the window's audit's acce
 the square root of the bound digests' finder's success, the hiding term, the read finder's collision and the
 forger's forgery. -/
 theorem executionPhaseCouplingTarget_of_noMiss (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
-    (hM : K.msgFinder = executionPhaseMsgFinder V rd) (hR : K.recordFinder = executionPhaseRecordFinder V rd) (W : Window)
+    (hM : K.msgFinder = executionPhaseMsgFinder V rd) (hR : K.recordFinder = executionPhaseRecordFinder V rd) (W : ExecutionPhase)
     (θ : ByteArray) (F : Array ByteArray)
     (h : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
       ENNReal.ofReal (Claims.Pr fun x : CoinTape (V.game θ F c) σ =>
@@ -875,7 +875,7 @@ omit θ F c in
 /-- **The accepted plays that miss nowhere, off the binding, the digest and the logged coupling, at the window**
 (`noMiss_le_of_logged`): each is one `P` and `Q` hold of, bounded by `hb`, or one `P` doesn't hold of, bounded by
 `ha`, or one `Q` doesn't, bounded by `hq`. -/
-theorem executionPhaseNoMiss_le_of_logged (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V) (W : Window)
+theorem executionPhaseNoMiss_le_of_logged (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V) (W : ExecutionPhase)
     (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
     (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (ha : ∀ (c : ByteArray) (σ : Strategy (V.game θ F c)),
@@ -932,11 +932,11 @@ of is at most as likely as the read finder's collision plus the forger's forgery
 strategy doesn't hold of is at most as likely as the square root of the bound digests' finder's success, and, at each
 commitment and strategy off its held-off events, the coin map's premise and the decoders' hold at the two. -/
 theorem executionPhaseCouplingTarget_of_logged (rd : ExecutionPhaseReadings) (K : ExecutionPhaseConstructions V)
-    (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (D : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseDecoders V θ F c W σ)
-    (M : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
+    (M : (W : ExecutionPhase) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
-    (W : Window) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
+    (W : ExecutionPhase) (P : Exchange → Prop) (θ : ByteArray) (F : Array ByteArray)
     (Q : (c : ByteArray) → Strategy (V.game θ F c) → Exchange → Prop)
     (BL : (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseLinkHold)
     (B : (c : ByteArray) → Strategy (V.game θ F c) → ExecutionPhaseRoundHold)

@@ -16,16 +16,16 @@ public import Definitions.Slowdown.Formalism.Circuits
   raises `|𝓘| = B`. `Verity.Partition.IsCK` also reads that every value is a bit, which every circuit of §1 has.
 * The **slowdown** `ρ = min_𝓘 |𝓘| c / |C|` (`slowdown d c k`) is an infimum in `ℝ≥0∞` over those partitions of
   `|𝓘| c / |C|` (`partitionSlowdown`), so it is `⊤` when none exists. A lower bound `X ≤ ρ` is the same as
-  `X ≤ |𝓘| c / |C|` for each of them (`InferenceOnly.Formalism.le_slowdown_iff`), and the theorems state it so.
+  `X ≤ |𝓘| c / |C|` for each of them (`Slowdown.Formalism.le_slowdown_iff`), and the theorems state it so.
 * **Kinds of work**: a kind `K` is a set of gates `B_K ⊆ C` with a cap `cap_K` on the gates of `B_K` that any inference
   block holds (`Caps`, the caps of a family of kinds), and its bound is `(|B_K| / |C|) / (cap_K / c)` (`kindBound`), the
   blocks its work alone needs, priced at `c` a block, against `|C|`. A kind whose work is amortized over the partition,
   its pieces paid by whichever block reads them, has no cap a block at a time, and gives its bound `Λ` for the whole
   partition (`PartitionBound`): `Λ ≤ |𝓘| c / |C|` for every partition `𝓘` into inference blocks, which is `Λ ≤ ρ`. A
-  kind with a cap a block gives its bound so (`InferenceOnly.Formalism.partitionBound_kindBound`).
+  kind with a cap a block gives its bound so (`Slowdown.Formalism.partitionBound_kindBound`).
 * A block's inputs split three ways: registered values `in(I) ∩ θ` (`registeredReads`), which are free; other inputs
   `in(I) ∩ (in(C) \ θ)` (`dataReads`), which are data; computed values `in(I) \ in(C)` (`computedReads`), which come from
-  other blocks. `k` bounds the last two together, `in(I) \ θ` (`InferenceOnly.Formalism.reads_split`).
+  other blocks. `k` bounds the last two together, `in(I) \ θ` (`Slowdown.Formalism.reads_split`).
 * Fit's blocks: a **compute block** (`ComputeBlock`) reads beyond `θ` a description of the update and the data of `s`
   tokens; a **reduction block** (`ReductionBlock`) the gradient and optimizer state of two children in a reduction tree;
   an **update application block** (`UpdateBlock`) the weights in the form the update rule reads and writes, `Δ_t`
@@ -37,7 +37,7 @@ public import Definitions.Slowdown.Formalism.Circuits
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (RegisteredCircuit Partition)
@@ -119,4 +119,4 @@ def ServingFits (Δ s τ k : ℕ) : Prop := Δ + s * τ ≤ k
 application block, `Δ_t + Δ_grad ≤ k`. -/
 def TrainingFits (Δ Δt Δgrad s τ k : ℕ) : Prop := Δ + s * τ ≤ k ∧ 2 * Δgrad ≤ k ∧ Δt + Δgrad ≤ k
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism

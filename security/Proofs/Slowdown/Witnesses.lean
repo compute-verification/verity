@@ -6,7 +6,7 @@ public import Proofs.Core
 public import Proofs.InferenceOnly.Lemmas
 public import Proofs.Slowdown.LoomisWhitneyBase
 public import Definitions.InferenceOnly.Reads
-public import Proofs.Slowdown.RemotePeriod
+public import Proofs.Slowdown.RemoteMonitoringPeriod
 public import Proofs.Slowdown.Capability.Witnesses
 public import Proofs.Core.Circuit
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
@@ -15,8 +15,8 @@ public import Mathlib.Tactic.Linarith
 /-!
 # The inference-only policy's guarantees: proofs of their witnesses
 
-Each witness of `Definitions.Slowdown.Guarantees.Witnesses`, at the toy (`InferenceOnly.Capability.Toy`) and the instances of
-`InferenceOnly.Witness`. The facts they share come first: the toy's one proof block is a `(2, 1)`-partition of exactly two gates,
+Each witness of `Definitions.Slowdown.Guarantees.Witnesses`, at the toy (`Slowdown.Capability.Toy`) and the instances of
+`Slowdown.Witness`. The facts they share come first: the toy's one proof block is a `(2, 1)`-partition of exactly two gates,
 so the toy complies at `Γ = 2` and the rate `α = 1/2`, and with the token registered at `α = 0`; the threading `T1` is
 `(1, 0)`-threaded and its weights incompressible at half a bit each, read off the toy's sixteen sets of gates; and `T0`
 has no counted multiplication and bound `e`.
@@ -24,9 +24,11 @@ has no counted multiplication and bound `e`.
 
 @[expose] public section
 
-namespace InferenceOnly.Witness
+open InferenceOnly
 
-open Verity Finset InferenceOnly.Capability.Toy
+namespace Slowdown.Witness
+
+open Verity Finset Slowdown.Capability.Toy
 
 theorem isCK_D : P1.IsCK D 2 1 := { boolean := ⟨fun _ => rfl, by decide⟩, card := by decide, reads := by decide }
 
@@ -147,11 +149,11 @@ theorem capBelowDepth_one_two : Cover.Assumptions.CapBelowDepth 1 1 2 := by
   unfold Cover.Assumptions.CapBelowDepth
   norm_num
 
-end InferenceOnly.Witness
+end Slowdown.Witness
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.Capability.Toy InferenceOnly.Witness InferenceOnly.Slowdown
+open Verity Finset Slowdown.Capability.Toy Slowdown.Witness Slowdown.Slowdown
 
 theorem ThreadedTraining_honest : Guarantees.ThreadedTraining_honest :=
   ⟨compliesRate_D, theta_id D, T1_threaded, T1_weights, coverage_T1⟩
@@ -297,11 +299,11 @@ theorem SlowdownRemote_nontrivial : Guarantees.SlowdownRemote_nontrivial := by
     rw [Cut.SecurityProofs.toy_workHE] at h1
     norm_num [efficiency, unregisteredShare, residualShare, lagShare] at h1
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
-open Verity InferenceOnly.Capability.Toy InferenceOnly.Witness
+open Verity Slowdown.Capability.Toy Slowdown.Witness
 
 theorem CoverTraining_honest : Guarantees.CoverTraining_honest :=
   ⟨compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2, capBelowDepth_one_two, D_blockFits,
@@ -311,4 +313,4 @@ theorem CoverTraining_nontrivial : Guarantees.CoverTraining_nontrivial :=
   ⟨by norm_num, by norm_num, compliesRate_D, theta_id D, mb0_updateHardness D 4 1, mb0_upstream D _ 2,
     capBelowDepth_one_two, D_blockFits, mb0_not_coverage_two, by rw [size_D]; norm_num⟩
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

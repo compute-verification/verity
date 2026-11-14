@@ -5,13 +5,13 @@ public import Poub.Session
 /-!
 # One openings coin over several windows: `audit.Params.groups_per_coin`
 
-At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are sample c, sampled from one openings coin released after the
-last root of the sample's last window: the session's coins are its W challenges, then ⌈W/g⌉ openings coins, coin c at
-W + c. `close` is `Session.close` for a sample: only the sample's last window closes, once its roots are final, which makes
-every window of the sample final; each is rejected `few` in order; and the sample's `s` receipts are sampled over its passes
-in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own share,
-(pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the close
-accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
+At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are sample c, sampled from one openings coin released after
+the last root of the sample's last window: the session's coins are its W challenges, then ⌈W/g⌉ openings coins, coin c
+at W + c. `close` is `Session.close` for a sample: only the sample's last window closes, once its roots are final, which
+makes every window of the sample final; each is rejected `few` in order; and the sample's `s` receipts are sampled over
+its passes in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own
+share, (pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the
+close accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
 
 `step g` and `run g` are `Session.step` and `Session.run` with that close, and at g = 1 they are `Session.step` and
 `Session.run` (`step_one`, `run_one`): the properties of the code stated on `Session.run` are about the

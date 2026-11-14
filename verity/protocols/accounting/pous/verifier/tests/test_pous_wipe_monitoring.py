@@ -32,7 +32,7 @@ LINK = WP.link("control", "n0", "outside", "eth0")
 
 
 def _answer(egress_mib: int | None) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
+    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU subprotocol records."""
     w = wipe_run.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
               coin_secret=b"coins", egress_mib=egress_mib)

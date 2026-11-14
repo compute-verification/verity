@@ -10,7 +10,7 @@ three subprotocols' over one registration: it accepts when all three accept and 
 certifier's period is on the policy's record, and any one's rejection rejects it whatever the others answer.
 
 It credits no verified compute: PoUW's period is none of its subprotocols, so a case of it is refused by name, and
-remote's window tie (`Core.Remote.windows`), which reads the period's windows, is none of its ties. It is not remote
+remote's window tie (`Core.Remote.executionPhases`), which reads the period's windows, is none of its ties. It is not remote
 with the network certifier with a subprotocol switched off: it has its own id.
 
 It is no verifier: `Core.Composites` doesn't list it, so no configuration names it, the Site has no registration

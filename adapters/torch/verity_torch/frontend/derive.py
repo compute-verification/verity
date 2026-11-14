@@ -1,7 +1,7 @@
 """Derivation mode (design §4; GUIDANCE §43): an ordinary `nn.Module` / callable with NO Verity annotations ->
 a `Program`, or an `Unsupported` outcome. Never a partial program, never an opaque gate.
 
-    derive(source, example_inputs, *, mode, profile, config, rules, allowed_dims, name) -> Program | Unsupported
+    derive(source, example_inputs, *, mode, profile, config, rules, vocabulary, end_rules, allowed_dims, name) -> Program | Unsupported
 
 How it works
 ------------
@@ -19,7 +19,7 @@ How it works
    (`applies(node, ctx)`), never by op name alone. A node no rule accepts is an `Unsupported` with a reason from
    design §4.3 and the reasons every candidate rule gave.
 4. The result is a flat program over leaf kinds with `nn_module_stack` names as annotations only. Optionally a
-   `FamilyRule` (../../../vllm/verity_vllm/program/frontend/rules/family.py) claims a registered program identity — only after verifying that the derived
+   `FamilyRule` (`rules/family.py`) claims a registered program identity — only after verifying that the derived
    leaf dataflow is node-for-node isomorphic to that program's expanded body, with the module's parameters bound
    to the program's weight roles (identity comes from rule + registry, never from names).
 5. Provenance (`Program.annotations["derive"]`) records mode, profile, kind vocabulary + version, rule set +
@@ -32,9 +32,10 @@ source unrolled at export time; data-dependent control flow is `Unsupported(dyna
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import operator
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, NoReturn
 
@@ -54,8 +55,6 @@ from verity.circuits.types import Array, RecordType, Type, Value
 from verity.circuits.types import Tuple as TupleT
 from verity_vllm.definitions.replay import replayer
 
-from verity_vllm.program.frontend import seed_rule as SEED
-from verity_vllm.program.frontend import stop_rule as SR
 from verity_torch.frontend.derive_context import (
     Ctx,
     StaticIndex,
@@ -87,6 +86,9 @@ DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rota
 
 aten = torch.ops.aten
 
+#: a rule `derive` applies after the walk, as `rule(ctx, outs, out_node)`: the Program's last Calls and checks
+EndRule = Callable[[Ctx, list, Any], None]
+
 
 # ---------------------------------------------------------------------------------------------------------
 # the derivation
@@ -95,17 +97,29 @@ aten = torch.ops.aten
 
 def derive(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
            rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
-           check_registry: bool = True, rank: tuple[int, int] | None = None, registered_values: bool = False) -> Program | Unsupported:
+           check_registry: bool = True, rank: tuple[int, int] | None = None, registered_values: bool = False,
+           vocabulary: Callable[[str, str | None], Any] | None = None, end_rules: Sequence[EndRule] = ()) -> Program | Unsupported:
     """Derive a `Program` from an unannotated module/callable, or return `Unsupported`. See module docstring."""
     return derive_report(source, example_inputs, mode=mode, profile=profile, config=config, rules=rules, allowed_dims=allowed_dims,
-                         name=name, check_registry=check_registry, rank=rank, registered_values=registered_values).result
+                         name=name, check_registry=check_registry, rank=rank, registered_values=registered_values,
+                         vocabulary=vocabulary, end_rules=end_rules).result
+
+
+@functools.cache
+def _torch_ruleset() -> RuleSet:
+    from verity_torch.frontend.rules import TORCH_RULES
+    return RuleSet("torch", list(TORCH_RULES))
 
 
 def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: str | None = None, config: dict | None = None,
                   rules: RuleSet | None = None, allowed_dims: dict | None = None, name: str | None = None,
                   check_registry: bool = True, rank: tuple[int, int] | None = None, exported=None, theta: Sequence[str] = (),
-                  registered_values: bool = False, session: list | None = None, dead_free: bool | str = False, correspondence: bool = True) -> DeriveReport:
-    """`registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
+                  registered_values: bool = False, session: list | None = None, dead_free: bool | str = False, correspondence: bool = True,
+                  vocabulary: Callable[[str, str | None], Any] | None = None, end_rules: Sequence[EndRule] = ()) -> DeriveReport:
+    """`rules`: the rule set (default `TORCH_RULES`, the rules on ATen ops); `vocabulary`: the kinds a rule may emit under
+    `(mode, profile)` (default `verity_torch.frontend.rules.vocabulary_for`); `end_rules`: each called in order as
+    `rule(ctx, outs, out_node)` after the walk, which may add the Program's last Calls and checks (`Ctx.check`), as a serving
+    adapter's seed and length rules do.  `registered_values`: the program's values (the norms' eps, the attention scale) are fields of a registered `values` parameter
     (before `weights`), read by the Definitions that take them as inputs (`TargetProfile.registered_values`); the provenance's
     `supplied` states every field's bits.  `rank=(world, rank)`: the rank coordinate of a tensor-parallel rank Program.  It is written into the runtime correspondence
     (`annotations["correspondence"].rank`, explicit integers) and NOWHERE else: not a static, not a config -- the Program's identity
@@ -121,9 +135,9 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         raise ValueError("rank and session are the runtime correspondence's: they need correspondence=True")
     if rank is not None and not (len(rank) == 2 and 0 <= int(rank[1]) < int(rank[0])):
         raise ValueError(f"rank must be (world, rank) with 0 <= rank < world, got {rank!r}")
-    from verity_vllm.program.frontend.rules import DEFAULT_RULES, vocabulary_for
-    ruleset = rules if rules is not None else DEFAULT_RULES
-    vocab = vocabulary_for(mode, profile)
+    from verity_torch.frontend.rules import vocabulary_for
+    ruleset = rules if rules is not None else _torch_ruleset()
+    vocab = (vocabulary or vocabulary_for)(mode, profile)
     allowed_dims, config, theta = dict(allowed_dims or {}), dict(config or {}), tuple(theta)
     source_name: str = type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived")
     name = name or source_name
@@ -136,7 +150,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     try:
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
-                                    registered_values=registered_values)
+                                    registered_values=registered_values, end_rules=end_rules)
         head = (dict(prov), dict(ctx.unresolved_module_paths))
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free, correspondence=correspondence, theta=theta)
         if session is not None:
@@ -297,7 +311,8 @@ def _weights_of(module: torch.nn.Module | None) -> tuple[list[WeightLeaf], dict[
 
 
 def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims, name, ruleset, vocab,
-                 _ctx_holder: list | None = None, exported=None, registered_values: bool = False) -> tuple[SpecializedDefinition, Ctx]:
+                 _ctx_holder: list | None = None, exported=None, registered_values: bool = False,
+                 end_rules: Sequence[EndRule] = ()) -> tuple[SpecializedDefinition, Ctx]:
     module = source if isinstance(source, torch.nn.Module) else None
     ep = exported if exported is not None else _export(source, example_inputs)
     sig = ep.graph_signature
@@ -357,7 +372,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
               run_inputs=run_inputs)
     if _ctx_holder is not None:
         _ctx_holder.append(ctx)
-    out = _translate(ctx)
+    out = _translate(ctx, end_rules)
     if run_inputs is not None:
         try:
             run_inputs.finish(params)
@@ -388,7 +403,7 @@ def _flat_definition(name: str, body, src_static: dict, mode: str) -> Specialize
     return sd
 
 
-def _translate(ctx: Ctx) -> Coll:
+def _translate(ctx: Ctx, end_rules: Sequence[EndRule] = ()) -> Coll:
     ep = ctx.ep
     sig = ep.graph_signature
     out_node = None
@@ -447,8 +462,8 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
-    SEED.in_derive(ctx, out_node)        # a stochastic request's seed rule (its `seed_rule.PARAMS`), then the length rule under
-    SR.in_derive(ctx, outs, out_node)    # the config's `stop`: the Program's last Calls and checks
+    for end_rule in end_rules:
+        end_rule(ctx, outs, out_node)
     if ctx.checks:
         ctx.checks_output = len(outs)
         outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))

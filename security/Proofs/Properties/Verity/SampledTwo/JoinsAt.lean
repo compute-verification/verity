@@ -16,9 +16,10 @@ public import Proofs.Properties.Verity.SampledTwo.AcceptsTop
 public import Proofs.Properties.Verity.SampledTwo.DrawRoots
 public import Proofs.Properties.Verity.SampledTwo.GoodCaseHeld
 public import Proofs.Properties.Verity.SampledTwo.BlobFinder
+public import Proofs.Properties.Verity.SampledTwo.FormDraw
 
 /-!
-# The two-stage leg's projection at the form's accept, from the coin map's distribution
+# The two-stage subprotocol's projection at the form's accept, from the coin map's distribution
 
 `joined` (`Joined.lean`) is the projection's bound over any acceptance. This module is the one place the two-stage
 form's check comes in: the acceptance is the form's (`FormAccepts C`), the check read a log of both sessions, the log
@@ -82,12 +83,13 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
   `caseIsSent`), no longer a field; it gives the interior's log on the play's (`SessionCoins.interiorLogged_read`).
 * **The run of record's accept** (`playAccepts_form`'s premises): `heldOfAt` (HELDOF: the held copies at each
   accepted play, or its blobs collide with the registered files `V.registered θ`, the plays the cut leaves out at the
-  blob finder's term, `cutBound_avoid`); `portsDistinctAt`; `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`,
+  blob finder's term, `cutBound_avoid`); `stmtsRead`, `roundsHeldAt`, `scopeHeldAt`, `pinHeldAt`,
   `sessionsRun` (MESSAGES and the sessions' workers); and `sessionMsgs`. That an accepted play's records name their
   registrations' names and read back as the records the run held, that the held copies' design evaluates, that each
   accepted play's held first stage samples one fixed number of replay blocks, and that at each such number the held
-  copies' parts are the interior program's strata's, are theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`,
-  `twoHolds_at`, `firstK_of_formAccepts`, `partsSizedAt_of_formAccepts`), no longer fields. The last is the run's
+  copies' parts are the interior program's strata's, and that each play's registrations list each port once, are
+  theorems (ACCEPTS's `recordsHeldAt_of`, `recordsRead`, `twoHolds_at`, `firstK_of_formAccepts`,
+  `partsSizedAt_of_formAccepts`; `portsDistinctAt`), no longer fields. The last is the run's
   refusal of an interior whose strata are not the parts its replay block's cells give (`interior-parts`), read at the
   held copies of the case kept on the plays with no such collision (`heldOfAt_goodCase`); with them it gives the parts
   at each such play's replay sample (`partsHeldAt_of_accepts`).
@@ -246,7 +248,7 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) : Prop where
   /-- On two windows, the two setups' ledger lines are two sessions' in the device's order (`Sessions.LedgerInOrder`).
   Taken as a hypothesis; a lemma of the modelled device after soundness's device pull request (PRF-490). -/
-  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, windowsOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
+  ledgerInOrder : ∀ o : Verity.Exchange, o.params = θ → ∀ w₁ w₂, executionPhasesOf θ = some (w₁, w₂) → w₁ ≠ w₂ →
     Sessions.LedgerInOrder (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o)
   /-- The two stages' families differ. -/
   distinctFamilies : ℓ₁ ≠ ℓ₂
@@ -274,8 +276,6 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   /-- Each accepted play's held copies are the ones `heldOf` builds from its input and interior, or its blobs collide
   with the registered files (`HeldOfAtOr`; `heldOfAtOr_of_files` at `V.registered θ`). -/
   heldOfAt : HeldOfAtOr A C (V.registered θ)
-  /-- Each accepted play's registrations list each port once. -/
-  portsDistinctAt : PortsDistinctAt C
   /-- The reading's session statements are the ones the run's second stage checked. -/
   stmtsRead : StmtsRead A C (joinSessions A C Ms tab ℓ₁ ℓ₂)
   /-- Each session statement has its template's stage count. -/
@@ -411,7 +411,7 @@ theorem joinedOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite
       (fun o => FormAccepts C o ∧ NoCollide (V.registered θ) o) :=
     reachedAccepts_goodCase (reachedAccepts A x (goodCase C (NoCollide (V.registered θ)))
       (joinSessions A C Ms tab ℓ₁ ℓ₂) (CoinMap.dev (joinLocate A tab ℓ₁ ℓ₂)) P' (sourcesFit A _)
-      (playAccepts_form A _ _ P' hParts hHeld (portsDistinctAt_goodCase h.portsDistinctAt)
+      (playAccepts_form A _ _ P' hParts hHeld (portsDistinctAt_goodCase (portsDistinctAt C))
         (stmtsRead_goodCase h.stmtsRead) (roundsHeldAt_goodCase h.roundsHeldAt) (scopeHeldAt_goodCase h.scopeHeldAt)
         (pinHeldAt_goodCase h.pinHeldAt) (sessionsRun_goodCase h.sessionsRun)) (sessionMsgs_goodCase h.sessionMsgs))
   exact joined V k A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q (FormAccepts C)

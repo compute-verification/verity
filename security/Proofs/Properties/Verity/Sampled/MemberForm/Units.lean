@@ -18,7 +18,7 @@ that accepted every session, which session is which member's and what its record
   `run_units`): each statement's one session has its verdict at its member's own statement (`ProvedAt`), and a unit
   is one of the evidence's exactly when one of those sessions proved it.
 * **The sessions' units over the members** (`run_over`): the window's members are the parameters', a range each,
-  no unit in two (`Window.Laid`); so the run's statements are the members the sample holds, in the members' order,
+  no unit in two (`ExecutionPhase.Laid`); so the run's statements are the members the sample holds, in the members' order,
   and a unit of a statement's member is the evidence's exactly when the statement's session proved it
   (`UnitsOver`).
 * **A member's part of the sample** (`part_sampled`, `printedPart_of_mem`): at a sample that holds the proof blocks
@@ -95,7 +95,7 @@ theorem run_units {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.On
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
     {r : _root_.Spot.OneStageZk.Run} (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r)
     (hr : r.all = true) :
-    ∃ roots held U, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+    ∃ roots held U, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
       List.Forall₂ (ProvedAt c.record roots bs) (sts.zip held).toList U ∧
       ∀ x, x ∈ e.base.provedUnits ↔ ∃ us ∈ U, x ∈ us := by
@@ -118,14 +118,14 @@ every session: each statement's one session has its verdict at its member's own 
 members are a range each, no unit in two, and the sessions' units are over them (`UnitsOver`, at a member's first
 unit and the unit after its last); and the statements' members are the members the sample holds, in the members'
 order. -/
-theorem run_over {F : Array ByteArray} {W : Window} (hlaid : W.Laid) {ms : Array _root_.Spot.OneStageZk.Member}
+theorem run_over {F : Array ByteArray} {W : ExecutionPhase} (hlaid : W.Laid) {ms : Array _root_.Spot.OneStageZk.Member}
     {vms : List _root_.Spot.OneStageZk.Member} (hperm : vms.Perm ms.toList)
     (hsorted : vms.Pairwise fun a b => a.first < b.first) (hall : List.Forall₂ (MemberOn F) vms W.ms)
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {e : _root_.Spot.OneStageZk.Evidence} {sts : Array _root_.Spot.OneStageZk.StatementFiles}
     {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
     (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r) (hr : r.all = true) :
-    ∃ roots held U, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+    ∃ roots held U, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧
       List.Forall₂ (ProvedAt c.record roots bs) (sts.zip held).toList U ∧
       UnitsOver (fun vm : _root_.Spot.OneStageZk.Member => vm.first) (fun vm => vm.first + vm.count) vms
@@ -252,7 +252,7 @@ the sample `S` holds the proof blocks at the evidence's `proved_units`: the stat
 members with a proof block in `S`; and the member `m` at place `i` with a proof block in `S` is a verifier's
 member `vm` whose statement is the one at place `sampledBefore W.ms S i`, whose one session has its verdict at
 `vm`'s own statement, with a record whose sample is the sample file of `m`'s part of `S`. -/
-theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
+theorem member_session {F : Array ByteArray} {W : ExecutionPhase} (hlaid : W.Laid)
     {ms : Array _root_.Spot.OneStageZk.Member} {vms : List _root_.Spot.OneStageZk.Member}
     (hperm : vms.Perm ms.toList) (hsorted : vms.Pairwise fun a b => a.first < b.first)
     (hall : List.Forall₂ (MemberOn F) vms W.ms) {p : _root_.Spot.OneStageZk.Params}
@@ -260,7 +260,7 @@ theorem member_session {F : Array ByteArray} {W : Window} (hlaid : W.Laid)
     {sts : Array _root_.Spot.OneStageZk.StatementFiles} {bs : _root_.Core.Blobs}
     {r : _root_.Spot.OneStageZk.Run} (h : _root_.Spot.OneStageZk.membersRun p ms c e sts bs = .ok r)
     (hr : r.all = true) {S : Finset (Fin W.nJ)} (hS : ∀ v, v ∈ S ↔ v.val ∈ e.base.provedUnits) :
-    ∃ roots held, _root_.Spot.OneStageZk.rootsOf ms c.record = .ok roots ∧
+    ∃ roots held, _root_.Spot.OneStageZk.membersRootsOf p ms c.record = .ok roots ∧
       _root_.Spot.OneStageZk.membersHeld ms sts = .ok held ∧ sampledBefore W.ms S W.ms.length = sts.size ∧
       ∀ i m, W.ms[i]? = some m → (m.part S).Nonempty →
         ∃ vm st a s keys record spec tabs rest proofs units, MemberOn F vm m ∧

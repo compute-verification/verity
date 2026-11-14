@@ -43,7 +43,7 @@ namespace Verity.Sampled
 
 /-- **The window's table's name**: its first member's. Every member's, at a window whose members have one table
 (`MembersAt`). -/
-def Window.table (W : Window) : String := (W.ms.head?.map fun m => m.I.tags.table).getD ""
+def ExecutionPhase.table (W : ExecutionPhase) : String := (W.ms.head?.map fun m => m.I.tags.table).getD ""
 
 namespace MemberForm
 
@@ -144,7 +144,7 @@ parameters in `θ` name members, and `W`'s are those, in the order of their firs
 (`MemberOn`); the sample's sampling design is the verifier's over `W`'s population (`samplingDesignAt`) and its bytes `MAX_COINS` coins of
 the parameters' challenger family, 64 bytes each; the vocabulary reads `F` as the members' files in that order; and
 the published share is `W`'s and `F`'s units `W`'s population. -/
-structure ExecutionPhaseOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop where
+structure ExecutionPhaseOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) : Prop where
   members : ∃ (p : _root_.Spot.OneStageZk.Params) (ms : Array _root_.Spot.OneStageZk.Member)
       (vms : List _root_.Spot.OneStageZk.Member),
     ParamsAt θ p ∧ p.members = some ms ∧ vms.Perm ms.toList ∧
@@ -159,15 +159,15 @@ structure ExecutionPhaseOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArra
   units : V.units θ F = W.nJ
 
 /-- Each member of a window on the files has the statement's tags. -/
-theorem ExecutionPhaseOn.tags {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
+theorem ExecutionPhaseOn.tags {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : ExecutionPhaseOn V θ F W)
     (m : Member W.nJ) (hm : m ∈ W.ms) : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags := by
   obtain ⟨_, _, _, -, -, -, -, hall, -⟩ := h.members
   obtain ⟨_, -, hon⟩ := forall₂_right hall m hm
   exact hon.tags
 
-/-- **A window on the files has members of its one table with hm96-sha512 rows** (`MembersAt` at `Window.table`):
+/-- **A window on the files has members of its one table with hm96-sha512 rows** (`MembersAt` at `ExecutionPhase.table`):
 each has the statement's tags and one table. -/
-theorem ExecutionPhaseOn.membersAt {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem ExecutionPhaseOn.membersAt {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V θ F W) : MembersAt W W.table := by
   refine ⟨fun m hm => ?_, fun m hm => statement_hm96Rows (h.tags m hm), fun m hm => ?_⟩
   · obtain ⟨_, _, _, -, -, -, -, hall, -⟩ := h.members
@@ -179,11 +179,11 @@ theorem ExecutionPhaseOn.membersAt {V : Vocab d α} {θ : ByteArray} {F : Array 
       exact List.mem_cons.2 (Or.inl rfl)
     have ht : m.I.tags = m₀.I.tags := Option.some.inj ((h.tags m hm).symm.trans (h.tags m₀ hm₀))
     have hT : W.table = m₀.I.tags.table := by
-      simp only [Window.table, hW, List.head?_cons, Option.map_some, Option.getD_some]
+      simp only [ExecutionPhase.table, hW, List.head?_cons, Option.map_some, Option.getD_some]
     exact (congrArg Flock.Tags.table ht).trans hT.symm
 
 /-- **A window on some files is on files read alike.** -/
-theorem ExecutionPhaseOn.of_read {V : Vocab d α} {θ : ByteArray} {F F' : Array ByteArray} {W : Window}
+theorem ExecutionPhaseOn.of_read {V : Vocab d α} {θ : ByteArray} {F F' : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V θ F W) (hr : V.read θ F = V.read θ F') : ExecutionPhaseOn V θ F' W := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
   have hu : V.units θ F' = V.units θ F := congrArg Verity.ExecutionPhaseFiles.units hr.symm
@@ -214,16 +214,16 @@ theorem FilesPass.checked {nJ : ℕ} {m : Member nJ} (h : FilesPass m) (hfix : m
 /-! ## The verifier sets the window up -/
 
 /-- **The verifier sets the window `W` up on the committed files `F`**, at the per-member form: `W` is the
-parameters' members on the registered files, read on `F` (`ExecutionPhaseOn`), laid out in order (`Window.Laid`), and every
+parameters' members on the registered files, read on `F` (`ExecutionPhaseOn`), laid out in order (`ExecutionPhase.Laid`), and every
 member's files pass the files check (`FilesPass`), the members the sample holds and those it misses. -/
-structure MembersSetUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop
+structure MembersSetUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) : Prop
     extends ExecutionPhaseOn V θ F W where
   laid : W.Laid
   passes : ∀ m ∈ W.ms, FilesPass m
 
 /-- **At a window the verifier sets up whose members' roots fix their domains, every member of Flock's window is
 `Checked`**, at every cost. -/
-theorem MembersSetUp.checked {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem MembersSetUp.checked {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : MembersSetUp V θ F W) (hfix : W.RootsFix) (t : ℕ) {M : MemberV5 ByteArray W.nJ}
     (hM : M ∈ W.ms.map fun m => m.toV5 t) : M.Checked := by
   obtain ⟨m, hm, rfl⟩ := List.mem_map.1 hM

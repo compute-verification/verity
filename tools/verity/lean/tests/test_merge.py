@@ -436,12 +436,12 @@ def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_s
 
 def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
     """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
-    `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
+    `Definitions.Pouw.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
     after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
     readers, as locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the renaming
     branch's group, cleanly."""
     sides = json.loads((FIXTURES / "j10r-layout-renamed-onto-next.json").read_text())
-    m = "Definitions.Accounting.TS.J10R"
+    m = "Definitions.Pouw.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
     assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
     assert sides["ours"]["reads"][m]["guarantees"] != sides["base"]["reads"][m]["guarantees"]
@@ -814,7 +814,7 @@ def test_a_renamed_premise_merges_to_one_entry_and_a_text_a_restated_statement_s
 
     def lock(h: str, *texts: str) -> dict:
         """A lock listing ``g`` with the premises ``texts``, reading ``d`` at hash ``h``."""
-        return {"guarantees": {g: rec}, "reads": {"Definitions.Accounting.Guarantees.Pouw": {"definitions": {d: h * 64}}},
+        return {"guarantees": {g: rec}, "reads": {"Definitions.Pouw.Guarantees.Pouw": {"definitions": {d: h * 64}}},
                 "shape": {"inline": {g: dict.fromkeys(texts, why)}}}
     merged, _ = M.merge(lock("1", old), lock("1", old), lock("2", new), candidate := [])
     assert merged["shape"]["inline"] == {g: {new: why}} and candidate == []
@@ -1102,7 +1102,7 @@ def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
     sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
-    gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
+    gone = "import Definitions.Certifier.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
     assert gone not in text
     assert M._import_names(text) == M._import_names(sides["theirs"]) | (M._import_names(sides["ours"]) - M._import_names(

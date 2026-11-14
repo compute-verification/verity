@@ -132,6 +132,6 @@ def test_a_v3c_window_that_isnt_the_scans_is_refused_by_name(tmp_path, scanned, 
 
 
 def test_v3c_is_one_execution_phase_the_runs_first(tmp_path, scanned):
-    with pytest.raises(SystemExit, match="--v3c: V3c's window is link-window 0's, a group of 1, not 2 from 0"):
+    with pytest.raises(SystemExit, match="--v3c: V3c's window is execution phase 0's, a group of 1, not 2 from 0"):
         sz.link(tmp_path, setup=S, group=2, v3c=scanned["window"])
 

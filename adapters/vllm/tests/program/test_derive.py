@@ -27,7 +27,8 @@ from verity_vllm.definitions.registry import stop_check as SC
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import stop_rule as SR
 from verity_torch.frontend.correspond import compare_bodies
-from verity_torch.frontend.derive import Unsupported, derive, derive_report
+from verity_torch.frontend.derive import Unsupported
+from verity_vllm.program.frontend.vllm_derive import derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.family import DecoderLayerT
 

@@ -6,7 +6,7 @@ model in the BF16 pin's form, each linear bf16 [N, K] with no scale. P2 runs at 
 1,024-bit blocks, 8 a segment (`weight_store.geometry`), so the adapter encodes it in milliseconds. The memory challenger's side is
 `challenger_party.serve` in a thread, signed by the PoUS tests' test signer on a counter clock, and the prover answers it
 over a socket pair, as `challenger_prover.session` would across hosts. The answer is read back as the composed run reads it
-(`served_verdicts.piece_row`, `block_record.leg`).
+(`served_verdicts.piece_row`, `block_record.subprotocol`).
 """
 from __future__ import annotations
 
@@ -321,8 +321,8 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     row = SV.piece_row("space", served.out.parent)
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-    leg = BR.leg("pous", row, server=NODE, runs=[])
-    assert leg["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
+    subprotocol = BR.subprotocol("pous", row, server=NODE, runs=[])
+    assert subprotocol["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
 
     prof = answer["profile"]
     w_bytes = sum(n * k for n, k in SHAPES.values()) * LAYERS
@@ -387,7 +387,7 @@ def test_a_plain_bf16_checkpoint_is_held_as_its_linears_at_twice_the_bytes(serve
     assert len(bytes.fromhex(setup["evidence"])) == 4 + 4 * 10 + 80 * (4 + SMALL.block_bytes)
 
 
-def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
+def test_the_challenger_samples_the_salt_and_the_verdict_derives_the_session_id(served, tmp_path, monkeypatch):
     """Setup's salt is the one the memory challenger drew after the commitment and logged under the window's binding, and
     the session runs under the id derived from that binding, the commitment and the salt, which the verdict computes
     itself: the request names the binding and setup's published outputs, and the private record carries the id."""
@@ -399,7 +399,7 @@ def test_the_challenger_draws_the_salt_and_the_verdict_derives_the_session_id(se
     bind = SP.binding(REPO, REV, 3, None)
     commitment, salt = bytes.fromhex(published["commitment"]), bytes.fromhex(published["salt"])
     assert len(auditor.sources) == 1 and auditor.salts.get(bind) == (commitment, salt)
-    assert salt == pous_setup.draw_salt(auditor.sources[0], commitment)
+    assert salt == pous_setup.sample_salt(auditor.sources[0], commitment)
     sid = CS.session_id(bind, commitment, salt)
     assert run["session_id"] == sid.hex() == run["session"]["commitment"]["session"] and sid in auditor.log
     request = calls[0][1]

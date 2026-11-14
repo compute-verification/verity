@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.SampledTwo.Majority
 public import Proofs.Hash.RowBinding
-public import Proofs.Accounting.ReadUnit.Sha
+public import Proofs.Poub.ReadUnit.Sha
 
 /-!
 # Two readings of a bound wire are a SHA-512 collision

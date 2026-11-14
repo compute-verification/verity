@@ -308,7 +308,7 @@ def _form_params(j: Any) -> dict:
 
 
 def _covered(form_params: Callable[[Any], dict]) -> Callable[[Any], dict]:
-    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli law refused at any p, as
+    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli sampling design refused at any p, as
     `covered_params` refuses it (`service.bernoulli`)."""
     def params(j: Any) -> dict:
         p = form_params(j)

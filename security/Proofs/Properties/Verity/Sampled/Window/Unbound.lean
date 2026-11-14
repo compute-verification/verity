@@ -29,7 +29,7 @@ This file holds the statements, each a `Prop`, and the names they read; it prove
   wherever the member's deployed commitment opens and at the files' constants, and the trace is the member's.
 * **One member** (`MemberV5.UnboundFaulty`, `MemberV5.FaultyIncorrect`): the units its trace doesn't bind are faulty in its
   sampling statement (`MemberV5.faulty`), and its incorrect proof blocks are incorrect at every registration
-  (`MemberV5.wrongAt`).
+  (`MemberV5.incorrectAt`).
 * **The seats' traces** (`Seat.trace`, `tracesWith`): each member's transcript at its seat's trace, at its files'
   circuit, side by side in the members' order: the trace a window's extractor gives.
 * **The window** (`ReadsWith`, `JointAuditV5.ReadsAt`, `JointAuditV5.UnboundIncorrect`): with the members laid out in unit
@@ -105,7 +105,7 @@ noncomputable def transcript (Xv : Fin m.Cc.N → Bool) : (Flock.Bridge.circuitO
 
 /-- **The member's incorrect proof blocks at a registration and a trace**: `incorrectRegZc` at the member's canonical
 openings. -/
-noncomputable def wrongAt (R : Reg) (Xv : Fin m.Cc.N → Bool) : Finset (Fin m.n) :=
+noncomputable def incorrectAt (R : Reg) (Xv : Fin m.Cc.N → Bool) : Finset (Fin m.n) :=
   incorrectRegZc execArith m.P (planZHJP m.dj m.y₀) (tabZHJP m.dj m.y₀) m.vb m.canon R Xv
 
 /-- **The trace the member's session fixes at registration** at `τ`, played alone at `L`: `XplurZC` at the simulator's
@@ -116,7 +116,7 @@ noncomputable def Xr (L : SamplingDesign m.n) (hL : m.OneClass L) (τ : Strategy
 
 /-- **The member's incorrect proof blocks at `τ` are those at its registration and the trace fixed there.** -/
 theorem incorrectSet_eq (L : SamplingDesign m.n) (hL : m.OneClass L) (τ : Strategy (m.game L)) :
-    m.incorrectSet L hL τ = m.wrongAt (reg (m.sim L hL τ)) (m.Xr L hL τ) :=
+    m.incorrectSet L hL τ = m.incorrectAt (reg (m.sim L hL τ)) (m.Xr L hL τ) :=
   rfl
 
 /-- **The member's canonical openings are those at its rows and constants.** -/
@@ -164,7 +164,7 @@ def UnboundFaulty : Prop :=
 /-- **A member's incorrect proof blocks are incorrect proof blocks**: at files that pass the verifier's checks, a unit faulty in
 the member's sampling statement at a trace is incorrect at that trace and every registration. -/
 def FaultyIncorrect : Prop :=
-  m.Checked → ∀ (R : Reg) (Xv : Fin m.Cc.N → Bool) (u : Fin m.n), u.val ∈ m.faulty Xv → u ∈ m.wrongAt R Xv
+  m.Checked → ∀ (R : Reg) (Xv : Fin m.Cc.N → Bool) (u : Fin m.n), u.val ∈ m.faulty Xv → u ∈ m.incorrectAt R Xv
 
 end MemberV5
 
@@ -218,7 +218,7 @@ noncomputable def memberX (τ : Strategy w.game) (k : Fin w.ms.length) : Fin (w.
 
 /-- **Member `k`'s incorrect proof blocks at `τ` are those at the joint registration and the trace fixed there.** -/
 theorem memberIncorrect_eq (τ : Strategy w.game) (k : Fin w.ms.length) :
-    w.memberIncorrect τ k = (w.ms.get k).wrongAt (reg (w.memberSim τ k)) (w.memberX τ k) :=
+    w.memberIncorrect τ k = (w.ms.get k).incorrectAt (reg (w.memberSim τ k)) (w.memberX τ k) :=
   rfl
 
 /-- The window's members, each at the trace its session fixes at the joint registration at `τ`, in the members'
@@ -259,8 +259,8 @@ end Flock.Guarantees
 namespace Verity.Sampled
 
 /-- **The claim at a window** at every budget of SHA-512 calls: the units the window's trace doesn't bind are the
-incorrect proof blocks of Flock's window (`Window.joint`), the set the window's bound and the claim's transfer
+incorrect proof blocks of Flock's window (`ExecutionPhase.joint`), the set the window's bound and the claim's transfer
 (`ExecutionPhaseInstance.ClaimTransfers`) read. -/
-def Window.UnboundIncorrect (W : Window) : Prop := ∀ (t : ℕ) [Nonempty (W.joint t).EndΩ], (W.joint t).UnboundIncorrect
+def ExecutionPhase.UnboundIncorrect (W : ExecutionPhase) : Prop := ∀ (t : ℕ) [Nonempty (W.joint t).EndΩ], (W.joint t).UnboundIncorrect
 
 end Verity.Sampled

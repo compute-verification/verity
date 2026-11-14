@@ -26,7 +26,7 @@ inputs outside `θ` (`ReadsAtMost`); a block's **entries** (`entries`) are those
    is at most `Π(k)` (`pi_readWords_le`).
 3. **Loomis–Whitney** (`card_inBlock_sq_le`): a block's MACs of one matmul are index triples `(i, j, l)`, whose
    projections are the outputs `(i, j)` they feed, the `w`-words `(i, l)` and the `x`-words `(l, j)` they read. The
-   discrete Loomis–Whitney inequality (`InferenceOnly.SecurityProofs.loomis_whitney`) and Cauchy–Schwarz over the matmuls give
+   discrete Loomis–Whitney inequality (`Slowdown.SecurityProofs.loomis_whitney`) and Cauchy–Schwarz over the matmuls give
    `(MACs in the block)² ≤ π(its words) · (outputs it feeds)`, and Cauchy–Schwarz over the blocks gives
    `V² ≤ m Π(k) F` for the `V` unsplit MACs and the `F` pairs of a block and an output it feeds (`counts`).
 4. **Outputs** (`card_fedBy_le`, `outOn_le`, `bY_mul_card_clear_le`): an output a block feeds has a wire in the
@@ -63,9 +63,9 @@ and `bound_on` and `bound_on_he` are `Bound` and `HE`'s bound over `G` at one bu
 
 @[expose] public section
 
-namespace InferenceOnly.Cut.SecurityProofs
+namespace Slowdown.Cut.SecurityProofs
 
-open Verity Finset InferenceOnly.Covering
+open Verity Finset Slowdown.Covering
 
 variable {C : Circuit}
 
@@ -158,7 +158,7 @@ theorem exists_separator (X Y : Finset (Fin C.N)) :
   have hne : {n | ∃ Z : Finset (Fin C.N), Z.card = n ∧ Separates C Z X Y}.Nonempty := by
     refine ⟨_, univ, rfl, ?_⟩
     intro a _ b _ hab
-    simpa using InferenceOnly.SecurityProofs.Covering.FeedsWithin.mem_right hab
+    simpa using Slowdown.SecurityProofs.Covering.FeedsWithin.mem_right hab
   exact Nat.sInf_mem hne
 
 theorem kappa_pos {X Y : Finset (Fin C.N)} {x y : Fin C.N} (hx : x ∈ X) (hy : y ∈ Y) (hxy : C.Feeds x y) :
@@ -331,7 +331,7 @@ theorem card_inBlock_sq_le {ι : Type} [Fintype ι] (P : Partition C m) (W : Wor
       exact Prod.ext (congrArg Prod.snd h) (congrArg Prod.fst h)
   calc (inBlock P W u a).card ^ 2
       ≤ ((inBlock P W u a).image fun t => (t.1, t.2.1)).card * ((inBlock P W u a).image fun t => (t.1, t.2.2)).card *
-          ((inBlock P W u a).image fun t => (t.2.1, t.2.2)).card := InferenceOnly.SecurityProofs.loomis_whitney _
+          ((inBlock P W u a).image fun t => (t.2.1, t.2.2)).card := Slowdown.SecurityProofs.loomis_whitney _
     _ ≤ ((inBlock P W u a).image fun t => (t.1, t.2.1)).card * (readWords P W u ∩ W.wWords a).card *
           (readWords P W u ∩ W.xWords a).card := Nat.mul_le_mul (Nat.mul_le_mul le_rfl hw) hx
     _ = (readWords P W u ∩ W.wWords a).card * (readWords P W u ∩ W.xWords a).card *
@@ -1065,4 +1065,4 @@ theorem bound_on_budgets_he {ι V : Type} [Fintype ι] [DecidableEq ι] [Decidab
   rw [e1, e2] at h
   exact h
 
-end InferenceOnly.Cut.SecurityProofs
+end Slowdown.Cut.SecurityProofs

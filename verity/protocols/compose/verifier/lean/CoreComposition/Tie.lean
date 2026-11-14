@@ -5,7 +5,7 @@ public import CoreComposition.Blobs
 /-!
 A tie: subprotocols of a composition that must name one value, each reading the values it names off its case, the way
 onsite's space and bandwidth subprotocols must be on one store (`Core.Onsite.store`) and each window of remote's PoUW
-period must name the policy's record (`Core.Remote.windows`). `tiedSame` is `same` with ties: once `same` doesn't
+period must name the policy's record (`Core.Remote.executionPhases`). `tiedSame` is `same` with ties: once `same` doesn't
 reject, subprotocols of a tie that didn't all name one value reject whatever the subprotocols answer, and any rejection of
 `same`'s, a subprotocol's, the record's or the cases' misfit, stands. Its parameters, commitment and evidence are
 `same`'s.

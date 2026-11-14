@@ -22,9 +22,9 @@ public import Mathlib.Tactic.Linarith
 
 @[expose] public section
 
-namespace InferenceOnly.SecurityProofs
+namespace Slowdown.SecurityProofs
 
-open Verity Finset InferenceOnly.Capability
+open Verity Finset Slowdown.Capability
 open scoped ENNReal
 
 theorem HeldBudget : Guarantees.HeldBudget := by
@@ -116,4 +116,4 @@ theorem StatHeldBudget : Guarantees.StatHeldBudget := by
   have hk : (S.card : ℝ) ≤ k := by exact_mod_cast hCK.reads u
   linarith
 
-end InferenceOnly.SecurityProofs
+end Slowdown.SecurityProofs

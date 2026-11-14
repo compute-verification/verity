@@ -138,7 +138,7 @@ DOC_TERMS = {
     "sampling period, sampling block, PoUW's commit period": "execution phase (work plus its audit: an execution phase and its "
                                                             "verification phase)",
     "hm96 rows, outside the commitments' docs": "hiding commitments",
-    "integrity period": "execution phase (`IntegrityPeriod` stays in backticks until renamed)",
+    "integrity period": "execution phase",
     "execution transcript": "trace (a proof's or a session's messages stay its transcript)",
     "that period's coins": "before any coins are flipped",
     "rejection dominates, reject dominance": "any rejection rejects the whole",
@@ -765,9 +765,9 @@ def test_the_scan_reads_the_incorrect_ands():
 
 
 def test_the_doc_scan_reads_the_trace_and_phase_terms():
-    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityPeriod` stay."""
+    """A run's trace and the execution phase, on toy files: a proof's transcript and `IntegrityMonitoringPeriod` stay."""
     docs = {"a.md": "An integrity period, two integrity\nperiods and an execution-transcript; a proof's transcript, "
-                    "`IntegrityPeriod`.\n"}
+                    "`IntegrityMonitoringPeriod`.\n"}
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
         ("a.md", 1, "integrity period"), ("a.md", 1, "integrity periods"), ("a.md", 2, "execution-transcript")]
 
