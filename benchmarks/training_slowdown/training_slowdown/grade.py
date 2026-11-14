@@ -56,7 +56,7 @@ no job writes): the grade never reads it and passes it on, beside each record it
   (`capture.products.on_premise`);
 - **the bound of record** at the same policy (the `bound` of `calculator.slowdown`'s result there): the least
   slowdown of any partition of the attack's traced circuit, by the theorem's count solved for the fewest blocks. ρ's
-  products term is this bound, so where products bind ρ is it and S is p times it (`BOUND_IS_RHO`). The block prints
+  products term is this bound, so where products bind ρ is it and S is p times it (`BOUND_IS_SLOWDOWN`). The block prints
   it under S with its statement and what it rests on;
 - **per period** (`per_period`): the run's AND gates at S, C·ρ, and their share of one datacenter's and of the
   world's compute over a window, a week, a month and a year (`calculator.fleets`, `calculator.periods`), with the
@@ -116,8 +116,8 @@ BESIDE = {"circuit": "the measured step's cut of its gradient and its structure,
           "capture_code": "the version of the code that took the trace"}
 #: how the bound of record stands to ρ, which the block says under it: `calculator.slowdown` scores each choice of the
 #: work by the calculator's bound, so the products term is the bound of record on the work it chose
-BOUND_IS_RHO = ("rho's products term is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
-                "the same N, O, β, b and F: where products bind, rho is it and S is p times it")
+BOUND_IS_SLOWDOWN = ("the products term of the record's slowdown is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
+                "the same N, O, β, b and F: where products bind, the record's slowdown is it and S is p times it")
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where ρ
 #: has no trace to read: one refused, or one that was not taken. `RETRACE_ON` is the job less its device, for a trace
 #: that is to be taken on a device of the job's kind
@@ -564,7 +564,7 @@ def blank(record: dict, got: dict, unmeasured: dict) -> dict:
     return out
 
 
-def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple[dict, dict]:
+def slowdown_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple[dict, dict]:
     """ρ at the policy `pol` from the config's search job `run`, a start of `shape`, and the bound of record there:
     `formalism.published` at (c, k) on its first scored checkpoint at or below its target, else on its last (`at`
     says which), read with its record's trace (`traced`), with the theorem's inputs there (`work`, the bound of
@@ -603,7 +603,7 @@ def rho_of(run: dict | None, f: dict, g: float, pol: dict, shape: dict) -> tuple
         {"repeats": b["inputs"]["products"]["repeats"]} if b["inputs"]["products"].get("repeats") else {}), of_record
 
 
-def per_period(run_gates: float, rho: dict) -> dict:
+def per_period(run_gates: float, slowdown: dict) -> dict:
     """The run's gates at S (`run_gates`, C·ρ) in AND gates, at a served-precision GEMM's gates an AND, and their share
     of each fleet's compute over each period (`calculator.fleets`, `calculator.periods`), with what is measured, what
     is proved (on the batch, the premise `work.batch_premise` states of ρ's `repeats`) and what is scaled."""
@@ -617,10 +617,10 @@ def per_period(run_gates: float, rho: dict) -> dict:
         "proved": (f"the count ρ's products term solves for the fewest blocks, {calculator.theorem()}'s first "
                    "conjunct (`HEShared`'s where its products share arrays): a lower bound at the N, O, β_w, β_x and "
                    "b_y the traced step gives, given (H), (E), the theorem's hypotheses on the circuit, which the "
-                   f"trace doesn't check, and that {work.batch_premise(rho.get('repeats'))}; the solving is the "
+                   f"trace doesn't check, and that {work.batch_premise(slowdown.get('repeats'))}; the solving is the "
                    "calculator's arithmetic, and p "
-                   "and the shares are not proved" if rho["binding_kind"] == "products" else
-                   f"nothing: ρ's {rho['binding_kind']} term is computed"),
+                   "and the shares are not proved" if slowdown["binding_kind"] == "products" else
+                   f"nothing: ρ's {slowdown['binding_kind']} term is computed"),
         "scaled": f"every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC at the "
                   f"{calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the run's "
                   f"gates are AND gates at the {policy.SERVED_PRECISION} GEMM's ratio. The fleets' sizes and the "
@@ -685,11 +685,11 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     p = {k: None if two else ratio(C, h["C"]) for k, h in H.items()}
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
-    rho, of_record = rho_of(search, f, g, pol, entry["shape"])
-    why = two or ((rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else
+    slowdown, of_record = slowdown_of(search, f, g, pol, entry["shape"])
+    why = two or ((slowdown.get("why") or "ρ is unmeasured") if slowdown["rho"] is None else
                   None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}")
-    S = {k: None if why or not p[k] else p[k]["p"] * rho["rho"] for k in H} | {
-        "why": why, "lower_bound": bool(rho.get("partial"))}
+    S = {k: None if why or not p[k] else p[k]["p"] * slowdown["rho"] for k in H} | {
+        "why": why, "lower_bound": bool(slowdown.get("partial"))}
     traced_rows = (((search or {}).get("record") or {}).get("trace") or {}).get("rows") or []
     return {
         "schema": SCHEMA_AS_IF if as_if_assumed else SCHEMA, "as_if": AS_IF if as_if_assumed else None,
@@ -699,18 +699,18 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         "fit": f | {"data": entry.get("data"), "starts": data,
                     "c_spread": c_spread(f, target(f, entry["l0_bpb"], g))},
         "attack": sides[me], "honest": sides[hon], "others": [sides[n] for n in others or {}],
-        "H": H, "p": p, "rho": rho, "S": S,
+        "H": H, "p": p, "rho": slowdown, "S": S,
         "bound_of_record": of_record,
         "rests_on": {
             "p": f"counted |C| ({gates.UNIT}) at each seed's first checkpoint at or below its target on "
                  f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H"
                  + (", every record counted by the assumed dtypes (as-if)" if as_if_assumed else ""),
-            "rho": rho.get("rests_on"), "capture": rho.get("capture"), "capture_code": rho.get("capture_code"),
-            "provenance": rho.get("provenance"),
+            "rho": slowdown.get("rests_on"), "capture": slowdown.get("capture"), "capture_code": slowdown.get("capture_code"),
+            "provenance": slowdown.get("provenance"),
             "attention": products.ATTENTION_PREMISE if products.on_premise(traced_rows) else None,
             "gain": f"the fit {FORM} on {f['points']} of the {len(data)} starts on data {entry.get('data')}"
                     + (f", provisional under {FIT_TARGET}" if f["provisional"] else "")},
-        "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None and not two else None,
+        "per_period": per_period(C["mean"] * slowdown["rho"], slowdown) if C and slowdown["rho"] is not None and not two else None,
         "records": [_read(n, r) for n, rs in jobs.items() for r in rs]}
 
 
@@ -756,7 +756,7 @@ def _said(provenance) -> str:
 def text(s: dict) -> str:
     """The block the grade prints (module docstring). An as-if grade's block says so in its first line and its
     second, and every line after them begins with `as-if`, so a line read apart from the block still says it."""
-    pol, f, rho, S, basis = s["policy"], s["fit"], s["rho"], s["S"], s["basis"]["split"]
+    pol, f, slowdown, S, basis = s["policy"], s["fit"], s["rho"], s["S"], s["basis"]["split"]
     mine, per, bound = s["attack"]["splits"], s["per_period"], s["bound_of_record"]
     tag = "as-if " if s["as_if"] else ""
     lines = [f"{tag.upper()}SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} "
@@ -768,10 +768,10 @@ def text(s: dict) -> str:
         lines.extend(f"  {tag}{h:<17} {b}" for h, b in zip((head, *[""] * len(body)), body))
 
     if S["why"]:
-        add("S = p x rho", f"none: {S['why']}")
+        add("S = p x slowdown", f"none: {S['why']}")
     else:
-        add("S = p x rho", *(f"against {name}: S {'>= ' if S['lower_bound'] else ''}{S[k]:,.6g} = p {s['p'][k]['p']:.4g}"
-                             f" x rho {rho['rho']:,.6g}" if S[k] else f"against {name}: none (H: {_h(s['H'][k])})"
+        add("S = p x slowdown", *(f"against {name}: S {'>= ' if S['lower_bound'] else ''}{S[k]:,.6g} = p {s['p'][k]['p']:.4g}"
+                             f" x the record's slowdown {slowdown['rho']:,.6g}" if S[k] else f"against {name}: none (H: {_h(s['H'][k])})"
                              for k, name in (("any", "any route"), ("honest", "the honest route"))))
     spread_ = "the fit's residuals bound none of its uncertainty" if f["c_spread"] is None else \
         f"the fit's rms is {100 * f['c_spread']:.3g}% in effective compute at the target"
@@ -783,16 +783,16 @@ def text(s: dict) -> str:
     add("p", f"against any route {_p(s['p']['any'])}; against the honest route {_p(s['p']['honest'])}; the attack's "
              + (f"|C| {C['mean']:.4g} gates" if C else "|C| none")
              + f" ({mine[basis]['reached']} of {mine[basis]['of']} seeds reach)")
-    add("rho", f"none: {rho['why']}" if rho["rho"] is None else
-        f"{rho['rho']:,.6g}{' (a lower bound: ' + str(rho['why'] or 'a kind is unmeasured') + ')' if rho['partial'] else ''}"
-        f", binding {rho['binding_kind']}, on search seed {rho['seed']} at {rho['at']} (step {rho['checkpoint_step']})")
-    if rho["rho"] is not None:
-        gaps = rho["blank"]
+    add("record's slowdown", f"none: {slowdown['why']}" if slowdown["rho"] is None else
+        f"{slowdown['rho']:,.6g}{' (a lower bound: ' + str(slowdown['why'] or 'a kind is unmeasured') + ')' if slowdown['partial'] else ''}"
+        f", binding {slowdown['binding_kind']}, on search seed {slowdown['seed']} at {slowdown['at']} (step {slowdown['checkpoint_step']})")
+    if slowdown["rho"] is not None:
+        gaps = slowdown["blank"]
         add("sensitivities", ", ".join(f"{name} " + ("blank" if name in gaps else f"{v:,.6g}")
-                                       for name, v in rho["sensitivities"].items())
-            + ", beside rho and never in it: each holds only for partitions split by tokens",
+                                       for name, v in slowdown["sensitivities"].items())
+            + ", beside the record's slowdown and never in it: each holds only for partitions split by tokens",
             *(f"{name}: " + (f"blank: {why}" if name in gaps else f"partial: {why.removeprefix('unmeasured: ')}")
-              for name, why in (rho["unmeasured"] | {n: w for n, w in gaps.items() if n in rho["sensitivities"]}).items()))
+              for name, why in (slowdown["unmeasured"] | {n: w for n, w in gaps.items() if n in slowdown["sensitivities"]}).items()))
     seeds = [_seed(split, seed, v) for split in ("final", "search") for seed, v in mine[split]["seeds"].items()]
     theirs = [_seed(split, seed, v) for split in ("final", "search")
               for seed, v in s["honest"]["splits"][split]["seeds"].items()]
@@ -800,8 +800,8 @@ def text(s: dict) -> str:
         "the spread of |C|: " + ("none" if not C else f"{C['min']:.4g} to {C['max']:.4g} gates over {C['n']} seeds"
                                   + (f", sd {C['sd']:.3g}" if C["sd"] is not None else "")))
     r = s["rests_on"]
-    no_code = rho.get("blank", {}).get("capture_code", "rho is unmeasured")
-    add("rests on", f"rho: {r['rho'] or 'nothing: it is unmeasured'}",
+    no_code = slowdown.get("blank", {}).get("capture_code", "the record's slowdown is unmeasured")
+    add("rests on", f"the record's slowdown: {r['rho'] or 'nothing: it is unmeasured'}",
         f"capture: {r['capture'] or 'none'}, its code "
         + (r["capture_code"] or f"blank: {no_code}")
         + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
@@ -809,11 +809,11 @@ def text(s: dict) -> str:
     add("bound of record", *([bound["why"]] if not bound["available"] else [
         f"every partition of the attack's traced circuit into the policy's blocks pays at least "
         f"{bound['slowdown']:,.6g}x ({bound['theorem']}: at least {bound['blocks']:.4g} blocks of c gates over its |C|)",
-        f"rests on: {bound['rests_on']}", BOUND_IS_RHO]))
+        f"rests on: {bound['rests_on']}", BOUND_IS_SLOWDOWN]))
     if per is None:
         add("per period", "none: no S")
     else:
-        add("per period", f"the run at S: {per['run_and_gates']:.4g} AND gates (|C| x rho); its share of the compute of",
+        add("per period", f"the run at S: {per['run_and_gates']:.4g} AND gates (|C| x the record's slowdown); its share of the compute of",
             *(f"{over} ({rows[0]['fleet']}, {rows[0]['locations']:,.0f} locations): " + ", ".join(
                 f"{x['period']} {x['share']:.3g}" for x in rows)
               for over in dict.fromkeys(x["over"] for x in per["rows"])

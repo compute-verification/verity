@@ -512,7 +512,7 @@ def test_the_scan_reads_each_form():
     assert used == {"N, the round's proof units", "verity/proof-service/"}
 
 
-def test_the_scan_reads_rho_terms():
+def test_the_scan_reads_the_slowdown_calculators_terms():
     """`benchmarks/slowdown`'s incorrect outputs, steps and ingress units, on toy files: its keys and Lean-mirroring names,
     a faulty node, link or device, and the same words outside it stay."""
     docs = {
@@ -548,7 +548,7 @@ def test_the_scan_reads_the_network_terms():
 
 def test_the_scan_reads_the_incorrect_ands():
     """`sampling_plan`'s incorrect ANDs, on toy files, in every file: an AND gate in another sense stays."""
-    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside rho\n"}
+    docs = {"a.py": "# 9 faulty ANDs and faulty\n# ANDs; a faulty AND gate, faulty outputs outside the calculator\n"}
     assert offenders(list(docs), read=docs.__getitem__)[0] == [("a.py", 1, "faulty ANDs"), ("a.py", 1, "faulty # ANDs")]
 
 
