@@ -681,7 +681,7 @@ mask slot's words from the OS and writes them into the witness's mask slot (`Fra
 `Frame.MaskSlot.fill`: the slot of the session's own statement for the table, at its `m`), samples the four extra lanes,
 every lane's padding and the level-0 salts, commits level 0 on them and keeps the table's `Flock.ZkServer.Level0` (its `m`,
 level 0's schedule and `t_pad`, the witness, the samples, the codeword's rows, the Merkle layers from the leaves to the
-cap, and the root, each `Link`'s function of the witness and samples: `Level0.ofDraws_ok`). The prover writes the words
+cap, and the root, each `Link`'s function of the witness and samples: `Level0.ofSamples_ok`). The prover writes the words
 into its own witness's mask slot (`z`, `a` and `b`, whose circuit is the identity there, and the lincheck's packing of
 `z`) and takes the samples in place of its own (`Level0Zk`'s `extra` and `pads`, `LeafSalts::set_level0`), so the device
 commits the codeword the loop did; the loop's root is the root of record. A worker that keeps words of its own in the slot

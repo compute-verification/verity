@@ -26,8 +26,8 @@ once, over a structure of only what it reads (`Plays`), and each leg instantiate
   - at the bits (`Plays.ex_off_le_bits`), `p` is the bit's minority weight, at most its majority's
     (`Plays.minority_le_majority`), so `∑ a p ≤ K` and `(∑ a)² ≤ W ∑ a² ≤ WK`;
   - at the units (`Plays.ex_off_le_units`), `p_u` is the probability of binding `u`, and the majority at any bit of
-    `u`'s wires weighs at least `p_u / 2` (`Plays.drawn_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
-* **A unit bound in a witness and unbound in a transcript** (`unbound_drawn`): the witness differs from the
+    `u`'s wires weighs at least `p_u / 2` (`Plays.sampled_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
+* **A unit bound in a witness and unbound in a transcript** (`unbound_sampled`): the witness differs from the
   transcript at some bit of one of the unit's wires.
 
 The uniform averages the argument reads (`ex_*`, `pr_*`) and the plurality word's bits (`getLsbD_ofNat_sum`) are here
@@ -226,7 +226,7 @@ theorem units_bound {Ξ ι : Type} [Fintype Ξ] [Fintype ι] {Smp : Ξ → Type}
 
 /-- **A unit unbound in `Xe` and bound in `Xw` gives a wire bit where they differ**: where `Xw` is correct at `u` and
 opened at each of its wires, a unit unbound in `Xe` has a wire where `Xe` differs from `Xw`, at some bit. -/
-theorem unbound_drawn {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
+theorem unbound_sampled {C : Verity.Circuit} {n : ℕ} (P : Verity.Partition C n)
     (opens : (g : Fin C.N) → BitVec (C.w g) → Prop) {Xw Xe : C.Trace} {u : Fin n}
     (hc : P.Correct Xw u) (ho : ∀ g ∈ P.io u, opens g (Xw g)) (hu : u ∈ Accounting.unbound P opens Xe) :
     ∃ g ∈ P.io u, ∃ i < C.w g, (Xw g).getLsbD i = !(Xe g).getLsbD i := by
@@ -295,7 +295,7 @@ def offEvent (Xt : C.Trace) (u : Fin n) (ξ : M.Ξ) (s : M.Smp ξ) : Prop :=
 
 /-- **A play's binding of the unit `u`**: at the play `s` of the sample `ξ`, it accepts, binds `u`, and the extractor
 returns a witness in the relation. -/
-def drawEvent (u : Fin n) (ξ : M.Ξ) (s : M.Smp ξ) : Prop :=
+def sampleEvent (u : Fin n) (ξ : M.Ξ) (s : M.Smp ξ) : Prop :=
   M.acc ξ s ∧ M.drawn ξ s u ∧ ∃ wt, M.wit ξ s = some wt ∧ M.R ξ wt
 
 /-- **The event the binding term counts at the wire bit `b`**: `wEvent` at bit `b.2` of the wire `b.1`, reading the
@@ -348,9 +348,9 @@ theorem majority_le_coll (coll : (ξ₁ : M.Ξ) → M.Smp ξ₁ → (ξ₂ : M.�
 /-- **The plurality's bit weighs at least half a bound unit**: at a bit `i` of a wire `g` of the unit `u`, the weight
 of the bit `extract` picked there is at least half the probability that a play accepts, binds `u` and the extractor
 returns a witness in the relation. -/
-theorem drawn_le_weight {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) {i : ℕ} (hi : i < C.w g) :
-    Ex (fun ξ => Pr (M.drawEvent u ξ)) ≤ 2 * M.weight g i ((M.extract g).getLsbD i) := by
-  have hsum : Ex (fun ξ => Pr (M.drawEvent u ξ)) ≤ M.weight g i true + M.weight g i false := by
+theorem sampled_le_weight {u : Fin n} {g : Fin C.N} (hg : g ∈ P.io u) {i : ℕ} (hi : i < C.w g) :
+    Ex (fun ξ => Pr (M.sampleEvent u ξ)) ≤ 2 * M.weight g i ((M.extract g).getLsbD i) := by
+  have hsum : Ex (fun ξ => Pr (M.sampleEvent u ξ)) ≤ M.weight g i true + M.weight g i false := by
     rw [weight_eq, weight_eq, ← Claims.Ex_add]
     refine Ex_mono fun ξ => le_trans (Pr_mono fun s hs => ?_) (pr_or_le _ _)
     obtain ⟨hacc, hu, wt, hw, hR⟩ := hs
@@ -388,18 +388,18 @@ theorem ex_off_le_bits (coll : (ξ₁ : M.Ξ) → M.Smp ξ₁ → (ξ₂ : M.Ξ)
 /-- **The binding term at the units**: averaged over the samples, the probability that a play accepts while the
 extractor's witness differs from the plurality at a bit of a wire of a unit it binds is at most `√(2n · K)`, `n` the
 units (`units_bound`): a play off the plurality at a bit of a wire of `u` collides with every play that reads the
-plurality's bit there, which weighs at least half `u`'s binding (`drawn_le_weight`). -/
+plurality's bit there, which weighs at least half `u`'s binding (`sampled_le_weight`). -/
 theorem ex_off_le_units (coll : (ξ₁ : M.Ξ) → M.Smp ξ₁ → (ξ₂ : M.Ξ) → M.Smp ξ₂ → Prop) (hcoll : M.Binds coll)
     {K : ℝ} (hK : Ex (fun p : M.Ξ × M.Ξ => Pr (fun s : M.Smp p.1 × M.Smp p.2 => coll p.1 s.1 p.2 s.2)) ≤ K) :
     Ex (fun ξ => Pr (fun s : M.Smp ξ => ∃ u, M.offEvent M.extract u ξ s)) ≤ Real.sqrt (2 * n * K) := by
   classical
   have hlow : ∀ u ξ₁ (s₁ : M.Smp ξ₁), M.offEvent M.extract u ξ₁ s₁ →
-      Ex (fun ξ => Pr (M.drawEvent u ξ)) ≤ 2 * Ex (fun ξ₂ => Pr (coll ξ₁ s₁ ξ₂)) := by
+      Ex (fun ξ => Pr (M.sampleEvent u ξ)) ≤ 2 * Ex (fun ξ₂ => Pr (coll ξ₁ s₁ ξ₂)) := by
     intro u ξ₁ s₁ hs
     obtain ⟨-, hu₁, w₁, he₁, hR₁, g, hg, i, hi, hb₁⟩ := hs
-    exact le_trans (M.drawn_le_weight hg hi) (mul_le_mul_of_nonneg_left
+    exact le_trans (M.sampled_le_weight hg hi) (mul_le_mul_of_nonneg_left
       (M.majority_le_coll coll hcoll ⟨u, hu₁, hg⟩ he₁ hR₁ hb₁) (by norm_num))
-  have h := units_bound (Smp := M.Smp) (M.offEvent M.extract) M.drawEvent coll (by norm_num : (0 : ℝ) ≤ 2)
+  have h := units_bound (Smp := M.Smp) (M.offEvent M.extract) M.sampleEvent coll (by norm_num : (0 : ℝ) ≤ 2)
     (fun u ξ s hs => by
       obtain ⟨hacc, hu, wt, hw, hR, -⟩ := hs
       exact ⟨hacc, hu, wt, hw, hR⟩) hlow hK

@@ -35,10 +35,6 @@ variable, and nothing under `benchmarks/` or `adapters/`. Its tests are in `test
 - `masked_gemm/`: `floored_gemm/`'s GEMM with its operands hidden, one kernel for each way of hiding them.
 - `edited_gemm/`: the served linear and attention products on dithered or edited int8 operands, with receipts, on
   `masked_gemm/`'s mainloop.
-- `nvfp4_sm120/`: the plain NVFP4 and FP8 GEMMs on sm_120a, with no proof of work, the baseline on the same mainloop
-  that a Pearl-C4 or Pearl-C kernel is timed against.
-- `harness/native/`: the sources of the GPU harness's device library (`libpouw_harness.so`: fills, flushes, events,
-  graphs, cuBLASLt and the CUTLASS baselines), which its `build.sh` builds with `nvfp4_sm120/`'s plain GEMMs.
 - `gpu_kit/`: the kernel-engineering skill's timing protocol as code (poisoning, clock reads, SASS checks), for a
   standalone `.cu` bench to include.
 - `served_zk/`: a served Pearl-C window's rows committed as hm96-sha512 leaves in the ZK statement's format, and that

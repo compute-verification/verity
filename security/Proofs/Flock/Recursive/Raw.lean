@@ -51,7 +51,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBind Integrate Placed StrictCR
   DecodeZL Composed ZkReg FailClosed
-open ZkHidden (planZHJ planZHJ_length DrawSetupZHJ TagsOkZHJ DrawOkZKHJ layShHJ)
+open ZkHidden (planZHJ planZHJ_length SampleSetupZHJ TagsOkZHJ SampleOkZKHJ layShHJ)
 open FlockSoundness.Discharge.Tables (LiveOutJ liveSession liveRoundsJ)
 open scoped ENNReal
 
@@ -72,7 +72,7 @@ structure ZkOuterR (mPts nv J : ℕ) (Reg' : Type) (c : Flock.Circuit) (hU : Bui
   hTags : TagsOkZHJ I
   hJ : nTab I = J
   rd : ∀ (ht : I.tags.typed = false) (S₀ : Finset (Fin nv)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok (pubZ I)),
     FlockSoundness.Registered.ReadsX
       (layShHJ (Reg := Reg') dj y₀ ht hc (Layout.scopeOkH_of_scopeOk hscope) hU (pub := pubZ I))
@@ -157,7 +157,7 @@ untemplated tags, their circuit is `c`, their registered population has `nv` uni
 sample. -/
 def Typable : Prop :=
   ScopeZR x.I ∧ x.I.tags.isTmpl = false ∧ circZ x.I = c ∧ (pubZ x.I).n = nv ∧
-    ∃ (S₀ : Finset (Fin nv)) (d₀ : Lean.Json), Nonempty (DrawSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
+    ∃ (S₀ : Finset (Fin nv)) (d₀ : Lean.Json), Nonempty (SampleSetupZHJ (inputsJ x.I 0) mPts S₀ d₀)
 
 variable {x}
 
@@ -178,7 +178,7 @@ noncomputable def Typable.S₀ (hx : x.Typable) : Finset (Fin nv) := hx.2.2.2.2.
 noncomputable def Typable.d₀ (hx : x.Typable) : Lean.Json := hx.2.2.2.2.choose_spec.choose
 
 /-- The typed session's setup of table 0 at `Typable.S₀`. -/
-noncomputable def Typable.y₀ (hx : x.Typable) : DrawSetupZHJ (inputsJ x.I 0) mPts hx.S₀ hx.d₀ :=
+noncomputable def Typable.y₀ (hx : x.Typable) : SampleSetupZHJ (inputsJ x.I 0) mPts hx.S₀ hx.d₀ :=
   Classical.choice hx.2.2.2.2.choose_spec.choose_spec
 
 /-- Every table count of the typed session's plan is `J`. -/

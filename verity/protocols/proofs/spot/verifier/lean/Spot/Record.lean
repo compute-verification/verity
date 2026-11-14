@@ -116,7 +116,7 @@ only when they fail. `digest` is the registration's, `units` the sample's. -/
 def checks (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json) (digest : String)
     (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
-  let mut out := #[("draw", Draw.checkDrawFull draw (getD reg "population") law),
+  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") law),
     ("proved", Draw.checkProvedFull draw provedUnits instances)]
   if !jeq (getD receipt "registration") (Json.str digest) then
     out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
@@ -213,7 +213,7 @@ def ownRegisteredFast (rec : Json) (opened : Option (Array (String × Json))) : 
 def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : Array Json) (instances : Json)
     (digest : String) (served : Option (Array Int)) (sessionRoots : Option (Array (String × Json)))
     (sessionRegistered : Option (Array (String × Json))) : Array (String × Check) := Id.run do
-  let mut out := #[("draw", Draw.checkDrawFull draw (getD reg "population") law),
+  let mut out := #[("draw", Draw.checkSampleFull draw (getD reg "population") law),
     ("proved", Draw.checkProvedFull draw provedUnits instances)]
   if !jeq (getD receipt "registration") (Json.str digest) then
     out := out.push ("receipt", failed "receipt" (obj [("receipt", getD receipt "registration")]))
@@ -246,7 +246,7 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   simp only [checks, checksFast, find?_byPort]
 
 /-- The profile's sample of the sampling design a sample names (`audit.profile`): a work sampling design is the stratified sampling design at its sizes. -/
-def profileDraw (law : Json) : Option Core.SamplingDesign :=
+def profileSample (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
   | .str "subset" => (nat? (getD law "k")).map .subset
   | .str "bernoulli" => do
@@ -377,7 +377,7 @@ def inputOf (j : Json) : V Input := do
   return { registration := reg, receipt, draw, units, law, provedUnits, instances := getD j "instances",
            statement := getD j "statement", verdicts, delta, sessions, served, sessionRoots, certified }
 
-private def strataDrawn (draw : Json) (units : Array Int) : Json :=
+private def strataSampled (draw : Json) (units : Array Int) : Json :=
   obj ((match getD draw "strata" with | .arr ss => ss | _ => #[]).toList.filterMap fun s =>
     match getD s "template" with
     | .str t =>
@@ -423,13 +423,13 @@ def record (i : Input) : V Json := do
   let mut wrongUnits := Json.null
   if accepted then
     let delta ← floatJson i.delta
-    let some draw := profileDraw i.draw | throw "the draw's law has no profile"
+    let some draw := profileSample i.draw | throw "the draw's law has no profile"
     let population ← match nat? (get "population") with
       | some n => pure n
       | none => throw "the population is negative"
     profile := if stratified then
         match draw.toJson with
-        | .obj kvs => (Json.obj kvs).setObjVal! "delta" delta |>.setObjVal! "drawn" (strataDrawn i.draw i.units)
+        | .obj kvs => (Json.obj kvs).setObjVal! "delta" delta |>.setObjVal! "drawn" (strataSampled i.draw i.units)
         | j => j
       else obj [("programs", Json.arr #[get "program"]), ("prescribed", Json.arr #[]), ("linked", Json.bool false),
         ("covered", Json.arr #[]), ("levels", Json.arr #[obj [("name", Json.str LEVEL), ("query", get "partition"),

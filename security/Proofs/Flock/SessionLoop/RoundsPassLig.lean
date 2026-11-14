@@ -132,7 +132,7 @@ theorem repState_closeIn {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
     {d : _root_.Flock.ZkServer.Frame.Draws} {mk : Option _root_.Flock.ZkServer.Frame.MaskSlot}
     (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-    (hcd : c = Cfg.ofDraws lay d mk) (hord : c''.order.size = c.order.size)
+    (hcd : c = Cfg.ofSamples lay d mk) (hord : c''.order.size = c.order.size)
     (hcr : cr.size = alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1) {cs : Array F128} {m : Masker}
     (ha : (repState c t rep dom xs hi cr0 cr ns (alg.size + (xs.size + 2) + 1 + (t.sch.k0 + 3) + 1)).answer c'' cs =
       .ok m) :
@@ -417,7 +417,7 @@ theorem schedTaken_lig (L₁ : LeanRelease Flock.Wit Loop.Tp)
   have hmkt : tph.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512 := by rw [hts']; exact hmk
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hAA : alg.size = A := by
     rw [(alg_cnt (by rw [htm]; omega) (by rw [htk]; omega) hmb hal).1, htm, htk, hAd]
   have hXSP : xs.size = spec.points * (Masked.stAt x j).regions.size := by rw [hxs]; exact hXS

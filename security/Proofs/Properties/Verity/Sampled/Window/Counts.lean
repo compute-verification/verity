@@ -296,13 +296,13 @@ theorem Member.spec_at {nJ : ℕ} (m : Member nJ) (hc : m.I.count = 1) (hr : m.I
 
 /-- **The session `--zk` sets up at a member's part of a sample has the member's link points' count**: its one
 statement is set up at the record's sample, the member's printed part, where it has the link points of as many proof
-blocks as the part (`drawOkZKHJP_of_count`), the member's at a part of its session's size (`Window.hcls`). -/
+blocks as the part (`sampleOkZKHJP_of_count`), the member's at a part of its session's size (`Window.hcls`). -/
 theorem Member.mPts_eq {nJ : ℕ} (m : Member nJ) (t : ℕ) {record : String} {spec : Flock.SessionSpec}
     {sts : Array Flock.Stmt} (hs : Exec.setupOfP (ZkExec.zkInputs m.I) m.own record = .ok (spec, sts))
     {S : Finset (Fin nJ)} (hdr : Exec.recordDraw record = some (printedPart (m.part S)))
     (hcls : Exec.mPtsOf m.D.unroll.g (m.part S).card = Exec.mPtsOf m.D.unroll.g (m.kd / Composed.nTab m.I)) :
     spec.mPts = memberPts (m.toV5 t) := by
-  have hpin := ZkHidden.drawOkZKHJP_of_count m.I m.own m.ht (m.toV5 t).hcS m.hcount (fun S => .subset S.card) m.n
+  have hpin := ZkHidden.sampleOkZKHJP_of_count m.I m.own m.ht (m.toV5 t).hcS m.hcount (fun S => .subset S.card) m.n
     printedPart (m.toV5 t).hCust.2 (m.part S)
   have h1 : m.I.count ≤ 1 := m.hcount
   unfold Exec.setupOfP at hs

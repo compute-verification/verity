@@ -38,7 +38,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.tags.typed = false)
   (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-  {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {pub : Public}
+  {S₀ : Finset (Fin n)} (x₀ : SampleSetup I mPts S₀ (dj S₀)) {pub : Public}
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
 
@@ -91,7 +91,7 @@ Its hypotheses, past the session's inputs:
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
   `model_eq_stmtOf`), the statement the executable's acceptance plays. At an accepted sample whose link points are not `mPts`
   the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted sample of the sampling design to set up at
-  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_eq`);
+  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (`Exec.setupH_mPts_sampled`, `Exec.setupH_mPts_eq`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
 * numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).

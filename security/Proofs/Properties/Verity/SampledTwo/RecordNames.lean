@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.HeldOf
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 public import Proofs.Properties.Verity.SampledTwo.JpWalk
 
 /-!
@@ -174,10 +174,10 @@ theorem registered_null {rec : Json} (hk : Spot.keys? rec = some KEYS) : Spot.ge
     simp only [Spot.keys?, Option.some.injEq] at hk
     rw [SpotFlock.RunsAs.getD_obj, getElem?_none_of_not_key m "registered" (fun hm => ?_)]
     · rfl
-    · have h2 := (FlockSoundness.Audit.DrawExec.mem_qsort _ (· < ·) _).2 hm
+    · have h2 := (FlockSoundness.Audit.SampleExec.mem_qsort _ (· < ·) _).2 hm
       rw [show (m.toArray.map Prod.fst).qsort (· < ·) = KEYS from hk] at h2
       unfold KEYS Spot.sortStrings at h2
-      rw [FlockSoundness.Audit.DrawExec.mem_qsort] at h2
+      rw [FlockSoundness.Audit.SampleExec.mem_qsort] at h2
       simp at h2
   | _ => simp [Spot.keys?] at hk
 

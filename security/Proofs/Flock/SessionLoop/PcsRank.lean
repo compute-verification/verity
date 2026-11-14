@@ -512,7 +512,7 @@ theorem rank_unrefused_sched (T : ZKMal.CoinLayer.TableData)
     rw [hlay0]
     show _ - 6 + 6 = _
     omega
-  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofDraws_order _ _ _
+  have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by rw [hc']; exact ofSamples_order _ _ _
   have hm14t : 14 ≤ t.st.m := by rw [htm, hstj]; exact hm14
   have hk6t : 6 ≤ t.st.fold.kLog := by rw [htk, hstj]; exact y.wf.1.hk6
   have hAA : alg.size = A := by rw [(alg_cnt hm14t hk6t hmb hal).1, htm, htk, hAd]

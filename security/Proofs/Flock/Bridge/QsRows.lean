@@ -48,7 +48,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {dj : Finset (Fin n) → Lean.Json} {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} {y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀} {ht : I.tags.typed = false} {c : Flock.Circuit}
+  {d₀ : Lean.Json} {y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀} {ht : I.tags.typed = false} {c : Flock.Circuit}
   {hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c} {hscope : Discharge.Layout.scopeOkH c = true}
   {hU : Built c.unit} {pub : Flock.Public} {hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub}
   {hpt : pub.tables = none}
@@ -82,7 +82,7 @@ theorem qs_vbOf_le_split (L : FlockSoundness.Audit.Law n) (kd : ℕ) (bad : Fins
 
 /-- **`Q_s ≤ k_d · n_p + 2 + k_d · 2⁻⁶⁴ · n · n_p` at the live subset sample**, on a uniform byte source (A3) that
 holds the first read's `2 · k_d · width n + 64` bytes: the sample holds `k_d` proof blocks unless it runs out of bytes
-(`Law.execOS_subset_draw_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`Law.runOS_subset_none_le`). -/
+(`Law.execOS_subset_sample_card_le`), with probability at most `k_d · 2⁻⁶⁴` (`Law.runOS_subset_none_le`). -/
 theorem qs_vbOf_execOS_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     (kd : ℕ) (hkd : kd ≤ n) (hLb : 2 * kd * Flock.Draw.width n + 64 ≤ Lb 0) :
@@ -99,7 +99,7 @@ theorem qs_vbOf_execOS_le {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 →
   have h := qs_vbOf_le_split (dj := dj) (y₀ := y₀) (ht := ht) (hc := hc) (hscope := hscope) (hU := hU) (hpub := hpub)
     (hpt := hpt) (Reg := Reg) (Law.execOS (n := n) src (.subset kd) n) kd
     (Finset.univ.filter fun ω : Ω => Law.runOS (src ω) (.subset kd) n = none)
-    (fun ω hω => Law.execOS_subset_draw_card_le src kd ω fun h0 =>
+    (fun ω hω => Law.execOS_subset_sample_card_le src kd ω fun h0 =>
       hω (Finset.mem_filter.2 ⟨Finset.mem_univ _, h0⟩))
   exact h.trans (add_le_add le_rfl (mul_le_mul_of_nonneg_right hbad (by positivity)))
 

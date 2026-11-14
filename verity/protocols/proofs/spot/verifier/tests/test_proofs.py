@@ -216,7 +216,7 @@ def test_fits_why_refuses_a_field_at_the_limit_and_not_below_it(field, value, si
     assert PF.fits_why(size + 1, **inputs) is None
 
 
-def test_fits_why_names_the_first_field_past_the_limit_and_the_draw_its_own():
+def test_fits_why_names_the_first_field_past_the_limit_and_the_sample_its_own():
     assert PF.fits_why(1, b"x", b"y", [("t", b"z")], b"p", {}, []) == "the circuit file"
     assert PF.fits_why(3, b"", b"", [], b"", {"a": 1}, ["é"]) == "the partition object"
     assert PF.fits_why(PF.WORD, b"x", b"y", [("t", b"z")], b"p", {}, []) is None

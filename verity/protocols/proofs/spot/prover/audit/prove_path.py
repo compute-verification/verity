@@ -79,7 +79,7 @@ Two kinds of committed run:
 * **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
-  sample's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
+  sample's receipt and the advice-root-after-the-draw negative (`advice_after_sample`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it proves the false
   witness, and a window passes when its docket passed every check before the sample, the outcome is a reject and
   the forged unit's member was stopped (`forged_row`): the ZK server released no proof of it, or under ``--plain``, where
@@ -1071,7 +1071,7 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
             "detail": {"drawn_after": receipt.get("registration"), "registration": R.digest(rec), "received": receipt.get("received")}}
 
 
-def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
+def advice_after_sample(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
                       held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source, codec: Any = None) -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a docket binding that root, with its opening. Every check before the sample passes on it (``source`` against the new
@@ -1186,7 +1186,7 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         rec, receipt = (json.loads((out / f).read_text()) for f in ("registration.json", "receipt.json"))
         row["advice_before_draw"] = advice_before_draw(receipt, rec, bound)
         row["negatives"] = {**(row["negatives"] or {}),
-                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src,
+                            "advice-root-after-the-draw": advice_after_sample(compiler, receipt, rec, opening, mine, held, src,
                                                                             advice_codec(a))}
         ordered = row["advice_before_draw"]["ok"] and row["negatives"]["advice-root-after-the-draw"]["refused"]
     else:
