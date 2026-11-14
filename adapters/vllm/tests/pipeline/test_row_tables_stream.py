@@ -12,7 +12,6 @@ import sys
 from pathlib import Path
 
 import pytest
-
 from verity.circuits.program import Program
 from verity.commitments import row_table as RT
 from verity.protocols.proofs.spot.verifier import service as S

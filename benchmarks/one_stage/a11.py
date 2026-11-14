@@ -553,6 +553,7 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
     from verity_vllm.definitions.boolean import boolean_version
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     cands = []
     for m in res.instances:
         if K.family(m["spec"]) != kind or m["step"] not in steps:

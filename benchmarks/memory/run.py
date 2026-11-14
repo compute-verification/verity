@@ -203,6 +203,8 @@ def session(record: Path, k: int | None) -> dict:
         raise NoNumber(f"session {vs['k']} is recorded accepted, but its record names no Lean verdict "
                        f"({vs.get('verdict')!r}): only the Lean verifier's accept has a number")
     ledger = vs.get("ledger") or {}
+    if (undecided := (ledger.get("spec") or {}).get("undecided")) is not None:
+        raise NoNumber(f"session {vs['k']} was accepted and its γ at the specification's rate is {undecided}")
     gamma = (ledger.get("spec") or {}).get("gamma")
     if isinstance(gamma, bool) or not isinstance(gamma, (int, float)):
         raise NoNumber(f"session {vs['k']} was accepted and its ledger holds no γ at the specification's rate")

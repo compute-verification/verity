@@ -18,7 +18,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parents[1]
-ROOT = HERE.parents[2]
+ROOT = HERE.parents[1]
 
 TREE = {
     ".gitignore": ".lake/\n__pycache__/\n",

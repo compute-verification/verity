@@ -106,7 +106,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Link": (f"{CORE}Site.lean::Verity.Site.Link", f"{SITE_LEAN}::Core.Site.Link", f"{SITE_PY}::Link"),
     "Machine": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine",),
     "Merkle": (),  # nothing in scope declares it
-    "Netlist": ("verity/circuits/private_circuits/universal.py::Netlist",),
+    "Netlist": (),  # nothing in scope declares it
     "Node": (),
     "Op": (f"{CORE}Boolean.lean::Verity.Boolean.Op",),
     "Opening": ("security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/commitments/merkle.py::Opening"),
@@ -531,7 +531,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `Flock.Stmt`: becomes its spec (one block R1CS statement) (lean)",
     "security/Definitions/Flock/Statement.lean::FlockSoundness.Model.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
-    "security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
+    "security/Definitions/InferenceOnly/Cover.lean::InferenceOnly.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
     "security/Definitions/Certifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
@@ -640,7 +640,7 @@ KNOWN: dict[str, str] = {
     # security/Properties/
     "security/Properties/Attest.lean::MemoryChallenger.Attest.Properties.Device":
         "homonym, the memory challengers a property ranges over: rename (lean)",
-    "security/Properties/Pous/Period.lean::Pous.Period.Strategy":
+    "security/Properties/Pous/Period/Audits.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
     "security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
@@ -696,7 +696,7 @@ KNOWN: dict[str, str] = {
         "homonym, a served request's benchmark row: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py::Record":
         "homonym, a check's two verdicts side by side: rename (compute-accounting)",
-    "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py::Window":
+    "benchmarks/pouw/served_zk/replay_window.py::Window":
         "homonym, one replayed window's checks: rename (compute-accounting)",
     "verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py::Challenger":
         "duplicate of `parties.Challenger`: becomes a client of it (compute-accounting)",
@@ -716,10 +716,10 @@ KNOWN: dict[str, str] = {
     "benchmarks/property_redteam/squaring.py::Op": "homonym, a red-team model's op: rename (memory-accounting)",
     "benchmarks/remote_session/serve.py::Trace":
         "homonym, the engine's steps as a remote session runs them: rename (memory-accounting)",
-    "benchmarks/rho/rho/circuits.py::Circuit":
+    "benchmarks/slowdown/slowdown/circuits.py::Circuit":
         "homonym, a benchmark row naming a Definition at its size: rename (training)",
-    "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
-    "benchmarks/rho/rho/theorem.py::Partition":
+    "benchmarks/slowdown/slowdown/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
+    "benchmarks/slowdown/slowdown/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
     "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",

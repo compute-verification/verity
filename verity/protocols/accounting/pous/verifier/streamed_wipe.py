@@ -90,10 +90,12 @@ MARK_BYTES = DIGEST_BYTES["sha512"]
 COMPLETE, LATE, WRONG = "complete", "late", "wrong"
 
 DEPLOYED_FILL_BYTES = 2_600_000_000_000
-"""The deployed fill: 2.6 TB, every tier of one server."""
+"""The reference fill: 2.6 TB, every tier of one server, the size `StreamedWipeMeets2600GB` is stated at.  A run's fill
+is its own `WipeParams`'."""
 DEPLOYED_LABELS = DEPLOYED_FILL_BYTES // LABEL_BYTES
 DEPLOYED_K = 74_000
-"""The deployed challenge count: retained prior content at most about 1.02 GB plus the egress, at δ = 2^-40."""
+"""The challenge count at the reference fill: retained prior content at most about 1.02 GB plus the egress, at
+δ = 2^-40."""
 
 
 def raw_clock_ns() -> int:
@@ -429,19 +431,6 @@ class WipeMemoryChallenger:
         return self.indices
 
 
-class Prover:
-    """The honest server: it keeps every label it is sent and answers from them."""
-
-    def __init__(self, params: WipeParams) -> None:
-        self.store = bytearray(params.labels * LABEL_BYTES)
-
-    def receive(self, start: int, data: bytes) -> None:
-        self.store[LABEL_BYTES * start:LABEL_BYTES * start + len(data)] = data
-
-    def answer(self, indices: Sequence[int]) -> bytes:
-        return b"".join(bytes(self.store[LABEL_BYTES * i:LABEL_BYTES * (i + 1)]) for i in indices)
-
-
 EGRESS_UNIT_BITS = 8 << 20
 """The public egress count's unit: one MiB."""
 EGRESS_MAX_UNITS = (1 << 15) - 1
@@ -547,7 +536,7 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
-           "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord", "Prover",
+           "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeMemoryChallenger", "WipeParams", "batch_digest",
            "challenges_for", "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
            "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

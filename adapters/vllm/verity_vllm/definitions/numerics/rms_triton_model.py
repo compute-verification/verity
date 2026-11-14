@@ -213,7 +213,7 @@ class RmsUnresolved(Exception):
     """The call is outside the measured domain of the model."""
 
 
-# n_cols values at which the production kernels were run against the model (natural: 1536; stress: the rest);
+# n_cols values at which the served kernels were run against the model (natural: 1536; stress: the rest);
 # the same family for both kernels (rms_stress.py --kernel triton / cuda)
 MEASURED_N_COLS = (16, 64, 576, 1024, 1536, 2048, 3072, 4096)
 

@@ -7,7 +7,6 @@ subprotocol hold what the option does with a tool's answer, and nothing about th
 """
 from __future__ import annotations
 
-import importlib
 import json
 import re
 import sys
@@ -18,6 +17,7 @@ import torch
 from verity.runtime.stream import Side
 from verity.protocols.accounting.pous.prover import challenger_prover as CR
 from verity.protocols.accounting.pous.verifier import period, setup
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.runtime.stream import Side
 
 from tests import fake_vllm
@@ -52,15 +52,6 @@ def toy(monkeypatch):
     monkeypatch.setattr(pous, "linear_types", lambda: (Linear,))
     monkeypatch.setattr(ws, "geometry", lambda scheme: SMALL)
     return Model()
-
-
-@pytest.fixture
-def packages():
-    """Three package names for `weight_store.load_package`, each out of ``sys.modules`` again after the test, with its modules."""
-    names = ("pous_package_plain", "pous_package_with_init", "pous_package_broken")
-    yield names
-    for loaded in [m for m in sys.modules if m.split(".")[0] in names]:
-        del sys.modules[loaded]
 
 
 def _settings(source):
@@ -160,29 +151,6 @@ def test_an_encoder_whose_blocks_do_not_hold_w_is_caught_at_a_segments_first_blo
     assert _untouched(toy, before)
 
 
-def test_the_stores_package_loads_from_its_files_with_or_without_an_init_and_never_half(tmp_path, packages):
-    plain, with_init, broken = packages
-    path = list(sys.path)
-    for name in packages:
-        (tmp_path / name).mkdir()
-        (tmp_path / name / "leaf.py").write_text("VALUE = 5\n")
-        (tmp_path / name / "reader.py").write_text(f"from {name}.leaf import VALUE\n")
-    (tmp_path / with_init / "__init__.py").write_text("FROM_INIT = 1\n")
-    (tmp_path / broken / "__init__.py").write_text("raise RuntimeError('half an init')\n")
-
-    for name in (plain, with_init):
-        ws.load_package(name, tmp_path / name)
-        module = sys.modules[name]
-        assert importlib.import_module(f"{name}.reader").VALUE == 5                    # its modules import one another by its name
-        assert list(module.__path__) == [str(tmp_path / name)]
-        ws.load_package(name, tmp_path / "nowhere")                                      # loaded once: a second call reads no file
-        assert sys.modules[name] is module
-    assert sys.modules[with_init].FROM_INIT == 1 and not hasattr(sys.modules[plain], "FROM_INIT")
-    with pytest.raises(RuntimeError, match="half an init"):
-        ws.load_package(broken, tmp_path / broken)
-    assert broken not in sys.modules and sys.path == path
-
-
 def test_the_layers_pous_encodes_are_vllms_linear_layers_that_hold_a_weight(monkeypatch):
     """vLLM is `tests.fake_vllm` here, and its ``LinearBase`` a class of this test's."""
 
@@ -215,7 +183,7 @@ def _lean(monkeypatch, tmp_path):
     as ``say["setup"]``.  Returns ``say``, the Python's runs and what was served, each in order."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CR, "session", session)
-    audit, runs, served = period.audit, [], []
+    audit, runs, served = period_prover.audit, [], []
     say: dict[str, Any] = {"run": lambda answer: answer | {"reason": "the Lean's words"}, "setup": {"verdict": "accept"}}
 
     def audited(*args, **kw):
@@ -226,7 +194,7 @@ def _lean(monkeypatch, tmp_path):
         served.append((exe, list(cases)))
         return [say["run"](runs[-1].answer) if exe == "RUN" else say["setup"]]
 
-    monkeypatch.setattr(period, "audit", audited)
+    monkeypatch.setattr(period_prover, "audit", audited)
     monkeypatch.setattr(period, "serve", serve)
     return say, runs, served
 

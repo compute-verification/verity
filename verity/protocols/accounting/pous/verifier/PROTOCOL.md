@@ -471,8 +471,12 @@ c_j   = derive(coin_secret, "verity/pous/streamed-wipe-coins/v1", {server, sessi
 ~~~
 
 A label's message is 75 bytes, one SHA-512 compression, so a GPU derives labels faster than any link carries them.
-SHA-512 is the PRF (C3, claim `prf/sha-512`). `coin_secret` is sampled from the OS once the fill is complete, and the
-indices are uniform and independent, with replacement: live coins, never Fiat–Shamir.
+SHA-512 is the PRF of both lines (C3, claim `prf/sha-512`): the labels are its outputs under `K`, and each index is
+read from a counter-mode stream under the key `derive` gives from `coin_secret`, 32 bytes sampled from the OS once the
+fill is complete: a live coin, never Fiat–Shamir. So the indices are uniform and independent, with replacement, before
+the coins' PRF advantage, as the labels are uniform before the labels'. The bound below carries the labels' advantage
+as its term `Adv_PRF` and takes the indices as uniform, so the coins' advantage is outside it; neither is priced and
+neither is assumed (SHA-512 as PRF: not priced, not assumed).
 
 **Messages.** One session per server and wipe, under an id the auditor designates (`session`, 32 bytes):
 
@@ -581,7 +585,8 @@ keeping `z` means `M + E` bits held `z` and `g + 1` labels, which happens for a 
 egress and a counting term. `z` survives when a function of what is held inside and outside returns it, so the bound
 covers prior content moved out of the boundary too.
 
-At the deployed fill, `N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half of it for sampling:
+At the reference fill (`DEPLOYED_FILL_BYTES`, every tier of one server; a run's fill is its own `WipeParams`'),
+`N = 40,625,000,000` labels (2.6 TB) at `δ = 2^-40`, half of it for sampling:
 
 - `k = 72,074` is the fewest challenges for which a server short of 1 GB of labels passes with probability at most
   `2^-40` (`challenges_for`, sampling alone);
@@ -850,7 +855,8 @@ the timed audit and the simulator with the dense codec as default.
 ## In Lean (`lean/`)
 
 - **Trusted without proof:** `security/Definitions/Pous/Game` (bits, uniform probability, parallel oracle programs
-  `OracleAlgorithm`), `security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`/`TimedINC`, and the models below),
+  `OracleAlgorithm`), `security/Definitions/Pous/Model` (schemes, the audit game `AuditSecure`, `INC`, and the models below),
+  `security/Definitions/Assumptions/Pous.lean` (`TimedINC`, a named assumption),
   `security/Definitions/Pous/Accounting/{Params,LemmaA}.lean` (`ρ`, `δ`, `Meets`), `security/Definitions/Pous/Assumptions.lean`,
   `security/Definitions/Pous/Guarantees.lean` and, for the lemmas, `security/Proofs/Pous/Statements.lean`.
 - **`Meets sch reveal D Q k ε`:** `ε ≤ 2^-128`, `sch` is correct, `|C| ≥ |W|`, the space bound holds, and
@@ -1008,7 +1014,7 @@ The properties of the Lean verdicts `PousCheck.TimedAudit` and `MemoryChallenger
 | `BandTwoWay220_12`, `BandTwoWay220_12D11`, `BandTwoWay220_16` | the band certificate for the two-directional column game (`Pous.ColumnGame`): `B(220, 12)` at game depths 10 and 11, and `B(220, 16)` at depth 12, save at most `X = 3` labels | proved |
 | `StreamedWipeMeetsReadsTight`, `StreamedWipeMeetsServer`, `StreamedWipeMeetsServer5GB`, `StreamedWipeMeetsServerH200` | the streamed-label wipe as `StreamedWipeMeetsReads` states it, with the count of the missing labels, `m·(⌊log₂⌊3N/m⌋⌋ + 1)` for `m = ⌈N/r⌉ − 1`, in place of `N`; per server against its assumed memory capacity `M_s = 512·N + R`, at most `2^-128 + Adv_PRF` for `q ≥ B(N, r, k, R) + E`, and at the 5 GB point `B ≤ 4·10^10` for `q ≥ 4·10^10 + E`; one H200 as measured at its deployed `k = 5500` | proved |
 | `StreamedWipe`, `StreamedWipeMeets2600GB` | the streamed-label wipe ("The streamed-label wipe"): for every prover of the sequential wipe, `Pr[accepted ∧ the prior content survives] ≤ (g/N)^k + k·C(N, g+1)·2^(M+E)/2^(q+(g+1)·b) + Adv_PRF`, with no named assumption; at 2.6 TB and `k = 74,000`, at most `2^-40 + Adv_PRF` for `q ≥ E + 8.6·10⁹` bits | proved |
-| `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB` | the streamed-label wipe at `k = 2152` reads: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at 96 GiB the explicit threshold | proved |
+| `StreamedWipeMeetsFamily`, `StreamedWipeMeets96GiB` | the streamed-label wipe at `k = 2152` reads: for every fill of at least one 32 MiB segment, at most `2^-128 + Adv_PRF` for `q ≥ ⌈M/19⌉ + E`; at a card's device memory (`Verity.Accel.Card`'s `size .dram`) the same threshold | proved |
 | `StreamedWipeMeetsReads`, `StreamedWipeMeetsH200` | the streamed-label wipe at any `k` reads with `(1 − 1/r)^k ≤ 2^-129`, `verity/wipe/v0`'s figure at the session's `k`: for every fill and `R` bits outside it, at most `2^-128 + Adv_PRF` for `q ≥ 512·(⌈N/r⌉ − 1) + N + ⌊log₂ k⌋ + 130 + R + E`; an H200 (141 GiB, 151,397,597,184 bytes, filled whole) at `k = 2906`, `q ≥ 39,068,035,213 + E` bits, at most 5 GB | proved |
 
 **Why N10 fails.** Top label `v` reads only column `v` of the lower layer, so an adversary can pay for a lower label a
@@ -1095,7 +1101,10 @@ Two gaps stood between these statements and the deployed verifier:
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
   `trusted-device` (`verity.claims`): "the auditor's device runs its stated code, timing
   included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
-  host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
+  host never restores its earlier state". This log is part of that state, as is the LMS leaf state. A run's record
+  says `trusted-device` holds only under a committed configuration, for a session signed under a key its `[[pin]]`
+  entries give the memory challenger (`memory_challenger.trusted_device`), never from the host names, which are the
+  run's own: a session under any other key, a pin the run passes itself among them, is a rehearsal's, with no bound.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an
   audit has at most one session it can accept. On the served piece (`benchmarks/pous/served_piece.py`) the id is
