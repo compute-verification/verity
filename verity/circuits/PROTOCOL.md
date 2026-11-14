@@ -129,6 +129,8 @@ Vectors: `refs` (sequence, references), `take` (type, sequence, axis, member, re
 A primitive is one gate producing one `Value<w>`. Its evaluator is code, found by id in a registry, and the decoder refuses a
 primitive whose `params` or `ret` differ from the registry's; an `Input<w>_v1` or `RegisteredInput<w>_v1` id always denotes
 the Program's input primitive of that binding time (§5.2). A body's `params` and `ret_type` are inline types, not interned.
+A Definition's parameter names are distinct: a parameter is read by its name (a port's declaration, §12; a registered read),
+and two of one name would be read as one.
 
 Either entry may also carry `ports` (§12), and carries it only when its Definition declares port types. An entry without it is
 exactly the entry above.
@@ -219,6 +221,7 @@ have):
   holds it;
 - a primitive id that a family materialised by id matches only in part, or spells otherwise than its member's id (§5.2, §9);
 - a root that is not a composite without parameters;
+- a composite whose `params` give one name twice (§4.2; a primitive's are the registry's, which holds none that does);
 - an input node (§5.2) in a definition other than the root;
 - a node form other than the four, or keys other than its form's;
 - a primitive node whose callee is a composite, or a call or scan node whose callee is a primitive;
