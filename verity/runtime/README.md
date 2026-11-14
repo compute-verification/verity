@@ -39,7 +39,8 @@ Internal, which no code outside this directory imports and `runner.run` reaches 
   `OsCoins`, which a run with no seed attaches itself, as it attaches `RealClock()`.
 - `process.spawn` (`process.py`): a party in a process of its own on this machine, over TCP to the run that spawned it.
 
-The served table of `verity run` doesn't go through `runner.run`: it runs `served_verdicts.sh`.
+The served table of `verity run` runs `served_verdicts.sh` for the served window, and its runtime pieces (the wipe's,
+PoUS's rounds' and PoUB's parties) through `runner.run`.
 
 ## Where to look
 

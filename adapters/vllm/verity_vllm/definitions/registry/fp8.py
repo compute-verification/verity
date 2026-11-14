@@ -2,7 +2,7 @@
 
 Under `LLM(quantization="fp8")` on an H100 (pinned build d9105ea80, eager, `VLLM_BATCH_INVARIANT=1`, TP=1) every
 decoder linear of Qwen2.5-1.5B (qkv_proj, o_proj, gate_up_proj, down_proj; the tied lm_head stays bf16) is
-executed by two kernels, both read from the vLLM source and confirmed on the production run:
+executed by two kernels, both read from the vLLM source and confirmed on the served run:
 
 1. `_C.dynamic_per_token_scaled_fp8_quant` (`dynamic_per_token_scaled_fp8_quant_kernel_strided`, 256 threads per
    token row, `scale_ub = None`): per-row absmax `m = max_e |f32(x_e)|` (thread partials from `0.f` over 8-element
@@ -11,7 +11,7 @@ executed by two kernels, both read from the vLLM source and confirmed on the pro
    the kernel's anyway), the scale `s_x = fmaxf(m / 448.0f, 1.0f / (448.0f * 512.0f))` (an IEEE `div.rn.f32`, not
    a reciprocal), and the row's e4m3 words `x_q[e] = cvt.rn.satfinite.e4m3x2.f32(fmaxf(-448, fminf(f32(x_e) / s_x, 448)))`
    (`scaled_fp8_conversion<is_scale_inverted=false>`: again a true division).  BOTH outputs are materialised by
-   production and recorded as ports 0 (`x_q`, [M, K] e4m3) and 1 (`s_x`, [M, 1] f32) of the `fp8_quant` node.
+   serving and recorded as ports 0 (`x_q`, [M, K] e4m3) and 1 (`s_x`, [M, 1] f32) of the `fp8_quant` node.
 2. `_C.cutlass_scaled_mm` (`cutlass_gemm_sm90_fp8_batch_invariant_dispatch` -> `sm90_fp8_config_M64_N8192` for
    every N > 1280 of B1: TileShape 64x64x256, `KernelTmaWarpSpecializedFP8FastAccum`, `swap_ab = true`):
    `D^T = W_q · x_q^T` — one accumulator coordinate is an ascending chain of K/32 `wgmma.mma_async.sync.aligned
@@ -27,7 +27,7 @@ max(|W|)` over the bf16 fused tensor, `s_w = f32(amax) / 448` (torch f32 divisio
 (`static_scaled_fp8_quant`: here a *reciprocal multiply*), stored as `layer.weight = W_q.t()` ([K, N] view) and
 `layer.weight_scale` (one f32).  They are **derived Inputs** of the program, bound from the commit's stored e4m3/f32
 words.  `numerics.fp8_twins.np_online_weight_quant` is this quantisation on CPU, and on the checkpoint's layer-0
-qkv_proj it gives the production run's committed words (`adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py`); binding
+qkv_proj it gives the served run's committed words (`adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py`); binding
 doesn't call it, so a commit's weight words are not compared with a re-quantisation of the checkpoint.  The activation
 scale `s_x` and the e4m3 activations are **computed** by `Fp8ActQuant` from the norm output — never Inputs.
 
@@ -250,7 +250,7 @@ def ScaledMmFp8NoSwap(B, S, xq, sx, w, sw, *bias):
            conformance="exact-model-tested; the two halves are the production nodes (Fp8ActQuant, ScaledMmFp8); as one function on real rows: tests/program/test_fp8.py::test_quant_linear_fp8_on_production_row (layer 0 qkv_proj, t=0/63/130: x_q, s_x and eight output words exact)")
 def QuantLinearFp8(B, S, x, w, sw, *bias):
     """The FP8 linear on one token row: `Fp8ActQuant` (computed x_q and s_x from the bf16 row) then `ScaledMmFp8`.
-    Returns (x_q, s_x, y) — the three values production materialises.  The layer functions call the two halves as
+    Returns (x_q, s_x, y) — the three values serving materialises.  The layer functions call the two halves as
     sibling nodes (so each captured leaf is a whole call's return); this composite is the linear as one function."""
     q = B.call(bind(Fp8ActQuant, K=S.K), x)
     xq, sx = q[0], q[1]
@@ -319,7 +319,7 @@ def Fp8GroupScale(B, S, x):
 def Fp8GroupQuant(B, S, x):
     """`_C.per_token_group_fp8_quant` on one bf16 row: (x_q[K] e4m3, x_s[K/G] f32) — per group g, `x_s[g] = Fp8GroupScale(x[gG:(g+1)G])`
     and `x_q[e] = cvt.rn.satfinite.e4m3(fminf(fmaxf(f32(x[e]) / x_s[g], -448), 448))` (a true division; the clamp makes the saturating
-    and the software e4m3 conversions coincide).  Both outputs are materialised by production (ports 0 and 1 of the quant node)."""
+    and the software e4m3 conversions coincide).  Both outputs are materialised by serving (ports 0 and 1 of the quant node)."""
     K, G = S.K, S.G
     assert K % G == 0, (K, G)
     c448, cneg = B.call(C448), B.call(C_NEG448)

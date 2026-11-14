@@ -44,11 +44,11 @@ PERTURBED: dict[str, Any] = {"hashseed": "4242", "heap": 100_000, "junk": 37, "r
 
 CLOCKS = ("time", "time_ns", "monotonic", "monotonic_ns", "perf_counter", "perf_counter_ns", "process_time",
           "process_time_ns", "thread_time", "thread_time_ns", "clock_gettime", "clock_gettime_ns")
-DRAWS = ("random", "randint", "randrange", "randbytes", "getrandbits", "choice", "choices", "shuffle", "sample", "uniform",
-         "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate", "vonmisesvariate", "gammavariate",
-         "betavariate", "paretovariate", "weibullvariate", "binomialvariate")
-NUMPY_DRAWS = ("random", "rand", "randn", "randint", "random_sample", "random_integers", "choice", "shuffle", "permutation",
-               "bytes", "uniform", "normal", "standard_normal")
+RANDOM_CALLS = ("random", "randint", "randrange", "randbytes", "getrandbits", "choice", "choices", "shuffle", "sample",
+                "uniform", "triangular", "gauss", "normalvariate", "lognormvariate", "expovariate", "vonmisesvariate",
+                "gammavariate", "betavariate", "paretovariate", "weibullvariate", "binomialvariate")
+NUMPY_RANDOM_CALLS = ("random", "rand", "randn", "randint", "random_sample", "random_integers", "choice", "shuffle",
+                      "permutation", "bytes", "uniform", "normal", "standard_normal")
 
 _reads: list[str] | None = None
 _keep: list = []
@@ -85,13 +85,13 @@ def _install() -> None:
 
     for n in CLOCKS:
         _wrap(time, n, f"time.{n}")
-    for n in DRAWS:
+    for n in RANDOM_CALLS:
         _wrap(random, n, f"random.{n}")
     _wrap(random.Random, "seed", "an unseeded random.Random", lambda self, a=None, *_a, **_k: a is None)
     _wrap(os, "urandom", "os.urandom")
     _wrap(os, "getrandom", "os.getrandom")
     random._urandom = os.urandom  # type: ignore[attr-defined]  (SystemRandom's, so secrets')
-    for n in NUMPY_DRAWS:
+    for n in NUMPY_RANDOM_CALLS:
         _wrap(npr, n, f"numpy.random.{n}")
     _wrap(npr, "default_rng", "an unseeded numpy.random.default_rng", lambda seed=None, *_a, **_k: seed is None)
 
