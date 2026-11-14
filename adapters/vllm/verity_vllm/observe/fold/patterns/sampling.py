@@ -5,27 +5,53 @@ from __future__ import annotations
 
 import collections
 import math
+import struct
 from dataclasses import dataclass, replace
 from typing import Any
 
 from verity.circuits.defs import bind
 from verity.definitions.registry import b1
+from verity.definitions.registry import sampling as _sampling
 
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.geometry import is_int, sub_rows
-from verity_vllm.observe.fold.patterns.ops import base_op, bound_args, first, triton_name
-from verity_vllm.observe.fold.patterns.resolutions import ComputeGroup, _fmt, hint_of, unsupported
+from verity_vllm.observe.fold.patterns.ops import (
+    base_op,
+    bound_args,
+    first,
+    triton_name,
+)
+from verity_vllm.observe.fold.patterns.resolutions import (
+    ComputeGroup,
+    _fmt,
+    hint_of,
+    unsupported,
+)
 from verity_vllm.observe.fold.patterns.target import target_of
 from verity_vllm.observe.fold.patterns.transparent import widened_source
-from verity_vllm.observe.fold.resolver import Compute, Const, Gather, Param, PerRow, Resolution, StepContext, Supplied, Transparent, Unsupported
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Const,
+    Gather,
+    Param,
+    PerRow,
+    Resolution,
+    StepContext,
+    Supplied,
+    Transparent,
+    Unsupported,
+)
 from verity_vllm.observe.fold.tree import TreeNode
+from verity_vllm.program.frontend.target_profile import TargetProfile
+
+__all__ = ["with_sampler_construction"]
 
 SCRATCH_TOKEN_SELECT = "token_select"  # ctx.scratch key: two-stage greedy sampler state (TokenSelectGumbelTwoStage)
 
 
 def greedy_sampling(ctx: StepContext) -> str | None:
     """None when the run header records greedy sampling (temperature 0) for the whole workload, else the reason."""
-    s = (ctx.header.workload or {}).get("sampling") or (ctx.header.profile or {}).get("sampling") or {}
+    s = _sampling_block(ctx)
     if s.get("greedy") is not True:
         return "the run header does not record greedy sampling"
     if s.get("temperature") not in (0, 0.0):
@@ -75,7 +101,7 @@ class TokenSelectGumbelTwoStage:
         if why is not None:
             return unsupported(node, f"_gumbel_sample_kernel outside greedy sampling: {why}")
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         flags = {k: first(consts.get(k), a.get(k)) for k in ("IS_DRAFTING", "APPLY_TEMPERATURE", "PER_TOKEN_COL")}
         if any(bool(v) for v in flags.values()):
             return unsupported(node, "_gumbel_sample_kernel with drafting / temperature / per-token-column flags", **flags)
@@ -85,12 +111,12 @@ class TokenSelectGumbelTwoStage:
         logits = a.get("logits_ptr")
         local_argmax = a.get("local_argmax_ptr")
         local_max = a.get("local_max_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (logits, local_argmax, local_max)):
+        if not (isinstance(logits, ViewDesc) and isinstance(local_argmax, ViewDesc) and isinstance(local_max, ViewDesc)):
             return unsupported(node, "_gumbel_sample_kernel pointers not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         if logits.rank != 2 or logits.strides[1] != 1 or logits.dtype != "bfloat16":
             return unsupported(node, "TokenSelect_v1 is defined over row-contiguous bf16 [R,V] logits", logits=repr(logits))
         R, V = logits.shape
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "logits width is not the vocabulary", V=V, vocab=self.vocab)
         vs = a.get("vocab_size")
         if vs is not None and int(vs) != V:
@@ -115,8 +141,11 @@ class TokenSelectGumbelTwoStage:
         x = first(a.get("self"), a.get("arg0"))
         if not isinstance(x, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT) or {}
-        s1 = (st.get("stage1") or {}).get(x.alloc)
+        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT)
+        if not st:
+            return None
+        by_max = st.get("stage1")
+        s1 = by_max.get(x.alloc) if by_max else None
         if s1 is None or x.shape != s1["local_max"].shape:
             return None  # not the two-stage sampler's argmax; TokenSelectArgmax may claim it
         dim = a.get("dim", a.get("arg1"))
@@ -137,8 +166,9 @@ class TokenSelectGumbelTwoStage:
         idx = first(a.get("index"), a.get("arg2"))
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT) or {}
-        s2 = (st.get("stage2") or {}).get(idx.alloc)
+        st = ctx.scratch.get(SCRATCH_TOKEN_SELECT)
+        by_idx = st.get("stage2") if st else None
+        s2 = by_idx.get(idx.alloc) if by_idx else None
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -150,7 +180,7 @@ class TokenSelectGumbelTwoStage:
         out = outs[0]
         if out.numel != R or not is_int(out):
             return unsupported(node, "sampled ids are not an integer [R] view", out=repr(out))
-        rows = tuple(ctx.start.logits_rows) if R == len(ctx.start.logits_rows) else ()
+        rows = tuple(ctx.start.logits_rows) if len(ctx.start.logits_rows) == R else ()
         return Compute(bind(b1.TokenSelect, V=V), R, (PerRow(logits),), (PerRow(out),), (node.id,),
                        hint=hint_of(node, "gumbel_sample stage 3 (token id) = argmax(logits)"), kernels=(*s2["kernels"], "ArgMaxOps", "gather_kernel"),
                        attribution=rows, pattern=self.name)
@@ -188,7 +218,7 @@ class TokenSelectArgmax:
         R, V = logits.shape
         if logits.strides[1] != 1:
             return unsupported(node, "logits rows are not contiguous", view=repr(logits))
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "argmax width is not the vocabulary", V=V, vocab=self.vocab)
         why = greedy_sampling(ctx)
         if why is not None:
@@ -207,7 +237,7 @@ class TokenSelectArgmax:
         if out.numel != R or not is_int(out):
             return unsupported(node, "argmax output is not an integer [R] view", out=repr(out))
         return Compute(bind(b1.TokenSelect, V=V), R, (PerRow(logits),), (PerRow(out),), (node.id,), hint=hint_of(node, "argmax"),
-                       kernels=("ArgMaxOps",), attribution=tuple(ctx.start.logits_rows) if R == len(ctx.start.logits_rows) else (),
+                       kernels=("ArgMaxOps",), attribution=tuple(ctx.start.logits_rows) if len(ctx.start.logits_rows) == R else (),
                        pattern=self.name)
 
 
@@ -216,8 +246,17 @@ TOPP_STATS_BLOCK, TOPP_STEP_BLOCK, TOPP_FANOUT, TOPP_ROUNDS = 8192, 2048, 8, 5  
 TEMPERATURE_BLOCK = 8192                                                          # `apply_temperature` BLOCK_SIZE
 
 
+def _sampling_block(ctx: StepContext) -> dict:
+    """The header's sampling block as recorded: the workload's when it states any, else the pinned profile's, else none."""
+    for doc in (ctx.header.workload, ctx.header.profile):
+        if doc and doc.get("sampling"):
+            return doc["sampling"]
+    return {}
+
+
 def header_sampling(ctx: StepContext) -> dict:
-    return dict((ctx.header.workload or {}).get("sampling") or (ctx.header.profile or {}).get("sampling") or {})
+    """The run's sampling parameters, a copy of the header's block."""
+    return dict(_sampling_block(ctx))
 
 
 def request_sampling(ctx: StepContext) -> dict[str, dict]:
@@ -225,15 +264,18 @@ def request_sampling(ctx: StepContext) -> dict[str, dict]:
     recorded fork fact parent seed + index); the workload's sampling parameters supply what a record does not pin."""
     wl = ctx.header.workload or {}
     s = header_sampling(ctx)
-    per = {p["request_id"]: p for p in s.get("per_request", []) or []}
+    per_request = s.get("per_request")
+    per = {p["request_id"]: p for p in per_request} if per_request else {}
     out: dict[str, dict] = {}
-    for r in wl.get("requests", []) or []:
+    requests = wl.get("requests")
+    for r in requests if requests else []:
         p = per.get(r["request_id"], {})
         out[r["request_id"]] = {"seed": None if r.get("seed") is None else int(r["seed"]),
                                 "temperature": float(first(r.get("temperature"), p.get("temperature"), s.get("temperature", 0.0))),
                                 "top_p": float(first(r.get("top_p"), p.get("top_p"), s.get("top_p", 1.0))),
                                 "top_k": int(first(r.get("top_k"), p.get("top_k"), s.get("top_k", 0)) or 0)}
-    for c in wl.get("children", []) or []:
+    children = wl.get("children")
+    for c in children if children else []:
         base = dict(out.get(c["parent"], {}))
         base["seed"] = None if c.get("seed") is None else int(c["seed"])
         out[c["request_id"]] = base
@@ -241,7 +283,6 @@ def request_sampling(ctx: StepContext) -> dict[str, dict]:
 
 
 def _f32_bits(x: float) -> int:
-    import struct
     return struct.unpack("<I", struct.pack("<f", float(x)))[0]
 
 
@@ -348,7 +389,7 @@ class TokenSelectGumbelTopP:
 
     def _temperature(self, node: TreeNode, ctx: StepContext) -> Resolution:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         rec = self._row_state(node, ctx, a.get("logits_ptr"))
         if isinstance(rec, Unsupported):
             return rec
@@ -367,7 +408,7 @@ class TokenSelectGumbelTopP:
 
     def _topp(self, node: TreeNode, ctx: StepContext, k: str) -> Resolution:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         rec = self._row_state(node, ctx, first(a.get("LOGITS"), a.get("logits_ptr")))     # the split kernels' signature: LOGITS, STATS, PARTS, K, P, ROUND
         if isinstance(rec, Unsupported):
             return rec
@@ -422,7 +463,7 @@ class TokenSelectGumbelTopP:
 
     def _stage1(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         a = bound_args(node)
-        consts = dict(node.enter.constexprs)
+        consts = dict(node.triton.constexprs)
         flags = {k: first(consts.get(k), a.get(k)) for k in ("IS_DRAFTING", "APPLY_TEMPERATURE", "PER_TOKEN_COL", "USE_FP64")}
         if any(bool(v) for v in flags.values()):
             return unsupported(node, "_gumbel_sample_kernel with drafting / in-kernel temperature / per-token-column / fp64 flags", **flags)
@@ -431,13 +472,13 @@ class TokenSelectGumbelTopP:
         logits = a.get("logits_ptr")
         local_argmax = a.get("local_argmax_ptr")
         local_max = a.get("local_max_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (logits, local_argmax, local_max)):
+        if not (isinstance(logits, ViewDesc) and isinstance(local_argmax, ViewDesc) and isinstance(local_max, ViewDesc)):
             return unsupported(node, "_gumbel_sample_kernel pointers not bound as expected", args={k: _fmt(v) for k, v in a.items()})
         rec = self._row_state(node, ctx, logits)
         if isinstance(rec, Unsupported):
             return rec
         R, V = rec["f32"].shape
-        if self.vocab is not None and V != self.vocab:
+        if self.vocab is not None and self.vocab != V:
             return unsupported(node, "logits width is not the vocabulary", V=V, vocab=self.vocab)
         vs = a.get("vocab_size")
         if vs is not None and int(vs) != V:
@@ -488,8 +529,11 @@ class TokenSelectGumbelTopP:
         x = first(a.get("self"), a.get("arg0"))
         if not isinstance(x, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOPP_SELECT) or {}
-        s1 = (st.get("stage1") or {}).get(x.alloc)
+        st = ctx.scratch.get(SCRATCH_TOPP_SELECT)
+        if not st:
+            return None
+        by_max = st.get("stage1")
+        s1 = by_max.get(x.alloc) if by_max else None
         if s1 is None or x.shape != s1["local_max"].shape:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -510,8 +554,9 @@ class TokenSelectGumbelTopP:
         idx = first(a.get("index"), a.get("arg2"))
         if not isinstance(src, ViewDesc) or not isinstance(idx, ViewDesc):
             return None
-        st = ctx.scratch.get(SCRATCH_TOPP_SELECT) or {}
-        s2 = (st.get("stage2") or {}).get(idx.alloc)
+        st = ctx.scratch.get(SCRATCH_TOPP_SELECT)
+        by_idx = st.get("stage2") if st else None
+        s2 = by_idx.get(idx.alloc) if by_idx else None
         if s2 is None or src.alloc != s2["local_argmax"].alloc:
             return None
         dim = a.get("dim", a.get("arg1"))
@@ -525,7 +570,6 @@ class TokenSelectGumbelTopP:
             return unsupported(node, "sampled ids are not an integer [R] view", out=repr(out))
         if out.rank == 1:
             out = ViewDesc(out.alloc, out.offset, (R, 1), (out.strides[0], 1), out.dtype, out.device)
-        from verity.definitions.registry import sampling as _sampling
         from verity.definitions.registry import sampling_vocab
         construction = self.construction or target_of(ctx)[0].effective_sampler_construction()
         spec = bind(sampling_vocab.select_for(_sampling.GumbelTopPTokenSelect, construction), V=V)
@@ -533,6 +577,9 @@ class TokenSelectGumbelTopP:
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []
         run = getattr(ctx.profile, "registered_values", False)
+        top_p: Supplied | Const
+        phi: Supplied | Const
+        temp: Supplied | Const
         for r, (rid, pos, seed, T, p) in enumerate(s2["specs"]):
             pos_bits = int(pos) & 0xFFFFFFFFFFFFFFFF
             if run:     # the request's sampling values are inputs of its run, the Philox position one per sampled position
@@ -573,16 +620,16 @@ class LogitsGather:
                 return unsupported(node, "aten.index with an index pattern other than one leading index tensor", indices=_fmt(idxs))
             idx = tensors[0]
         else:
-            dim = a.get("dim", a.get("arg1"))
-            idx = a.get("index", a.get("arg2"))
-            if dim not in (0,) or not isinstance(idx, ViewDesc):
+            dim, index = a.get("dim", a.get("arg1")), a.get("index", a.get("arg2"))
+            if dim not in (0,) or not isinstance(index, ViewDesc):
                 return unsupported(node, "index_select not along the leading axis", dim=dim)
+            idx = index
         outs = node.output_views()
         if not outs or not is_int(idx) or idx.rank != 1:
             return unsupported(node, "gather index is not an integer [R] view", index=repr(idx))
         R = idx.shape[0]
         li = ctx.start.logits_indices
-        if R != len(li):
+        if len(li) != R:
             return unsupported(node, "gather rows differ from the step's logits_indices", R=R, logits_indices=len(li))
         if src.rank < 1 or any(i < 0 or i >= src.shape[0] for i in li):
             return unsupported(node, "logits_indices outside the gathered source", src=repr(src), logits_indices=list(li)[:8])
@@ -602,7 +649,6 @@ def with_sampler_construction(profile, construction: str | None):
     `profile` itself when None.  A construction `TargetProfile` does not name is refused by name."""
     if construction is None:
         return profile
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     if construction not in TargetProfile.SAMPLER_CONSTRUCTIONS:
         raise SystemExit(f"sampler construction {construction!r} is not one of {list(TargetProfile.SAMPLER_CONSTRUCTIONS)}")
     return replace(profile, patterns=[replace(p, construction=construction) if isinstance(p, TokenSelectGumbelTopP) else p for p in profile.patterns])
