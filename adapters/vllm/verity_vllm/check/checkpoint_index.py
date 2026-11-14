@@ -12,7 +12,6 @@ import os
 import re
 import struct
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -137,7 +136,8 @@ class CheckpointIndex:
         self.config = {}
         cfg = os.path.join(ckpt_dir, "config.json")
         if os.path.exists(cfg):
-            self.config = json.loads(Path(cfg).read_text())
+            with open(cfg) as f:
+                self.config = json.load(f)
         rules = renames(self.config)
         for fn in shard_names(ckpt_dir):
             hdr, base = read_safetensors_header(os.path.join(ckpt_dir, fn))

@@ -12,7 +12,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.commitments.windows.rows import SCHEME, copy_private, own_entries, registered_header
+import numpy as np
+
+from verity.commitments.windows.rows import (BC_BYTES, SCHEME, copy_private, held_ports, own_entries,
+                                             registered_header)
 
 #: Flock's circuit prover's ``flock-circuit-inputs`` header constants (``verity_flock.circuit``) and the META keys a class leaves out
 M0_FORMAT, M0_STATEMENT, M0_BINDING_KEYS = "flock-circuit-inputs", "verity/flock-circuit", ("partition", "program_sha512", "program_digests")
@@ -40,6 +43,31 @@ def flock_circuit(circuit: str | bytes) -> FlockCircuit:
     return FlockCircuit(meta, hashlib.sha512(b).hexdigest(), cls.hexdigest())
 
 
+def identity_refs(n: int, ports: int) -> np.ndarray:
+    """A re-laid body's refs: each of ``n`` instances' ref to its own row of each of ``ports`` ports."""
+    return np.repeat(np.arange(n, dtype="<u4")[:, None], ports, axis=1)
+
+
+def relay(body: bytes, n: int, ports: int) -> bytes:
+    """An instance-major public body, ``n`` instances of ``ports`` rows' b || c, re-laid port-major under identity refs:
+    each port's rows in instance order, then `identity_refs`."""
+    if len(body) != n * ports * BC_BYTES:
+        raise ValueError(f"a public body of {len(body)} bytes, not {n} instances of {ports} rows' b || c")
+    rows = np.frombuffer(body, dtype=np.uint8).reshape(n, ports, BC_BYTES)
+    return b"".join(rows[:, j].tobytes() for j in range(ports)) + identity_refs(n, ports).tobytes()
+
+
+def unrelay(body: bytes, n: int) -> bytes | None:
+    """The instance-major body of ``n`` instances that `relay` re-lays to ``body``, else None: `relay` is one to one, so
+    its only candidate, read off ``body``'s port-major rows, is it exactly when `relay` gives ``body`` back."""
+    if n <= 0 or not body or len(body) % (n * (BC_BYTES + 4)):
+        return None
+    ports = len(body) // (n * (BC_BYTES + 4))
+    rows = np.frombuffer(body, dtype=np.uint8, count=n * ports * BC_BYTES).reshape(ports, n, BC_BYTES)
+    staged = rows.transpose(1, 0, 2).tobytes()
+    return staged if relay(staged, n, ports) == body else None
+
+
 def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircuit, out_dir: str | Path, *,
                       write: Sequence[str] = ("pub", "inst"), files: tuple[Mapping[str, Any], Mapping[str, Any]] | None = None
                       ) -> dict[str, Any]:
@@ -47,8 +75,9 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     ``verity_flock.circuit.write`` gives the circuit it composed: its SHA-512 pin, its META's statement, subcircuit, block shape
     and class, the member's global unit indices, and its ``frame_v3``.  The bodies are the window's bytes, its prover body
     made from its window's files (`rows.copy_private`) and its header's paths read off the window's (`rows.registered_header`).
-    A member that reads a registered value has every other port registered too, as rows of its own tree (`rows.own_entries`),
-    the reads the verifier adds at the registration's roots (`rows.own_reads`). ``circuit`` is the
+    A member that reads a registered value, or holds a wired port in its writer's tree (`rows.held_ports`), has every other
+    port registered too, as rows of its own tree or its writer's (`rows.own_entries`), the reads the verifier adds at the
+    registration's roots (`rows.own_reads`). ``circuit`` is the
     circuit's text or its `flock_circuit`, ``write`` the files to write (a member's ``inst`` is the prover's, wanted only once
     it is sampled), and ``files`` the window's ``window.json`` and ``registration.json`` as read (else read here)."""
     if not set(write) <= {"pub", "inst"}:
@@ -76,9 +105,10 @@ def flock_input_files(window_dir: str | Path, k: int, circuit: str | FlockCircui
     if mem.get("shared_rows"):
         head["shared_rows"] = mem["shared_rows"]
     pub = (d / f"m{k}-public.bin").read_bytes()
-    if mem.get("registered"):
-        reads = registered_header(win, k)
-        head["registered"] = {**reads, **own_entries(mem, pub, reads)}
+    held = held_ports(win, k)
+    if mem.get("registered") or held:
+        reads = registered_header(win, k) if mem.get("registered") else {}
+        head["registered"] = {**reads, **own_entries(mem, pub, reads, held)}
     o.mkdir(parents=True, exist_ok=True)
     got = {"circuit_sha512": c.pin, "class": c.cls}
     if "pub" in write:

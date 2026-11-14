@@ -14,8 +14,8 @@ the deployed form, verified by `flock-verify verify` itself. Each
 `--expect` file is a list of `{"name", "expect": {"accepted", "why"}}` (`redigest.py`'s `mutants.json`); a session's name
 is its directory's basename, and `why` is a prefix of the Lean verifier's reason. An expectation may add
 `upstream_accepted` for an intended divergence (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D list): upstream must then return that
-verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sample law no soundness claim samples by, which the Lean
-verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
+verdict instead of the Lean verifier's. `--lean-refuses-drawn WHY` is D12 at a sampling design no soundness claim samples by, which the
+Lean verifier refuses at setup: it must reject every session whose record carries a unit sample, one expected accepted with a
 reason starting `WHY` and one expected rejected with `WHY` or its expected reason (a statement that does not set up is
 refused for that first), and upstream must return each session's expected verdict; a session with none (a fuzz case) only
 needs the refusal. `--lean-refuses WHY` is D12 at a statement whose form the soundness proof does not cover, and

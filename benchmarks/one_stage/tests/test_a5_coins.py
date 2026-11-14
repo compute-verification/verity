@@ -90,17 +90,18 @@ def test_a5s_stream_draws_on_no_coins_of_its_own():
 
 def test_the_challengers_bytes_with_no_evidence_are_rejected_by_the_lean_run():
     """Bytes passed off as the challenger's with no log to show they are its: the outcome fails `run`, the Lean refusing
-    at its select (`coins`), and Python's `coins_reason` refuses the missing evidence."""
+    at its select (`coins`), and Python's `coins_reason` refuses the missing evidence under any key."""
     stream = stream_of(AC.Replay(bytes([0x5a]) * 4096))
-    draw = stream.select(register(stream))
-    assert stream.deliver(draw, [SESSION]) is None
-    got = stream.outcome(draw, VERDICTS, {"statement": "stub"}, coins=None)
+    sample = stream.select(register(stream))
+    assert stream.deliver(sample, [SESSION]) is None
+    got = stream.outcome(sample, VERDICTS, {"statement": "stub"}, coins=None)
     audit = stream.records[-1]["audit"]
     assert not got.accepted and not audit["checks"]["run"]["ok"]
     side = AC.lean_side(audit)
     assert (side["step"], side["codes"]) == AC.SELECT_COINS
-    assert CC.coins_reason(None, ROOT, AC.family(0), bytes.fromhex(draw.registration.digest), b"\x5a",
-                           AC.lms_verify) is not None
+    key = AC.Ch.ChallengerKey(4, 5, bytes(AC.Ch.PUBLIC_BYTES))
+    assert CC.coins_reason(key, [], None, ROOT, AC.family(0), bytes.fromhex(sample.registration.digest), b"\x5a",
+                           AC.lms_verify) == CC.DRAW_FORM
 
 
 def test_the_replay_reads_no_more_than_the_honest_draw():

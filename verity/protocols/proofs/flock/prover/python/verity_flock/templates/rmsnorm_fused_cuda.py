@@ -2,12 +2,13 @@
 (``verity_flock.ir_lower.reduction_cut``) into identical units, one per CUDA warp of the kernel's cub BlockReduce: the warp's
 residual adds, squares and shfl-down tree (its aggregate is a cut word) and the epilogue of its elements, which reads the row
 scalar ``s`` (a cut word). The tail, the sequential sum of the warp aggregates, ``/ N``, ``+ eps`` and ``RsqrtApprox``,
-reads no input word: the verifier evaluates it with the IR evaluator and supplies the cut words as public unit words.
+reads no input word: the verifier evaluates it with the circuits' reference evaluator and supplies the cut words as public unit
+words.
 
 A warp's input leaves (:func:`width`): 32 threads, each reading x and res at every position it owns (threads hold elements
 t, t + T, ... with T = min(N, 1024) threads); when T does not divide N the warps differ and there is no single unit. The
-unit netlist is pinned per (N, EPS) by :data:`PINS`, its leaf maps and cut structure (the tail with N and eps, the cut ports)
-included."""
+unit's circuit description is pinned per (N, EPS) by :data:`PINS`, its leaf maps and cut structure (the tail with N and eps, the
+cut ports) included."""
 TEMPLATE = "rmsnorm-fused-cuda"
 UNIT = "rmsnorm-fused-cuda/bf16/warp"
 PINS = {(2048, 1e-05): "b18b3a5995ac32acab7377c653554b648dc5b9452ca4526bbfacc9d1eeaedced",

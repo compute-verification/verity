@@ -29,7 +29,7 @@ from verity.definitions.registry import tp_allreduce_check as K
 from verity.definitions.registry import tp_allreduce_nodes as TN
 
 from tests.properties import glm53_tp8_allreduce_capture_gpu as X
-from verity_vllm.properties.record import REGISTRY, digest_of, seal
+from verity_vllm.records.property_record import REGISTRY, digest_of, seal
 
 N = 1536
 N7 = 1792

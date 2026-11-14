@@ -1,5 +1,5 @@
 """Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "Integrations are frontends";
-ARCHITECTURE.md "Integrations"): any serving stack plugs in without changing ``verity/``.
+ARCHITECTURE.md, section 2, "The ideas that organize everything"): any serving stack plugs in without changing ``verity/``.
 Today some files do: Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
 equivalent yet, and core's difftests of the primitives and sigma hold the Lean to them (a benchmark may compose an
 integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site fails, and so does a
@@ -153,7 +153,7 @@ def test_the_scan_sees_verity():
 
 def test_nothing_in_verity_imports_an_integration_outside_known():
     new = sorted(_sites() - KNOWN)
-    assert not new, ("a file under verity/ imports an integration (ARCHITECTURE.md \"Integrations\": verity meets a serving "
+    assert not new, ("a file under verity/ imports an integration (ARCHITECTURE.md, section 6, rule 1: verity meets a serving "
                      "stack at one interface); import from verity instead, or, if the dependency cannot go through verity "
                      "yet, add to KNOWN in tests/test_integration_boundaries.py:\n"
                      + "\n".join(f'    ("{f}", "{m}"),' for f, m in new))

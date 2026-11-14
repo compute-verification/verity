@@ -84,6 +84,7 @@ class FakeScheduler:
             self._resumed.add(victim)
         nst: dict[str, int] = {}
         left = self.budget
+        new: list[str]
         new, cached = [], []
         for rid in self.running:
             q = self.requests[rid]

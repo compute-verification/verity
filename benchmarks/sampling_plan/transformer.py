@@ -49,29 +49,29 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import CARDS, I, cap, observations  # noqa: E402
+from inputs import CARDS, I, cap, observations
 
-from verity.protocols import reporting
-from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum  # noqa: E402
-from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, shape_of  # noqa: E402
-from verity.protocols.proofs.spot.prover.costfit import Fitted, fit  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.protocols.proofs.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
+from verity import protocol
+from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
+from verity.protocols.proofs.spot.prover.candidates import Shape, cuts, shape_of
+from verity.protocols.proofs.spot.prover.costfit import Fitted, fit
+from verity.protocols.proofs.spot.verifier.one_stage.draw import work_k, work_table
+from verity.protocols.proofs.spot.prover.optimize import (Candidate, TensorCommit, CostModel, Objective,
                                                            Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
-from verity.circuits.codec import descriptor_id  # noqa: E402
-from verity.circuits.defs import bind  # noqa: E402
-from verity.circuits.ops import fp32 as F, gemm as G, prims as P  # noqa: E402
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.circuits.ops import fp32 as F, gemm as G, prims as P
 
-#: core's reporting deltas (`reporting`), as floats
-DELTAS = tuple(map(float, reporting.DELTAS))
+#: core's reporting deltas (`verity.protocol`), as floats
+DELTAS = tuple(map(float, protocol.DELTAS))
 #: the server-time block, assumed: the Phase 2 default, 20 minutes, which a `gpu-lease`'s 30-minute ceiling sets; no
 #: wipe has been timed, and the census has no block length
 BLOCK_S = 1200
 #: the datacenter, assumed: the census has no datacenter size
 SERVERS = 10_000
-#: core's monitoring periods (`reporting`), seconds by name
-PERIODS = dict(reporting.PERIODS)
+#: core's monitoring periods (`verity.protocol`), seconds by name
+PERIODS = dict(protocol.MONITORING_PERIODS)
 #: the target, a share of the block's ANDs certified at most incorrect: a share of the work scales with the model where a
 #: count of units does not (a coarser cut has fewer units); 1e-3 is the small model's knee (halving it costs about 8%
 #: more, each halving past it over 10%), held fixed for every size

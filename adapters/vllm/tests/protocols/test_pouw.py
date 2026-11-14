@@ -322,13 +322,16 @@ def test_a_scheme_that_keeps_weight_state_is_refused_beside_pous(monkeypatch, sc
 
 def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp_path, monkeypatch):
     """Two kernel directories in one process (a tuned variant beside the gated one) get their own
-    run.py and fixture.py; the same bytes anywhere are one kernel.  Before this, the second got the first's run.py."""
-    def kernel_dir(name, mark):
+    run.py; the same bytes anywhere are one kernel.  Before this, the second got the first's run.py.  The loader executes
+    no fixture.py, and the digest covers grouped.py where the directory has one."""
+    def kernel_dir(name, mark, grouped=False):
         d = tmp_path / name
         d.mkdir()
         (d / "run.py").write_text(f"MARK = {mark!r}\n\nclass Dev:\n    def __init__(self, raw):\n        self.raw = raw\n\n"
                                   "    def open(self):\n        self.opened = True\n")
-        (d / "fixture.py").write_text("FIX = 1\n")
+        (d / "fixture.py").write_text("raise RuntimeError('the loader executed fixture.py')\n")
+        if grouped:
+            (d / "grouped.py").write_text("GROUPED = 1\n")
         (d / "pearl_c_sm120.cubin").write_bytes(b"cubin " + mark.encode())
         return d
 
@@ -338,11 +341,13 @@ def test_kernel_directories_load_as_their_own_modules_named_by_their_sources(tmp
     monkeypatch.setattr(PPK, "_KERNELS", {})
     before = set(sys.modules)
     try:
-        a, b, a2 = kernel_dir("a", "gated"), kernel_dir("b", "tuned"), kernel_dir("a2", "gated")
+        a, b, a2 = kernel_dir("a", "gated"), kernel_dir("b", "tuned", grouped=True), kernel_dir("a2", "gated")
         ka, kb, ka2 = (PPD.Kernel.load(str(d)) for d in (a, b, a2))
         assert (ka.run.MARK, kb.run.MARK) == ("gated", "tuned") and ka.run is not kb.run and ka.dev.opened
-        assert ka2 is ka and ka.fixture is kb.fixture
-        assert ka.source_sha256 == PPD.source_digest(sha(a / "run.py"), sha(a / "fixture.py")) != kb.source_sha256
+        assert ka2 is ka
+        assert ka.files == {"run.py": sha(a / "run.py")}
+        assert kb.files == {"run.py": sha(b / "run.py"), "grouped.py": sha(b / "grouped.py")}
+        assert ka.source_sha256 == PPD.source_digest(ka.files) != kb.source_sha256 == PPD.source_digest(kb.files)
         assert ka.cubin_sha256 == sha(a / "pearl_c_sm120.cubin")
         assert PPD.Kernel.load(str(a), str(b / "pearl_c_sm120.cubin")).cubin_sha256 == kb.cubin_sha256
     finally:

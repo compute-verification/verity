@@ -44,8 +44,8 @@ for a host run. `--peer` overrides it, and a gate run whose record names none is
 (the verifier's machine) has no ledger: its log is read under the key its run wrote (`session_of`) and its line is not
 the auditor's.
 
-**Credit.** The line of record (`line`) counts a session only when all five hold, each reported per session
-(`credit`), and gives any other session zero credit with the reasons:
+**Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
+(`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
 
 - *credited*: its window reads through `challenger.credited_session` (its pin first, as *pinned* reads it) with the
   descriptor of the verifier that ran it, `verity/remote-bandwidth/v0 verifier tree <tree>`, `<tree>` being
@@ -62,21 +62,25 @@ the auditor's.
   lines as the gate served them) and the auditor's own first-parent list of main (`--main FILE`, `git rev-list
   --first-parent origin/main`): its open sealed the log as it stood, one of the sealed lines records the open's
   `pinned`, and that commit is on main's first-parent line, a tree main's check ran on. With no
-  log or no copy of main, no session is pinned or credited;
-- *bound*: the registered store is the model's (`bound_check`, the run's, so every session's): the verifier bound it
-  (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose payload root isn't that of the store the
-  pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited* names, so the period's circuit commits to
-  the code that decided it), the Lean verifier deciding it (`hold`, the binding's `lean`), the binding's root is the
-  registration's, and its model, name and
-  checkpoint_sha512, is the one the audit's period signs (its open's `model`), or with no period's, `--model-pin`'s.
-  With neither, no session is bound.
+  log or no copy of main, no session is pinned or credited.
+
+**The store** (`bound_check`, the run's, so every session's, reported as `bound`). The registered store is bound to
+the model when the verifier bound it (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose
+payload root isn't that of the store the pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited*
+names, so the period's circuit commits to the code that decided it), the Lean verifier deciding it (`hold`, the
+binding's `lean`), the binding's root is the registration's, and its model, name and checkpoint_sha512, is the one the
+audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose verifier bound the store to
+no model, or with no model to bind it to, is unbound: its sessions are credited on the four checks, and the line is
+conditional on `DeveloperStore` (`PREMISES`: the verifier held no checkpoint, so the store's bytes are the developer's
+choice). A binding the record carries is checked even with no model: one that doesn't hold, or holds the store to
+another model, is refused, and every session's credit is zero.
 
 At each T the line is the least share among the credited sessions there, and zero when none is, with every session's
 reasons; beside each share of weights held is the same session's share of filler held (the rest of HBM and the host
 tier, `line`'s `filler`), which the line doesn't count as weights. Each form charges the node's rates (`RATES`) and
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7), and deducts the chips' S_chip at no
 less than the auditor's (`verifier.recorded_chip_bytes`). What every accepted paced session
-measured, credited or not, is `measured`. `--table` writes each session's five checks and the line as Markdown.
+measured, credited or not, is `measured`. `--table` writes each session's four checks and the line as Markdown.
 Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
 and `sketch_outside` every F the run's sessions were charged at.
 
@@ -98,8 +102,9 @@ check, so a line says it is conditional on C (`NoOutsideCompute`, the label's na
 the gate node's boundary. A relay prover, a thin node forwarding each coin to a helper that holds
 the store and computes the receipts, breaks that premise alone. The error's binding term takes the gap `binding-split`
 as closed (split_t = 0), which the deployed protocol doesn't yet ensure, so every line is conditional on that too,
-grounded or not. The `memory-line-of-record` label names what the file names (`line_label`: `lean conditional on
-NoOutsideCompute, binding-split`), and the evidence store's labeller refuses one that doesn't.
+grounded or not. An unbound store's line is conditional on `DeveloperStore` after them (**The store**). The
+`memory-line-of-record` label names what the file names (`line_label`: `lean conditional on NoOutsideCompute,
+binding-split`, then `, DeveloperStore` when unbound), and the evidence store's labeller refuses one that doesn't.
 
 **The lockdown** (`--lockdown FILE`, `read_lockdown`, `lockdown_check`). Infra's record of the provider's lockdown of
 the gate node: the security group's allow list, each interval it was applied, with infra's records, and whether the
@@ -116,22 +121,9 @@ fetched with `--transcripts`), the Lean makes the session's record itself, `Shar
 record that isn't it; elsewhere it reads the kept
 record. The verifier's clock's reading holds the times seen to the record's; the challenger's clock's doesn't.
 
-**The boundary** (`--boundary FILE --boundary-pin SHA512`, off by default; `boundary_check`). With it, a sixth check
-refuses a session's credit when the network certifiers' records of the gate node's boundary links over its credited
-span, from chal_0's release to its last root's arrival on the challenger's clock, show ingress other than the verifier's
-messages. It reads the certifier's `CertifiedRecord` of each boundary link's ingress window covering the span
-(`certifier.certificate`: the head's `counts` and `root`), each held to one record with a complete status, signed under
-the certifier's key in its session (`certifier.audit.Audit.check_ingress_link`), and compares its real frames with the
-verifier's own messages framed as the link frames them: their count and their root (`certificate.frames_root`), which
-must be equal. FILE names the links, the certifier's key (whose SHA-512 is `--boundary-pin`), its session and ingress
-grid, each window's span on the challenger's clock, the verifier's frames and the records (`read_boundary`). It reads the
-heads in the clear, a prototype; that the links are all of the node's boundary is `certifier-coverage`, which it doesn't
-check, so the line stays conditional on `NoOutsideCompute` with it on.
-
     python auditor_line.py OUT --host-bytes B [--pin SHA512 --period P --commit SHA [--pins LOG --main FILE]]
         [--ledger HEAD ...] [--peer NAME] [--model-pin FILE] [--disk-bytes-per-s B/S] [--link-bytes-per-s B/S]
-        [--bursts stated|none] [--line-by lean|python] [--lean-exe PATH] [--table FILE]
-        [--boundary FILE --boundary-pin SHA512] [--lockdown FILE]
+        [--bursts stated|none] [--line-by lean|python] [--lean-exe PATH] [--table FILE] [--lockdown FILE]
 """
 from __future__ import annotations
 
@@ -154,14 +146,10 @@ from verity.protocols.accounting.poub.verifier.session import lean_verifier as l
 from verity.protocols.accounting.poub.verifier.session import verifier as V  # noqa: E402
 from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import audit as caudit  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.grid import GridParams, Reason, Status  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, coins, ledger, line, pooled, receipts, timing  # noqa: E402
 from verity.protocols.accounting.poub.verifier import store as rstore  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
-from verity.commitments.crypto import lms  # noqa: E402
 
 RATES = {"disk_bytes_per_s": 4.4e9, "link_bytes_per_s": 5e10}
 """The node's ceilings a gate run's line is read at, bytes a second (`line.Rates`): the node's NICs into its memory,
@@ -174,8 +162,17 @@ they were recorded at (`test_auditor_line_lean`; a burst of 0 states the rate do
 LANE = "memory-accounting"
 VERIFIER_TREE = "verity/protocols/accounting/poub/verifier"
 LEAN_VERDICTS = ("lean", "both")
-CHECKS = ("credited", "complete", "accepted", "pinned", "bound")
+CHECKS = ("credited", "complete", "accepted", "pinned")
 """What a session's credit needs, each reported per session in this order."""
+UNBOUND = "the verifier held no checkpoint: the store's bytes are the developer's choice"
+"""What an unbound store's line rests on (`bound_check`), in benchmarks/memory's words (`run.UNBOUND`)."""
+DEVELOPERS, MODELS = "the developer's choice", "the model's"
+"""Whose the store is (`bound_check`'s `store`): unbound, or bound to the model."""
+STORE_PREMISE = "DeveloperStore"
+PREMISES = {STORE_PREMISE: (
+    f"{UNBOUND}: no auditor's machine reads a checkpoint, so the blocks the line credits as weights are the "
+    "registered model's weights only on the developer's word that the store holds them")}
+"""What the line rests on when nothing held the store to the model (`bound_check`'s `premise`)."""
 SHARES = ("time", "snapshot", "filler_time", "filler_snapshot")
 """A session's shares of the node in a form (`shares`): weights held, over time and at the passes, and filler held in
 the same two readings."""
@@ -213,8 +210,6 @@ GROUNDED = {LOCKDOWN: (
     "became, with the certifiers in its place")}
 """What grounds `NoOutsideCompute` for a session (`lockdown_check`), each with what it says: a line whose sessions are
 all grounded is conditional on it in its place."""
-BOUNDARY = "boundary"
-"""The check `--boundary` adds to `CHECKS` (`boundary_check`)."""
 
 
 class Disagree(ValueError):
@@ -548,15 +543,30 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
     binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
     store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
-    `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`."""
+    `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`.
+    `bound` says whether it is. A run with no binding, or with no model to hold one to, is unbound: its store is the
+    developer's choice (`store`), which the line is then conditional on (`premise`, `STORE_PREMISE`), and `ok`.
+    A binding that doesn't hold, or holds the store to another model, is refused (`refused`, not `ok`): its credit
+    is zero."""
     b, root = v.get("binding"), (v.get("registration") or {}).get("payload_root")
     out = {"model": model, "source": source, "binding": None if b is None else {
         k: b.get(k) for k in ("name", "checkpoint_sha512", "payload_root", "expected_root", "bound", "lean")}}
-    if model is None:
-        why = "no model to bind the store to: the audit's period signs none and no --model-pin names one"
-    elif b is None:
-        why = ("the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin FILE), so its "
-               "payload root is the prover's choice")
+    why = refused(b, root, model)
+    if why is None and (b is None or model is None):
+        why = ("no model to bind the store to: the audit's period signs none and no --model-pin names one"
+               if model is None else "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint "
+               "DIR --pin FILE), so its payload root is the prover's choice")
+        return {**out, "bound": False, "store": DEVELOPERS, "premise": STORE_PREMISE, "refused": None, "ok": True,
+                "reason": why}
+    return {**out, "bound": why is None, "store": MODELS if why is None else DEVELOPERS, "premise": None,
+            "refused": why, "ok": why is None, "reason": why}
+
+
+def refused(b: dict | None, root: str | None, model: dict | None) -> str | None:
+    """Why the binding `b` (verifier.json's, None: none) doesn't hold the store whose payload root is `root` to
+    `model` (None: no model to hold it to, so only the binding itself is checked), or None."""
+    if b is None:
+        why = None
     elif b.get("bound") is not True:
         why = f"the verifier didn't hold the hello's payload root to {b.get('name')}'s store"
     elif b.get("expected_root") != root or b.get("payload_root") != root:
@@ -564,97 +574,22 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     elif not isinstance(lean := b.get("lean"), dict) or "regions" not in lean or lean.get("expected_root") != root:
         why = ("the Lean verifier didn't hold the hello's payload root to the store (`hold`): the binding is "
                "store.py's alone")
-    elif (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
+    elif model is not None and (b.get("name"), b.get("checkpoint_sha512")) != (model["name"], model["checkpoint_sha512"]):
         why = (f"the verifier bound the store to {b.get('name')} ({str(b.get('checkpoint_sha512'))[:16]}...), not "
                f"{model['name']} ({model['checkpoint_sha512'][:16]}...)")
     else:
         why = None
-    return {**out, "ok": why is None, "reason": why}
+    return why
 
 
-def certified_record_json(r: cert.CertifiedRecord) -> dict:
-    """A network certifier's certified record as `read_boundary` reads it: every bytes field as hex, the status as its
-    reason (None: complete)."""
-    h, c = r.head, r.certificate
-    return {"head": {"link": h.link, "direction": h.direction.value, "window": h.window, "buckets": h.buckets,
-                     "allocation": h.allocation, "frame_bytes": h.frame_bytes, "bucket_ms": h.bucket_ms,
-                     "status": None if h.status.reason is None else h.status.reason.value, "deadline": h.deadline,
-                     "parameters": h.parameters.hex(), "counts": list(h.counts), "root": h.root.hex()},
-            "salt": r.salt.hex(),
-            "certificate": {"key_id": c.key_id.hex(), "link": c.link, "direction": c.direction.value,
-                            "window": c.window, "digest": c.digest.hex(), "signature": c.signature.hex()}}
-
-
-def certified_record(d: dict) -> cert.CertifiedRecord:
-    """The certified record `d` (`certified_record_json`'s form) is."""
-    h, c = d["head"], d["certificate"]
-    head = cert.RecordHead(h["link"], cert.Direction(h["direction"]), h["window"], h["buckets"], h["allocation"],
-                           h["frame_bytes"], h["bucket_ms"], Status(None if h["status"] is None else Reason(h["status"])),
-                           h["deadline"], bytes.fromhex(h["parameters"]), tuple(h["counts"]), bytes.fromhex(h["root"]))
-    return cert.CertifiedRecord(head, bytes.fromhex(d["salt"]), cert.Certificate(
-        bytes.fromhex(c["key_id"]), c["link"], cert.Direction(c["direction"]), c["window"], bytes.fromhex(c["digest"]),
-        bytes.fromhex(c["signature"])))
-
-
-def read_boundary(path: Path, pin: str) -> dict:
-    """The boundary file `--boundary` names (JSON), its certifier's key held to `pin`, the SHA-512 of the key's public
-    bytes: `links`, the gate node's boundary links; `key` ({N, W, H, public}) and `session`, the network certifier's LMS
-    key and its certifier session's id; `grid`, its ingress grid (`GridParams`'s fields); `windows`, each ingress
-    window's number and span `[start_ns, end_ns)` on the challenger's clock; `verifier_frames`, by link and window, the
-    frames that carried the verifier's messages, as the link frames them; and `records`, the certified records
-    (`certified_record_json`)."""
-    raw = path.read_bytes()
-    d = json.loads(raw)
-    k = d["key"]
-    key = cert.LmsKey(lms.Params(k["N"], k["W"], k["H"]), bytes.fromhex(k["public"]))
-    if hashlib.sha512(key.public).hexdigest() != pin:
-        raise SystemExit(f"auditor_line: {path}'s certifier key is not the one --boundary-pin names ({pin[:16]}...)")
-    if not d["links"]:
-        raise SystemExit(f"auditor_line: {path} names no boundary link")
-    params = GridParams(**d["grid"])
-    frames = {link: {int(w): [bytes.fromhex(f) for f in fs] for w, fs in by.items()}
-              for link, by in d.get("verifier_frames", {}).items()}
-    if any(len(f) != params.frame_bytes for by in frames.values() for fs in by.values() for f in fs):
-        raise SystemExit(f"auditor_line: {path}'s verifier frames are not all the grid's {params.frame_bytes} bytes")
-    return {"sha512": hashlib.sha512(raw).hexdigest(), "links": list(d["links"]), "key": key,
-            "session": bytes.fromhex(d["session"]), "params": params,
-            "windows": [(w["window"], w["start_ns"], w["end_ns"]) for w in d["windows"]], "frames": frames,
-            "records": [certified_record(r) for r in d["records"]]}
-
-
-def boundary_check(b: dict, seen: list[dict]) -> dict:
-    """Whether the gate node's boundary links let in nothing but the verifier's messages over a session's credited span,
-    from chal_0's release to its last root's arrival on the challenger's clock (`seen`, `auditor_seen`'s), by the
-    network certifiers' records `b` (`read_boundary`'s): the ingress windows that meet the span cover it, and each
-    boundary link's record of each is one record with a complete status, signed under the certifier's key in its
-    session, on its grid (`Audit.check_ingress_link`), whose real frames are as many as the verifier's messages framed
-    for that link-window, under the same root (`frames_root`)."""
-    lo = seen[0]["released_ns"]
-    hi = max([lo, *(t for w in seen for t in w["arrivals_ns"])])
-    meet = sorted(((s, e, w) for w, s, e in b["windows"] if s <= hi and lo < e))
-    at = lo
-    for s, e, _ in meet:
-        if s <= at:
-            at = max(at, e)
-    why = [] if at > hi else [f"the certifiers' windows cover its span [{lo}, {hi}] ns only to {at}"]
-    windows = sorted({w for _, _, w in meet})
-    for link in b["links"]:
-        verdicts = {v.window: v for v in caudit.Audit().check_ingress_link(
-            link, b["records"], max(windows, default=-1) + 1, b["key"], b["params"], b["session"])}
-        heads = {r.window: r.head for r in b["records"] if r.link == link and r.direction is cert.Direction.INGRESS}
-        for w in windows:
-            if not verdicts[w].accepted:
-                why.append(f"{link}'s ingress window {w} has no record to read ({verdicts[w].violation})")
-                continue
-            mine = b["frames"].get(link, {}).get(w, [])
-            n = sum(heads[w].counts)
-            if n != len(mine):
-                why.append(f"{link}'s ingress window {w} let in {n} frames, the verifier's messages {len(mine)}")
-            elif heads[w].root != cert.frames_root(mine, b["params"]):
-                why.append(f"{link}'s ingress window {w} let in frames other than the verifier's messages (its root "
-                           "is not theirs)")
-    return {"ok": not why, "reason": "; ".join(why) or None, "span_ns": [lo, hi], "windows": windows,
-            "links": b["links"]}
+def store_text(bound: dict) -> str:
+    """`bound_check`'s outcome in a line: the model the store is bound to, the premise an unbound store's line rests
+    on, or why the binding is refused."""
+    if bound["bound"]:
+        return f"yes, to {bound['model']['name']}"
+    if bound["premise"] is not None:
+        return f"no, {UNBOUND} ({bound['reason']}); credited on the other checks, conditional on {bound['premise']}"
+    return f"refused, every session's credit zero: {bound['refused']}"
 
 
 def _utc(x: object) -> bool:
@@ -715,13 +650,15 @@ def lockdown_check(lockdown: dict | None, span: list[str] | None) -> dict:
             "shared_filesystem": "pending (infra)" if lockdown["shared_filesystem"] is None else "none mounted"}
 
 
-def conditional_on(rows: list[dict]) -> dict:
-    """What the line is conditional on (`CONDITIONAL_ON`, `GROUNDED`): the assumption each credited session's
-    `NoOutsideCompute` rests on (`no_relay`), or each gate session's when none is credited, `NoOutsideCompute` with
-    none; then the gaps in its charge (`GAPS`)."""
+def conditional_on(rows: list[dict], bound: dict | None = None) -> dict:
+    """What the line is conditional on (`CONDITIONAL_ON`, `GROUNDED`, `PREMISES`): the assumption each credited
+    session's `NoOutsideCompute` rests on (`no_relay`), or each gate session's when none is credited,
+    `NoOutsideCompute` with none; then the gaps in its charge (`GAPS`); then the store's premise when `bound`
+    (`bound_check`'s) names one."""
     xs = [r for r in rows if r["credit"]["ok"]] or rows
     names = sorted({r["no_relay"]["conditional_on"] for r in xs if "no_relay" in r}) or ["NoOutsideCompute"]
-    return {n: {**CONDITIONAL_ON, **GROUNDED}[n] for n in [*names, *GAPS]}
+    premise = [] if bound is None or bound.get("premise") is None else [bound["premise"]]
+    return {n: {**CONDITIONAL_ON, **GROUNDED, **PREMISES}[n] for n in [*names, *GAPS, *premise]}
 
 
 def line_label(doc: dict) -> str:
@@ -803,9 +740,9 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
     the verifier `desc` describes (`credited_session`), that verifier's `commit` on `main`, its window and its period
     closed complete, its verdict the
     Lean's acceptance, its open's pin one the host's pins log `pins` records on the auditor's first-parent list of
-    main `main` (`pinned_session`; None: no log, or no copy of main), and the run's store bound to the model (`bound`,
-    `bound_check`'s); each check with its reason, and `zero` the
-    reasons it earns none."""
+    main `main` (`pinned_session`; None: no log, or no copy of main); each check with its reason, and `zero` the
+    reasons it earns none. The run's store (`bound`, `bound_check`'s) is reported beside them and zeroes the credit
+    only when its binding is refused: an unbound store is a premise of the line (`conditional_on`), not a check."""
     sid = (s.get("challenger") or {}).get("session")
     credited: dict = {"descriptor_sha512": hashlib.sha512(desc).hexdigest()}
     try:
@@ -858,9 +795,9 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
         pinned.update(ok=True, reason=None)
     except Ch.CoinError as e:
         pinned.update(ok=False, reason=str(e))
-    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned, "bound": bound}
+    checks = {"credited": credited, "complete": complete, "accepted": accepted, "pinned": pinned}
     zero = [f"not {name}: {c['reason']}" for name, c in checks.items() if not c["ok"]]
-    return {**checks, "ok": not zero, "zero": zero}
+    return with_check({**checks, "ok": not zero, "zero": zero}, "bound", bound)
 
 
 def session_check(s: dict, k: int, R: str, windows: dict, periods: dict, *, period: str, lane: str, peer: str,
@@ -916,18 +853,16 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             lane: str = LANE, peer: str | None = None, rates: dict | None = None,
             desc: bytes | None = None, commit: str | None = None, pins: list[str] | None = None,
             main: list[str] | None = None, model: dict | None = None, lean: lv.Lean | None = None,
-            boundary: dict | None = None, lockdown: dict | None = None) -> dict:
+            lockdown: dict | None = None) -> dict:
     """The run's line: `desc` is the descriptor of the verifier that ran it (`descriptor` of `commit`'s tree, `commit`
     in full), `pins` the challenger host's pins log, its lines (None: the gate served none), `main` the auditor's first-parent list of
     main (None: none given), `model` the model the store must be bound to ({name, checkpoint_sha512},
     `--model-pin`'s) when the audit's period signs none, `peer` the gate sessions' peer (None: the record's,
     `peer_of`), `rates` the node's (`rates_at`; None: its defaults), `lean` the Lean verifier that computes every
-    session's line (`line_of_record`; None: `line.py` alone, `line_by` python), and `boundary` the certifiers' records
-    of the gate node's boundary that each gate session's credit is then held to (`read_boundary`, `boundary_check`;
-    None: not checked), and `lockdown` the provider's lockdown of the gate node, which grounds a gate session's
-    `NoOutsideCompute` where its signed span lies inside an applied interval (`read_lockdown`, `lockdown_check`;
-    None: none does). Each session's line is the Lean's off the record `Session.run` makes of its transcript where
-    out/ keeps it (`transcript_of`, `line_of`), else off its kept record."""
+    session's line (`line_of_record`; None: `line.py` alone, `line_by` python), and `lockdown` the provider's lockdown
+    of the gate node, which grounds a gate session's `NoOutsideCompute` where its signed span lies inside an applied
+    interval (`read_lockdown`, `lockdown_check`; None: none does). Each session's line is the Lean's off the record
+    `Session.run` makes of its transcript where out/ keeps it (`transcript_of`, `line_of`), else off its kept record."""
     rates = rates_at() if rates is None else rates
     v = json.loads((out / "verifier.json").read_text())
     reg = v["registration"]
@@ -938,8 +873,6 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     lines: list[str] = []
     doc: dict = {"registration": reg["digest"], "host_bytes": host_bytes, "rates": rates,
                  "line_by": "python" if lean is None else "lean", "conditional_on": dict(CONDITIONAL_ON),
-                 "boundary": {"checked": False, "reason": "off by default (--boundary)"} if boundary is None else {
-                     "checked": True, "sha512": boundary["sha512"], "links": boundary["links"]},
                  "lockdown": {"read": False, "reason": "no lockdown record (--lockdown)"} if lockdown is None else {
                      "read": True, **{k: lockdown[k] for k in ("sha512", "node", "allow", "intervals",
                                                                "shared_filesystem")}},
@@ -1013,8 +946,6 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         if not s["accepted"]:
             continue
         seen, row["named"] = auditor_seen(log, s["windows_seen"], s.get("groups_per_coin", 1))
-        if boundary is not None and c.get("challenger") == "gate":
-            row["credit"] = with_check(row["credit"], BOUNDARY, boundary_check(boundary, seen))
         a = copy.deepcopy(s)
         a["lean_record"], a["windows_seen"] = V.lean_record(s), seen
         row["groups"] = len(seen)
@@ -1030,13 +961,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                 if cur is None or x["time"] < cur["time"]:
                     measured[t][clock][f] = {"k": k, **{name: x[name] for name in SHARES},
                                              "of_record": row["of_record"], "credited": row["credit"]["ok"]}
-    for r in rows:
-        if boundary is not None and r["challenger"] == "gate" and BOUNDARY not in r["credit"]:
-            r["credit"] = with_check(r["credit"], BOUNDARY, {"ok": False, "reason": (
-                "no credited span to hold to the certifiers' records: not an accepted paced session read as signed")})
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
-    doc["conditional_on"] = conditional_on(rows)
+    doc["conditional_on"] = conditional_on(rows, bound)
     doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
     return doc
 
@@ -1070,7 +997,7 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
     credited = [r["k"] for r in rows if r["credit"]["ok"]]
     zero = {r["k"]: r["credit"]["zero"] for r in rows if not r["credit"]["ok"]}
     if not credited:
-        said = "the line credits zero: no session is credited, complete, accepted, pinned and bound"
+        said = "the line credits zero: no session is credited, complete, accepted and pinned under a binding not refused"
     else:
         said = (f"the line credits session(s) {', '.join(map(str, credited))}"
                 + (f"; session(s) {', '.join(map(str, zero))} earn none" if zero else ""))
@@ -1079,22 +1006,21 @@ def credited_line(rows: list[dict]) -> tuple[dict, dict]:
 
 
 def table(doc: dict) -> str:
-    """`analyse`'s doc as Markdown: each session's five checks (`CHECKS`), with the reason of each that failed, and
-    its credit, weights held then filler held; then the line at each T, time-held (labelled as under Identity, which
+    """`analyse`'s doc as Markdown: each session's four checks (`CHECKS`), with the reason of each that failed, and
+    its credit, weights held then filler held; then the store (`store_text`), the line at each T, time-held (labelled as under Identity, which
     nothing the verifier checks establishes) / link-charged with the snapshot forms, weights and filler apart, and its
     error when it credits a session."""
     b = line.FORMS
-    checks = (*CHECKS, BOUNDARY) if doc["boundary"]["checked"] else CHECKS
-    out = ["| session | T | " + " | ".join(checks) + " | credit |", "|---|---|" + "---|" * len(checks) + "---|"]
+    out = ["| session | T | " + " | ".join(CHECKS) + " | credit |", "|---|---|" + "---|" * len(CHECKS) + "---|"]
     for s in doc["sessions"]:
         c = s["credit"]
-        cells = ["-" if n not in c else "yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in checks]
+        cells = ["-" if n not in c else "yes" if c[n]["ok"] else f"no: {c[n]['reason']}" for n in CHECKS]
         mine = {x: (s.get("shares_auditor_clock") or {}).get(x) for x in b}
         credit = ("credited: weights " + " / ".join(f"{mine[x]['time']:.4%}" for x in b) + ", filler "
                   + " / ".join(f"{mine[x]['filler_time']:.4%}" for x in b) if c["ok"] and all(mine.values())
                   else "zero")
         out.append(f"| {s['k']} | {s.get('T') or '-'} | " + " | ".join(cells) + f" | {credit} |")
-    out.append("")
+    out += ["", *([f"store bound: {store_text(doc['bound'])}"] if "premise" in (doc.get("bound") or {}) else [])]
     for t, row in doc["line"].items():
         out.append(f"line {t}: credited {row['credited_sessions']}, time-held (under Identity: no block over the "
                    "boundary links) / link-charged weights "
@@ -1113,9 +1039,6 @@ def table(doc: dict) -> str:
         f"{s['no_relay']['grounded_by']}, its span inside the lockdown applied {' to '.join(s['no_relay']['interval'])}"
         if s["no_relay"]["grounded_by"] else f"conditional on NoOutsideCompute, {s['no_relay']['reason']}")
         for s in doc["sessions"] if "no_relay" in s]
-    out.append(f"boundary: held to the certifiers' records {doc['boundary']['sha512'][:16]}... of "
-               f"{', '.join(doc['boundary']['links'])}" if doc["boundary"]["checked"] else
-               f"boundary: not held to certifiers' records, {doc['boundary']['reason']}")
     return "\n".join(out) + "\n"
 
 
@@ -1138,8 +1061,8 @@ def main(argv: list[str] | None = None) -> int:
                     "line (`git rev-list --first-parent origin/main` in its checkout): without it no session is pinned")
     ap.add_argument("--model-pin", type=Path, metavar="FILE",
                     help="the model the store must be bound to when the audit's period signs none: a pin in the "
-                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either no session is "
-                         "bound")
+                         "auditor's model registry's shape (`remote_bandwidth.store.read_pin`); without either the store is "
+                         "unbound and the line conditional on DeveloperStore")
     ap.add_argument("--table", type=Path, help="write each session's checks and the line here, as Markdown")
     ap.add_argument("--lane", default=LANE)
     ap.add_argument("--peer", help="override the gate sessions' challenger peer, which is otherwise the run's record's "
@@ -1156,20 +1079,11 @@ def main(argv: list[str] | None = None) -> int:
                          "line.py alone (a reading, not of record)")
     ap.add_argument("--lean-exe", type=Path, metavar="PATH",
                     help="the remote-audit-verifier executable (default: `lake build` it in PoUB's package)")
-    ap.add_argument("--boundary", type=Path, metavar="FILE",
-                    help="the network certifiers' records of the gate node's boundary links (`read_boundary`): refuse "
-                         "a session's credit when they show ingress other than the verifier's messages over its span "
-                         "(off by default)")
-    ap.add_argument("--boundary-pin", metavar="SHA512", help="SHA-512 of the certifier's public key --boundary's "
-                    "records must verify under")
     ap.add_argument("--lockdown", type=Path, metavar="FILE",
                     help="infra's record of the provider's lockdown of the gate node (`read_lockdown`): a gate "
                          "session whose signed span lies inside an applied interval is conditional on "
                          "ProviderLockdown in place of NoOutsideCompute (default: none is)")
     a = ap.parse_args(argv)
-    if (a.boundary is None) != (a.boundary_pin is None):
-        ap.error("--boundary and --boundary-pin go together")
-    boundary = None if a.boundary is None else read_boundary(a.boundary, a.boundary_pin)
     commit, desc = None, None
     if a.commit is not None:
         commit, tree = verifier_tree(a.commit, a.repo)
@@ -1193,7 +1107,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         doc = analyse(a.out, host_bytes=a.host_bytes, pin=a.pin, period=a.period, heads=a.ledger, lane=a.lane,
                       peer=a.peer, rates=rates_at(a.disk_bytes_per_s, a.link_bytes_per_s, a.bursts), desc=desc,
-                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean, boundary=boundary,
+                      commit=commit, pins=pins, main=first_parent, model=model, lean=lean,
                       lockdown=None if a.lockdown is None else read_lockdown(a.lockdown))
     except (Disagree, lv.LeanError) as e:
         raise SystemExit(f"auditor_line: no line: {e}") from None
@@ -1206,9 +1120,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"auditor_line: line by {doc['line_by']}; {doc['credit']['summary']}", file=sys.stderr)
     print(f"auditor_line: conditional on {', '.join(doc['conditional_on'])} (its memory-line-of-record label: "
           f"`{line_label(doc)}`)", file=sys.stderr)
-    bound = doc["bound"]
-    print(f"auditor_line: bound: {'yes, to ' + bound['model']['name'] if bound['ok'] else 'no: ' + bound['reason']}",
-          file=sys.stderr)
+    print(f"auditor_line: bound: {store_text(doc['bound'])}", file=sys.stderr)
     return 0
 
 

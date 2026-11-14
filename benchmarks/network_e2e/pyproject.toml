@@ -1,7 +1,7 @@
 [project]
 name = "verity-network-e2e"
 version = "0.0.0"
-description = "Network certification end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
+description = "Network certification's chain after N2: the advice and its bits, the endpoint's own advice and the prove path's adoption."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 
@@ -17,26 +17,11 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = [
-    "tests/test_chain.py",
-    "tests/test_e2e.py",
-    "tests/test_e2e_compact_finish.py",
-    "tests/test_e2e_compact_token.py",
-    "tests/test_e2e_tie_report.py",
-]
-# e2e.py runs certifier-serve's rehearsals and N2's verdicts through n2_zk, and the chain the negatives
-# (`negatives.py`), which it imports from there; the chain's derived bits are `encodings/derived.py`'s (the encodings
-# suite's module, loaded by path, over the vLLM integration's advice code); the claim's zero-knowledge gaps are checked against the certifier README's. The
-# compact finish's regression ties the gate's own compact runs, network_traces' `gate_compact`, whose command is the
-# auditor host's. The tests build and run the Lake packages whose lakefiles they list: `network-records`
-# (certifier.lean_audit) and `sampled-proofs-verifier` (one_stage.verifier). The endpoint's Commit windows are the vLLM
+# The chain imports `window_chain` from network_traces; its derived bits are `encodings/derived.py`'s (the encodings
+# suite's module, loaded by path, over the vLLM integration's advice code). The endpoint's Commit windows are the vLLM
 # integration's window advice (`window_advice`), which the chain reads.
 inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived.py",
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
           "adapters/vllm/verity_vllm/pipeline/window_advice.py",
-          "verity/protocols/accounting/certifier/verifier/README.md", "verity/protocols/compose/device/live_challenger/auditor.py",
-          "verity/protocols/compose/device/live_challenger/host.json",
-          "verity/protocols/accounting/certifier/verifier/lean/lakefile.toml", "verity/protocols/proofs/spot/verifier/lean/lakefile.toml",
-          "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/compose/device/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/compose/device/live_challenger/__init__.py", "verity/protocols/accounting/certifier/verifier/__init__.py"]
+          "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/certifier/__init__.py", "verity/protocols/accounting/certifier/verifier/__init__.py"]

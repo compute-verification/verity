@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import importlib
+import logging
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from types import ModuleType
-from typing import Any, Mapping
+from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
 
 from verity_bench.vllm.presets import NO_CONTROL, SERVED_EXECUTIONS, ArmSettings
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -127,7 +131,9 @@ def plugin(arm: Arm) -> Any | None:
 
 
 def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
-    """The arm's protocol entries that bind the served computation to a row Build (`protocol_options.requires_build`)."""
+    """The arm's protocol entries that bind the served computation to a row Build (`protocol_options.requires_build`). An
+    entry whose protocol `verity_vllm.protocols` refuses (unknown, or its adapter not importable here) isn't one: it is
+    logged, and the engine's own build refuses it by name."""
 
     if not arm.protocols:
         return ()
@@ -139,8 +145,9 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
         try:
             if PO.requires_build(entry, ctx):
                 bound.append(entry)
-        except PO.Refused:
-            continue
+        except PO.Refused as e:
+            log.info("arm %r: protocol entry %r refused (%s), so it binds no Build here; the engine's build refuses it",
+                     arm.id, entry, e)
     return tuple(bound)
 
 

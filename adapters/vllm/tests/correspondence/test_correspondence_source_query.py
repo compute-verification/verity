@@ -49,11 +49,11 @@ def _record(P) -> dict:
 
 def test_record_and_fallback_agree_call_for_call_and_the_source_is_recorded():
     P = program()
-    table = RC.RuntimeCorrespondence.from_json(_record(P))
-    canon = Correspondence(P, table=table)
+    doc = _record(P)
+    canon = Correspondence(P, document=doc)
     fallback = Correspondence(P)
     assert canon.source == "correspondence" and fallback.source == "v1_annotations"
-    assert canon.digest == RC.correspondence_digest(table.doc) and fallback.digest is None
+    assert canon.digest == RC.correspondence_digest(doc) and fallback.digest is None
     for c in P.calls:
         assert canon.module_of(c.id) == fallback.module_of(c.id), c.name
         assert canon.name(c.id) == fallback.name(c.id), c.name
@@ -187,7 +187,7 @@ def test_a_rank_programs_collective_sites_are_the_same_identities_under_the_reco
     P = tp_attention_program()
     merged = []
     for rank in (0, 1):
-        canon, fallback = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(_tp_record(P, rank))), Correspondence(P)
+        canon, fallback = Correspondence(P, document=_tp_record(P, rank)), Correspondence(P)
         assert canon.module_of(1) == ATTN and fallback.module_of(1) == f"{ATTN}.all_gather2_5"
         assert canon.site_path(1) == fallback.site_path(1) == f"{ATTN}.all_gather2_5"
         assert canon.name(7) == fallback.name(7)
@@ -212,8 +212,6 @@ def test_a_record_of_another_program_is_refused():
     doc = _record(P)
     doc["calls"] = doc["calls"][:-1]
     with pytest.raises(ValueError, match="another Program"):
-        Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))
-    with pytest.raises(ValueError, match="another Program"):
         Correspondence(P, document=doc)
 
 
@@ -233,8 +231,10 @@ def test_of_reads_the_build_dir_and_picks(tmp_path):
     a, b, c = Correspondence.of(P, str(new)), Correspondence.of(P, str(old)), Correspondence.of(P, None)
     assert a.source == "correspondence" and a.digest == RC.correspondence_digest(doc) and a.problem is None
     assert b.source == "v1_annotations" and c.source == "v1_annotations"
-    t = Correspondence(P, table=RC.RuntimeCorrespondence.from_json(doc))       # `of` reads the document's names off its fields: the table's
+    t = Correspondence(P, document=doc)                                        # what `of` reads off the Build dir is the document given
     assert a.names == t.names and a.tensorless == t.tensorless and (a.rows, a.columns) == (t.rows, t.columns) and a.provenance() == t.provenance()
+    assert a.names == {r.call: call_name_of(r) for r in RC.RuntimeCorrespondence.records(doc)}      # read off its fields: its records' names
+    assert Correspondence(P, document=doc, digest="d" * 64).digest == "d" * 64                      # a digest handed in is kept: `of` hands on the one it checked
     assert [a.site_path(k) for k in a.names] == [t.site_path(k) for k in t.names]
     assert [b.site_path(k) for k in b.names] == [k_.module for k_ in b.names.values()] and b.provenance()["schema"] is None
     (new / "result.json").write_text(json.dumps({"ok": True, "program": {"digest": "p" * 64, "correspondence_digest": "0" * 64}}))

@@ -19,8 +19,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 Where SHA-512 has no collision on the strings both hash, two heads with one digest are one (`head_inj`), two heads
 whose digests are signed as one, each under its own salt, have one digest (`certificateDigest_inj`), and a
 certificate message's input names one certifier session, link-window and digest (`messageInput_inj`, with
-`link_short` for the link's length). `Proofs.Properties.NetworkCertifier.DeviceOutput.Runs` uses them to match each record an
-accepted unit holds to the one the certifier device issued.
+`link_short` for the link's length).
 -/
 
 @[expose] public section

@@ -4,7 +4,7 @@
 and `persistent_topk`) and `sparse_mla_split.SparseMlaHeadSplit_v1` (FA3, `FLASH_ATTN_MLA_SPARSE`) at GLM-5.3's statics on one TP8 rank (8 MLA
 heads; the indexer's 32 heads replicated), and the run that settles the RoPE contraction of the two Triton kernels.
 
-One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`properties.record`), and the two
+One GPU process writes `<out>/glm53_dsa_capture.json`, the property record `glm53_dsa_capture` (`records.property_record`), and the two
 Triton kernels' PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one line per phase, a `ROPE`
 line, then `GLM53-DSA GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
 (exit 3).  vLLM runs at its defaults, as it serves: `engine.env.served_defaults` clears every switch the process inherited before
@@ -118,7 +118,7 @@ from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
 from verity_vllm.pipeline.cli import MACHINE
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-dsa-capture/v3"
 RECORD = "glm53_dsa_capture.json"

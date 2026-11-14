@@ -82,8 +82,14 @@ def test_an_import_the_surface_lacks_fails_as_where_vllm_is_absent(monkeypatch):
         _import("vllm.no_such_module")
     with pytest.raises(ModuleNotFoundError, match="vllm.envs.no_such_module"):
         _import("vllm.envs.no_such_module")
-    with pytest.raises(ImportError, match="NoSuchName"):
-        _import("vllm:NoSuchName")
+
+    def from_statement() -> object:
+        from vllm import NoSuchName
+
+        return NoSuchName
+
+    with pytest.raises(ImportError, match="^cannot import name 'NoSuchName' from 'vllm'"):
+        from_statement()
 
 
 def test_a_name_the_test_did_not_set_refuses_every_use_and_names_its_entry(monkeypatch):
@@ -111,6 +117,11 @@ def test_reading_off_a_module_what_no_test_set_is_an_attribute_error_that_says_w
     def read(name: str) -> object:
         return getattr(envs, name)
 
+    def from_statement() -> object:
+        from vllm.envs import NOT_SET
+
+        return NOT_SET
+
     with pytest.raises(AttributeError) as refused:
         read("NOT_SET")
     said = str(refused.value)
@@ -119,10 +130,10 @@ def test_reading_off_a_module_what_no_test_set_is_an_attribute_error_that_says_w
     assert not hasattr(envs, "NOT_SET") and getattr(envs, "NOT_SET", 7) == 7
     with pytest.raises(AttributeError, match="^module 'vllm.envs' has no attribute '__wrapped__'$"):
         read("__wrapped__")
-    with pytest.raises(ImportError, match="NOT_SET"):
-        _import("vllm.envs:NOT_SET")
+    with pytest.raises(ImportError, match="^cannot import name 'NOT_SET' from 'vllm.envs'"):
+        from_statement()
     envs.NOT_SET = 1
-    assert envs.NOT_SET == 1 and _import("vllm.envs:NOT_SET") == 1
+    assert envs.NOT_SET == 1 and from_statement() == 1
 
 
 def test_a_module_that_acts_on_an_imported_vllm_module_is_imported_before_the_install(monkeypatch):

@@ -6,14 +6,12 @@ required here.  Only the one-process capture writes the realized schedule, the s
 `lag`, so on a TP record they are None and G6 has no driver claim to hold them to.  The prompt and the cap are the Program's,
 which both read instead, so they are not typed here.
 
-    t = ServedTokens.load(os.path.join(oracle_dir, "capture", "tokens.json"))
+    t = ServedTokens.of(json.loads(text), "capture/tokens.json")
 """
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from verity_vllm.records.fields import RecordError, objects, optional, present, required
@@ -67,8 +65,3 @@ class ServedTokens:
         lag = optional(doc, "lag", where, Mapping)
         return cls(where=where, requests=tuple(ServedRequest.of(r, where, f"requests[{i}]") for i, r in enumerate(reqs)),
                    lag=None if lag is None else present(lag, "value", where, int, "lag.value"))
-
-    @classmethod
-    def load(cls, path: str | Path) -> ServedTokens:
-        with open(path) as f:
-            return cls.of(json.load(f), str(path))

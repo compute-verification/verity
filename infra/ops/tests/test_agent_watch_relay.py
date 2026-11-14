@@ -821,6 +821,25 @@ def test_an_agent_that_went_on_by_itself_is_posted_and_rings_no_one(relay):
     assert rings(relay) == []
 
 
+def test_a_github_read_of_the_watch_s_own_that_was_refused_leads_with_infra_rings_it_and_says_what_to_do(relay):
+    """A read of the watch's own that GitHub refused is a sentence for infra, whose inbox is rung: what the watch misses
+    meanwhile, and the two commands that find and clear the cause."""
+    infra = relay.slack.tag(relay.slack.entry(relay.REG, "infra"))
+    rec = {"t": "2026-10-30T00:52:00Z", "kind": "github_refused", "agent": "", "name": "", "run": "", "owner": "infra",
+           "what": "the open PRs", "why": "GitHub answered HTTP 401 to the read of compute-verification/verity's open PRs",
+           "every_min": 5}
+    assert relay.rung(rec) == "infra"
+    relay.log_text["text"] = json.dumps(rec) + "\n"
+    relay.once()
+    relay.once()
+    (post,) = relay.posts
+    assert post.startswith(f"{infra} *Agent watch:* the watch can't read the open PRs from GitHub: GitHub answered HTTP 401 ")
+    assert "counts only for the agents the last read's PRs named" in post and "reads again every 5 min" in post
+    assert "`/data/infra/gh_read_token.sh > /dev/null`" in post and "`rm /dev/shm/verity-read-token`" in post
+    assert "can't render" not in post and "?" not in post and "bc-" not in post
+    assert [r["thread_ts"] for r in rings(relay)] == [INFRA_INBOX["inbox_ts"]]
+
+
 def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(relay):
     rec = {"t": "2026-10-30T00:52:00Z", "kind": "outage", "agent": "", "name": "", "run": "", "owner": "top", "count": 5,
            "handles": ["kernels", "proofs"], "since": "2026-10-29T23:22:00Z", "every_min": 15}
@@ -829,3 +848,10 @@ def test_an_outage_leads_with_top_names_daniel_and_lists_the_coordinators_down(r
     out = relay.text(rec)
     assert out.startswith(relay.slack.tag(relay.slack.entry(relay.REG, "top"))) and f"<@{daniel['slack_user']}>" in out
     assert "5 coordinators have been down" in out and "@kernels, @proofs" in out and "every 15 min" in out
+
+
+def test_a_sent_file_that_does_not_parse_counts_no_line_as_posted_and_says_so(relay, capsys):
+    assert relay.load_sent() == {} and capsys.readouterr().out == ""
+    relay.sent_path().write_text("{")
+    assert relay.load_sent() == {}
+    assert "unreadable, so no line counts as posted before (JSONDecodeError" in capsys.readouterr().out

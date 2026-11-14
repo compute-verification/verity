@@ -112,3 +112,10 @@ lean = "Nci.Cut.Assumptions.Exports"
 standing = "assumed"
 beyond = "assumed"
 credible_bits = { value = inf, unit = "bit", source = "a property of the work's MACs and outputs (a set of computed gates pays b cut gates for each output it finishes), not of a block's bits", status = "derived" }
+
+# Which bounds set the lower bound (rho/scenario.py). With lock_only, only a bound whose own citations a lock all
+# states: a class one of whose own cites is a draft: statement sets the lower bound at no block size, and is still
+# reported alone, labeled draft. false admits every bound whose premises aren't refuted at a block. A cut's premises
+# and the structure's (draft:no-straddle) are not a bound's own.
+[bounds]
+lock_only = { value = true, source = "a published figure rests only on a bound a lock states", status = "declared" }

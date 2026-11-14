@@ -1475,3 +1475,15 @@ def test_a_cancel_after_the_runner_closed_control_cancel_ends_the_run_itself(tmp
     assert sc["why"] == "the runner had recorded the workload's exit before the cancel" and sc["empty"] is True
     assert sc["status_json"] == "not written: its runner is live and writes status.json"
     assert "scope_end" not in json.loads((Path(rd) / "status.json").read_text())
+
+
+# ---- the real-kernel fixtures (fixtures/run_fixtures.sh), which a person runs in a pod of its own --------------------------------------------
+
+FIXTURES = Path(events.__file__).resolve().parent / "fixtures"
+
+
+def test_the_kernel_fixtures_parse_and_each_workload_answers_help():
+    subprocess.run(["bash", "-n", str(FIXTURES / "run_fixtures.sh")], check=True)
+    for name in ("hog.py", "forkshare.py", "writer.py", "spans.py"):
+        r = subprocess.run([sys.executable, str(FIXTURES / name), "--help"], capture_output=True, text=True)
+        assert r.returncode == 0 and r.stdout.startswith("usage: "), (name, r.stderr)

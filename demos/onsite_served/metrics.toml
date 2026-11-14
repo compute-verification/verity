@@ -1,0 +1,13 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "vllm/onsite-demo-minutes"
+title = "The onsite demo: minutes from its first command to its verdict"
+owner = "vllm"
+unit = "minutes"
+better = "lower"
+command = "research run --cwd source -- python3 demos/onsite_served/minutes.py PROVER_RUN AUDITOR_RUN"
+every = "7d"
+floor = 60
+goal = "demos/onsite-demo"

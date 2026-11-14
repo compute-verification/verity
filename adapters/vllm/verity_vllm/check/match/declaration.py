@@ -20,6 +20,8 @@ from verity_vllm.records.fields import RecordError
 from verity_vllm.records.schema_ids import GLOBAL_PROGRAM_SCHEMA
 from verity_vllm.records.workload import Workload
 
+__all__ = ["MODELLED_ENGINE", "compilation_facts"]
+
 GP_SCHEMA = GLOBAL_PROGRAM_SCHEMA
 
 

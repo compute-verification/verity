@@ -400,6 +400,20 @@ def test_a_source_of_no_fused_norm_loads_no_build(norm):
     assert src.stats["so"] == norm.so and src.stats["so_sha256"] is None
 
 
+def test_the_fused_norm_source_reads_its_words_per_token_before_the_bytes_of_its_build(norm, tmp_path):
+    """The loaded build is hashed last, so a `words_per_token` that is no integer is refused whether or not the build's bytes can be
+    read."""
+    model, gone = _two_modules(_fused_norm, "norm"), str(tmp_path / "no_such_build.so")
+    no_integer: Any = "x"
+    with pytest.raises(ValueError, match="invalid literal for int"):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, gone, words_per_token=no_integer)
+    with pytest.raises(FileNotFoundError):
+        N.NormScaleSource(Recorder(), model, {"norm": FUSED}, gone, words_per_token=3)
+    assert norm.loaded == [gone, gone]
+    src = N.NormScaleSource(Recorder(), model, {"norm": FUSED}, norm.so, words_per_token=3)
+    assert src.words_per_token == 3 and src.stats["so_sha256"] == hashlib.sha256(BUILD).hexdigest()
+
+
 # --- the call boundaries: forward pre-hooks alone ------------------------------------------------------------------------------------------
 
 def _plan(module: str) -> CBP.Plan:

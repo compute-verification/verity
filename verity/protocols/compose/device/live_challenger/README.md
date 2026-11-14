@@ -15,8 +15,8 @@ verifier reads them.
   pod runs it on a loop.
 - `run.sh` is a development session: `serve.py` as a `research run` on another machine, which tunnels its port to the
   developer's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
-  `research run ... -- bash verity/protocols/compose/device/live_challenger/run.sh` (its header has the full command), not bare
-  `verity bench live_challenger`.
+  `research run ... -- bash verity/protocols/compose/device/live_challenger/run.sh` (its header has the full command).
+  `verity bench` has no name for it: that command runs only a directory of `benchmarks/`.
 
 A session reads the source tree, the challenger's key directory (`~/.local/state/live-challenger/key`, never under `out/`) and
 `/etc/vy/peers`. It writes `record.json`, `key.json`, `releases.jsonl`, `hellos.jsonl` and the signed close (`challenger.json`)

@@ -1,25 +1,31 @@
 """The suite's step: the lf model's tiny training step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path)
 with its log-free loss, derived by the training-step frontend at the step's batch shape and at the structure's, and handed
 over as a lane hands it over (`grader.write_handover`); at a compute capability `cc`, the step's bf16 linears' GEMMs are lowered
-to the routes `ROUTES` stands in for that GPU's cuBLAS, and the structure is derived without it, as its routes don't cover its
-shapes."""
+to the routes `ROUTES` stands in for that GPU's cuBLAS and its attention to that GPU's flash attention at the stand-in shape
+`SDPA`, under deterministic algorithms, and the structure is that GPU's step as a structure Program (`structure_program`), which
+reads no route."""
 from __future__ import annotations
 
 import collections
+import contextlib
 import importlib.util
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import torch
 
 import grader as G
 from verity.definitions.registry import cublas_bf16 as CB
+from verity.definitions.registry import fa2_train as FT
+from verity.definitions.registry import fa2_train_bwd as FTB
 from verity_vllm.program.frontend.train_step import AdamW, export_step, primitives, step_report
 
 LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
-#: the step's batch and the structure Program's, as rows of tokens
-STEP, STRUCTURE = (2, 17), (3, 5)
+#: the step's batch and the structure Program's, as rows of tokens: the structure's attention at a T of 32 (its tokens less
+#: one), whole blocks of the 16 rows and keys its stand-in heads take at a cc (`training_attention.STAND_IN`)
+STEP, STRUCTURE = (2, 17), (3, 33)
 #: the compute capability a step's bf16 products may be derived at, and the routes its cuBLAS stands in to take for the tiny
 #: step's linears' GEMMs at M = 2 x 16 tokens (its capture covers the workloads' shapes, not these): unsplit, but for a split-K
 #: over a bf16 workspace, a serial split-K and the three over grid.z (an f32 workspace and none, their slices' residue tiles
@@ -31,6 +37,9 @@ ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64,
           (32, 64, 64, "fwd"): {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
           (32, 192, 64, "fwd"): {"kernel": "serialk", "SPLIT_K": 5, "align": 8, "tile_k": 32},
           (32, 64, 192, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16", "align": 8, "tile_k": 16}}
+#: the tiny step's attention [B, H, T, D] at the step's batch, which no capture of torch's flash attention covers, as a shape
+#: of both its kernels: the forward unsplit over key blocks of 16, the backward over blocks of 16 rows and 16 keys
+SDPA = (2, 2, 16, 32)
 
 
 def _lf():
@@ -45,14 +54,30 @@ def _lf():
 LF = _lf()
 
 
-def _derive(dtype, rows: int, tokens: int, cc: tuple[int, int] | None = None):
+@contextlib.contextmanager
+def _deterministic_algorithms():
+    """torch's deterministic algorithms on for the block, under which alone the GPU's flash attention backward is a Definition,
+    and afterwards as they were: the setting is the process's."""
+    was, warn_only = torch.are_deterministic_algorithms_enabled(), torch.is_deterministic_algorithms_warn_only_enabled()
+    torch.use_deterministic_algorithms(True)
+    try:
+        yield
+    finally:
+        torch.use_deterministic_algorithms(was, warn_only=warn_only)
+
+
+def _derive(dtype, rows: int, tokens: int, cc: tuple[int, int] | None = None, structure: bool = False):
     model, batch = LF.meta_step("tiny", rows, ctx=tokens - 1, vocab=64, matmul_dtype=dtype)
     opt = AdamW(**LF.ADAMW)
-    ex = export_step(model, LF.square_loss, opt, batch, gpu=cc is not None)
-    with pytest.MonkeyPatch.context() as mp:
-        for key, route in ROUTES.items() if cc else ():
-            mp.setitem(CB.TRAIN_ROUTES, key, route)
-        rep = step_report(model, LF.square_loss, opt, batch, exported=ex, cc=cc)
+    step = cc is not None and not structure
+    with pytest.MonkeyPatch.context() as mp, _deterministic_algorithms() if step else contextlib.nullcontext():
+        ex = export_step(model, LF.square_loss, opt, batch, gpu=cc is not None)
+        if step:
+            for key, route in ROUTES.items():
+                mp.setitem(CB.TRAIN_ROUTES, key, route)
+            mp.setitem(FT.TRAIN_SDPA, SDPA, ("unsplit", 16))
+            mp.setitem(FTB.TRAIN_SDPA_BWD, SDPA, (16, 16))
+        rep = step_report(model, LF.square_loss, opt, batch, exported=ex, cc=cc, structure=structure)
     assert rep.program is not None, rep.unsupported
     return rep.program, ex[0]
 
@@ -66,7 +91,7 @@ def steps(tmp_path_factory):
 
     def get(dtype=None, cc: tuple[int, int] | None = None) -> SimpleNamespace:
         if (dtype, cc) not in made:
-            (prog, gm), (prog2, gm2) = _derive(dtype, *STEP, cc), _derive(dtype, *STRUCTURE)
+            (prog, gm), (prog2, gm2) = _derive(dtype, *STEP, cc), _derive(dtype, *STRUCTURE, cc, structure=cc is not None)
             path = G.write_handover(tmp_path_factory.mktemp("handover"), prog, prog2, run="tiny", checkpoints=[("start", 1)],
                                     frontend="0" * 40, step_batch=STEP, structure_batch=STRUCTURE)
             made[dtype, cc] = SimpleNamespace(path=path, program=prog, gm=gm, gm2=gm2)

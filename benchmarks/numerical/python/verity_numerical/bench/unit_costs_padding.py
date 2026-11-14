@@ -40,9 +40,10 @@ from __future__ import annotations
 import argparse
 import json
 import math
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from .unit_costs import retree
 
@@ -331,15 +332,15 @@ def _short(w: str) -> str:
 def render(pad: Mapping[str, Any]) -> str:
     L = [f"# F6 padding: unit = one subcircuit, K = {pad['K']} sampled proof blocks, δ = {pad['delta']}", "",
          "Per-unit nonzeros: " + str(pad.get("nnz")), "",
-         "zpad: Z rounding only; pad_mean: with sessions of B slots rounded up; public: each shape's session count fixed at "
-         "its 1 − 2⁻⁴⁰ quantile (hides the sample's mix); pad_q: bound on the 1 − 2⁻⁴⁰ quantile of padded / actual. All over the "
-         "body's expected actual nonzeros. Tail: the samplers and units over "
-         f"{pad['tail_factor']}x the body's 99th-percentile Z, each its own bucket at B = 1.", "",
+         ("zpad: Z rounding only; pad_mean: with sessions of B slots rounded up; public: each shape's session count fixed at "
+          "its 1 − 2⁻⁴⁰ quantile (hides the sample's mix); pad_q: bound on the 1 − 2⁻⁴⁰ quantile of padded / actual. All over the "
+          "body's expected actual nonzeros. Tail: the samplers and units over "
+          f"{pad['tail_factor']}x the body's 99th-percentile Z, each its own bucket at B = 1."), "",
          "## Compact: each workload x menu at its best B", "",
          f"best B: the largest B within {pad['b_tolerance']:.0%} of B = 1's pad_mean.", "",
-         "| workload | menu | buckets | best B | zpad | pad_mean | round extra | public | hide extra | pad_q | sessions mean / "
-         "public | tail share of the sample | tail actual / body actual | tail public / body actual | same, token-select at its step "
-         "model |", "|" + "---|" * 15]
+         ("| workload | menu | buckets | best B | zpad | pad_mean | round extra | public | hide extra | pad_q | sessions mean / "
+          "public | tail share of the sample | tail actual / body actual | tail public / body actual | same, token-select at its step "
+          "model |"), "|" + "---|" * 15]
     for w in pad["workloads"]:
         t, ts = w["tail"]["eval"], w["tail"]["eval_step_model"] or w["tail"]["eval"]
         for m in w["menus"]:

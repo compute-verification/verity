@@ -74,7 +74,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
-    "quarantine-lint": ("verity_vllm.properties.quarantine_lint", "quarantine registry lint"),
     "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
                             "switch), and a checkpoint's staging (staged)"),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
@@ -105,14 +104,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "workload": ("verity_vllm.pipeline.workload", "the deterministic sweep workload generator"),
     "workload-file": ("verity_vllm.pipeline.workload_file", "workload files fetched by their art ids and checked against SHA256SUMS"),
 }
-
-#: Why a command's module can be absent from a tree, for the refusal that names it: the public release leaves out what
-#: reads a private protocol.
-ABSENT: dict[str, str] = {
-    "serve-openai": "the served window (this endpoint and the window circuit) reads the network certifier's encoding, which the "
-                    "public release leaves out, so it ships without a runnable served window",
-}
-
 
 #: The pod layout's machine paths: the default of an option (``Class.field``) that neither its flag nor its
 #: environment variable sets.
@@ -259,8 +250,7 @@ def main(argv: list[str] | None = None) -> Any:
     except ModuleNotFoundError as e:
         if e.name != COMMANDS[argv[0]][0]:
             raise
-        why = ABSENT.get(argv[0])
-        print(f"{PROG}: {argv[0]}: its module {e.name} is not on this tree" + (f": {why}" if why else ""), file=sys.stderr)
+        print(f"{PROG}: {argv[0]}: its module {e.name} is not on this tree", file=sys.stderr)
         return 2
     process_settings(os.environ)
     if process:

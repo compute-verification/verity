@@ -23,6 +23,7 @@ torch = pytest.importorskip("torch")
 HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
 from p2_v1 import bandwidth as B
 
 from verity.protocols.accounting.pous.verifier import verifier as V
@@ -93,7 +94,7 @@ def test_vk_paths_from_row_digests_are_the_verifiers(tmp_path) -> None:
     rows = [rng.integers(0, 256, 64, dtype=np.uint8).tobytes() for _ in range(12)]
     (tmp_path / "seg").mkdir()
     (tmp_path / "rows").mkdir()
-    from p2_v1 import store as ST
+    from p2_store import store as ST
 
     for s in range(3):
         data = b"".join(rows[4 * s:4 * s + 4])
@@ -118,12 +119,12 @@ def test_the_tracked_registrations_plan_is_the_real_layouts_tensors_units() -> N
     """A pass over mem69-v2 reads the units of the 209 tensors' blocks, not the 12,745 blocks of padding past
     lm_head (PoUS's, which the decode never reads): the 3,186 units wholly padding are out, lm_head's last unit, three
     of its blocks and one of padding, in."""
-    from p2_v1 import store as ST
+    from p2_store import store as ST
 
     doc = ST._dump(ST.build(ST.MQA16K).to_json())
     assert hashlib.sha512(doc.encode()).hexdigest() == ST.LAYOUT_SHA512
     layout = json.loads(doc)
-    tracked = json.loads((HERE / "p2_v1" / "bandwidth-mem69-v2.json").read_text())
+    tracked = json.loads((ROOT / "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json").read_text())
     reg = p2_party.registration_of(tracked)
     plan = p2_party.plan_of(tracked, reg)
     assert plan == B.tensor_plan(layout, reg.blocks) == receipts.Plan(((0, 17_003_406),), reg.blocks)
@@ -201,9 +202,9 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
     """The auditor gate's party shape (`--party CMD`): the party run as the gate runs one, from the tree with no
     site-packages (`-S`: the standard library only, which the gate's `python3 -s -E` has) and its `--device`
     directory; CMD's stdout says the port and then the verifier's record of the answer, which the verdict line holds
-    to the session's, and which the device's answers.jsonl keeps. Each session's core case, the one the device's
-    private cases.jsonl keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the toy's store,
-    and `session.json` holds only its digest, store and verdict."""
+    to the session's, and which the device's answers.jsonl keeps. Each session's core case, whose digest alone the
+    device's private case-digests.txt keeps, goes with its answer to `--case-dir` (0700, its files 0600), naming the
+    toy's store, and `session.json` holds only its digest, store and verdict."""
     reg = B.toy(tmp_path / "toy")
     party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_party "
              f"--device {tmp_path / 'party'} --listen 127.0.0.1:0 "
@@ -230,7 +231,9 @@ def test_a_party_the_gate_starts_says_its_port_and_its_own_record_of_the_answer(
         cases.append(case)
     kept = [json.loads(x) for x in (tmp_path / "party" / "answers.jsonl").read_text().splitlines()]
     assert kept == [json.loads((tmp_path / s / "session.json").read_text())["answer"] for s in ("honest", "cheat")]
-    assert [json.loads(x) for x in (tmp_path / "party" / "private" / "cases.jsonl").read_text().splitlines()] == cases
+    private = tmp_path / "party" / "private"
+    assert (private / p2_party.CASE_DIGESTS).read_text().splitlines() == [p2_party.case_digest(c) for c in cases]
+    assert sorted(p.name for p in private.iterdir()) == [p2_party.CASE_DIGESTS]
     record = {"verdict": "accept"}
     assert B.verdict_line(doc["answer"], "reject", record).endswith("verifier_record_agrees=False FAIL")
     with pytest.raises(SystemExit, match="can't be under --out"):

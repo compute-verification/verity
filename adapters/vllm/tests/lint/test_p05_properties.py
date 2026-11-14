@@ -11,7 +11,7 @@ that recomputes) is ``tests/check/test_verdict.py``.  Once ``properties.check_pr
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 from . import _imports as I
 from . import _ratchet as R
@@ -25,7 +25,7 @@ def importer(src: str) -> bool:
     return I.layer_of(src) in ("check|properties", "pipeline") and not I.in_group(src, I.PROPERTY_MODULES)
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     hits = I.unique_edges(lambda e: importer(e.src) and I.in_group(e.dst, I.PROPERTY_MODULES)
                           and not I.in_group(e.dst, ALLOWED_ENTRY_POINTS))

@@ -66,7 +66,9 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   its rows aren't the scan's own. The honest round's ``scan/state`` and ``scan/prog<j>`` are then V3c's roots and
   domains, which the consistency check (`NetworkCheck.Period`'s rows form: `stateTied`, `wired`) holds to V3c's
   audit at any sample of it, and there is no block round: V3c's audit proves the anchored Programs' slot entries, and
-  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`).
+  ``answers.json`` carries no ``audits`` (the period reads V3c's ``period.json``, `scan_period.rows_case`). `stateTied`
+  reads an audit's state entry among its ``roots`` and its ``registered`` alone, so the check refuses V3c's audit,
+  whose `SCAN_STATE` is in its window's activations alone, at the state tie.
 * **The honest round, one registration**: one Program of three templates (`TEMPLATES`) in the generator form
   (`scan_root`, the form `NetworkCheck.Period`'s `scanOf` reads): the first unit (`IngressScanFirst`, bucket 0), G·T − 1
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
@@ -86,7 +88,10 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   last unit's o1, S_{G·T−1}, which no state leaf holds, is a member's own rows (`Frame`), committed and never opened.
   Leaf 0 is opened by
   no unit, and the entries boundary 0's Programs write on it are read by none: bucket 0 reads the empty state, in
-  which no slot is live, so none is due. Accepted: every o0 opens to 1. Its registration names each lane's
+  which no slot is live, so none is due. The registration's window states those reads, one run a port (``reads``,
+  `state_reads`: ``sin`` units 1 … G·T − 1 and ``o1`` units 0 … G·T − 2, each from leaf 1, as `NetworkCheck.Period`'s
+  `stateRead` holds them), and opens leaf 0 to the empty state, zero words under its salt (``empty``, `state_empty`,
+  its `stateEmpty`), public as that state is. Accepted: every o0 opens to 1. Its registration names each lane's
   ``prog<j>`` tied, which R8 lets through though `EVERY` units read each slot entry, and both verifiers' verdict
   publishes them (``rests_on_period_check``, the lanes' ``prog<j>``): the acceptance rests on a period check,
   `NetworkCheck.Period`'s `wired`, which ties each ``prog<j>``'s rows to the audit that registered them and refuses
@@ -99,7 +104,12 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   (each proof block's public o0, the last ingress proof block's o1, a block member's ``x``) is the member's own rows of
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
   input set), so its root is the member's frame root of the port, which the round's registration names before any
-  coin; `stage` refuses a member whose frame root isn't the tree's. A public o0 is opened as before, under the salt the
+  coin; `stage` refuses a member whose frame root isn't the tree's. A scan member's input set is its template's
+  (`set_of`), naming no round and no execution phase, so the frame domain of such a port is its template's and its unit
+  count's in every round. A public o0's rows are committed under the verifier's public salts (`ok_salts`,
+  `scan_ok.salt`), so the o0 frame root of a member whose every proof block is ok is a constant of its template and
+  count, which a period check computes from the schedule's T and holds the registration's ``<member>/o0`` to
+  (`scan_ok.constants`, the period check's `okChecks`); it is opened as before, under that salt, which the
   prover sends.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
@@ -174,10 +184,11 @@ from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
-from typing import NamedTuple, Sequence
+from typing import Mapping, NamedTuple, Sequence
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 import leak_scan as LS  # noqa: E402
 import warden_zk as WZ  # noqa: E402
@@ -188,7 +199,7 @@ from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity.circuits.refs import Coll, array_of, coll_concat  # noqa: E402
 from verity.circuits.types import Array, Tuple  # noqa: E402
-from verity.commitments import advice as ADV  # noqa: E402
+from verity.commitments import advice as ADV, domains  # noqa: E402
 from verity.commitments.frame_v3 import BitRowLeaf, FrameV3, Port  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 from verity.commitments.indexed import RangeIndexedDomain  # noqa: E402
@@ -197,17 +208,19 @@ from verity.commitments.rowleaf import (SCHEMA_HM96_SHA512_ROW_SEG, bit_row, row
                                            sha512_row_seg_digest)
 from verity.commitments.crypto import lms  # noqa: E402
 from verity.protocols.accounting.certifier.prover import egress as EG, ingress_scan as IS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden as W  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, scan_ok, warden as W  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsSigner  # noqa: E402
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, draw as DR, partition as PA, produced  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registered as REG, registration as RG  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.scan_answer import _found, window_answer  # noqa: E402
 
 _TRAFFIC = HERE.parents[1] / "verity/protocols/accounting/certifier/verifier/tests/scan_traffic.py"
 _spec = importlib.util.spec_from_file_location("scan_traffic", _TRAFFIC)
@@ -286,7 +299,7 @@ PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "b
 #: Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which a block member's o0 rows
 #: are committed and so its lane's ``prog<j>`` tree (`block_binding`), and a member's own rows of a port (`Frame`;
 #: `stage` refuses a member whose frame root of such a port isn't its tree's)
-FRAME_BINDING = "verity/flock-circuit/binding/v2"
+FRAME_BINDING = domains.FLOCK_CIRCUIT_BINDING
 
 
 def value(kind: str) -> str:
@@ -420,6 +433,13 @@ def block_set(heads: list, session: bytes, j: int) -> str:
     return f"scan-block-{_bound(f'prog{j}', heads, session).hex()}"
 
 
+#: A scan template's statements' input set, which their frame domains bind (`frame_binding`): the template's alone
+#: (`scan_ok.set_of`, the verifier's, which computes each member's ok bits' frame domain from it), naming no round and
+#: no execution phase, so a member's frame domain of a port is its template's, its unit count's and the port's, the
+#: same in every round and in every execution phase of a group. A block member's is its run's (`block_set`).
+set_of = scan_ok.set_of
+
+
 def frame_binding(set_name: str, n: int, port: str, schema: str = BitRowLeaf.hiding_schema) -> bytes:
     """The binding of a statement's frame domain of ``port`` over its ``n`` units (`verity_flock.circuit.statement`'s,
     at instances 0 … n of input set ``set_name``, its rows of leaf schema ``schema``): a tree under it has the leaves,
@@ -456,10 +476,21 @@ class Frame(ADV.Committed):
             object.__setattr__(self, "root", ADV._scheme(self.binding, n, self.n_bits).root(ADV.PORT, leaves))
 
 
-def frame(set_name: str, port: str, rows: list, n_bits: int, schema: str = BitRowLeaf.hiding_schema) -> Frame:
-    """A member's own rows of ``port``, each unit's (bits or bytes), as `Frame` commits them, under fresh salts."""
+def frame(set_name: str, port: str, rows: list, n_bits: int, schema: str = BitRowLeaf.hiding_schema,
+          salts: Sequence[bytes] | None = None) -> Frame:
+    """A member's own rows of ``port``, each unit's (bits or bytes), as `Frame` commits them, under fresh salts, or
+    under ``salts`` (a public word's public ones, `ok_salts`)."""
     return Frame(frame_binding(set_name, len(rows), port, schema), n_bits, tuple(_bytes(r) for r in rows),
-                 tuple(ADV.INST.fresh_salt() for _ in rows), schema)
+                 tuple(ADV.INST.fresh_salt() for _ in rows) if salts is None else tuple(salts), schema)
+
+
+def ok_salts(n: int) -> list[bytes]:
+    """The salts a member's ``n`` proof blocks' public o0 rows are committed under: the verifier's public ones
+    (`scan_ok.salt`), row i's by its index in the member. A proof block's public word is its ok bit, so a member
+    whose every proof block is ok has the o0 frame root anyone computes from its template and count, and a period
+    check holds the round's registration to it (`scan_ok.constants` at the schedule's T, `NetworkCheck.ScanOk`): a
+    proof block's ok bit is then no row the prover stated."""
+    return [scan_ok.salt(i) for i in range(n)]
 
 
 def _schema(reg: ADV.Committed) -> str:
@@ -526,6 +557,34 @@ def tree_entry(kind: str, reg: ADV.Committed, positions) -> dict:
             "paths": [b"".join(reg.open(p).path).hex() for p in positions]}
 
 
+def state_reads(ports: Sequence[Mapping[str, dict]]) -> dict:
+    """The scan's state reads as its registration's `window` states them (``reads``, `NetworkCheck.Period`'s
+    `stateRead`), from each member's ``--registered`` ports (`tree_port`: unit ``reads_from + i`` at leaf ``reads[i]``):
+    its ``sin`` and ``o1`` of the state's value, each one run ``{"leaf": l, "units": [lo, hi]}``, unit lo + i at leaf
+    l + i. SystemExit when a port's reads are no one run."""
+    at: dict[str, dict[int, int]] = {}
+    for ps in ports:
+        for p in ("sin", "o1"):
+            if p in ps and ps[p]["value"] == value("state"):
+                at.setdefault(p, {}).update({ps[p].get(REG.READS_FROM, 0) + i: r for i, r in enumerate(ps[p]["reads"])})
+    runs = {}
+    for p, got in sorted(at.items()):
+        lo, hi = min(got), max(got) + 1
+        if got != {u: got[lo] + u - lo for u in range(lo, hi)}:
+            raise SystemExit(f"the scan's {p} reads {got} are no one run, unit lo + i at leaf l + i, as its "
+                             "registration states them")
+        runs[p] = {"leaf": got[lo], "units": [lo, hi]}
+    return runs
+
+
+def state_empty(reg: ADV.Committed | Held) -> dict:
+    """Row 0's opening as the scan's registration's `window` gives it (``empty``, `NetworkCheck.Period`'s
+    `stateEmpty`): the empty state, its ``words`` zero u16 words, under leaf 0's salt through its path. The row is
+    public, and no unit reads leaf 0, so its salt opens no row a proof hides."""
+    o = reg.open(0)
+    return {"words": reg.n_bits // 16, "salt": o.salt.hex(), "path": b"".join(o.path).hex()}
+
+
 def tree_refusal(port: dict, reg: ADV.Committed, entry: dict, bcs: list[bytes | None],
                  refs: list[int] | None = None) -> str | None:
     """The host's read of a statement's entry on a scan registration, as Lean's registered reads make it (in
@@ -589,15 +648,6 @@ def synthetic(out: Path, setup: Setup, windows: list[int]) -> SimpleNamespace:
                            fail_buckets=[], failed_why=[])
 
 
-def _found(run: Path, name: str) -> Path:
-    """A network certifier run's file: in the run's directory (`warden_serve.py serve --out`), else its ``witness/``
-    (the gate's `warden-rehearse --scan`)."""
-    for d in (run, run / "witness"):
-        if (d / name).is_file():
-            return d / name
-    raise SystemExit(f"--warden-run {run}: no {name} there or in its witness/ (warden_serve.py serve writes it)")
-
-
 def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> SimpleNamespace:
     """A warden_serve run's execution phases `windows` as the verifier reads them, refused by name where they don't
     hold: the deployment's schedule (its digest, and the class serving it) and public key; each link's registration of
@@ -609,7 +659,8 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     ``failed`` the reasons its ``fails`` record has in the execution phases, ``fail_buckets`` the buckets they're in,
     and ``failed_why`` the run's ``check.json`` problems that name a connection failed closed). The tampered round's
     re-signed execution phase is signed by a key of the driver's own (``out``), under which the verifier reads it."""
-    import warden_serve as WS
+    from benchmarks.network_traces import warden_serve as WS
+    from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
@@ -620,44 +671,44 @@ def warden_run(run: Path, setup: Setup, windows: list[int], out: Path) -> Simple
     except ValueError as e:
         raise SystemExit(f"--warden-run {run}: {e} (warden_serve.py rehearse at scan_zk's schedule, PARAMS, or the "
                          "gate's warden-rehearse --scan)")
-    key, session = WS.cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {name: [WS.ar.unpack_record(b, params.cell_bytes) for b in WS.ar.read_blobs(_found(run, f"{name}.records"))]
-               for name in WS.CERTIFIED}
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {name: [RF.unpack_record(b, params.cell_bytes) for b in WS.bf.read_blobs(_found(run, f"{name}.records"))]
+               for name in RC.CERTIFIED}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
-    salts = WS.ar.read_blobs(_found(run, "cells.salts"))
+    salts = WS.bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     sides = {}
-    for side, name, direction in (("ingress", WS.INGRESS, Direction.INGRESS), ("egress", WS.EGRESS, Direction.EGRESS)):
+    for side, name, direction in (("ingress", RC.INGRESS, Direction.INGRESS), ("egress", RC.EGRESS, Direction.EGRESS)):
         sides[side] = []
         for w in windows:
             got = [(doc["registration"], blob) for doc, blob in zip(lines, salts) if "registration" in doc and
                    (doc["registration"]["link"], doc["registration"]["direction"], doc["registration"]["window"])
-                   == (WS.LINK, direction.value, w)]
+                   == (RC.LINK, direction.value, w)]
             record = next((r for r in records[name] if r.window == w), None)
             if not got or record is None:
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w} has no registration or no record (the "
                                  "signer refused it, or the run ended before it)")
             registration, blob = got[0]
             try:
-                head, dom = WR.check_registration(registration, key, session, params, WS.LINK, direction, w)
+                head, dom = WR.check_registration(registration, key, session, params, RC.LINK, direction, w)
             except ValueError as e:
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s registration doesn't verify under the "
                                  f"deployment's key and session: {e}")
             row_salts, wiring_salt = WR.read_witness(blob)
-            cells = WR.Cells.of(WS.LINK, direction, record, params, session, row_salts, wiring_salt)
+            cells = WR.Cells.of(RC.LINK, direction, record, params, session, row_salts, wiring_salt)
             if cells.head != head:
                 raise SystemExit(f"--warden-run {run}: {side} link-window {w}'s record under cells.salts isn't the rows "
                                  "whose root the warden signed")
             sides[side].append(SimpleNamespace(cells=cells, registration=registration, head=head, dom=dom))
     fails = [((r.window - windows[0]) * params.window + t, sum(f is not None for f in row))
-             for r in records[WS.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
+             for r in records[RC.FAILS] if r.window in windows for t, row in enumerate(r.grid)]
     fail_buckets = sorted(t for t, n in fails if n)
     check = next((d / "check.json" for d in (run, run / "witness", run / "out") if (d / "check.json").is_file()), None)
     named = [p.removeprefix("audit: ") for p in (json.loads(check.read_text()).get("problems") or [])
              if "failed closed" in p] if fail_buckets and check else []
     B, outputs = params.cell_bytes, {}
-    for rec in sorted(records[WS.EGRESS], key=lambda r: r.window):
+    for rec in sorted(records[RC.EGRESS], key=lambda r: r.window):
         for t, row in enumerate(WR.window_rows(rec, params)):
             for s in range(params.lanes * params.slots):
                 if row[s * B] == W.FAIL:
@@ -910,7 +961,9 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     that entry, is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or
     network certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's
     x) is the member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input
-    set ``set_name`` (a block member's its lane's `block_set`), which the round's registration names before any coin;
+    set ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its
+    lane's `block_set`), which the round's registration names before any coin; a public o0's rows are under the
+    public salts (`ok_salts`), every other own row's under fresh ones;
     ``framed`` names the ports `stage` holds to their frame roots (those, and a block member's o0)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
@@ -950,7 +1003,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         made = {"o1": [s for _o, s, _v in got], "o2": [v for _o, _s, v in got]}
     units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if r == "x" else _bits(reads[r][1], reads[r][2][k])
                    for r, _b in ins) for k, b in enumerate(bs)]
-    set_name = at.block_sets[mb.lane] if tp == "block" else f"unit-scan-{tp}-{name}-{mb.name}"
+    set_name = at.block_sets[mb.lane] if tp == "block" else set_of(tp)
     sig = (*ins, *(() if tp in ROWS_O0 else (("o0", 16),)), *outs)
     own = {**{r: [u[i] for u in units] for i, (r, _b) in enumerate(ins)}, **made,
            **({} if outputs is None else {"o0": [[o] for o in outputs]})}
@@ -960,7 +1013,9 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                 raise SystemExit(f"{name}/{mb.name}: a unit's {p} row is none the reference gives, and a port no tree "
                                  "or network certifier row holds is registered as the member's own rows before any "
                                  "coin")
-            reads[p] = ("frame", frame(set_name, p, own[p], n_bits, ROW_SCHEMAS.get((tp, p), BitRowLeaf.hiding_schema)),
+            public = p == scan_ok.PORT and tp not in ROWS_O0
+            reads[p] = ("frame", frame(set_name, p, own[p], n_bits, ROW_SCHEMAS.get((tp, p), BitRowLeaf.hiding_schema),
+                                       ok_salts(len(bs)) if public else None),
                         list(range(len(bs))))
     salts, entries, ports, bcs, refs = {}, {}, {}, {}, {}
     for p, side in warden.items():
@@ -1221,14 +1276,14 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
+    (out / "registered.json").write_text(WR.reads_text(registered_file(mr)))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
          "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
          "class": st.class_sha512, "set": set_name, "tables": {r: len(x) for r, x in tables.items()},
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
          "partition_file": pg.partition_file, "program_file": pg.program_file,
-         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "warden": mr.warden,
+         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "network_certifier": mr.warden,
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     fv = m["header"]["frame_v3"]
@@ -1291,15 +1346,15 @@ def challenger(a, at: SimpleNamespace, out: Path):
     import a5_coins as AC
 
     root = window_root(at)
-    manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+    manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                         peer=a.peer, key_record=a.challenger_key)
-    coins = SimpleNamespace(AC=AC, draws=draws, root=root, challenger=a.challenger, published=None)
+    coins = SimpleNamespace(AC=AC, turns=turns, root=root, challenger=a.challenger, published=None)
     try:
         yield coins
     finally:
-        draws.skip(0)
+        turns.skip(0)
         finisher.join()
-        coins.published = draws.evidence()
+        coins.published = turns.evidence()
         manager.shutdown()
 
 
@@ -1339,10 +1394,13 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     return spec, units, counts
 
 
-def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins) -> S.Stream:
+def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins, held: dict | None = None) -> S.Stream:
     """The honest round's `service.Stream` on ``coins``: the challenger's own copy of the round's Program is the
-    generator form the round registers (`scan_root`, ``Stream(program=)``), not its templates' mixed population."""
-    return S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, program=pg.program)
+    generator form the round registers (`scan_root`, ``Stream(program=)``), not its templates' mixed population.
+    ``held``: the challenger's key and the verifier's copy of main's history the stream is made with
+    (`a5_coins.held`), which it reads every outcome's coin evidence under."""
+    return S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, program=pg.program,
+                    **(held or {}))
 
 
 def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.Stream, draw: S.Draw,
@@ -1351,12 +1409,13 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
     """The honest sample's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
     its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
     its window `window_root`) held to the Python's, the audit failing ``coins`` where
-    `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, and the evidence for another window)
+    `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, each with the key and the copy of
+    main's history its stream holds, and the evidence for another window)
     as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
-    the Lean's run refuses at its select (``stream_on``: the round's stream on given coins, `stream_of`). -> (the audit
+    the Lean's run refuses at its select (``stream_on``: the round's stream on given coins and what it holds, `stream_of`). -> (the audit
     record, None where the stream refused or holds the outcome; the negatives; the coins' record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
-    published = coins.draws.evidence()
+    published = coins.turns.evidence()
     ev = AC.evidence(published, segment) if segment is not None else None
 
     def outcome(s: S.Stream, d: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
@@ -1364,10 +1423,10 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         return (late if late is not None else s.outcome(d, verdicts, statement, coins=evidence, **given)), \
             s.records[-1]["audit"]
 
-    family = stream.family(draw)
+    family, ours = stream.family(draw), AC.held(coins.turns)
 
-    def reason(evidence: dict | None, window: str = root) -> str | None:
-        return CC.coins_reason(evidence, window, family, after, read, AC.lms_verify)
+    def reason(evidence: dict | None, window: str = root, held: dict = ours) -> str | None:
+        return CC.coins_reason(held["key"], held["main"], evidence, window, family, after, read, AC.lms_verify)
 
     why = (published.get("error") or "the draw committed no segment") if ev is None else reason(ev)
     try:
@@ -1379,10 +1438,10 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
     neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, coins.draws.pre()), "coins-for-another-window": ev} if ev is not None else {}
-    for name, evidence in bad.items():
+    bad = {**AC.negatives(ev, coins.turns.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
+    for name, (evidence, held) in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s = stream_on(AC.Replay(read, family))
+        s = stream_on(AC.Replay(read, family), held)
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
             if d.draw != draw.draw:
@@ -1391,7 +1450,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
             accepted, side = got.accepted, AC.lean_side(audit)
         except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
             accepted, side = None, {"refused": AC._refusal(e)}
-        py = reason(evidence, window)
+        py = reason(evidence, window, held)
         step = ((side or {}).get("step"), (side or {}).get("codes"))
         neg[name] = {"refused": py is not None and accepted is False and step == AC.SELECT_COINS, "accepted": accepted,
                      "python": py, "lean": side}
@@ -1416,7 +1475,7 @@ def warden_roots(members) -> list[dict]:
     which this registration lists none of, and refuses the round."""
     out = {}
     for m in members:
-        for doc in m["warden"].values():
+        for doc in m["network_certifier"].values():
             p = f"rows/{doc['direction']}/{doc['window']}"
             out[p] = {"port": p, "root": doc["root"], "leaves": doc["rows"], "domain": doc["domain"]}
     return [out[p] for p in sorted(out)]
@@ -1477,6 +1536,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
            "link": "registered: each warden row port, input or output, at the warden's signed root of its "
                    "link-window, unit base + k row k of the member's rows; the scan's state, each lane's prog<j> and "
                    "view, inputs and outputs, at the prover's registered roots (scan/*)"}
+    reads = state_reads([json.loads(Path(m["registered_file"]).read_text())["ports"] for m in members])
+    win |= ({"reads": {"scan/state": reads}} if reads else {}) | (
+        {"empty": {"scan/state": state_empty(trees["state"])}} if "state" in trees else {})
     rec = R.record(pg.program, pg.query, law, a0.SCHEME, roots, win, leaf_layer=leaf_layer, work_table=table)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
     checks = {"registration": V.check(rec, pg.program, pg.query, law, a0.SCHEME, want, leaf_layer=leaf_layer,
@@ -1502,10 +1564,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         lean_draw = json.loads(line.split(" ", 1)[1])
     else:
         spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
-        rank = coins.AC.RankCoins(coins.draws, 0)
+        rank = coins.AC.RankCoins(coins.turns, 0)
         draw = refused = None
         try:
-            stream = stream_of(a, spec, units, pg, rank)
+            stream = stream_of(a, spec, units, pg, rank, coins.AC.held(coins.turns))
             rank.plan(coins.AC.need(rule, pg.program, pg.query, rec["population"]))
             reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
             rank.commit(bytes.fromhex(reg.digest))
@@ -1521,7 +1583,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                                       "segment": segment, "read": read.hex(), "need": rank.need},
                                                      sort_keys=True))
         if draw is None:
-            coins.draws.skip(0)
+            coins.turns.skip(0)
             log(f"{name}: the stream drew nothing on the challenger's coins: {refused}")
             for f in (out / "registration.json", out / "segment.json"):
                 os.link(f, vdir / f.name)
@@ -1566,8 +1628,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
                  "session_roots": session_roots}
-        result, neg, told = coins_outcome(a, coins, lambda c: stream_of(a, spec, units, pg, c), counts, stream, draw,
-                                          rec, want, leaf_layer, read, segment, sessions, verdicts, statement, given)
+        result, neg, told = coins_outcome(a, coins, lambda c, held: stream_of(a, spec, units, pg, c, held), counts,
+                                          stream, draw, rec, want, leaf_layer, read, segment, sessions, verdicts,
+                                          statement, given)
         (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
         log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
             f"{told['coins_reason']}, run {told['run']}, negatives refused "
@@ -1645,30 +1708,6 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
                              for x, v in (("prove_s", tm.get("prove_total_s")), ("session_s", t.get("session_s")),
                                           ("lean_verify_s", t.get("lean_verify_s")))}}
     return out
-
-
-def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
-    """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
-    (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
-    its registration's R8 let through when there are any (``rests``, the registration verdict's
-    ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
-    commitment = RG.digest(reg)
-    if record is None:
-        return {"commitment": commitment, "profile": None, "protocol": RG.PROTOCOL, "public": None, "reason": reason,
-                "verdict": "reject"}
-    if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
-        raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")
-    draw = record["draw"]
-    profile = AU.profile(reg, draw, delta).to_json()
-    profile["delta"] = str(delta)
-    wrong = AU.wrong_units(reg, draw, delta)
-    return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
-            "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
-                       **({"rests_on_period_check": list(rests)} if rests else {})},
-            "reason": None, "verdict": "accept"}
 
 
 def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tuple[dict, dict]:
@@ -1802,7 +1841,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     setup = SETUPS[a.setup]
-    h = host(out / "warden", a.warden_run, a.draw, setup, a.group, v3c=a.v3c)
+    h = host(out / "warden", a.network_certifier_run, a.draw, setup, a.group, v3c=a.v3c)
     at, T, G = h.at, h.at.T, h.at.G
     ch, cls, N = at.chain, setup.cls, 2 * G * T
     if a.draw is not None and not 3 <= a.draw <= N:
@@ -1926,7 +1965,7 @@ def main(argv=None) -> int:
                    help="the class and the network certifier's schedule (default w63's, PARAMS; w63k4: w63's at KO 4 "
                         "and KI 32, its certifier's at egress cells 5; test: the certifier tests', a CPU window)")
     p.add_argument("--group", type=int, default=1, help="G: link-windows 0 .. G - 1 in one registration (default 1)")
-    p.add_argument("--warden-run", type=Path,
+    p.add_argument("--warden-run", dest="network_certifier_run", type=Path,
                    help="a warden_serve run's directory (rehearse --ids at the class's schedule): its group's "
                         "execution phases, verified under its deployment's key, in place of the synthetic run")
     p.add_argument("--draw", type=int,

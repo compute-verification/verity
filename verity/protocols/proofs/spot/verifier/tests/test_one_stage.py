@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-import verity.circuits.ops.prims  # noqa: F401  (with verity.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names)
+import verity.circuits.ops.prims  # with verity.circuits.ops.scalar, the primitives partition_vectors.json's descriptor names
 import verity.circuits.ops.scalar  # noqa: F401
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind
@@ -257,7 +257,7 @@ def test_the_window_runs_its_days_declared_circuit():
     accepted log's view: another day's program is `R2-declared`, a day the log declares nothing for `R2-undeclared`, and
     a day declared twice, which the log's own check refuses, `R2-declared-twice`. A verifier passes the day and the
     declarations together, as the view writes them, or neither."""
-    from verity.hardware import registration as G
+    from verity.protocols.accounting.registration.verifier import registration as G
     prog, q, rec = _registration(6)
     bodies = [G.Declaration(0, rec["program"], (PAIR.id,)), G.Declaration(1, "0" * 128, (PAIR.id,))]
     declared = G.check(G.Auditor(), "remote", G.chain("remote", bodies)).view().to_json()["declarations"]

@@ -59,6 +59,7 @@ from verity_vllm.check.match import batch_decomp as BD
 from verity_vllm.check.match import declaration as GD
 from verity_vllm.check.match import global_match as gm
 from verity_vllm.check.match import global_match_fast as GMF
+from verity_vllm.check.match import input_layout
 from verity_vllm.check.match import sampler_geometry as SG
 from verity_vllm.observe.events import (
     DispatchEnter,
@@ -83,8 +84,8 @@ from verity_vllm.observe.fold.resolver import (
 )
 from verity_vllm.observe.log import dumps as log_dumps
 from verity_vllm.pipeline import cli
-from verity_vllm.pipeline.match import persist_program
-from verity_vllm.pipeline.match import persist_program as _persist
+from verity_vllm.pipeline.match_fold import persist_program
+from verity_vllm.pipeline.match_fold import persist_program as _persist
 from verity_vllm.records import workload as WL
 from verity_vllm.records.fields import RecordError, UnknownField
 from verity_vllm.records.global_match import GlobalMatch
@@ -2185,7 +2186,7 @@ def test_fast_producer_chronology_equals_the_records_loop(memory, tmp_path):
         B = C.load_oracle(oracle, "oracle")
         meta_of = {o["node"]: o for o in B.oracle_rows}
         engine_step_of = {i: int(meta_of[r["k"]]["step"]) for i, r in enumerate(B.inst) if meta_of.get(r["k"], {}).get("step") is not None}
-        weights_nodes = frozenset(BD.weights_input_nodes(B, len(reqs), 0))
+        weights_nodes = frozenset(input_layout.weights_input_nodes(B, len(reqs), 0))
         per_req = collections.defaultdict(list)
         for i, r in enumerate(B.inst):
             req = meta_of.get(r["k"], {}).get("request")

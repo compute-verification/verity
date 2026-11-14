@@ -15,8 +15,18 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 
 from verity.commitments.randomness import frame
-from verity.protocols.accounting.poub.verifier import audit, codec, coins, receipts, timing
-from verity.protocols.accounting.poub.verifier.audit import AuditRun, Params, SessionError
+from verity.protocols.accounting.poub.verifier import (
+    audit,
+    codec,
+    coins,
+    receipts,
+    timing,
+)
+from verity.protocols.accounting.poub.verifier.audit import (
+    AuditRun,
+    Params,
+    SessionError,
+)
 from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 20
@@ -376,10 +386,10 @@ def test_the_rebuild_term_is_the_record_s_codec_at_the_stated_ceiling() -> None:
         audit.Rebuild("p1024/k3/masked", 1e9)
 
 
-def synthetic(lengths: tuple[int, ...], drawn: int, delta: float) -> audit.Record:
-    """A record of windows of one pass each, `lengths[t]` receipts and `drawn` openings, a second apiece."""
+def synthetic(lengths: tuple[int, ...], sampled: int, delta: float) -> audit.Record:
+    """A record of windows of one pass each, `lengths[t]` receipts and `sampled` openings, a second apiece."""
     windows = tuple(audit.WindowRecord(t, (u,), t * 10**9, (t + 1) * 10**9, (t + 1) * 10**9, IntegrityProfile(
-        ("receipt",), (u,), {"receipt": Subset(drawn)}, delta, drawn={"receipt": drawn})) for t, u in enumerate(lengths))
+        ("receipt",), (u,), {"receipt": Subset(sampled)}, delta, drawn={"receipt": sampled})) for t, u in enumerate(lengths))
     return audit.Record(bytes(64), bytes(64), max(lengths), 4096, windows)
 
 
@@ -968,7 +978,7 @@ def test_a_session_that_binds_z_recomputes_each_tile(stores, kind) -> None:
 
 
 def test_openings_are_drawn_from_the_windows_live_coin(store) -> None:
-    def draws(label: bytes):
+    def sampled(label: bytes):
         s, _, _, clock = drive(store, params(), SCHEDULE, label=label)
         clock.now = s.deadline(2) + 1
         out = s.close(0)
@@ -976,7 +986,7 @@ def test_openings_are_drawn_from_the_windows_live_coin(store) -> None:
             s.coins.challenger.open(coins.OPENINGS, 0, s.windows[0].roots[-1])
         assert s.coins.afters(coins.OPENINGS) == (s.windows[0].roots[-1],)
         return out
-    assert draws(b"coins") == draws(b"coins") != draws(b"other coins")
+    assert sampled(b"coins") == sampled(b"coins") != sampled(b"other coins")
 
 
 def test_a_session_over_the_store_starts_after_the_one_before_it_ends(store) -> None:
