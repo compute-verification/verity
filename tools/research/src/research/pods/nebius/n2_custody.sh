@@ -145,7 +145,7 @@ fi
 info() {
   python3 - "$1" "$MAX_FILES" << 'EOF'
 import calendar, json, os, re, sys, time
-d, cap = sys.argv[1], int(sys.argv[2])
+d, max_files = sys.argv[1], int(sys.argv[2])
 try:
     m = re.search(r'"campaign": ?"([^"]*)"', open(f"{d}/job.json").read())
 except OSError:
@@ -190,9 +190,9 @@ if state != "running":
             except OSError:
                 continue
             size, mt = size + s.st_size, max(mt, s.st_mtime)
-            if n > cap:
+            if n > max_files:
                 break
-        if n > cap:
+        if n > max_files:
             break
 print(m.group(1) if m else "-", state, int(now - (mt or now)), n, size)
 EOF

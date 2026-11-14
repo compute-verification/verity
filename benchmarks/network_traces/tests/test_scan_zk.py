@@ -626,7 +626,7 @@ def test_a_warden_runs_rows_are_read_under_its_deployments_key(tmp_path):
     regs = {d["registration"]["direction"]: d["registration"] for d in map(json.loads, (
         tmp_path / "run" / "cells.jsonl").read_text().splitlines()) if d["registration"]["window"] == 0}
     assert {r["port"]: (r["root"], r["domain"], r["leaves"]) for r in sz.warden_roots(
-        [{"warden": m.warden} for m in honest])} == {
+        [{"network_certifier": m.warden} for m in honest])} == {
         f"rows/{d}/0": (regs[d]["root"], regs[d]["domain"], sz.PARAMS.window) for d in ("ingress", "egress")}
 
 
@@ -650,7 +650,7 @@ def test_each_registration_names_its_execution_phases_warden_rows_its_ports_read
     regs = _cells(run)
     for w in range(G):
         honest = h.rounds[f"honest-{w}"].members
-        roots = sz.warden_roots([{"warden": m.warden} for m in honest])
+        roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest])
         assert roots == [
             {"port": f"rows/{d}/{w}", "root": regs[d, w]["root"], "leaves": T, "domain": regs[d, w]["domain"]}
             for d in ("egress", "ingress")]
@@ -660,7 +660,7 @@ def test_each_registration_names_its_execution_phases_warden_rows_its_ports_read
             f"warden/{d}/{w}" for d in ("egress", "ingress")}
         assert sz.AU.session_registered(verdicts, {"roots": roots}) == {}
     w = h.whole.tampered.window
-    tampered = sz.warden_roots([{"warden": m.warden} for m in h.rounds[f"tampered-{w}"].members])
+    tampered = sz.warden_roots([{"network_certifier": m.warden} for m in h.rounds[f"tampered-{w}"].members])
     assert [r["port"] for r in tampered] == [f"rows/egress/{w}"]
     assert tampered[0]["root"] == h.whole.tampered.registration["root"] != regs["egress", w]["root"]
 
@@ -684,7 +684,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
         signed[f"rows/{d}/{w}"] = (head.root.hex(), dom.domain_id.hex())
     assert len(signed) == 2 * G
     honest = [m for w in range(G) for m in h.rounds[f"honest-{w}"].members]
-    roots = sz.warden_roots([{"warden": m.warden} for m in honest])
+    roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest])
     assert {r["port"]: (r["root"], r["domain"]) for r in roots} == signed
     read: dict[str, set] = {}
     for m in honest:
@@ -703,7 +703,7 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
                                                                                              "cells": mine})}})
     mb = next(mb for mb in sz.members_of(sz.TEMPLATES, h.T) if mb.template == "egress")
     m = sz.member(forged, f"honest-{w}", mb)
-    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"warden": m.warden}])[0]["root"]) == (
+    assert (sz.registered_file(m)["ports"]["o1"]["root"], sz.warden_roots([{"network_certifier": m.warden}])[0]["root"]) == (
         signed[f"rows/egress/{w}"][0],) * 2
     assert m.refused == "registered reads: table row 0 does not open the registered root at position 0"
 
@@ -868,7 +868,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     oks = [{"port": f"{m.name}/o0", "root": m.ports["o0"]["root"], "leaves": m.n, "domain": m.ports["o0"]["domain"]}
            for m in honest if m.template != "start"]
     assert PC.scan_ok.held(PC.scan_ok.constants(T), {"roots": oks})
-    roots = sz.warden_roots([{"warden": m.warden} for m in honest]) + [
+    roots = sz.warden_roots([{"network_certifier": m.warden} for m in honest]) + [
         *({"port": PC.prog_name(j), **o} for j, o in enumerate(progs)), {"port": "scan/state", **state}, *oks]
     law = sz.DR.parse_design(f"stratified:{N}")
 
