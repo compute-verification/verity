@@ -2747,7 +2747,7 @@
     {"file": "benchmarks/harness/tests/test_overhead.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/overhead_node.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/overhead_records.py", "count": 1},
-    {"file": "benchmarks/harness/verity_bench/vllm/commit_arm.py", "count": 4},
+    {"file": "benchmarks/harness/verity_bench/vllm/commit_arm.py", "count": 1},
     {"file": "benchmarks/harness/verity_bench/vllm/runner.py", "count": 4},
     {"file": "benchmarks/hash/dither/dbw.py", "count": 3},
     {"file": "benchmarks/hash/dither/dither_a.py", "count": 12},
