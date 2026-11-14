@@ -27,7 +27,7 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks/torch_gpu/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
 import layout as L
 from verity.protocols.accounting.poub.verifier import p2
 from verity.protocols.accounting.poub.verifier import receipts as R

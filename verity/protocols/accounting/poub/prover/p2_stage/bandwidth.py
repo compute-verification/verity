@@ -67,8 +67,8 @@ from typing import Any
 
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[3]
-STAGE = (ROOT / "benchmarks/torch_gpu/p2_stage/stage.py").parent
+ROOT = Path(__file__).resolve().parents[6]
+STAGE = (ROOT / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent
 sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 

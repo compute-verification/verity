@@ -24,7 +24,7 @@ HERE = Path(__file__).resolve().parents[1]
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
-sys.path.insert(0, str((ROOT / "benchmarks/pous/p2_v1/bandwidth.py").parent))
+sys.path.insert(0, str((ROOT / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
 import bandwidth as B  # noqa: E402
 from p2_v1 import bandwidth_toy as BT  # noqa: E402
 
@@ -318,6 +318,6 @@ def test_the_cli_runs_as_a_script(tmp_path) -> None:
                        capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0, p.stderr
     assert json.loads(p.stdout)["units"] == 8
-    p = subprocess.run([sys.executable, str(ROOT / "benchmarks/pous/p2_v1/bandwidth.py"), "--help"], check=False,
+    p = subprocess.run([sys.executable, str(ROOT / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py"), "--help"], check=False,
                        capture_output=True, text=True, cwd=ROOT)
     assert p.returncode == 0 and "session" in p.stdout, p.stderr

@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks/torch_gpu/p2_stage/stage.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/stage.py").parent))
 import layout as L
 
 _JOB: dict = {}

@@ -48,7 +48,7 @@ from typing import Any
 
 import numpy as np
 
-sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "benchmarks/pous/p2_v1/bandwidth.py").parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
 
 import bandwidth as B  # noqa: E402
 
