@@ -75,7 +75,7 @@ accepts a period that exchanged more than `K` bits but with probability `δ`**: 
 that the certifier's check `cert` accepts while the period's window programs exchanged `ext > K` bits with machines
 outside the registered devices is at most `δ`. The served form of the certifier's count, which
 `Pouw.Assumptions.CertifierSeesImports` states surely for the onsite guarantee; the certifier's guarantee
-(`NetTiming.Guarantees.PeriodLeakAccepted`) bounds the information an accepted period carries out, and the step from it
+(`NetTiming.Guarantees.MonitoringPeriodLeakAccepted`) bounds the information an accepted period carries out, and the step from it
 to this count is open. It is falsified by a strategy whose periods the certifier accepts, with
 probability more than `δ`, after its window programs exchanged more than `K` bits. -/
 def CertifiedExchange {Ω : Type} [Fintype Ω] (cert : Ω → Prop) (ext : Ω → ℝ) (K δ : ℝ) : Prop :=
