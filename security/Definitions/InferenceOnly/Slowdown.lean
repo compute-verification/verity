@@ -41,7 +41,7 @@ The training-efficiency bound of `benchmarks/nci/tiers.py`. A developer spends `
 unmonitored hardware, and must still compute the counted multiplications `M` of training (an updated weight times an
 activation or an activation gradient). Each stands for `2/κ` FLOP of an unconstrained run, `κ` being the share of
 training FLOP that are counted multiplications at 2 FLOP each, so the compute efficiency is `η = (2/κ) M / (C + U)`
-(`efficiency`). The dampener bounds it by `s + min(r, μ) + ν + χ` (`InferenceOnly.Guarantees.Dampener`), with:
+(`efficiency`). The dampener bounds it by `s + min(r, μ) + ν + χ` (`InferenceOnly.Guarantees.Slowdown`), with:
 
 * `s = U/(C + U)`, the unmonitored compute share (`unregisteredShare`);
 * `r = 1 − W_cert/C`, the monitored compute residual (`residualShare`);
@@ -54,7 +54,7 @@ training FLOP that are counted multiplications at 2 FLOP each, so the compute ef
 
 @[expose] public section
 
-namespace InferenceOnly.Dampener
+namespace InferenceOnly.Slowdown
 
 /-- **Compute efficiency** `η = (2/κ) M / (C + U)`: the FLOP of an unconstrained run that `M` counted multiplications
 stand for, `2/κ` each, over the FLOP the developer spends, `C` monitored and `U` unmonitored. -/
@@ -85,4 +85,4 @@ monitored servers when each window of `R/(αF)` ticks starts from at most `R` bi
 a tick, and holds at most `K Λ(K)/b_a` counted multiplications at `K = 2R`, in the quadratic regime of `Λ`. -/
 noncomputable def memoryCap (reuse κ R α d b_w b_a : ℝ) : ℝ := 2 * reuse * R * α / (κ * d * b_w * b_a)
 
-end InferenceOnly.Dampener
+end InferenceOnly.Slowdown

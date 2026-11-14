@@ -88,10 +88,10 @@ def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
 
 
 def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remote_at_full_capacity():
-    """Lean's `DampenerRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
+    """Lean's `SlowdownRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
     `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its padded size ratio is `DampenerRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
+    capacity, so its padded size ratio is `SlowdownRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
     that `ρ` at the reference's MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
@@ -110,14 +110,14 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     assert pad <= 1 / (s + (1 - s) * u) and pad == pytest.approx(1 / (s + (1 - s) * u), rel=1e-4)
 
 
-#: `InferenceOnly.Dampener.remoteDampener` as security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.DampenerRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean) that names it `ρ`
-REMOTE_SLOWDOWN = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
-REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
+#: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
+#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean) that names it `ρ`
+REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
+REMOTE_CONCLUSION = "remoteSlowdown mfu (unregisteredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
-    """Without reference efficiency the remote slowdown is `DampenerRemote`'s `ρ`, `remoteDampener MFU₀ s x ≤
+    """Without reference efficiency the remote slowdown is `SlowdownRemote`'s `ρ`, `remoteSlowdown MFU₀ s x ≤
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
     compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
     server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
@@ -403,7 +403,7 @@ def test_pouws_delta_splits_into_coins_and_cryptography():
     """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
     theorem's `δ = p/ε'` (2.7e-8 at `ε' = 10⁻⁴` with the cryptography's two terms assumed at `δ_s` each, so
     `p = 3 · 2⁻⁴⁰`), and sampled proofs add their escape bound's `δ`. The windows' knowledge errors `Σ_t ks_t`
-    (`DampenerRemotePeriod`) add `⌈period / window_s⌉ window_ks` to the cryptography, remote only."""
+    (`SlowdownRemoteMonitoringPeriod`) add `⌈period / window_s⌉ window_ks` to the cryptography, remote only."""
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)

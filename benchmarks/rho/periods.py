@@ -20,7 +20,7 @@ world-inference-2027) and each monitoring period (`PERIODS`, core's, through `rh
 * **what is scaled**: a server block's local minimum is a per-server-window bound (one server between two wipes,
   onsite; one server over the period, remote), its cuts' statements are per server block, and the bound sums them over
   every server and window; the unregistered leaves are one pool, `ε_unreg` of the fleet, and the uncertified routes are shares of
-  each server's capacity, neither a per-window bound; on a remote row both are `DampenerRemotePeriod`'s terms over the
+  each server's capacity, neither a per-window bound; on a remote row both are `SlowdownRemoteMonitoringPeriod`'s terms over the
   period, which a row cites with the premises it takes, each one's section of the lock's record and the terms it is on
   (`PERIOD_PREMISES`), the escape's tail and the windows' knowledge errors (`pooled`);
 * **what sets it** (`analysis.attribution`);
@@ -70,9 +70,9 @@ FIXED = ("datasheet", "measured", "declared", "ruled")
 #: output bits, the widest public size class (the limit, provisional) down to the smallest, the 16-bit limit
 LIMITS = dict.fromkeys(params.BLOCK_OUTPUT_BITS, "the size class's limit (provisional)")
 #: the period statement whose terms a remote row's unregistered pool and uncertified routes are, each a share of the
-#: fleet's capacity over the period, and the premises it takes in place of `DampenerRemote`'s per-window ones, each
+#: fleet's capacity over the period, and the premises it takes in place of `SlowdownRemote`'s per-window ones, each
 #: with the terms it is on; no statement sums a server block's bound over servers, so the scaled part cites none
-PERIOD_BOUND = "InferenceOnly.Guarantees.DampenerRemotePeriod"
+PERIOD_BOUND = "InferenceOnly.Guarantees.SlowdownRemoteMonitoringPeriod"
 #: the per-block statement the remote cuts cite (`Remote.CITES`), whose premises the period statement's others are
 PER_BLOCK_BOUND = Remote.CITES[0]
 PERIOD_PREMISES = {"InferenceOnly.Assumptions.PouwPerWindow": "`ε'` and `p/ε'`",
