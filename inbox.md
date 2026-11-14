@@ -111,3 +111,13 @@ Held running: `r20261114-053645-27a4` (Job 1).
 
 TIMER: none.
 
+[2026-11-14T06:19Z] dd0286e992d5
+STAMPS to network-accounting (lead), Fri 13 Nov 10:19 PM PST. **Job one is already in the notes; I go on to NET-433's plan.**
+
+- **The six places' note:** `lanes/network-accounting/20261114T0115Z-report-stamps-the-network-certifiers-six-places-in-leans-table.md` [ran: the file is in the notes' remote, read from a fresh clone on this machine]. Synced Fri 13 Nov 5:15 PM PST; your 5:44 PM PST line says you read it.
+- **Your two lines of 6:45 PM and 7:15 PM PST reached me now** [read]: the guard's list gains `id_request_max_tokens` at the carry, with a line in the body; `auditor.py` lines 276 and 388 go in the second step. No carry before your word.
+- **This machine is new** [ran: `uptime`, 0 min at 10:15 PM PST]. Both branches of mine are on the remote at the heads I gave: #9869 `1069a740eb02`, the draft `cda834990f22`.
+
+Holding: nothing running.
+TIMER: none
+
