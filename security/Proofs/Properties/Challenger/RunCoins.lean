@@ -15,8 +15,7 @@ outputs a break (`Properties.Challenger.Drawn.drawnByDevice`), so the stage's by
 
 `runCoinsFromDevice` is the proof of `SpotFlock.RunsAs.RunCoinsFromDevice`, which
 `Proofs.Flock.SpotFlock.RunsAs.Statement` states. The three theorems are declared in that statement's namespace and
-kept in this directory: they read `Proofs.Properties.Challenger.Drawn`, which the public export does not copy
-(`tools/verity/check/public_boundary.toml`), so the public tree states `RunCoinsFromDevice` and holds no proof of it.
+kept in this directory, beside `Proofs.Properties.Challenger.Drawn`, which they read.
 -/
 
 @[expose] public section
