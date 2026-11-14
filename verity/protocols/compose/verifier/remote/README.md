@@ -547,16 +547,18 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 
 ## The demo
 
-**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. Lifecycle is the only example that steps through the whole remote composite, and
-the vLLM demo runs both halves on one served run, PoUW's as a development run:
+**No run of record of the remote verifier yet:** `remote check` (to be `verity verify remote`) has none. The remote demo
+is `demos/remote.toml` (`demos/README.md`), which `verity run` doesn't accept yet: Pearl+ has no piece. The lifecycle
+workload is the only code that steps through the whole remote composite, and the vLLM served run runs both halves on one
+served run, PoUW's as a development run:
 
-- `verity demo lifecycle` (`tools/verity/cli/tests/lifecycle/README.md`): the remote composite stepped through one monitoring period
-  on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
-  period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for Flock, and
-  its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
-  check`. It runs; nothing about it is proved.
+- the lifecycle workload (`tools/verity/cli/tests/lifecycle/README.md`), beside `verity run`'s tests: the remote composite
+  stepped through one monitoring period on CPU in about 2 s: hardware registration, registration, declarations, live
+  samples, each declaration's verdict and the period's accounting, with every deviation it lists refused by name. Its
+  prover is a labelled stand-in for Flock, and its verdict is the composition's Python mirror over per-declaration
+  stand-ins for its subprotocols, not `remote check`. It runs; nothing about it is proved.
 
-- `verity demo vllm` (`adapters/vllm/tools/served_run/README.md`), the vLLM demo: Llama-3.2-1B INT8 served by vLLM on one H200, its
+- the vLLM served run (`adapters/vllm/tools/served_run/README.md`): Llama-3.2-1B INT8 served by vLLM on one H200, its
   values committed while serving, a verification phase's proof blocks sampled by live coins, proved by Flock `--zk` and
   checked by the Lean verifier, and PoUW's H1 on the served model. PoUW's verdict there is a development run under the
   challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a
