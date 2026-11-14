@@ -260,3 +260,7 @@ cat <<EOF
 READY $MACHINE $IP vm=$VM_ID project=$PROJECT_ID data=$DATA_ID sg=$SG_ID
 next: research run --on $MACHINE --project $PROJECT --source . --cwd source -- python3 tools/research/src/research/pods/nebius/check.py
 EOF
+# The register holds the machine's address now, and no file of the tree does: each list that names it is made from the register
+if [ "$register" = 1 ]; then
+  echo "next: research deploy roll /etc/vy/peers --by WHO   # a shared node, once the vy-cluster key pair is on it: a dry run of its own list, the key each node takes from it and its line in every other node's list; --apply does it, one node at a time"
+fi

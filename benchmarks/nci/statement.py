@@ -80,7 +80,7 @@ THRESHOLD_TIERS = ("T1", "T3", "T4", "T5")
 #: parameters the page's "no other parameter" sets aside: the parts of r̂ (the GPUs, the clock, host CPUs and the verdict
 #: lag J Delta / H), s and g
 TORNADO_SKIP = ("free", "host_share", "clock_share", "lag_s", "identities", "unregistered", "g")
-COSTS = {"today's sparse draws": T.DEFAULTS["overhead"], "512 draws per statement": 1.7e10}
+COSTS = {"today's sparse samples": T.DEFAULTS["overhead"], "512 samples per statement": 1.7e10}
 
 
 def same(p: dict, x: float) -> float:
@@ -451,7 +451,7 @@ def holes() -> dict:
            "slowdown_fit": [fit_slowdown(p | over | {"overhead": c["overhead"]}, "T5") for c in cases]}
           for name, over in RUNGS.items()]
     other = [
-        ("χ at today's sparse draws over χ at 512 draws", cases[0]["chi"] / cases[1]["chi"]),
+        ("χ at today's sparse samples over χ at 512 samples", cases[0]["chi"] / cases[1]["chi"]),
         ("thread_bits: the reads up to which one inference block is held to (d, e)-threading", p["thread_bits"]),
         ("S_1 = √(2 b_w b_a block_mults Γ): the reads at which one block's (1, 0) bound reaches all its work, bits",
          math.sqrt(2 * p["b_w"] * p["b_a"] * p["block_mults"] * p["Gamma"])),

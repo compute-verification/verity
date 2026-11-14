@@ -713,7 +713,7 @@ PREMISES: dict[str, dict[str, Any]] = {
                            "in the lock. Three of its parts are in no lock: RegMatches, that the registration matches the "
                            "design the bound reads, assumed and the sampled subprotocol's bridge's to give (`sampled-leg-bridge`); "
                            "the sampling_design identity, that OneStage.check's derived v.law is g.rule.samplingDesignOver n, which today meet "
-                           "only through R1's Draw.sameLaw, an equality of canonical texts (jeq); and the population "
+                           "only through R1's Draw.sameSamplingDesign, an equality of canonical texts (jeq); and the population "
                            "lemma, jeq a (toJson n) → nat? a = some n, so R2's population check gives the n the audit's "
                            "bound reads",
                      "discharged_by": ("Claims.Sampling.Count.countBound_miss_design",)},

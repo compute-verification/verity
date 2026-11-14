@@ -205,19 +205,19 @@ open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Disc
 /-- **A checked unit's proof layer is sound at `δ` through its Flock sessions**
 (`Accounting.Guarantees.TS.CheckedSessionSound`). -/
 theorem Accounting.SecurityProofs.TS.CheckedSessionSound : Accounting.Guarantees.TS.CheckedSessionSound := by
-  intro Ω _ S nπ sess out ok right δ hCR hLaw hk hS hok hδ hδ0
+  intro Ω _ S nπ sess out ok right δ hCR hSamplingDesign hk hS hok hδ hδ0
   have hAcc : Accounting.Assumptions.TS.AcceptedLive (checkedLayer sess out ok right) sess out :=
     fun _ _ _ h => h
   have hChk : Accounting.Assumptions.TS.ServedChecksHold (checkedLayer sess out ok right) sess out rowsReg :=
     fun x w i _ hD => ⟨hok x w i, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
   have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedLayer sess out ok right) sess out rowsReg 0 := by
     intro w i
-    refine (hLaw w i fun s o => s.ServedEv o).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
+    refine (hSamplingDesign w i fun s o => s.ServedEv o).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedEv (sess x w i) (hk x w i) (hS x w i))).trans
       ENNReal.toReal_zero
   refine ⟨hAcc, hChk, hLink, ?_⟩
   simpa only [zero_add] using
-    Accounting.SecurityProofs.TS.SessionSoundAt (checkedLayer sess out ok right) sess out rowsReg 0 δ hCR hAcc hLaw
+    Accounting.SecurityProofs.TS.SessionSoundAt (checkedLayer sess out ok right) sess out rowsReg 0 δ hCR hAcc hSamplingDesign
       hChk hLink hδ hδ0
 
 namespace Accounting.TS.Checked
@@ -243,7 +243,7 @@ the `ok` port (`PortsOk`) and registered served roots asked only of a session `P
 and the committed rows where it fails, so nothing is asked there (`prob_servedOn`). -/
 theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String) (P : RowsSession → Prop) (δ : ℝ)
-    (hCR : ∀ x w i, (sess x w i).CR) (hLaw : Accounting.Assumptions.TS.ExecutionPhaseDesign sess out)
+    (hCR : ∀ x w i, (sess x w i).CR) (hSamplingDesign : Accounting.Assumptions.TS.ExecutionPhaseDesign sess out)
     (hP : ∀ s, P s → PortsOk ok s ∧ s.kd = s.n ∧ ∀ u, s.ServedRegistered u)
     (hδ : ∀ x w i, ((sess x w i).n : ℝ≥0∞) * (sess x w i).bound ≤ ENNReal.ofReal δ) (hδ0 : 0 ≤ δ) :
     (checkedOnLayer sess out ok P).SoundAt δ := by
@@ -258,12 +258,12 @@ theorem checkedOn_soundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} (sess : Paths �
     exact ⟨(hP _ hp).1, (sess x w i).Xv, rfl, fun u hu g hg => ((hD u hu).2 g hg).2.symm⟩
   have hLink : Accounting.Assumptions.TS.ServedRootsLinked (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 := by
     intro w i
-    refine (hLaw w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
+    refine (hSamplingDesign w i fun s o => LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.IncorrectAt u ∧ s.RowsAt o u) ∧
       rowsOn P s s.Xv ≠ openedReg s).trans (avg_le _ le_rfl fun x => le_of_eq ?_)
     exact (congrArg ENNReal.toReal (RowsSession.prob_servedOn (sess x w i) P
       (fun hp => ⟨(hP _ hp).2.1, (hP _ hp).2.2⟩))).trans ENNReal.toReal_zero
   simpa only [zero_add] using
-    Accounting.SecurityProofs.TS.SessionSoundAt (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 δ hCR hAcc hLaw
+    Accounting.SecurityProofs.TS.SessionSoundAt (checkedOnLayer sess out ok P) sess out (rowsOn P) 0 δ hCR hAcc hSamplingDesign
       hChk hLink hδ hδ0
 
 end Accounting.TS.Checked

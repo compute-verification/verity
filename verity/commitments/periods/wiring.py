@@ -132,11 +132,11 @@ def check(members: Sequence[Any], publics: Mapping[str, bytes]) -> dict[str, str
 def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any) -> dict[str, str]:
     """`check` on the sampled proof blocks alone (``units``, global unit indices): each sampled proof block's wired rows' ``b || c`` are its
     writers' output rows', work proportional to the sampled proof blocks.  ``{member: why}``; empty when every sampled wire holds."""
-    drawn = np.unique(np.asarray(list(units), dtype=np.int64))
+    sampled = np.unique(np.asarray(list(units), dtype=np.int64))
     bad: dict[str, str] = {}
     at = bases(members)
     for m in members:
-        local = drawn[(drawn >= m.base) & (drawn < m.base + m.n)] - m.base
+        local = sampled[(sampled >= m.base) & (sampled < m.base + m.n)] - m.base
         if not m.wired or not len(local):
             continue
         for p, o, ws in m.wired:
@@ -147,7 +147,7 @@ def check_drawn(members: Sequence[Any], publics: Mapping[str, bytes], units: Any
             for wm, sel, theirs in writers(members, np.asarray(ws, dtype=np.int64)[local], at):
                 got = strings(publics, wm, o)
                 if got is None or not np.array_equal(mine[local][sel], got[theirs]):
-                    bad[m.key] = f"a drawn unit's {p} strings are not the {o} strings of the {wm.key} units that wrote them"
+                    bad[m.key] = f"a sampled proof block's {p} strings are not the {o} strings of the {wm.key} units that wrote them"
                     break
             if m.key in bad:
                 break
