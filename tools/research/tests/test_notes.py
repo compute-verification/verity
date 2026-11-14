@@ -441,7 +441,7 @@ def test_finish_checks_custody_pod_worktree_and_handoffs_never_named(tmp_path, r
     assert notes.finish(root, "fin", repo, keep_pod="x", custody=lambda arts: (True, "ok"))[1] == 0
 
 
-def test_snapshot_commits_the_notes_repo_except_files_over_the_cap(tmp_path):
+def test_snapshot_commits_the_notes_repo_except_files_over_the_limit(tmp_path):
     root = tmp_path / "notes"
     _touch(root / "lanes" / "a" / "20260923T1700Z-report-a.md", 5, "# a\n")
     _touch(root / "lanes" / "a" / "tools" / "odd [name]*.md", 5, "glob characters are literal\n")
@@ -948,7 +948,7 @@ def test_reap_custody_wants_the_cited_arts_preserved_and_every_run_on_the_pod_fe
     assert notes.reap_custody(root, "empty", "p9", arts=arts, runs=runs_ok) == (True, "no art: cited; 0 run(s) on it fetched or registered")
 
 
-def test_art_custody_is_the_preserved_check_and_caps_what_it_would_read_back(tmp_path, monkeypatch):
+def test_art_custody_is_the_preserved_check_and_limits_what_it_would_read_back(tmp_path, monkeypatch):
     from research.store.local import LocalStore
 
     (tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "vault"}"\n')
