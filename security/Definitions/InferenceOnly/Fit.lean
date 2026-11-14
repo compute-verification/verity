@@ -3,7 +3,7 @@ module
 public import Definitions.InferenceOnly.Threads
 
 /-!
-# NCI over windows: the fit bound's vocabulary
+# The inference-only policy over windows: the fit bound's vocabulary
 
 The fit bound divides the reference circuit `c` into windows, a partition of its computed gates (`Verity.Partition`): in
 the accounting model, one server's time from a wipe through whole wipe periods. When no window can hold a model that
