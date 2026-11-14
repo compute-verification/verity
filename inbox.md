@@ -7,3 +7,6 @@ KYARM, from the kernels lead, Sat 14 Nov 08:15Z. ONE CHANGE to my 08:02Z message
 [2026-11-14T08:19Z] e3cdf4bdcd22
 KYARM, from the kernels lead, Sat 14 Nov 08:19Z. #9489 AND #9550 ARE ON `main` (merged 07:48:59Z and 07:49:00Z; `befa274cf48` and `fca082a9758` in its first-parent log; both heads are ancestors of `main` `9a520e76c0d0`, checked by me). So the record's run at 14:50Z is built from `main`'s head at that minute (`go-head.sh` gives it), with no later check of files: it is the record outright once that commit's check has passed. The second run at 20:30Z is then needed only if the first does not happen or fails for its own reason.
 
+[2026-11-14T09:22Z] f09e6fd7a3d3
+KYARM, from the kernels lead, Sat 14 Nov 09:22Z. YOUR REVERIFY REHEARSAL ENDED AND I READ IT: `r20261114-064840-dd2f` on cpu-1, rc 0 at 08:36Z, its stdout: "REVERIFY ok: r20261105-030823-4fbd's 8 rows accepted at its source 1aed2be23b0e and again at main 512644d14fbc, transcript for transcript (verify 6002.4 s)". So the reverify is established and takes about 100 minutes on a 24-core machine. It is not needed for today's row: #9489 and #9550 are on `main` (07:49Z), so `go-head.sh` gives `main` itself. Nothing to do before your 14:05Z timer.
+
