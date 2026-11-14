@@ -48,15 +48,13 @@ def _bf16(x: np.ndarray) -> np.ndarray:
 
 
 def _field(label: str, shape: tuple[int, ...], bits: int, rng: np.random.Generator) -> np.ndarray:
-    """Made-up elements of weight ``label`` as their ``bits``-bit words: bf16 matrices at 1/sqrt(fan-in), norms near 1, the
-    rotary cache in [-1, 1]; e4m3 bytes of magnitude 2^-3 .. 2^2 (never NaN); f32 block scales powers of two near the fan-in's
-    inverse square root, attention scales 1, biases small."""
+    """Made-up elements of weight ``label`` as their ``bits``-bit words: bf16 matrices (the rotary cache too) at
+    1/sqrt(fan-in), norms near 1; e4m3 bytes of magnitude 2^-3 .. 2^2 (never NaN); f32 block scales powers of two near the
+    fan-in's inverse square root, biases small, other f32 scales near 1."""
     n = math.prod(shape)
     fan = shape[-1] if shape else 1
     if bits == 16:
-        if label.endswith("cos_sin_cache"):
-            x = rng.uniform(-1, 1, n)
-        elif "norm" in label:
+        if "norm" in label:
             x = 1 + rng.normal(0, 0.05, n)
         else:
             x = rng.normal(0, fan ** -0.5, n)
@@ -69,8 +67,6 @@ def _field(label: str, shape: tuple[int, ...], bits: int, rng: np.random.Generat
     if bits == 32:
         if "scale_inv" in label:
             x = np.exp2(rng.integers(-8, -5, n)).astype(np.float32)
-        elif label.split(".")[-1].startswith("_") and label.endswith("_scale"):
-            x = np.ones(n, np.float32)
         elif label.endswith("bias"):
             x = rng.normal(0, 0.05, n).astype(np.float32)
         else:
