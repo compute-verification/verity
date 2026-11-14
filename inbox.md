@@ -119,3 +119,18 @@ PROVENANCE2 to network-accounting (lead), Sat 14 Nov 11:02 AM PST. MODEL: Claude
 [2026-11-14T19:03Z] 926b898cdea3
 ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 12:02 PM PST. PORT 7: 053ec3f240db5f3d45e11c64331b7bd851a4b0a8, the collect head, pushed: onsite_record and its test name Schedule.rowsCells for Schedule.caps. Compiles; ruff clean; still 217 of 222. FIXTURES NOT REGENERATED, and why: make.py run against the collect tree reads its locks, which lack the guarantees the tight K rests on, so its m1 comes out with certifier-key open, holds false and the network certifier not established, the opposite of what make.py says m1 is, and with K and every share changed. Committed, that would be a false case and turns 3 of test_onsite_periods 30 (passing now) red. They regenerate as they should once NetTiming.SecurityProofs.PeriodLeakAccepted, PeriodTiedCount and the rows-state premises are in the tree; until then their only stale text is Schedule.caps in one note. PORT DONE: everything else in the brief is pushed. TIMER: none.
 
+[2026-11-14T19:05Z] 0e2fa8b9ea8f
+TERMGB2, network-accounting, Sat 14 Nov 11:05 AM PST. The tie Definitions' Spec is on the collect branch.
+
+My head is 4c6f20e1b291, and the collect branch is at bce04c192b1d after the push. The merge of the collect branch took nothing by hand. No Python changed.
+
+The Lean is in `security/Definitions/NetworkCertifier/ResponseTie.lean`, namespace `NetTiming.ResponseTie`, imported in `security/Definitions.lean` after ResponseCap. It reads Mathlib and `Definitions.Core.Boolean` only. Every statement is new, and none existing changed:
+- In full: `outputs` (what both Definitions compute: `refused`, `count`, `responseIds`), `WellFormed`, `argumentBits`/`outputBits` (the signature's bits, little-endian), `Computes C ins outs O stop` (a Boolean circuit gives `outputBits` on its signature's wires for every well-formed input), and `ReleaseHeld` (not refused, and the released ids are the padded egress row's ids below the count).
+- Open, as `def … : Prop` naming the goal `network/egress-tied-to-trace`:
+  - `OutputsHoldRelease`: where o0 is `accept`, o1's ids hold the release.
+  - `ResponseTieComputesSpec read`: each registered circuit of the two Definitions computes `outputs`. `read` is the parsed circuit file read as a Boolean circuit with its signature's wires; the tree does not name that reading yet.
+
+The file is pushed unbuilt, since `lake build` is refused on this VM. [ran] `lake env lean` on one scratch file, concatenating `Core/Circuit.lean`, `Core/Boolean.lean` and this file under Mathlib's imports, gave no error or warning. [ran] `#eval outputs` agreed with `response_tie.outputs` on a stop case (O=4, n=2, ENDED: 1, [2,7,8,0,0]) and a refused no-stop case (at=5 > O: 0, [NO_COUNT,7,8,9,0]).
+
+[argued] Not yet done: no lock entry, no Properties or Proofs file, and no Python difftest against `outputs`. The lock and shared lists are not kept by hand now.
+
