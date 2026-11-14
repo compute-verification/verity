@@ -1,12 +1,12 @@
 """A sample's place in its window's session, and the family of that session its challenges are read from.
 
 A window's challenger session reserves one family of challenges a sample, and a family's challenges follow one
-registration (`coins.FAMILY_ROOT`). Which family a sample reads is no prover's file's to say: it is the sample's place,
-a number its registration record's window fixes (`of`), the family is `FAMILY`, a slash and the place in decimal
+docket (`coins.FAMILY_ROOT`). Which family a sample reads is no prover's file's to say: it is the sample's place,
+a number its docket's window fixes (`of`), the family is `FAMILY`, a slash and the place in decimal
 (`family`), and the session is the one opened on the window's run (`run`). Whoever reserves a session's families
 reserves by place, and whoever reads a sample again names its family by place and refuses another. This is the one
 Python definition of a place: every caller uses it, and a stream of any sampling design holds its challenge source
-to it where it samples a registration, a two-stage stream at its first stage (`service.Stream.select`).
+to it where it samples a docket, a two-stage stream at its first stage (`service.Stream.select`).
 
     place = ((prompt · 2^32 + outputs) · 2 + stopped) · 2 + blocks
 

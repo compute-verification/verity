@@ -22,7 +22,7 @@ branch across it):
 3. in a `lean-audit.json`, renames module names and prose but not the records the Lean check's `--update` writes (`guarantees`,
    `reads`, `dependencies`), so that `--update --moved` compares the build with them under their old names;
 4. rewrites a `TRUSTED.sha256` line whose file the move changed, when it held that file's digest before, and likewise a
-   Lake manifest's digest in a JSON pin of `tools/verity/check/pins.py`: a move changes a manifest only in where its path
+   Lake manifest's digest in a JSON pin of the check's `pins.py`: a move changes a manifest only in where its path
    packages sit, which no pinned output reads (`layout.repin_manifests`, as `layout.py` repins one; a pin of any other
    file the move changes is left for its command);
 5. appends its renamed paths to research's `moves.json` once, as `layout.py` does, each moved path up to the end of each
@@ -33,7 +33,7 @@ It refuses a dirty worktree, and a second run changes nothing. The first step ru
 default the cores it may use, at most 32), since `restack.py` runs it once for each branch it carries; a file's new text
 reads only that file and the map, so the result is one process's.
 
-A map with `scope = "prose"` renames only prose, the part of a move `tools/verity/check/move_check.py` certifies without a
+A map with `scope = "prose"` renames only prose, the part of a move the check's `move_check.py` certifies without a
 build: a word that stands as a word in a comment, a docstring or Markdown's text (`regions`, `prose_word`), never one in
 code, a string literal, a data file, backticks, a name, a path or a constant's name, nor in a file a JSON pin records (its
 command regenerates the pin). Such a move moves no path, renames no declaration (`--moves` prints `{}`) and leaves every
@@ -736,9 +736,9 @@ def repin(root: Path, words: Words, pins: str, texts: dict[str, str], dest: dict
 
 
 def json_pins(root: Path) -> list[tuple[str, str, str]]:
-    """The pins `tools/verity/check/pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
+    """The pins the check's `pins.py` lists that record {path: digest} under a JSON key, as (pin, key, the directory
     its paths are below); none in a tree without it."""
-    return [(p, key, under) for p, key, under in L.pins(root / L.PINS_PY) if key is not None]
+    return [(p, key, under) for p, key, under in L.pins(root / L.pins_py(lambda p: (root / p).is_file())) if key is not None]
 
 
 def pinned(root: Path) -> set[str]:
