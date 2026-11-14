@@ -131,19 +131,24 @@ theorem costs : CostsRead base dev := fun θ' F c σ t =>
         (Verity.Game.Tape.out _ σ t).sent.blobs.size)
     (Finset.mem_univ t)
 
+section
+
+variable (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts)
+
 open Classical in
 /-- The deployment runs `live` at `θ₀`, where the registered files' SHA-512s differ. -/
 noncomputable def session (θ' : ByteArray) : Option Live :=
-  if θ' = θ₀ ∧ Distinct then some live else none
+  if θ' = θ₀ ∧ Distinct then some (live hC hP hS hPr) else none
 
-theorem session_some {θ' : ByteArray} {A : Live} (h : session θ' = some A) : θ' = θ₀ ∧ Distinct ∧ A = live := by
+theorem session_some {θ' : ByteArray} {A : Live} (h : session hC hP hS hPr θ' = some A) :
+    θ' = θ₀ ∧ Distinct ∧ A = live hC hP hS hPr := by
   unfold session at h
   split at h
   · exact ⟨‹_ ∧ _›.1, ‹_ ∧ _›.2, (Option.some.inj h).symm⟩
   · cases h
 
 /-- The honest deployed instance with a session. -/
-noncomputable def inst : Instance Verity.Idle.device Unit where
+noncomputable def inst (hJ : JsonCanon.JsonFacts) : Instance Verity.Idle.device Unit where
   base := base
   deployment := Instance.Honest.deployment
   signer _ := rfl
@@ -158,20 +163,22 @@ noncomputable def inst : Instance Verity.Idle.device Unit where
     split at hm
     · exact (Prod.mk.inj (List.mem_singleton.1 hm)).2
     · simp at hm
-  session := session
+  session := session hC hP hS hPr
   circuitFile := circuitFileAt
   publicFile := publicFileAt
   circuitHash θ' A h := by
-    obtain ⟨rfl, -, -⟩ := session_some h
+    obtain ⟨rfl, -, -⟩ := session_some hC hP hS hPr h
     show programDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then circuitFile else θ₀).data.toList)
     rw [ite_eq_left rfl]
-    exact (Params.digests JsonCanon.jsonFacts).1
+    exact (Params.digests hJ).1
   publicHash θ' A h := by
-    obtain ⟨rfl, -, -⟩ := session_some h
+    obtain ⟨rfl, -, -⟩ := session_some hC hP hS hPr h
     show publicDigestOf θ₀ = some (Verity.sha512 (if θ₀ = θ₀ then publicFile else θ₀).data.toList)
     rw [ite_eq_left rfl]
-    exact (Params.digests JsonCanon.jsonFacts).2
+    exact (Params.digests hJ).2
   registered _ := Array.append_empty.symm
+
+end
 
 theorem namedFile_first (a b : ByteArray) :
     Verity.namedFile (some (Verity.sha512 a.data.toList)) #[a, b] = a := by
@@ -192,63 +199,68 @@ private theorem registered_at : base.registered θ₀ = #[circuitFile, publicFil
   show #[circuitFileAt θ₀, publicFileAt θ₀] = _
   simp [circuitFileAt, publicFileAt]
 
-theorem circuit_at : base.circuitFile θ₀ (base.registered θ₀) = circuitFile := by
+theorem circuit_at (hJ : JsonCanon.JsonFacts) : base.circuitFile θ₀ (base.registered θ₀) = circuitFile := by
   have hd : base.programDigest θ₀ = some (Verity.sha512 circuitFile.data.toList) :=
-    (inst.programDigest θ₀).trans (Params.digests JsonCanon.jsonFacts).1
+    (show base.programDigest θ₀ = programDigestOf θ₀ from rfl).trans (Params.digests hJ).1
   unfold Vocab.circuitFile
   rw [hd, registered_at]
   exact namedFile_first _ _
 
-theorem public_at (h : Distinct) : base.publicFile θ₀ (base.registered θ₀) = publicFile := by
+theorem public_at (hJ : JsonCanon.JsonFacts) (h : Distinct) :
+    base.publicFile θ₀ (base.registered θ₀) = publicFile := by
   have hd : base.publicDigest θ₀ = some (Verity.sha512 publicFile.data.toList) :=
-    (inst.publicDigest θ₀).trans (Params.digests JsonCanon.jsonFacts).2
+    (show base.publicDigest θ₀ = publicDigestOf θ₀ from rfl).trans (Params.digests hJ).2
   unfold Vocab.publicFile
   rw [hd, registered_at]
   exact namedFile_second h
 
 /-- `live` is the session v2 sets up on `θ₀` and the registered files, where their SHA-512s differ. -/
-theorem sets_up (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) live := by
-  obtain ⟨p, hp, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩ := Params.params_spec JsonCanon.jsonFacts
-  have hI := live_inputs
-  have hcirc : live.I.circuitFile = base.circuitFile θ₀ (base.registered θ₀) := by
-    rw [hI, circuit_at]; rfl
-  have hpub : live.I.publicFile = base.publicFile θ₀ (base.registered θ₀) := by
-    rw [hI, public_at hd]; rfl
+theorem sets_up (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts)
+    (hJ : JsonCanon.JsonFacts) (hd : Distinct) : SetsUp base θ₀ (base.registered θ₀) (live hC hP hS hPr) := by
+  obtain ⟨p, hp, hpart, hprog, hvp, hvq, hvl, hvt, hch⟩ := Params.params_spec hJ
+  have hI := live_inputs hC hP hS hPr
+  have hcirc : (live hC hP hS hPr).I.circuitFile = base.circuitFile θ₀ (base.registered θ₀) := by
+    rw [hI, circuit_at hJ]; rfl
+  have hpub : (live hC hP hS hPr).I.publicFile = base.publicFile θ₀ (base.registered θ₀) := by
+    rw [hI, public_at hJ hd]; rfl
   refine
     { params := ⟨p, hp, by rw [hI, hpart]; rfl, by rw [hI, hprog]; rfl, ?_, ?_, ?_, key₀, label₀,
-          _root_.Spot.Challenger.MAX_COINS, hch, by show (label₀, _) ∈ families θ₀; simp [families], by rw [live_lb]⟩
+          _root_.Spot.Challenger.MAX_COINS, hch, by show (label₀, _) ∈ families θ₀; simp [families], by rw [live_lb hC hP hS hPr]⟩
       tags := by rw [hI]; exact tags_find
       count := by rw [hI]; rfl
       work := by rw [hI]; rfl
       stratified := by rw [hI]; rfl
       closure := by rw [hI]; rfl
-      own := live_own
+      own := live_own hC hP hS hPr
       circuit := hcirc
       publicFile := hpub
       read := ?_
       share := ?_ }
-  · rw [Live.design, live_n, live_desc, live_query, live_law, live_table]
-    exact Program.lawAt_of _ hvp hvq hvl hvt
-  · rw [live_desc, hvp]
-    exact Program.program_parse
-  · rw [live_query, hvq]
-  · show readOf PinnedTables.empty θ₀ (base.registered θ₀) = live.fileRead
+  · rw [Live.design, live_n hC hP hS hPr, live_desc hC hP hS hPr, live_query hC hP hS hPr, live_law hC hP hS hPr,
+      live_table hC hP hS hPr]
+    exact hPr.lawAt_of _ hvp hvq hvl hvt
+  · rw [live_desc hC hP hS hPr, hvp]
+    exact hPr.program_parse
+  · rw [live_query hC hP hS hPr, hvq]
+  · show readOf PinnedTables.empty θ₀ (base.registered θ₀) = (live hC hP hS hPr).fileRead
     refine readOf_eq base PinnedTables.empty (fun _ => rfl) (fun _ => rfl) ?_ ?_ hcirc hpub ?_
     · rw [hI]; exact tags_find
     · rw [hI]; rfl
     · rw [hI]
       exact (pinnedTables_empty _).symm
-  · rw [live_epsilon]; rfl
+  · rw [live_epsilon hC hP hS hPr]; rfl
 
-theorem sessions_ready : inst.SessionsReady := by
+theorem sessions_ready (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts)
+    (hJ : JsonCanon.JsonFacts) : (inst hC hP hS hPr hJ).SessionsReady := by
   intro θ' F A hs _
-  obtain ⟨-, -, rfl⟩ := session_some hs
-  exact live_ready
+  obtain ⟨-, -, rfl⟩ := session_some hC hP hS hPr hs
+  exact live_ready hC hP hS hPr
 
-theorem session_registered : inst.SessionRegistered .remote := by
+theorem session_registered (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts)
+    (hJ : JsonCanon.JsonFacts) : (inst hC hP hS hPr hJ).SessionRegistered .remote := by
   intro θ' A hs _ _
-  obtain ⟨rfl, hd, rfl⟩ := session_some hs
-  exact sets_up hd
+  obtain ⟨rfl, hd, rfl⟩ := session_some hC hP hS hPr hs
+  exact sets_up hC hP hS hPr hJ hd
 
 theorem error_top (a : Subprotocol) (θ' : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (base.game θ' F c)) : base.error a θ' F c σ = ⊤ := by

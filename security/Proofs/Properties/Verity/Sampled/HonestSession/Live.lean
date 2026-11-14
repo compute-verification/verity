@@ -27,35 +27,38 @@ open FlockSoundness.Discharge
 /-- The descriptor the circuit file parses to. -/
 def D : Flock.Desc := .single cH
 
-theorem desc_ok : Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables = .ok D := by
+theorem desc_ok (hC : CircuitFileFacts) :
+    Flock.Desc.parse (ZkExec.zkTags inputs) inputs.circuitFile inputs.tables = .ok D := by
   show Flock.Desc.parse tagsZ circuitFile [] = .ok (.single cH)
   unfold Flock.Desc.parse
-  rw [CircuitFile.parse_ok]
+  rw [hC.parse_ok]
 
 theorem nTab_inputs : Composed.nTab inputs = 1 := rfl
 
-theorem proved_size (D' : Flock.Draw.UnitDraw) (h : Flock.Draw.UnitDraw.ofJson draw₀ = .ok D') :
+theorem proved_size (hS : SetupFacts) (hPr : ProgramFacts) (D' : Flock.Draw.UnitDraw)
+    (h : Flock.Draw.UnitDraw.ofJson draw₀ = .ok D') :
     D'.proved.size = Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits) := by
-  rw [Setup.draw_ofJson] at h
+  rw [hS.draw_ofJson] at h
   cases h
-  rw [Program.design_eq]
+  rw [hPr.design_eq]
   rfl
 
 /-- The honest session supplies every field of a `Live`. -/
-theorem exists_live : ∃ A : Live,
+theorem exists_live (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts) :
+    ∃ A : Live,
     A.I = inputs ∧ A.n = nUnits ∧ A.desc = desc ∧ A.qr = query ∧ A.lj = law ∧ A.tb = none ∧ A.own = none ∧
       A.Lb = deployedLb ∧ A.ε = 0 ∧ A.OpensReady := by
-  have hD := desc_ok
+  have hD := desc_ok hC
   have ht : inputs.tags.typed = false := typed_false
   have hU : FlockSoundness.Built D.unroll.unit :=
     Hidden.built_of_parseStmt (Flock.Desc.parseStmt_of_parse hD) ((ZkExec.zkTags_typed inputs).trans ht)
   obtain ⟨hpi, pub, hpub, hdup, hn⟩ :=
-    LiveFacts.pub_of_setup (I := inputs) (D := D) (pubO := pubO) (n := nUnits) rfl hD Setup.setupHidden_ok
-      PublicFile.hmOut_loadPublic PublicFile.pubO_n Scope.ports_ok
+    LiveFacts.pub_of_setup (I := inputs) (D := D) (pubO := pubO) (n := nUnits) rfl hD hS.setupHidden_ok
+      hP.hmOut_loadPublic hP.pubO_n (Scope.ports_ok hC hP)
   obtain ⟨S₀, d₀, hy⟩ :=
     LiveFacts.y₀_of_setup nUnits (I := inputs) (D := D)
-      (kd := Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits)) rfl ht hD proved_size
-      Setup.setupHidden_ok Setup.shapeOk_ok
+      (kd := Flock.Bridge.lawK (Flock.Bridge.designAt desc query law none nUnits)) rfl ht hD (proved_size hS hPr)
+      hS.setupHidden_ok hS.shapeOk_ok
   let A : Live :=
     { n := nUnits
       I := inputs
@@ -68,17 +71,17 @@ theorem exists_live : ∃ A : Live,
       pub
       hpub
       pubO
-      hpubO := PublicFile.hmOut_loadPublic
-      hscope := Scope.scopeOkH
+      hpubO := hP.hmOut_loadPublic
+      hscope := Scope.scopeOkH hC
       hdup
       hn
-      hnO := PublicFile.pubO_n
+      hnO := hP.pubO_n
       desc
       qr := query
-      hpop := Program.popMatches
+      hpop := hPr.popMatches
       lj := law
       tb := none
-      hsub := by rw [Program.design_eq]; rfl
+      hsub := by rw [hPr.design_eq]; rfl
       hdiv := by rw [nTab_inputs]; exact Nat.mod_one _
       S₀
       d₀
@@ -103,20 +106,37 @@ theorem exists_live : ∃ A : Live,
       v := 0
       w := 0
       h := 0 }
-  exact ⟨A, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ⟨Scope.ready⟩⟩
+  exact ⟨A, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, ⟨Scope.ready hC hP⟩⟩
+
+section
+
+variable (hC : CircuitFileFacts) (hP : PublicFileFacts) (hS : SetupFacts) (hPr : ProgramFacts)
 
 /-- The honest session. -/
-noncomputable def live : Live := Classical.choose exists_live
+noncomputable def live : Live :=
+  Classical.choose (exists_live hC hP hS hPr)
 
-theorem live_inputs : live.I = inputs := (Classical.choose_spec exists_live).1
-theorem live_n : live.n = nUnits := (Classical.choose_spec exists_live).2.1
-theorem live_desc : live.desc = desc := (Classical.choose_spec exists_live).2.2.1
-theorem live_query : live.qr = query := (Classical.choose_spec exists_live).2.2.2.1
-theorem live_law : live.lj = law := (Classical.choose_spec exists_live).2.2.2.2.1
-theorem live_table : live.tb = none := (Classical.choose_spec exists_live).2.2.2.2.2.1
-theorem live_own : live.own = none := (Classical.choose_spec exists_live).2.2.2.2.2.2.1
-theorem live_lb : live.Lb = deployedLb := (Classical.choose_spec exists_live).2.2.2.2.2.2.2.1
-theorem live_epsilon : live.ε = 0 := (Classical.choose_spec exists_live).2.2.2.2.2.2.2.2.1
-theorem live_ready : live.OpensReady := (Classical.choose_spec exists_live).2.2.2.2.2.2.2.2.2
+theorem live_inputs :
+    (live hC hP hS hPr).I = inputs := (Classical.choose_spec (exists_live hC hP hS hPr)).1
+theorem live_n :
+    (live hC hP hS hPr).n = nUnits := (Classical.choose_spec (exists_live hC hP hS hPr)).2.1
+theorem live_desc :
+    (live hC hP hS hPr).desc = desc := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.1
+theorem live_query :
+    (live hC hP hS hPr).qr = query := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.1
+theorem live_law :
+    (live hC hP hS hPr).lj = law := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.1
+theorem live_table :
+    (live hC hP hS hPr).tb = none := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.2.1
+theorem live_own :
+    (live hC hP hS hPr).own = none := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.2.2.1
+theorem live_lb :
+    (live hC hP hS hPr).Lb = deployedLb := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.2.2.2.1
+theorem live_epsilon :
+    (live hC hP hS hPr).ε = 0 := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.2.2.2.2.1
+theorem live_ready :
+    (live hC hP hS hPr).OpensReady := (Classical.choose_spec (exists_live hC hP hS hPr)).2.2.2.2.2.2.2.2.2
+
+end
 
 end Verity.Sampled.Instance.HonestSession

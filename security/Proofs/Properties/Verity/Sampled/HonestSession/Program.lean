@@ -6,9 +6,9 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.Hex
 /-!
 # The program, its population and its sampling design
 
-The descriptor parses to `program` (`program_parse`), its query's population is the public file's one proof block
-(`popMatches`), the sampling design the verifier derives from it is the subset of one (`design_eq`, `lawAt_of`), and
-the partition object's digest is `partitionDigestB` (`partitionDigest_ok`). `PopMatches` is `popCheck`'s verdict, which
+The descriptor parses to `program`, its query's population is the public file's one proof block, the sampling design
+the verifier derives from it is the subset of one, and the partition object's digest is `partitionDigestB`: the named
+proposition `ProgramFacts`, which is not proved. The pieces that use it take it as a hypothesis. `PopMatches` is `popCheck`'s verdict, which
 evaluates the partition object's validity (`isSha512Hex` of the program's spliced SHA-512, `Hex.isSha512Hex_hexOf`) and
 the query over the descriptor; no step evaluates a hash. `Array.qsort` over the descriptor's keys is read by
 `qsort_of_sorted`, the keys being ascending.
@@ -16,28 +16,26 @@ the query over the descriptor; no step evaluates a hash. `Array.qsort` over the 
 
 @[expose] public section
 
-namespace Verity.Sampled.Instance.HonestSession.Program
+namespace Verity.Sampled.Instance.HonestSession
 
 open Flock
 
-theorem program_parse : Spot.Program.parse ⟨desc.toArray⟩ = .ok program := by
-  sorry -- piece P4 (program)
+/-- **Facts about the concrete program, not proved**: the descriptor parses to `program` with SHA-512 `programSha`, its
+query's population matches the public file's, the sampling design is the subset of one, a verifier holding the session's
+program, query, law and work table derives that design, and the partition object's digest is `partitionDigestB`. -/
+structure ProgramFacts : Prop where
+  /-- The descriptor parses to `program`. -/
+  program_parse : Spot.Program.parse ⟨desc.toArray⟩ = .ok program
+  /-- `program`'s SHA-512 is `programSha`. -/
+  program_sha : program.sha512 = programSha
+  /-- The query's population matches the descriptor's. -/
+  popMatches : Flock.Bridge.PopMatches desc query nUnits
+  /-- The sampling design at the session's descriptor, query and law is the subset of one. -/
+  design_eq : Flock.Bridge.designAt desc query law none nUnits = .subset 1
+  /-- A verifier holding the session's program, query, law and work table derives that design at `nUnits`. -/
+  lawAt_of : ∀ (v : Spot.Registration.Verifier), v.program = program → v.query = query → v.law = law →
+    v.workTable = none → lawAt v nUnits = .ok (Flock.Bridge.designAt desc query law none nUnits)
+  /-- The partition object's digest is `partitionDigestB`. -/
+  partitionDigest_ok : HmRow.partitionDigest partitionObj = .ok partitionDigestB
 
-theorem program_sha : program.sha512 = programSha := by
-  sorry -- piece P4 (program)
-
-theorem popMatches : Flock.Bridge.PopMatches desc query nUnits := by
-  sorry -- piece P4 (program)
-
-theorem design_eq : Flock.Bridge.designAt desc query law none nUnits = .subset 1 := by
-  sorry -- piece P4 (program)
-
-theorem lawAt_of (v : Spot.Registration.Verifier) (hp : v.program = program) (hq : v.query = query)
-    (hl : v.law = law) (ht : v.workTable = none) :
-    lawAt v nUnits = .ok (Flock.Bridge.designAt desc query law none nUnits) := by
-  sorry -- piece P4 (program)
-
-theorem partitionDigest_ok : HmRow.partitionDigest partitionObj = .ok partitionDigestB := by
-  sorry -- piece P4 (program)
-
-end Verity.Sampled.Instance.HonestSession.Program
+end Verity.Sampled.Instance.HonestSession

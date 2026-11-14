@@ -7,49 +7,51 @@ public import Proofs.Flock.Recursive.FirewallJson
 /-!
 # The circuit file parses
 
-`HmOut.parse` at `verify --zk`'s tags reads the circuit file to `cH` (`parse_ok`), whatever the fixed nets' content: the
-walk is `Proofs.Flock.SessionLoop.Concrete.Fwd`'s, at the hidden-output tags (`Tags.circuit`) and this file's META, with
-the fixed nets as parameters and `Properties.Flock.Nets.fixedNetsBuild` at them. The circuit's fields the other pieces
-read are named here; a piece that needs another field asks for it here.
+`HmOut.parse` at `verify --zk`'s tags reads the circuit file to `cH`, whatever the fixed nets' content: the walk is
+`Proofs.Flock.SessionLoop.Concrete.Fwd`'s, at the hidden-output tags (`Tags.circuit`) and this file's META, with the fixed
+nets as parameters and `Properties.Flock.Nets.fixedNetsBuild` at them. The facts the other pieces read of `cH` are the
+named proposition `CircuitFileFacts`, which is not proved: the pieces that use it take it as a hypothesis.
 -/
 
 @[expose] public section
 
-namespace Verity.Sampled.Instance.HonestSession.CircuitFile
+namespace Verity.Sampled.Instance.HonestSession
 
 open Flock
 
-theorem maskLog : Zk.maskLogOf circuitFile = 14 := by
-  sorry -- piece P1 (circuit file)
+/-- **Facts about the concrete circuit file, not proved**: `HmOut.parse` and `parseCommit` at `verify --zk`'s tags read it
+to `cH`, `HmIn.parse` finds no public input port, `cH` has the one 64-word output row, its META is `norm metaJ`, and its
+unit net reads only its leaf group, returns the outputs, has at most `2^32` rows and reads only port bits. -/
+structure CircuitFileFacts : Prop where
+  /-- The zero-knowledge mask size the file's META states is `14`. -/
+  maskLog : Zk.maskLogOf circuitFile = 14
+  /-- `HmOut.parse` reads the file to `cH`. -/
+  parse_ok : HmOut.parse tagsZ circuitFile [] = .ok cH
+  /-- `HmOut.parseCommit` reads the file to `cH`. -/
+  parseCommit_ok : HmOut.parseCommit tagsZ circuitFile [] = .ok cH
+  /-- `cH` names no public input port. -/
+  hmIn_parse : HmIn.parse cH = .ok {}
+  /-- `cH` carries the file's SHA-512, `circuitSha`. -/
+  cH_sha : cH.sha = circuitSha
+  /-- `cH` carries the class SHA-512, `classSha`. -/
+  cH_classSha : cH.classSha = classSha
+  /-- `cH`'s one port is `yPort`. -/
+  cH_ports : cH.ports = #[yPort]
+  /-- `cH`'s one output row holds one port. -/
+  cH_outRowPorts : cH.outRowPorts = #[1]
+  /-- `cH` has one gate group. -/
+  cH_g : cH.g = 1
+  /-- `cH`'s `k_log` is `22`. -/
+  cH_kLog : cH.kLog = 22
+  /-- `cH`'s META is the parser's reading of `metaJ`. -/
+  cH_metaJ : cH.metaJ = FlockSoundness.Discharge.Recursion.FirewallJson.norm metaJ
+  /-- `cH`'s unit reads one input group. -/
+  unit_inGroups : cH.unit.inGroups.size = 1
+  /-- `cH`'s output net is its unit net. -/
+  unit_outNet : cH.outNet = cH.unitNet
+  /-- `cH`'s unit has at most `2^32` rows. -/
+  unit_unitLog : cH.unit.unitLog ≤ 32
+  /-- `cH`'s unit reads only port bits among its inputs. -/
+  unit_portReads : FlockSoundness.Discharge.Layout.portReadsB cH.unit = true
 
-theorem parse_ok : HmOut.parse tagsZ circuitFile [] = .ok cH := by
-  sorry -- piece P1 (circuit file)
-
-theorem parseCommit_ok : HmOut.parseCommit tagsZ circuitFile [] = .ok cH := by
-  sorry -- piece P1 (circuit file)
-
-theorem hmIn_parse : HmIn.parse cH = .ok {} := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_sha : cH.sha = circuitSha := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_classSha : cH.classSha = classSha := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_ports : cH.ports = #[yPort] := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_outRowPorts : cH.outRowPorts = #[1] := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_g : cH.g = 1 := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_kLog : cH.kLog = 22 := by
-  sorry -- piece P1 (circuit file)
-
-theorem cH_metaJ : cH.metaJ = FlockSoundness.Discharge.Recursion.FirewallJson.norm metaJ := by
-  sorry -- piece P1 (circuit file)
-
-end Verity.Sampled.Instance.HonestSession.CircuitFile
+end Verity.Sampled.Instance.HonestSession

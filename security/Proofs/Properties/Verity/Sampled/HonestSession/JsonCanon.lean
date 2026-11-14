@@ -8,7 +8,8 @@ public import CoreProtocol.Protocol
 
 `Flock.canon` writes a plain value's `printJson` text (`canon_plain`), the same at its parsed form (`canon_norm`), and a
 canonical text of ASCII parses back to `norm` of its value (`canonicalJson_canon`). These are the canonical-JSON
-reader's facts; this file states them for the honest session and its proofs are that reader's.
+reader's facts; this file states them for the honest session as the named proposition `JsonFacts`, which is not proved:
+the pieces that use it take it as a hypothesis.
 -/
 
 @[expose] public section
@@ -24,8 +25,5 @@ structure JsonFacts : Prop where
   canon_norm : ∀ {j : Json}, Flock.Firewall.plain j = true → Flock.canon (norm j) = Flock.canon j
   canonicalJson_canon : ∀ {j : Json} {s : String}, Flock.Firewall.plain j = true →
     (s.toUTF8.data.all (· < 0x7f)) = true → Flock.canon j = .ok s → Core.canonicalJson s.toUTF8 = .ok (norm j)
-
-theorem jsonFacts : JsonFacts := by
-  sorry -- the canonical-JSON reader's lemmas
 
 end Verity.Sampled.Instance.HonestSession.JsonCanon

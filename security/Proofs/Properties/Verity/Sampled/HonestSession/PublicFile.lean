@@ -7,35 +7,36 @@ public import Proofs.Properties.Verity.Sampled.HonestSession.CircuitFile
 
 Each side's reading of the public file over `cH` (`HmOut.loadPublic`, `HmIn.loadPublic` over no public input port), the
 sampled statement's public file at `draw₀` (`HmIn.drawn`) and its check (`HmOut.checkPublic`), from the circuit's fields
-`CircuitFile` names. The header is `printJson hdrJ`, which parses back to `norm hdrJ` (`FirewallJson.parse_printJson`);
-the walk is `Proofs.Flock.SessionLoop.Concrete.Public`'s, at the hidden-output header.
+`CircuitFileFacts` names. The header is `printJson hdrJ`, which parses back to `norm hdrJ` (`FirewallJson.parse_printJson`);
+the walk is `Proofs.Flock.SessionLoop.Concrete.Public`'s, at the hidden-output header. These facts are the named
+proposition `PublicFileFacts`, which is not proved: the pieces that use it take it as a hypothesis.
 -/
 
 @[expose] public section
 
-namespace Verity.Sampled.Instance.HonestSession.PublicFile
+namespace Verity.Sampled.Instance.HonestSession
 
 open Flock
 
-theorem hmOut_loadPublic : HmOut.loadPublic tagsZ cH publicFile = .ok pubO := by
-  sorry -- piece P2 (public file)
+/-- **Facts about the concrete public file, not proved**: each side's load of it over `cH` returns the public value with
+population `nUnits`, the verifier's own-port check passes, it is drawn at the sample file and passes the public check,
+and its header publishes the one row's domain, the 64 bytes `domY`. -/
+structure PublicFileFacts : Prop where
+  /-- `HmOut.loadPublic` reads the file to `pubO`. -/
+  hmOut_loadPublic : HmOut.loadPublic tagsZ cH publicFile = .ok pubO
+  /-- `HmIn.loadPublic` over no public input port reads the file to `pubI`. -/
+  hmIn_loadPublic : HmIn.loadPublic tagsZ cH {} publicFile = .ok pubI
+  /-- `pubO`'s population is `nUnits`. -/
+  pubO_n : pubO.n = nUnits
+  /-- `pubI`'s population is `nUnits`. -/
+  pubI_n : pubI.n = nUnits
+  /-- The verifier's own public input check passes at `pubI`. -/
+  checkOwn_ok : HmIn.checkOwn {} pubI none = .ok ()
+  /-- The public file is drawn at the sample file `draw₀`, to `pubD`. -/
+  drawn_ok : HmIn.drawn cH {} pubI draw₀ = .ok pubD
+  /-- `pubD` passes the public check at `cH`. -/
+  checkPublic_ok : HmOut.checkPublic cH pubD = .ok ()
+  /-- `pubO`'s header publishes `domY` as the one port's domain id. -/
+  pubO_domain : pubO.fv3Bytes "domain_ids" "y" = .ok domY
 
-theorem hmIn_loadPublic : HmIn.loadPublic tagsZ cH {} publicFile = .ok pubI := by
-  sorry -- piece P2 (public file)
-
-theorem pubO_n : pubO.n = nUnits := by
-  sorry -- piece P2 (public file)
-
-theorem pubI_n : pubI.n = nUnits := by
-  sorry -- piece P2 (public file)
-
-theorem checkOwn_ok : HmIn.checkOwn {} pubI none = .ok () := by
-  sorry -- piece P2 (public file)
-
-theorem drawn_ok : HmIn.drawn cH {} pubI draw₀ = .ok pubD := by
-  sorry -- piece P2 (public file)
-
-theorem checkPublic_ok : HmOut.checkPublic cH pubD = .ok () := by
-  sorry -- piece P2 (public file)
-
-end Verity.Sampled.Instance.HonestSession.PublicFile
+end Verity.Sampled.Instance.HonestSession
