@@ -1625,10 +1625,11 @@ def _long_chain(layers: int, d: Path) -> None:
 def test_a_windows_commit_is_linear_in_its_members(tmp_path):
     """A window's commit and the verifier's rebuild of it from its record (`_long_chain`) run loops whose turns grow with
     its members, wires and reads, not with their products: from 32 layers to 64 the turns grow at most about twice what
-    they grow from 16 to 32 (the difference drops what a window does once, such as its hiding tables). The 4,32,4 window
-    class's commit (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each
-    member past every read and each wired port past every member, hours on one core; a timing can't say which, a count
-    can."""
+    they grow from 16 to 32 (the difference drops what a window does once, and a first window, uncounted, makes what a
+    process makes once, such as its hiding tables, whichever tests ran before it). The 4,32,4 window class's commit
+    (58,719 members, 166,038 wired member ports, 6,727 reads) ran each port's hashes past every port's, each member past
+    every read and each wired port past every member, hours on one core; a timing can't say which, a count can."""
+    _long_chain(16, tmp_path / "first")
     a, b, c = (_loop_turns(lambda n=n: _long_chain(n, tmp_path / str(n))) for n in (16, 32, 64))
     assert c - b <= 2.2 * (b - a), (a, b, c)
 
