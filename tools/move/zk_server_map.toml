@@ -11,7 +11,8 @@
 # ([keep]): the domain tags and format ids (`verity/firewall-*/v0`, `firewall/v0/...`), the deployment's party and the
 # reports' key `"firewall"` as a quoted token, the parties' message type `"Firewall"` a deploy log records, the release's
 # reasons upstream's Rust records, a goal's id and the machines' systemd slice, A7's recorded refusals (`firewall-.*`),
-# and the Lean build lock `.firewall.lock`, which scripts outside these directories take too.
+# the Lean build lock `.firewall.lock`, which scripts outside these directories take too, and the replicated fixtures'
+# directory `recursion/verifier/firewall/tests/fixtures`, which no move renames.
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that
 # `tools/verity/lean/check.py --update --moved` takes.
 
@@ -48,6 +49,10 @@
 "firewalled session" = "ZK server session"
 "firewalled sessions" = "ZK server sessions"
 "firewalled masked prover" = "masked prover behind the ZK server"
+"a firewalled prover's Lean Hello" = "the Lean Hello of a prover behind the ZK server"
+"firewall, and the Lean verifier's verdict" = "ZK server, and the Lean verifier's verdict"
+"firewall ${FW" = "ZK server ${FW"
+"device floor (firewall)" = "device floor (ZK server)"
 
 # --- the Lean namespace and its module paths; the executable's root takes `Main`, since the library `FlockZkServer`
 # holds the name it would get
@@ -133,6 +138,7 @@ patterns = ['(?<![\w-])verity/firewall-[\w-]*(?:/v\d+)?', '(?<![\w/.-])firewall/
             '(?<=[\x22\x27])firewall(?=[\x22\x27])', '(?<=\\[\x22\x27])firewall(?=\\[\x22\x27])',
             '\x22Firewall\x22|\bFirewall(?= \{sha512)',
             '\bthe firewall(?: serves nothing more of it|\x27s fault)',
-            '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b', '\.firewall\.lock\b']
+            '\b(?:goal:)?proofs/firewall-[\w-]+', '\bfirewall\.slice\b', '\.firewall\.lock\b',
+            'recursion/verifier/firewall/tests/fixtures']
 strings = ["dials firewall, workers", "refused listen: firewall, workers", "outer prove (firewall) e2e_s",
            'r"firewall-.*"']
