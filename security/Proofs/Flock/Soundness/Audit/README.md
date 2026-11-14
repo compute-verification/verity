@@ -28,7 +28,7 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
 - `audit_profile`: $\Pr[\text{accept} \wedge \mathrm{wrong}(X) \in \mathcal B] \le \sup_{B \in \mathcal B} e_L(B) +
   \varepsilon_{ks} + \delta_{link}$;
 - `audit_count`: $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks} + \delta_{link}$;
-- `audit_drawn`: sampled proof blocks are correct up to $\varepsilon_{ks} + \delta_{link}$, even for a consumer who looks after
+- `audit_sampled`: sampled proof blocks are correct up to $\varepsilon_{ks} + \delta_{link}$, even for a consumer who looks after
   the sample;
 - `audits_seq`: audits in sequence fail with at most the sum of their bounds, each holding from every history. Nested,
   this is the lifetime union bound, with every term against a prover that took part in all the audits;
@@ -37,7 +37,7 @@ roots gets `X`'s values up to that opening's own binding term, which the audit d
 - `Partition.audit_cone_count`: at least $j$ incorrect proof blocks in a cone;
 - `Partition.audit_covered`: a cone inside the sample, for wires chosen even after the sample: $\varepsilon_{ks} +
   \delta_{link} + \delta_{in}$;
-- `Partition.oracle_count`, `oracle_profile`, `oracle_drawn`, `oracle_cone`: the same at the oracle layer, from
+- `Partition.oracle_count`, `oracle_profile`, `oracle_sampled`, `oracle_cone`: the same at the oracle layer, from
   `SessionSound ε` and `InputsSound δ_in`, with $\delta_{link} = 0$.
 
 **Theorems, sampling designs** (`Audit/SamplingDesign.lean`): `bernoulli_escape`, a Bernoulli($p$) sample's miss probability
@@ -68,24 +68,24 @@ its averages are `Claims.Ex` over the reals): where run $t$'s bound also holds t
 a nonnegative charge that reads those coins and the earlier runs', the product of the runs' factors, on the runs whose
 bounds multiply to at most $c$, averages at most $c$ plus the average of the charges' sum (`ex_prod_add_le`): the charge
 is paid once over the $T$ runs, not at its largest value in each.
-`subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
+`subset_exec_escape_le` (`ExecSample.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
 executable `Flock.Draw.subset k n` returns a sample missing $B$ with probability at most `subset_escape`'s
 $\binom{n-|B|}{k}/\binom{n}{k}$, through its rejection sampler, its `HashMap` Fisher–Yates and its `Array.qsort`.
 `stratified_exec_escape_le` (`ExecStratified.lean`): the executable `Flock.Draw.stratified`, on strata that describe
 $\sigma$'s (`ExecStrata`), misses $B$ with probability at most `Law.stratified`'s miss probability, the product
-over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
+over strata; `flock_e2e_sampled_exec` and `flock_e2e_count_exec` are the e2e theorems at the executable's sampling design
 (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
-(`ExecStrataOf.lean`): the strata of a sample file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
+(`ExecStrataOf.lean`): the strata of a sample file `UnitSample.ofJson` accepts describe some assignment's (`ExecStrata`), each
 stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
 neither: their sampling design is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
-(`liveStrata_of_ofJson`: non-empty at an accepted sample file's sampling design). `drawOS_subset_escape_le`,
-`drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**:
-`Flock.Draw.drawWith` on the challenger's coins (`Spot.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
-`IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
+(`liveStrata_of_ofJson`: non-empty at an accepted sample file's sampling design). `sampleOS_subset_escape_le`,
+`sampleOS_stratified_escape_le` and `sampleOS_work_escape_le` (`ExecSampleOS.lean`), **the live sample**:
+`Flock.Draw.drawWith` on the challenger's coins (`Spot.Draw.sampleUnits`; `Flock.Draw.sampleOS` is `drawWith` on
+`IO.getRandomBytes`, `sampleOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
 the same miss probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
 `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
-sampling design (`execOS`). `subsetOn_escape_le`, `drawOn_escape_le` and `keyedExecutionPhase_escape_le` (`KeyedDraw.lean`),
+sampling design (`execOS`). `subsetOn_escape_le`, `sampleOn_escape_le` and `keyedExecutionPhase_escape_le` (`KeyedSample.lean`),
 **the PoUW circuit's keyed samples**. `Key.subset`, which samples each swap from its own `verity.commitments.randomness` stream, has
 no higher miss probability than the uniform $k$-subset. The window's per-call samples under one key form one
 `Law.stratified` over its (call, template) strata. So the live window sample (`keyedExecutionPhase`) misses $B$ with probability
@@ -131,7 +131,7 @@ $\Pr[\text{accept} \wedge W_{\mathrm{wrong}(X)} \ge T]$ by $((W - T)/W)^K$ plus 
 `audit_work_of_record`: at $K = 27{,}713$, incorrect proof blocks doing at least 0.1% of the work have miss probability at
 most $2^{-40}$; `record_sizing_one_fewer`: $K = 27{,}712$ does not reach it under this bound. `Law.widen` and
 `escape_widen_le`, the seam for closure samples: proving more units than are sampled, on the same coins, never raises a
-miss probability. `FlockWork.lean`'s `workRule_eq_draw` and `countRule_eq_draw`: the executable's
+miss probability. `FlockWork.lean`'s `workRule_eq_sample` and `countRule_eq_sample`: the executable's
 `Flock.Draw.workK` and `stratumK` are `Law.workRule` and `countRule`.
 
 **Theorems, harm bounds** (`Audit/HarmBound.lean`, `IsHarmBound` proved for the stratified sampling design):
@@ -160,7 +160,7 @@ h_u$. `harm_count`: under Bernoulli($q$) samples, an accepted play with $K$ or m
 probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
 gives $1 - p + \sum_t \mathrm{err}_t$ at $k^*(p) = \ln(1/(1-p)) / (-\ln(1-q))$. `life_harm_budget` is the instance over
 a lifetime of $N$ one-stage audits (`life`): after each accepted audit the prover chooses whether to go on, and a
-rejection ends the lifetime with no resample, so $\mathrm{err}_m = \varepsilon_{ks,m} + \delta_{link,m}$ by `audit_drawn`.
+rejection ends the lifetime with no resample, so $\mathrm{err}_m = \varepsilon_{ks,m} + \delta_{link,m}$ by `audit_sampled`.
 It fixes each audit's sampling design in advance by its index, over one $n$; `harm_budget` itself lets the history
 choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
 the whole play.
@@ -247,7 +247,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
 - `flock_inputs_sound`: the input unit, likewise, given `InputsLoweringSound`;
 - `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve, $\delta(K) = \mathrm{miss}_L(K) + 2^{-205}$,
   and $\binom{n-K}{k}/\binom{n}{k} + 2^{-205}$ for the uniform $k$-subset;
-- `flock_oracle_drawn`: sampled proof blocks correct up to $2^{-205}$;
+- `flock_oracle_sampled`: sampled proof blocks correct up to $2^{-205}$;
 - `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-205}$.
 
 The hypotheses are the lowerings.
@@ -255,7 +255,7 @@ The hypotheses are the lowerings.
 **The compiled layer** (`Audit/Extraction.lean`, `Audit/FlockCompiled.lean`, `Audit/FlockBatched.lean`; `../DESIGN.md`
 §12):
 
-- `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_drawn`: the one-stage audit with a **randomized
+- `extraction_audit_le`, `extraction_audit_count`, `extraction_audit_sampled`: the one-stage audit with a **randomized
   extractor**. Per sampled proof block, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
   probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
   on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
@@ -269,7 +269,7 @@ The hypotheses are the lowerings.
   `table_knowledge_sound_joint_tight`: $\mathbb E_\omega[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega)
   + N_0/(eK)]$, which is $\varepsilon_c^- + t\cdot2^{-244.7}$ at the best $K$ under the generic collision bound. Neither
   has a named assumption;
-- `flock_batched_count`, `flock_batched_drawn` (and `flock_compiled_count`, `flock_compiled_drawn`):
+- `flock_batched_count`, `flock_batched_sampled` (and `flock_compiled_count`, `flock_compiled_sampled`):
   $\delta(K) = \mathrm{miss}_L(K) + \varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$, and sampled proof blocks up to
   $\varepsilon_{ks}(\sigma) + \delta_{link}(\sigma)$.
 

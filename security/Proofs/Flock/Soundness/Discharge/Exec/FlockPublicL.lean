@@ -18,7 +18,7 @@ zero; and `vals` elsewhere.
 * `linkEvB_of_pub`: at a sampled proof block, when the public wires decode to their values in every satisfying message of its
   table (`PubDecodes`), the link event at `Xpub ones zeros vals` is the link event at `vals`. So the link theorem's bound holds
   unchanged for `Xpub ones zeros XplurL` (`flock_batched_linkSoundE_pubL`), and with it the count curve and the drawn-unit
-  bound (`flock_batched_count_publicL`, `flock_batched_drawn_publicL`).
+  bound (`flock_batched_count_publicL`, `flock_batched_sampled_publicL`).
 * `pubDecodes_of_place`: `PubDecodes` for the decoder that reads each sampled proof block from its place. Two facts about the
   statement suffice:
   - `ConstCols`: only a unit's constant column sits on a gate of `ones`. No input column of a unit reads a constant,
@@ -118,9 +118,9 @@ theorem flock_batched_count_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
     (flock_batched_linkSoundE_pubL P H E Lf plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])
 
-/-- **Sampled proof blocks at the public transcript**: `flock_batched_drawn_linkedL` with the committed transcript 1 on `ones`,
+/-- **Sampled proof blocks at the public transcript**: `flock_batched_sampled_linkedL` with the committed transcript 1 on `ones`,
 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
-theorem flock_batched_drawn_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
+theorem flock_batched_sampled_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
@@ -130,7 +130,7 @@ theorem flock_batched_drawn_publicL (ones zeros : Finset (Fin C.N)) (hpub : P.Pu
         ¬ Disjoint (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  (flock_batched_drawnEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk
+  (flock_batched_sampledEL P H E Lf plan tab decode (fun R τ => Xpub ones zeros (XplurL P H E Lf plan tab vb R τ k Rw)) hk
     (fun S R j => (hr S R j).trans_lt hρ) hlow
     (flock_batched_linkSoundE_pubL P H E Lf plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])

@@ -45,7 +45,7 @@ theorem rowsFit_of_scopeH {tags : Tags} {cf : ByteArray} {tables : List (String 
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none) {Reg : Type}
 
 include hU hpub in
@@ -53,7 +53,7 @@ include hU hpub in
 each sampled proof block's site is `BcSiteH`: the acceptance's sample is `dj S`, which decodes to `D`, its regions are the
 executable's, its public file loads (`HmOut.loadPublic`) to `pub`, with or without shared rows, and the unit's block
 and template instance index its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2`). -/
-theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableH_bcSiteS {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
   refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_⟩
@@ -70,7 +70,7 @@ theorem tableH_bcSiteS {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u 
 set_option linter.unusedSectionVars false in
 include hU hpub hpt in
 /-- `tableH_bcSiteS` at a public file without shared rows. -/
-theorem tableH_bcSite {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableH_bcSite {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub (x.table.o u h) (x.table.vu u h) u.val :=
   tableH_bcSiteS ht hc hscope dj hU hpub x h
 
@@ -86,7 +86,7 @@ theorem sitesAtH_bcSite :
   intro S R u h M hM
   show BcSiteH ((tableAtH dj x₀ S).acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub ((tableAtH dj x₀ S).o u h)
     ((tableAtH dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupH I mPts S (dj S))
   · have e : tableAtH dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtH
       rw [dite_eq_left_of_eq_true (eq_true hS)]

@@ -8,6 +8,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Tactic.Positivity.Finset
 import VCVio.Prelude.Core
+public import Proofs.Flock.Soundness.Discharge.Exec.LawSample
 public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.Rounds

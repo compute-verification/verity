@@ -16,14 +16,14 @@ reads; `Proofs.Flock.Recursive.Witness` proves that each check's `.ok` is the mo
   partition object and program returns one table, and `Zk.schedule` accepts its `m`), `acceptsDescription`
   (`AcceptsDescription`, at each of the verifier's own registered reads), and with `--record` the recorded inner
   session's Σ (its `hello`'s `link.sigma`) against the statement's, at the record's full sample when it has one
-  (`RecCoins.drawnSpec`, as check 5 decodes it). `accepts_stmt`'s line also prints the statement's
+  (`RecCoins.sampledSpec`, as check 5 decodes it). `accepts_stmt`'s line also prints the statement's
   partition finding, the verifier's own inner shape (`shapeOf`, `innerAt`), the number of V*'s outer statements over it
   (`outerPartsOf`, `outerParts`) and V*'s statements there (`RecVStar.statements`).
 * `session [--statement ID] --circuit F --public F [--partition F] [--program F] [--registered F] [--tables DIR]
   [--session-tables J] [--rec-inner F --rec-part J --rec-bindings F [--rec-rows F]] --session DIR...`: one of V*'s outer
   sessions, with `verity-verify-proof verify --zk`'s flags. Once: `tagsOk` (`DecodeZL.TagsOk`, public outputs) and `tagsOkZHJ`
   (`ZkHidden.TagsOkZHJ`, hidden outputs, `ZkOuterR.hTags`), which no session meets both of, the statement check without
-  and with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullDraw`
+  and with the registered reads (`ScopeZ`, `ScopeZR`), and the circuit's `scopeOk` (`VStmt.hscope`). Per session: `fullSample`
   (the record's sample is the full sample `RecordCustody` reads, `subset` of every unit of the population), `acceptsZKRAt`
   (`ZkReg.AcceptsZKR`, with the statement's `m` and its schedule's level 0), and with `--rec-inner` `accepts_zkv`
   (`AcceptsZKV`: `acceptsZKRAt`, then `checkZKV`, V*'s statement check, whose refusal it prints apart as `check_stmt`).
@@ -38,12 +38,12 @@ namespace Flock.Witness
 open Lean (Json)
 
 /-- The record's sample is the full sample over `n` units: `subset n` of the population `[0, n)`, every unit, no closure. -/
-def fullDraw (n : Nat) (record : String) : V Unit :=
+def fullSample (n : Nat) (record : String) : V Unit :=
   match recordDraw record with
   | none => throw "the record has no draw"
   | some d => do
-    let D ← Draw.UnitDraw.ofJson d
-    match D.samplingDesign with
+    let D ← Draw.UnitSample.ofJson d
+    match D.law with
     | .subset k =>
       if k = n ∧ D.population = n ∧ D.units = Array.range n ∧ D.closure = #[] then pure ()
       else throw s!"the draw is subset:{k} of {D.units.size} units over {D.population}, not every one of {n}"
@@ -180,7 +180,7 @@ def innerCmd (args : List String) : IO UInt32 := do
     let record ← readJson rf
     let want : V SessionSpec := do
       let (spec, _) ← r
-      RecCoins.drawnSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile RecVStar.innerTree [] (some d)
+      RecCoins.sampledSpec (fun d => Stmt.setupHidden RecVStar.innerTags circuitFile publicFile RecVStar.innerTree [] (some d)
         partition program) spec st text
     let ok : V Unit := do
       let s ← record >>= recordSigma
@@ -230,7 +230,7 @@ def sessionCmd (args : List String) : IO UInt32 := do
   all := (← line "scope_ok" c) && all
   for (dir, record, setup) in sessions do
     let draw : V Unit := match n with
-      | some n => fullDraw n record
+      | some n => fullSample n record
       | none => throw "the public file does not load"
     all := (← line "full_draw" draw [("session", Json.str dir), ("population", Lean.toJson n)]) && all
     let s : V (SessionSpec × Array Stmt) ← await setup

@@ -10,7 +10,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 
 `readsWithin`: `ReadsWithin` (`OfRun.lean`) at every held copy whose first-stage registration has no closure map. A
 sample takes its bytes in order (`Draw.take`), which throws where the source runs out, so a sample that ends at position
-`R` ends within the source: `drawUnits_within`, and through the stages' samples, `select_within` (with no closure map)
+`R` ends within the source: `sampleUnits_within`, and through the stages' samples, `select_within` (with no closure map)
 and `selectSecond_within`. The walk is `RunsAs.Released`'s, step for step, with "the position stays within the source"
 in place of "the same on any source with the same prefix".
 
@@ -94,10 +94,10 @@ theorem stratifiedWith_within {ξ : ByteArray} {strata : Array Flock.Draw.Stratu
         | exact pure_within hk hs
         | (revert hk; (repeat' split) <;> intro hk <;> exact pure_within hk hs))
 
-theorem drawWith_within {ξ : ByteArray} (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) {p : ℕ}
-    {x : Option Flock.Draw.UnitDraw × ℕ} (hp : p ≤ ξ.size)
-    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run p = .ok x) : x.2 ≤ ξ.size := by
-  cases samplingDesign with
+theorem sampleWith_within {ξ : ByteArray} (law : Flock.Draw.Law) (n : ℕ) {p : ℕ}
+    {x : Option Flock.Draw.UnitSample × ℕ} (hp : p ≤ ξ.size)
+    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) law n).run p = .ok x) : x.2 ≤ ξ.size := by
+  cases law with
   | subset k =>
     unfold Flock.Draw.drawWith at h
     try dsimp only at h
@@ -121,10 +121,10 @@ theorem drawWith_within {ξ : ByteArray} (samplingDesign : Flock.Draw.SamplingDe
 
 /-- **A sample reads no byte past its source**: the units a sampling design samples from `ξ`, having read `r.2` bytes, read them within
 `ξ`. -/
-theorem drawUnits_within {ξ : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
-    (h : Spot.Draw.drawUnits samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
-  unfold Spot.Draw.drawUnits at h
-  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run 0 with
+theorem sampleUnits_within {ξ : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
+    (h : Spot.Draw.sampleUnits law n ξ = .ok r) : r.2 ≤ ξ.size := by
+  unfold Spot.Draw.sampleUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) law n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     obtain ⟨o, rd⟩ := y
@@ -133,17 +133,17 @@ theorem drawUnits_within {ξ : ByteArray} {samplingDesign : Flock.Draw.SamplingD
     | none => cases h
     | some d =>
       obtain rfl := (Except.ok.inj h).symm
-      have hb : rd ≤ ξ.size := drawWith_within samplingDesign n (Nat.zero_le _) hw
+      have hb : rd ≤ ξ.size := sampleWith_within law n (Nat.zero_le _) hw
       exact hb
 
-theorem drawFirstRead_within {samplingDesign : Json} {n : ℕ} {ξ : ByteArray} {r : Json × ℕ}
-    (h : Spot.Draw.drawFirstRead samplingDesign n ξ = .ok r) : r.2 ≤ ξ.size := by
-  unfold Spot.Draw.drawFirstRead at h
+theorem sampleFirstRead_within {law : Json} {n : ℕ} {ξ : ByteArray} {r : Json × ℕ}
+    (h : Spot.Draw.sampleFirstRead law n ξ = .ok r) : r.2 ≤ ξ.size := by
+  unfold Spot.Draw.sampleFirstRead at h
   obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
   obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
   obtain ⟨u, rd⟩ := ur
   have hr : r.2 = rd := congrArg Prod.snd (Except.ok.inj h).symm
-  have hb : rd ≤ ξ.size := drawUnits_within hu
+  have hb : rd ≤ ξ.size := sampleUnits_within hu
   rw [hr]
   exact hb
 
@@ -170,7 +170,7 @@ theorem selectSecond_within {sample ns ks : Array ℕ} {ξ : ByteArray} {r : Jso
         | exact absurd h (throw_bind_ne _ _ _)
         | (cases h; done)
         | exact congrArg Prod.snd (Except.ok.inj h).symm
-    have hb : rd ≤ ξ.size := drawFirstRead_within hd
+    have hb : rd ≤ ξ.size := sampleFirstRead_within hd
     rw [hr]
     exact hb
 
@@ -200,7 +200,7 @@ theorem select_within {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
         | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm
     rw [hr]
     exact Nat.zero_le _
-  | samplingDesign text =>
+  | law text =>
     try dsimp only at h
     obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
     obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
@@ -214,7 +214,7 @@ theorem select_within {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
         | exact absurd h (throw_bind_ne _ _ _)
         | (cases h; done)
         | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm
-    have hb : rd ≤ ξ.size := drawUnits_within hu
+    have hb : rd ≤ ξ.size := sampleUnits_within hu
     rw [hr]
     exact hb
   | twoStage grain replay k =>
@@ -231,7 +231,7 @@ theorem select_within {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
         | exact absurd h (throw_bind_ne _ _ _)
         | (cases h; done)
         | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm
-    have hb : rd ≤ ξ.size := drawUnits_within hu
+    have hb : rd ≤ ξ.size := sampleUnits_within hu
     rw [hr]
     exact hb
 
@@ -252,7 +252,7 @@ theorem readsWithin (h : SpotFlock.Held) (hc : h.reg.first.closure = none) : Rea
 the held first-stage registration's closure map is the run's input's. -/
 theorem closure_of_held {i : Spot.Run.Input} {it : Spot.Run.Interior} {h : SpotFlock.Held}
     (hm : HeldMatches i it h) : h.reg.first.closure = i.closure := by
-  obtain ⟨n, rule, samplingDesign, wt, res, -, -, -, -, -, hreg⟩ := hm.first
+  obtain ⟨n, rule, law, wt, res, -, -, -, -, -, hreg⟩ := hm.first
   exact congrArg SamplingDeploy.Reg.closure hreg
 
 /-- **An accepted play's run of record has no closure map**: the form hands `Spot.Run.run` none (`inputOf`). -/

@@ -35,7 +35,7 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} {I : Inputs} (ht : I.tags.typed = false) {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json)
-  {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
+  {S₀ : Finset (Fin n)} (y₀ : SampleSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
 
 include ht in
 /-- **Every table of the `--zk` plan is at Flock ZK's parameters** (`tableAtZK_M1`). -/

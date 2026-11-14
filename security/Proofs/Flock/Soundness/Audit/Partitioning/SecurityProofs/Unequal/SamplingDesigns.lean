@@ -1,17 +1,17 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
-import Proofs.Flock.Soundness.Audit.SamplingDesign
+import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Game
 
 /-!
 # Two sampling designs for the free-compute proofs
 
-* `SamplingDesign.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
+* `Law.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
   `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
-  `SamplingDesign.bernoulli` is its case of one `num` for every unit.
+  `Law.bernoulli` is its case of one `num` for every unit.
 * `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its escape of `B` is `L`'s escape
-  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
+  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanSamples_restrict`).
 -/
 
 @[expose] public section
@@ -23,18 +23,18 @@ open scoped ENNReal
 
 variable {n : ℕ}
 
-theorem incl_le_one (L : SamplingDesign n) (u : Fin n) : L.incl u ≤ 1 := by
+theorem incl_le_one (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
   classical
-  unfold Verity.SamplingDesign.incl prCoin
+  unfold Verity.Law.incl prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 
-theorem incl_toReal_le_one (L : SamplingDesign n) (u : Fin n) : (L.incl u).toReal ≤ 1 := by
+theorem incl_toReal_le_one (L : Law n) (u : Fin n) : (L.incl u).toReal ≤ 1 := by
   simpa using ENNReal.toReal_mono ENNReal.one_ne_top (incl_le_one L u)
 
-theorem meanDraws_nonneg (L : SamplingDesign n) : 0 ≤ meanDraws L := sum_nonneg fun _ _ => ENNReal.toReal_nonneg
+theorem meanSamples_nonneg (L : Law n) : 0 ≤ meanSamples L := sum_nonneg fun _ _ => ENNReal.toReal_nonneg
 
-theorem cost_nonneg (L : SamplingDesign n) {c : Fin n → ℝ} (hc : ∀ u, 0 ≤ c u) : 0 ≤ cost L c :=
+theorem cost_nonneg (L : Law n) {c : Fin n → ℝ} (hc : ∀ u, 0 ≤ c u) : 0 ≤ cost L c :=
   sum_nonneg fun u _ => mul_nonneg ENNReal.toReal_nonneg (hc u)
 
 /-! ## Independent samples with per-unit probabilities -/
@@ -47,7 +47,7 @@ theorem prCoin_fin_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
 
 theorem prCoin_fin_not_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
     (prCoin fun x : Fin den => ¬ x.val < k).toReal = 1 - (k : ℝ) / den := by
-  rw [SamplingDesign.prCoin_not, ENNReal.toReal_sub_of_le _ ENNReal.one_ne_top, ENNReal.toReal_one, prCoin_fin_lt den k hk]
+  rw [Law.prCoin_not, ENNReal.toReal_sub_of_le _ ENNReal.one_ne_top, ENNReal.toReal_one, prCoin_fin_lt den k hk]
   calc prCoin (fun x : Fin den => x.val < k) ≤ prCoin (fun _ : Fin den => True) := prCoin_mono fun _ _ => trivial
     _ = 1 := by
       unfold prCoin
@@ -56,11 +56,11 @@ theorem prCoin_fin_not_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
 
 /-- **The per-unit Bernoulli escape**: `∏_{u ∈ B} (1 − num u / den)`. -/
 theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den)
-    (B : Finset (Fin n)) : ((SamplingDesign.bernoulliOf num den).escape B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
+    (B : Finset (Fin n)) : ((Law.bernoulliOf num den).escape B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
   classical
-  have h : (SamplingDesign.bernoulliOf num den).escape B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
+  have h : (Law.bernoulliOf num den).escape B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) B (fun u x => ¬ x.val < num u)]
-    unfold Verity.SamplingDesign.escape
+    unfold Verity.Law.escape
     refine congrArg prCoin (funext fun ω => propext ?_)
     simp only [Finset.disjoint_left, Finset.mem_filter, Finset.mem_univ, true_and]
     exact ⟨fun h u hu hlt => h hlt hu, fun h u hlt hu => h u hu hlt⟩
@@ -68,11 +68,11 @@ theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum 
   exact Finset.prod_congr rfl fun u _ => prCoin_fin_not_lt den (num u) (hnum u)
 
 theorem bern_incl_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den) (u : Fin n) :
-    ((SamplingDesign.bernoulliOf num den).incl u).toReal = (num u : ℝ) / den := by
+    ((Law.bernoulliOf num den).incl u).toReal = (num u : ℝ) / den := by
   classical
-  have h : (SamplingDesign.bernoulliOf num den).incl u = ∏ i ∈ {u}, prCoin (fun x : Fin den => x.val < num i) := by
+  have h : (Law.bernoulliOf num den).incl u = ∏ i ∈ {u}, prCoin (fun x : Fin den => x.val < num i) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) {u} (fun i x => x.val < num i)]
-    unfold Verity.SamplingDesign.incl
+    unfold Verity.Law.incl
     refine congrArg prCoin (funext fun ω => propext ?_)
     simp
   rw [h, Finset.prod_singleton]
@@ -81,27 +81,27 @@ theorem bern_incl_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : 
 /-! ## A sampling design restricted to some of its units -/
 
 /-- `L` on the units of `S` alone, numbered in increasing order. -/
-def restrict (L : SamplingDesign n) (S : Finset (Fin n)) : SamplingDesign S.card where
+def restrict (L : Law n) (S : Finset (Fin n)) : Law S.card where
   Ω := L.Ω
   draw ω := univ.filter fun i => S.orderEmbOfFin rfl i ∈ L.draw ω
 
-theorem restrict_escape (L : SamplingDesign n) (S : Finset (Fin n)) (B : Finset (Fin S.card)) :
+theorem restrict_escape (L : Law n) (S : Finset (Fin n)) (B : Finset (Fin S.card)) :
     (restrict L S).escape B = L.escape (B.map (S.orderEmbOfFin rfl).toEmbedding) := by
-  unfold Verity.SamplingDesign.escape
+  unfold Verity.Law.escape
   refine congrArg prCoin (funext fun ω => propext ?_)
   simp only [restrict, Finset.disjoint_left, Finset.mem_filter, Finset.mem_univ, true_and, Finset.mem_map,
     RelEmbedding.coe_toEmbedding, not_exists, not_and]
   exact ⟨fun h u hu i hi hiu => by subst hiu; exact h hu hi, fun h i hi hiB => h hi i hiB rfl⟩
 
-theorem restrict_incl (L : SamplingDesign n) (S : Finset (Fin n)) (i : Fin S.card) :
+theorem restrict_incl (L : Law n) (S : Finset (Fin n)) (i : Fin S.card) :
     (restrict L S).incl i = L.incl (S.orderEmbOfFin rfl i) := by
-  unfold Verity.SamplingDesign.incl
+  unfold Verity.Law.incl
   refine congrArg prCoin (funext fun ω => propext ?_)
   simp [restrict]
 
-theorem meanDraws_restrict (L : SamplingDesign n) (S : Finset (Fin n)) :
-    meanDraws (restrict L S) = ∑ u ∈ S, (L.incl u).toReal := by
-  unfold meanDraws
+theorem meanSamples_restrict (L : Law n) (S : Finset (Fin n)) :
+    meanSamples (restrict L S) = ∑ u ∈ S, (L.incl u).toReal := by
+  unfold meanSamples
   simp only [restrict_incl]
   conv_rhs => rw [← Finset.map_orderEmbOfFin_univ S rfl]
   rw [Finset.sum_map]

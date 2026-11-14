@@ -107,8 +107,8 @@ theorem ConverseExact : Guarantees.ConverseExact := by
     rw [ENNReal.toReal_sum fun ω _ => ENNReal.mul_ne_top (ENNReal.inv_ne_top.2 (by simp)) (hg ω)]
     refine Finset.sum_congr rfl fun ω _ => ?_
     rw [ENNReal.toReal_mul, ENNReal.toReal_inv, ENNReal.toReal_natCast]
-  have hmean : meanDraws L = ∑ ω, c * (S ω : ℝ) := by
-    unfold meanDraws
+  have hmean : meanSamples L = ∑ ω, c * (S ω : ℝ) := by
+    unfold meanSamples
     rw [← ENNReal.toReal_sum fun u _ => ne_top_of_le_ne_top ENNReal.one_ne_top (incl_le_one L u), ← L.avg_card,
       havg_toReal _ fun ω => ENNReal.natCast_ne_top _]
     simp [S]
@@ -141,10 +141,10 @@ theorem ConverseExact : Guarantees.ConverseExact := by
       rw [max_eq_left hMs, zero_pow hK.ne']
       positivity
   have hδ0 : 0 ≤ δ := ENNReal.toReal_nonneg.trans hδ
-  have key : 1 - meanDraws L / M ≤ δ ^ ((K : ℝ)⁻¹) := by
-    rcases le_or_gt (1 - meanDraws L / M) 0 with h | h
+  have key : 1 - meanSamples L / M ≤ δ ^ ((K : ℝ)⁻¹) := by
+    rcases le_or_gt (1 - meanSamples L / M) 0 with h | h
     · exact h.trans (Real.rpow_nonneg hδ0 _)
-    · set t₀ := 1 - meanDraws L / M with ht₀
+    · set t₀ := 1 - meanSamples L / M with ht₀
       have hsumt : ∑ ω, c * (1 - (S ω : ℝ) / M) = t₀ := by
         have e : ∀ ω, c * (1 - (S ω : ℝ) / M) = c - c * (S ω : ℝ) / M := fun ω => by ring
         rw [Finset.sum_congr rfl fun ω _ => e ω, Finset.sum_sub_distrib, hcsum, ← Finset.sum_div, ← hmean]
@@ -165,10 +165,10 @@ theorem ConverseExact : Guarantees.ConverseExact := by
           _ ≤ δ := havg
       have := Real.rpow_le_rpow (by positivity) hlow (by positivity : (0 : ℝ) ≤ (K : ℝ)⁻¹)
       rwa [Real.pow_rpow_inv_natCast h.le hK.ne'] at this
-  have h2 : 1 - δ ^ ((K : ℝ)⁻¹) ≤ meanDraws L / M := by linarith
+  have h2 : 1 - δ ^ ((K : ℝ)⁻¹) ≤ meanSamples L / M := by linarith
   rw [le_div_iff₀ hM] at h2
   calc M * (1 - δ ^ ((K : ℝ)⁻¹)) = (1 - δ ^ ((K : ℝ)⁻¹)) * M := mul_comm _ _
-    _ ≤ meanDraws L := h2
+    _ ≤ meanSamples L := h2
 
 /-- `e^{−x} ≤ 1 − x + x²/2` for `x ≥ 0`: `e^x ≥ 1 + x + x²/2`, and `(1 + x + x²/2)(1 − x + x²/2) = 1 + x⁴/4`. -/
 theorem exp_neg_le (x : ℝ) (hx : 0 ≤ x) : Real.exp (-x) ≤ 1 - x + x ^ 2 / 2 := by
@@ -264,7 +264,7 @@ theorem HeavyUnit : Guarantees.HeavyUnit := by
     ENNReal.toReal_one] at h
   linarith
 
-theorem UnequalDraws : Guarantees.UnequalDraws := Unequal.unequalDraws ConverseAsymptotic
+theorem UnequalSamples : Guarantees.UnequalSamples := Unequal.unequalSamples ConverseAsymptotic
 
 theorem UnequalCost : Guarantees.UnequalCost := fun _ w _ _ _ _ _ _ _ hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL =>
   Unequal.unequalCost_of_le ConverseAsymptotic w hρ ha haA hw hC hδ0 hδ1 hf ho hAΛ L hL

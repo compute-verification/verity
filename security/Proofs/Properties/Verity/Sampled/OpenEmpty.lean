@@ -233,7 +233,7 @@ structure AtLeaf (o : OpeningAt E g') (ν key : ByteArray) (s r n : ℕ) {block 
   round_eq : (o.p.2 : ℕ) = r
   count_eq : o.n = n
   block_eq : o.T.spec.block = block
-  draw_eq : HEq (o.T.sample.2 o.p.1 o.p.2) d₀
+  sample_eq : HEq (o.T.sample.2 o.p.1 o.p.2) d₀
 
 /-- **The empty class misses at the leaf**: where the play ends in a close that records its log and `o` describes the
 node at the sample `d₀`'s leaf, an empty class at `bits` means no sample with `d₀`'s leaf has its first `n` coins `bits`

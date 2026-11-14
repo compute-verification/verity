@@ -15,7 +15,7 @@ which the verifier's work table sets per stratum beside `w_s` (one when it names
 
 The work sampling design is `SamplingDesign.stratified` at those sizes (`SamplingDesign.work`), so every theorem of the stratified sampling design and of the one-stage
 audit holds of it as stated: `stratified_escape`, `stratified_escape_floor`, `audit_whole_stratum`,
-`extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_drawn` and the Flock instantiations. What is new,
+`extraction_audit_whole_stratum`, `audit_profile`, `audit_count`, `audit_sampled` and the Flock instantiations. What is new,
 for every floor `f ≥ 1`:
 
 * `floor_le_workK`: **the floor**. A stratum samples at least `min(n_s, f_s)` units, so every non-empty stratum samples at least
@@ -375,7 +375,7 @@ theorem countK_self (σ : Fin n → Fin m) (s : Fin m) : countK σ n s = (stratu
     rw [countRule_self hpos hn, min_self]
 
 /-- **The count sampling design at `C = N` has no sampling term** (a recursive inner session's full sample, `rec_live.full_draw`): its
-sample is every unit (`stratified_draw_full`), so `miss K = 0` for `K ≥ 1`. -/
+sample is every unit (`stratified_sample_full`), so `miss K = 0` for `K ≥ 1`. -/
 theorem countK_self_miss (σ : Fin n → Fin m) {K : ℕ} (hK : 1 ≤ K) :
     (stratified σ (countK σ n) (countK_le σ n)).miss K = 0 :=
   stratified_full_miss σ _ _ (countK_self σ) hK

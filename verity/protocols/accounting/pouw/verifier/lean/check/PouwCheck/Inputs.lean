@@ -206,7 +206,7 @@ bytes it was read from. -/
 def WindowCommitmentRecord.digest (c : WindowCommitmentRecord) : ByteArray :=
   Flock.WindowRecord.digestOf c.format c.bytes
 
-/-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
+/-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitSample`, decoded with this check's own
 refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its sampling design to `outcome`. -/
 
 deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.SamplingDesign
@@ -255,7 +255,7 @@ def pOf (s ctx : String) : V (Nat × Nat) :=
 
 /-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
 live execution phase's `salt` (`saltOf`). -/
-def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
+def drawOf (j : Json) : V Flock.Draw.UnitSample := do
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
     throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
@@ -290,7 +290,7 @@ def saltOf (j : Json) : V (Option Json) :=
 
 /-- What the service said. -/
 inductive Said where
-  | accept (profile : Core.Integrity) (draw : Flock.Draw.UnitDraw)
+  | accept (profile : Core.Integrity) (draw : Flock.Draw.UnitSample)
   | reject (reason : String)
   | undecided (reason : String)
 

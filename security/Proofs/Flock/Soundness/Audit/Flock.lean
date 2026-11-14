@@ -31,7 +31,7 @@ schedule, so every other table's coins are part of its strategy.
 * `flock_inputs_sound`: the input unit, an always-proved table, likewise (`InputsLoweringSound`);
 * `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
   `δ(K) = miss K + 2^-205`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-205`;
-* `flock_oracle_drawn`, `flock_oracle_cone`: sampled proof blocks, and a consumer's value through its cone;
+* `flock_oracle_sampled`, `flock_oracle_cone`: sampled proof blocks, and a consumer's value through its cone;
 
 Mutual correlated agreement is proved (`mcaError_le_bchks25`), so there is no other hypothesis.
 Of `Audit/`, only this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`)
@@ -182,12 +182,12 @@ theorem flock_oracle_count_subset
 
 /-- **Sampled proof blocks of the Flock audit** are correct up to `2^-205`, even for a consumer who looks
 after the sample. -/
-theorem flock_oracle_drawn
+theorem flock_oracle_sampled
     (plan : Finset (Fin n) → (Fin C.N → Bool) → List FlockTable) (hlow : P.LoweringSound plan)
     (L : SamplingDesign n) (σ : Strategy (audit L (Fin C.N → Bool) (flockSession plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ (flockSession plan)) σ ≤
       ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  P.oracle_drawn (P.flock_session_sound plan hlow) σ
+  P.oracle_sampled (P.flock_session_sound plan hlow) σ
 
 /-- **A consumer's value in the Flock audit**: for committed wires `T` fixed before the sample, the
 audit accepts with a wrong wire of `T` with probability at most the largest miss probability in

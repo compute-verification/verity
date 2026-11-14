@@ -62,7 +62,7 @@ form, bits and efficiency are the compiled sampled verifier's at the deployed re
   deployed trace commitment's opening program, hm96 leaves of rows that place the opened bit under the verifier's own
   registered path check; at the deployed record by definition and proved (`SamplingDeploy.deploy_commit`,
   `SamplingDeploy.row_places`).
-* `DrawSlots` (`Sampling.Select.DrawDesign`): on every statement that parses and whose query evaluates, the partition and
+* `DrawSlots` (`Sampling.Select.SampleLaw`): on every statement that parses and whose query evaluates, the partition and
   design are the verifier's own: the partition has the shape of its layout, and the design is the one `Slots.select`
   samples, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's
   run, which builds `D`.

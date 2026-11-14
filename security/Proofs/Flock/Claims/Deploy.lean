@@ -60,7 +60,7 @@ SHA-512 call an oracle query.
   an `OC.query`, the session's digests and the live coins' among them (S12's `msg_sha512`, `dgWith`); then, with no
   hash, the live session's custody (`checks`): the last message's statement is `x`, the record's sample is the statement's,
   the record's link and rounds are the live messages and coins (`custody`); then the scope (`ProvedScope.check`) and a
-  draw-less session's refusal (`drawDesign zk tags false none`), and last S0, the record in its canonical text (`RecordText.check`),
+  draw-less session's refusal (`sampleLaw zk tags false none`), and last S0, the record in its canonical text (`RecordText.check`),
   as `verifyCmd` orders them.
 * **Rounds.** `k(x) = 2 + Σ_tables 2 · repRounds`, the link, every recorded round and the last message (`rounds`), of
   the session the statement sets up at SHA-512 (`setupOf`).
@@ -223,17 +223,17 @@ def setupCallsOf (h : ByteArray → ByteArray) (r : Readable.Read) : ℕ :=
     r.I.work r.I.stratified r.I.closure r.publicInputs
 
 /-- **The checks after the verdict**, with no hash: the last message's statement is `x`, the record's sample is the
-statement's whatever its key order (`drawEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the
+statement's whatever its key order (`sampleEq`: `JsonEquiv`, objects as finite maps, as the service's dict equality), the
 live session's custody, the verifier's scope check, a draw-less session's refusal, and last the record's canonical text
 (S0, `RecordText.check`: the record is what `printT` prints of what it parses to). -/
 def checks (zk : Bool) (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray)
     (c₁ : Coin) (mids : List (Claims.Msg × Coin)) (f : Final) : V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"
-  Record.check (drawEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
+  Record.check (sampleEq (FlockSoundness.Discharge.Exec.recordDraw f.record) s.read.draw)
     "live: the record's draw is not the statement's"
   custody spec (← liveOf spec f.record) link c₁ mids
   s.read.check
-  (if s.read.draw.isNone then ProvedScope.drawDesign zk s.read.tags false none else pure ())
+  (if s.read.draw.isNone then ProvedScope.sampleLaw zk s.read.tags false none else pure ())
   RecordText.check f.record
 
 /-- **The decision at a session**: the shipped verdict over `OC` on its tables, then the checks. -/

@@ -33,8 +33,8 @@ lp-zkbind's `sitesZAt`, `layZAt`, `rsZAt` and `rsZAt_computes` (`ZkBind/At.lean`
 `tablesAtZKH dj y₀`, as HiddenExec's `sitesAtH`, `layAtH`, `rsAtH` and `rsAtH_computes` are at the public path's
 `tablesAtH`:
 
-* `tableShH`: the public hidden-output table (`HiddenExec.TableH`) at the same sample: the `DrawSetupZKH`'s
-  `DrawSetupH` at `zkInputs I` and its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's
+* `tableShH`: the public hidden-output table (`HiddenExec.TableH`) at the same sample: the `SampleSetupZKH`'s
+  `SampleSetupH` at `zkInputs I` and its `table`, or `y₀`'s refused one. Its statement is the `--zk` table's
   (`tableAtZKH_S`, both `stmtOf` of setupHidden's statement at the same regions).
 * `sitesShH`, `layShH`, `rsShH`, `rsShH_computes`: HiddenExec's `keyLayoutH` and `keyRowsH` at `tableShH`'s sites.
 * `placeZH`: each sampled proof block's place in its `--zk` table, `keyPlaceH`'s along `tableAtZKH_S`; `decAgreeH`: the two
@@ -69,13 +69,13 @@ theorem decode_placeCast {C : Verity.Boolean.Circuit} {n : ℕ} {P : Audit.Parti
 /-! ## The public hidden-output table at each `--zk` table's sample -/
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
+  (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
 
 open Classical in
-/-- **The public hidden-output table at the `--zk` table's sample**: the sample's `DrawSetupZKH`'s table, or `y₀`'s
+/-- **The public hidden-output table at the `--zk` table's sample**: the sample's `SampleSetupZKH`'s table, or `y₀`'s
 refused one. -/
 noncomputable def tableShH (S : Finset (Fin n)) : TableH (zkInputs I) mPts S :=
-  if h : Nonempty (DrawSetupZKH I mPts S (dj S)) then (Classical.choice h).x.table else y₀.x.refused S
+  if h : Nonempty (SampleSetupZKH I mPts S (dj S)) then (Classical.choice h).x.table else y₀.x.refused S
 
 /-- **The `--zk` table's statement is the public table's**, at every sample: both are `stmtOf` of the same setupHidden
 statement at the same regions. -/
@@ -128,7 +128,7 @@ theorem sitesShH_bcSite :
   intro S R u h M hM
   show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc (rowsFit_of_scopeH (zkTyped ht) hc hscope)) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
       unfold tableShH
       rw [dite_eq_left_of_eq_true (eq_true hS)]

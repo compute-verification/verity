@@ -55,7 +55,7 @@ local notation "𝔽" => FlockLevel3.GF128
 section One
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
+  (y₀ : SampleSetupZKH I mPts S₀ (dj S₀)) {Reg : Type}
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hrf : Hidden.Any.RowsFitS c)
 
@@ -89,7 +89,7 @@ theorem sitesShHI_bcSite :
   intro S R u h M hM
   show BcSiteH ((tableShH dj y₀ S).acc (zkTyped ht) hc hrf) pub ((tableShH dj y₀ S).o u h)
     ((tableShH dj y₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupZKH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupZKH I mPts S (dj S))
   · have e : tableShH dj y₀ S = (Classical.choice hS).x.table := by
       unfold tableShH
       rw [dite_eq_left_of_eq_true (eq_true hS)]
@@ -204,7 +204,7 @@ end One
 section J
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+  {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
   (ht : I.tags.typed = false) {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
   (hrf : Hidden.Any.RowsFitS c)
 
@@ -239,7 +239,7 @@ include hpub in
 /-- `BcSiteH` at a table set up at table `j`'s inputs (`tableH_bcSiteI` at `inputsJ I j`). -/
 theorem tableShHJ_bcSiteI {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableH I' mPts S')
     (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
-    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
+    (hX : ∃ (j : ℕ) (d : Lean.Json) (x : SampleSetupH (inputsJ I j) mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
     BcSiteH (Tb.2.acc p₁ p₂ hrf) pub (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
@@ -257,7 +257,7 @@ theorem sitesShHJI_bcSite :
   intro S R u h M hM
   refine bcSiteH_recast _ (congrArg TabSpec.S (tabOfShHJ_eq dj y₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJ_eq dj y₀ S R u)).symm _ _ ?_
-  by_cases hS : Nonempty (DrawSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
+  by_cases hS : Nonempty (SampleSetupZHJ (inputsJ I (partOf I (dj S) u.val)) mPts
     (partS I (dj S) S (partOf I (dj S) u.val)) (drawJ I (dj S) (partOf I (dj S) u.val)))
   · exact tableShHJ_bcSiteI hrf hpub _ _ _
       ⟨_, _, (Classical.choice hS).x, tableShHJ_set dj y₀ hS⟩ (mem_partS h)

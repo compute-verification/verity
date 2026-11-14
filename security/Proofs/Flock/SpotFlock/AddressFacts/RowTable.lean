@@ -33,7 +33,7 @@ import all Lean.Data.Json.Basic
 # The labels of a checked inner block's session
 
 `AddressRow.Sits h` (`RowOf`) asks, at an accepted run, that the session's instances be labelled by their slots
-(`LabelledAt` at `drawSlot`). This file proves that part, `CheckedRun.labelled_of_ok`, from what the second stage
+(`LabelledAt` at `sampleSlot`). This file proves that part, `CheckedRun.labelled_of_ok`, from what the second stage
 checks of the session's statement and what Flock's setup computes of its public file:
 
 * the session is one table, at a table count of at most one (`CheckedRun.one_table`): the statement check holds a
@@ -47,7 +47,7 @@ checks of the session's statement and what Flock's setup computes of its public 
 * the second stage's sample check holds the statement's sample to its own subset sample, which the normalized sample Flock
   reads parses to (`proved_of_wf`), so each sampled proof block is below the part's count.
 
-`drawn_of_ok` gives the sampled proof blocks as the second sample's units in the part, which the rest of `Sits` reads.
+`sampled_of_ok` gives the sampled proof blocks as the second sample's units in the part, which the rest of `Sits` reads.
 -/
 
 @[expose] public section
@@ -68,7 +68,7 @@ theorem ofJson?_draw {j : Json} {S : Spot.SecondStage.Stmt} (hS : Spot.SecondSta
   · split at hS <;> cases hS <;> assumption
 
 /-- **The second stage's statement of a session holds the session's sample**, parsed. -/
-theorem stmtJsonOf_draw {h : Held} {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt}
+theorem stmtJsonOf_sample {h : Held} {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt}
     (hS : stmtJsonOf h t w = some S) : ∃ b, w.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok S.draw := by
   unfold stmtJsonOf at hS
   obtain ⟨hdr, -, hS⟩ := Option.bind_eq_some_iff.1 hS
@@ -139,7 +139,7 @@ header's `units.indices` and writes, at the sample's proved units, their indices
 theorem drawn_units {c : _root_.Flock.Circuit} {pub pub' : _root_.Flock.Public} {d : Json}
     {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) (hp : pub.header = .obj m)
     (h : _root_.Flock.HmRow.drawn c pub d = .ok pub') :
-    ∃ D u a popIdx, _root_.Flock.Draw.UnitDraw.ofJson d = .ok D ∧
+    ∃ D u a popIdx, _root_.Flock.Draw.UnitSample.ofJson d = .ok D ∧
       _root_.Flock.J.get pub.header "units" "public file" = .ok u ∧
       _root_.Flock.J.arr u "indices" "public file" = .ok a ∧
       a.mapM (_root_.Flock.J.asNat · "a unit index") = .ok popIdx ∧ pub'.n = D.proved.size ∧
@@ -232,8 +232,8 @@ theorem one_table (hr : r.Ok h) : r.sts.size = 1 ∧ r.ins.read.I.count ≤ 1 :=
 /-- **The session's sampled proof blocks**: the session's statement is one table (`one_table`), set up at its sample, which parses
 to the second sample's units in the part counted from its first (`proved_of_wf` at the second stage's sample check), and
 the session's public file labels each sampled proof block by its slot in the part (`slots_of_population`). -/
-theorem drawn_of_ok (hr : r.Ok h) :
-    ∃ dj D draw, r.ins.read.draw = some dj ∧ _root_.Flock.Draw.UnitDraw.ofJson dj = .ok D ∧
+theorem sampled_of_ok (hr : r.Ok h) :
+    ∃ dj D draw, r.ins.read.draw = some dj ∧ _root_.Flock.Draw.UnitSample.ofJson dj = .ok D ∧
       secondDraw h r.c₀ r.c₁ = some draw ∧ r.sts[0]!.pub.n = D.proved.size ∧
       D.proved = ((((Spot.Draw.proved draw).map Int.toNat).filter
         ((partOf h r).holds (sampleOf h r).size)).map (· - (partOf h r).lo)) ∧
@@ -252,8 +252,8 @@ theorem drawn_of_ok (hr : r.Ok h) :
   have hwins := ins_of_setupOf hw hset
   obtain ⟨-, hH, -, -⟩ := stmtJsonOf_fields h hS
   have hpf := (ins_reads_public hwins).2
-  obtain ⟨dr, hdrm, hdr⟩ := FlockDeploy.Raw.ins_draw hwins
-  obtain ⟨b, hb', hjb⟩ := stmtJsonOf_draw hS
+  obtain ⟨dr, hdrm, hdr⟩ := FlockDeploy.Raw.ins_sample hwins
+  obtain ⟨b, hb', hjb⟩ := stmtJsonOf_sample hS
   rw [hb', Option.mapM_some, hjb] at hdrm
   obtain ⟨_, he, rfl⟩ := Depths.someMap_ok hdrm
   cases he
@@ -286,14 +286,14 @@ theorem drawn_of_ok (hr : r.Ok h) :
   obtain ⟨D, u, a, popIdx, hD, hu', ha, hidxs, hn', hunits⟩ := drawn_units hmw hm hdrawn
   have hH' : headerOf r.ins.read.I.publicFile = some S.header := by rw [hpf]; exact hH
   obtain ⟨hpn, hslot⟩ := slots_of_population (q := (sampleOf h r).size) (p := partOf h r) hl hH' hpo hu' ha hidxs
-  obtain ⟨D', hD', hpopD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec hdrawn
+  obtain ⟨D', hD', hpopD, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec hdrawn
   rw [hD] at hD'
   cases hD'
-  have hdl := FlockComplete.JsonRT.Ins.setup_drawDesign hsetup (by rw [hdj]; rfl)
+  have hdl := FlockComplete.JsonRT.Ins.setup_sampleLaw hsetup (by rw [hdj]; rfl)
   rw [hdj] at hdl
-  simp only [_root_.Flock.ProvedScope.drawDesign, hD] at hdl
-  have hlw : _root_.Flock.ProvedScope.samplingDesignWhy r.ins.read.zk r.ins.read.tags false D = none := by
-    cases e : _root_.Flock.ProvedScope.samplingDesignWhy r.ins.read.zk r.ins.read.tags false D with
+  simp only [_root_.Flock.ProvedScope.sampleLaw, hD] at hdl
+  have hlw : _root_.Flock.ProvedScope.lawWhy r.ins.read.zk r.ins.read.tags false D = none := by
+    cases e : _root_.Flock.ProvedScope.lawWhy r.ins.read.zk r.ins.read.tags false D with
     | none => rfl
     | some _ => rw [e] at hdl; cases hdl
   have hWd : Claims.Json.Wf S.draw := wf_of_jsonOf hjb
@@ -303,7 +303,7 @@ theorem drawn_of_ok (hr : r.Ok h) :
     unfold Spot.jeq
     rw [FlockDeploy.canon_jsonEquiv (FlockDeploy.jsonEquiv_norm _ hWd)]
     exact hsamp
-  have hprov := proved_of_wf (FlockDeploy.wf_norm _) hD (FlockComplete.JsonRT.samplingDesign_of_samplingDesignWhy hlw) hj
+  have hprov := proved_of_wf (FlockDeploy.wf_norm _) hD (FlockComplete.JsonRT.law_of_lawWhy hlw) hj
   have h0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hpos
   refine ⟨_, D, draw, hdj, hD, hdraw, by rw [h0, hn'], hprov, fun idx hidx n hn => ?_⟩
   rw [h0, unitIndices_of_units hunits] at hidx
@@ -316,13 +316,13 @@ theorem drawn_of_ok (hr : r.Ok h) :
   have e2 : D.proved.getD n 0 = D.proved[n] := by simp [hnD]
   rw [e1, e2, hslot _ hlt]
 
-/-- **A checked inner block's session labels its instances by their slots** (`drawn_of_ok`). -/
-theorem labelled_of_ok (hr : r.Ok h) : LabelledAt (drawSlot (partOf h r) r.ins.read.draw) r.sts := by
-  obtain ⟨dj, D, -, hdj, hD, -, hn, -, hidx⟩ := drawn_of_ok hr
+/-- **A checked inner block's session labels its instances by their slots** (`sampled_of_ok`). -/
+theorem labelled_of_ok (hr : r.Ok h) : LabelledAt (sampleSlot (partOf h r) r.ins.read.draw) r.sts := by
+  obtain ⟨dj, D, -, hdj, hD, -, hn, -, hidx⟩ := sampled_of_ok hr
   intro idx hi n hlt
   rw [hn] at hlt
   rw [hidx idx hi n hlt]
-  simp only [drawSlot, hdj, unitOf, hD]
+  simp only [sampleSlot, hdj, unitOf, hD]
 
 end CheckedRun
 

@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
 public import Proofs.Flock.Soundness.CROnly.Hiding
 public import Proofs.Flock.Soundness.ZK.RealLeaves
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 
 /-!
 # Salts from the operating system (A3)

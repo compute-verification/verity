@@ -9,7 +9,7 @@ public import Proofs.Flock.SpotFlock.RunsAs.Proved
 `spotRunAcceptsPlay` assembles the parts. The accepted run's steps (part 5, `accepted_steps`) give the first stage's
 select, the second stage's and round 2's check with no code. The held copies agree with what the run reads
 (`HeldMatches`), so the model's replay sample on round 0's coin is the select's units (part 1, `sample_read`), which are
-the units the sample proves (`proved_select`), and the model's second sample is the run's (part 2, `secondDraw_read`). What
+the units the sample proves (`proved_select`), and the model's second sample is the run's (part 2, `secondSample_read`). What
 the verifier holds is the model's (`OwnAgrees`), round 2 had statements (`statements_some`), and round 2's check gives
 the model's statement check (part 3, `RoundTwo`): `stmtOk_of_accepted`, which reads no session. The sessions accept
 (`SessionsAccept`), so the play accepts on its coins (part 4, `accepts_seqCoins`). The clauses round 2 does not make
@@ -106,7 +106,7 @@ theorem stmtOk_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Js
   have hss' : Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks it.source = .ok (draw₂, read₂) := by
     rw [hsample, ← hproved, ← hns', ← hks'']
     exact hss
-  have hsd : secondDraw h c₀ c₁ = some draw₂ := secondDraw_read h c₀ c₁ hss' (hpc.2 _ _ hss')
+  have hsd : secondDraw h c₀ c₁ = some draw₂ := secondSample_read h c₀ c₁ hss' (hpc.2 _ _ hss')
   have hpa := hm.parts draw rest read strata hsel' hstrata
   rw [← hproved] at hpa
   have hown : OwnAgrees h (runOwn i it ((Spot.Draw.proved draw).map Int.toNat) strata draw₂)

@@ -8,14 +8,14 @@ public import Proofs.Flock.SpotFlock.Cap
 import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
+import Proofs.Flock.Soundness.Discharge.Exec.LawSample
 import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.Sampling.Select.Second
 import Proofs.Flock.SamplingGeneric.TwoCode
 import Proofs.Flock.SpotFlock.Facts
 import Proofs.Flock.SpotFlock.Placement
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.Soundness.ExecSample
 import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.TreeMap.Raw.Lemmas
@@ -30,11 +30,11 @@ unit's instance (`rankAt`) is below the table's count (`Counted`), where the fir
 layout (`FirstSlots`).
 
 The unit is checked because the second stage drew a slot whose proof block it is (`RegTwo.checked`). Round 2 holds the
-session's sample to the verifier's own draw within the template's part (`second-sample`, `SecondStage.ownDraw`) by
+session's sample to the verifier's own draw within the template's part (`second-sample`, `SecondStage.ownSample`) by
 canonical text (`jeq`), and two printable values with one canonical text are equivalent, the parser reading `canon`'s
 text back to each (`jsonEquiv_of_jeq`). The session sets up with its statement's sample, normalized
-(`Raw.ins_draw`), so its sample's units are the drawn slots in the part, counted from its first (`units_of_equiv`).
-Its first table's instances are the units the sample proves (`Layout.drawn_spec`), and the unit's instance is the first
+(`Raw.ins_sample`), so its sample's units are the drawn slots in the part, counted from its first (`units_of_equiv`).
+Its first table's instances are the units the sample proves (`Layout.sampled_spec`), and the unit's instance is the first
 of them whose proof block is the unit (`CheckedRun.drawnAt`, `CheckedRun.counted_of`).
 
 The drawn slot is in its proof block's template's part (`fit_of`): the second stage's draw proves slots of its
@@ -132,8 +132,8 @@ theorem canon_of_jeq {a b : Json} (h : Spot.jeq a b = true) : ∃ s, _root_.Floc
 
 /-- **The verifier's own draw is printable.** -/
 theorem good_ownDraw (q : ℕ) (p : Spot.SecondStage.Part) (drawn : Array ℕ) :
-    Claims.Json.Good (Spot.SecondStage.ownDraw q p drawn) := by
-  simp only [Spot.SecondStage.ownDraw]
+    Claims.Json.Good (Spot.SecondStage.ownSample q p drawn) := by
+  simp only [Spot.SecondStage.ownSample]
   refine FlockComplete.JsonRT.good_mkObj (by simp) fun e he => ?_
   simp only [List.mem_cons, List.mem_nil_iff, or_false] at he
   rcases he with rfl | rfl | rfl | rfl
@@ -146,18 +146,18 @@ theorem good_ownDraw (q : ℕ) (p : Spot.SecondStage.Part) (drawn : Array ℕ) :
 
 /-- **The verifier's own draw's units**, at its key. -/
 theorem ownDraw_units (q : ℕ) (p : Spot.SecondStage.Part) (drawn : Array ℕ) :
-    (Spot.SecondStage.ownDraw q p drawn).getObjVal? "units" =
+    (Spot.SecondStage.ownSample q p drawn).getObjVal? "units" =
       .ok (Spot.natsJson ((drawn.filter (p.holds q)).map (· - p.lo))) := by
-  simp only [Spot.SecondStage.ownDraw]
+  simp only [Spot.SecondStage.ownSample]
   exact FlockComplete.JsonRT.getObjVal?_mkObj (by simp) (by simp)
 
 -- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A sample's units are its `units` field's**, as natural numbers. -/
-theorem ofJson_units {d : Json} {D : _root_.Flock.Draw.UnitDraw} (h : _root_.Flock.Draw.UnitDraw.ofJson d = .ok D) :
+theorem ofJson_units {d : Json} {D : _root_.Flock.Draw.UnitSample} (h : _root_.Flock.Draw.UnitSample.ofJson d = .ok D) :
     ∃ a, _root_.Flock.J.arr d "units" "unit_draw" = .ok a ∧
       a.mapM (_root_.Flock.J.asNat · "U2: a drawn unit") = .ok D.units := by
-  unfold _root_.Flock.Draw.UnitDraw.ofJson at h
+  unfold _root_.Flock.Draw.UnitSample.ofJson at h
   dsimp only at h
   simp only [FlockSoundness.Refine.throw_bind'] at h
   repeat' walk_step
@@ -212,8 +212,8 @@ theorem nats_of_equiv {a : Array Json} {us : Array ℕ} (he : FlockDeploy.JsonEq
 /-- **A sample equivalent to the verifier's own draw has its units**: the drawn slots in the part, counted from its
 first. -/
 theorem units_of_equiv {d : Json} (hw : Claims.Json.Wf d) {q : ℕ} {p : Spot.SecondStage.Part} {drawn : Array ℕ}
-    (he : FlockDeploy.JsonEquiv d (Spot.SecondStage.ownDraw q p drawn)) {D : _root_.Flock.Draw.UnitDraw}
-    (hD : _root_.Flock.Draw.UnitDraw.ofJson d = .ok D) :
+    (he : FlockDeploy.JsonEquiv d (Spot.SecondStage.ownSample q p drawn)) {D : _root_.Flock.Draw.UnitSample}
+    (hD : _root_.Flock.Draw.UnitSample.ofJson d = .ok D) :
     D.units = (drawn.filter (p.holds q)).map (· - p.lo) := by
   obtain ⟨a, ha, hm⟩ := ofJson_units hD
   obtain ⟨w, hw', hvw, -⟩ :=
@@ -337,21 +337,21 @@ theorem stratifiedWith_sub (src : ByteArray) (strata : Array _root_.Flock.Draw.S
     obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
     have hD : D = out'.qsort (fun x1 x2 => decide (x1 < x2)) := (Option.some.inj h1).symm
     intro x hx
-    rw [hD, FlockSoundness.Audit.DrawExec.mem_qsort] at hx
+    rw [hD, FlockSoundness.Audit.SampleExec.mem_qsort] at hx
     rcases hsub x hx with h0 | ⟨i, hi, j, hj, hx'⟩
     · simp at h0
     · have := List.mem_range'_1.1 hi
       exact ⟨i, by omega, j, hj, hx'⟩
 
 open Properties.Spot.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **A draw's units are slots of its population**: under a `subset` sampling design, or a stratified or work sampling design whose strata's
-ranges are the population's slots in order, every unit `drawUnits` returns is below the population. -/
-theorem drawUnits_lt {samplingDesign : _root_.Flock.Draw.SamplingDesign} {n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
-    (hb : _root_.Flock.Bridge.NotBernoulli samplingDesign)
-    (hSt : ∀ St : Array _root_.Flock.Draw.Stratum, ((∃ k, samplingDesign = .stratified k St) ∨
-      ∃ k ws, samplingDesign = .work k ws ∧ St = ws.map (·.toStratum)) →
+/-- **A draw's units are slots of its population**: under a `subset` law, or a stratified or work law whose strata's
+ranges are the population's slots in order, every unit `sampleUnits` returns is below the population. -/
+theorem drawUnits_lt {law : _root_.Flock.Draw.Law} {n : ℕ} {src : ByteArray} {units : Array ℕ} {read : ℕ}
+    (hb : _root_.Flock.Bridge.NotBernoulli law)
+    (hSt : ∀ St : Array _root_.Flock.Draw.Stratum, ((∃ k, law = .stratified k St) ∨
+      ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) →
         St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n)
-    (h : Spot.Draw.drawUnits samplingDesign n src = .ok (units, read)) : ∀ u ∈ units, u < n := by
+    (h : Spot.Draw.sampleUnits law n src = .ok (units, read)) : ∀ u ∈ units, u < n := by
   have hstrata : ∀ St : Array _root_.Flock.Draw.Stratum,
       St.toList.flatMap (fun s => Properties.Spot.SecurityProofs.expand s.units.toList) = List.range n →
       ∀ p D, (_root_.Flock.Draw.stratifiedWith (fun _ need => Spot.Draw.take src need) St).run 0 = .ok (some D, p) →
@@ -365,8 +365,8 @@ theorem drawUnits_lt {samplingDesign : _root_.Flock.Draw.SamplingDesign} {n : �
         List.getD_eq_getElem _ _ (by rw [← Properties.Spot.SecurityProofs.stratum_size']; exact hj)]
       exact List.getElem_mem _
     exact List.mem_range.1 hmem
-  unfold Spot.Draw.drawUnits at h
-  cases hw : (_root_.Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) samplingDesign n).run 0 with
+  unfold Spot.Draw.sampleUnits at h
+  cases hw : (_root_.Flock.Draw.drawWith (fun _ need => Spot.Draw.take src need) law n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>
     obtain ⟨r, read'⟩ := x
@@ -378,7 +378,7 @@ theorem drawUnits_lt {samplingDesign : _root_.Flock.Draw.SamplingDesign} {n : �
     dsimp only at h
     obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
     subst hu
-    cases samplingDesign with
+    cases law with
     | subset k =>
       unfold _root_.Flock.Draw.drawWith at hw
       dsimp only at hw
@@ -430,13 +430,13 @@ theorem drawUnits_lt {samplingDesign : _root_.Flock.Draw.SamplingDesign} {n : �
           exact hstrata _ (hSt _ (Or.inr ⟨k, strata, rfl, rfl⟩)) p D ho
 
 open Properties.Spot.SecurityProofs (bind_eq_ok throw_bind_ne) in
-/-- **An accepted second stage's draw** is the object `drawFirstRead` writes for the units it drew under `secondSamplingDesign`'s
-Flock sampling design over the `|sample|·Σ n_t` proof blocks. -/
+/-- **An accepted second stage's draw** is the object `sampleFirstRead` writes for the units it drew under `secondLaw`'s
+Flock law over the `|sample|·Σ n_t` proof blocks. -/
 theorem selectSecond_draw {sample ns ks : Array ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
-    ∃ parsed units read', Spot.Draw.flockSamplingDesign (Spot.Select.secondSamplingDesign sample ns ks) (sample.size * ns.toList.sum) =
-        .ok parsed ∧ Spot.Draw.drawUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read') ∧
-      draw = Json.mkObj ((Spot.entries (Spot.Select.secondSamplingDesign sample ns ks)).toList ++
+    ∃ parsed units read', Spot.Draw.flockLaw (Spot.Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) =
+        .ok parsed ∧ Spot.Draw.sampleUnits parsed (sample.size * ns.toList.sum) src = .ok (units, read') ∧
+      draw = Json.mkObj ((Spot.entries (Spot.Select.secondLaw sample ns ks)).toList ++
         [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", Spot.natsJson units)]) := by
   unfold Spot.Select.selectSecond at h
   cases hq : Spot.Select.secondProblem sample ns ks with
@@ -449,7 +449,7 @@ theorem selectSecond_draw {sample ns ks : Array ℕ} {src : ByteArray} {draw : J
     · exact absurd h (throw_bind_ne _ _ _)
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    unfold Spot.Draw.drawFirstRead at hd
+    unfold Spot.Draw.sampleFirstRead at hd
     obtain ⟨parsed, hp, hd⟩ := bind_eq_ok.1 hd
     obtain ⟨⟨units, read''⟩, hu, hd⟩ := bind_eq_ok.1 hd
     simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at hd
@@ -462,7 +462,7 @@ theorem proved_second_lt {sample ns ks : Array ℕ} {src : ByteArray} {draw : Js
     (h : Spot.Select.selectSecond sample ns ks src = .ok (draw, read)) :
     ∀ j ∈ Spot.Draw.proved draw, ∃ v : ℕ, j = v ∧ v < sample.size * ns.toList.sum := by
   obtain ⟨parsed, units, read', hp, hu, rfl⟩ := selectSecond_draw h
-  obtain ⟨ws, rfl, hmap⟩ := Properties.Spot.SecurityProofs.flockSamplingDesign_second _ _ _ _ _ hp
+  obtain ⟨ws, rfl, hmap⟩ := Properties.Spot.SecurityProofs.flockLaw_second _ _ _ _ _ hp
   have hlt := drawUnits_lt (fun a b => by simp) (fun St hSt => by
       rcases hSt with ⟨k, hk⟩ | ⟨k, ws', hk, rfl⟩
       · cases hk
@@ -470,17 +470,17 @@ theorem proved_second_lt {sample ns ks : Array ℕ} {src : ByteArray} {draw : Js
         exact Properties.Spot.SecurityProofs.positions_second hmap) hu
   intro j hj
   unfold Spot.Draw.proved at hj
-  rw [FlockSoundness.Audit.DrawExec.mem_qsort] at hj
+  rw [FlockSoundness.Audit.SampleExec.mem_qsort] at hj
   rcases Array.mem_append.1 hj with hj | hj
   · dsimp only at hj
-    rw [Properties.Spot.SecurityProofs.getD_draw_units] at hj
+    rw [Properties.Spot.SecurityProofs.getD_sample_units] at hj
     simp only [Spot.natsJson, Array.mem_filterMap, Array.mem_map] at hj
     obtain ⟨_, ⟨v, hv, rfl⟩, hjv⟩ := hj
     rw [Properties.Spot.SecurityProofs.int_toJson] at hjv
     cases hjv
     exact ⟨v, rfl, hlt v hv⟩
   · dsimp only at hj
-    have hc : Spot.getD (Json.mkObj ((Spot.entries (Spot.Select.secondSamplingDesign sample ns ks)).toList ++
+    have hc : Spot.getD (Json.mkObj ((Spot.entries (Spot.Select.secondLaw sample ns ks)).toList ++
         [("population", Lean.toJson (sample.size * ns.toList.sum)), ("units", Spot.natsJson units)])) "closure" =
         Json.null := rfl
     rw [hc] at hj
@@ -491,7 +491,7 @@ end DrawnAt
 variable (h : Held)
 
 /-- **Round 2's statement reads the session statement's sample**: the JSON its `draw` bytes parse to. -/
-theorem stmtJsonOf_draw {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt} (hS : stmtJsonOf h t w = some S) :
+theorem stmtJsonOf_sample {t : ℕ} {w : FlockDeploy.Raw} {S : Spot.SecondStage.Stmt} (hS : stmtJsonOf h t w = some S) :
     ∃ b, w.draw = some b ∧ FlockDeploy.jsonOf "draw" b = .ok S.draw := by
   unfold stmtJsonOf at hS
   obtain ⟨hdr, -, hS⟩ := Option.bind_eq_some_iff.1 hS
@@ -645,15 +645,15 @@ theorem firstSlots_of {K : ℕ} (hK : firstK h.reg.first = some K)
     obtain rfl := Except.ok.inj hn'
     rw [hlo] at hl'
     obtain rfl := Except.ok.inj hl'
-    obtain rfl : derived = none := Properties.Spot.SecurityProofs.deriveSamplingDesign_subset _ _ _ _ _
-      (Properties.Spot.SecurityProofs.flockSamplingDesign_subset _ _ _ hf).1 hder
+    obtain rfl : derived = none := Properties.Spot.SecurityProofs.deriveLaw_subset _ _ _ _ _
+      (Properties.Spot.SecurityProofs.flockLaw_subset _ _ _ hf).1 hder
     rw [hpu hc] at hi ⊢
     rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
     · exact absurd hall hne
-    · have hp' : Spot.Draw.flockSamplingDesign named n = .ok parsed := hp
+    · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
       rw [hf] at hp'
       obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
-      have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu
+      have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
       have hlt := DrawnAt.drawUnits_lt (fun a b => by simp) (fun St hSt => by
         rcases hSt with ⟨k, hk⟩ | ⟨k, ws, hk, -⟩ <;> cases hk) hu'
       have hmem : units.getD i 0 ∈ units := by
@@ -674,10 +674,10 @@ namespace CheckedRun
 
 /-- **A checked unit's one-table session draws its template's part of the second stage's sample**: in an accepted
 run, the second stage drew `draw` (`secondDraw`) and round 1's record lists the replay sample (`blocksOf`); the units
-the session's sample proves (`drawnOf`) are its first table's instances (`Layout.drawn_spec`); and its sample's units
+the session's sample proves (`drawnOf`) are its first table's instances (`Layout.sampled_spec`); and its sample's units
 are the drawn slots in the unit's template's part, counted from its first (`units_of_equiv`). -/
 theorem drawnAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
-    ∃ draw rec, ∃ D : _root_.Flock.Draw.UnitDraw, secondDraw h r.c₀ r.c₁ = some draw ∧ jsonMsg r.m₁ = some rec ∧
+    ∃ draw rec, ∃ D : _root_.Flock.Draw.UnitSample, secondDraw h r.c₀ r.c₁ = some draw ∧ jsonMsg r.m₁ = some rec ∧
       blocksOf rec = (h.reg.sample (src r.c₀)).toList ∧
       drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList ∧
       r.sts[0]!.pub.n = D.proved.size ∧
@@ -694,8 +694,8 @@ theorem drawnAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) 
   have hio := readsOk_order h hat.2 hst hrec hdraw
   obtain ⟨-, -, -, -, -, hjeq, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
   have hwi := ins_of_setupOf hw hset
-  obtain ⟨b, hb, hjo⟩ := stmtJsonOf_draw h hS
-  obtain ⟨draw', hdm, hdr⟩ := FlockDeploy.Raw.ins_draw hwi
+  obtain ⟨b, hb, hjo⟩ := stmtJsonOf_sample h hS
+  obtain ⟨draw', hdm, hdr⟩ := FlockDeploy.Raw.ins_sample hwi
   rw [hb, Option.mapM_some] at hdm
   obtain ⟨dr, hdr', rfl⟩ := Depths.someMap_ok hdm
   rw [hjo] at hdr'
@@ -719,7 +719,7 @@ theorem drawnAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) 
   rw [_root_.Flock.Readable.tagsAt_hiddenOutputs, hh] at hd
   simp only [↓reduceIte] at hd
   obtain ⟨pop, -, -, hsome⟩ := (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd).pub
-  obtain ⟨D, hD, -, hn, -, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec (hsome _ hrd)
+  obtain ⟨D, hD, -, hn, -, -⟩ := FlockSoundness.Discharge.Layout.sampled_spec (hsome _ hrd)
   have hread : FlockDeploy.readOf true (unitStmt h r.m₂ r.u) = some r.ins.read := by
     simp [FlockDeploy.readOf, hins]
   refine ⟨draw, rec, D, hdraw, hrec, blocksOf_of_interiorOrderOk hio, ?_, ?_,
@@ -762,10 +762,10 @@ theorem counted_of {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 
     rw [hun]
     exact Array.mem_map.2 ⟨j.toNat, Array.mem_filter.2 ⟨Array.mem_map.2 ⟨j, hj, rfl⟩, hP⟩, rfl⟩
   have hmemP : j.toNat - (partAt h (h.reg.sample (src r.c₀)).size (templateOf h.ms r.u)).lo ∈ D.proved := by
-    unfold _root_.Flock.Draw.UnitDraw.proved
+    unfold _root_.Flock.Draw.UnitSample.proved
     split
     · exact hmemU
-    · exact (FlockSoundness.Audit.DrawExec.mem_qsort _ _ _).2 (Array.mem_append_left _ hmemU)
+    · exact (FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).2 (Array.mem_append_left _ hmemU)
   show rankAt h [] r.m₁ (r.xS h) r.u < r.sts[0]!.pub.n
   unfold rankAt
   simp only [hrec, Option.map_some, Option.getD_some, hbl, Array.toArray_toList, hdr, hn]

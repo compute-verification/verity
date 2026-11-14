@@ -52,7 +52,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀))
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {Reg : Type}
 
 include ht hc in
@@ -65,7 +65,7 @@ theorem checkFactsH : CheckFacts c := by
 include hpub in
 /-- **The site fact at a sampled table under hidden outputs**, `tableH_bcSiteS` with the template instance's bound from
 the check (`Layout.vu_lt_pow2_of`) in place of the unit returning the outputs. -/
-theorem tableH_bcSiteI {S : Finset (Fin n)} (x : DrawSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableH_bcSiteI {S : Finset (Fin n)} (x : SampleSetupH I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteH (x.table.acc ht hc hrf) pub (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : x.st.c = c := x.table.c_eq hc
   refine ⟨dj S, x.D, rfl, x.hD, Layout.proved_lt_population x.hD, fun r hr => List.mem_map_of_mem hr, ?_, ?_, ?_⟩
@@ -88,7 +88,7 @@ theorem sitesAtH_bcSiteI :
           ((sitesAtH ht hc hrf dj x₀).vu S R u h) u.val := by
   intro S R u h M hM
   show BcSiteH ((tableAtH dj x₀ S).acc ht hc hrf) pub ((tableAtH dj x₀ S).o u h) ((tableAtH dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupH I mPts S (dj S))
   · have e : tableAtH dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtH
       rw [dite_eq_left_of_eq_true (eq_true hS)]

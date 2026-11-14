@@ -127,7 +127,7 @@ shared rows: its circuit, form, partition, program and registered reads `po`'s, 
 sample the one compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else
 none`, at the part's tags), as the model's `Raw.ins` reads a sample. Its public file is the one the component reads for
 part `j` (`publicFile`; the model's part session replaces it with the staged one), and each parsed field's bytes are the
-canonical bytes of what the component read (`partitionB`, `registeredB`, `bindingsB`, `drawB`). -/
+canonical bytes of what the component read (`partitionB`, `registeredB`, `bindingsB`, `sampleB`). -/
 structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartProof) (bs : Core.Blobs) (j : ℕ)
     (q : PartX) : Prop where
   bindings : jsonOf "rec-bindings" q.bindings = .ok po.bindings
@@ -145,7 +145,7 @@ structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartPro
   partitionB : (VStar.Recursive.canonBytes po.partition).map some = .ok q.base.partition
   registeredB : po.registered.mapM VStar.Recursive.canonBytes = .ok q.base.registered
   bindingsB : VStar.Recursive.canonBytes po.bindings = .ok q.bindings
-  drawB : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
+  sampleB : ∀ tags0 recordB record, Flock.Tags.find? VStar.Recursive.STATEMENT = some tags0 →
     bs.get pp.record s!"part {j}'s record" = .ok recordB → String.fromUTF8? recordB = some record →
     (if (Flock.Zk.tags tags0
         (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows then Flock.Witness.recordDraw record else none).mapM

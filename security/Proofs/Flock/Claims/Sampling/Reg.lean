@@ -2,6 +2,7 @@ module
 
 public import Spot.Registration
 public import Proofs.Flock.Claims.Sampling.Code
+public import Proofs.Flock.Claims.Sampling.Select.SampleLaw
 public import Proofs.Flock.Claims.Sampling.Select.DrawDesign
 public import Properties.Spot.Second
 
@@ -51,9 +52,9 @@ def Reg.layout (g : Reg) : Spot.Slots.SlotOrder :=
   | .error _ => default
 
 /-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
-is refused (`drawChecked`). -/
+is refused (`sampleChecked`). -/
 def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
+  (sampleChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
 (`first`), each template's proof blocks in a replay block (`ns`, a cell each) and the second stage's count in each of

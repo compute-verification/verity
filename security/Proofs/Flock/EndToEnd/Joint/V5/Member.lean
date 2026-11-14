@@ -19,7 +19,7 @@ coins are the sample's at which the sample ended and the earlier sessions' sampl
 * `JointAuditV5.endShare_mul_epsKs_le`, `JointAuditV5.endShare_mul_link_le`: `ε_ks` and `ε_bind` read only member `k`'s
   part of the sample, so that share of each at `memberSamplingDesign` is at most the term at `design k`, which samples the sample's
   coins alone and counts the samples that ran out too;
-* `JointAuditV5.member_accepted_drawnWrong_le`: the sample ends and member `k`'s session in the window's audit accepts
+* `JointAuditV5.member_accepted_sampledWrong_le`: the sample ends and member `k`'s session in the window's audit accepts
   with a sampled proof block of its part incorrect with probability at most `ε_ks,k + ε_bind,k` at `design k`
   (`MemberV5.accepted_drawnWrong_le` at `memberSamplingDesign`).
 
@@ -175,7 +175,7 @@ theorem readShare_memberSamplingDesign (τ : Strategy w.game) (k : Fin w.ms.leng
       ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.endDesign k) p ×
           ((c : w.EndΩ) → w.before τ k c.1) :=
-    Equiv.prodSubtypeFstEquivSubtypeProd (p := fun c : w.EndΩ => ReadsDrawZ (L := w.endDesign k) execArith
+    Equiv.prodSubtypeFstEquivSubtypeProd (p := fun c : w.EndΩ => ReadsSampleZ (L := w.endDesign k) execArith
       (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (w.ms.get k).vb p c)
   have hΩ : Fintype.card (w.memberSamplingDesign τ k).Ω =
@@ -239,7 +239,7 @@ theorem endShare_mul_link_le (τ : Strategy w.game) (k : Fin w.ms.length) :
 /-- **The sample ends and member `k`'s session in the window's audit accepts with a sampled proof block of its part
 incorrect** with probability at most `ε_ks,k + ε_bind,k` at `design k`, under `cr/sha-512` and `ecr/sha-512` at its
 session played alone. -/
-theorem member_accepted_drawnWrong_le (τ : Strategy w.game) (k : Fin w.ms.length)
+theorem member_accepted_sampledWrong_le (τ : Strategy w.game) (k : Fin w.ms.length)
     (hCR : ∀ ω j, TableCRZ execArith hs512
       (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))

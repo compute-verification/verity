@@ -42,7 +42,7 @@ theorem ExfiltrationOptimum : Guarantees.ExfiltrationOptimum := by
     have h2 : 0 ≤ 1 - δ ^ ((K + 1 : ℝ)⁻¹) := by
       have : δ ^ ((K + 1 : ℝ)⁻¹) ≤ 1 := Real.rpow_le_one hδ0.le hδ1 (by positivity)
       linarith
-    exact (mul_nonpos_of_nonpos_of_nonneg h1 h2).trans (Exfil.meanDraws_nonneg L)
+    exact (mul_nonpos_of_nonpos_of_nonneg h1 h2).trans (Exfil.meanSamples_nonneg L)
 
 theorem RefinementRule : Guarantees.RefinementRule := by
   intro n r b b' K s f o δ ℓ hr hs hf ho hδ0 hδ1 hn hlo hhi hw
@@ -56,7 +56,7 @@ theorem RefinementRule : Guarantees.RefinementRule := by
     refine ⟨L, hL, ?_⟩
     rw [Exfil.cost_const]
     have hfrac : unitCost f o s / (unitCost f o s + 1) ≤ 1 := (div_le_one (by linarith)).2 (by linarith)
-    calc meanDraws L * unitCost f o s
+    calc meanSamples L * unitCost f o s
         ≤ (n * Real.log δ⁻¹ / (K + 1) + ε / (unitCost f o s + 1)) * unitCost f o s :=
           mul_le_mul_of_nonneg_right hm hc
       _ = unitCost f o s * (n * Real.log δ⁻¹ / (K + 1)) + ε * (unitCost f o s / (unitCost f o s + 1)) := by ring
@@ -87,7 +87,7 @@ theorem RefinementRule : Guarantees.RefinementRule := by
         (n - K) * unitCost f o s * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) := by
       field_simp
     have hA' : ((r : ℝ) * n - K) * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) ≤
-        meanDraws L' := by
+        meanSamples L' := by
       have e : ((r : ℝ) * n - (K + 1) + 1) / (K + 1) * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * (K + 1))) =
           ((r : ℝ) * n - K) * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) := by
         field_simp
@@ -115,9 +115,9 @@ theorem RefinementRule : Guarantees.RefinementRule := by
             mul_le_mul_of_nonneg_right hcmp hy
         _ = ((r : ℝ) * n - K) * (Real.log δ⁻¹ / (K + 1) * (1 - Real.log δ⁻¹ / (2 * (K + 1)))) *
               unitCost f o (s / r) := by ring
-        _ ≤ meanDraws L' * unitCost f o (s / r) := mul_le_mul_of_nonneg_right hA' hc'
+        _ ≤ meanSamples L' * unitCost f o (s / r) := mul_le_mul_of_nonneg_right hA' hc'
     · have hnK' : (0 : ℝ) ≤ n - K := by linarith
       exact (mul_nonpos_of_nonneg_of_nonpos (mul_nonneg hnK' hc) hy).trans
-        (mul_nonneg (Exfil.meanDraws_nonneg L') hc')
+        (mul_nonneg (Exfil.meanSamples_nonneg L') hc')
 
 end FlockSoundness.Audit.Partitioning.SecurityProofs

@@ -91,8 +91,8 @@ def registered (p : Params) (c : WindowCommitmentRecord) : Except String Fixed :
         let wrong := wrongItems p win.items f
         if wrong ≠ [] then .error s!"public-value: {", ".intercalate wrong}"
         else if c.population ≠ work.n then .error s!"population: registered {c.population}, the level's {work.n}"
-        else if cs c.samplingDesign ≠ cs (subsetLaw s.k) then
-          .error s!"law: registered {cs c.samplingDesign}, the window's {cs (subsetLaw s.k)}"
+        else if cs c.law ≠ cs (subsetLaw s.k) then
+          .error s!"law: registered {cs c.law}, the window's {cs (subsetLaw s.k)}"
         else if c.query ≠ p.query then .error s!"query: registered {c.query}, the check's {p.query}"
         else if c.scheme ≠ p.check.scheme then .error s!"scheme: registered {c.scheme}, the check's {p.check.scheme}"
         else .ok f
@@ -135,7 +135,7 @@ def UnitsOk (units : Array Nat) (k n : Nat) : Prop :=
 instance instDecidableUnitsOk (units : Array Nat) (k n : Nat) : Decidable (UnitsOk units k n) := by
   unfold UnitsOk; infer_instance
 
-def drawnJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
+def sampledJson (drawn : Array (String × Nat)) : Json := Json.mkObj (drawn.toList.map fun (k, v) => (k, Json.num v))
 
 /-- The service's answer to an execution phase commitment record that keeps PoUW's rule. -/
 def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence) : Core.Outcome Public Core.Integrity :=
@@ -159,9 +159,9 @@ def outcome (p : Params) (c : WindowCommitmentRecord) (f : Fixed) (e : Evidence)
     else if prof.delta ≠ p.delta then
       .reject s!"profile: delta {prof.delta.toString}, not the window's {p.delta.toString}"
     else if prof.drawn ≠ #[(unitLevel, k)] then
-      .reject s!"profile: drawn {cs (drawnJson prof.drawn)}, not {k} units"
-    else if draw.samplingDesign ≠ .subset k ∨ draw.population ≠ n then
-      .reject s!"draw: {lawName draw.samplingDesign} over {draw.population}, not subset:{k} over {n}"
+      .reject s!"profile: drawn {cs (sampledJson prof.drawn)}, not {k} units"
+    else if draw.law ≠ .subset k ∨ draw.population ≠ n then
+      .reject s!"draw: {lawName draw.law} over {draw.population}, not subset:{k} over {n}"
     else if ¬ UnitsOk draw.units k n then
       .reject s!"draw: its {draw.units.size} units are not {k} ascending distinct units below {n}"
     else

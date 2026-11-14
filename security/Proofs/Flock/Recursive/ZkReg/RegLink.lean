@@ -23,7 +23,7 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
 * `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
   and its term `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, `Q_s = Σ_c π_c` as in `linkBoundZC`;
 * `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + δ_link + δ_reg`;
-  `zk_flock_regDrawnC_cr`: the same with a wrong sampled proof block counted too.
+  `zk_flock_regSampledC_cr`: the same with a wrong sampled proof block counted too.
 
 `qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
 `t'(1 + k R_w)` at `t'` per run is an honest budget. Lean counts no evaluations; whoever instantiates `RegCRZC` states it.
@@ -230,7 +230,7 @@ off the samples reading `c`): jointly with acceptance and averaged over the samp
 bound `B₀` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_mass_genZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
-    (hoff : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → ∀ bs, Ψ ω bs = 0) {B₀ : ℝ} (hB₀ : 0 ≤ B₀)
+    (hoff : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → ∀ bs, Ψ ω bs = 0) {B₀ : ℝ} (hB₀ : 0 ≤ B₀)
     (htr : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c),
       expect (trialValZC planZ R Ψ) (trialGZC A Hs P planZ tab vb R τ c k Rw)
         (trialStratZC A Hs P planZ tab vb R τ c k Rw) ≤ B₀) :
@@ -244,12 +244,12 @@ theorem ideal_mass_genZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
     expectAcc (gameωZC A Hs planZ R τ ω) (stratωZC A Hs planZ R τ ω).2 (accωZC planZ R ω) k (Ψ ω) with hf
   have hΩ : (0 : ℝ) < Fintype.card L.Ω := by exact_mod_cast Fintype.card_pos
   have hB : 0 ≤ B₀ + k / (Real.exp 1 * Rw) := add_nonneg hB₀ (by positivity)
-  have hoff' : ∀ ω, ¬ ReadsDrawZ A P planZ tab vb c ω → f ω = 0 := by
+  have hoff' : ∀ ω, ¬ ReadsSampleZ A P planZ tab vb c ω → f ω = 0 := by
     intro ω hω
     have hpsi : Ψ ω = fun _ => 0 := funext (hoff ω hω)
     simp only [hf, hpsi, expectAcc_zero, mul_zero]
   have hsum : ∑ ω : L.Ω, f ω = ∑ w : ΩcZ A P planZ tab vb L c, f w.1 := by
-    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsDrawZ A P planZ tab vb c ω)
+    rw [← Finset.sum_filter_of_ne (p := fun ω => ReadsSampleZ A P planZ tab vb c ω)
       (fun ω _ hne => by by_contra h; exact hne (hoff' ω h))]
     exact Finset.sum_subtype _ (fun ω => by simp) f
   rw [hsum, div_le_iff₀ hΩ]
@@ -502,7 +502,7 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
   classical
   have hlow := loweringSoundZK_of_place A P planZ tab place
   have hj := jointZC_ksBound A hA Hs planZ hk
-  have h := extraction_audit_drawn
+  have h := extraction_audit_sampled
     (analysisRegZC A Hs P planZ tab vb wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
       (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
     (reg_knowledgeSoundZC A Hs P planZ tab vb wo _ _ hlow hj)
@@ -522,7 +522,7 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
 /-- **`zk_flock_regValsC_cr` with the incorrect proof blocks counted too**: on its assumptions,
 `Pr[accept ∧ a drawn unit is wrong or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
 event `analysisRegZC`'s at its committed transcript. -/
-theorem zk_flock_regDrawnC_cr (hA : A.Correct)
+theorem zk_flock_regSampledC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc) (wo : vb.Pos → vb.Opening)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -539,7 +539,7 @@ theorem zk_flock_regDrawnC_cr (hA : A.Correct)
   classical
   have hlow := loweringSoundZK_of_place A P planZ tab place
   have hj := jointZC_ksBound A hA Hs planZ hk
-  have h := extraction_audit_drawn
+  have h := extraction_audit_sampled
     (analysisRegZC A Hs P planZ tab vb wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
       (fun S R j => (hr S R j).trans_lt hρ) hlow _ hj)
     (reg_knowledgeSoundZC A Hs P planZ tab vb wo _ _ hlow hj)

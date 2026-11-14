@@ -31,7 +31,7 @@ open scoped ENNReal
 local notation "𝔽" => FlockLevel3.GF128
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-  (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
+  (x₀ : SampleSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
 /-- **The headline over hidden-output sessions.** Let `I` be a verify command's inputs (one table) under a tag with
 hidden outputs, and let the challenger write sample `S` as the JSON `dj S` (`x₀` one sample it sets up with

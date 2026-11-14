@@ -55,7 +55,7 @@ excludes and `regFinder` prices once per audit: no new event, no guarantee recor
   `readsOwn_of_hown` and the label check at reached, checked outcomes (`ReachedChecked`: `accRead_at_unit`'s
   premises at every session). `reachedChecked_of` discharges it: an accepted record is a session-game outcome
   (`Accepted`'s tie), so each session's record is reached and written, and `ChecksC3Reached` (named, `ChecksReached`'s
-  form at `ChecksC3`) transfers the checks to it along the record's sample (`checksC3_of_recordDraw`).
+  form at `ChecksC3`) transfers the checks to it along the record's sample (`checksC3_of_recordSample`).
 * `hSite_of_checked`: the two reads' registration and position: both entries read `rec-c<hr>` at both reps' rows
   (`checkOwn`), `--rec-rows` registers it (`checkRows` at the part's `m<hr>`), and `checkShared` holds both to its
   first entry of that value (`site_of_checkShared`).
@@ -612,7 +612,7 @@ def ChecksC3Reached (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂)
 tie), so each session's record is one its game reaches (`Reached`, `ZkOuter.outcome_writes`) — a transcript the
 session writes and accepts. `ChecksC3Reached` then checks some written, accepted transcript; under V*'s full sample
 every written record carries one sample (`execOS_subset_full_mem`, through the record's custody `hRec`), so the checks
-transfer to the outcome's own transcript (`checksC3_of_recordDraw`). -/
+transfer to the outcome's own transcript (`checksC3_of_recordSample`). -/
 theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg : ByteArray → ByteArray} {N k Rw : ℕ}
     {cs : List (Cm × (ℐ).Coin) → Option Flock.RecVStar.InnerCommits}
     {coins : List (Cm × (ℐ).Coin) → Option Flock.RecCoins.Source}
@@ -633,7 +633,7 @@ theorem reachedChecked_of {F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂} {dg 
   have hd₁ := ((F.zs R ω t R₂ j).hRec _ _ x₁ (acceptsZK_of_R hacc₁)).1
   have hd₂ := ((F.zs R ω t R₂ j).hRec _ _ x₂ (acceptsZK_of_R hacc₂)).1
   refine ⟨⟨ω₁, (τ j).1, x₁, hx₁⟩, F.ish, cs t, coins t, F.bind j, rows,
-    Flock.Guarantees.checksC3_of_recordDraw hc3 ?_⟩
+    Flock.Guarantees.checksC3_of_recordSample hc3 ?_⟩
   rw [hwr, hd₁, hd₂, huniv]
 
 /-- **A registered read's port is the reads file's entry of its name, read at the unit's own row.** -/

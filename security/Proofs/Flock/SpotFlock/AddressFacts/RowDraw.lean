@@ -13,11 +13,11 @@ import all Lean.Data.Json.FromToJson.Basic
 /-!
 # A subset sample's JSON, as Flock parses it
 
-The second stage holds a session statement's sample to its own (`SecondStage.ownDraw`, `second-sample`) by `jeq`, and
-Flock's verifier finds the session's instances by parsing that sample (`Draw.UnitDraw.ofJson`). Both read a subset
-sample: the four keys `samplingDesign` (`subset`), `population`, `k` (the units' count) and `units` (`subsetJson`). `subsetParses`
+The second stage holds a session statement's sample to its own (`SecondStage.ownSample`, `second-sample`) by `jeq`, and
+Flock's verifier finds the session's instances by parsing that sample (`Draw.UnitSample.ofJson`). Both read a subset
+sample: the four keys `law` (`subset`), `population`, `k` (the units' count) and `units` (`subsetJson`). `subsetParses`
 proves that a printable sample `jeq` to `subsetJson pop us` that Flock parses proves exactly `us`. The second stage's
-own sample is one (`ownDraw_eq`), and so is a sample of every unit of a population of `m` (units `0..m-1`, no closure:
+own sample is one (`ownSample_eq`), and so is a sample of every unit of a population of `m` (units `0..m-1`, no closure:
 `wholeJson_eq`). A sample the verifier rebuilt is well formed, and printable where its sampling design is a subset's or a
 stratified one, so `proved_of_wf` asks only that.
 
@@ -45,14 +45,14 @@ def subsetJson (pop : ℕ) (us : Array ℕ) : Json := Json.mkObj (subsetList pop
 
 /-- **The second stage's own sample for part `p`'s session is a subset sample**: of its `q · n` slots, the second sample's
 units among them, counted from the part's first. -/
-theorem ownDraw_eq (q : ℕ) (p : Spot.SecondStage.Part) (drawn : Array ℕ) :
-    Spot.SecondStage.ownDraw q p drawn = subsetJson (q * p.n) ((drawn.filter (p.holds q)).map (· - p.lo)) := rfl
+theorem ownSample_eq (q : ℕ) (p : Spot.SecondStage.Part) (drawn : Array ℕ) :
+    Spot.SecondStage.ownSample q p drawn = subsetJson (q * p.n) ((drawn.filter (p.holds q)).map (· - p.lo)) := rfl
 
 /-- **A sample held to a subset sample parses to its units**: a printable sample that `jeq` holds to `subsetJson pop us`
 and that Flock's verifier parses proves `us`, with no closure. -/
 def SubsetParses : Prop :=
-  ∀ {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.Draw.UnitDraw}, Good j →
-    Spot.jeq j (subsetJson pop us) = true → _root_.Flock.Draw.UnitDraw.ofJson j = .ok D → D.proved = us
+  ∀ {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.Draw.UnitSample}, Good j →
+    Spot.jeq j (subsetJson pop us) = true → _root_.Flock.Draw.UnitSample.ofJson j = .ok D → D.proved = us
 
 theorem subsetList_distinct (pop : ℕ) (us : Array ℕ) : Distinct (subsetList pop us) := by
   simp [subsetList]
@@ -156,15 +156,15 @@ theorem subsetParses : SubsetParses := by
       | none => rfl
       | some _ => rw [hmg] at hs; cases hs
     have hc : D.closure = #[] := hcl (getObjVal_closure_none hmc)
-    rw [_root_.Flock.Draw.UnitDraw.proved, hc, ← Except.ok.inj hmap]
+    rw [_root_.Flock.Draw.UnitSample.proved, hc, ← Except.ok.inj hmap]
     rfl
 
 /-- **A well-formed sample held to a subset sample parses to its units**: `subsetParses` at a sample the verifier rebuilt
-(`Flock.norm`, well formed: `draw_wf`) whose sampling design is one a soundness claim samples by (`samplingDesign_of_samplingDesignWhy`). Such a sample
+(`Flock.norm`, well formed: `sample_wf`) whose sampling design is one a soundness claim samples by (`law_of_lawWhy`). Such a sample
 that decodes is printable (`good_subset`, `good_stratified`). -/
-theorem proved_of_wf {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.Draw.UnitDraw} (hw : Claims.Json.Wf j)
-    (hD : _root_.Flock.Draw.UnitDraw.ofJson j = .ok D)
-    (hl : (∃ K strata, D.samplingDesign = .stratified K strata) ∨ ∃ k, D.samplingDesign = .subset k)
+theorem proved_of_wf {j : Json} {pop : ℕ} {us : Array ℕ} {D : _root_.Flock.Draw.UnitSample} (hw : Claims.Json.Wf j)
+    (hD : _root_.Flock.Draw.UnitSample.ofJson j = .ok D)
+    (hl : (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k)
     (hj : Spot.jeq j (subsetJson pop us) = true) : D.proved = us := by
   have hg : Good j := by
     rcases hl with ⟨K, strata, hl⟩ | ⟨k, hl⟩

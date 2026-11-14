@@ -43,9 +43,9 @@ theorem qs_card_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E
     ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c) ≤
       Fintype.card L.Ω * (kd * r + E.card) + bad.card * (n * r) := by
   classical
-  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card ≤
+  have hω : ∀ ω, (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card ≤
       (kd * r + E.card) + (if ω ∈ bad then n * r else 0) := fun ω => by
-    have hsub : (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω) ⊆ (L.draw ω).biUnion T ∪ E := by
+    have hsub : (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω) ⊆ (L.draw ω).biUnion T ∪ E := by
       intro c hc
       obtain ⟨u, hu, g, hg, rfl⟩ := (Finset.mem_filter.1 hc).2
       rcases hpos u g hg with h | h
@@ -63,16 +63,16 @@ theorem qs_card_le_split (L : SamplingDesign n) (T : Fin n → Finset vb.Pos) (E
         exact (Nat.mul_le_mul_right r hn).trans (Nat.le_add_left _ _)
       · rw [ite_eq_right hb, Nat.add_zero]
         exact Nat.mul_le_mul_right r (hgood ω hb)
-    calc (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card
+    calc (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card
         ≤ ((L.draw ω).biUnion T ∪ E).card := Finset.card_le_card hsub
       _ ≤ ((L.draw ω).biUnion T).card + E.card := Finset.card_union_le _ _
       _ ≤ (L.draw ω).card * r + E.card := Nat.add_le_add_right hbi _
       _ ≤ (kd * r + (if ω ∈ bad then n * r else 0)) + E.card := Nat.add_le_add_right hd _
       _ = (kd * r + E.card) + (if ω ∈ bad then n * r else 0) := Nat.add_right_comm _ _ _
   calc ∑ c : vb.Pos, Fintype.card (ΩcZ A P planZ tab vb L c)
-      = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsDrawZ A P planZ tab vb c ω).card :=
+      = ∑ c : vb.Pos, (Finset.univ.filter fun ω => ReadsSampleZ A P planZ tab vb c ω).card :=
         Finset.sum_congr rfl fun c _ => Fintype.card_of_subtype _ fun ω => by simp
-    _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsDrawZ A P planZ tab vb c ω).card := by
+    _ = ∑ ω : L.Ω, (Finset.univ.filter fun c => ReadsSampleZ A P planZ tab vb c ω).card := by
         simp only [Finset.card_filter]
         exact Finset.sum_comm
     _ ≤ ∑ ω : L.Ω, ((kd * r + E.card) + (if ω ∈ bad then n * r else 0)) := Finset.sum_le_sum fun ω _ => hω ω

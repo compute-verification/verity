@@ -28,7 +28,7 @@ import all Init.WF
 
 `Flock.SecurityProofs.EndToEndRegistered_honest` concludes, at one instance, each premise of
 `Flock.Guarantees.EndToEndRegistered` that no named assumption states, and
-`Flock.SecurityProofs.EndToEndRegisteredDrawn_honest` the same of `EndToEndRegisteredDrawn`, which takes the same four:
+`Flock.SecurityProofs.EndToEndRegisteredDrawn_honest` the same of `EndToEndRegisteredSampled`, which takes the same four:
 
 * `Built`: the one-row unit net `unitNet`, which `Net.ofRows` builds (a constant row and one output word);
 * `TagsOkZHJ`: `verify --zk`'s inputs at `verity/flock-circuit/tmpl`'s tags (`Flock.Tags.circuitTmpl`), the templated
@@ -165,7 +165,7 @@ theorem _root_.Flock.SecurityProofs.EndToEndRegistered_honest :
         SessCRZ execArith ZkExec.hs512 T pre post cap₀ σ (2 ^ 257) (2 ^ 257) :=
   ⟨ZkReg.Witness.unitNet_built, ZkReg.Witness.ins_tagsOk, by intros; apply linkCRZC_top, by intros; apply sessCRZ_top⟩
 
-/-- **`EndToEndRegisteredDrawn`'s premises hold together**: they are `EndToEndRegistered`'s. -/
+/-- **`EndToEndRegisteredSampled`'s premises hold together**: they are `EndToEndRegistered`'s. -/
 theorem _root_.Flock.SecurityProofs.EndToEndRegisteredDrawn_honest :
     Built ZkReg.Witness.unitNet ∧ ZkHidden.TagsOkZHJ ZkReg.Witness.ins ∧
       (∀ {mPts : ℕ} {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}

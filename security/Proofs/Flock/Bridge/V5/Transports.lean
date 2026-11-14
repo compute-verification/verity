@@ -66,7 +66,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed
 
 variable {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Json)
-  {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (ht : I.tags.typed = false)
+  {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZHJP (inputsJ I 0) own mPts S₀ d₀) (ht : I.tags.typed = false)
   {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
   (hscope : Discharge.Layout.scopeOkH c = true) (hU : Built c.unit) {pi : Flock.HmIn.Ports}
   (hpi : Flock.HmIn.parse c = .ok pi) {pub : Flock.Public}

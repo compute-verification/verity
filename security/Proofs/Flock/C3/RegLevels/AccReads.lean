@@ -23,7 +23,7 @@ checked its statement (`checkAcc_of_checkStmt`):
   (`accReads_recOpen`: the table's level `l`'s unit `u` reads row `u / q · n + opensBelow l + u % q`;
   `accReads_recOpenStacked`: R's level `l`'s unit `u` reads row `2 · n + opensBelow' l + u`; `getElem?_accRow`);
 * `accPort_of_checks`, `accPort_of_checkStmt`: so `own`'s entry of each name has `acc0`'s registration and those reads;
-* `accRead_drawn`: at a sampled proof block, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
+* `accRead_sampled`: at a sampled proof block, `OwnReadsHJ` puts a registered read of an `acc` (`acc_out`) column at `own`'s entry
   of its name, so the reads file names the column's port and the read's port has `acc0`'s registration; its position
   is `accReads`' row at the sampled statement's label of the unit (`idx`, which `OwnReadsHJ` reads), not at the unit;
 * `readsOwn_of_hown`: V*'s sessions sample every unit (`VLaw.live`, `execOS_subset_full_mem`), so at an accepted outcome
@@ -272,7 +272,7 @@ def Reached (o : Reg' × Finset (Fin nv) × Exec.Transcript) : Prop :=
 verifier's checks of the session's statement `s` (`accPort_of_checks`): the reads file names the column's port, and the
 read's port has `acc0`'s registration; its position is `accReads`' row at some index (the sampled statement's label of
 the unit, `OwnReadsHJ`'s). -/
-theorem accRead_drawn {ω : Lv.Ω} {R' : Reg'} {o}
+theorem accRead_sampled {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv} (hu : u ∈ Lv.draw ω)
     {q : Fin c.ports.size} (hr : zo.rd.isRead (.inl (u, q))) {i : Flock.RecVStar.Inner} {s : VStar.Stmt}
     {rows : Option (Array Flock.Registered.Port)} (hck : Flock.RecVStar.checkAcc s zo.own rows = .ok ())
@@ -319,7 +319,7 @@ def AtLabel (F : C3Family T CT st hp xR L Reg Cm Reg' Reg₂) (R : Reg) (ω : L.
     (j : Fin (vstarCount F.ish)) (tr : Exec.Transcript) (u : Fin (F.Vs j).nv) (reads : Array (Option ℕ)) (pos : ℕ) :
     Prop :=
   ∃ d D dp idx, recordDraw tr.record = some d ∧
-    Draw.UnitDraw.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
+    Draw.UnitSample.ofJson (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) = .ok D ∧
     HmOut.drawn (F.Vs j).c (F.zs R ω t R₂ j).pub (drawJ (F.zs R ω t R₂ j).I d (partOf (F.zs R ω t R₂ j).I d u.val)) =
       .ok dp ∧ Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos)

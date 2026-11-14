@@ -36,7 +36,7 @@ theorems take once averaged over the prover's state; neither needs to hold state
 $$\Pr[\text{accept} \wedge E(X, S)] \le \Pr_S[E(X, S) \wedge S \cap \mathrm{wrong}(X) = \emptyset]
   + \varepsilon_{ks} + \delta_{link}.$$
 Its corollaries are the integrity profile (`audit_profile`), the count curve
-`δ(K) = miss K + ε_ks + δ_link` (`audit_count`), and the sampled proof blocks (`audit_drawn`).
+`δ(K) = miss K + ε_ks + δ_link` (`audit_count`), and the sampled proof blocks (`audit_sampled`).
 -/
 
 @[expose] public section
@@ -197,7 +197,7 @@ theorem audit_count (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks
 
 /-- **Sampled proof blocks are correct up to `ε_ks + δ_link`**, even for a consumer who looks after the
 sample. -/
-theorem audit_drawn (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
+theorem audit_sampled (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
     (hlink : A.BindSound δlink) (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (A.wrong (A.committedOf σ)) o.2) (audit L Reg session) σ ≤
       εks + δlink := by
@@ -423,9 +423,9 @@ theorem oracle_profile (hs : P.SessionSound session' ε) (𝓑 : Finset (Fin n) 
   rwa [add_zero] at this
 
 /-- **The design's drawn-unit bound, at the oracle layer.** -/
-theorem oracle_drawn (hs : P.SessionSound session' ε) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
+theorem oracle_sampled (hs : P.SessionSound session' ε) (σ : Strategy (audit L (Fin C.N → Bool) session')) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (reg σ)) o.2) (audit L _ session') σ ≤ ε := by
-  have := audit_drawn (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound σ
+  have := audit_sampled (P.oracle session') (P.oracle_knowledgeSound hs) P.oracle_linkSound σ
   rwa [add_zero] at this
 
 /-- **The design's cone bound, at the oracle layer.** -/

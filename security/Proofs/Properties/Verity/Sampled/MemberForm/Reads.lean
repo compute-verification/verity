@@ -19,8 +19,8 @@ blobs sent (`sentEvidenceAt`) and the proof files decoded from it at the stateme
 (`statementFiles statementTable`).
 
 The sample's family's releases precede every opening (`accept_read`'s `SampleLinkFirst`). At coins whose bytes are
-the window's, the window's sample ends on them, so its sample ended (`joint_drawUnits_of_drew`), and the sample is the
-units v1's check proved (`joint_draw_of_drew`, `checkAt_proved`, at the registration's population,
+the window's, the window's sample ends on them, so its sample ended (`joint_sampleUnits_of_drew`), and the sample is the
+units v1's check proved (`joint_sample_of_drew`, `checkAt_proved`, at the registration's population,
 `WindowOn.population`), so each member with a proof block in it has a statement with one
 session (`member_session`), which the check names at its place (`named_at`), whose record and evidence are the ones
 sent for that place (`sentRecordAt_session`, `sentEvidenceAt_session`), which the verifier's read holds the device's
@@ -59,7 +59,7 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
   obtain ⟨a, b, e, c, ev, ξ, dr, sts, r, hcase, hacc, hM⟩ := accept_members hF hp hms hv
   obtain ⟨lines, lr, trees, held, named, hcs, hlogged, hlr, hct, hreason, hheld, hnamed, hslf, hlogRead⟩ :=
     accept_read hv.2.1 hcase hacc hM hl
-  have hlab : dr.label = labelAt x.params := draw_label hv.2.1 hcase hacc hp
+  have hlab : dr.label = labelAt x.params := sample_label hv.2.1 hcase hacc hp
   have haft : dr.after = after := hsd a b e p c ev ξ dr hcase hacc
   rw [hlab, haft] at hslf
   have hfr := ofV2_frames hlogged
@@ -67,18 +67,18 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
   -- the window's sample at `ω` is the units v1's check proved
   obtain ⟨pub, prof, hv1⟩ := hM.v1
   obtain ⟨design, n, read, hder0, hn, hdf⟩ := checkAt_drew hv1
-  obtain ⟨derived, fl, hder, hfl, hdu⟩ := drawnFrom_ok hdf
-  have hof : SamplingDesignOf p c (derived.getD fl) n := ⟨design, derived, fl, hder0, hn, hder, hfl, rfl⟩
-  have hdrew : Drew k x.sent dr (derived.getD fl) n ξ (drawnUnits ev.base.draw) :=
+  obtain ⟨derived, fl, hder, hfl, hdu⟩ := sampledFrom_ok hdf
+  have hof : LawOf p c (derived.getD fl) n := ⟨design, derived, fl, hder0, hn, hder, hfl, rfl⟩
+  have hdrew : Drew k x.sent dr (derived.getD fl) n ξ (sampledBlocks ev.base.draw) :=
     ⟨a, b, e, p, c, ev, hcase, hacc, hof, rfl, read, hdu⟩
   have hnJ : W.nJ = n :=
     hset.toWindowOn.population hset.passes hp hms (membersStructure_laid (membersRun_ok hM.run hM.all).1) hn
-  have hL : W.samplingDesign = derived.getD fl := by
-    have h1 := samplingDesignAt_of_samplingDesignOf hof
+  have hL : W.law = derived.getD fl := by
+    have h1 := lawAt_of_lawOf hof
     rw [← hnJ] at h1
     exact Except.ok.inj (hlaw.symm.trans h1)
   have hs := shows_of_read hv.2.1 hcase hacc hlogRead hl
-  unfold ShowsDraw at hs
+  unfold ShowsSample at hs
   rw [hlab, haft] at hs
   have hξ := coins_size_le hacc
   have e₀ : bitsOf (_root_.Properties.Spot.bytesOf (coinBytes _root_.Spot.Challenger.MAX_COINS 64 κ 0)) =
@@ -92,9 +92,9 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
       rw [h64] at hξ
       rw [length_bitsOf, length_fillCoins]
       omega
-  have hpr : drawnUnits ev.base.draw = ev.base.provedUnits :=
+  have hpr : sampledBlocks ev.base.draw = ev.base.provedUnits :=
     checkAt_proved (e := { ev.base with verdicts := r.out }) hv1 (evidenceOf_closure hacc.2.2.1)
-  have hd := joint_draw_of_drew hdrew (W.joint 0) ω hL hnJ hpre
+  have hd := joint_sample_of_drew hdrew (W.joint 0) ω hL hnJ hpre
   have hS : ∀ v : Fin W.nJ, v ∈ W.L.draw ω ↔ v.val ∈ ev.base.provedUnits := fun v => by
     have hmem := Finset.ext_iff.1 hd v
     rw [← hpr]
@@ -111,10 +111,10 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     rw [Array.length_toList, Array.length_toList, Array.size_zip, ← hzip.1, Nat.min_self] at h1
     exact h1.symm
   have hMA := hset.toWindowOn.membersAt
-  obtain ⟨read', hok⟩ := joint_drawUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
-  have hok' : _root_.Spot.Draw.drawUnits W.samplingDesign W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
-      .ok (drawnUnits ev.base.draw, read') := hok
-  have hended : Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω = true := by
+  obtain ⟨read', hok⟩ := joint_sampleUnits_of_drew hdrew (W.joint 0) ω hL hnJ hpre
+  have hok' : _root_.Spot.Draw.sampleUnits W.law W.nJ (_root_.Properties.Spot.bytesOf (W.src ω 0)) =
+      .ok (sampledBlocks ev.base.draw, read') := hok
+  have hended : Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true := by
     simp only [Flock.Guarantees.sampleEnded, hok']
   refine ⟨hended, ?_, opensLast_congr hfr hA.opensLast, Nat.le_of_eq (by rw [hplace.1, hcount, hsize]), ?_⟩
   · rw [← helloSpecs_congr hfr]
@@ -137,7 +137,7 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
   obtain ⟨B, hB, hBu⟩ := hsv.blob
   obtain rfl : B = blob := Except.ok.inj (hB.symm.trans hb)
   obtain rfl : record = record' := Option.some.inj (hBu.symm.trans hu)
-  have hevs : ev.sessions[drawnBefore W.ms (W.L.draw ω) i]? = some s := by
+  have hevs : ev.sessions[sampledBefore W.ms (W.L.draw ω) i]? = some s := by
     rw [hM.sessions]
     exact hsj
   obtain ⟨n?, hroot⟩ :=
@@ -151,11 +151,11 @@ theorem windowRead_members {V : Vocab d α} {k : Verity.Registration.Composite} 
     rfl
   have hev : _root_.Spot.sha512Hex evidence = _root_.Spot.sha512Hex ⟨evidence.data.toList.toArray⟩ := by
     rw [bytes_eta]
-  have hread : SessionRead x.log #[W.table] (drawnBefore W.ms (W.L.draw ω) i) record
+  have hread : SessionRead x.log #[W.table] (sampledBefore W.ms (W.L.draw ω) i) record
       ((Flock.JsonParse.parse record).toOption.getD Json.null) sess evidence.data.toList :=
     sessionRead_logged hct hlr hreason rfl (linkFirst_members hct hlr hreason) hlogged hxj htabx hJ hdec hctree
       htb h512 hev
-  have hj : drawnBefore W.ms (W.L.draw ω) i < named.size := by
+  have hj : sampledBefore W.ms (W.L.draw ω) i < named.size := by
     have h1 := (List.getElem?_eq_some_iff.1 hzj).1
     rw [hnamed.length_eq, Array.length_toList] at h1
     exact h1

@@ -231,7 +231,7 @@ theorem ligerito_conss {tIn : Lin} {sws : Array Switched} {k k' : Nat} {src : Fl
   cases ha
   obtain ⟨b, k₃, hb, h⟩ := cm_bind h
   cases hb
-  by_cases cd : src.drawnAll k₁ = true
+  by_cases cd : src.sampledAll k₁ = true
   rotate_left
   · rw [ite_eq_left (by simpa using cd)] at h
     obtain ⟨_, _, h0, _⟩ := cm_bind h

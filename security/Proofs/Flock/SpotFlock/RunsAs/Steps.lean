@@ -314,7 +314,7 @@ theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : J
 
 /-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the sample object
 its first stage's select returned, under `Select.resolve`'s rule and the work table `Rule.tableOver` expands. -/
-theorem answer_draw {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
+theorem answer_sample {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
     ∃ (workTable : Option Json) (resolved : Spot.Select.Rule) (rest : Array ℕ) (read : ℕ),
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧

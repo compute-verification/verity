@@ -72,7 +72,7 @@ theorem sampledAuditAccepted_of {T : Type}
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
-    (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
+    (hfixed : SampleFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) :
@@ -80,7 +80,7 @@ theorem sampledAuditAccepted_of {T : Type}
   subst hflock
   exact NetTiming.SecurityProofs.SampledAuditAccepted H _ L K S lay k
     (Claims.SamplingGeneric.flockKS H D.flock _ hKS hlist (Binding_of_hm96 D own at_ row salt π layer hcommit hrow H)
-      (Claims.SamplingGeneric.sessions_ofDeploy D iroots H (drawDesign_of_slots D hslots)
+      (Claims.SamplingGeneric.sessions_ofDeploy D iroots H (sampleLaw_of_slots D hslots)
         (refuses_of H D (scopeMatches_of D hslots hprog) hchecks) hfix hfixed hsessions hnum hopens))
 
 set_option synthInstance.maxSize 1024 in
@@ -92,7 +92,7 @@ theorem sampledAuditAccepted_zk (rel : _root_.Flock.Readable.Parsed → _root_.F
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
-    (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
+    (hfixed : SampleFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) :
@@ -109,7 +109,7 @@ theorem sampledAuditAccepted_plain (rel : _root_.Flock.Readable.Parsed → _root
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
-    (hfixed : DrawFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
+    (hfixed : SampleFixed D) (hsessions : SessionRuns H D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens H D iroots) (hfix : InteriorFixed H D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
     (k : AuditStatement → ℕ) :

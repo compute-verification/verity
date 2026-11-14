@@ -36,7 +36,7 @@ def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × J
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
-    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
+    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
   ((field? c.record "registered").isSome ∨ opened.isSome →
@@ -84,7 +84,7 @@ theorem secondChecked_units {v : Registration.Verifier} {delta : Core.Ratio} {c 
   obtain ⟨h1, h⟩ := accept_of_ite h
   obtain ⟨h2, h⟩ := accept_of_ite h
   obtain ⟨h3, h⟩ := accept_of_ite h
-  refine ⟨(registration_nil _ _).1 (Array.isEmpty_iff.1 h1), (checkDraw_nil _ _ _).1 (Array.isEmpty_iff.1 h2),
+  refine ⟨(registration_nil _ _).1 (Array.isEmpty_iff.1 h1), (checkSample_nil _ _ _).1 (Array.isEmpty_iff.1 h2),
     (checksAt_nil c e _).1 (Array.isEmpty_iff.1 h3), ?_⟩
   rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
   · exact (verdictOf_accept _).1 hv

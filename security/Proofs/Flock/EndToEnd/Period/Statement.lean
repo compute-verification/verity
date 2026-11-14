@@ -65,7 +65,7 @@ structure SamplingBlock where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
     LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
@@ -123,7 +123,7 @@ noncomputable def sim (τ : Strategy w.game) :=
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ w.I w.wr _ _ _ _ _
       (runsZCJH_live w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj w.y₀
         w.wr _ w.hTags w.hCust.1
-        fun _ => drawOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
+        fun _ => sampleOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
 
 /-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
 registration (`XplurZC`), as in `EndToEndHidden`. -/
@@ -159,7 +159,7 @@ structure WindowRec where
   idx : ℕ
   accepted : Prop
   wrong : ℕ
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace SamplingBlock
 

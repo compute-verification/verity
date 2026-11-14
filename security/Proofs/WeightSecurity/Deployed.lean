@@ -13,7 +13,7 @@ session on one live sample). The probability that it leaves `M` incorrect proof 
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_undetected`. A window is accepted with a sampled incorrect proof block with probability at most its members'
 knowledge and binding terms (`JointAuditV5.accepted_sampledWrong_le`). Its sample misses its `w` incorrect proof
-blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the sampling design's per-block
+blocks with probability at most `P_a ≤ x^w` (`JointAuditV5.sampleMiss_le`, with `x` the sampling design's per-block
 miss: a premise on its `P_a`, which `pa_le_pow_of_fac` discharges at every registered sampling design whose strata
 each have `(n − k)/n ≤ x`). The named assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
 
@@ -85,7 +85,7 @@ theorem servedRec_miss_le (w : JointAuditV5) (hA3 : Assumptions.UniformRandomByt
       ENNReal.ofReal x ^ (w.wrongSet (servedAudit w τ)).card := by
   show prob (fun b => ¬ ∃ u ∈ b.2.2.1, u ∈ w.wrongSet (servedAudit w τ)) (w.game.map fun o => (τ.1, o)) τ.2 ≤ _
   rw [prob_map, ← ENNReal.ofReal_pow hx]
-  exact (w.drawMiss_le hA3 _ (servedAudit w τ)).trans (ENNReal.ofReal_le_ofReal (hpa _))
+  exact (w.sampleMiss_le hA3 _ (servedAudit w τ)).trans (ENNReal.ofReal_le_ofReal (hpa _))
 
 /-- **Model weight security at the deployed audit.** `TheftServed` with the probability of leaving `M` incorrect proof
 blocks undetected bounded by the windows' knowledge and binding terms plus `x^M`, at every datacenter strategy `s θ r`,

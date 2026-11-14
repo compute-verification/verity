@@ -36,8 +36,8 @@ are the proof blocks, with `k = 1` and no interior registration.
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
 5. **The contract** (`CompiledTwo.Sessions`): `Compiled.Sessions` with its draw law split by stage and its openings
    read at a replay block. The first stage misses a set `T` of replay blocks with probability at most `P_a(T)`
-   (`replayDraws`); at the first stage's coins, the second stage misses a set `X` of proof blocks with probability at
-   most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell|, k_t)/C(n_{ρ,t}, k_t)` (`secondDraws`); the waits' bits cover the
+   (`replaySamples`); at the first stage's coins, the second stage misses a set `X` of proof blocks with probability at
+   most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell|, k_t)/C(n_{ρ,t}, k_t)` (`secondSamples`); the waits' bits cover the
    footprint bits and the replay sample's proof blocks, `M ≤ n_out` and `|sampleBlocks S| ≤ n_in` (`unions`); the
    interior roots precede the second stage (`interior`); and a witness in `A`'s relation reveals openings under which
    its proof block is correct on its replay block's boundary values and interior values (`opens`). `slots`, `refuses`,
@@ -261,9 +261,9 @@ def Scope (L : CompiledTwo Coin A) (x : Msg) : Prop :=
 /-- **The two-stage compiler's contract** at `H`: `Compiled.Sessions` with its draw law split by stage and its openings
 read at a replay block.
 
-* `replayDraws`: on a statement in scope, the first stage's sample misses a set `T` of replay blocks with probability
+* `replaySamples`: on a statement in scope, the first stage's sample misses a set `T` of replay blocks with probability
   at most the first stage's `P_a(T)`.
-* `secondDraws`: on a statement in scope, at a run's coins `r`, fresh second-stage coins sample no proof block of a set
+* `secondSamples`: on a statement in scope, at a run's coins `r`, fresh second-stage coins sample no proof block of a set
   `X` with probability at most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell(ρ, t)|, k_t)/C(n_{ρ,t}, k_t)`, `S` the replay
   blocks `r` samples: the second stage's sample is, in each sampled replay block, a uniform `k_t`-subset of each cell,
   independently.
@@ -279,10 +279,10 @@ read at a replay block.
 * `keys`: `Sessions`', the sample's slots hold at most `n_sess` keys, so the extractor runs `A`'s extractor at most
   `n_sess` times per run (`CompilerEfficientTwo` reads it). -/
 structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
-  replayDraws : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
+  replaySamples : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
     ∀ T ⊆ Finset.range d.part.blocks.length,
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ ρ ∈ L.replaySample x r, ρ ∉ T) ≤ d.replay.Pa d.part T
-  secondDraws : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
+  secondSamples : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
     ∀ (r : Fin (L.V.k x) → Coin) (X : Finset ℕ),
       Pr (fun e : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r e), u ∉ X) ≤
         ∏ ρ ∈ (Finset.range d.part.blocks.length).filter (· ∈ L.replaySample x r),

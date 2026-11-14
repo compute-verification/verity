@@ -27,7 +27,7 @@ In (i), from the statement and the premises (`Proofs.Flock.Recursive.ExecClass`,
   (`compiledForkSound_execClassAt`, from `flock_inner_sound_compiled`);
 * the raw event bounded by the typed sessions' at the transported prover (`prob_recT_le`, `verifies_zsOf`).
 
-(i) is at the sampling design of the registration's samples (`drawDesign`), nonempty by the element its space comes with. Still taken by
+(i) is at the sampling design of the registration's samples (`sampleLaw`), nonempty by the element its space comes with. Still taken by
 the property, each to become a lemma at the executable or a refusal of the verifier: in (ii) the honest witnesses
 (`honest`) and the obligations on the ZK server's code and V*'s staging (`ZkServerSends`, `SessionsPublic`,
 `SessionsCoined`, `SessionsHonest`, `OuterZK.Sessions`' `hz`, `hR`, `hS`); in (i) the obligation that V*'s statements'

@@ -12,7 +12,7 @@ A closure sample proves each sampled proof block together with its closure `cl t
 the X and Y strips it reads and the node units on its X strip's path. The closure map is the verifier's own, from its
 program.
 
-* `SamplingDesign.closure L cl`: `L` widened by `cl` on `L`'s coins (`SamplingDesign.widen`). `mem_closure_draw`: a unit is proved when it is
+* `Law.closure L cl`: `L` widened by `cl` on `L`'s coins (`Law.widen`). `mem_closure_sample`: a unit is proved when it is
   sampled or lies in a sampled proof block's closure.
 * `closure_escape`: **the closure sample's escape is the base sampling design's escape of `B` with the units it makes unsound**,
   `(L.closure cl).escape B = L.escape (B ∪ unsoundTiles cl B)`, where `unsoundTiles cl B` are the units whose closure
@@ -36,7 +36,7 @@ namespace FlockSoundness.Audit
 open Game Finset
 open scoped ENNReal
 
-namespace SamplingDesign
+namespace Law
 
 variable {n m : ℕ}
 
@@ -45,17 +45,17 @@ def unsoundTiles (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) : Finset (
   univ.filter fun t => ¬ Disjoint (cl t) B
 
 /-- **Closure samples**: `L`'s sample, each sampled proof block proved together with its closure. -/
-def closure (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) : SamplingDesign n :=
+def closure (L : Law n) (cl : Fin n → Finset (Fin n)) : Law n :=
   L.widen fun S => S ∪ S.biUnion cl
 
 /-- **What a closure sample proves**: a unit is proved when it is sampled or lies in a sampled proof block's closure. -/
-theorem mem_closure_draw (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) (ω : (L.closure cl).Ω) (u : Fin n) :
+theorem mem_closure_sample (L : Law n) (cl : Fin n → Finset (Fin n)) (ω : (L.closure cl).Ω) (u : Fin n) :
     u ∈ (L.closure cl).draw ω ↔ u ∈ L.draw ω ∨ ∃ t ∈ L.draw ω, u ∈ cl t := by
   show u ∈ L.draw ω ∪ (L.draw ω).biUnion cl ↔ _
   rw [mem_union, mem_biUnion]
 
 /-- **The closure sample's escape** is the base sampling design's escape of `B` with the units it makes unsound. -/
-theorem closure_escape (L : SamplingDesign n) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
+theorem closure_escape (L : Law n) (cl : Fin n → Finset (Fin n)) (B : Finset (Fin n)) :
     (L.closure cl).escape B = L.escape (B ∪ unsoundTiles cl B) := by
   show prCoin (fun ω : L.Ω => Disjoint (L.draw ω ∪ (L.draw ω).biUnion cl) B) =
     prCoin (fun ω : L.Ω => Disjoint (L.draw ω) (B ∪ unsoundTiles cl B))
@@ -132,7 +132,7 @@ theorem closure_escape_le_work (σ : Fin n → Fin m) (w : Fin m → ℕ) (f : F
   rw [closure_escape]
   exact work_escape_le_of_le σ w f K hf hW hT
 
-end SamplingDesign
+end Law
 
 section Audits
 
@@ -141,56 +141,56 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → �
 
 /-- **The work audit with closure samples** (oracle layer): the audit accepts while its incorrect proof blocks and the units they make
 unsound do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work_closure (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
-    prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
-        (audit ((SamplingDesign.work σ w f K).closure cl) Reg session) σ' ≤
-      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
-  refine (audit_profile A hks hlink (fun B => T ≤ SamplingDesign.unsoundWork σ w cl B) σ').trans ?_
+theorem audit_work_closure (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
+        (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
+      (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => T ≤ Law.unsoundWork σ w cl B) σ').trans ?_
   gcongr
-  exact iSup₂_le fun B hB => SamplingDesign.closure_escape_le_work σ w f K cl hf hW hB
+  exact iSup₂_le fun B hB => Law.closure_escape_le_work σ w f K cl hf hW hB
 
 /-- **The work audit with closure samples** (compiled layer, randomized extractor): at most
 `((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
-theorem extraction_audit_work_closure (A : ExtractionAnalysis ((SamplingDesign.work σ w f K).closure cl) Reg session)
-    {εks δlink : (R : Reg) → Cont ((SamplingDesign.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
-    prob (fun o => o.1 = true ∧ T ≤ SamplingDesign.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
-        (audit ((SamplingDesign.work σ w f K).closure cl) Reg session) σ' ≤
-      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K +
+theorem extraction_audit_work_closure (A : ExtractionAnalysis ((Law.work σ w f K).closure cl) Reg session)
+    {εks δlink : (R : Reg) → Cont ((Law.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
+        (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
+      (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K +
         εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by
-  refine (extraction_audit_le A hks hlink (fun X _ => T ≤ SamplingDesign.unsoundWork σ w cl (A.wrong X)) σ').trans ?_
+  refine (extraction_audit_le A hks hlink (fun X _ => T ≤ Law.unsoundWork σ w cl (A.wrong X)) σ').trans ?_
   gcongr
-  by_cases hB : T ≤ SamplingDesign.unsoundWork σ w cl (A.wrong (A.committedOf σ'))
-  · exact (prCoin_mono fun ω h => h.2).trans (SamplingDesign.closure_escape_le_work σ w f K cl hf hW hB)
+  by_cases hB : T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ'))
+  · exact (prCoin_mono fun ω h => h.2).trans (Law.closure_escape_le_work σ w f K cl hf hW hB)
   · exact (prCoin_mono (q := fun _ => False) fun ω h => hB h.1).trans (prCoin_false.le.trans zero_le)
 
 /-- **Each incorrect proof block is charged its harm** (oracle layer): the audit accepts while some incorrect proof block, sampled or not, has
 harm at least `T` with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
-theorem audit_work_closure_harm (A : Analysis ((SamplingDesign.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w) (T : ℕ)
-    (σ' : Strategy (audit ((SamplingDesign.work σ w f K).closure cl) Reg session)) :
-    prob (fun o => o.1 = true ∧ ∃ u ∈ A.wrong (A.committedOf σ'), T ≤ SamplingDesign.harm σ w cl u)
-        (audit ((SamplingDesign.work σ w f K).closure cl) Reg session) σ' ≤
-      (((SamplingDesign.totalWork σ w - T : ℕ) : ℝ≥0∞) / (SamplingDesign.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
+theorem audit_work_closure_harm (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ ∃ u ∈ A.wrong (A.committedOf σ'), T ≤ Law.harm σ w cl u)
+        (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
+      (((Law.totalWork σ w - T : ℕ) : ℝ≥0∞) / (Law.totalWork σ w : ℝ≥0∞)) ^ K + εks + δlink := by
   refine le_trans (prob_mono (fun o ho => ⟨ho.1, ?_⟩) _ _) (audit_work_closure A hks hlink hf hW T σ')
   obtain ⟨u, hu, hT⟩ := ho.2
-  exact hT.trans (SamplingDesign.harm_le_unsoundWork σ w cl hu)
+  exact hT.trans (Law.harm_le_unsoundWork σ w cl hu)
 
 /-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks and the units
 they make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
-theorem audit_work_closure_of_record (A : Analysis ((SamplingDesign.work σ w f 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < SamplingDesign.totalWork σ w)
-    (σ' : Strategy (audit ((SamplingDesign.work σ w f 27713).closure cl) Reg session)) :
-    prob (fun o => o.1 = true ∧ SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
-        (audit ((SamplingDesign.work σ w f 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
-  refine (audit_profile A hks hlink (fun B => SamplingDesign.totalWork σ w ≤ 1000 * SamplingDesign.unsoundWork σ w cl B) σ').trans ?_
+theorem audit_work_closure_of_record (A : Analysis ((Law.work σ w f 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
+    (σ' : Strategy (audit ((Law.work σ w f 27713).closure cl) Reg session)) :
+    prob (fun o => o.1 = true ∧ Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
+        (audit ((Law.work σ w f 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
+  refine (audit_profile A hks hlink (fun B => Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl B) σ').trans ?_
   gcongr
   refine iSup₂_le fun B hB => ?_
-  rw [SamplingDesign.closure_escape]
-  exact SamplingDesign.work_escape_of_record σ w f hf hW hB
+  rw [Law.closure_escape]
+  exact Law.work_escape_of_record σ w f hf hW hB
 
 end Audits
 

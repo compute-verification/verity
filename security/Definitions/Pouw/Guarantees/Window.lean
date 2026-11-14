@@ -7,7 +7,7 @@ public import Definitions.Pouw.Window
 
 C1, a sample that depends on the registration, is already expressed on main: `FlockSoundness.Audit.auditReg`
 (`Proofs/Flock/Soundness/Audit/RegDraw.lean`) and the keyed window's record theorem over it,
-`keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedDraw.lean`), which takes one
+`keyedExecutionPhaseReg_extraction_audit_of_record` (`Proofs/Flock/Soundness/KeyedSample.lean`), which takes one
 `ExtractionAnalysis` of the whole window with state-dependent `ε_ks(R, τ)` and `ε_bind(R, τ)`. This module's own content
 is M2: what the window's `κ`, `coll(R, τ)` and `ε_bind(R, τ)` are in terms of its calls', for a window of `C` calls,
 registered at once, sampled at once by a sampling design that depends on the registration, and proved call by call (`Pouw.Window`).

@@ -24,12 +24,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # Flock's one-stage audit, end to end, under hidden outputs (trusted)
 
 `EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration production `--zk` runs (the default
-`--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenDrawn` is `EndToEndDrawn`'s, the same
+`--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenSampled` is `EndToEndSampled`'s, the same
 statement at the sampled proof blocks. Both read the circuit through its descriptor (`Flock.Desc`): the circuit file is read as
 a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` and `EndToEndHiddenDrawnFlat` are the two at a
 flat circuit file, `D = Desc.single c`, stated over the circuit `c` that `HmOut.parse` reads. Their proofs are
 `Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden`,
-`Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn` and the two `Flat` corollaries.
+`Flock.SecurityProofs.EndToEndHiddenSampled : Flock.Guarantees.EndToEndHiddenSampled` and the two `Flat` corollaries.
 
 Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ`, and `Definitions.lean`, which the `security` package builds without
@@ -95,7 +95,7 @@ def EndToEndHidden : Prop :=
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -120,7 +120,7 @@ def EndToEndHidden : Prop :=
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -151,7 +151,7 @@ def EndToEndHiddenPerTest : Prop :=
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -177,7 +177,7 @@ def EndToEndHiddenPerTest : Prop :=
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD)
           (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -195,13 +195,13 @@ def EndToEndHiddenPerTest : Prop :=
 
 open Classical in
 /-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks.** `EndToEndHidden`'s setting
-with `EndToEndDrawn`'s event: for every live prover `τ`,
+with `EndToEndSampled`'s event: for every live prover `τ`,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
 with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
 fixed at registration), and `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss
 term, so it holds whatever the verifier's bytes: it needs no A3, and the sample need not be uniform.
 
-Its named assumptions, each a hypothesis, are `EndToEndDrawn`'s: `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`,
+Its named assumptions, each a hypothesis, are `EndToEndSampled`'s: `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`,
 with A6 `uniform/flock-coin-server` for its coins), `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for
 each table's knowledge finders at budgets `qF` and `qS`, and `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through
 `LinkCRZC`) for the prover's link finders. The rest are the verify command's tags under hidden outputs (`TagsOkZHJ`), an
@@ -210,7 +210,7 @@ untyped statement with no shared-row tables (`pub.tables = none`), the bound's n
 verity-verify-proof accepts gives (`Flock.SecurityProofs.EndToEndHidden_refSetup`), at any number of tables. As in
 `EndToEndHidden`, the circuit is the one the verifier's descriptor unrolls to, and `EndToEndHiddenDrawnFlat` is this
 statement at a flat circuit file. -/
-def EndToEndHiddenDrawn : Prop :=
+def EndToEndHiddenSampled : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit's descriptor, which the verifier parses, and its public file
     (I : Inputs) (ht : I.tags.typed = false)
@@ -221,7 +221,7 @@ def EndToEndHiddenDrawn : Prop :=
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -245,7 +245,7 @@ def EndToEndHiddenDrawn : Prop :=
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
           hCust.1
-          fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -273,7 +273,7 @@ def EndToEndHiddenFlat : Prop :=
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -296,7 +296,7 @@ def EndToEndHiddenFlat : Prop :=
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -313,7 +313,7 @@ def EndToEndHiddenFlat : Prop :=
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
 open Classical in
-/-- **`EndToEndHiddenDrawn` at a flat circuit file**: `EndToEndHiddenDrawn` at the descriptor `Desc.single c`, stated
+/-- **`EndToEndHiddenSampled` at a flat circuit file**: `EndToEndHiddenSampled` at the descriptor `Desc.single c`, stated
 over the circuit `c` that `HmOut.parse` reads from the circuit file. -/
 def EndToEndHiddenDrawnFlat : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -326,7 +326,7 @@ def EndToEndHiddenDrawnFlat : Prop :=
     (kd : ℕ) (hdiv : kd % nTab I = 0)
     -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -348,7 +348,7 @@ def EndToEndHiddenDrawnFlat : Prop :=
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
@@ -376,7 +376,7 @@ def EndToEndHiddenPerTestFlat : Prop :=
     (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-    (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Discharge.Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -400,7 +400,7 @@ def EndToEndHiddenPerTestFlat : Prop :=
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hCust.1
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →

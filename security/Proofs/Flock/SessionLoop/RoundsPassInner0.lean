@@ -253,7 +253,7 @@ theorem repState_end_from {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64) {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
     {d : _root_.Flock.ZkServer.Frame.Draws} {mk : Option _root_.Flock.ZkServer.Frame.MaskSlot}
-    (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (hcd : c = Cfg.ofDraws lay d mk) :
+    (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (hcd : c = Cfg.ofSamples lay d mk) :
     ∀ (e : ℕ) {cr : Array (Array F128)} {N : ℕ} {c'' : Cfg} {cs : Array F128} {m : Masker}, cr.size = N →
       N = alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 + 1 + e →
       N ≤ alg.size + (Count.openList (xs.size + 2) t.sch).length →
@@ -291,7 +291,7 @@ theorem repState_end {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (hx : xs.size + 2 < 2 ^ 64) {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp)) {lay : _root_.Flock.Zk.PadLayout}
     {d : _root_.Flock.ZkServer.Frame.Draws} {mk : Option _root_.Flock.ZkServer.Frame.MaskSlot}
-    (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (hcd : c = Cfg.ofDraws lay d mk)
+    (hlay : lay = _root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (hcd : c = Cfg.ofSamples lay d mk)
     (htp : 2 * t.tPad < 2 ^ 64) (hd : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64)
     {cr : Array (Array F128)} {N : ℕ} (hN : cr.size = N)
     (hC : alg.size + (xs.size + 2) + 1 + t.sch.k0 + 4 < N)
@@ -419,7 +419,7 @@ theorem ofLoop_answered_end (T : CoinLayer.TableData)
     try rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hdgt : t.st.digest.size < 2 ^ 64 := by rw [← hT.1]; exact hdg
   have htpd : 2 * t.tPad < 2 ^ 64 := by rw [← hT.2.2.1]; exact hpd
   have hdT : ∀ i, 64 * 2 ^ (t.sch.levels.getD i default).d < 2 ^ 64 := by rw [← hT.2.1]; exact hdd
@@ -493,7 +493,7 @@ theorem roundOk_inner0 (L₁ : LeanRelease Flock.Wit Tp)
     exact hnr 0 (by decide)
   have hcfg : (ofLoopLink (withInner Masked.dataE L₁ real (finHonest (ofLoopLink L₁ src real))) src real).cfg x
       (ν, t) ((m₀, ρ₀) :: ops) = (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) := by
-    unfold cfg drawsAt
+    unfold cfg samplesAt
     rfl
   have hcfg1 : (ofLoopLink L₁ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops) =
       (withFrames Masked.dataE L₁ real).cfg x (ν, t) ((m₀, ρ₀) :: ops) :=
