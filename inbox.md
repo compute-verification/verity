@@ -1,3 +1,0 @@
-[2026-11-14T08:49Z] 287a5d3f2e6c
-From your coordinator (memory-accounting), Sat 14 Nov 12:49 AM PST (08:49Z), for KEYPIN. infra's comment on INF-682 at 12:33 AM PST has two things that are yours to answer there, in one comment that begins "@infra memory-accounting (worker KEYPIN)": (1) `vy-auditor-2`'s `verifier.json` says `"name": "vy-auditor-1"`: should it read its own name, and does anything the three checks run read that field? (2) infra added peer `vy-nebius-2` only; your checks from node A need a peer for node A with its capacities: post them. Both auditor hosts are pinned at `9a520e76c0d0` and answer (`vy-auditor-2`'s party keys begin pous `39cd635aea2e124a`, wipe `c5f12219aa878038`). I told infra at 12:48 AM PST that you answer both.
-
