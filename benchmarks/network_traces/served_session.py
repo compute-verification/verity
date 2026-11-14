@@ -208,7 +208,7 @@ CERTIFIED = "certified-io.json"
 TRACED = ("arrive", "step", "finish")
 #: or a record with one of these fields: the trace's, requests.jsonl's and the certified I/O's request values
 VALUED = ("prompt_len", "sampling", "seed", "rows", "emitted", "prompt_ids", "streamed_ids", "prompt", "output")
-HAND_START = ("serve-openai run directly, not demos/vllm/serve.sh: serve.sh's serve-openai line (--required-manifest "
+HAND_START = ("serve-openai run directly, not adapters/vllm/tools/served_run/serve.sh: serve.sh's serve-openai line (--required-manifest "
               "ROW/manifest.json, the int8 B4 row's Build of record, with the served node's own taps as "
               "--hidden-so and --norm-tap-so) plus the endpoint's flags, and --disk-floor-gb 40 (serve-openai's own default "
               "under --seal is 300 GB; 72 GB of seals then needs about 112 GB free at the start); serve.sh refuses on "
@@ -354,9 +354,8 @@ def outcome(bundle: bytes) -> dict:
     dep = json.loads(files["out/deployment.json"]) if "out/deployment.json" in files else {}
     n, params = dep.get("windows"), dep.get("params") or {}
     span = n * params["window"] * params["bucket_ms"] / 1000 if n is not None and params else None
-    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "ended_utc": end.get("ended_utc"),
-            "pinned": end.get("pinned"), "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"),
-            "windows": n, "session_s": span}
+    return {"run": end.get("run"), "rc": end.get("rc"), "ended": end.get("ended"), "pinned": end.get("pinned"),
+            "verdict": end.get("verdict"), "origin_unix": dep.get("origin_unix"), "windows": n, "session_s": span}
 
 
 def needles(ps: list[list[int]]) -> list[bytes]:
@@ -464,7 +463,7 @@ def local(a: argparse.Namespace, data: bytes, keep: Path) -> bytes:
     endpoint.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     stub = [sys.executable, str(HERE / "demo_stub.py"), "serve", "--prompt-ids", str(a.prompt_ids), "--tokens",
             str(a.tokens), "--vocab", str(a.vocab), "--out", str(endpoint)]
-    A.certifier_run(host, run, pinned=pinned(), now=lambda: datetime.now(UTC),
+    A.certifier_run(host, run, pinned=pinned(),
                     tunnel_argv=getattr(a, "tunnel", None) or (lambda ssh, port: [*stub, "--port", str(port)]))
     return A.certifier_fetch(run, host, witness=True)
 
@@ -552,11 +551,14 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
 
 
 def served_peer(fetch: Path) -> str | None:
-    """The node the kept gate run served on: its ``request.json``'s peer."""
+    """The node the kept gate run served on: its request's peer, which the gate's fetch holds in the witness's
+    ``request.json`` alone (`auditor.certifier_fetch`), so in a fetch with the run's own lane's key. A fetch kept
+    from a gate that still named the peer in the run's own ``request.json`` is read there."""
     with tarfile.open(fetch, "r:gz") as tar:
         for m in tar:
-            if m.isfile() and m.name.count("/") == 1 and m.name.endswith("/request.json"):
-                return json.loads(tar.extractfile(m).read()).get("peer")
+            if m.isfile() and m.name.split("/")[1:] in ([A.WITNESS, "request.json"], ["request.json"]):
+                if (peer := json.loads(tar.extractfile(m).read()).get("peer")) is not None:
+                    return peer
     return None
 
 
@@ -590,7 +592,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused("--coins gate draws --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
-        raise Refused(f"{fetch} holds no request.json naming the node it served on, so the coin peer can't be checked")
+        raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
+                      "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
                       f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
@@ -609,7 +612,7 @@ def certified_io(fetch: Path) -> tuple[dict, dict]:
     """The kept network certifier run's deployment.json and certified I/O (`warden_chain.io`), read in a scratch
     directory beside the fetch."""
     sys.path[:0] = [str(TREE), str(HERE)]
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
     with tempfile.TemporaryDirectory(dir=fetch.parent) as d:
         with tarfile.open(fetch, "r:gz") as tar:
             tar.extractall(d, filter="data")

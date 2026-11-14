@@ -41,11 +41,11 @@ open scoped ENNReal
 
 open Classical in
 /-- **Flock's one-stage audit, end to end, at the sampled proof blocks.** As in `EndToEnd`: the prover registers `R`; the
-verifier samples a `kd`-subset of the `n` proof blocks from its operating system's bytes (`Law.execOS` on the byte source
+verifier samples a `kd`-subset of the `n` proof blocks from its operating system's bytes (`SamplingDesign.execOS` on the byte source
 `src`); one `--zk` session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and
 `verity-verify-proof verify --zk --session-tables J` reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{verity-verify-proof accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-with "wrong" `EndToEnd`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at registration), and
+with "wrong" `EndToEnd`'s (`incorrectRegZ`, against the public file, in the committed transcript fixed at registration), and
 `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss term, so it holds whatever
 the verifier's bytes: it needs no A3.
 
@@ -84,9 +84,9 @@ def EndToEndSampled : Prop :=
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     (qF qS : ℝ),
-    let L := Law.execOS (n := n) src (.subset kd) n
+    let L := SamplingDesign.execOS (n := n) src (.subset kd) n
     let P := (keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)
     let vb := (rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
@@ -98,7 +98,7 @@ def EndToEndSampled : Prop :=
       (zcStrat execArith hs512 (planZJ dj y₀) (cont σ ω)) qF qS) →
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
-    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ wrongRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
+    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ incorrectRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
       ksAvgStrictZ (planZJ dj y₀) L k qF qS (reg σ) +

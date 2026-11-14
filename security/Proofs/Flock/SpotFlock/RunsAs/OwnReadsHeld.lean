@@ -92,12 +92,12 @@ theorem rootFor_of_byPort {rec : Json} {p : String} {x : Json} (hx : (p, x) ∈ 
 
 /-- **Each port of a record that passed the registration check has a root that is a string**, where the verifier
 lists each port once: the record names exactly the verifier's ports, and R3 holds each to a hex root. -/
-theorem byPort_root_str {rec : Json} {v : Spot.Registration.Verifier} (h : Spot.Registration.check rec v = #[])
+theorem byPort_root_str {rec : Json} {v : Spot.Docket.Verifier} (h : Spot.Docket.check rec v = #[])
     (hn : (v.ports.map (·.1)).toList.Nodup) {p : String} {x : Json} (hx : (p, x) ∈ Spot.Record.byPort rec) :
     ∃ s, Spot.getD x "root" = .str s := by
-  obtain ⟨law, -, -, h3, -⟩ := (Properties.Spot.registration_nil rec v).1 h
-  -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the seventh of its eight
-  obtain ⟨-, -, -, -, -, -, hroot, -⟩ := h3
+  obtain ⟨samplingDesign, -, -, h3, -⟩ := (Properties.Spot.docket_nil rec v).1 h
+  -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the last of its seven
+  obtain ⟨-, -, -, -, -, -, hroot⟩ := h3
   obtain ⟨⟨ps, hps, -, hmem⟩, -⟩ := recordOk_spec (RecordNames.recordOk_of_check h hn)
   have hp : p ∈ ps := (AddressRow.byPort_isSome_iff hps p).1 (find?_isSome_of ⟨(p, x), hx, rfl⟩)
   have hp' : p ∈ (v.ports.map (·.1)).toList := (hmem p).1 hp
@@ -118,7 +118,7 @@ theorem accepted_leftOut_held {i : Spot.Run.Input} {it : Spot.Run.Interior} {j :
     (hno : (v, r) ∉ (Spot.Record.lessOwnReads it.record (some opened)).getD #[]) :
     ∃ x, (v, x) ∈ Spot.Record.byPort it.record ∧ Spot.jeq (Spot.getD x "root") r = true ∧ HeldRead i it v r := by
   obtain ⟨x, hx, hxr, hn | hh⟩ := accepted_leftOut ha ho hv hno
-  · obtain ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, -, -, -, -, -, -, -, -, -, hchk⟩ :=
+  · obtain ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, -, -, -, -, -, -, -, -, -, hchk⟩ :=
       accepted_registered ha
     obtain ⟨s, hs⟩ := byPort_root_str (Array.isEmpty_iff.1 hchk) hports hx
     rw [hs] at hn

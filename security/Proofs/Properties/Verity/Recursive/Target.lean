@@ -8,13 +8,13 @@ public import Proofs.Core.Circuit
 public import Proofs.Properties.Verity.Majority
 
 /-!
-# The target, proved: sampled proofs at the recursive configuration
+# The target, proved: SPOT at the recursive configuration
 
 `spotRecursive` proves the target's bound at each strategy from the property `acc_of_accepts` states
 (`AccOfAccepts`, the statement of `acc_of_accepts` at the deployment), at `acc_of_accepts`.
 
 The proof, at a strategy `σ` whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the
-commit phase's check (elsewhere no play is accepted) and sampled proofs' claim fails on the extracted transcript `X`
+commit phase's check (elsewhere no play is accepted) and SPOT's claim fails on the extracted transcript `X`
 (elsewhere the event is empty), so that the unbound units `U` number more than `ε n`:
 * each accepted play shows, through the coupling (`SessionIn.names_shows`) and G, an accepted run of the recursive
   verifier at a dense statement (`verdict_run`);
@@ -102,22 +102,16 @@ theorem verdict_run (q : Dep) (hG : AccOfAccepts q) (V : Vocab d α) (k : Verity
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen)
     (ξ : S.Ξ) (s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin)) (h : RecVerdict V k (S.out ξ s)) :
     RecDeploy.DenseAt (S.x ξ) ∧ (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2).out = .acc := by
-  obtain ⟨-, -, a, cb, eb, hcase, hda, j, p, hj, hp⟩ := h
-  obtain ⟨p', c', ev, hp', -, he, pub, prof, hch⟩ := id hda
-  rw [hj] at hp'
-  change VStar.Recursive.Sampled.paramsOfJson j = .ok p' at hp'
-  rw [hp] at hp'
-  cases hp'
-  cases ev with
-  | inl e₀ =>
-      change VStar.Recursive.Sampled.checkBlobs (.inr p) c' (.inl e₀)
-        (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof at hch
-      simp [VStar.Recursive.Sampled.checkBlobs] at hch
-  | inr e =>
-      have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof :=
-        hch
-      obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp he
-      exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
+  obtain ⟨-, -, a, cb, eb, hcase, hda⟩ := h
+  obtain ⟨p, c', e, hp, -, he, pub, prof, hch⟩ := id hda
+  cases hj : Core.canonicalJson a with
+  | error err => rw [hj] at hp; cases hp
+  | ok j =>
+    rw [hj] at hp
+    have hp' : VStar.Recursive.paramsOfJson j = .ok p := hp
+    have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof := hch
+    obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp' he
+    exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
 
 /-- **The recursive session's plays** (`Majority.Plays` at the session `S` and the reading `readX`): the samples `ξ`,
 a run with the extractor's seed at each (`Dep.Sample`), the run's accept, the units `ξ` samples, the extractor's
@@ -501,10 +495,10 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
   · rw [min_eq_right h]
     exact ex_off_le_units q V S readX collOf dColl hcoll hcr.2
 
-/-- **The target: sampled proofs at the recursive configuration**, in the per-prover form over the causal game (R4′,
+/-- **The target: SPOT at the recursive configuration**, in the per-prover form over the causal game (R4′,
 R5, R6), with the recursive configuration's verdict (`RecVerdict`). At composite `k`, the parameters `θ`, the
 committed files `F`, the commitment `c` and a strategy `σ`, with `S` its recursive session (`SessionIn`), the
-probability that the recursive component accepts while sampled proofs' claim fails on the extractor's transcript
+probability that the recursive component accepts while SPOT's claim fails on the extractor's transcript
 (`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
 the finders built from `σ`, `δs + E_ξ[ksAt] + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
 and `⊤` elsewhere, where `ksAt` is `t'(σ) · 2^{-λ}`, and at a sample whose statement is at the deployment's tables the

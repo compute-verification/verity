@@ -295,7 +295,7 @@ class TP2CaptureWorkerExtension:
         from verity_vllm.engine import vllm_adapter as va
         from verity_vllm.observe.capture import Capture, ObserverConfig, make_header
         from verity_vllm.observe.events import RunHeader
-        from verity_vllm.pipeline.m1_capture import dump_cos_sin
+        from verity_vllm.pipeline.match_capture import dump_cos_sin
 
         facts = _tp_facts(self)
         rank, world = int(facts["tp"]["rank"]), int(facts["tp"]["world_size"])
@@ -1142,7 +1142,7 @@ class TP2CaptureWorkerExtension:
         """THIS rank's picks for the cross-rank collective-output pass, from the COMMITTED bytes (`pipeline.tp.xrank_dump`),
         each all-reduce on a captured route under the route the engine's all-reduce switches take on this GPU."""
         import torch
-        from verity.definitions.registry.tp_allreduce import device_of, settings_of
+        from verity_vllm.definitions.registry.tp_allreduce import device_of, settings_of
 
         from verity_vllm.engine import env as engine_env
         from verity_vllm.pipeline.tp import xrank_dump as XD

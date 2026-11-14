@@ -22,7 +22,7 @@ GIVEN = {"accepted": True, "complete": True, "interior": [], "replay_sample": []
 OWN = {k: v for k, v in LAYOUT.items() if k not in W.STAND_IN} | {"replay": "Request_v1{L=2}"}
 CLOSED = dict.fromkeys(spot_status.HOLES, spot_status.CLOSED)
 #: what the fixture's four runs name a verdict's class, serve and registration by
-NAMED = {"class": "p4-o2", "serve": "r20261113-000001-0001", "registration": REGISTRATION}
+NAMED = {"class": "w1/p4-o2", "serve": "r20261113-000001-0001", "registration": REGISTRATION}
 #: a made-up table in which a Lean verifier decides every verdict and every check, each under a lock entry
 ALL_LEAN = {
     "verdicts": {k: {"what": f"each session's {k}", "verifier": f"lean-{k}", "decided_by": "lean", "proved_by": "Made.up"}
@@ -53,7 +53,8 @@ def reads(record):
     """Whether the command's own reader of a verdict's record takes the section's, field for field, and the record
     names its class, its serve and its registration beside them."""
 
-    return (E.verdict(record, "the section's record") == {k: record[k] for k in E.VERDICT_FIELDS}
+    return (E.verdict(record, "the section's record") == {k: record[k] for k in (*E.VERDICT_FIELDS, *E.CLASS_FIELDS)
+                                                          if k in record}
             and set(record) == {*E.VERDICT_FIELDS, *W.NAMES})
 
 
@@ -71,7 +72,7 @@ def test_proved_is_printed_only_where_every_lock_entry_has_no_open_premise(tmp_p
     doc = W.account(record, tree(tmp_path), kinds=ALL_LEAN, holes=CLOSED)
     out = W.render(doc)
     assert doc["verdict"]["mark"] == W.PROVED and doc["to_fully_proved"] == []
-    assert "- **verdict: proved.** Every sampled proof accepted by the Lean verifier (2 of 2 sessions); the final accept " \
+    assert "- **verdict: proved.** Every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept " \
            "given by `lean-outcome`." in out
     assert "- **to fully proved**: nothing in the run's own files or in its verdicts' lock entries." in out
     assert out.count("proved by `Made.up`, which takes no open premise") == 3 and all(k[W.PROVED] for k in doc["verdicts"])
@@ -154,7 +155,7 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     assert doc["outcome"]["final"] == "withheld" and doc["verdict"]["mark"] == E.RUN_NOT_PROVED
     assert doc == W.account(record_of(tmp_path / "other", sessions_record=False), tree(tmp_path), holes=CLOSED) | {
         "one_stage_record": doc["one_stage_record"]}
-    assert doc["verdict"]["line"] == ("every sampled proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
+    assert doc["verdict"]["line"] == ("every sampled proof block's proof accepted by the Lean verifier (2 of 2 sessions); the final accept "
                                       "withheld, reason `two-stage-form` (the two-round form's soundness is not proved)")
     assert "final accept given" not in out and "| withheld (`two-stage-form`) |" in out
     assert "  - the final accept is withheld by `sampled-proofs-verifier`: `two-stage-form`, the two-round form's " \
@@ -174,8 +175,8 @@ def test_an_accept_the_verifier_withheld_is_never_said_to_be_given(tmp_path):
     # where the served run's files give one of them none, the section says which
     assert "The record names no" not in out
     alone = W.account(R.read(served(tmp_path / "alone")["second"])[0], tree(tmp_path), holes=CLOSED)
-    assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"serve": None}
-    assert "The record names no `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
+    assert {k: alone["verdict_record"][k] for k in W.NAMES} == NAMED | {"class": None, "serve": None}
+    assert "The record names no `class` and `serve`: the served run's files give none, so a reader that holds four verdicts to one " \
            "class of one serve under one registration cannot count it." in W.render(alone)
     assert "  - the replay block's inputs are committed after the sample: the interior registers `logits` after the " \
            "first stage's sample" in out
@@ -201,7 +202,7 @@ def test_a_refused_outcome_and_no_outcome_are_said_as_they_are(tmp_path):
     # a second stage that reached no outcome holds no verdict; a proof the Lean verifier refused is counted as such
     verdicts = {"lean-verify/m0": True, "lean-verify/m1": False}
     doc = W.account(record_of(tmp_path, outcome=None, held=False, verdicts=verdicts), tree(tmp_path), holes=CLOSED)
-    assert doc["verdict"]["line"] == ("1 of 2 sampled proofs accepted by the Lean verifier; no final accept: the second "
+    assert doc["verdict"]["line"] == ("1 of 2 sampled proof blocks' proofs accepted by the Lean verifier; no final accept: the second "
                                       "stage reached no outcome")
     assert doc["verdict_record"] is None and doc["to_fully_proved"][-1]["said"] == "the final accept is not reached"
 

@@ -39,7 +39,7 @@ In place of `scopeOkH` and `pub.tables = none`, the circuit conditions are the r
 tables' runs, `runsZCJH_liveI`, read none) or on shared-row tables.
 
 * `instProg_readsOwn`: `instProg`'s units read only their own gates and input gates (`instProg_reads`).
-* `rsZHJI_wrongRegZ`: `wrongRegZ` at `rsZHJI` is one set at every registration.
+* `rsZHJI_incorrectRegZ`: `incorrectRegZ` at `rsZHJI` is one set at every registration.
 -/
 
 namespace FlockSoundness.Discharge.HiddenExec
@@ -80,30 +80,30 @@ theorem zk_session_soundHJI
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveI I ht hc dj y₀ wr _ hTags hRec hDraw)) τ
     -- cr/sha-512 for the knowledge finders of its simulation
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           k Rw M ρ t' (reg σ) (cont σ) := by
@@ -138,23 +138,23 @@ theorem zk_session_soundHJ_custodyI
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveI I ht hc dj y₀ wr _ hTags hCust.1
           fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K₀ ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           k Rw M ρ t' (reg σ) (cont σ) :=
@@ -162,23 +162,23 @@ theorem zk_session_soundHJ_custodyI
     (fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
 /-- **The registered commit strings are the public file's**, at `instProg`: the rows' value binding (`rsZHJI`) reads
-the registration only through the public file `pub`, so its `wrongRegZ` is one set at every registration. -/
-theorem rsZHJI_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S₀ : Finset (Fin n)}
+the registration only through the public file `pub`, so its `incorrectRegZ` is one set at every registration. -/
+theorem rsZHJI_incorrectRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S₀ : Finset (Fin n)}
     {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hrf : Hidden.Any.RowsFitS c) {pub : Public}
     (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hU : Built c.unit) (hpr : Layout.PortReads c hU)
     (hw : ProvedScope.wiresAcyclic c = true) (R R' : Reg) (Xv : Fin (instN c n) → Bool) :
-    wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+    incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
         ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)) R Xv =
-      wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+      incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
         ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)) R' Xv := by
-  apply wrongRegZ_congr
+  apply incorrectRegZ_congr
   intro p
   rfl
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's
 custody, at `instProg`.** `zk_session_soundHJ_custody_reg` with the template instance's program: "wrong" is
-`wrongRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
+`incorrectRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
 theorem zk_session_soundHJ_custody_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -196,25 +196,25 @@ theorem zk_session_soundHJ_custody_regI
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveI I ht hc dj y₀ wr _ hTags hCust.1
           fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+        K₀ ≤ (incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ)
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           k Rw M ρ t' (reg σ) (cont σ) := by
@@ -233,7 +233,7 @@ theorem zk_session_soundHJ_custody_regI
 
 /-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples, at `instProg`.**
 `zk_session_soundHJ_custody_sampled_reg` with the template instance's program: the executable verifier accepts and some
-unit the session drew is in `wrongRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
+unit the session drew is in `incorrectRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
 theorem zk_session_soundHJ_custody_sampled_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -250,29 +250,29 @@ theorem zk_session_soundHJ_custody_sampled_regI
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_liveI I ht hc dj y₀ wr _ hTags hCust.1
           fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+        u ∈ incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ)
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
             (reg σ) (cont σ) k Rw))
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+      ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           k Rw M ρ t' (reg σ) (cont σ) := by
   intro σ hCR
-  let W := wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+  let W := incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
     ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw)) (reg σ)
     (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
       ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))

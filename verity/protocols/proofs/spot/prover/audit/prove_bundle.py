@@ -49,9 +49,8 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
-REPO = HERE.parents[1]
-sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "benchmarks" / "one_stage" / "interfaces"),
+REPO = Path(__file__).resolve().parents[6]
+sys.path[:0] = [str(REPO / "benchmarks" / "one_stage" / "interfaces"),
                 str(REPO / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement")]
 
 from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
@@ -106,7 +105,7 @@ class Staged:
     def __init__(self, wdir: Path, out: Path) -> None:
         self.wdir, self.out = wdir, out
         self.rec = json.loads((wdir / "registration.json").read_text())
-        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_law(self.rec["law"])), None)
+        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_sampling_design(self.rec["law"])), None)
         self.files = (json.loads((wdir / "window.json").read_text()), self.rec)
         self.want = CS.expected_ports(self.mine)
         self.roots = {r["port"]: r for r in self.rec["roots"]}
@@ -147,8 +146,8 @@ class Staged:
         return {**mm, "checks": ok, "k_log": circ.meta.get("k_log")}
 
 
-def _law(law: dict) -> str:
-    return f"{law['law']}:{law['k']}"
+def _sampling_design(sampling_design: dict) -> str:
+    return f"{sampling_design['law']}:{sampling_design['k']}"
 
 
 def session(a, mm: dict, draw: dict, sdir: Path, zk_server: bool = True, forged: bool = False,

@@ -13,7 +13,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
-from verity.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
+import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
 
 from verity_vllm.pipeline import chunk_rows as CR

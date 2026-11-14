@@ -189,12 +189,12 @@ def paramsParsed (j : Json) : V Params := do
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
 its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
-sample is sampled under (`OneStage.sampledFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
+sample is sampled under (`OneStage.sampledFrom`, `Draw.deriveSamplingDesign`): v1 has already resolved a rate stated as text over
 the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
 `work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
-  let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""
+  let kind := match getD p.base.verifier.samplingDesign "law" with | .str s => s | _ => ""
   if kind != "subset" then throw (SUBSET_ONLY kind)
   pure p
 
@@ -577,7 +577,7 @@ registered openings, once the sampling design holds. -/
 def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
     V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := do
   let (spec, sts) ← (sessionAt I rd draw).mapError (s!"setup: {·}")
-  (if draw.isSome then Flock.ProvedScope.sampleLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  (if draw.isSome then Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
   pure (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
     Flock.registeredOpenings sts rd.registered)
 
@@ -623,7 +623,7 @@ def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (co
   Flock.Zk.verify spec tabs record proofs
   scope
   Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-  (if draw.isNone then Flock.ProvedScope.sampleLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  (if draw.isNone then Flock.ProvedScope.sampleDesign true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
   Flock.RecSetup.fullSample none false draw record
   Flock.RecSetup.innerSampled none
   Flock.ProvedScope.programHeld I.program
@@ -824,7 +824,7 @@ a population `n`, and under the verifier's query the program's proof blocks are 
 (`Slots.popOk`). This module imports `Spot.PopOrder`, so the call runs from the query's ranges
 (`Slots.popOk_eq_popOkRanges`) and builds no proof block: without the import it would run `Slots.layout`, a proof block
 for every input gate of the root. -/
-def popHeld (v : Registration.Verifier) (record : Json) : V Unit :=
+def popHeld (v : Docket.Verifier) (record : Json) : V Unit :=
   match nat? (getD record "population") with
   | none => throw "the record names no population"
   | some n => if Slots.popOk v.program v.query n then pure () else throw POPULATION_ORDER
@@ -979,9 +979,9 @@ def membersWiringOf (pr : Json) : V (Option (Spot.Wires.Wiring × Spot.Wires.Sum
 and everything else as the one statement's parameters hold it (`paramsParsed`, read at `proofs` of no file, so under
 any sampling design v1 parses and not the one statement's `subset` alone): `own` is that program and partition, with
 no file. The registration's check reads the members, each its units and its circuit's units a proof block
-(`Registration.Verifier.members`), so v1's check refuses a registration under which a sample that ends misses a
+(`Docket.Verifier.members`), so v1's check refuses a registration under which a sample that ends misses a
 member, or a member's sampled proof blocks give two counts of link points (`link-points`,
-`Registration.linkRefused`). -/
+`Docket.linkRefused`). -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
   membersKeysHeld pr

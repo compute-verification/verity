@@ -106,44 +106,20 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         "verity_vllm/program/predict/scan_state.py": ("accounting.certifier.verifier.blocks",),
         "verity_vllm/program/predict/steps.py": ("accounting.certifier.verifier.advice",),
         "verity_vllm/protocols/remote_bandwidth/binder.py": ("accounting.poub.verifier.audit.Tiles",),
-        "verity_vllm/protocols/remote_bandwidth/memory_map.py": (
-            "accounting.poub.verifier.audit", "accounting.poub.verifier.codec",
-            "accounting.poub.verifier.memory_map.Change", "accounting.poub.verifier.memory_map.Header",
-            "accounting.poub.verifier.memory_map.MemoryMapError", "accounting.poub.verifier.memory_map.Replay",
-            "accounting.poub.verifier.memory_map.Step", "accounting.poub.verifier.memory_map.Written",
-            "accounting.poub.verifier.memory_map.dumps", "accounting.poub.verifier.memory_map.parse",
-        ),
-        "verity_vllm/protocols/remote_bandwidth/plan.py": (
-            "accounting.poub.verifier.receipts", "accounting.poub.verifier.receipts.PER_LEAF",
-            "accounting.poub.verifier.receipts.Plan",
-        ),
-        "verity_vllm/protocols/remote_bandwidth/registry.py": (
-            "accounting.poub.verifier.receipts", "accounting.poub.verifier.receipts.PER_LEAF",
-            "accounting.poub.verifier.receipts.Plan", "accounting.poub.verifier.store.store_salt",
-        ),
         "verity_vllm/protocols/remote_bandwidth/remote.py": (
-            "accounting.poub.verifier.audit", "accounting.poub.verifier.codec", "accounting.poub.verifier.receipts",
-        ),
-        "verity_vllm/protocols/remote_bandwidth/verify.py": (
-            "accounting.poub.verifier.receipts", "accounting.poub.verifier.receipts.PER_LEAF",
+            "accounting.poub.verifier.audit", "accounting.poub.verifier.codec",
         ),
     },
     "compute-accounting": {
-        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`), and a coins client in place of the
-        # verifier's own `Challenger` and `verifier.coins` for the Pearl+ serve.
+        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
         "verity_vllm/check/replay/pouw_circuit.py": ("accounting.pouw.verifier.protocol.DomainError",),
-        "verity_vllm/pipeline/serve_pearl.py": ("accounting.pouw.verifier.coins.Challenger", "accounting.pouw.verifier.verifier"),
     },
     "memory-accounting": {
-        # `protocols/pous.py` runs a whole period (setup, serve, audit, certify, the memory challenger's session): it
-        # needs a prover entry in pous's prover/ that takes the layout and serves, the period's audit left to the verifier.
+        # `protocols/pous.py` reads the schemes for its refusals, setup's salt draw, and the period's certificate and gaps
+        # for its details; the store, its encode and decode and the period are pous's prover's (`weight_store`).
         "verity_vllm/protocols/pous.py": (
-            "accounting.pous.device.challenger_session", "accounting.pous.device.memory_challenger",
-            "accounting.pous.verifier.layout.TensorLayout", "accounting.pous.verifier.period",
-            "accounting.pous.verifier.run", "accounting.pous.verifier.schemes", "accounting.pous.verifier.schemes.p2",
-            "accounting.pous.verifier.schemes.p2.decode_segment", "accounting.pous.verifier.schemes.p2.expand_prefix",
-            "accounting.pous.verifier.setup", "accounting.pous.verifier.verifier.DIGEST_BYTES",
-            "accounting.pous.verifier.verifier.VerifierKey",
+            "accounting.pous.verifier.period", "accounting.pous.verifier.schemes",
+            "accounting.pous.verifier.schemes.p2", "accounting.pous.verifier.setup",
         ),
     },
 }

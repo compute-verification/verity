@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_vllm.config import workload_file
 from verity_vllm.observe.events import RunHeader
@@ -116,7 +116,6 @@ def test_profile_is_discovered_by_case_and_is_the_base_pattern_list():
     # registers it; no B7 shape is a tabled key, see below, so it never fires here)
     assert [p.name for p in prof.patterns] == ["gemm.matmul_kernel_persistent.tuned", *[p.name for p in BASE.PROFILE.patterns]]
     assert [type(p) for p in prof.patterns[1:]] == [type(p) for p in BASE.PROFILE.patterns]
-    assert prof.kernel_allowlist == BASE.PROFILE.kernel_allowlist
     pins = prof.notes["pins"]
     assert pins["gemm"] == BASE.PROFILE.notes["pins"]["gemm"] and pins["rms_norm"] == BASE.PROFILE.notes["pins"]["rms_norm"]
     assert pins["attention"]["kBlockN"] == 64 == Q15.PROFILE.notes["pins"]["attention"]["kBlockN"]

@@ -1,5 +1,5 @@
 /-
-The interface every core protocol implements (PoUW, PoUS, the network certificate check, sampled proofs' one-stage
+The interface every core protocol implements (PoUW, PoUS, the network certificate check, SPOT's one-stage
 audit, the composition).
 
 * `params`: the protocol's public parameters (k, Δ, the sampling design, ...), canonical JSON;

@@ -51,7 +51,7 @@
 #     stratified-rate:1/2 and stratified-rate:1/1.
 #   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
 #     sample, until multi-table coverage lands, so each partition's rule must be a stratified rate over a window of one member.
-#   Which arms pass the rule check: a stream's rule is a rate (service.Law: rate:NUM/DEN, stratified-rate:NUM/DEN or
+#   Which arms pass the rule check: a stream's rule is a rate (service.SamplingDesign: rate:NUM/DEN, stratified-rate:NUM/DEN or
 #     work-rate:NUM/DEN), and each audit states its partition file's text as the rule: prove_path.py audit, and with
 #     PP_RECORDS=1 records_audit.py, which takes the window's sampling design to be the one that rate names over the window's
 #     own proof blocks. The stand-in states rates, and so does each arm's default partition above (PP_TP, PP_LLAMA, PP_SERVE_RUN
@@ -134,7 +134,7 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
   esac
 fi
-PLAIN=(); LAW=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified-rate
+PLAIN=(); SAMPLING_DESIGN=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) SAMPLING_DESIGN=stratified-rate
 M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
@@ -178,7 +178,7 @@ run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, 
   if [ -n "${PP_KEEP_WINDOWS:-}" ]; then   # the windows whole, the prover's files included, for a later job on this node
     mkdir -p "$PP_KEEP_WINDOWS" && rm -rf "$PP_KEEP_WINDOWS/$name-windows" && cp -a $W/$name-windows "$PP_KEEP_WINDOWS/" || return 1
     R keep "$PP_KEEP_WINDOWS" --owner @proofs --expires 7d --priority low \
-      --why "prove_path/run.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $O/keep.log 2>&1
+      --why "prove_path.sh PP_KEEP_WINDOWS: committed windows (rows and salts) a later job stages from" >> $O/keep.log 2>&1
   fi
   if [ -n "${PP_RECORDS:-}" ] && [ -n "${REC_RUN:-}" ]; then   # the window's audit from its records alone
     records $name $part $forged
@@ -202,11 +202,11 @@ c = json.load(open(sys.argv[1]))
 print(json.dumps({c["name"]: {"digest": c["digest"], "argv": sys.argv[2:]}}))' $O/$REC_NAME-records/compiler.json \
     $PY $REPO/verity/protocols/proofs/spot/prover/audit/prove_path.py circuit --serve-run $REC_RUN --window $REC_K --vllm-python ${PP_VLLM_PYTHON:-$PY} \
     ${PP_TARGET:+--target $PP_TARGET} --partition $(realpath $part) "${TG[@]}" > $O/$name/compilers.json || return 1
-  local root law
+  local root sampling_design
   root=$($PY -c 'import json, sys
 print(next(w["run_root"] for w in map(json.loads, open(sys.argv[1])) if int(w["window"]) == int(sys.argv[2])))' $REC_RUN/windows.jsonl $REC_K) || return 1
-  law=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
-  $TIME $PY verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window $W/$name-windows/rank0 --law $law --run $root \
+  sampling_design=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["law"])' $part) || return 1
+  $TIME $PY verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window $W/$name-windows/rank0 --sampling-design $sampling_design --run $root \
     --opening $REC_RUN/advice/w$REC_K/private/opening.json --compilers $O/$name/compilers.json --template-sets $W/sets \
     ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
     --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
@@ -240,12 +240,12 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
   if [ -n "${PP_SERVE_RUN:-}" ]; then
     served served $PP_SERVE_RUN ${PP_WINDOW:-0} || rc=1
   else
-    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload demos/vllm/workloads/$LROW.json"
+    LLAMA="--bundle $D/commit/replay_bundle_p0 --row-dir $D --workload adapters/vllm/tools/served_run/workloads/$LROW.json"
     if [ -n "${PP_SERVE_STANDIN:-}" ]; then
       $PP serve-standin $LLAMA --out $W/serve-run | tee $O/serve-standin.json || exit 8
       served llama-served $W/serve-run 0 || rc=1
     else
-      $PP advice --workload demos/vllm/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
+      $PP advice --workload adapters/vllm/tools/served_run/workloads/$LROW.json --out $W/advice.bin | tee $O/advice.log || exit 8
       run llama "$LLAMA" $W/advice.bin ${PP_PARTITION:-$STEP1} "" || rc=1
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
@@ -278,7 +278,7 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
     run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
     units=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["units"])' $O/$name/verifier/tie.json) || return 1
     mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
-    $TIME $PY verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window $W/$name-window --law work-rate:$units/$units --circuit $c --run $run \
+    $TIME $PY verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window $W/$name-window --sampling-design work-rate:$units/$units --circuit $c --run $run \
       --registered $O/$name/verifier/registered.json \
       ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
       --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --zk-server $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
@@ -296,11 +296,11 @@ elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
   [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 else
   S=$W/served
-  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:1/2 --deferred) \
+  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $SAMPLING_DESIGN:1/2 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
   mkdir -p $O/standin && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8
-  echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$LAW:1/1\"}" > $W/all.json
+  echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$SAMPLING_DESIGN:1/1\"}" > $W/all.json
   SI="--tp-commit $S/commit --build-root $S/build"
   run standin "$SI" $W/advice.bin $S/partition.json "${PP_RANKS:-}" || rc=1
   run standin-forged "$SI" $W/advice.bin $W/all.json "${PP_FORGED_RANKS:-0}" --forge $FORGE || rc=1

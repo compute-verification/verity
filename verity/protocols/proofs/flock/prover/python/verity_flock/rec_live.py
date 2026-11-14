@@ -552,10 +552,10 @@ def full_draw(program, query: dict) -> dict:
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
     n = sum(hi - lo for _, rs in P.strata(program, query) for lo, hi in rs)
-    law = D.derive(program, query, {"law": "stratified", "k": n})
-    if any(s["k"] != sum(hi - lo for lo, hi in s["units"]) for s in law["strata"]):
+    sampling_design = D.derive(program, query, {"law": "stratified", "k": n})
+    if any(s["k"] != sum(hi - lo for lo, hi in s["units"]) for s in sampling_design["strata"]):
         raise ValueError("the stratified law at K = the population leaves a unit undrawn")
-    return {**law, "population": n, "units": list(range(n))}
+    return {**sampling_design, "population": n, "units": list(range(n))}
 
 
 #: `RecSetup.noInnerSample`: the verifier's refusal, last in a session's verdict, of a session over an inner session whose
@@ -731,7 +731,7 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
     its record its stream's round, opened after `round_after` of the round; and the log must show no tree and no opening
     that no session records, and no round read twice. `challenger.sessions_tree_reason` holds a `flock-circuit serve`
     session to the log the same way, after what that server answers. It mirrors `Spot.Challenger.innerTreesReason`,
-    the verifier, which the recursive audit reads (`test_challenger_inner_trees.py` in the sampled proofs
+    the verifier, which the recursive audit reads (`test_challenger_inner_trees.py` in the SPOT
     service's tests holds the two together)."""
     from verity.protocols.proofs.spot.device import challenger as C
 

@@ -8,9 +8,9 @@ public import Proofs.Properties.Verity.Sampled.DigestTie
 /-!
 # The window the verifier sets up, at the per-member form
 
-Soundness at a window reads its window instance's `SetsUp` (`WindowInstance.SetsUp`), the window the verifier sets
-up on the committed files, through two consequences (`WindowInstance.lb`, `WindowInstance.members`) and through what
-the claim reads of it (`WindowInstance.ClaimReads`). This module states it at the per-member form of one-stage v2:
+Soundness at a window reads its window instance's `SetsUp` (`ExecutionPhaseInstance.SetsUp`), the window the verifier sets
+up on the committed files, through two consequences (`ExecutionPhaseInstance.lb`, `ExecutionPhaseInstance.members`) and through what
+the claim reads of it (`ExecutionPhaseInstance.ClaimReads`). This module states it at the per-member form of one-stage v2:
 
 * **How v2 reads the members' files** (`memberRead`, `membersRead`): each member's files are the registered files its
   digests name, read as `readOf` reads one statement's; the window's are its members', in the order of their first
@@ -22,7 +22,7 @@ the claim reads of it (`WindowInstance.ClaimReads`). This module states it at th
   inputs, no work, stratified or closure input and no recomputation of public input words, as
   `Spot.OneStageZk.inputsAt` hands them, and the member's units, a range of the window's population from its first.
   Its files are then read as `memberRead` reads them (`MemberOn.fileRead_eq`).
-* **The window** (`WindowOn`): the window's members are the parameters', in the order of their first units, each on
+* **The window** (`ExecutionPhaseOn`): the window's members are the parameters', in the order of their first units, each on
   the registered files; the sample's sampling design is the verifier's over the window's population, and its bytes `MAX_COINS`
   coins of the parameters' challenger family; the vocabulary's read is the members' files in that order; the
   published share is the window's and the files' units its population.
@@ -30,11 +30,11 @@ the claim reads of it (`WindowInstance.ClaimReads`). This module states it at th
   member's files beyond what a window's member fixes, and the ports check's pass.
 * **The verifier sets the window up** (`MembersSetUp`): the window is on the files, laid out in order, and every
   member's files pass, with a proof block in the sample or not. It gives `MAX_COINS` frames' bytes and members of the
-  window's one table (`WindowOn.lb`, `WindowOn.membersAt`), and that every member is `Checked` wherever the members'
+  window's one table (`ExecutionPhaseOn.lb`, `ExecutionPhaseOn.membersAt`), and that every member is `Checked` wherever the members'
   roots fix their domains (`MembersSetUp.checked`).
 
-`WindowOn` reads the committed files only through the vocabulary's read, so it moves between files read alike
-(`WindowOn.of_read`); the layout and the files check read the window alone.
+`ExecutionPhaseOn` reads the committed files only through the vocabulary's read, so it moves between files read alike
+(`ExecutionPhaseOn.of_read`); the layout and the files check read the window alone.
 -/
 
 @[expose] public section
@@ -90,7 +90,7 @@ def byFirst (ms : Array _root_.Spot.OneStageZk.Member) : List _root_.Spot.OneSta
 /-- **How v2 reads a window's files among the registered files `R`**, at the parameters `θ`: the members' files
 (`memberRead`), in the order of their first units (`byFirst`), where the parameters name members; else one
 statement's (`readOf`). -/
-noncomputable def membersRead (R : Array ByteArray) (θ : ByteArray) : Verity.WindowFiles :=
+noncomputable def membersRead (R : Array ByteArray) (θ : ByteArray) : Verity.ExecutionPhaseFiles :=
   match ((paramsOf θ).bind (·.members)).map fun ms => (byFirst ms).map (memberRead R) with
   | some (r :: rs) => ⟨r, rs⟩
   | _ => .one (readOf θ R)
@@ -141,15 +141,15 @@ theorem MemberOn.fileRead_eq {F : Array ByteArray} {vm : _root_.Spot.OneStageZk.
 
 /-- **The window `W` is the parameters' members on the registered files, read on the committed files `F`**: v2's
 parameters in `θ` name members, and `W`'s are those, in the order of their first units, each on the registered files
-(`MemberOn`); the sample's sampling design is the verifier's over `W`'s population (`lawAt`) and its bytes `MAX_COINS` coins of
+(`MemberOn`); the sample's sampling design is the verifier's over `W`'s population (`samplingDesignAt`) and its bytes `MAX_COINS` coins of
 the parameters' challenger family, 64 bytes each; the vocabulary reads `F` as the members' files in that order; and
 the published share is `W`'s and `F`'s units `W`'s population. -/
-structure WindowOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop where
+structure ExecutionPhaseOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop where
   members : ∃ (p : _root_.Spot.OneStageZk.Params) (ms : Array _root_.Spot.OneStageZk.Member)
       (vms : List _root_.Spot.OneStageZk.Member),
     ParamsAt θ p ∧ p.members = some ms ∧ vms.Perm ms.toList ∧
       vms.Pairwise (fun a b => a.first < b.first) ∧ List.Forall₂ (MemberOn (V.registered θ)) vms W.ms ∧
-      lawAt p.base.verifier W.nJ = .ok W.law ∧
+      samplingDesignAt p.base.verifier W.nJ = .ok W.samplingDesign ∧
       ∃ key label, p.base.challenger = some (key, label) ∧
         (label, _root_.Spot.Challenger.MAX_COINS) ∈ V.families θ
   lb : W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64
@@ -159,7 +159,7 @@ structure WindowOn (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : 
   units : V.units θ F = W.nJ
 
 /-- Each member of a window on the files has the statement's tags. -/
-theorem WindowOn.tags {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+theorem ExecutionPhaseOn.tags {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
     (m : Member W.nJ) (hm : m ∈ W.ms) : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some m.I.tags := by
   obtain ⟨_, _, _, -, -, -, -, hall, -⟩ := h.members
   obtain ⟨_, -, hon⟩ := forall₂_right hall m hm
@@ -167,8 +167,8 @@ theorem WindowOn.tags {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W
 
 /-- **A window on the files has members of its one table with hm96-sha512 rows** (`MembersAt` at `Window.table`):
 each has the statement's tags and one table. -/
-theorem WindowOn.membersAt {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) : MembersAt W W.table := by
+theorem ExecutionPhaseOn.membersAt {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+    (h : ExecutionPhaseOn V θ F W) : MembersAt W W.table := by
   refine ⟨fun m hm => ?_, fun m hm => statement_hm96Rows (h.tags m hm), fun m hm => ?_⟩
   · obtain ⟨_, _, _, -, -, -, -, hall, -⟩ := h.members
     obtain ⟨_, -, hon⟩ := forall₂_right hall m hm
@@ -183,10 +183,10 @@ theorem WindowOn.membersAt {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     exact (congrArg Flock.Tags.table ht).trans hT.symm
 
 /-- **A window on some files is on files read alike.** -/
-theorem WindowOn.of_read {V : Vocab d α} {θ : ByteArray} {F F' : Array ByteArray} {W : Window}
-    (h : WindowOn V θ F W) (hr : V.read θ F = V.read θ F') : WindowOn V θ F' W := by
+theorem ExecutionPhaseOn.of_read {V : Vocab d α} {θ : ByteArray} {F F' : Array ByteArray} {W : Window}
+    (h : ExecutionPhaseOn V θ F W) (hr : V.read θ F = V.read θ F') : ExecutionPhaseOn V θ F' W := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
-  have hu : V.units θ F' = V.units θ F := congrArg Verity.WindowFiles.units hr.symm
+  have hu : V.units θ F' = V.units θ F := congrArg Verity.ExecutionPhaseFiles.units hr.symm
   exact ⟨h.members, h.lb, ⟨m₀, rest, hW, hr.symm.trans hread⟩, h.share, hu.trans h.units⟩
 
 /-! ## The files check at a member -/
@@ -214,10 +214,10 @@ theorem FilesPass.checked {nJ : ℕ} {m : Member nJ} (h : FilesPass m) (hfix : m
 /-! ## The verifier sets the window up -/
 
 /-- **The verifier sets the window `W` up on the committed files `F`**, at the per-member form: `W` is the
-parameters' members on the registered files, read on `F` (`WindowOn`), laid out in order (`Window.Laid`), and every
+parameters' members on the registered files, read on `F` (`ExecutionPhaseOn`), laid out in order (`Window.Laid`), and every
 member's files pass the files check (`FilesPass`), the members the sample holds and those it misses. -/
 structure MembersSetUp (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop
-    extends WindowOn V θ F W where
+    extends ExecutionPhaseOn V θ F W where
   laid : W.Laid
   passes : ∀ m ∈ W.ms, FilesPass m
 

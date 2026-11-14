@@ -88,14 +88,14 @@ both audits read accepted. -/
 theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot.Run.run i form = .ok j) :
     (∃ (step : String) (codes : Array String),
       j = Json.mkObj [("step", Json.str step), ("codes", Json.arr (codes.map Json.str))]) ∨
-    ∃ (n : ℕ) (rule : Spot.Select.Rule) (law : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
+    ∃ (n : ℕ) (rule : Spot.Select.Rule) (samplingDesign : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
         (draw : Json) (rest : Array ℕ) (read : ℕ),
       Spot.nat? (Spot.getD i.record "population") = some n ∧
       i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.lawOver n = .ok law ∧
+      rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
-      ¬(!(Spot.Registration.check i.record { i.params.verifier with law, workTable }).isEmpty) = true ∧
+      ¬(!(Spot.Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty) = true ∧
       ¬i.closure.isSome = true ∧
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
@@ -153,8 +153,8 @@ theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot
     x.1 = it ∧ ∃ ns ids ks, Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids ns = .ok ks ∧
       ¬(Spot.nat? (Spot.getD it.record "population") != some (sample.size * ns.toList.sum)) = true ∧
-      ¬(!(Spot.Registration.check it.record { it.params.verifier with
-        law := Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson (sample.size * ns.toList.sum))] }).isEmpty) =
+      ¬(!(Spot.Docket.check it.record { it.params.verifier with
+        samplingDesign := Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson (sample.size * ns.toList.sum))] }).isEmpty) =
           true ∧
       Spot.Select.selectSecond sample ns ks it.source = .ok (x.2.2.1, x.2.2.2.2) ∧
       (∀ code, Spot.Run.coinsCode i.key i.main it.coins it.record it.params.verifier.windowRoot it.family
@@ -171,10 +171,10 @@ theorem interiorSteps_ok {i : Spot.Run.Input} {it : Spot.Run.Interior} {k : Spot
 /-- **Round 2's audit of an interior**: the run's `Own` (`runOwn`) at the interior's strata, the audit record of the
 second stage's sample, the answer whether round 2's attached record reads accepted, and one staged entry. -/
 private theorem interiorAudit_some {form : Bool} {i : Spot.Run.Input} {sample : Array ℕ} {it : Spot.Run.Interior}
-    {receipt draw law : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
-    (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, law, read)) = .ok (acc, staged)) :
+    {receipt draw samplingDesign : Json} {read : ℕ} {acc : Bool} {staged : List (String × Json)}
+    (h : Spot.Run.interiorAudit form i sample (some (it, receipt, draw, samplingDesign, read)) = .ok (acc, staged)) :
     (∃ e, staged = [("interior", e)]) ∧ ∃ rec_ strata,
-      Spot.Run.audit i it.record receipt draw law (it.provedUnits.getD (Spot.Draw.proved draw))
+      Spot.Run.audit i it.record receipt draw samplingDesign (it.provedUnits.getD (Spot.Draw.proved draw))
         (it.instances.getD (it.provedUnits.getD (Spot.Draw.proved draw)).size) it.served it.sessionRoots =
           .ok rec_ ∧
       Spot.Partition.strata it.params.verifier.program it.params.verifier.query = .ok strata ∧
@@ -204,9 +204,9 @@ private theorem record_wf {x : Spot.Record.Input} {r : Json} (h : Spot.Record.re
     | (cases h; exact ⟨_, rfl, Std.TreeMap.Raw.WF.ofList⟩)
 
 /-- **An audit record is a well-formed object.** -/
-private theorem audit_wf {i : Spot.Run.Input} {record receipt draw law : Json} {proved : Array Int} {instances : Int}
+private theorem audit_wf {i : Spot.Run.Input} {record receipt draw samplingDesign : Json} {proved : Array Int} {instances : Int}
     {served sessionRoots r : Json}
-    (h : Spot.Run.audit i record receipt draw law proved instances served sessionRoots = .ok r) :
+    (h : Spot.Run.audit i record receipt draw samplingDesign proved instances served sessionRoots = .ok r) :
     ∃ m : Std.TreeMap.Raw String Json compare, r = .obj m ∧ m.WF := by
   unfold Spot.Run.audit at h
   obtain ⟨x, _, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
@@ -247,7 +247,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     cases hs
   · obtain ⟨x, hx, rfl⟩ := secondStage_two hr ha.interior hsec
     obtain ⟨hx1, ns, ids, ks, hns, hids, hks, -, -, hss, hcoins₂⟩ := interiorSteps_ok hx
-    obtain ⟨it', receipt₂, draw₂, law₂, read₂⟩ := x
+    obtain ⟨it', receipt₂, draw₂, samplingDesign₂, read₂⟩ := x
     simp only at hx1
     subst hx1
     obtain ⟨⟨e, he⟩, rec₂, strata, haud, hstrata, hacc⟩ := interiorAudit_some hia
@@ -270,32 +270,32 @@ and passed the registration check with no code under the interior's parameters w
 population. The first stage's sample is `accepted_steps`'s: `Rule.tableOver`, `Select.resolve` and `Select.select` are
 functions of the run's input. -/
 theorem accepted_registered {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (ha : AcceptedTwo i it j) :
-    ∃ (n : ℕ) (rule : Spot.Select.Rule) (law : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
+    ∃ (n : ℕ) (rule : Spot.Select.Rule) (samplingDesign : Json) (workTable : Option Json) (resolved : Spot.Select.Rule)
         (draw : Json) (rest : Array ℕ) (read : ℕ) (ns : Array ℕ),
       Spot.nat? (Spot.getD i.record "population") = some n ∧
       i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-      rule.lawOver n = .ok law ∧
+      rule.samplingDesignOver n = .ok samplingDesign ∧
       i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable =
         .ok workTable ∧
-      (Spot.Registration.check i.record { i.params.verifier with law, workTable }).isEmpty = true ∧
+      (Spot.Docket.check i.record { i.params.verifier with samplingDesign, workTable }).isEmpty = true ∧
       Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
       Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
       Spot.nat? (Spot.getD it.record "population") =
         some (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum) ∧
-      (Spot.Registration.check it.record { it.params.verifier with
-        law := Json.mkObj [("law", Json.str "subset"),
+      (Spot.Docket.check it.record { it.params.verifier with
+        samplingDesign := Json.mkObj [("law", Json.str "subset"),
           ("k", Lean.toJson (((Spot.Draw.proved draw).map Int.toNat).size * ns.toList.sum))] }).isEmpty = true := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two
-  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, law, workTable, resolved, draw, rest, read, hn, hrule,
+  rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, hn, hrule,
       hlaw, ht, hchk, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
   · have hs := ha.accept
     rw [hj, symbol_refused] at hs
     cases hs
   · obtain ⟨x, hx, rfl⟩ := secondStage_two hr ha.interior hsec
     obtain ⟨-, ns, ids, ks, hns, -, -, hpop, hchk₂, -, -⟩ := interiorSteps_ok hx
-    exact ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, hn, hrule, hlaw, ht, of_not_not hchk, hres, hsel,
+    exact ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, hn, hrule, hlaw, ht, of_not_not hchk, hres, hsel,
       hns, eq_of_not_bne hpop, of_not_not hchk₂⟩
 
 /-- **The answer's `draw` is the first stage's**: an accepted two-stage run's answer lists under `draw` the sample object
@@ -314,7 +314,7 @@ theorem answer_sample {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} (
     rw [hj, symbol_refused] at hs
     cases hs
   · obtain ⟨x, -, rfl⟩ := secondStage_two hr ha.interior hsec
-    obtain ⟨it', receipt₂, draw₂, law₂, read₂⟩ := x
+    obtain ⟨it', receipt₂, draw₂, samplingDesign₂, read₂⟩ := x
     obtain ⟨⟨e, he⟩, -⟩ := interiorAudit_some hia
     have hd : Spot.getD j "draw" = draw := by
       rw [hj, he]

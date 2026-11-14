@@ -28,7 +28,6 @@ def test_b0_profile_is_the_pinned_profile_plus_the_sampler_recognizer():
     assert isinstance(p.patterns[0], TokenSampleGumbel) and p.patterns[0].vocab == BASE.C["V"] == 49152
     tuned = [x for x in p.patterns[1:] if x.name == "gemm.matmul_kernel_persistent.tuned"]        # the generic list's target specialization
     assert len(tuned) == 1 and [type(x) for x in p.patterns[1:] if x not in tuned] == [type(x) for x in BASE.PROFILE.patterns]
-    assert p.kernel_allowlist == BASE.PROFILE.kernel_allowlist
     assert "ov_sampling" in p.notes and "GumbelArgmaxBf16" in p.notes["ov_sampling"]["definition"]
 
 

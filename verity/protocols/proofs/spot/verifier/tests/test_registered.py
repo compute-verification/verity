@@ -40,7 +40,7 @@ MIX = bind(CompositeDefinition("RegisteredTestMix", 0, (), lambda S: ((("x", Arr
 POS = (3, 3, 0, 2, 1, 3)
 TABLE = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
 SCHEME = "frame-v3-sha512/hm96-sha512"
-LAW = {"law": "subset", "k": 2}
+SAMPLING_DESIGN = {"law": "subset", "k": 2}
 #: the sample the audit record's tests hand it: units 1 and 4 of six
 SAMPLE = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
 SERVED = {"kind": "served", "row": 7, "run": "r-registered"}
@@ -92,7 +92,7 @@ def _record(prog: Program, reg: G.Registered, **kw):
     ports = {p: {"leaves": leaves, "domain": R.window_domain(part["program"], P.digest(part), p, schema, leaves, "r-registered")}
              for p, schema, leaves in (("x", "hm96-sha512/row/v1", n), ("out", "u16", n))}
     roots = [{"port": p, "root": "ab" * 64, **ports[p]} for p in ports]
-    return R.record(prog, Q, LAW, SCHEME, roots, SERVED, registered=[reg.entry()], **kw), ports
+    return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, roots, SERVED, registered=[reg.entry()], **kw), ports
 
 
 def test_the_registered_root_is_the_hm96_rows_tree_under_its_own_domain():
@@ -503,7 +503,7 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     reg = _registered(prog)
     rec, ports = _record(prog, reg)
     assert rec["format"] == "verity/registration/v2" and rec["registered"] == [reg.entry()]
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports}
     assert R.check(rec, prog, Q, **kw, registered={"W": 2}).ok
     assert R.digest(rec) != R.digest({**rec, "format": "verity/registration/v1"})
     e = reg.entry()
@@ -519,12 +519,12 @@ def test_registration_v2_names_the_registered_values_and_r7_holds_them():
     # a count equal to the verifier's is still refused as a bool: True would give the docket a second digest
     one = _program(pos=(0, 0), rows=1)
     rec1, ports1 = _record(one, G.Registered.commit(P.program_digest(one), "W", TABLE[:1]))
-    kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
+    kw1 = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports1}
     assert rec1["registered"][0]["leaves"] == 1 and R.check(rec1, one, Q, **kw1, registered={"W": 2}).ok
     true = {**rec1, "registered": [{**rec1["registered"][0], "leaves": True}]}
     assert R.digest(true) != R.digest(rec1) and R.check(true, one, Q, **kw1, registered={"W": 2}).codes == ("R7-leaves",)
     # the record names 16 by leaving it out, whatever the entry it was given
-    assert R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED, registered=[{**e, "word_bits": 16}]) == rec
+    assert R.record(prog, Q, SAMPLING_DESIGN, SCHEME, rec["roots"], SERVED, registered=[{**e, "word_bits": 16}]) == rec
 
 
 def test_an_r7_root_of_127_hex_digits_and_a_newline_is_refused():
@@ -535,7 +535,7 @@ def test_an_r7_root_of_127_hex_digits_and_a_newline_is_refused():
     rec, ports = _record(prog, reg)
     root = reg.entry()["root"][:127] + "\n"
     assert len(root) == 128
-    got = R.check({**rec, "registered": [{**reg.entry(), "root": root}]}, prog, Q, law=LAW, scheme=SCHEME, ports=ports,
+    got = R.check({**rec, "registered": [{**reg.entry(), "root": root}]}, prog, Q, sampling_design=SAMPLING_DESIGN, scheme=SCHEME, ports=ports,
                   registered={"W": 2})
     assert got.codes == ("R7-root",)
 
@@ -546,7 +546,7 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
     prog = _program(w=32)
     reg = G.Registered.commit(P.program_digest(prog), "W", [[r * 0x10001, r] for r in range(5)], word_bits=32)
     rec, ports = _record(prog, reg)
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports}
     assert rec["registered"] == [reg.entry()] and reg.entry()["word_bits"] == 32
     assert R.check(rec, prog, Q, **kw, registered={"W": 2}).ok
     no_width = {k: x for k, x in reg.entry().items() if k != "word_bits"}
@@ -559,7 +559,7 @@ def test_r7_holds_a_32_bit_value_to_the_verifiers_width():
                                                                                                               "R7-word_bits"}
     narrow = _program()
     rec16, ports16 = _record(narrow, G.Registered.commit(P.program_digest(narrow), "W", TABLE, word_bits=32))
-    assert set(R.check(rec16, narrow, Q, law=LAW, scheme=SCHEME, ports=ports16, registered={"W": 2}).codes) == {"R7-domain",
+    assert set(R.check(rec16, narrow, Q, sampling_design=SAMPLING_DESIGN, scheme=SCHEME, ports=ports16, registered={"W": 2}).codes) == {"R7-domain",
                                                                                                               "R7-word_bits"}
     # a v2 record where the verifier registers nothing, and a v1 record where it registers a value, are refused
     assert R.check(rec, prog, Q, **kw).codes == ("keys",)
@@ -574,10 +574,10 @@ def test_a_value_is_committed_once_and_the_log_holds_its_root():
     prog = _program()
     reg = _registered(prog)
     rec, ports = _record(prog, reg)
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "held": ["W"]}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "held": ["W"]}
 
     def later(window, previous, entry):
-        return R.record(prog, Q, LAW, SCHEME, rec["roots"], {**SERVED, "row": window}, previous=R.digest(previous),
+        return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, rec["roots"], {**SERVED, "row": window}, previous=R.digest(previous),
                         registered=[entry] if entry else ())
 
     assert R.check(later(8, rec, reg.entry()), prog, Q, **kw, log=[rec]).ok
@@ -600,9 +600,9 @@ def _windows(prog: Program, xs, w: G.Registered):
     base, ports = _record(prog, w)
     out = []
     for i, x in enumerate(xs):
-        out.append(R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
+        out.append(R.record(prog, Q, SAMPLING_DESIGN, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
                             previous=R.digest(out[-1]) if out else None, registered=[x.entry(), w.entry()]))
-    return out, {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2}}
+    return out, {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2}}
 
 
 def test_two_honest_windows_register_the_same_names_under_their_own_roots():
@@ -734,11 +734,11 @@ def test_the_window_prefixed_form_still_verifies():
             prog, x, w, window_root = _prefixed(f"w{i}/"), f"w{i}/x", f"w{i}/W", r if windowed else None
             d = P.program_digest(prog)
             base, ports = _record(prog, G.Registered.commit(d, w, TABLE))
-            rec = R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
+            rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, base["roots"], {**SERVED, "row": 7 + i},
                            previous=R.digest(log[-1]) if log else None,
                            registered=[G.Registered.commit(d, x, X_ROWS, window=window_root).entry(),
                                        G.Registered.commit(d, w, TABLE).entry()])
-            assert R.check(rec, prog, Q, LAW, SCHEME, ports, log=log, registered={x: 2, w: 2}, window_root=window_root,
+            assert R.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, log=log, registered={x: 2, w: 2}, window_root=window_root,
                            held=[w] if windowed else None).ok, (i, windowed)
             log.append(rec)
 
@@ -823,7 +823,7 @@ def test_advice_no_registered_compiler_reads_is_refused_by_name():
 def test_a_record_without_registered_values_keeps_v1s_bytes():
     prog = _program()
     rec, _ = _record(prog, _registered(prog))
-    v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
+    v1 = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, rec["roots"], SERVED)
     assert v1["format"] == "verity/registration/v1" and "registered" not in v1
     assert R.digest(v1) == hashlib.sha512(b"verity/registration/v1\0" + canonical_json(v1)).hexdigest()
 
@@ -846,7 +846,7 @@ def test_the_audit_record_holds_the_roots_the_reads_were_opened_against():
         r = audit.audit_record(*args, session_registered=opened)
         assert not r["accepted"] and r["checks"]["registered"]["codes"] == ["registered"] and r["integrity_profile"] is None
         assert r["checks"]["registered"]["detail"] == {"registered": ["W"], "opened": sorted(opened), "wrong": wrong}
-    v1 = R.record(prog, Q, LAW, SCHEME, rec["roots"], SERVED)
+    v1 = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, rec["roots"], SERVED)
     plain = audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:])
     assert plain["accepted"] and "registered" not in plain["integrity_profile"]["inputs"]
     assert not audit.audit_record(v1, R.receipt(v1, "verifier-test"), *args[2:], session_registered={"W": reg.root.hex()})["accepted"]
@@ -908,12 +908,12 @@ def _seeded_case(bits: int = 32, x_root: str = "ab" * 64, roots=None, **kw):
              for p, s in (("x", "hm96-sha512/row/v1"), ("out", "u16"))}
     served = [{"port": p, "root": x_root if p == "x" else "cd" * 64, **ports[p]} for p in ports]
     w = G.Registered.commit(P.program_digest(prog), "W", TABLE)
-    base = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry()], **kw)
+    base = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()], **kw)
     sup = G.sources(SUPPLIED)["pouw.roots"]
     roots = roots or G.supplied_value(prog, "pouw.roots", sup, base, ["pouw.roots"])
-    rec = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()], **kw)
+    rec = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()], **kw)
     words = 2 * _digest(bits).leaves
-    check = {"program": prog, "query": q, "law": LAW, "scheme": SCHEME, "ports": ports,
+    check = {"program": prog, "query": q, "sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports,
              "registered": {"W": 2, "pouw.roots": words}, "supplied": SUPPLIED}
     return rec, check, w, roots
 
@@ -1096,7 +1096,7 @@ def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
     other = {**hist, "registered": {"k_hist": "11" * 64}}
     seen = []
     monkeypatch.setattr(V, "lean", lambda piece, args: seen.append((piece, args)) or {"refused": "the spy's"})
-    p, q, design, ports = check["program"], check["query"], check["law"], check["ports"]
+    p, q, design, ports = check["program"], check["query"], check["sampling_design"], check["ports"]
     interior = {"program": p, "query": q, "law": design, "copies": (ports, leaf, (), [], None, None, None, None, None, None,
                                                                  None),
                 "history": other, "replay": p, "values": [], "record": rec, "received": "r", "read": b"", "coins": None,
@@ -1281,14 +1281,14 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     first, ports = _record(prog, reg)
     part = P.partition(prog, Q)
     dom = R.window_domain(part["program"], P.digest(part), "prev.out", "hm96-sha512/row/v1", len(TABLE), "r-earlier")
-    earlier = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
+    earlier = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], {"port": "prev.out", "root": "cd" * 64, "leaves": len(TABLE),
                                                                "domain": dom},
                                               {"port": "short", "root": "cd" * 64, "leaves": 4, "domain": dom}],
                        {**SERVED, "row": 6}, registered=[reg.entry()])
     entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
-    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
                    registered=[entry])
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
     out = {"W": {"record": R.digest(earlier), "port": "prev.out"}}
     assert R.check(rec, prog, Q, **kw, outputs=out).ok
     assert R.check(rec, prog, Q, **kw, held=["W"]).codes == ("R7-domain", "R7-held")
@@ -1441,11 +1441,11 @@ def test_r7_holds_a_windows_history_to_the_previous_records_port():
     first, ports = _record(prog, reg)
     dom = "da" * 64
     port = {"port": "W", "root": "cd" * 64, "leaves": len(TABLE), "domain": dom}
-    last = R.record(prog, Q, LAW, SCHEME, [*first["roots"], port], {**SERVED, "row": 6}, registered=[reg.entry()])
+    last = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], port], {**SERVED, "row": 6}, registered=[reg.entry()])
     entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
-    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(last),
+    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(last),
                    registered=[entry])
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [last]}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [last]}
     hist = {"W": {"port": "W"}}
     assert R.last_digest([first, last]) == R.digest(last) and R.last_digest([]) == ""
     assert R.check(rec, prog, Q, **kw, outputs=hist).ok
@@ -1455,11 +1455,11 @@ def test_r7_holds_a_windows_history_to_the_previous_records_port():
     assert R.check({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=hist).codes == ("R7-held",)
     assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=hist).codes == ("R7-domain", "R7-held")
     assert R.check(rec, prog, Q, **kw, outputs={"W": {"port": "nope"}}).codes[0] == "R7-output"
-    short = R.record(prog, Q, LAW, SCHEME, [*first["roots"], {**port, "leaves": 4}], {**SERVED, "row": 6},
+    short = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], {**port, "leaves": 4}], {**SERVED, "row": 6},
                      registered=[reg.entry()])
     assert R.check({**rec, "previous": R.digest(short)}, prog, Q, **{**kw, "log": [short]},
                    outputs=hist).codes[0] == "R7-output"
-    after = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 7}, previous=R.digest(last),
+    after = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 7}, previous=R.digest(last),
                      registered=[reg.entry()])
     assert R.check({**rec, "previous": R.digest(after)}, prog, Q, **{**kw, "log": [last, after]},
                    outputs=hist).codes[0] == "R7-output"
@@ -1473,6 +1473,37 @@ def test_r7_holds_a_windows_history_to_the_previous_records_port():
         R.check(rec, prog, Q, **kw, outputs=hist, pinned={"W": "cd" * 64})
 
 
+def test_r7_carries_no_start_past_a_record_the_verdict_log_refused():
+    """With the verifier's verdict log (`verdicts`), an output value reading a port of an earlier record carries where
+    the log names that record accepted or doesn't name it, and is `R7-output-refused` where it names it refused, in the
+    history form and the explicit one alike, after SPOT's R7 codes (the caller's check, `caller.check`); a reused
+    registered value is not held to it, and a log in another form is refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    first, ports = _record(prog, reg)
+    dom = "da" * 64
+    port = {"port": "W", "root": "cd" * 64, "leaves": len(TABLE), "domain": dom}
+    last = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], port], {**SERVED, "row": 6},
+                    registered=[{**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}])
+    entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
+    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(last),
+                   registered=[entry])
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [last]}
+    d = R.digest(last)
+    for out in ({"W": {"port": "W"}}, {"W": {"record": d, "port": "W"}}):
+        for verdicts in (None, {}, {d: True}, {"ee" * 64: False}):
+            assert C.both(rec, prog, Q, **kw, outputs=out, verdicts=verdicts).ok, (out, verdicts)
+        got = C.both(rec, prog, Q, **kw, outputs=out, verdicts={d: False})
+        assert got.codes == ("R7-output-refused",) and got.detail["R7-output-refused"]["records"] == [d], out
+        assert C.both({**rec, "registered": [{**entry, "root": "ce" * 64}]}, prog, Q, **kw, outputs=out,
+                       verdicts={d: False}).codes == ("R7-held", "R7-output-refused"), out
+    assert R.refused({d: False}, d) and not R.refused({d: True}, d) and not R.refused({}, d)
+    assert C.both(rec, prog, Q, **kw, outputs={"W": {"record": d, "value": "a/16@0"}}, verdicts={d: False}).ok
+    for bad in ([], {d: 0}, {d.upper(): False}, {d[:-2]: False}, {5: False}):
+        with pytest.raises(ValueError):
+            C.both(rec, prog, Q, **kw, outputs={"W": {"port": "W"}}, verdicts=bad)
+
+
 def test_r7_reuses_an_earlier_records_registered_value():
     """A value may reuse an earlier record's registered value (`outputs: {value: {"record", "value"}}`, H1's `a/<K>@<s>` as
     a Commit's AROW, say): its entry takes that entry's domain and root, with no tree of its own, under another name or the
@@ -1484,12 +1515,12 @@ def test_r7_reuses_an_earlier_records_registered_value():
     first, ports = _record(prog, reg)
     dom = "da" * 64
     theirs = {**reg.entry(), "value": "a/16@0", "root": "cd" * 64, "domain": dom}
-    earlier = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6},
+    earlier = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6},
                        registered=[{**theirs, "root": "ce" * 64}, theirs])
     entry = {**reg.entry(), "root": "cd" * 64, "domain": dom}
-    rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
+    rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier),
                    registered=[entry])
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "log": [earlier]}
     out = {"W": {"record": R.digest(earlier), "value": "a/16@0"}}
     assert R.check(rec, prog, Q, **kw, outputs=out).ok
     assert R.check(rec, prog, Q, **kw).codes == ("R7-domain",)
@@ -1497,12 +1528,12 @@ def test_r7_reuses_an_earlier_records_registered_value():
     assert R.check({**rec, "registered": [{**entry, "domain": "db" * 64}]}, prog, Q, **kw,
                    outputs=out).codes == ("R7-domain",)
     assert R.check({**rec, "registered": [reg.entry()]}, prog, Q, **kw, outputs=out).codes == ("R7-domain", "R7-held")
-    same = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "value": "W"}])
+    same = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[{**theirs, "value": "W"}])
     assert R.check({**rec, "previous": R.digest(same)}, prog, Q, **{**kw, "log": [same]},
                    outputs={"W": {"record": R.digest(same), "value": "W"}}).ok
     for e in ({**theirs, "leaves": 4}, {**theirs, "words": 1}, {**theirs, G.WIDTH_KEY: 32}, {**theirs, "domain": 1},
               {**theirs, "root": None}, {**theirs, "leaves": True}):
-        other = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
+        other = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
         assert R.check({**rec, "previous": R.digest(other)}, prog, Q, **{**kw, "log": [other]},
                        outputs={"W": {"record": R.digest(other), "value": "a/16@0"}}).codes[0] == "R7-output", e
     for bad in ({"record": "ee" * 64, "value": "a/16@0"}, {"record": R.digest(earlier), "value": "nope"},
@@ -1560,13 +1591,13 @@ def _pool_window(prog: Program, w: G.Registered, i: int, log, pin=None, reset=Fa
     pool, marks = _pool(log, reset, week, verdicts, lag)
 
     def record(pin_entry):
-        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks, **window},
+        return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks, **window},
                         previous=R.digest(log[-1]) if log else None,
                         registered=[x.entry(), w.entry(), pout.entry(), *([pin_entry] if pin_entry else [])])
 
     if pin is None:
         pin = G.supplied_value(prog, "pin", [[("bytes", GENESIS)]], record(None), ["pin"]).entry()
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2, "pin": 16, "pout": 16},
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"x": 2, "W": 2, "pin": 16, "pout": 16},
           "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"], "pool": pool}
     return record(pin), kw
 
@@ -1755,10 +1786,10 @@ def test_a_hit_on_a_page_an_older_window_wrote_reads_it_through_the_carried_copi
     def window(i, log, pages=None, copies=True):
         port = {"port": "W", "root": f"c{i}" * 64, "leaves": len(TABLE), "domain": f"d{i}" * 64}
         read = {**reg.entry(), "root": pages["root"], "domain": pages["domain"]} if pages else reg.entry()
-        rec = R.record(prog, Q, LAW, SCHEME, [*first["roots"], *([port] if copies else [])], {**SERVED, "row": 6 + i},
+        rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, [*first["roots"], *([port] if copies else [])], {**SERVED, "row": 6 + i},
                        previous=R.digest(log[-1]) if log else None, registered=[read])
         own = {"W": {"leaves": port["leaves"], "domain": port["domain"]}} if copies else {}
-        return rec, port, {"law": LAW, "scheme": SCHEME, "ports": {**ports, **own}, "registered": {"W": 2},
+        return rec, port, {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": {**ports, **own}, "registered": {"W": 2},
                            "log": list(log)}
 
     w0, p0, kw0 = window(0, [])
@@ -1835,13 +1866,13 @@ def _cut_window(prog: Program, w: G.Registered, i: int, log, pin=None, ing=None,
                G.Registered.commit(d, "pout", [POOLS[i]], word_bits=32, window=POOL_WINDOWS[i]).entry()]
 
     def record(pin_entry):
-        return R.record(prog, Q, LAW, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks},
+        return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, base["roots"], {**SERVED, "row": 7 + i, **marks},
                         previous=R.digest(log[-1]) if log else None,
                         registered=[*entries, *([pin_entry] if pin_entry else [])])
 
     if pin is None:
         pin = G.supplied_value(prog, "pin", [[("bytes", GENESIS)]], record(None), ["pin"]).entry()
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports,
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports,
           "registered": {"x": 2, "W": 2, "ing": 3, "req": 2 + VALUES, "pin": 16, "pout": 16},
           "pinned": {"ing": stamped.root.hex()}, "log": list(log), "window_root": POOL_WINDOWS[i], "held": ["W"],
           "pool": pool}
@@ -1960,7 +1991,7 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
     prog = _program(rows=16, w=32)
     first, ports = _record(prog, _registered(prog))
     own = G.domain(P.program_digest(prog), "W", 2, 16, 32).domain_id.hex()
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "schemas": {"W": G.SCHEMA_SEG}}
+    kw = {"sampling_design": SAMPLING_DESIGN, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}, "schemas": {"W": G.SCHEMA_SEG}}
     for y, name in ((False, "pearl-a/0/0"), (True, "pearl-y/0/0")):
         rows = [[(2 * r + j + 1) << 16 for j in range(2)] if r < 5 else [0, 0] for r in range(16)]
         tree, dom, _ = _pearl_plus(rows, y)
@@ -1969,10 +2000,10 @@ def test_r7_reuses_a_pearl_plus_entry_under_its_own_domain():
         assert theirs["domain"] != own
 
         def earlier(e):
-            return R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
+            return R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 6}, registered=[e])
 
         def codes(entry, w=theirs, **change):
-            rec = R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier(w)),
+            rec = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": 8}, previous=R.digest(earlier(w)),
                            registered=[{**theirs, "value": "W", **entry}])
             return R.check(rec, prog, Q, **{**kw, "log": [earlier(w)], **change},
                            outputs={"W": {"record": R.digest(earlier(w)), "value": name}}).codes
@@ -2003,9 +2034,9 @@ def test_pouw_roots_reads_an_arow_row_table_root():
 
     def record(table_root, roots=None):
         served = [{"port": p, "root": table_root if p == ROW_TABLE else "ab" * 64, **ports[p]} for p in ports]
-        base = R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry()])
+        base = R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry()])
         roots = roots or G.supplied_value(prog, "pouw.roots", G.sources(sup)["pouw.roots"], base, ["pouw.roots"])
-        return R.record(prog, q, LAW, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()]), roots
+        return R.record(prog, q, SAMPLING_DESIGN, SCHEME, served, SERVED, registered=[w.entry(), roots.entry()]), roots
 
     rec, roots = record("5e" * 64)
     assert [list(r) for r in roots.rows] == [G.bytes_leaves(bytes.fromhex("5e" * 64) + w.root, 32)] * 2

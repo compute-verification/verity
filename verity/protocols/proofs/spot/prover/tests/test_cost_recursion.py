@@ -1,15 +1,18 @@
 """`recursion.py`: a recursion_e2e result's measured session scaled to every machine-window of each deployment."""
+from pathlib import Path
+
 import pytest
 from verity.protocols.proofs.spot.prover.cost import recursion as R
 
 RESULT = {"headline": {"ok": True, "pipeline": {"inner M0 e2e_s": 10.0, "V* staging_s (vstage + vcap steps)": 20.0,
-                                                "outer prove (zk_server) e2e_s": 570.0, "Lean step_s": 60.0}},
+                                                "outer prove (firewall) e2e_s": 570.0, "Lean step_s": 60.0}},
           "summary": {"outer": {"firewall": {"statements": 12}}},
           "rows": [{"stage": "baseline --zk", "e2e_s": {"median": 20.0}}], "staged": {"n": 3, "unit": "u", "m": 29}}
+ROOT = Path(__file__).resolve().parents[6]
 
 
 def test_a_session_scales_to_every_machine_window_of_each_deployment():
-    deps = R.deployments()
+    deps = R.deployments(ROOT / "benchmarks/census/deployments.json", ROOT / "benchmarks/slowdown/data/reference.toml")
     assert [d["id"] for d in deps] == [R.DEPLOYMENT, R.WORLD] and deps[0]["machines"] == 12500 and deps[1]["machines"] > 1e7
     s = R.session(RESULT)
     assert (s["prover_s"], s["auditor_s"], s["statements"], s["baseline_zk_e2e_s"]) == (600.0, 60.0, 12, 20.0)

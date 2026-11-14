@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Bounds
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -18,9 +18,9 @@ namespace FlockSoundness.Audit.Partitioning.SecurityProofs
 open Finset Game
 open scoped ENNReal
 
-theorem incl_le_one {n : ℕ} (L : Law n) (u : Fin n) : L.incl u ≤ 1 := by
+theorem incl_le_one {n : ℕ} (L : SamplingDesign n) (u : Fin n) : L.incl u ≤ 1 := by
   classical
-  unfold Verity.Law.incl prCoin
+  unfold Verity.SamplingDesign.incl prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 
@@ -113,7 +113,7 @@ theorem ConverseExact : Guarantees.ConverseExact := by
       havg_toReal _ fun ω => ENNReal.natCast_ne_top _]
     simp [S]
   have havg : ∑ ω, c * (((n - S ω).choose K : ℝ) / (n.choose K : ℝ)) ≤ δ := by
-    have h2 : avg (fun B : (Law.subset n K hKn).Ω => L.escape B.1) ≤ L.miss K :=
+    have h2 : avg (fun B : (SamplingDesign.subset n K hKn).Ω => L.missProb B.1) ≤ L.miss K :=
       (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
     rw [L.avg_escape_subsets hKn] at h2
     have h3 := ENNReal.toReal_mono (ne_top_of_le_ne_top ENNReal.one_ne_top (L.miss_le_one K)) h2
@@ -217,7 +217,7 @@ theorem ServedGranularityOptimum : Guarantees.ServedGranularityOptimum := by
   exact ⟨L, hL, by linarith⟩
 
 /-- `A·s + B/s` over `s > 0` is least at `t` with `t² = B/A`: the difference is `A (s − t)²/s`. -/
-theorem root_law_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
+theorem root_samplingDesign_le {A t s : ℝ} (hA : 0 ≤ A) (ht : 0 < t) (hs : 0 < s) :
     A * t + A * (t * t) / t ≤ A * s + A * (t * t) / s := by
   have hs0 : s ≠ 0 := hs.ne'
   have ht0 : t ≠ 0 := ht.ne'
@@ -254,13 +254,13 @@ theorem ServedGranularityChoice : Guarantees.ServedGranularityChoice := by
     simp only [mul_zero, zero_mul, div_zero, zero_div, add_zero]
     nlinarith
   · rw [hcommit t h0.ne']
-    have key := root_law_le hA h0 hs
+    have key := root_samplingDesign_le hA h0 hs
     nlinarith [key]
 
 theorem HeavyUnit : Guarantees.HeavyUnit := by
   intro n w C δ L hL u hu
   have h := hL {u} (by simpa using hu)
-  rw [Law.escape_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
+  rw [SamplingDesign.escape_singleton, ENNReal.toReal_sub_of_le (incl_le_one L u) ENNReal.one_ne_top,
     ENNReal.toReal_one] at h
   linarith
 

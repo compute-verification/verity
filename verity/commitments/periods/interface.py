@@ -215,7 +215,7 @@ def _static(v: Any) -> Any:
 
 
 # A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/circuits/ops`)
-# and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
+# and not the registry, which is the vLLM adapter's (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:
@@ -693,7 +693,9 @@ class TableOpening:
     holds: ``ports`` are the opening (the row, its salt, its path), and ``verdict`` the output row whose bit is 1 exactly
     when they open to the table's root (`gates.embedding`'s ``ok``). On a verdict of 1 the opening is the table's row, salt
     and path at the key, under the binding of the row's hm96 leaf and frame-v3 tree: not free where the period's root for
-    the table's parameter is the pinned root (`input_count`)."""
+    the table's parameter is the pinned root (`input_count`). ``row``, where the opening declares one: the output row that
+    returns the row opened, the first of the reader's two outputs, the second the verdict, of a reader of six input
+    rows; nothing is filled by it, and a record names it only where it is declared."""
     reader: str
     table: str
     key: str
@@ -701,10 +703,11 @@ class TableOpening:
     verdict: str
     at: int
     units: int
+    row: str | None = None
 
     def doc(self) -> dict[str, Any]:
         return {"reader": self.reader, "table": self.table, "key": self.key, "ports": list(self.ports), "verdict": self.verdict,
-                "at": self.at, "units": self.units}
+                "at": self.at, "units": self.units, **({} if self.row is None else {"row": self.row})}
 
 
 #: a registered value's row format (`Registered.formats`): its rows' schema and its leaves' width in bits, of `WIDTHS`
@@ -775,7 +778,9 @@ class Registered:
     there are some. ``formats``: by parameter, the rows its reads read when they aren't 16-bit leaves in
     ``hm96-sha512/row/v2`` rows (`value_format`), ``{"row_schema", "word_bits"}``: Pearl+'s A rows and y are FP32 words in
     ``hm96-sha512/row-seg/v1`` rows, as its trees commit them; ``formats`` and ``histories`` recorded only when there are
-    some."""
+    some. ``supplied``: registered parameters whose rows the verifier makes itself, one row for each unit that reads it,
+    each a public function of the unit's sampled index (`Window.give`), committed under public salts as a table's
+    supplied values are (`supplied`); recorded only when there are some. Not written: a circuit with one is refused."""
     params: Mapping[str, int]
     tables: tuple[Table, ...] = ()
     reads: tuple[Read, ...] = ()
@@ -784,8 +789,12 @@ class Registered:
     values: tuple[str, ...] = ()
     formats: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
     histories: tuple[History, ...] = ()
+    supplied: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
+        if self.supplied:
+            raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled unit "
+                                      f"(Registered.supplied {list(self.supplied)})")
         if not isinstance(self.formats, Mapping) or not all(isinstance(f, Mapping) for f in self.formats.values()):
             raise ValueError(f"formats {self.formats!r}: an object of a format by parameter")
         object.__setattr__(self, "formats", {str(v): dict(f) for v, f in self.formats.items()})
@@ -804,20 +813,21 @@ class Registered:
                 "reads": [r.doc() for r in self.reads], "roots": [r.doc() for r in self.roots],
                 "openings": [o.doc() for o in self.openings], **({"values": list(self.values)} if self.values else {}),
                 **({"formats": dict(sorted(self.formats.items()))} if self.formats else {}),
-                **({"histories": [h.doc() for h in self.histories]} if self.histories else {})}
+                **({"histories": [h.doc() for h in self.histories]} if self.histories else {}),
+                **({"supplied": list(self.supplied)} if self.supplied else {})}
 
     @classmethod
     def of(cls, d: Any) -> Registered:
         try:
             if not {"params", "tables", "reads", "roots", "openings"} <= set(d) <= {"params", "tables", "reads", "roots",
                                                                                     "openings", "values", "formats",
-                                                                                    "histories"}:
+                                                                                    "histories", "supplied"}:
                 raise ValueError(sorted(d))
             return cls({str(k): v for k, v in d["params"].items()}, tuple(Table(**t) for t in d["tables"]),
                        tuple(Read.of(r) for r in d["reads"]), tuple(TableRead(**r) for r in d["roots"]),
                        tuple(TableOpening(**{**o, "ports": tuple(o["ports"])}) for o in d["openings"]),
                        tuple(d.get("values", ())), d.get("formats", {}),
-                       tuple(History(**h) for h in d.get("histories", ())))
+                       tuple(History(**h) for h in d.get("histories", ())), tuple(d.get("supplied", ())))
         except (TypeError, ValueError, KeyError, AttributeError) as e:
             raise ValueError(f"a circuit's registered reads are {{params, tables, reads, roots, openings}}, its values, "
                              f"their formats and its histories: {e}") from e
@@ -1227,6 +1237,10 @@ def check_inputs(templates: Mapping[str, tuple[RowLayout, int]], cuts: Mapping[s
         units(o.reader, o.at, o.units, o.doc())
         if o.table not in tables or o.verdict not in dict(templates[o.reader][0].outs) or not o.ports:
             raise ValueError(f"opening {o.doc()}: a declared table's row at its key, with a verdict output")
+        lay = templates[o.reader][0]
+        if o.row is not None and not (len(lay.rows) == 6 and [q for q, _ in lay.outs] == [o.row, o.verdict]):
+            raise ValueError(f"opening {o.doc()}: the row it declares is the first of its reader's two outputs, the "
+                             "second its verdict, of a reader of six input rows")
         for p in o.ports:
             rects.append((o.reader, p, o.at, o.at + o.units, 0, port(o.reader, p, o.doc())[1], o.doc()))
     for g in ingress:
@@ -1989,7 +2003,7 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
     """The bits a record that lists its ``members`` declares as its period's ingress (``templates``: each ``(descriptor id,
     units)`` in the program's order, a template's units the members' from its first): each declaration's units times its
     port's row bits. The period's ingress is what its members read whole from rows before the period, committed there: the
-    link checks bind it to its writers' outputs (sampled proofs' wiring, ε_bind), so it is not the run's ingress (`Ingress`
+    link checks bind it to its writers' outputs (SPOT's wiring, ε_bind), so it is not the run's ingress (`Ingress`
     in a stated record, the ingress gates Lean's ``freeInputs`` reads) and leaves the run's count free (`input_count`).
     Refused (ValueError) where one names no template, reads outside its units or units no member holds, or a port that
     isn't an input row of every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s
@@ -2043,7 +2057,8 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
     ``hm96-sha512/row-seg/v1`` rows of its words and its runs tiling its positions over the writer's units; a table read
     (`TableRead`) fills a 64-byte input row no wire or row table fills
     with its table's root or domain id; an opening (`TableOpening`) holds its ``ports``, input rows no wire or row table
-    fills, to its table's row at its ``key``, an input row (wired or not), by its ``verdict``, an output. Refused
+    fills, to its table's row at its ``key``, an input row (wired or not), by its ``verdict``, an output, as the ``row`` it
+    may declare is. Refused
     (ValueError) otherwise, or where two declarations, or one and the period's ``ingress``, meet: every input row is wired,
     registered, period ingress or free, at most one of them. The work is per declaration and per member it covers, never
     per unit. `circuit_record`, `window_of_record` and `input_count` each refuse a listed record whose declarations this
@@ -2140,6 +2155,9 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
             if o.key not in dict(m.rows) or o.verdict not in dict(m.outs):
                 raise ValueError(f"{what}: {m.key} has no input row {o.key} or no output {o.verdict}; an opening's key is "
                                  "an input row and its verdict an output")
+            if o.row is not None and not (len(m.rows) == 6 and [q for q, _ in m.outs] == [o.row, o.verdict]):
+                raise ValueError(f"{what}: {m.key}'s outputs are not {o.row} then {o.verdict} over six input rows; the "
+                                 "row an opening declares is a table read's row returned")
             for p in o.ports:
                 unfilled(i, p, what)
                 out[(i, p)] = tables[o.table].param
@@ -2520,6 +2538,15 @@ class Window:
         tables = (self.circuit.registered or Registered({})).readable.values()
         entries = {p: v.entry() for p, v in reg.items() if p in {t.param for t in tables}}
         self.registered = {**reg, **supplied(self.circuit.registered, entries, self.window.partition_digest, module=module)}
+
+    def give(self, param: str, rows: Sequence[bytes], module: Any) -> None:
+        """Add ``param``, one of its circuit's ``Registered.supplied``, to ``registered``: ``rows`` its bytes for each unit
+        that reads it in read order, as the verifier makes them from the unit's sampled index (its supplied value's
+        ``{"bytes": hex}`` sources, `one_stage.registered.supplied_rows`, which read them by the parameter's leaf width),
+        committed under the public salts ``module.supplied_salts`` gives at the period's partition digest, so `close`
+        leaves their salts out and the verifier's root of them is the record's. Not written."""
+        raise NotImplementedError("proofs/zero-knowledge: registered rows the verifier makes for each sampled unit "
+                                  "(Window.give)")
 
     def count(self, tid: str) -> int:
         """Template ``tid``'s units recorded so far."""

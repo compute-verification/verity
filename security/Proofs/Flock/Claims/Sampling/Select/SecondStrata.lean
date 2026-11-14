@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.Bounds
 public import Proofs.Flock.Claims.Sampling.Reg
-public import Proofs.Flock.Soundness.Discharge.Exec.LawSample
+public import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Spot.Draw
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
@@ -196,7 +196,7 @@ theorem sum_proved_selectSecond_le {sample ns ks : Array ℕ} {src : ByteArray} 
     ((Draw.proved draw).toList.map fun j => W j.toNat).sum ≤
       sample.size * ((List.range ns.size).map fun t => ks.getD t 0 * M t).sum := by
   obtain ⟨-, parsed, units, hp, hu, hdu, hdc⟩ := selectSecond_units h
-  obtain ⟨ws, rfl, hmap⟩ := flockLaw_second sample ns ks _ parsed hp
+  obtain ⟨ws, rfl, hmap⟩ := flockSamplingDesign_second sample ns ks _ parsed hp
   rw [sum_proved_of_units hdu hdc W]
   refine (workUnits_sum_le hu W).trans ?_
   have hws : (ws.toList.map fun s => s.k * (expand s.units.toList).toFinset.sup W) =

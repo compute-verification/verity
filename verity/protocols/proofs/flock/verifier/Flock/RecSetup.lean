@@ -235,7 +235,7 @@ closure (`Witness.fullSample`, the sample `RecordCustody` reads, `fullSample_ok`
 population's (`HmRow.drawn` refuses another at setup), and `checkStmt` pins the circuit, so the part's numbers (its
 rounds, table error, `N₀` and weight) are the ones its circuit and population fix, never a smaller sample's. A recursive
 session (`rec`: the verifier holds `--rec-part`, `--rec-bindings` or `--rec-rows`) without an inner shape is refused
-(`noInner`), since the V* checks and this refusal run under that shape. Without a sample (which `ProvedScope.sampleLaw`
+(`noInner`), since the V* checks and this refusal run under that shape. Without a sample (which `ProvedScope.sampleDesign`
 refuses), or outside a recursive session without an inner shape, it passes. -/
 def fullSample (inner : Option RecVStar.Inner) (rec : Bool) (draw : Option Json) (record : String) : V Unit := do
   if rec && inner.isNone then throw noInner

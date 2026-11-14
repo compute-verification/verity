@@ -8,7 +8,7 @@ registration and to the second sample's cells (`check`). `Run.run` adds it to th
   query (`Partition.strata`, which `population-order` holds to the population's units, template by template), each one
   range of `Q·n_t` slots from `off_t`, `Q` the replay sample's size (`parts`). Template `t`'s cell in the sample's
   `i`-th replay block `S[i]` is its `n_t` slots from `off_t + i·n_t` (`Part.span`). One template's cells are
-  `Select.secondLaw`'s strata.
+  `Select.secondSamplingDesign`'s strata.
 * **A statement** (`Stmt`) is one second-stage session's, as its files state it: the template its circuit is an
   instance of (its stratum's name), its public file's header, its session record's sample (`unit_draw`), and the
   registered reads it was verified against (`--registered`), null for none.
@@ -460,10 +460,10 @@ template's statement and the registered reads it reads (`refReads`, null for non
 wires (`replayWires`, none when the Definition makes none), the rows of the ports they and the links name
 (`replayRows`), the names the replay block's return has in the boundary registration's record (`replayReturns`), and,
 of the values the interior registration registers, the verifier's own copies of those it holds without the prover:
-each one it fills itself, with its rows of sources (`Registration.Verifier.supplied`, `Supplied.Rows`), and the names
-of those it pinned or holds to an earlier record (`fixed`: `Registration.Verifier.pinned` and `outputs`); the
+each one it fills itself, with its rows of sources (`Docket.Verifier.supplied`, `Supplied.Rows`), and the names
+of those it pinned or holds to an earlier record (`fixed`: `Docket.Verifier.pinned` and `outputs`); the
 templates the auditor's params record as reads, each with its table's rows, `(template, V)` (`Run.templateReads`); the
-registered tables the auditor's params pin before any coin (`tables`: `Registration.Verifier.tables`),
+registered tables the auditor's params pin before any coin (`tables`: `Docket.Verifier.tables`),
 `(parameter, entry)` each, the entry the tables' registration names; the words of the rows each wire joins
 (`replayWidths`); and the wired key's switch, by default `WIRED_KEY`, which no executable of record sets otherwise. -/
 structure Own where
@@ -916,7 +916,7 @@ def INTERIOR_ROOT : String := "verity-vllm/interior-run/v1"
 /-- **The interior window's open root**, for the boundary registration of digest `boundary` (lowercase hex) and the
 replay sample `sample`, in order: SHA-512 over `INTERIOR_ROOT`, a zero byte and the canonical JSON
 `{"boundary", "replay_sample"}`, in lowercase hex. The verifier computes it, so a second stage sampled on a session of
-its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorWindowOk`). None
+its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorRunOk`). None
 where `Flock.canon` fails. -/
 def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
   let m ← (Flock.canon (Json.mkObj [("boundary", .str boundary), ("replay_sample", Lean.toJson sample)])).toOption

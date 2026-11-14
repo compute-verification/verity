@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from collections import Counter
+from collections.abc import Sequence
 from pathlib import Path
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -41,7 +42,7 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW)))
 #: one of the PAIR and three of the 9 TRIPLEs
-RULE = S.Law("stratified-rate:1/3")
+RULE = S.SamplingDesign("stratified-rate:1/3")
 SPEC = S.Spec(VALUES, RULE,
               S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
@@ -70,16 +71,16 @@ def _table(program: Program | None = None) -> dict:
 def _record() -> dict:
     ports = _ports()
     roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **ports[p]} for i, p in enumerate(ports)]
-    law = S.selection_law(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
-    return R.record(_program(), QUERY, law, S.SCHEME, roots,
+    sampling_design = S.selection_sampling_design(RULE, sum(COUNTS.values()), D.strata_sizes(_program(), QUERY))
+    return R.record(_program(), QUERY, sampling_design, S.SCHEME, roots,
                     {"kind": "served", "run": RUN, "row": 0}, work_table=_table())
 
 
 def _check(rec: dict | None = None, program: Program | None = None, ports: dict | None = None):
     """R1-R7 by the verifier on the toy window's docket and the verifier's copies, each a new object each call."""
     program = program or _program()
-    law = S.selection_law(SPEC.selection, sum(COUNTS.values()), D.strata_sizes(program, QUERY))
-    return V.check(rec or _record(), program, QUERY, law, S.SCHEME, ports or _ports(), work_table=_table(program))
+    sampling_design = S.selection_sampling_design(SPEC.selection, sum(COUNTS.values()), D.strata_sizes(program, QUERY))
+    return V.check(rec or _record(), program, QUERY, sampling_design, S.SCHEME, ports or _ports(), work_table=_table(program))
 
 
 def _asked(monkeypatch) -> Counter:
@@ -93,11 +94,12 @@ def _asked(monkeypatch) -> Counter:
     return asked
 
 
-def _negatives() -> dict[str, dict]:
-    """a5's negatives on the challenger's coins: each its own stream on the honest sample's bytes, registering the same record
-    (in its window), sampling, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
+def _negatives(names: Sequence[str] = tuple(NEGATIVES)) -> dict[str, dict]:
+    """a5's negatives on the challenger's coins (those of ``names``): each its own stream on the honest sample's bytes,
+    registering the same record (in its window), sampling, and its outcome with its evidence. -> by name: accepted, the
+    Lean run's side, the record."""
     out = {}
-    for name, (coins, window) in NEGATIVES.items():
+    for name, (coins, window) in ((n, NEGATIVES[n]) for n in names):
         s = S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 memo test, challenger", coins=AC.Replay(READ),
                      clock=lambda: 0.0)
         d = s.select(s.register(_record(), _ports(), window_root=window, counts=COUNTS))

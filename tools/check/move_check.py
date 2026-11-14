@@ -32,7 +32,8 @@ Every path git sees changed must be one of:
   new Lake package with its `lean-audit.json`; and in any `pyproject.toml`, an added line of a new Lake package's own
   files (its lakefile, manifest, lock or toolchain), as a suite's inputs list what Lake reads;
 - in `WORKSPACE_FILES` (the root `pyproject.toml`, `uv.lock`), a quoted distribution's directory rewritten to where its
-  `pyproject.toml` went, also out of a directory the range split (`rules`'s `members`);
+  `pyproject.toml` went, also out of a directory the range split (`rules`'s `members`), as a relative path that names
+  exactly that directory (a moved `pyproject.toml`'s `"."`) is read;
 - an edit to a `*.lean` file whose changed lines only rewrite an `import M` to the new module of a `.lean` file renamed in
   the range (a module is its path below its Lake package, `/` as `.`, without `.lean`), as when a Lean split gives the
   proof modules a root of their own while their declarations keep their namespace, or a moved path from the root (a doc
@@ -446,16 +447,17 @@ def module_sub(text: str, mods: dict[str, str]) -> str:
     return pattern.sub(lambda m: mods[m.group(1)], text)
 
 
-def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
+def resolve_relative(text: str, path: str, pmap: dict[str, str], dists: dict[str, str] | None = None) -> str:
     """Each quoted relative path (in Markdown, in backticks or a link's target), as `<root>/` and the repository path it names
-    from `path`'s directory, mapped by `pmap`. In a Lake file, a path to another package is one with no leading dot too
+    from `path`'s directory, mapped by `pmap`, and one that names exactly a distribution's directory by `dists` (where its
+    `pyproject.toml` went). In a Lake file, a path to another package is one with no leading dot too
     (`path = "composition"`, a package inside the requiring one): Lake reads it from the package's directory, and
     `tools/move/layout.py` rewrites it as one (its `lake_spans`)."""
-    here = posixpath.dirname(path)
+    here, dists = posixpath.dirname(path), dists or {}
 
     def rooted(rel: str) -> str | None:
         p = posixpath.normpath(posixpath.join(here, rel))
-        return None if p.startswith("..") else f"<root>/{map_path(p, pmap)}"
+        return None if p.startswith("..") else f"<root>/{dists[p] if p in dists else map_path(p, pmap)}"
     if path.endswith(".md"):
         return MD_RELATIVE.sub(lambda m: rooted(m.group(0)) or m.group(0), text)
     for a, b in reversed(_rename().L.lake_spans(posixpath.basename(path), text)):
@@ -525,17 +527,33 @@ IMPORT_AS = re.compile(rf"^{_OPEN}import\s+([\w.]+)(?:\s+as\s+(\w+))?\s*{_CLOSE}
 FROM_PAREN = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+\(([\w\s,]*?),?\s*\)?\s*(#.*)?$")
 #: `from a import x, y, \`, its names continued likewise
 FROM_SLASH = re.compile(r"^(\s*)from\s+([\w.]+)\s+import\s+([\w\s,]*?),?\s*\\()$")
+#: a continuation line of such an import: more of its names, and its end (`)`, or no `\`)
+NAMES = re.compile(r"^\s*([\w\s,]*?),?\s*(\)|\\)?\s*(#.*)?$")
 
 
 def bindings(lines: list[str], path: str) -> list[tuple[str, str, str, str]] | None:
     """Each name the import lines bind, as (indent, comment, the dotted name it binds, the name), or None if a line isn't
-    one such import. A parenthesized `from a import (`, or one continued after `\\`, also binds `a` itself, under the name
-    `(`: its continuation lines may be unchanged context, so `a`'s rewrite must be checked even when the line names nothing."""
-    out = []
+    one such import or a continuation of one. A parenthesized `from a import (`, or one continued after `\\`, also binds `a`
+    itself, under the name `(`, unless its names end among the lines: its continuation lines may be unchanged context, so
+    `a`'s rewrite must be checked even when the line names nothing."""
+    out, cont = [], None
     for line in lines:
-        if (m := FROM.match(line)) or (m := FROM_PAREN.match(line)) or (m := FROM_SLASH.match(line)):
+        if cont is not None:
+            if not (m := NAMES.match(line)):
+                return None
+            for part in filter(str.strip, m.group(1).split(",")):
+                name, _, alias = (w.strip() for w in part.partition(" as "))
+                if not name.isidentifier() or (alias and not alias.isidentifier()):
+                    return None
+                out.append((*cont[1][:2], f"{cont[1][2]}.{name}", alias or name))
+            if m.group(2) == ")" or (cont[0] is FROM_SLASH and m.group(2) != "\\"):
+                out.remove(cont[1])
+                cont = None
+        elif (m := FROM.match(line)) or (m := FROM_PAREN.match(line)) or (m := FROM_SLASH.match(line)):
             if m.re is not FROM:
-                out.append((m.group(1), m.group(4) or "", absolute(m.group(2), path), "("))
+                out.append(opened := (m.group(1), m.group(4) or "", absolute(m.group(2), path), "("))
+                if m.re is FROM_SLASH or not line.split("#")[0].rstrip().endswith(")"):
+                    cont = (m.re, opened)
             for part in filter(str.strip, m.group(3).split(",")) if m.re is not FROM else m.group(3).split(","):
                 name, _, alias = (w.strip() for w in part.partition(" as "))
                 if not name.isidentifier() or (alias and not alias.isidentifier()):
@@ -1970,7 +1988,7 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             why = h and ("edit beyond import lines that name a module renamed in the range and moved paths", h)
         else:
             rel, py = name in RELATIVE_NAMES or new.endswith(".md"), new.endswith(".py")
-            na_text = resolve_relative(a, old, pmap) if rel else join_chains(a) if py else a
+            na_text = resolve_relative(a, old, pmap, dists) if rel else join_chains(a) if py else a
             n0 = na_text.splitlines()
             na = n0 if same else substitute(na_text, pmap).splitlines()
             nb = (resolve_relative(b, new, {}) if rel else join_chains(b) if py else b).splitlines()

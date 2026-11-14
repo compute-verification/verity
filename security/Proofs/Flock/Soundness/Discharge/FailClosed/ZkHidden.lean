@@ -96,14 +96,14 @@ theorem zk_session_composedHJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     -- hash-derived-key
     (hKey : Assumptions.Zk.HashDerivedKeyHm96)
@@ -112,24 +112,24 @@ theorem zk_session_composedHJ
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
+        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
     (prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ⨆ hs : ScopeZ I,
         (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
           k Rw M ρ t' (reg σ) (cont σ))) ∧
@@ -150,34 +150,34 @@ theorem zk_session_soundH
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the sampling design and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, SampleOkZKH I dj mPts ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
+    (hDraw : ∀ ω, SampleOkZKH I dj mPts ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZK I dj wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I, ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
-        ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+        ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ))) j
       (zcStrat execArith hs512 (planAtZKH dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ) ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZHSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ)) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      ⨆ hs : ScopeZ I, ((Law.stratified σs ks hks).miss K₀ +
-        ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      ⨆ hs : ScopeZ I, ((SamplingDesign.stratified σs ks hks).miss K₀ +
+        ksAvgStrictZ (planAtZKH dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hRec hDraw)) τ)) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZHSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
@@ -190,8 +190,8 @@ theorem zk_session_soundH
 theorem zk_session_soundH_custody
     (I : Inputs) (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circZ I) = false) (hn : I.count ≤ 1)
     -- the sampling design and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the record, at the link points of the sampling design's samples
@@ -204,26 +204,26 @@ theorem zk_session_soundH_custody
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf (circZ I).g (∑ s, ks s)) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf (circZ I).g (∑ s, ks s)) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I, ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
-        ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+        ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
           (fun ω => sampleOkZKH_of_execSt I hs.typed (hs.parseH hh) σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
       (zcStrat execArith hs512 (planAtZKH dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
           (fun ω => sampleOkZKH_of_execSt I hs.typed (hs.parseH hh) σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZHSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
           (fun ω => sampleOkZKH_of_execSt I hs.typed (hs.parseH hh) σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
           (fun ω => sampleOkZKH_of_execSt I hs.typed (hs.parseH hh) σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf (circZ I).g (∑ s, ks s)) N wr)) τ ≤
-      ⨆ hs : ScopeZ I, ((Law.stratified σs ks hks).miss K₀ +
-        ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf (circZ I).g (∑ s, ks s)) N wr)) τ ≤
+      ⨆ hs : ScopeZ I, ((SamplingDesign.stratified σs ks hks).miss K₀ +
+        ksAvgStrictZ (planAtZKH dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveHSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ tablesAtZKH_liveSt (hs.tagsOkH hh hn) hCust.1
           (fun ω => sampleOkZKH_of_execSt I hs.typed (hs.parseH hh) σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
@@ -246,38 +246,38 @@ theorem zk_session_soundHJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω))
     -- the challenger's live-coin part's record of the live session
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
+        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ⨆ hs : ScopeZ I,
         (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec hDraw)) τ
-        (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
           k Rw M ρ t' (reg σ) (cont σ)) := by
@@ -299,7 +299,7 @@ theorem zk_session_soundHJ_custody
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
@@ -307,26 +307,26 @@ theorem zk_session_soundHJ_custody
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hCust.1
           fun _ => sampleOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj hCust.2 _)) τ
-        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
+        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hCust.1
           fun _ => sampleOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj hCust.2 _)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ⨆ hs : ScopeZ I,
         (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hCust.1
           fun _ => sampleOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj hCust.2 _)) τ
-        (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
           k Rw M ρ t' (reg σ) (cont σ)) := by
@@ -350,7 +350,7 @@ theorem zk_session_soundHJ_custody_json
     (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
@@ -358,26 +358,26 @@ theorem zk_session_soundHJ_custody_json
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec
           fun _ => sampleOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj (sampleFileZK_of_toJson_subset dj kd n hdj) _)) τ
-        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
+        ∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) :
     prob (fun o => LiveVerifiesZK I o ∧ ∀ hs : ScopeZ I,
         let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec
           fun _ => sampleOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj (sampleFileZK_of_toJson_subset dj kd n hdj) _)) τ
-        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).wrong
+        K₀ ≤ (((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)).incorrect
           (XplurZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
             (reg σ) (cont σ) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ⨆ hs : ScopeZ I,
         (let σ := simZJ execArith hs512 (planZHJ dj y₀) I wr (opnAtZHJ (planZHJ dj y₀) I dj) dg (decAtZJ (planZHJ dj y₀))
           (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
           (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_liveSt I hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj y₀ wr _ (hs.tagsOkZHJ hh) hRec
           fun _ => sampleOkZKHJ_of_fileSt I hs.typed (hs.parseH hh) kd n hdiv dj (sampleFileZK_of_toJson_subset dj kd n hdj) _)) τ
-        (Law.subset n kd hkd).miss K₀ +
-        ksAvgStrictZ (planZHJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (SamplingDesign.subset n kd hkd).miss K₀ +
+        ksAvgStrictZ (planZHJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg (circZ I) hs.built n).partition (Layout.outsOf (circZ I) hs.built n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJSt dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)).bindingZ (rsZHJSt_computes dj y₀ hs.typed (hs.parseH hh) (hs.rowsFitH hh hf) (hs.scopeH hf) hs.built (hs.loadH hh)))
           k Rw M ρ t' (reg σ) (cont σ)) := by

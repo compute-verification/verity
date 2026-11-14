@@ -81,7 +81,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The public wires decode to their values**: every message packing a satisfying witness of a sampled proof block's table
 decodes, on the unit's committed wires, each gate of `ones` to 1 and each gate of `zeros` outside `ones` to 0. -/
@@ -173,7 +173,7 @@ theorem flock_batched_count_public (ones zeros : Finset (Fin C.N)) (hpub : P.Pub
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (P.flock_batched_countE H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) hk
@@ -190,7 +190,7 @@ theorem flock_batched_sampled_public (ones zeros : Finset (Fin C.N)) (hpub : P.P
     (σ : Strategy (audit L Reg (batchedSession H E plan)))
     (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (P.flock_batched_sampledE H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) hk

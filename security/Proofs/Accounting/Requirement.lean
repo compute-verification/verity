@@ -4,7 +4,7 @@ public import Definitions.Accounting.Guarantees.Requirement
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
-# A declared circuit's requirement, from what the audit credits
+# A registered circuit's requirement, from what the audit credits
 
 The values a store placement packs in one block total at most the block's `b` bits (`bits_filter_block_le`): their bit
 ranges are disjoint intervals of `[0, b)`. So the values of a set `S`, each in a block of `R`, outside the blocks `H`

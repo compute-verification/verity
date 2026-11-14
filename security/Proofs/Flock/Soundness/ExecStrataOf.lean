@@ -9,7 +9,7 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # The strata the verifier accepts are a partition's
 
-`Law.execStrata_of_ofJson`: a sample file `Flock.Draw.UnitSample.ofJson` accepts under a stratified sampling design has an assignment `σ`
+`SamplingDesign.execStrata_of_ofJson`: a sample file `Flock.Draw.UnitSample.ofJson` accepts under a stratified sampling design has an assignment `σ`
 of its population's units to the strata that the strata describe (`ExecStrata`), each stratum's `k` at most its size. The
 hypotheses `ExecStrata σ k S` and `k s ≤ (stratum σ s).card` that the stratified e2e theorems take are so not conditions
 on the statement's form: they follow from the verifier accepting.
@@ -20,7 +20,7 @@ on the statement's form: they follow from the verifier accepting.
   (`stratumK`), and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
 * `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once;
   `StrataExec.chain_covers`: any chain from `a` to `b` covers each unit of `[a, b)`.
-* `Law.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
+* `SamplingDesign.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
 * At a work sampling design: `StrataExec.ofJson_work`, `ofJson` checks that `workProblem` finds nothing, and
   `StrataExec.workProblem_chain`, which checks that the ranges, sorted by their starts, chain from `0` to `pop`.
 -/
@@ -354,7 +354,7 @@ theorem stratumOfJson_ranges {j : Json} {s : Stratum} (h : stratumOfJson j = .ok
 /-- A sample file `UnitSample.ofJson` accepts under a stratified sampling design: `strataProblem` found nothing, and every stratum
 passed `stratumOfJson`. -/
 theorem ofJson_stratified {j : Json} {D : UnitSample} {k : ℕ} {S : Array Stratum} (h : UnitSample.ofJson j = .ok D)
-    (hl : D.law = .stratified k S) :
+    (hl : D.samplingDesign = .stratified k S) :
     strataProblem k S D.population = none ∧ ∀ s ∈ S, s.units ≠ #[] ∧ ∀ r ∈ s.units, r.1 < r.2 := by
   unfold UnitSample.ofJson at h
   simp only [throw_bind'] at h
@@ -364,8 +364,8 @@ theorem ofJson_stratified {j : Json} {D : UnitSample} {k : ℕ} {S : Array Strat
     subst h
     cases hl
   all_goals
-    have hlaw := ‹(_ : Flock.V Flock.Draw.Law) = Except.ok (Flock.Draw.Law.stratified k S)›
-    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq, Flock.Draw.Law.stratified.injEq] at hlaw
+    have hlaw := ‹(_ : Flock.V Flock.Draw.SamplingDesign) = Except.ok (Flock.Draw.SamplingDesign.stratified k S)›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq, Flock.Draw.SamplingDesign.stratified.injEq] at hlaw
   all_goals
     obtain ⟨-, rfl⟩ := ‹_ ∧ _ = S›
     have hp := ‹∀ (why : String), strataProblem _ _ _ = some why → False›
@@ -375,7 +375,7 @@ theorem ofJson_stratified {j : Json} {D : UnitSample} {k : ℕ} {S : Array Strat
 
 /-- A sample file `UnitSample.ofJson` accepts under a work sampling design: `workProblem` found nothing. -/
 theorem ofJson_work {j : Json} {D : UnitSample} {k : ℕ} {S : Array WorkStratum} (h : UnitSample.ofJson j = .ok D)
-    (hl : D.law = .work k S) : workProblem k S D.population = none := by
+    (hl : D.samplingDesign = .work k S) : workProblem k S D.population = none := by
   unfold UnitSample.ofJson at h
   simp only [throw_bind'] at h
   repeat' walk_step
@@ -384,8 +384,8 @@ theorem ofJson_work {j : Json} {D : UnitSample} {k : ℕ} {S : Array WorkStratum
     subst h
     cases hl
   all_goals
-    have hlaw := ‹(_ : Flock.V Flock.Draw.Law) = Except.ok (Flock.Draw.Law.work k S)›
-    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq, Flock.Draw.Law.work.injEq] at hlaw
+    have hlaw := ‹(_ : Flock.V Flock.Draw.SamplingDesign) = Except.ok (Flock.Draw.SamplingDesign.work k S)›
+    simp only [pure, Except.pure, Except.ok.injEq, reduceCtorEq, Flock.Draw.SamplingDesign.work.injEq] at hlaw
   all_goals
     obtain ⟨-, rfl⟩ := ‹_ ∧ _ = S›
     have hp := ‹∀ (why : String), workProblem _ _ _ = some why → False›
@@ -395,7 +395,7 @@ end ofJson
 
 end StrataExec
 
-namespace Law
+namespace SamplingDesign
 
 open StrataExec
 
@@ -498,12 +498,12 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
 sampling design `stratified k S` has an assignment `σ` of its population's units to the strata `S` that `S` describes, each
 stratum's `k` at most its size. -/
 theorem execStrata_of_ofJson {j : Lean.Json} {D : UnitSample} {k : ℕ} {S : Array Stratum}
-    (h : UnitSample.ofJson j = .ok D) (hl : D.law = .stratified k S) :
+    (h : UnitSample.ofJson j = .ok D) (hl : D.samplingDesign = .stratified k S) :
     ∃ σ : Fin D.population → Fin S.size, ExecStrata σ (fun s => S[s].k) (fun s => S[s]) ∧
       ∀ s, S[s].k ≤ (stratum σ s).card := by
   obtain ⟨hp, hS⟩ := ofJson_stratified h hl
   exact execStrata_of_strataProblem (fun s hs => (hS s hs).2) (fun s hs => (hS s hs).1) hp
 
-end Law
+end SamplingDesign
 
 end FlockSoundness.Audit

@@ -414,7 +414,7 @@ variable (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) (planZ : Finset (Fin n) → 
   (dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg)
   (one : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → Bool)
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
-  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) (L : Law n)
+  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) (L : SamplingDesign n)
 
 /-- **The decoder is right at the sampling design's samples, table by table** (`DecodesOnJ` at the compiled `--zk` tables): at every
 sample `L.draw ω`, registration and table `j`, on every live outcome verity-verify-proof `--zk` accepts, table `j`'s compiled
@@ -486,7 +486,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (opn : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → OpensZ 𝔽 D Sl)
   (dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg)
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
-  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : Law n)
+  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : SamplingDesign n)
 
 /-- **`RunsOnZC` at `J` tables**: at the sampling design's samples, on every live outcome verity-verify-proof `--zk` accepts, each table's
 reps have a `RepRun` on their streams' rounds along `repShapeZ`, with `fin`'s messages as the tail, and the table's
@@ -677,7 +677,7 @@ each of the sampling design's samples setting each table up at `mPts` link point
 theorem runsZCJ_live (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : SampleSetupZJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
-    (L : Law n) (hT : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
+    (L : SamplingDesign n) (hT : TagsOkZJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr)
     (hDraw : ∀ ω, SampleOkZKJ I dj mPts (L.draw ω)) :
     RunsOnZCJ (K := 𝕂) execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) L := by

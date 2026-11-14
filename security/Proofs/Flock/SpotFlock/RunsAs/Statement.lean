@@ -93,13 +93,13 @@ headers and reads are the auditor's params'; and the second stage reads at most 
 of `h` (the descriptor, the members' units, the reference statements, the frame) is the auditor's registered copy,
 which the run does not read. -/
 structure HeldMatches (i : Spot.Run.Input) (it : Spot.Run.Interior) (h : Held) : Prop where
-  first : ∃ n rule law workTable resolved,
+  first : ∃ n rule samplingDesign workTable resolved,
     Spot.nat? (Spot.getD i.record "population") = some n ∧
     i.rule.over n (Spot.Select.strataSizes i.params.verifier.program i.params.verifier.query) = some rule ∧
-    rule.lawOver n = .ok law ∧
+    rule.samplingDesignOver n = .ok samplingDesign ∧
     i.rule.tableOver i.params.verifier.program i.params.verifier.query i.params.verifier.workTable = .ok workTable ∧
     Spot.Select.resolve i.rule i.params.verifier.program i.params.verifier.query = .ok resolved ∧
-    h.reg.first = ⟨{ i.params.verifier with law, workTable }, resolved, i.closure⟩
+    h.reg.first = ⟨{ i.params.verifier with samplingDesign, workTable }, resolved, i.closure⟩
   ns : Spot.Select.replayCells it.replay it.params.verifier.query = .ok h.reg.ns
   ks : ∃ grain replay k, i.rule = .twoStage grain replay k ∧ ∃ ids,
     Spot.Select.templateIds it.params.verifier.query = .ok ids ∧ k.over ids h.reg.ns = .ok h.reg.ks
@@ -194,11 +194,11 @@ def RunCoinsFromDevice : Prop :=
       (∃ sample ns ks draw, Spot.Select.selectSecond sample ns ks it.source = .ok (draw, read₂)) ∧
       (0 < (i.source.extract 0 read₁).size → ∃ key w label d, i.key = some key ∧
         i.params.verifier.windowRoot = some w ∧ i.family = some label ∧
-        Spot.Registration.digest i.record = .ok d ∧
+        Spot.Docket.digest i.record = .ok d ∧
         FromDevice dev key w label d i.coins (i.source.extract 0 read₁)) ∧
       (0 < (it.source.extract 0 read₂).size → ∃ key w label d, i.key = some key ∧
         it.params.verifier.windowRoot = some w ∧ it.family = some label ∧
-        Spot.Registration.digest it.record = .ok d ∧
+        Spot.Docket.digest it.record = .ok d ∧
         FromDevice dev key w label d it.coins (it.source.extract 0 read₂))
 
 /-! ## The top statement -/

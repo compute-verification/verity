@@ -40,26 +40,18 @@ means = "one table: the file, what it shows, its command, how far it runs and is
 [[tree]]
 path = "demos/remote.toml"
 means = "the remote demo: SPOT, PoUW and the inference-only policy, with no auditor's device at the site"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "demos/onsite_network.toml"
 means = "onsite, network only: the network certifier, SPOT and the memory wipe"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "demos/onsite_compute.toml"
 means = "onsite, the default: those three, PoUW and the inference-only policy"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "demos/onsite_full.toml"
 means = "onsite, whole: those five, PoUS and PoUB"
-owner = "top"
-day = "2026-11-15"
 
 [[tree]]
 path = "security/"
@@ -191,7 +183,7 @@ means = "a suite's configuration, where it has one"
 
 [[tree]]
 path = "verity/protocols/proofs/"
-means = "flock, with spot and recursion on it: what the other protocols call to prove; it uses neither layer"
+means = "flock, with spot and recursion on it, spot_flock on those and spot_flock_recursion on top: what the other protocols call to prove; it uses neither layer"
 
 [[tree]]
 path = "verity/protocols/accounting/"
@@ -218,7 +210,12 @@ protocol = true
 
 [[tree]]
 path = "verity/protocols/proofs/spot_flock/"
-means = "SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's lists for the proofs, with the recursive audit"
+means = "SPOT[Flock], the argument SPOT builds over Flock: the caller's check and the one-stage and two-stage forms; what stands on compose's lists for the proofs"
+protocol = true
+
+[[tree]]
+path = "verity/protocols/proofs/spot_flock_recursion/"
+means = "SPOT[Flock] composed with recursion: the recursive audit, on spot_flock and recursion; nothing below uses it"
 protocol = true
 
 [[tree]]
@@ -262,7 +259,7 @@ means = "experimental/NAME/, a whole directory no configuration lists; made with
 
 [[tree]]
 path = "verity/protocols/interface/"
-means = "the Lean interface each protocol's check implements"
+means = "the shape every protocol's check has in Lean (Core.Protocol, its command line and its outcome), with the registered hardware's type, the account and the periods, which every protocol's package reads"
 
 [[tree]]
 path = "verity/protocols/__init__.py"
@@ -369,10 +366,10 @@ day = "2026-11-15"
 
 [[not_yet]]
 path = "infra/"
-to = "the platform repository, with tools/research, tools/agent-guard and tools/move"
+to = "the platform repository (compute-verification/infra), with tools/research and tools/agent-guard; tools/move stays here, its maps being this tree's records"
 owner = "infra"
-day = "2026-11-20"
-note = "the day is top's, set 14 Nov: after the layout and the dashboard; infra confirms or corrects it"
+day = "2026-11-27"
+note = "infra's days, 14 Nov: copied there with its history by 20 Nov, cut from here 27 Nov if architecture is on main by 16 Nov and the machines' read access is settled by 17 Nov"
 
 # ---- not ruled -----------------------------------------------------------------------------------------------------
 

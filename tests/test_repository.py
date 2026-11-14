@@ -70,7 +70,9 @@ ALLOWLIST = {
     "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
     "adapters/vllm/manifests/checkpoints.json": 320 * 1024,
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
-    "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
+    # the paths of every layout move: one record a move, read in order (tools_registry.former_modules), and the branch
+    # `architecture` makes many; its limit holds the records that branch adds until it closes, at the rate it adds them
+    "tools/research/src/research/store/moves.json": 576 * 1024,
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
     "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
     # GLM-5.3's block card and its sparse-attention partition card: each key block's values units and key rows' writers
@@ -271,8 +273,7 @@ CREDENTIAL_PAIRS = {("api", "key"), ("access", "key"), ("secret", "key"), ("priv
 #: A file holds a credential name only if its lowercased text holds one of these.
 _NAME_HINTS = ("secret", "token", "passw", "credential", "apikey", "api_key", "api-key", "accesskey", "access_key", "access-key",
                "privatekey", "private_key", "private-key")
-#: Binary data, never read; and data files (vectors, fixtures), read only for the fixed credential formats.
-_BINARY = frozenset({".bin", ".npy", ".npz", ".lgto", ".neg", ".proof", ".gz", ".png", ".pdf", ".olean", ".ilean", ".tar", ".zip"})
+#: Data files (vectors, fixtures), read only for the fixed credential formats.
 _DATA = frozenset({".json", ".jsonl", ".csv"})
 #: Values that say they are not real: documented examples (AWS's SigV4 test vector keys contain EXAMPLE) and placeholders.
 PLACEHOLDER = re.compile(r"EXAMPLE|example|dummy|DUMMY|fake|FAKE|placeholder|redacted|xxxx|XXXX|\*\*\*\*|[<{$]")
@@ -294,11 +295,13 @@ def test_no_secret_like_literals() -> None:
     """No tracked file holds something a secret scanner reads as a credential. A dummy credential is short and says what it is
     (`"dummy"`, `"not-to-be-copied"`); a test that needs a realistic one, to test redaction or scanning, splits it into adjacent
     string literals, which Python joins and no scanner reads as one."""
+    from research.addresses import BINARY
+
     offenders, formats = [], list(CREDENTIAL_FORMATS)
     for p in _tracked():
         path, suffix = ROOT / p, os.path.splitext(p)[1]
         try:
-            if suffix in _BINARY or path.stat().st_size > 1024 * 1024:
+            if suffix in BINARY or path.stat().st_size > 1024 * 1024:
                 continue
             text = path.read_text()
         except (FileNotFoundError, IsADirectoryError, UnicodeDecodeError):

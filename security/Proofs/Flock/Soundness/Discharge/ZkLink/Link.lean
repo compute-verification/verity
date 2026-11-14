@@ -125,7 +125,7 @@ structure ValueBindingZ (decode : DecoderZK (C := C) planZ tab) {Dh : Type} (Hc 
 attribute [instance] ValueBindingZ.finPos ValueBindingZ.decPos ValueBindingZ.finVal ValueBindingZ.decVal
   ValueBindingZ.inhVal ValueBindingZ.inhOp
 
-variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
+variable {L : SamplingDesign n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R)
 
 /-- The level-0 oracles the prover's `Commit` sends on sample `ω`. -/
@@ -154,10 +154,10 @@ noncomputable def readsZ (ω : L.Ω) (c : vb.Pos) : Finset vb.Val :=
   Finset.univ.filter fun v => ∃ o, OpensAtZ A P planZ tab vb R τ ω c v o
 
 /-- The samples that read `c`. -/
-abbrev ΩcZ (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsSampleZ A P planZ tab vb c ω}
+abbrev ΩcZ (L : SamplingDesign n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsSampleZ A P planZ tab vb c ω}
 
 open Classical in
-noncomputable instance instFintypeΩcZ (L : Law n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
+noncomputable instance instFintypeΩcZ (L : SamplingDesign n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
 
 /-- **The trial for commit string `c`**: a sample that reads `c`, uniform among such samples. -/
 noncomputable abbrev trialZ (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] : Game (ΩcZ A P planZ tab vb L c) :=
@@ -429,24 +429,24 @@ variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C
 /-- **The `--zk` count curve at the live sample, every table at M1's parameters, `δ_link` under A2**
 (interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
 registered commit strings (`ValueBindingZ`),
-`Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
+`Pr[accept ∧ at least K incorrect units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders
 satisfy A2 (`LinkCRZ`), and `⊤` on the right at any other. -/
 theorem zk_flock_count_execOS_m1_cr (hA : A.Correct)
     (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
     {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : ValueBindingZ A P planZ tab (decodeOfPlace A P planZ tab place) Hc)
     {M : ℕ} (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
-    (σ : Strategy (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
+    (σ : Strategy (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZK A planZ))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (XplurZ A P planZ tab vb (reg σ) (cont σ))).card)
-        (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
-      (Law.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) +
-        linkBoundZ A P planZ tab (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) vb M t'
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (XplurZ A P planZ tab vb (reg σ) (cont σ))).card)
+        (audit (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZK A planZ)) σ ≤
+      (SamplingDesign.stratified σs ks hks).miss K + ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) +
+        linkBoundZ A P planZ tab (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) vb M t'
           (reg σ) (cont σ) :=
   zk_flock_count_execOS_m1 A P planZ tab hA hM1 σs ks hks St hS Kd pop Lb src hA3 place
     (fun R τ => XplurZ A P planZ tab vb R τ)

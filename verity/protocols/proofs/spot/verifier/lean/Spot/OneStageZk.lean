@@ -1,5 +1,5 @@
 /-
-Sampled proofs' one-stage audit on the proofs themselves (`verity/sampled-proofs/one-stage/v2`), a `Core.BlobProtocol`: the
+SPOT's one-stage audit on the proofs themselves (`verity/sampled-proofs/one-stage/v2`), a `Core.BlobProtocol`: the
 v1 audit (`OneStage`) with the verdicts computed here, from the statement's files, rather than read from the evidence.
 
 * **params**: v1's, plus `proofs`, exactly `{"circuit", "public", "registered"}`: the SHA-512s the auditor committed for
@@ -837,13 +837,13 @@ def live (bs : Array ByteArray) : Core.Live (protocol.on bs) where
 /-- **What `paramsOfJson` returns, `paramsParsed` returned, under a `subset` sampling design**: its one refusal of its
 own is `SUBSET_ONLY`'s. -/
 theorem paramsOfJson_ok {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
-    paramsParsed j = .ok p ∧ getD p.base.verifier.law "law" = .str "subset" := by
+    paramsParsed j = .ok p ∧ getD p.base.verifier.samplingDesign "law" = .str "subset" := by
   unfold paramsOfJson at h
   cases hp : paramsParsed j with
   | error why => simp [hp, bind, Except.bind] at h
   | ok q =>
     simp only [hp, bind, Except.bind] at h
-    cases hl : getD q.base.verifier.law "law" with
+    cases hl : getD q.base.verifier.samplingDesign "law" with
     | str s =>
       simp only [hl] at h
       by_cases hs : s = "subset"
@@ -859,9 +859,9 @@ theorem paramsOfJson_parsed {j : Json} {p : Params} (h : paramsOfJson j = .ok p)
   (paramsOfJson_ok h).1
 
 /-- **Parsed parameters' sampling design is a `subset` one**: whatever `paramsOfJson` returns names a sampling design of
-kind `subset`, the kind the sample reads (`Draw.deriveLaw`, `Draw.flockLaw`). -/
+kind `subset`, the kind the sample reads (`Draw.deriveSamplingDesign`, `Draw.flockSamplingDesign`). -/
 theorem paramsOfJson_subset {j : Json} {p : Params} (h : paramsOfJson j = .ok p) :
-    getD p.base.verifier.law "law" = .str "subset" :=
+    getD p.base.verifier.samplingDesign "law" = .str "subset" :=
   (paramsOfJson_ok h).2
 
 /-- **Parsed parameters name no members**: whatever `paramsOfJson` returns is of the one statement's form. -/
@@ -900,7 +900,7 @@ theorem evidenceOf_statements {b : ByteArray} {e : Evidence} (h : evidenceOf b =
 
 /-- **The per-member form's parameters name members and hand them to the registration's check**: whatever
 `membersParamsOfJson` returns names some, and the members its v1 part's verifier holds
-(`Registration.Verifier.members`, which `link-points` reads) are those, each its units and its circuit's units a proof
+(`Docket.Verifier.members`, which `link-points` reads) are those, each its units and its circuit's units a proof
 block. -/
 theorem membersParamsOfJson_linked {j : Json} {p : Params} (h : membersParamsOfJson j = .ok p) :
     ∃ ms : Array Member, p.members = some ms ∧ p.base.verifier.members = ms.map fun m => (m.units, m.g) := by
@@ -924,7 +924,7 @@ theorem membersParamsOfJson_members {j : Json} {p : Params} (h : membersParamsOf
 
 /-- **Parameters of either form are parsed parameters but for the files and the members**: their v1 part is that of
 parameters `paramsParsed` returned, the one statement's own (`paramsOfJson_parsed`) or the per-member form's, read at
-`proofs` of no file, but for the members its registration's check reads (`Registration.Verifier.members`), which the
+`proofs` of no file, but for the members its registration's check reads (`Docket.Verifier.members`), which the
 per-member form's parse hands it (`membersParamsOfJson_linked`). -/
 theorem paramsEitherOfJson_base {j : Json} {p : Params} (h : paramsEitherOfJson j = .ok p) :
     ∃ j' p' ms, paramsParsed j' = .ok p' ∧

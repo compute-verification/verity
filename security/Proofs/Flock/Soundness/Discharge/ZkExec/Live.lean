@@ -61,7 +61,7 @@ def DecodesZK : Prop :=
   ∀ S R, Decodes (out S R) (fun o => AcceptsZK I (wr S R o)) (fun x => acc S R x = true) (opn S R) (dec S R)
     (one S R) (fin S R) (capOf S R) (G S R)
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The simulated audit strategy**: the live prover's registration, and at each sample the simulated table strategy
 (`simTable`) against its live session. -/

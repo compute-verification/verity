@@ -12,7 +12,7 @@ file carries an event of the sample too, and bounds the sampled proof blocks' co
 * `execRefinesZK_tables_sampled`: `execRefinesZK_tables` with an event `E` of the sample on both sides. Both audits'
   outcomes carry the sample, and the refinement is one inequality at each of the sampling design's samples, where `E` is fixed;
 * `ZkLink.zk_flock_sampledC_reg`: `Audit.extraction_audit_sampled` at `analysisZCReg`, so in the compiled batched audit
-  `Pr[accepts ∧ some drawn unit is in wrongRegZ] ≤ ε_ks + δ_link`;
+  `Pr[accepts ∧ some drawn unit is in incorrectRegZ] ≤ ε_ks + δ_link`;
 * `zk_session_soundJ_custody_sampled_reg`: the same at verity-verify-proof's acceptance, at the challenger's live-coin part's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
@@ -39,7 +39,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (dec : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → ByteArray → List Msg)
   (one : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → ℕ → Bool)
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
-  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
+  (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : SamplingDesign n}
 
 /-- **The refinement at `--zk` for sessions of `J` tables, with an event of the sample**: verity-verify-proof `--zk` accepts the
 live audit at a sample in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a sample in
@@ -86,17 +86,17 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
-  (vb : ValueBindingZ A P planZ tab decode Hc) {L : Law n}
+  (vb : ValueBindingZ A P planZ tab decode Hc) {L : SamplingDesign n}
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration**: it accepts with a sampled proof block in
-`wrongRegZ` with probability at most `ε_ks + δ_link`, `zk_flock_countC_reg`'s terms without the miss term. -/
+`incorrectRegZ` with probability at most `ε_ks + δ_link`, `zk_flock_countC_reg`'s terms without the miss term. -/
 theorem zk_flock_sampledC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t')
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
+        ¬ Disjoint (incorrectRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgZC A Hs planZ k a (reg σ) (cont σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) :=
   extraction_audit_sampled (analysisZCReg A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
@@ -105,7 +105,7 @@ theorem zk_flock_sampledC_reg (hlow : LoweringSoundZK A P planZ tab decode) (how
     (zk_linkSoundC_reg A Hs P planZ tab vb hlow hown hRw hM hρ hr hj ht) σ
 
 /-- **The sampled proof blocks of the compiled `--zk` audit, against the registration, at the value layer of any values `Xv`**:
-it accepts with a sampled proof block in `wrongRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
+it accepts with a sampled proof block in `incorrectRegZ` at `XlayerZC (Xv R τ)` with probability at most `ε_ks` plus the link bound
 from the binding errors against `Xv` (`errBoundZC`). -/
 theorem zk_flock_sampledC_reg_at (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw : ℕ}
     (hRw : 1 ≤ Rw) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -114,7 +114,7 @@ theorem zk_flock_sampledC_reg_at (hlow : LoweringSoundZK A P planZ tab decode) (
     (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val)
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        ¬ Disjoint (wrongRegZ A P planZ tab vb (reg σ) (XlayerZC A P planZ tab vb (Xv (reg σ) (cont σ)))) o.2)
+        ¬ Disjoint (incorrectRegZ A P planZ tab vb (reg σ) (XlayerZC A P planZ tab vb (Xv (reg σ) (cont σ)))) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgZC A Hs planZ k a (reg σ) (cont σ) + errBoundZC A Hs P planZ tab vb Xv k Rw ρ (reg σ) (cont σ) :=
   extraction_audit_sampled (analysisZCReg A Hs P planZ tab vb (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
@@ -133,7 +133,7 @@ open scoped ENNReal
 variable {n : ℕ} {Reg : Type}
 
 /-- **The sampled proof blocks of one `--zk` sampled session of `J` tables, against the public file, at the challenger's live-coin part's
-custody.** For any live prover `τ`, verity-verify-proof `--zk` accepts with some sampled proof block in `wrongRegZ` with probability at
+custody.** For any live prover `τ`, verity-verify-proof `--zk` accepts with some sampled proof block in `incorrectRegZ` with probability at
 most `ε_ks + δ_link`: `zk_session_soundJ_custody_reg`'s terms without the miss term, so without A3. -/
 theorem zk_session_soundJ_custody_sampled_reg
     (I : Inputs) (ht : I.tags.typed = false)
@@ -151,27 +151,27 @@ theorem zk_session_soundJ_custody_sampled_reg
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZJ (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t')
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)))
     {qF qS : ℝ} :
     let σ := simZJ execArith hs512 (planZJ dj y₀) I wr (opnAtZJ (planZJ dj y₀) I dj) dg (decAtZJ (planZJ dj y₀))
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJ_live I ht dj y₀ wr _ hTags hCust.1 fun _ => sampleOkZKJ_of_file I ht hc kd n hdiv dj hCust.2 _)) τ
-    (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
+    (∀ ω j, TableCRZ execArith hs512 (planZJ dj y₀ ((SamplingDesign.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
+        u ∈ incorrectRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)) (reg σ)
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
             ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
             (reg σ) (cont σ) k Rw))
-        (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
-      ksAvgStrictZ (planZJ dj y₀) (Law.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
+        (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
+      ksAvgStrictZ (planZJ dj y₀) (SamplingDesign.execOS (n := n) src (.subset kd) n) k qF qS (reg σ) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
           ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))
           k Rw M ρ t' (reg σ) (cont σ) := by
   intro σ hCR
-  let W := wrongRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
+  let W := incorrectRegZ execArith ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
     ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope)) (reg σ)
     (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZJ dj y₀) (tabZJ dj y₀)
       ((rsZJ dj y₀ ht hc hU hpub hpt hscope).bindingZ (rsZJ_computes dj y₀ ht hc hU hpub hpt hscope))

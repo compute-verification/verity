@@ -16,9 +16,9 @@ import pytest
 import torch
 import torch.nn as nn
 
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
-from verity.definitions.numerics.serve3_reference import materialize
+from verity_vllm.definitions.numerics.serve3_reference import materialize
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 BF = torch.bfloat16

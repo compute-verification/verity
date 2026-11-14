@@ -25,7 +25,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # One hidden-output `--zk` sampled session is sound, under the record's custody
 
 `zk_session_soundH_custody`: `zk_session_soundH` with its two premises about the record, `hRec` (`RecordsLiveZK`) and
-`hDraw` (`SampleOkZKH` at each of `Law.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
+`hDraw` (`SampleOkZKH` at each of `SamplingDesign.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
 (`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points verity-verify-proof sets up at each of the sampling design's samples
 (`sampleOkZKH_of_exec`), as `Composed.zk_session_sound_custody` is `zk_session_sound`'s. It rests on five: `cr/sha-512`
 (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and `live-verifier` (`hCust`).
@@ -43,7 +43,7 @@ variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session is sound, under `live-verifier`.** `zk_session_soundH` at the link
 points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody (`RecordCustodyZK`) in place of
-`hRec` and `hDraw`: `hRec` is its first half, and `hDraw` at every sample of `Law.execOS` is `sampleOkZKH_of_exec` from its
+`hRec` and `hDraw`: `hRec` is its first half, and `hDraw` at every sample of `SamplingDesign.execOS` is `sampleOkZKH_of_exec` from its
 second. -/
 theorem zk_session_soundH_custody
     (I : Inputs) (ht : I.tags.typed = false)
@@ -52,8 +52,8 @@ theorem zk_session_soundH_custody
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design and A3
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the record, at the link points of the sampling design's samples
@@ -66,26 +66,26 @@ theorem zk_session_soundH_custody
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planAtZKH (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (K₀ : ℕ)
     -- the live prover, and cr/sha-512 for the knowledge finders of its simulation
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
-        ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+        ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
       (zcStrat execArith hs512 (planAtZKH dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZH dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZH_computes dj y₀ ht hc hscope hU hpub hpt))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K₀ +
-        ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K₀ +
+        ksAvgStrictZ (planAtZKH dj y₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
           (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)

@@ -215,9 +215,9 @@ theorem reads_or_break (dev : Exchange → History) (θ : ByteArray) (hF : First
     have h := hK
     rw [← hθ] at h
     exact h
-  obtain ⟨-, -, -, hk₁⟩ := firstSamples_window h3
+  obtain ⟨-, -, -, hk₁⟩ := firstSamples_executionPhase h3
   have hm₁ : (d₁, firstCoins e) ∈ records o.sent := by rw [records_eq h1 h2, h3]; simp
-  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact windowsOf_eq h1 h3 h5 h6
+  have hw : windowsOf θ = some (d₁.window, d₂.window) := by rw [← hθ]; exact executionPhasesOf_eq h1 h3 h5 h6
   have hPT := hP o hθ d₁.window d₂.window hw
   have hP₁ : ∃ log₁, PrintsOn (dev o) d₁.window log₁ := by
     unfold PrintsTwo at hPT

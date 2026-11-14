@@ -1,10 +1,10 @@
-"""served_cases.py: one-stage v1's case (no composite's), the sampled proofs case (`verity/sampled-proofs/v1`:
+"""served_cases.py: one-stage v1's case (no composite's), SPOT case (`verity/sampled-proofs/v1`:
 v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
 same record, Pearl+'s run case from the parts its piece wrote, its commitment naming that record, and with ``--v2`` its
 bare v2 case, each in a 0700 directory beside its Lean answer, in the directory form a
 composition reads as a case (remote's three subprotocols; no composite runs v2's bare case), and every answer naming the
-window's docket's digest. A window whose a5 wrote no v2 case has no sampled proofs case, refused saying why.
+window's docket's digest. A window whose a5 wrote no v2 case has no SPOT case, refused saying why.
 
 Under H1's tie the window's record R is the Commit record H1 named before its sample coin, a v2 record chained right
 after H1's window docket W and reusing W's tables, as soundness's ``remotetie_demo.py`` builds them (`tied_serve`):
@@ -18,12 +18,12 @@ one whose verdict refused, and names the record's digest either way; the inferen
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
 check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
 names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
-does sampled proofs' Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
+does SPOT's Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
 tampered field is refused: by the Lean check (the record naming another Program, an input node in a block, θ on an
 unregistered input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
 or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
-case that isn't the audit's, which refuses sampled proofs' too), and an answer that isn't the window's record's is
+case that isn't the audit's, which refuses SPOT's too), and an answer that isn't the window's record's is
 written nowhere, its refusal saying the
 answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
 
@@ -89,36 +89,36 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
     ``design`` (one unit of each stratum when None)."""
     part = P.partition(program, query)
     ports = {"x": {"leaves": 8, "domain": "02" * 64}}
-    law = design or {"law": "stratified", "k": 1}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    sampling_design = design or {"law": "stratified", "k": 1}
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=previous,
                    registered=[{"value": "weights/w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=part)
+    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=part)
     evidence = {"draw": {"units": [0]}, "sessions": ["5e" * 64], "verdicts": {"m0": {"accepted": True}}}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
             "params": params}
 
 
 def audited_v1_case(program, query, accepted: bool = True) -> dict:
-    """v1's case of a whole audit of ``program`` (the sampled proofs difftest's accepted case): its record over the
+    """v1's case of a whole audit of ``program`` (SPOT difftest's accepted case): its record over the
     window's ports and their window domains, a stratified sample's first proof blocks of each stratum proved, the
     verifier's receipt, and the verdict of record ``accepted``."""
-    law, leaf = {"law": "stratified", "k": 2}, "ee" * 64
+    sampling_design, leaf = {"law": "stratified", "k": 2}, "ee" * 64
     part, population = P.partition(program, query), P.units(program, query)
     ports = {p: {"domain": R.window_domain(PO.program_sha512(program), P.digest(part), p, schema, leaves, "r-test"),
                  "leaves": leaves}
              for p, schema, leaves in (("out", "u16", 2 * population), ("x", "hm96-sha512/row/v1", population))}
     roots = {"out": "cd" * 64, "x": "ab" * 64}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": p, "root": roots[p], **ports[p]} for p in ports],
                    {"kind": "served", "row": 101, "run": "r-test"}, leaf_layer=leaf)
-    drawn = DR.derive(program, query, law)
+    drawn = DR.derive(program, query, sampling_design)
     units = sorted(u for s in drawn["strata"] for u in [u for lo, hi in s["units"] for u in range(lo, hi)][:s["k"]])
     draw = {**drawn, "population": population, "units": units}
     proved = DR.proved(draw)
     evidence = {"draw": draw, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received="2026-10-07T00:00:00Z"), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": accepted, "of_record": True}}}
-    params = {"anchors": [], "delta": "1/20", "law": law, "leaf_layer": leaf, "log": [], "partition": None,
+    params = {"anchors": [], "delta": "1/20", "law": sampling_design, "leaf_layer": leaf, "log": [], "partition": None,
               "ports": ports, "program": json.loads(codec.canonical_json(codec.encode_program(program))),
               "query": query, "registered": None, "scheme": S.SCHEME, "work_table": None}
     return {"commitment": codec.canonical_json(rec).hex(), "evidence": codec.canonical_json(evidence).hex(),
@@ -241,12 +241,12 @@ def tied_v1_case(w: dict) -> dict:
     program = P.mixed_population_program([(t, SLOTS) for t in templates],
                                          values=[(name, leaves, 16) for name, _, leaves in TABLES])
     query = P.template_instances_query(templates)
-    law, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
+    sampling_design, ports = {"law": "stratified", "k": 1}, {"x": {"leaves": 8, "domain": "02" * 64}}
     reused = {e["value"]: e for e in w["registered"]}
-    rec = R.record(program, query, law, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
+    rec = R.record(program, query, sampling_design, S.SCHEME, [{"port": "x", "root": "01" * 64, **ports["x"]}],
                    {"kind": "served", "run": "r-served-cases", "row": 0}, previous=R.digest(w),
                    registered=[{**reused[value], "value": name} for name, value, _ in TABLES])
-    params = RP.params(program, query, law, ports, None, "1/100", partition=P.partition(program, query), log=[w],
+    params = RP.params(program, query, sampling_design, ports, None, "1/100", partition=P.partition(program, query), log=[w],
                        registered={name: 1 for name, _, _ in TABLES},
                        outputs={name: {"record": R.digest(w), "value": value} for name, value, _ in TABLES},
                        schemas={name: G.SCHEMA_V2 for name, _, _ in TABLES})
@@ -312,7 +312,7 @@ def sampled_exe() -> Path:
 
 def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_path, capsys):
     """Each case is written in its own 0700 directory (files 0600) with the answer line its Lean printed, the Lean ran
-    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, sampled proofs' is v2's
+    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, SPOT's is v2's
     with the form ``one-stage`` in its params and its evidence and went to `vstar-recursive sampled check` with v2's
     blobs, v2's blobs went to its Lean, and nothing printed carries a case's bytes."""
     program, query = toy()
@@ -366,8 +366,7 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
 
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     """Without ``--v2`` no bare v2 case is made and v2's Lean never runs. A window whose a5 wrote no v2 case (a plain
-    audit's) has no sampled proofs case either, which is refused saying why (remote's composite then names sampled
-    proofs missing), and v1's and the inference-only case are still written."""
+    audit's) has no SPOT case either, which is refused saying why (remote's composite then names SPOT missing), and v1's and the inference-only case are still written."""
     program, query = toy()
     v1 = v1_case(program, query)
     private = tmp_path / "private"
@@ -382,7 +381,7 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
 def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
     """Where the tree leaves the inference-only policy out (no module `SC.POLICY`, which names the policy's Lean package
     and the Python its check is held to), the inference-only case is refused saying so, never
-    skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
+    skipped, its Lean never runs, and v1's and SPOT's cases are still written; a caller that asks for the
     package is refused the same way."""
     program, query = toy()
     v1 = v1_case(program, query)
@@ -426,7 +425,7 @@ def test_v1s_lean_checks_the_audits_case_and_names_the_records_digest(tmp_path, 
 ])
 def test_the_lean_check_accepts_the_inference_only_case_at_its_budgets_and_not_past_them(
         tmp_path, capsys, inference_only_exe, toy_v1, change, verdict, reason):
-    """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `nci_reference`'s),
+    """At Γ the one block's gates and α its input bits a gate (the Lean's profile, which is `inference_only_reference`'s),
     `inference-only check` accepts; one gate or one bit under, it rejects naming the budget. Its answer names the
     record's digest, so the case is written either way, its verdict the Lean's."""
     v1 = toy_v1
@@ -632,7 +631,7 @@ def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     ("key", "v2's case holds exactly"),
 ])
 def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change, reason):
-    """a5's v2 case is taken only as a5 wrote it for this audit, for sampled proofs' case and with ``--v2`` for the bare
+    """a5's v2 case is taken only as a5 wrote it for this audit, for SPOT's case and with ``--v2`` for the bare
     one: none when a5 wrote its error instead (which says why) or nothing, and refused when it commits to another record,
     names a blob that isn't there or holds another key."""
     program, query = toy()
@@ -979,7 +978,7 @@ def test_the_inference_only_case_on_the_4_32_4_class_is_accepted_at_its_budgets(
     it decodes in the policy's Lean check, which accepts it at the α and Γ ``--from-division`` reads off its division
     (`division_policy`: Γ its one block's gates, α its input bits a gate) and rejects it a gate under. The toy tests
     can't catch what only the served shapes have: the class's own Definitions
-    (heads cut by key block, scans, registered reads) through `nci_reference.root_nodes` and the Lean decoder, the
+    (heads cut by key block, scans, registered reads) through `inference_only_reference.root_nodes` and the Lean decoder, the
     description's walk bound, and the size of a served Program's text through the CLI's files."""
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import Registered

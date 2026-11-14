@@ -15,7 +15,7 @@ must reach its `max_tokens`); `vllm_adapter.sampling_params` hands it to vLLM.
 
 and records the realized schedule (`schedule_of`: per request in declared order, arrival, prefill forwards, token forwards, finish),
 whose digest leaves out request ids and tokens.  Two runs of one declaration with different prompt contents must have the same
-digest (`compare`): `m1_capture` holds its warm-up run (same lengths, random tokens) against the run of record.
+digest (`compare`): `match_capture` holds its warm-up run (same lengths, random tokens) against the run of record.
 
 vLLM's host prefix cache is refused before a static run (`host_prefix_cache_refusal`): its hash match decides which pages a request
 reads, outside the circuit.  Prefix sharing comes back in the circuit-native form: a static page pool, each slot's attention wired to

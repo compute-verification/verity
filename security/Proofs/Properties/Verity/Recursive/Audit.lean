@@ -41,11 +41,11 @@ import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.KSProved
 
 /-!
-# The recursive audit over sampled proofs' recursive form
+# The recursive audit over SPOT's recursive form
 
-`Flock.Guarantees.RecursiveAuditC3` is sampled proofs at the recursive configuration, the sample checked by V\*'s
-compiled check (`verity/sampled-proofs/recursive/v1`, the recursive form of onsite's and remote's sampled-proofs
-component), at every composite, with zero knowledge (`RecursiveZkServerPrivate`).
+`Flock.Guarantees.RecursiveAuditC3` is SPOT at the recursive configuration, the sample checked by V\*'s
+compiled check (`verity/sampled-proofs/recursive/v1`, a component of its own: onsite's and remote's sampled-proofs
+component refuses the recursive form by name), at every composite, with zero knowledge (`RecursiveZkServerPrivate`).
 
 * `SpotRecursive Acc` is `spotRecursive`'s bound at every deployment `RecursiveKS` is stated at
   (`Dep.deployed`: the deployed weights, and any brings, live-coin record and decoders meeting the list-decoding spec)
@@ -133,10 +133,10 @@ theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
       { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } (DeployedR.layR OpenRows.elemR)
       (boundAt q.wE q.w).IVStar FlockDeploy.sha512 x ps, hcap⟩
 
-/-- **Sampled proofs at the recursive configuration, at the deployment `q` and the verdict `Acc`**: for decoders meeting
+/-- **SPOT at the recursive configuration, at the deployment `q` and the verdict `Acc`**: for decoders meeting
 the list-decoding spec, at every composite `k` (as `Verity.SoundnessOf` quantifies it), the parameters `θ`, the
 committed files `F`, the commitment `c`, a strategy `σ` and its recursive session `S` at `k` (`SessionIn`), the
-probability that `Acc` at `k` holds of the play's outcome while sampled proofs' claim at `k` fails on the extracted
+probability that `Acc` at `k` holds of the play's outcome while SPOT's claim at `k` fails on the extracted
 transcript is at most `Dep.errAt` at `S`, the call bounds `nI₀`, `vS₀` and `λ = 135.7`. Its
 hypotheses are `spotRecursive`'s: `K₀` covers the claim's `ε` share and the sample misses any `K₀` units with
 probability at most `δs`; the vocabulary's extractor is the recursive configuration's (`Dep.extract`); the reading
@@ -167,7 +167,7 @@ def SpotRecursiveAt
     Game.prob (fun o => Acc V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
       q.errAt V S collOf dColl nI₀ vS₀ δs 135.7
 
-/-- **Sampled proofs at the recursive configuration, at the verdict `Acc`**: `SpotRecursiveAt` at every
+/-- **SPOT at the recursive configuration, at the verdict `Acc`**: `SpotRecursiveAt` at every
 deployment `RecursiveKS` is stated at, at every composite. -/
 def SpotRecursive
     (Acc : ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α], Vocab d α → Verity.Registration.Composite →
@@ -189,7 +189,7 @@ theorem spotRecursive_at (q : Dep)
     (fun _ h => (calls_lam q h).2.2.1) (fun _ h => (calls_lam q h).2.1) (fun _ h => (calls_lam q h).2.2.2) V k θ F c
     σ S readX collOf dColl K₀ δs hK₀ hdraw hX hread hcoll hlive
 
-/-- **`RecursiveKS` gives sampled proofs at the recursive configuration.** -/
+/-- **`RecursiveKS` gives SPOT at the recursive configuration.** -/
 theorem spotRecursive_of_ks (hKS : Flock.Guarantees.RecursiveKS) : SpotRecursive RecVerdict :=
   fun b aux nOf hd recRest decI decO =>
     spotRecursive_at (Dep.deployed b aux nOf hd recRest decI decO) (hKS b aux nOf hd recRest)
@@ -198,10 +198,11 @@ end Verity.Recursive
 
 namespace Flock.Guarantees
 
-/-- **The recursive audit**: (i) sampled proofs at the recursive configuration (`SpotRecursive` at the
-recursive configuration's verdict `RecVerdict`), at every composite `k`: wherever sampled proofs' case in what the
-prover sent `k` names the recursive form, V\*'s compiled check (`verity/sampled-proofs/recursive/v1`), the probability
-that the play is accepted while sampled proofs' claim fails on the extracted transcript is at most
+/-- **The recursive audit**: (i) SPOT at the recursive configuration (`SpotRecursive` at the
+recursive configuration's verdict `RecVerdict`), at every composite `k`: wherever the recursive audit's own case in what
+the prover sent `k`, V\*'s compiled check (`VStar.Recursive.protocol`, `verity/sampled-proofs/recursive/v1`), accepts
+(SPOT's component refuses the recursive form by name), the probability
+that the play is accepted while SPOT's claim fails on the extracted transcript is at most
 `δs + E_ξ[ksAt] + √(min(bits, 2n)·E[bindBudget]/2^256)`, `n` the units, where the finders built from the strategy
 meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveZkServerPrivate`.
 

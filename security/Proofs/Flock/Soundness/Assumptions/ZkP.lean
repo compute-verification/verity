@@ -38,26 +38,26 @@ def RecordCustodyZKJP {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (o
 /-- **The record is the live session's, at `J` tables, at the verifier's public inputs, under the sampling design of its sample**
 (`live-verifier`, as `RecordCustodyZKJP`): the record `verify --zk --session-tables J --public-inputs` reads is the one
 the challenger wrote for the live session (`RecordsLiveZKJA` at that command's acceptance and setup), and its sample file at
-each sample `S` the one `verity-verify-proof draw` printed for the verifier's own sample of `S` under the sampling design `law S` it drew `S` by
+each sample `S` the one `verity-verify-proof draw` printed for the verifier's own sample of `S` under the sampling design `samplingDesign S` it drew `S` by
 over the `n` proof blocks (`ZkLink.drawOf`): the registration's sampling design at every sample (`recordCustodyZKJPLaw_const`), or
 `subset |S|` for a member's part `S` of a window's sample. Provisional. -/
 def RecordCustodyZKJPLaw {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
     (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
-    (law : Finset (Fin n) → Flock.Draw.Law) : Prop :=
+    (samplingDesign : Finset (Fin n) → Flock.Draw.SamplingDesign) : Prop :=
   Discharge.Composed.RecordsLiveZKJA (Discharge.ZkHidden.AcceptsZKP I own)
       (Discharge.Exec.setupOfP (Discharge.ZkExec.zkInputs I) own) dj Jf wr ∧
-    ∀ S D, Flock.Draw.UnitSample.ofJson (dj S) = .ok D → D = Discharge.ZkLink.drawOf (law S) n S
+    ∀ S D, Flock.Draw.UnitSample.ofJson (dj S) = .ok D → D = Discharge.ZkLink.drawOf (samplingDesign S) n S
 
 /-- At one sampling design for every sample, `RecordCustodyZKJPLaw`'s sample half is `SampleFileZK` at that sampling design. -/
 theorem recordCustodyZKJPLaw_const {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (own : Option ByteArray)
     (dj : Finset (Fin n) → Lean.Json) (Jf : Finset (Fin n) → Reg → ℕ)
     (wr : (S : Finset (Fin n)) → (R : Reg) → Discharge.Tables.LiveOutJ (Jf S R) mPts → Discharge.Exec.Transcript)
-    (law : Flock.Draw.Law) :
-    RecordCustodyZKJPLaw I own dj Jf wr (fun _ => law) ↔
+    (samplingDesign : Flock.Draw.SamplingDesign) :
+    RecordCustodyZKJPLaw I own dj Jf wr (fun _ => samplingDesign) ↔
       Discharge.Composed.RecordsLiveZKJA (Discharge.ZkHidden.AcceptsZKP I own)
           (Discharge.Exec.setupOfP (Discharge.ZkExec.zkInputs I) own) dj Jf wr ∧
-        Discharge.ZkLink.SampleFileZK dj law n :=
+        Discharge.ZkLink.SampleFileZK dj samplingDesign n :=
   Iff.rfl
 
 /-- At the subset sampling design, `RecordCustodyZKJPLaw` is `RecordCustodyZKJP`. -/

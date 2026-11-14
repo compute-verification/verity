@@ -55,10 +55,10 @@ composite that lists v0 and not the rows check, would read no case at the plain 
 | SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes | yes |
 | PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | | | yes |
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | yes | |
-| the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | | yes |
+| the inference-only policy | `InferenceOnlySound` | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | | yes |
 | | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
 | PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
-| PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
+| PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
 | the network certifier | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
 | the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | yes |
 

@@ -4,10 +4,11 @@ import Proofs.Flock.Soundness.PlanDraw
 Vectors for `verity.randomness` v2 and the PoUW window draw, from the soundness package's Lean spec
 (`FlockSoundness/Randomness.lean`, `FlockSoundness/PlanDraw.lean`), for `tests/fixtures/randomness_lean.json`.
 
-* `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, which the tests hold equal to it.
+* `kat`: `verity/primitives/randomness/tests/vectors.json` recomputed from its inputs, its `wide` cases under `deriveWide` and
+  `streamWide`, which the tests hold equal to it.
 * `extra`: keys, streams, `uniform` and `subset` values on inputs of the spec's own, among them PoUW's closure-draw domain
   and `plan.draw`'s `("call", forward, position, "stratum", name)` contexts, which Python's `Key` must match.
-* `window`: `PlanDraw.executionPhase` on small windows: the draw of each, and a repeated call index refused.
+* `window`: `PlanDraw.executionPhase` on small executionPhases: the draw of each, and a repeated call index refused.
 
 Regenerate with `tests/lean/generate.sh`.
 -/
@@ -56,6 +57,7 @@ def num (n : Nat) : Json := .num (JsonNumber.fromNat n)
 def kat (j : Json) : Json := Id.run do
   let .ok (.arr fr) := j.getObjVal? "frame" | return .null
   let .ok (.arr cases) := j.getObjVal? "cases" | return .null
+  let .ok (.arr wides) := j.getObjVal? "wide" | return .null
   let frames := fr.map fun v => match v with
     | .arr #[.str r, _] => Json.arr #[.str r, .str (hexOf (frame (partOfRepr r)))]
     | _ => Json.null
@@ -98,7 +100,19 @@ def kat (j : Json) : Json := Id.run do
       ("stream", Json.mkObj [("index", sidx), ("bytes", .str (hexOf (stream key (indexOfJson sidx) (slen.length / 2))))]),
       ("shard", Json.mkObj [("index", hidx), ("key", .str (hexOf (shard key (indexOfJson hidx))))]),
       ("uniform", .arr us), ("bernoulli", .arr bs), ("subset", .arr ss)]
-  return Json.mkObj [("frame", .arr frames), ("cases", .arr cs)]
+  let ws := wides.map fun c =>
+    let src := unhex ((c.getObjValAs? String "source").toOption.getD "")
+    let dom := (c.getObjValAs? String "domain").toOption.getD ""
+    let ctx : List (String × Part) := match c.getObjVal? "context" with
+      | .ok (.obj kvs) => kvs.toArray.toList.map fun (k, v) => (k, partOfJson v)
+      | _ => []
+    let key := deriveWide src dom ctx
+    let sidx := ((c.getObjVal? "stream").toOption.bind fun s => (s.getObjVal? "index").toOption).getD Json.null
+    let slen := ((c.getObjVal? "stream").toOption.bind fun s => (s.getObjValAs? String "bytes").toOption).getD ""
+    Json.mkObj [("source", c.getObjValD "source"), ("domain", c.getObjValD "domain"), ("context", c.getObjValD "context"),
+      ("key", .str (hexOf key)),
+      ("stream", Json.mkObj [("index", sidx), ("bytes", .str (hexOf (streamWide key (indexOfJson sidx) (slen.length / 2))))])]
+  return Json.mkObj [("frame", .arr frames), ("cases", .arr cs), ("wide", .arr ws)]
 
 /-- The spec's own inputs: `(source, domain, context)`. -/
 def keys : List (ByteArray × String × List (String × Part)) :=
@@ -132,13 +146,13 @@ def extra : Json := .arr <| keys.toArray.map fun (src, dom, ctx) =>
 def stratumJson (s : Stratum) : Json :=
   Json.mkObj [("name", .str s.name), ("units", .arr (s.units.toArray.map num)), ("k", num s.k)]
 
-/-- Small windows: two calls, and the same with a call index repeated. -/
-def windows : List (List Call) :=
+/-- Small executionPhases: two calls, and the same with a call index repeated. -/
+def executionPhases : List (List Call) :=
   [[⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2, 3, 4, 5], 2⟩, ⟨"NcpDigest_v1", [6, 7], 1⟩]⟩,
     ⟨[.int 1, .int 5], [⟨"NcpTile_v1", [8, 9, 10, 11], 2⟩, ⟨"NcpDigest_v1", [12], 1⟩]⟩],
    [⟨[.int 0, .int 5], [⟨"NcpTile_v1", [0, 1, 2], 1⟩]⟩, ⟨[.int 0, .int 5], [⟨"NcpTile_v1", [3, 4, 5], 1⟩]⟩]]
 
-def windowVectors : Json := .arr <| windows.toArray.map fun calls =>
+def executionPhaseVectors : Json := .arr <| executionPhases.toArray.map fun calls =>
   let (src, dom, ctx) := keys.head!
   Json.mkObj [("source", .str (hexOf src)), ("domain", .str dom),
     ("context", Json.mkObj (ctx.map fun (k, v) => (k, partToJson v))),
@@ -150,4 +164,4 @@ def windowVectors : Json := .arr <| windows.toArray.map fun calls =>
 def main (args : List String) : IO Unit := do
   let .ok j := Json.parse (← IO.FS.readFile args[0]!) | throw (IO.userError "vectors.json is not JSON")
   IO.println (Json.mkObj [("source", .str "verity/protocols/proofs/flock/prover/tests/lean/RandomnessVectors.lean via tests/lean/generate.sh"),
-    ("kat", kat j), ("extra", extra), ("window", windowVectors)]).compress
+    ("kat", kat j), ("extra", extra), ("window", executionPhaseVectors)]).compress

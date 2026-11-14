@@ -31,7 +31,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) {mPts : ℕ}
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
-  {L : Law n}
+  {L : SamplingDesign n}
 
 /-- **The end-to-end drawn-unit bound with registered reads, under `cr/sha-512` alone**:
 `Registered.flock_e2e_sampled_hm96_reads` with `LinkCRStrict` for `LinkCR`. -/
@@ -54,7 +54,7 @@ theorem flock_e2e_sampled_hm96_reads
     {qR : ℝ} (hR : (StrictCR.oneRun (audit L Reg (batchedSession H E plan)) σ fun o => rd.pick (reg σ) (path o)).CR
       H512 qR) :
     prob (fun o => execAccept o ∧
-        (¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2 ∨
+        (¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2 ∨
           rd.Off (reg σ)))
         (audit L Reg (batchedSession H E plan)) σ ≤
       StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
@@ -85,7 +85,7 @@ theorem flock_e2e_count_hm96_reads
     {qR : ℝ} (hR : (StrictCR.oneRun (audit L Reg (batchedSession H E plan)) σ fun o => rd.pick (reg σ) (path o)).CR
       H512 qR) :
     prob (fun o => execAccept o ∧
-        (K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card ∨
+        (K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card ∨
           rd.Off (reg σ)))
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + StrictCR.ksAvgStrict plan L k qF qS (reg σ) +

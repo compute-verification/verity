@@ -13,7 +13,7 @@ import pytest
 
 from tests.lint._imports import core_less_definitions as _core
 
-REGISTRY = "verity.definitions.registry"
+REGISTRY = "verity_vllm.definitions.registry"
 _SPEC = importlib.util.find_spec(REGISTRY)
 assert _SPEC is not None and _SPEC.origin is not None
 REGISTRY_DIR = Path(_SPEC.origin).parent
@@ -27,7 +27,7 @@ THIRD_PARTY = ("numpy",)
 #: which holds the kernels and the private circuits too
 CATALOG = ("verity.circuits.ops", "verity.circuits.silicon", "verity.circuits.targets")
 #: `evidence.json`'s ids, read with the standard library only
-EVIDENCE = "verity.definitions.evidence"
+EVIDENCE = "verity_vllm.definitions.evidence"
 MOVED = ("verity_vllm.program.frontend.gemm_targets",)
 
 

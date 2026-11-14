@@ -139,7 +139,7 @@ session played alone at `τ`. -/
 theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Verity.Sampled.Widening)
     [Nonempty (w.extend S).EndΩ] (τ : Strategy (w.extend S).game)
     (hCR : ∀ k ω j, Assumptions.TableCRZAt execArith hs512
-      (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberLaw τ k).draw ω)
+      (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀ (((w.extend S).memberSamplingDesign τ k).draw ω)
         (reg ((w.extend S).memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP ((w.extend S).ms.get k).dj ((w.extend S).ms.get k).y₀)
         (cont ((w.extend S).memberSim τ k) ω))
@@ -150,7 +150,7 @@ theorem sampled_extend (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (S : Ve
       (reg ((w.extend S).memberSim τ k)) (cont ((w.extend S).memberSim τ k))
       ((w.extend S).ms.get k).k ((w.extend S).ms.get k).Rw ((w.extend S).ms.get k).M ((w.extend S).ms.get k).t')
     (W : Finset (Fin w.nJ)) :
-    prob (fun o => (w.extend S).Accepts o ∧ W ⊆ (w.extend S).wrongSet τ) (w.extend S).game τ ≤
+    prob (fun o => (w.extend S).Accepts o ∧ W ⊆ (w.extend S).incorrectSet τ) (w.extend S).game τ ≤
       ENNReal.ofReal (w.pa W) + w.eps :=
   (Flock.SecurityProofs.JointSampledV5 (w.extend S) (w.uniform_extend hA3 S) τ (fun _ => hCR) (fun _ => hA2)
     W).trans_eq

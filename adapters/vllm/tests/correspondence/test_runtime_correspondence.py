@@ -21,7 +21,7 @@ import pytest
 import torch
 from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.program import Program
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from verity_torch.correspondence.runtime import (
     JSON_SCHEMA,
@@ -34,7 +34,7 @@ from verity_torch.correspondence.runtime import (
     validate_document,
 )
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
 sys.path.insert(0, str(Path(__file__).parent))

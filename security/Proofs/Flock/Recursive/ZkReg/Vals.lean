@@ -78,7 +78,7 @@ theorem zk_session_regValsR
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design
-    (Lv : Law n)
+    (Lv : SamplingDesign n)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
@@ -184,7 +184,7 @@ theorem zk_session_regSampledR
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
     -- the sampling design
-    (Lv : Law n)
+    (Lv : SamplingDesign n)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, SampleOkZKHJ I dj mPts (Lv.draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
@@ -207,7 +207,7 @@ theorem zk_session_regSampledR
       (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
       (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw qW) :
     prob (fun o => LiveAcceptsZKR I own o ∧
-        ¬ Disjoint (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        ¬ Disjoint (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
             (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
               (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
               (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw) ∪
@@ -234,7 +234,7 @@ theorem zk_session_regSampledR
     (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ) hCR hW
   exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
     (zk_headline_exec_sampledJ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ¬ Disjoint
-      (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+      (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             (vbHJ dj y₀ ht hc hscope hU hpub) (reg (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ))
             (cont (simZHJ dj y₀ ht hc hscope hU wr dg N hTags hRec hDraw τ)) k Rw) ∪

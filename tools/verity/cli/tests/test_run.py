@@ -186,10 +186,10 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash before the network certifier's bound on a response's tokens and its lengths rows' form were
-#: parameters: a configuration that sets neither keeps it.
-UNBOUNDED_ONSITE = ("8bb037ee67cf0b2fd8475458194d5d0ea79d7e9ed1285b398a9b20420e1f6e64"
-                   "cbb336535923a6320f0cf3f717ddecfccd9ff8cef279e1eb20d992ab719fb9b8")
+#: The onsite configuration's hash with neither the network certifier's bound on a response's tokens nor its lengths
+#: rows' form set: a configuration that sets neither keeps it.
+UNBOUNDED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
+                    "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
 
 
 def bounded(tokens):
@@ -481,6 +481,16 @@ def test_remotes_development_composite_is_no_composite():
     assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
 
 
+@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
+def test_onsites_smaller_sets_are_read_and_hashed_and_verity_run_runs_neither(tmp_path, cid):
+    """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it and
+    `verity run` stops before any party with the goal that brings it."""
+    cfg = config(K.UNACCEPTED[cid])
+    assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
+    with pytest.raises(NotImplementedError, match="demos/onsite-demo"):
+        run(tmp_path, registry(), cfg=cfg)
+
+
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):
     cfg = config(REMOTE)
     cfg["protocols"] = ["sampled-proofs"]
@@ -519,11 +529,11 @@ def test_parties_apart_meet_only_at_a_configured_listen_port(tmp_path, capsys):
     rc, _ = run(tmp_path, registry(), "--on", "auditor-1", cfg=auditor)
     captured = capsys.readouterr()
     assert rc == 2 and said(captured.out) == [{"party": "network-certifier", "exit": 0}]
-    assert "refused listen: the verifier dials zk_server, workers" in captured.err
+    assert "refused listen: the verifier dials firewall, workers" in captured.err
     prover = tmp_path / "prover"
     prover.mkdir()
     rc, _ = run(prover, registry(), cfg=auditor)
-    assert rc == 2 and "refused listen: zk_server, workers listen for the verifier" in capsys.readouterr().err
+    assert rc == 2 and "refused listen: firewall, workers listen for the verifier" in capsys.readouterr().err
     party(auditor, "firewall").update(address="10.0.0.5", listen=7001)
     party(auditor, "workers").update(listen=7002)
     assert D.listening(K.check(auditor, REG.components, REG.workloads)) == {"firewall": "10.0.0.5:7001",

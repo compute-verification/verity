@@ -1,6 +1,6 @@
 """`IntegrityProfile`: the audit's output, bounds on the incorrect proof blocks of a partition, per stratum, at `delta`.
 
-An audit protocol (one-stage, sampled proofs) produces it: the facts checked exhaustively, and the verifier's sampling
+An audit protocol (one-stage, SPOT) produces it: the facts checked exhaustively, and the verifier's sampling
 design (decision 43) with its failure probability, from which the bounds on incorrect proof blocks follow (`bound`, `stratum_bounds`).
 It counts incorrect proof blocks and weights nothing.  Applications consume it without importing the protocol that produced it:
 each weights incorrect proof blocks by what one costs it, through the generic weighted bounds (`harm_bound`, `worst_case`), and
@@ -9,7 +9,7 @@ union counts it once.
 
 The sampling design is stated over named levels of a partition hierarchy (`verity.circuits.partition.Level`): each level's members
 partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`, `Work`) or
-only groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+only groups.  The names are the producer's labels (SPOT's one-stage profile is one level "unit"); the profile
 carries samples, never roles.
 """
 
@@ -163,7 +163,7 @@ class IntegrityProfile:
                 raise ValueError(f"the strata hold {self.draws[names[-1]].population} units, the checked level "
                                  f"{self.count(names[-1])}")
         else:
-            _, n, _, k = self._law()
+            _, n, _, k = self._sampling_design()
             if k > n:
                 raise ValueError(f"a Subset draw of {k} exceeds the {n} checked members it draws from")
         if not 0 < self.delta < 1:
@@ -185,7 +185,7 @@ class IntegrityProfile:
             raise ValueError(f"level {within!r} is finer than {name!r}")
         return prod(self.sizes[j + 1:i + 1])
 
-    def _law(self) -> tuple[int, int, Fraction, int]:
+    def _sampling_design(self) -> tuple[int, int, Fraction, int]:
         """(Bernoulli members, checked members n inside each, p, k)."""
         checked = self.levels[-1].name
         if isinstance(self.draws[checked], (Stratified, Work)):
@@ -200,7 +200,7 @@ class IntegrityProfile:
     def accept(self, m: int) -> Fraction:
         """Exact probability that one Bernoulli member with `m` incorrect checked members passes:
         1 - p + p * C(n - m, k) / C(n, k)."""
-        _, n, p, k = self._law()
+        _, n, p, k = self._sampling_design()
         if not 0 <= m <= n:
             raise ValueError(f"0 <= m <= {n}")
         return 1 - p + p * Fraction(comb(n - m, k), comb(n, k))
@@ -208,7 +208,7 @@ class IntegrityProfile:
     def _odds(self) -> tuple[int, int, int, int, int]:
         """(n, k, p's numerator, p's denominator, C(n, k)): accept(m) = ((den - num) C(n, k) + num C(n - m, k)) /
         (den C(n, k)), in integers."""
-        _, n, p, k = self._law()
+        _, n, p, k = self._sampling_design()
         return n, k, p.numerator, p.denominator, comb(n, k)
 
     def rho(self, m: int) -> float:
@@ -243,7 +243,7 @@ class IntegrityProfile:
         passes `cap`, that level's member count (`count`), which the bound never exceeds."""
         if cap is not None and cap < 0:
             raise ValueError("cap >= 0")
-        members, n, _, _ = self._law()
+        members, n, _, _ = self._sampling_design()
         rhos = self._rhos()
         points = [(r * (1 - MARGIN), float(u)) for m in range(1, n + 1) if (u := utility(m)) > 0 and (r := rhos[m]) < inf]
         best = 0.0
@@ -272,22 +272,22 @@ class IntegrityProfile:
         sample, a `Work` sample's at its k_s, or, when a `Subset(k)` of the checked level is the only sample, one stratum
         of all its members, named after the level.  None when a level is sampled `Bernoulli`."""
         checked = self.levels[-1].name
-        law = self.draws[checked]
-        if isinstance(law, Stratified):
-            return law
-        if isinstance(law, Work):
-            return law.stratified
-        if isinstance(law, Subset) and len(self.draws) == 1:
-            return Stratified.uniform(self.count(checked), law.k, checked)
+        sampling_design = self.draws[checked]
+        if isinstance(sampling_design, Stratified):
+            return sampling_design
+        if isinstance(sampling_design, Work):
+            return sampling_design.stratified
+        if isinstance(sampling_design, Subset) and len(self.draws) == 1:
+            return Stratified.uniform(self.count(checked), sampling_design.k, checked)
         return None
 
     def bound(self) -> int | float:
         """Except with probability delta, an accepted transcript has at most this many incorrect checked members: exact
         when the sampling design has strata (`Stratified.count_bound`) or is one `Bernoulli` sample of the checked level
         (`Bernoulli.count_bound`), else `worst_case` with utility m (the linear relaxation, from above)."""
-        law, checked = self.strata(), self.levels[-1].name
-        if law is not None:
-            return law.count_bound(self.delta)
+        sampling_design, checked = self.strata(), self.levels[-1].name
+        if sampling_design is not None:
+            return sampling_design.count_bound(self.delta)
         if isinstance(self.draws[checked], Bernoulli) and len(self.draws) == 1:
             return self.draws[checked].count_bound(self.count(checked), self.delta)
         return self.worst_case(lambda m: float(m))
@@ -296,18 +296,18 @@ class IntegrityProfile:
         """Each stratum's own bound at delta (`Stratified.stratum_bound`); empty when a level is sampled `Bernoulli`.  They
         hold jointly with `bound`, not each at its own delta: the one-stage profile bounds a family of incorrect sets by
         its likeliest set to escape, and every set breaking one of these bounds escapes with less than delta."""
-        law = self.strata()
-        return {} if law is None else {s.name: law.stratum_bound(s.name, self.delta) for s in law.strata}
+        sampling_design = self.strata()
+        return {} if sampling_design is None else {s.name: sampling_design.stratum_bound(s.name, self.delta) for s in sampling_design.strata}
 
     def harm_bound(self, harm: float | Mapping[str, float | Sequence[tuple[float, int]]]) -> float:
         """An upper bound, at delta, on the total harm of the incorrect checked members: the generic weighted bound an
         application reads with its own harm per member.  `harm` is one number for every member, or, when the sampling design has
         strata, per stratum a number or (harm, members) pairs (`Stratified.harm_bound`).  Under a `Bernoulli` level
         every member weighs the same: `worst_case` with utility harm * m."""
-        law = self.strata()
-        if law is not None:
-            per = harm if isinstance(harm, Mapping) else {s.name: float(harm) for s in law.strata}
-            return law.harm_bound(per, self.delta)
+        sampling_design = self.strata()
+        if sampling_design is not None:
+            per = harm if isinstance(harm, Mapping) else {s.name: float(harm) for s in sampling_design.strata}
+            return sampling_design.harm_bound(per, self.delta)
         if isinstance(harm, Mapping):
             raise ValueError("under a Bernoulli level every checked member weighs the same: pass one number")
         return self.worst_case(lambda m: harm * m)

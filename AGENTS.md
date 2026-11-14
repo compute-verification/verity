@@ -25,9 +25,9 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
-    (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`).
+    (`flock/agreement/`). `spot/verifier/` is SPOT, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
-    for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/nci/`),
+    for the proofs, with the recursive audit. The inference-only policy's check (`inference_only/verifier/lean/`),
     `spot_flock/`, `remote/` and `onsite/` are Lean only; the policy's Python is its
     manifest alone (`inference_only/verifier/parties.py`: the verifier, no channel). `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which the listing below
@@ -36,29 +36,28 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
-    sampling of units). `verity/definitions/`: the circuits
-    written in it: `ops` (the primitive circuits' Definitions), `silicon` (the GPUs' exact semantics), `kernels`,
-    `private_circuits` (the universal circuit), the served workloads' Definitions, and the evaluator and a circuit's
-    requirement in Lean (`evaluate`, `requirement`). Target, not yet: `verity/circuits/` also holds the circuits a
-    protocol names, and the served kernels' circuits go with the adapter that serves them.
+    sampling of units). The circuits written in it are under `verity/circuits/` too: `ops` (the primitive circuits'
+    Definitions), `silicon` (the GPUs' exact semantics), `kernels`, `private_circuits` (the universal circuit), and the
+    evaluator and a circuit's requirement in Lean (`evaluate`, `requirement`). The served kernels' circuits are the vLLM
+    adapter's (`adapters/vllm/verity_vllm/definitions/`). Target, not yet: `verity/circuits/` also holds the circuits a
+    protocol names.
   - `verity/commitments/`: the commitment schemes, with `crypto`, `randomness` (the one challenge derivation), `lms`
     and `identity` (Lean), `attest` (an auditor's device's signed period roots) and `windows` (what an adapter hands
     the prover for each execution phase).
-  - `verity/hardware/`: the registered hardware: `lean` (the Lean card tables' writer); its types, and the readers of
-    the data sheets, which are in the top-level `hardware/{cards,nodes}/`, are in `verity/`'s `device.py`.
   - `verity/configuration/`: `wire` (the messages every party speaks), `deploy` (parties,
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: five files
     directly under `verity/` (`party.py`, `channel.py` for the wire, `device.py`, `protocol.py` and `config.py`, which
     reads a configuration) and `verity/runtime/`, which runs parties over channels.
-  - `verity/claims/`: the security claims' ids, each Lean premise's generated from the locks' `ids`. `tools/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
+  - `tools/difftest/`: the Python held to each Lean (target, not yet: under `tools/`).
+    `verity/protocols/compose/device/live_challenger/`: the auditor device's challenger service, from `benchmarks/` too.
 - `hardware/`: the data sheets, and data only: `cards/` (one TOML data sheet per GPU, host or server model, or time
   base) and `nodes/` (one per kind of node). The Site's readers (`verity.device`'s `load_card` and `load_node`) read them.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
   commits its values while serving. Target, not yet: a torch adapter beside it, which the vLLM adapter sits on.
-- `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
+- `demos/`: one file per demo, the configuration `verity run` reads (`demos/README.md`, one table of them); a demo holds no
+  code.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
@@ -80,7 +79,7 @@ the ties the listing names by file (`against`, which only shrinks). No file unde
 `prover/`. `verity`'s own Python is in places, each the directories and files its `place` entry names, and a place's
 Python imports only its own place and the places its `loads` lists: to allow an import, write it, run the generator
 and say why in the pull request. A place under a `verifier/` or a `device/`, or one the listing marks `trusted` (the
-claims' ids, the wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
+wire, the deployment layer, the Site, the record, the Lean of the verifiers' side with its tests), is
 the verifiers' side, trusted code; the rest is the provers' side and the Python that mirrors the Lean for speed. Until
 its protocol's verifier is Lean, a trusted place loads and reaches only the places the listing froze for it, and from
 outside the trusted places only the files its `loaded_by` names import one, a test included; these lists only shrink,
@@ -173,7 +172,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
 - **Verifier cost: O(circuit description), never O(unrolled circuit).** A verifier works in
   proportion to the descriptor it reads (its Definitions, nodes and references) and never walks every gate, batch member
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
-  (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
+  (`InferenceOnlyCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
 - **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
@@ -296,7 +295,7 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean
   functions) and proofs (`Proofs/`, `security_proofs`, ArkLib allowed: every proof, lemma and proof-only definition, with
   `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each proved guarantee). No statement or module of the definitions
-  or properties trees reads the proofs tree (`trees` in `security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `Nci`,
+  or properties trees reads the proofs tree (`trees` in `security/lean-audit.json`, whose `except` is the cleanup's to-do). A subsystem's Lean goes in its own area of each tree (`Core`, `InferenceOnly`,
   `Pouw`, `Pous`, `Certifier`, `Flock`, `Accounting`). All packages share one toolchain and one Mathlib revision,
   bumped together in a PR of their own.
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:

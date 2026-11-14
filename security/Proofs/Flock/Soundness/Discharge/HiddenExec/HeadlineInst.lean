@@ -146,8 +146,8 @@ hypotheses are `flock_headline_exec_hidden`'s. -/
 theorem flock_headline_exec_hidden_inst {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     (hU : Built c.unit) (hpr : Layout.PortReads c hU)
     (hw : ProvedScope.wiresAcyclic c = true)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Flock.Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -158,20 +158,20 @@ theorem flock_headline_exec_hidden_inst {Lp : Merkle.Leaf (List FlockLevel3.GF12
     (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
     (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap Dig)) (N : ℕ)
     (hdec : DecodesOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dec one fin capOf
-      (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
+      (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop))
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)))
     (hCR : LinkCRL ((instProg c n).partition (outsOfI c n)) H512 enc512 Lp
       (planAtH dj x₀) (tabAtH dj x₀) ((rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).binding
         (rsAtHI_computes ht hc hrf dj x₀ hpub hU hpr hw))
       (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
       (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) k Rw M t')
     {qF qS : ℝ} (hKS : ∀ ω j, TableCRL execArith H512 enc512 Lp
-      (planAtH dj x₀ ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
+      (planAtH dj x₀ ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))) j
       (batchStratL H512 enc512 Lp (planAtH dj x₀)
         (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((instProg c n).partition (outsOfI c n)).wrong
+        K ≤ (((instProg c n).partition (outsOfI c n)).incorrect
           (Xpub {instOneG (c := c) (n := n)} {instZeroG (c := c) (n := n)}
             (XplurL ((instProg c n).partition (outsOfI c n)) H512 enc512 Lp (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).binding
@@ -179,12 +179,12 @@ theorem flock_headline_exec_hidden_inst {Lp : Merkle.Leaf (List FlockLevel3.GF12
               (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ))
               k Rw))).card)
-        (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
-      (Law.stratified σs ks hks).miss K +
-        StrictCR.ksAvgStrict (planAtH dj x₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
+        (auditLive (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
+      (SamplingDesign.stratified σs ks hks).miss K +
+        StrictCR.ksAvgStrict (planAtH dj x₀) (SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ)) +
         ((instProg c n).partition (outsOfI c n)).linkBoundE
-          (L := Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
+          (L := SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) (planAtH dj x₀) (tabAtH dj x₀)
           ((rsAtHI ht hc hrf dj x₀ hpub hU hpr hw (Reg := Reg)).binding
             (rsAtHI_computes ht hc hrf dj x₀ hpub hU hpr hw)) k Rw M ρ t' :=
   flock_headline_hidden dj x₀ (instProg c n) (outsOfI c n) σs ks hks St hS Kd pop Lb src hA3

@@ -8,7 +8,7 @@ public import Proofs.Flock.EndToEnd.Joint.V5.Session
 # A member's session in the window's audit, played alone
 
 A strategy of the window's audit reads the sample and every earlier member's session before it plays member `k`'s, so
-where the sample ended member `k`'s session in the audit is its session played alone at `JointAuditV5.memberLaw`, whose
+where the sample ended member `k`'s session in the audit is its session played alone at `JointAuditV5.memberSamplingDesign`, whose
 coins are the sample's at which the sample ended and the earlier sessions' sampled together, by
 `JointAuditV5.memberStrat`:
 
@@ -17,11 +17,11 @@ coins are the sample's at which the sample ended and the earlier sessions' sampl
   sample's coins at which the sample ended, `JointAuditV5.endShare` (`prob_seqG`, then `avg_ite_subtype` and
   `avg_prod_pi` over the sample's coins and, for each, the earlier sessions' coins);
 * `JointAuditV5.endShare_mul_epsKs_le`, `JointAuditV5.endShare_mul_link_le`: `ε_ks` and `ε_bind` read only member `k`'s
-  part of the sample, so that share of each at `memberLaw` is at most the term at `design k`, which samples the sample's
+  part of the sample, so that share of each at `memberSamplingDesign` is at most the term at `design k`, which samples the sample's
   coins alone and counts the samples that ran out too;
-* `JointAuditV5.member_accepted_sampledWrong_le`: the sample ends and member `k`'s session in the window's audit accepts
+* `JointAuditV5.member_accepted_sampledIncorrect_le`: the sample ends and member `k`'s session in the window's audit accepts
   with a sampled proof block of its part incorrect with probability at most `ε_ks,k + ε_bind,k` at `design k`
-  (`MemberV5.accepted_drawnWrong_le` at `memberLaw`).
+  (`MemberV5.accepted_drawnIncorrect_le` at `memberSamplingDesign`).
 
 `JointAuditV5.hcls_of_bounds` gives `JointAuditV5.hcls` from the registration check's refusal of a member whose fewest
 and most sampled proof blocks have different link points (`mPtsOf_mono`).
@@ -86,7 +86,7 @@ probability `E` has in the session played alone times the share of the sample's 
 theorem prob_member (τ : Strategy w.game) (k : Fin w.ms.length)
     (E : Finset (Fin (w.ms.get k).n) → Discharge.Exec.Transcript → Prop) :
     prob (fun o => (o.2.2[k.1]?).elim False (E ((w.ms.get k).part o.2.1)) ∧ o.1.2 = true) w.game τ =
-      w.endShare * prob (fun o => E o.2.1 o.2.2) ((w.ms.get k).game (w.memberLaw τ k)) (w.memberStrat τ k) := by
+      w.endShare * prob (fun o => E o.2.1 o.2.2) ((w.ms.get k).game (w.memberSamplingDesign τ k)) (w.memberStrat τ k) := by
   let h : (ω : w.L.Ω) → w.before τ k ω → ℝ≥0∞ := fun ω t =>
     prob (E ((w.ms.get k).part (w.L.draw ω))) ((w.ms.get k).live ((w.ms.get k).part (w.L.draw ω)) τ.1)
       (seqStrat (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw ω)) τ.1) w.ms k.1 k.2
@@ -106,11 +106,11 @@ theorem prob_member (τ : Strategy w.game) (k : Fin w.ms.length)
         (fun x => x.elim False (E ((w.ms.get k).part (w.L.draw ω)))) w.ms k.1 k.2 _).trans
         (avg_congr_fintype _ _ _)
     · rw [ite_eq_right he, ite_eq_right he]
-  have hR : prob (fun o => E o.2.1 o.2.2) ((w.ms.get k).game (w.memberLaw τ k)) (w.memberStrat τ k) =
-      avg fun x : (w.memberLaw τ k).Ω => h x.1.1 (x.2 x.1) := by
-    show avg (fun x => prob (fun o => E o.2.1 o.2.2) (((w.ms.get k).live ((w.memberLaw τ k).draw x) τ.1).map
-      fun t => (τ.1, (w.memberLaw τ k).draw x, t))
-        (Strategy.map (fun t => (τ.1, (w.memberLaw τ k).draw x, t)) _
+  have hR : prob (fun o => E o.2.1 o.2.2) ((w.ms.get k).game (w.memberSamplingDesign τ k)) (w.memberStrat τ k) =
+      avg fun x : (w.memberSamplingDesign τ k).Ω => h x.1.1 (x.2 x.1) := by
+    show avg (fun x => prob (fun o => E o.2.1 o.2.2) (((w.ms.get k).live ((w.memberSamplingDesign τ k).draw x) τ.1).map
+      fun t => (τ.1, (w.memberSamplingDesign τ k).draw x, t))
+        (Strategy.map (fun t => (τ.1, (w.memberSamplingDesign τ k).draw x, t)) _
           (seqStrat (fun m : MemberV5 w.Reg w.nJ => m.live (m.part (w.L.draw x.1.1)) τ.1) w.ms k.1 k.2
             (Strategy.ofMap (fun ts => ((τ.1, w.ended x.1.1), w.L.draw x.1.1, ts)) _ (τ.2 x.1.1)) (x.2 x.1)))) = _
     refine congrArg avg (funext fun x => ?_)
@@ -123,14 +123,14 @@ theorem prob_member (τ : Strategy w.game) (k : Fin w.ms.length)
 
 /-- **The sampling design of member `k`'s part of the sample, given that the sample ended**: the sample's coins at which
 it ended, member `k`'s part. -/
-noncomputable def endDesign (k : Fin w.ms.length) : Law (w.ms.get k).n where
+noncomputable def endDesign (k : Fin w.ms.length) : SamplingDesign (w.ms.get k).n where
   Ω := w.EndΩ
   draw c := (w.ms.get k).part (w.L.draw c.1)
 
 /-- An average over member `k`'s sampling design played alone of a function of its part of the sample is the average
 over the sample's coins at which the sample ended. -/
-theorem avg_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (G : Finset (Fin (w.ms.get k).n) → ℝ≥0∞) :
-    avg (fun x : (w.memberLaw τ k).Ω => G ((w.memberLaw τ k).draw x)) =
+theorem avg_memberSamplingDesign (τ : Strategy w.game) (k : Fin w.ms.length) (G : Finset (Fin (w.ms.get k).n) → ℝ≥0∞) :
+    avg (fun x : (w.memberSamplingDesign τ k).Ω => G ((w.memberSamplingDesign τ k).draw x)) =
       avg (fun c : (w.endDesign k).Ω => G ((w.endDesign k).draw c)) :=
   (avg_congr_fintype _ _ _).trans
     (avg_fst (B := (c : w.EndΩ) → w.before τ k c.1) fun c : w.EndΩ => G ((w.ms.get k).part (w.L.draw c.1)))
@@ -138,9 +138,9 @@ theorem avg_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (G : Finset (
 /-- **The ended share of an average over member `k`'s sampling design played alone** of a function of its part of the
 sample is at most the average over `design k`, which counts the samples that ran out too. -/
 theorem endShare_mul_avg_le (τ : Strategy w.game) (k : Fin w.ms.length) (G : Finset (Fin (w.ms.get k).n) → ℝ≥0∞) :
-    w.endShare * avg (fun x : (w.memberLaw τ k).Ω => G ((w.memberLaw τ k).draw x)) ≤
+    w.endShare * avg (fun x : (w.memberSamplingDesign τ k).Ω => G ((w.memberSamplingDesign τ k).draw x)) ≤
       avg (fun ω : (w.design k).Ω => G ((w.design k).draw ω)) := by
-  rw [w.avg_memberLaw τ k G]
+  rw [w.avg_memberSamplingDesign τ k G]
   refine (avg_ite_subtype (fun ω : w.L.Ω => w.ended ω = true)
     fun ω => G ((w.ms.get k).part (w.L.draw ω))).symm.trans_le ?_
   refine avg_mono fun ω => ?_
@@ -150,10 +150,10 @@ theorem endShare_mul_avg_le (τ : Strategy w.game) (k : Fin w.ms.length) (G : Fi
   · rw [ite_eq_right he]
     exact zero_le
 
-/-- **`ε_ks` reads only the member's part of the sample**: its ended share at `memberLaw` is at most `ε_ks` at
+/-- **`ε_ks` reads only the member's part of the sample**: its ended share at `memberSamplingDesign` is at most `ε_ks` at
 `design k`. -/
 theorem endShare_mul_epsKs_le (τ : Strategy w.game) (k : Fin w.ms.length) :
-    w.endShare * (w.ms.get k).epsKs (w.memberLaw τ k) ≤ (w.ms.get k).epsKs (w.design k) := by
+    w.endShare * (w.ms.get k).epsKs (w.memberSamplingDesign τ k) ≤ (w.ms.get k).epsKs (w.design k) := by
   unfold MemberV5.epsKs
   rw [ENNReal.mul_iSup]
   exact iSup_mono fun R => w.endShare_mul_avg_le τ k fun S =>
@@ -163,22 +163,22 @@ theorem endShare_mul_epsKs_le (τ : Strategy w.game) (k : Fin w.ms.length) :
 
 /-- The share of member `k`'s sampling design played alone whose samples read commit string `p` is that of the sample's
 coins at which the sample ended. -/
-theorem readShare_memberLaw (τ : Strategy w.game) (k : Fin w.ms.length) (p : (w.ms.get k).vb.Pos) :
+theorem readShare_memberSamplingDesign (τ : Strategy w.game) (k : Fin w.ms.length) (p : (w.ms.get k).vb.Pos) :
     (Fintype.card (ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
-        (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.memberLaw τ k) p) : ℝ) /
-        Fintype.card (w.memberLaw τ k).Ω =
+        (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.memberSamplingDesign τ k) p) : ℝ) /
+        Fintype.card (w.memberSamplingDesign τ k).Ω =
       (Fintype.card (ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.endDesign k) p) : ℝ) /
         Fintype.card w.EndΩ := by
   have e : ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
-        (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.memberLaw τ k) p ≃
+        (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.memberSamplingDesign τ k) p ≃
       ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
         (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.endDesign k) p ×
           ((c : w.EndΩ) → w.before τ k c.1) :=
     Equiv.prodSubtypeFstEquivSubtypeProd (p := fun c : w.EndΩ => ReadsSampleZ (L := w.endDesign k) execArith
       (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (w.ms.get k).vb p c)
-  have hΩ : Fintype.card (w.memberLaw τ k).Ω =
+  have hΩ : Fintype.card (w.memberSamplingDesign τ k).Ω =
       Fintype.card w.EndΩ * Fintype.card ((c : w.EndΩ) → w.before τ k c.1) :=
     Fintype.card_prod _ _
   rw [Fintype.card_congr e, Fintype.card_prod, hΩ, Nat.cast_mul, Nat.cast_mul,
@@ -217,10 +217,10 @@ theorem share_scale {ι : Type} [Fintype ι] {cE cL c d : ℝ} (hcE : 0 < cE) (h
     _ ≤ (∑ p, b p / cL) * (c / d) := mul_le_mul_of_nonneg_right key (div_nonneg hc hd.le)
     _ = (∑ p, b p / cL) * c / d := by ring
 
-/-- **`ε_bind` reads only the member's part of the sample**: its ended share at `memberLaw` is at most `ε_bind` at
+/-- **`ε_bind` reads only the member's part of the sample**: its ended share at `memberSamplingDesign` is at most `ε_bind` at
 `design k`. -/
 theorem endShare_mul_link_le (τ : Strategy w.game) (k : Fin w.ms.length) :
-    w.endShare * (w.ms.get k).link (w.memberLaw τ k) ≤ (w.ms.get k).link (w.design k) := by
+    w.endShare * (w.ms.get k).link (w.memberSamplingDesign τ k) ≤ (w.ms.get k).link (w.design k) := by
   have hE : (0 : ℝ) < Fintype.card w.EndΩ := by exact_mod_cast Fintype.card_pos
   have hL : (0 : ℝ) < Fintype.card w.L.Ω := by exact_mod_cast Fintype.card_pos
   have hs : w.endShare = ENNReal.ofReal ((Fintype.card w.EndΩ : ℝ) / (Fintype.card w.L.Ω : ℝ)) := by
@@ -234,25 +234,25 @@ theorem endShare_mul_link_le (τ : Strategy w.game) (k : Fin w.ms.length) :
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.endDesign k) p) : ℝ))
     (fun p => (Fintype.card (ΩcZ execArith (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (w.design k) p) : ℝ))
-    _ (fun p => w.readShare_memberLaw τ k p) fun p => by exact_mod_cast w.card_endDesign_le k p
+    _ (fun p => w.readShare_memberSamplingDesign τ k p) fun p => by exact_mod_cast w.card_endDesign_le k p
 
 /-- **The sample ends and member `k`'s session in the window's audit accepts with a sampled proof block of its part
 incorrect** with probability at most `ε_ks,k + ε_bind,k` at `design k`, under `cr/sha-512` and `ecr/sha-512` at its
 session played alone. -/
-theorem member_accepted_sampledWrong_le (τ : Strategy w.game) (k : Fin w.ms.length)
+theorem member_accepted_sampledIncorrect_le (τ : Strategy w.game) (k : Fin w.ms.length)
     (hCR : ∀ ω j, TableCRZ execArith hs512
-      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberLaw τ k).draw ω) (reg (w.memberSim τ k))) j
+      (planZHJP (w.ms.get k).dj (w.ms.get k).y₀ ((w.memberSamplingDesign τ k).draw ω) (reg (w.memberSim τ k))) j
       (zcStrat execArith hs512 (planZHJP (w.ms.get k).dj (w.ms.get k).y₀) (cont (w.memberSim τ k) ω))
       (w.ms.get k).qF (w.ms.get k).qS)
     (hA2 : LinkCRZC execArith hs512 (w.ms.get k).P (planZHJP (w.ms.get k).dj (w.ms.get k).y₀)
       (tabZHJP (w.ms.get k).dj (w.ms.get k).y₀) (w.ms.get k).vb (reg (w.memberSim τ k)) (cont (w.memberSim τ k))
       (w.ms.get k).k (w.ms.get k).Rw (w.ms.get k).M (w.ms.get k).t') :
     prob (fun o => (o.2.2[k.1]?).elim False (fun t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberWrong τ k) ∧ o.1.2 = true) w.game τ ≤
+        ∃ u ∈ (w.ms.get k).part o.2.1, u ∈ w.memberIncorrect τ k) ∧ o.1.2 = true) w.game τ ≤
       (w.ms.get k).epsKs (w.design k) + (w.ms.get k).link (w.design k) := by
   refine (w.prob_member τ k fun S t => AcceptsZKP (w.ms.get k).I (w.ms.get k).own t ∧
-    ∃ u ∈ S, u ∈ w.memberWrong τ k).trans_le ?_
-  refine (mul_le_mul' le_rfl ((w.ms.get k).accepted_drawnWrong_le (w.memberLaw τ k) (w.oneClass_memberLaw τ k)
+    ∃ u ∈ S, u ∈ w.memberIncorrect τ k).trans_le ?_
+  refine (mul_le_mul' le_rfl ((w.ms.get k).accepted_drawnIncorrect_le (w.memberSamplingDesign τ k) (w.oneClass_memberSamplingDesign τ k)
     (w.memberStrat τ k) hCR hA2)).trans ?_
   rw [mul_add]
   exact add_le_add (w.endShare_mul_epsKs_le τ k) (w.endShare_mul_link_le τ k)
@@ -264,15 +264,15 @@ end Ended
 link points (the registration check refuses a member whose fewest and most sampled proof blocks don't), then the part
 of every sample that ended has the record's link points. -/
 theorem hcls_of_bounds {Reg : Type} {nJ : ℕ} (ms : List (MemberV5 Reg nJ)) {Ω : Type} [Fintype Ω] [Nonempty Ω]
-    {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (law : Flock.Draw.Law)
+    {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (samplingDesign : Flock.Draw.SamplingDesign)
     (lo hi : Fin ms.length → ℕ)
-    (hdraw : ∀ k ω, sampleEnded src law nJ ω = true →
-      lo k ≤ ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card ∧
-        ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card ≤ hi k)
+    (hdraw : ∀ k ω, sampleEnded src samplingDesign nJ ω = true →
+      lo k ≤ ((ms.get k).part ((Bridge.execSel (n := nJ) src samplingDesign nJ).draw ω)).card ∧
+        ((ms.get k).part ((Bridge.execSel (n := nJ) src samplingDesign nJ).draw ω)).card ≤ hi k)
     (hrec : ∀ k, lo k ≤ (ms.get k).kd / nTab (ms.get k).I ∧ (ms.get k).kd / nTab (ms.get k).I ≤ hi k)
     (hends : ∀ k, mPtsOf (ms.get k).D.unroll.g (lo k) = mPtsOf (ms.get k).D.unroll.g (hi k)) :
-    ∀ (k : Fin ms.length) (ω : Ω), sampleEnded src law nJ ω = true →
-      mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src law nJ).draw ω)).card =
+    ∀ (k : Fin ms.length) (ω : Ω), sampleEnded src samplingDesign nJ ω = true →
+      mPtsOf (ms.get k).D.unroll.g ((ms.get k).part ((Bridge.execSel (n := nJ) src samplingDesign nJ).draw ω)).card =
         mPtsOf (ms.get k).D.unroll.g ((ms.get k).kd / nTab (ms.get k).I) := by
   intro k ω he
   have h1 := mPtsOf_mono (ms.get k).D.unroll.g (hdraw k ω he).1

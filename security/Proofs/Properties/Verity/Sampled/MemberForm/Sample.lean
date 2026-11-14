@@ -19,7 +19,7 @@ many proof blocks as the member has units. This module reads, off one session's 
   registration's units and the members' counts to its population (`laidHeld`, which the form's structure check
   runs), and at a member of the one range `[lo, hi)` its first unit is `lo`, its count `hi - lo`, its unit at slot
   `u` is `lo + u`, and the sample holds one of its units exactly where it holds a unit from `lo` up to `hi`.
-* **The window's population** (`WindowOn.total`, `WindowOn.population`): at the window the parameters' members are
+* **The window's population** (`ExecutionPhaseOn.total`, `ExecutionPhaseOn.population`): at the window the parameters' members are
   on, where every member's files pass, the members' counts sum to the window's population (the committed files'
   units are the population and the members' reads' units summed, `Verity.FileRead.unitsWith_eq_sum`, and a member
   whose files pass has as many units in its read as proof blocks, `Flock.Guarantees.MemberV5.fileRead_units`), which
@@ -139,8 +139,8 @@ theorem membersStructure_laid {p : _root_.Spot.OneStageZk.Params} {ms : Array _r
 /-- **The members' counts sum to the window's population**, where every member's files pass: the committed files'
 units are the population and the members' reads' units summed, and a member whose files pass has as many units in
 its read as proof blocks. -/
-theorem WindowOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+theorem ExecutionPhaseOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) : (W.ms.map fun m => m.n).sum = W.nJ := by
   obtain ⟨m₀, rest, hW, hread⟩ := h.read
   have hu : V.units θ F = ((W.ms.map fileRead).map Verity.FileRead.units).sum := by
@@ -156,8 +156,8 @@ theorem WindowOn.total {ι : Type} {d : Accounting.Device ι} {α : Type} [Finty
 /-- **The window's population is the registration's**: at the window the parameters' members are on, whose members'
 files pass, where the form's structure holds the members to the registration `rec` (`Spot.OneStageZk.laidHeld`),
 the window's population is the population `rec` names. -/
-theorem WindowOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
-    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : WindowOn V θ F W)
+theorem ExecutionPhaseOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α] {V : Vocab d α}
+    {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : ExecutionPhaseOn V θ F W)
     (hp : ∀ m ∈ W.ms, FilesPass m) {p : _root_.Spot.OneStageZk.Params}
     {ms : Array _root_.Spot.OneStageZk.Member} (hpa : ParamsAt θ p) (hms : p.members = some ms) {rec : Json}
     (hl : _root_.Spot.OneStageZk.laidHeld ms rec = .ok ()) {n : ℕ}
@@ -178,23 +178,23 @@ theorem WindowOn.population {ι : Type} {d : Accounting.Device ι} {α : Type} [
 
 /-- **A session whose verdict passes has a record whose sample decodes by the subset sampling design**: the verdict
 refuses a record without a sample (`verdictOf_sampled`), the setup at the record's own sample refuses a sampling
-design a soundness claim doesn't sample by at `--zk` (`setupAt_sampleLaw`, `lawWhy_zk`), and a session set up without
+design a soundness claim doesn't sample by at `--zk` (`setupAt_sampleDesign`, `samplingDesignWhy_zk`), and a session set up without
 a stratified input refuses a stratified sample (`setupTables_stratified`). -/
 theorem sessionVerdict_subset {a : StepAt} {bs : _root_.Core.Blobs} {keys : Array String}
     {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup}
     {rest : Json × Json} {proofs : Array ByteArray} {units : Array ℕ}
     (h : SessionVerdict a bs keys s record spec tabs rest proofs units) :
     ∃ dj D kd, Flock.Witness.recordDraw record = some dj ∧ Flock.Draw.UnitSample.ofJson dj = .ok D ∧
-      D.law = .subset kd ∧
+      D.samplingDesign = .subset kd ∧
       ∃ sts, Flock.Stmt.setupTables (Flock.Witness.zkTags a.I) a.I.circuitFile a.I.publicFile
         (Flock.Witness.zkCoins a.I) a.I.count a.I.tables (some dj) a.I.partition a.I.program = .ok (spec, sts) := by
   obtain ⟨dj, hdj⟩ := Option.isSome_iff_exists.1 (verdictOf_sampled h.verdict)
   have hst := h.setup
   rw [hdj] at hst
-  obtain ⟨D, hD, hw⟩ := sampleLaw_ok (setupAt_sampleLaw hst)
+  obtain ⟨D, hD, hw⟩ := sampleDesign_ok (setupAt_sampleDesign hst)
   obtain ⟨sts, hss, -⟩ := setupAt_ok hst
   obtain ⟨hset, -⟩ := sessionAt_ok hss
-  rcases lawWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
+  rcases samplingDesignWhy_zk hw with ⟨kd, hk⟩ | ⟨K, St, hk⟩
   · exact ⟨dj, D, kd, hdj, hD, hk, sts, hset⟩
   · exact (setupTables_stratified hset hD hk).elim
 

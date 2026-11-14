@@ -109,21 +109,21 @@ def served_h1():
 def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
          work_table: Mapping[str, Any] | None = None) -> int:
     """The most coins one rank's sample reads, known from its window before anything opens. The window gives the stream's sampling design:
-    the rule over its N and strata (`service.selection_law`), expanded over its program and query (`draw.derive`) under the work table
+    the rule over its N and strata (`service.selection_sampling_design`), expanded over its program and query (`draw.derive`) under the work table
     the rule's rate puts over the one the rank registers with (`service.selection_table`), as `Stream.register` expands it. The stream's own sampler (`service.select_draw`) samples that sampling design on bytes that reject no
     word (zeros: a zero word is below every largest multiple), and the need is what it reads plus its longest stream once
     more. `coins.draw_first` reads each stream (the sampling design's one, or one per stratum) once, 2 k width(n) + 64 bytes. It reads
     a stream again only when the stream's words run out, which takes k + 1 of them rejected, each with probability below
     2^-64 (`coins.OwnRandomness`). The margin covers one such rerun, so a sample reads past its need only after two."""
-    selection = S.Law(rule)
-    law = D.derive(program, query, S.selection_law(selection, population, D.strata_sizes(program, query)),
+    selection = S.SamplingDesign(rule)
+    sampling_design = D.derive(program, query, S.selection_sampling_design(selection, population, D.strata_sizes(program, query)),
                    S.selection_table(selection, program, query, work_table))
     reads: list[int] = []
 
     def zeros(n: int) -> bytes:
         reads.append(n)
         return bytes(n)
-    S.select_draw(selection, law, population, zeros)
+    S.select_draw(selection, sampling_design, population, zeros)
     return -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
 
 
@@ -763,7 +763,7 @@ class GateClient:
 
 
 class Loopback:
-    """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of sampled proofs' challenger)
+    """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of SPOT's challenger)
     at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, asked for before any session (`key`), so its coins are a development session's, not an
     auditor's (`simulated`)."""

@@ -242,7 +242,7 @@ theorem secondSamples_parts {p : VStar.Recursive.SampledTwo.Params} {e : VStar.R
 pins, main and session `firstCoins` names, and the interior record's digest is the interior commitment's. -/
 def SessionMatches (C : CaseOf) : Prop :=
   ∀ o, FormAccepts C o → ∀ p c e c₂, caseOf o.sent = .ok (p, c, e) → interiorOf e = .ok c₂ →
-    Spot.Registration.digest e.record = .ok c₂.digest ∧
+    Spot.Docket.digest e.record = .ok c₂.digest ∧
     ∀ f ∈ ["ledger", "pins", "main", "session"], Spot.getD (firstCoins e) f = Spot.getD e.coins f
 
 /-- **`FirstUnshown` from the form's check**, where it reads the cut's session (`SessionMatches`). -/
@@ -250,7 +250,7 @@ theorem firstUnshown_of (C : CaseOf) (hC : CaseIsSent C) (hM : SessionMatches C)
   intro o ha p c e key d₁ d₂ cm roots hcase hkey hd₁ hd₂ hw hts
   obtain ⟨c₂, hi₂, hch₂, hwin₂, hafter⟩ := secondSamples_parts hd₂
   obtain ⟨hdig, hf⟩ := hM o ha p c e c₂ hcase hi₂
-  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_window hd₁
+  obtain ⟨bp, hb, hbw, hkey₁⟩ := firstSamples_executionPhase hd₁
   have hbp : bp = p.boundary := by
     unfold boundaryOf at hb
     first

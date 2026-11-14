@@ -82,7 +82,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink 
 open scoped ENNReal
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type}
 
 /-- **A session's registered read is off the table's leaf, by a collision**: at the history `(R, ω, t)`, the
 registration `R₂` and the sessions' outcomes `o`, some session `j`'s registered read `p` whose opening and the

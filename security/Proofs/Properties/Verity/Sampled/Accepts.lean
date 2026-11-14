@@ -10,7 +10,7 @@ public import Proofs.Properties.Certifier.Check.Bytes
 public import Proofs.Properties.Spot.Tables
 
 /-!
-# Sampled proofs' acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
+# SPOT's acceptance: v2's verdict is verity-verify-proof `--zk`'s on the session's files
 
 The decoders' premise of the logged coupling (`Decodes`) asks that on the joint distribution's support, off the events at the
 stops it is held off, an accepted play is beside an outcome verity-verify-proof `--zk` accepts (`LiveAcceptsZKP`), which
@@ -420,7 +420,7 @@ theorem filesOn_of {V : Vocab d α} {T : PinnedTables} {θ : ByteArray} {F B : A
   · obtain ⟨circuitB, hg, hl⟩ := hheld
     have h : A.I.tables = pinnedTables T A.I.circuitFile := by
       rw [hA.circuit]
-      exact (congrArg (fun r : Verity.WindowFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
+      exact (congrArg (fun r : Verity.ExecutionPhaseFiles => r.first.tables) hA.read).symm.trans (hD.tables F)
     rw [h, ← hc p₀ hp₀ circuitB hg]
     exact pinnedTables_extend hl rfl ht
 

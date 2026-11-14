@@ -1,6 +1,6 @@
 # The onsite run of the served window: onsite's seven subprotocols, each party on its machine, and the keys
 # the auditor pinned for its devices. Run it on each machine with `verity run THIS --on MACHINE --bindings
-# FILE` (demos/onsite_served/README.md); the deploy bindings hold every host and address, this file none.
+# FILE` (tools/verity/cli/README.md); the deploy bindings hold every host and address, this file none.
 # `verity run THIS --dry-run` resolves it all.
 format = "verity/config/v0"
 protocols = ["sampled-proofs", "pouw", "inference-only", "pous", "bandwidth", "certifier", "wipe"]
@@ -104,31 +104,30 @@ to = "workers"
 messages = ["H1Coins"]
 
 [[channel]]
-from = "prover"
-to = "memory-challenger"
-messages = ["Setup", "Response", "FillAck", "Answer"]
-
-[[channel]]
 from = "memory-challenger"
 to = "prover"
-messages = ["Challenge", "Fill", "FillDone", "Read", "End"]
+messages = ["Warmup", "Index", "End", "Fill", "FillDone", "Read"]
+
+[[channel]]
+from = "prover"
+to = "memory-challenger"
+messages = ["Block", "FillAck", "Answer"]
 
 [[channel]]
 from = "memory-challenger"
 to = "verifier"
 messages = ["SignedRun", "WipeReport"]
-after = ["Response", "End"]
-
-[[channel]]
-from = "prover"
-to = "bandwidth-verifier"
-messages = ["Register", "Root", "Openings"]
+after = ["End"]
 
 [[channel]]
 from = "bandwidth-verifier"
 to = "prover"
-messages = ["Hold", "Run", "Open", "End"]
-after = ["Register"]
+messages = ["Hold", "Run", "Open", "End", "Case", "Answer"]
+
+[[channel]]
+from = "prover"
+to = "bandwidth-verifier"
+messages = ["Request", "Root", "Openings", "Malformed"]
 
 [[channel]]
 from = "bandwidth-verifier"
@@ -139,9 +138,9 @@ after = ["Openings"]
 [[channel]]
 from = "network-certifier"
 to = "workers"
-messages = ["out-opening"]
+messages = ["out-opening", "records", "cells-salts"]
 
 [[channel]]
 from = "network-certifier"
 to = "verifier"
-messages = ["out-record"]
+messages = ["out-record", "certificate", "registration", "deployment", "groups"]
