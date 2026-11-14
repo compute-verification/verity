@@ -24,7 +24,7 @@ from collections.abc import Callable
 from typing import Any
 
 from verity.party import Finish, Identity, Received, LogEntry, Send, Timer
-from verity.runtime.runner import ProtocolDef
+from verity.protocol import ProtocolDef
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_party as WP

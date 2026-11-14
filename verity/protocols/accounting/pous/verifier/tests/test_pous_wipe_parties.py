@@ -18,8 +18,9 @@ import pytest
 import pous_test_signer as ts
 import settings
 from verity.runtime import sources as S
+from verity.protocol import ProtocolDef
 from verity.party import Finish
-from verity.runtime.runner import ProtocolDef, run
+from verity.runtime.runner import run
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.device import wipe_challenger as WC
 from verity.protocols.accounting.pous.prover import wipe_prover as WR

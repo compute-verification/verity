@@ -30,13 +30,13 @@ what the bound rests on. The session signs no egress, and this check holds the e
 count whoever writes the evidence gives. That it is the network certifier's count over the span between the session's
 two marks is for the check that composes the wipe with the network certifier to establish.
 
-`leg(period_dir, node, out)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s `wipe` says
-(`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the whole
-device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory outside the
-fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM after it,
-`wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (`wipe_party.side_of`; this node by default, a
-process whose key and session log are beside the periods). The verifier trusts one memory-challenger key, the one whose
-SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
+`leg(period_dir, node, out, side_of=...)` is the wipe's leg of `benchmarks/all_protocols`: one wipe as `period.json`'s
+`wipe` says (`CONFIG`: `SEGMENTS` 32 MiB segments in host memory by default, or a GPU's memory through `wipe_store`, the
+whole device declared, the driver's reserve included (`wipe_store.Cuda.info`'s `total_bytes`), so that its memory
+outside the fill counts in `R`, the server's disks ahead of it in the same session, `wipe.disk`, and the host's DRAM
+after it, `wipe.dram`), the memory challenger on `period.json`'s `challenger_host` (this node by default, a process
+whose key and session log are beside the periods), its side handed in by the caller that starts the run (`side_of`).
+The verifier trusts one memory-challenger key, the one whose SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
 key its session came with. No network certifier counts the session's egress yet, so the check is given no
 count unless `wipe.egress_bits` names one, and an accepted leg certifies nothing either way (`uncounted`): its verdict
@@ -46,7 +46,8 @@ is a rehearsal with no bound. It names what the bound doesn't cover (`uncertifie
 session, an uncounted egress, the node's memory outside the declared tiers (`undeclared`), a GPU's driver reserve when NVML gave no total, what its disks
 leave outside the boundary (`disk_gaps`) and each link leaving the node that no network certifier counts
 (`wipe_party.link`).
-`main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU).
+`main` runs the leg on this node and prints its `summary` (`benchmarks/pous/streamed_wipe/demo.sh` runs it on one GPU,
+through `wipe_on_node.py`, which hands it the runtime's `Side.of`).
 """
 
 from __future__ import annotations
@@ -58,7 +59,6 @@ import os
 import re
 import secrets
 import socket
-import sys
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
@@ -66,14 +66,13 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from verity.runtime.stream import Side
 from verity.commitments.identity import canonical_json_bytes
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from . import streamed_wipe as sw
 from . import wipe_party, wipe_store
 from .period import decided_by, serve
-from .wipe_party import READS
+from .wipe_party import READS, Side
 
 PROTOCOL = "verity/wipe/v0"
 """`MemoryChallenger.WipeProtocol.ID`; a test signer's wipes answer under `memory_challenger.TEST_PREFIX` + it."""
@@ -591,10 +590,11 @@ def uncertified(where: Mapping[str, Any], egress_mib: int | None) -> list[str]:
     return out
 
 
-def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
-    """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out) -> answer`): one wipe as `period.json`'s
-    `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
-    party of its own on `period.json`'s `challenger_host` (`wipe_party.side_of`; on this node by default, a process
+def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., Side]) -> dict[str, Any]:
+    """The wipe's leg of `benchmarks/all_protocols` (`leg(period_dir, node, out, side_of=...) -> answer`): one wipe as
+    `period.json`'s `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the
+    memory challenger a party of its own on `period.json`'s `challenger_host` (`side_of(period, node, key, local,
+    what)`, which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. The verifier trusts the
     key `wipe.trusted_sha512` pins and no other; a challenger on its own host with none pinned is refused (ValueError)
     before its session. A `wipe_store` prover gates its store before the session.
@@ -613,7 +613,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     tools, c = doc.get("tools") or {}, config(doc)
     extra = (("--streamer", "build", *(("--threads", str(c["threads"])) if c["threads"] else ()))
              if c["streamer"] == "native" else ()) + (() if c["reads"] is None else ("--reads", str(c["reads"])))
-    party = wipe_party.side_of(doc, node, Path(period_dir).parent / "wipe-challenger", extra)
+    party = side_of(doc, node, "wipe", wipe_party.command(Path(period_dir).parent / "wipe-challenger", extra),
+                    "the wipe")
     egress = None if c["egress_bits"] is None else sw.egress_units(c["egress_bits"])
     if party.host != node and c["trusted_sha512"] is None:
         raise ValueError(f"period.json's wipe.trusted_sha512 is unset with the memory challenger on {party.host}: the "
@@ -706,18 +707,18 @@ def summary(record: Mapping[str, Any]) -> dict[str, Any]:
                        "sync_ns": (prover.get("fill") or {}).get("sync_ns"), "gate": prover.get("gate")}}
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """`python -m verity.protocols.accounting.pous.verifier.wipe_period --period DIR --out DIR [--node NAME] [--expect VERDICT]`: the
-    leg on this node, its summary printed; exit 0 when the verdict is the expected one (`accept` by default), 1
-    otherwise."""
-    ap = argparse.ArgumentParser(prog="python -m verity.protocols.accounting.pous.verifier.wipe_period", description=main.__doc__)
+def main(argv: Sequence[str] | None = None, *, side_of: Callable[..., Side]) -> int:
+    """`--period DIR --out DIR [--node NAME] [--expect VERDICT]`: the wipe on this node, its challenger's side where
+    `side_of` puts it (the runtime's `Side.of`, handed in by the program that starts the run), its summary printed; exit
+    0 when the verdict is the expected one (`accept` by default), 1 otherwise."""
+    ap = argparse.ArgumentParser(description=main.__doc__)
     ap.add_argument("--period", type=Path, required=True, help="the period's directory, holding period.json")
     ap.add_argument("--out", type=Path, required=True, help="where wipe.json and wipe.case.json go")
     ap.add_argument("--node", default=socket.gethostname(), help="the developer's node: the wiped server's id")
     ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
                     help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)
-    answer = leg(a.period, a.node, a.out)
+    answer = leg(a.period, a.node, a.out, side_of=side_of)
     print(json.dumps(summary(json.loads((a.out / "wipe.json").read_text())), indent=1, sort_keys=True), flush=True)
     return 0 if answer["verdict"] == a.expect else 1
 
@@ -729,6 +730,3 @@ __all__ = ["CONFIG", "COUNT_BITS", "DISK", "DRAM", "EPS", "EXPERIMENTAL", "LIMIT
            "main", "memory_bits",
            "outcome", "params_for", "profile", "ratio", "ratio_of", "run", "segments_of", "serve", "store_of", "summary",
            "timing", "uncertified", "uncounted", "undeclared", "writer_gap"]
-
-if __name__ == "__main__":
-    sys.exit(main())
