@@ -1228,7 +1228,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
          "partition_file": pg.partition_file, "program_file": pg.program_file,
-         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "warden": mr.warden,
+         "registered_file": out / "registered.json", "k_log": st.meta["k_log"], "nbl": nbl, "network_certifier": mr.warden,
          "stage_s": round(time.time() - t0, 1)}
     m["header"] = M.a0.public_header(out, n)
     fv = m["header"]["frame_v3"]
@@ -1291,15 +1291,15 @@ def challenger(a, at: SimpleNamespace, out: Path):
     import a5_coins as AC
 
     root = window_root(at)
-    manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+    manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                         peer=a.peer, key_record=a.challenger_key)
-    coins = SimpleNamespace(AC=AC, draws=draws, root=root, challenger=a.challenger, published=None)
+    coins = SimpleNamespace(AC=AC, turns=turns, root=root, challenger=a.challenger, published=None)
     try:
         yield coins
     finally:
-        draws.skip(0)
+        turns.skip(0)
         finisher.join()
-        coins.published = draws.evidence()
+        coins.published = turns.evidence()
         manager.shutdown()
 
 
@@ -1339,10 +1339,13 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
     return spec, units, counts
 
 
-def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins) -> S.Stream:
+def stream_of(a, spec: S.Spec, units: list, pg: SimpleNamespace, coins, held: dict | None = None) -> S.Stream:
     """The honest round's `service.Stream` on ``coins``: the challenger's own copy of the round's Program is the
-    generator form the round registers (`scan_root`, ``Stream(program=)``), not its templates' mixed population."""
-    return S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, program=pg.program)
+    generator form the round registers (`scan_root`, ``Stream(program=)``), not its templates' mixed population.
+    ``held``: the challenger's key and the verifier's copy of main's history the stream is made with
+    (`a5_coins.held`), which it reads every outcome's coin evidence under."""
+    return S.Stream(spec, units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins, program=pg.program,
+                    **(held or {}))
 
 
 def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.Stream, draw: S.Draw,
@@ -1351,12 +1354,13 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
     """The honest sample's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
     its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
     its window `window_root`) held to the Python's, the audit failing ``coins`` where
-    `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, and the evidence for another window)
+    `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, each with the key and the copy of
+    main's history its stream holds, and the evidence for another window)
     as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
-    the Lean's run refuses at its select (``stream_on``: the round's stream on given coins, `stream_of`). -> (the audit
+    the Lean's run refuses at its select (``stream_on``: the round's stream on given coins and what it holds, `stream_of`). -> (the audit
     record, None where the stream refused or holds the outcome; the negatives; the coins' record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
-    published = coins.draws.evidence()
+    published = coins.turns.evidence()
     ev = AC.evidence(published, segment) if segment is not None else None
 
     def outcome(s: S.Stream, d: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
@@ -1364,10 +1368,10 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         return (late if late is not None else s.outcome(d, verdicts, statement, coins=evidence, **given)), \
             s.records[-1]["audit"]
 
-    family = stream.family(draw)
+    family, ours = stream.family(draw), AC.held(coins.turns)
 
-    def reason(evidence: dict | None, window: str = root) -> str | None:
-        return CC.coins_reason(evidence, window, family, after, read, AC.lms_verify)
+    def reason(evidence: dict | None, window: str = root, held: dict = ours) -> str | None:
+        return CC.coins_reason(held["key"], held["main"], evidence, window, family, after, read, AC.lms_verify)
 
     why = (published.get("error") or "the draw committed no segment") if ev is None else reason(ev)
     try:
@@ -1379,10 +1383,10 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
     neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, coins.draws.pre()), "coins-for-another-window": ev} if ev is not None else {}
-    for name, evidence in bad.items():
+    bad = {**AC.negatives(ev, coins.turns.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
+    for name, (evidence, held) in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
-        s = stream_on(AC.Replay(read, family))
+        s = stream_on(AC.Replay(read, family), held)
         try:
             d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts))
             if d.draw != draw.draw:
@@ -1391,7 +1395,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
             accepted, side = got.accepted, AC.lean_side(audit)
         except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
             accepted, side = None, {"refused": AC._refusal(e)}
-        py = reason(evidence, window)
+        py = reason(evidence, window, held)
         step = ((side or {}).get("step"), (side or {}).get("codes"))
         neg[name] = {"refused": py is not None and accepted is False and step == AC.SELECT_COINS, "accepted": accepted,
                      "python": py, "lean": side}
@@ -1416,7 +1420,7 @@ def warden_roots(members) -> list[dict]:
     which this registration lists none of, and refuses the round."""
     out = {}
     for m in members:
-        for doc in m["warden"].values():
+        for doc in m["network_certifier"].values():
             p = f"rows/{doc['direction']}/{doc['window']}"
             out[p] = {"port": p, "root": doc["root"], "leaves": doc["rows"], "domain": doc["domain"]}
     return [out[p] for p in sorted(out)]
@@ -1502,10 +1506,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         lean_draw = json.loads(line.split(" ", 1)[1])
     else:
         spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
-        rank = coins.AC.RankCoins(coins.draws, 0)
+        rank = coins.AC.RankCoins(coins.turns, 0)
         draw = refused = None
         try:
-            stream = stream_of(a, spec, units, pg, rank)
+            stream = stream_of(a, spec, units, pg, rank, coins.AC.held(coins.turns))
             rank.plan(coins.AC.need(rule, pg.program, pg.query, rec["population"]))
             reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
             rank.commit(bytes.fromhex(reg.digest))
@@ -1521,7 +1525,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                                       "segment": segment, "read": read.hex(), "need": rank.need},
                                                      sort_keys=True))
         if draw is None:
-            coins.draws.skip(0)
+            coins.turns.skip(0)
             log(f"{name}: the stream drew nothing on the challenger's coins: {refused}")
             for f in (out / "registration.json", out / "segment.json"):
                 os.link(f, vdir / f.name)
@@ -1566,8 +1570,9 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": n_inst, "served": sorted(served),
                  "session_roots": session_roots}
-        result, neg, told = coins_outcome(a, coins, lambda c: stream_of(a, spec, units, pg, c), counts, stream, draw,
-                                          rec, want, leaf_layer, read, segment, sessions, verdicts, statement, given)
+        result, neg, told = coins_outcome(a, coins, lambda c, held: stream_of(a, spec, units, pg, c, held), counts,
+                                          stream, draw, rec, want, leaf_layer, read, segment, sessions, verdicts,
+                                          statement, given)
         (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
         log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
             f"{told['coins_reason']}, run {told['run']}, negatives refused "
@@ -1650,8 +1655,8 @@ def per_unit(members: list[dict], statement: dict) -> dict[str, dict]:
 def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, rests: Sequence[str] = ()) -> dict:
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
-    `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0), and the tied values
+    `audit`'s ``audit.json``), one-stage's answer of it at ``delta`` (`audit.answer`: its sample and proved units,
+    every unit sampled, the bound 0, and whether every verdict ran), and the tied values
     its registration's R8 let through when there are any (``rests``, the registration verdict's
     ``rests_on_period_check``), on whose period check the acceptance rests; else a reject naming ``reason``."""
     commitment = RG.digest(reg)
@@ -1660,15 +1665,10 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str, 
                 "verdict": "reject"}
     if record.get("accepted") is not True or RG.digest(record["registration"]) != commitment:
         raise SystemExit("an accepted scan's audit record is for another registration, or not accepted")
-    draw = record["draw"]
-    profile = AU.profile(reg, draw, delta).to_json()
-    profile["delta"] = str(delta)
-    wrong = AU.wrong_units(reg, draw, delta)
-    return {"commitment": commitment, "profile": profile, "protocol": RG.PROTOCOL,
-            "public": {"bound": wrong["bound"], "drawn": sorted(draw["units"]),
-                       "per_template": wrong.get("per_template"), "proved": sorted(record["proved_units"]),
-                       **({"rests_on_period_check": list(rests)} if rests else {})},
-            "reason": None, "verdict": "accept"}
+    answer = AU.answer(record, delta)
+    if rests:
+        answer["public"]["rests_on_period_check"] = list(rests)
+    return answer
 
 
 def _answer(out: Path, name: str, res: dict, delta: Fraction, what: str) -> tuple[dict, dict]:

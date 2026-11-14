@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_coverage_workloads import _LaggedStubEngine, _Out
+from verity_vllm.config import workload_file
 from verity_vllm.engine import arrivals, handle
 from verity_vllm.engine import chunks as CA
 from verity_vllm.pipeline import coverage_workloads as gw
@@ -71,9 +72,7 @@ def test_chunked_schedule_makes_a_request_wait_when_the_budget_is_spent():
 
 
 def test_generated_ck64_cell_is_the_base_cell_with_a_chunking_budget():
-    base, ck = PROF / "workload_cov_b0_b1_c256.json", PROF / "workload_cov_b0_b1_c256_ck64.json"
-    if not ck.exists():
-        pytest.skip("workload_cov_b0_b1_c256_ck64.json not generated in this checkout")
+    base, ck = workload_file(PROF / "workload_cov_b0_b1_c256.json"), workload_file(PROF / "workload_cov_b0_b1_c256_ck64.json")
     a, b = json.loads(base.read_text()), json.loads(ck.read_text())
     key = lambda r: (r["request_id"], r["prompt_token_ids"], r["max_tokens"], r["arrive_step"])  # noqa: E731
     assert [key(r) for r in a["requests"]] == [key(r) for r in b["requests"]], "same request ids, prompts, lengths, arrivals"
@@ -332,7 +331,7 @@ def test_randomized_scheduler_ids_are_mapped_back_to_the_submitted_ids():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the adapter wiring (needs torch + vllm importable: runs in the pod's venv-cu129, skipped on the laptop)
+# the adapter wiring (needs torch and vllm importable; skipped where either is absent)
 # ---------------------------------------------------------------------------------------------------------
 
 

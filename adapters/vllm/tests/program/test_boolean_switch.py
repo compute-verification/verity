@@ -6,7 +6,9 @@
 * `lift` re-emits a derived function's Calls on bits, every word run mapped to the bits it occupies (affine, strided, explicit,
   concatenated and `PartLog`-cut operands, a record of mixed widths), and computes the word function's outputs (bit-sliced
   evaluation of the lift against the plain-integer reference of the word function);
-* a Definition with no Boolean version is refused by name, at `lift` and at derive;
+* a Definition with no Boolean version is refused by name, at `lift` and at derive, and so is a named version (`family`) that
+  does not name the word, where a reader of a Program asks for the version that Program names and not the newest (a Boolean
+  primitive is its own version under its own family only);
 * `purity` counts the not-Boolean Definitions a Program reaches: zero for the lift, every one for the word Program;
 * the default target derives on words: `ir` is absent from its serialisation, so no profile digest moves.
 """
@@ -18,6 +20,9 @@ from verity.circuits import boolean as BL
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.evaluation import evaluate, evaluate_words
+from verity.circuits.ops import fp32 as W
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import prims as MP
 from verity.circuits.program import Program
 from verity.circuits.refs import (
     Affine,
@@ -31,9 +36,6 @@ from verity.circuits.refs import (
 from verity.circuits.types import Array, RecordType, Value
 from verity.circuits.types import Tuple as TupleT
 from verity.definitions import boolean as BB
-from verity.circuits.ops import fp32 as W
-from verity.circuits.ops import gemm as G
-from verity.circuits.ops import prims as MP
 from verity.definitions.replay import replayer
 
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET, TargetProfile
@@ -119,6 +121,29 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     with pytest.raises(BB.NoBooleanVersion, match=r"Twice_v2's ADD: no Boolean version of LonelyWord_v1") as e:
         BB.boolean_version(bind(word, N=4))
     assert list(e.value.missing) == ["Twice_v1{N=4}"]
+
+
+def test_a_reader_of_a_program_takes_the_version_it_names_and_not_the_newest():
+    """`MoeSum_v1` is the word of two registered Boolean Definitions: the newest is its Boolean version, ``family`` takes the
+    other, and a family that does not name the word is refused by name.  The two answers are kept apart."""
+    from verity.definitions.registry import moe as M
+
+    w = bind(M.MoeSum, TOPK=2, H=8)
+    assert descriptor_id(BB.boolean_version(w)) == "MoeSum_v3{TOPK=2,H=8}"
+    assert descriptor_id(BB.boolean_version(w, family="MoeSum_v2")) == "MoeSum_v2{TOPK=2,H=8}"
+    assert descriptor_id(BB.boolean_version(w)) == "MoeSum_v3{TOPK=2,H=8}" and BB.boolean_version(w, family="MoeSum_v3") is BB.boolean_version(w)
+    with pytest.raises(BB.NoBooleanVersion, match=r"no Boolean version of MoeSum_v1: MoeSum_v1\{TOPK=2,H=8\}: no registered MoeSum_v4 names it"):
+        BB.boolean_version(w, family="MoeSum_v4")
+
+
+def test_a_boolean_primitive_is_its_own_version_under_its_own_family_only():
+    """A Boolean primitive is its own Boolean version, and ``family`` is honoured there too: its own family returns it, and
+    another is refused by name."""
+    assert BB.boolean_version(BL.AND) is BL.AND and BB.boolean_version(BL.AND, family="And2_v1") is BL.AND
+    with pytest.raises(BB.NoBooleanVersion, match="no Boolean version of And2_v1: And2_v1: a Boolean primitive is its own Boolean "
+                                                  "version, and it is no Xor2_v1"):
+        BB.boolean_version(BL.AND, family="Xor2_v1")
+    assert BB.boolean_version(BL.AND) is BL.AND
 
 
 @pytest.mark.slow

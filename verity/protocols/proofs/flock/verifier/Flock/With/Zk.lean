@@ -1,12 +1,13 @@
-/-
-The `--zk` verifier (`Flock.Zk`) over the hash oracle (`Flock.With.Hashes`): `Zk.verifyWithM` is `Flock.Zk.verify` with
-every hash call the oracle's, the inner proof's `τ` commitment and its pads' Merkle paths included, and `Zk.verifyWith h`
-runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text.
--/
 module
 
 public import Flock.With.Verify
 public import Flock.Zk
+
+/-!
+The `--zk` verifier (`Flock.Zk`) over the hash oracle (`Flock.With.Hashes`): `Zk.verifyWithM` is `Flock.Zk.verify` with
+every hash call the oracle's, the inner proof's `τ` commitment and its pads' Merkle paths included, and `Zk.verifyWith h`
+runs it in `V` with SHA-512 replaced by `h`. The copies keep the originals' text.
+-/
 
 @[expose] public section
 

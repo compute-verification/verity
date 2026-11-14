@@ -5,7 +5,7 @@
 `GemmF32Out_v1`), and each model's lm_head shard and indexer projection (``F.linear``, core's `Gemm_v2`), at their TP8 shapes
 (`MODELS`) at vLLM's default cuBLAS configuration, with the former split-K-off route kept as a named comparison variant.
 
-One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`properties.record`),
+One GPU process writes `<out>/glm53_bf16_gemm_capture.json`, the property record `glm53_bf16_gemm_capture` (`records.property_record`),
 and prints one line per case and then `GLM53-BF16-GEMM GO` or `NO-GO` with each model's verdict.  `ok` (GO) = every check below,
 for every model run.  The device gate runs first and nothing else runs when it fails (exit 3).  A case that raises records its
 error and fails the verdict without stopping the others.
@@ -120,7 +120,7 @@ from verity.definitions.registry import ll_bf16 as LL
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-bf16-gemm-capture/v6"
 RECORD = "glm53_bf16_gemm_capture.json"
@@ -258,7 +258,10 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
 
     Random k16-leading values separate contiguous from strided partitions.  Row 0 plants split partials around 2^25 so serial
     forward reduction leaves +1 while reverse (and, from four splits, tree) loses it.  Row 1 makes the first partial 2^16 + 1
-    and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.
+    and the second -2^16, so rounding partials to bf16 loses the final +1 under either output type.  Where the random rows
+    leave the strided partition's words the contiguous one's (the bf16 rounding of a long row can hide every difference), row 2
+    plants 2^25 in block 0, -2^25 in block 1 and +1 in block `splits`: a contiguous first chunk cancels the pair and keeps the
+    +1, while the round-robin partition adds the +1 to block 0's 2^25, which absorbs it.
     """
     from verity.definitions.registry import bf16_gemm_check as BC
 
@@ -281,6 +284,10 @@ def splitk_probe_words(K: int, splits: int, output: str, N: int = 32, seed: int 
     w[1, starts[0] + 1] = 0x3F80
     w[1, starts[1]] = 0xC780
     models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
+    if np.array_equal(models[BC.CUBLAS_SPLITK_HYPOTHESIS], models["strided-f32-forward"]) and K > 16 * splits:
+        w[2] = 0
+        w[2, [0, 16, 16 * splits]] = [0x4C00, 0xCC00, 0x3F80]
+        models = BC.cublas_splitk_hypotheses(x, w, splits, out=output)
     candidate = models[BC.CUBLAS_SPLITK_HYPOTHESIS]
     differ = {name: int(np.count_nonzero(candidate != words)) for name, words in models.items()}
     if any(v == 0 for name, v in differ.items() if name != BC.CUBLAS_SPLITK_HYPOTHESIS):
@@ -726,6 +733,8 @@ def scan_ops(weights: Weights, gates: dict[str, Any], model: str, phase: str, na
             buf = torch.empty(top, NHL * V_HEAD, device="cuda", dtype=torch.bfloat16)
             out_full = buf.view(top, NHL, V_HEAD).transpose(0, 1)
             run = lambda M: torch.bmm(a[:, :M], b, out=out_full[:, :M])            # noqa: E731
+    xw: np.ndarray | None
+    ww: np.ndarray | None
     if phase != "bmm":
         # x row 0 all ones and crafted boundary rows atop W: the split count reads out of the words at either output rounding
         probe = BC.splitk_count_probe(w.shape[1], max_rows=min(w.shape[0], SCAN_FIT_COLS))
@@ -1375,7 +1384,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                       f"classes={[(c['split'], c['m0']) for c in rec['classes']]} sweep={rec['sweep']} ok={rec['ok']}", flush=True)
             doc["expected"] = [case_key(*c) for c in todo]
         for i, (model, phase, name, M) in enumerate(todo):
-            key = case_key(model, phase, name, M)
+            key: str | tuple[Any, ...] = case_key(model, phase, name, M)
             try:
                 launch_rec, job = launch(work, weights, gates, model, phase, name, M, 7000 + i, a.served_default,
                                          scan_split.get((model, phase, name, M)))

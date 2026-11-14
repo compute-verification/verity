@@ -14,7 +14,8 @@ verity bench certifier_term --scope world --period year  only those rows (each f
 verity bench certifier_term --requests census            the census's request in place of the sampling plan's
 verity bench certifier_term --out DIR                    also its result, for DIR: the amounts of the term of record's row
 verity bench certifier_term --out DIR --registration F   with its capacity and verified, read from the registration log F
-verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR   the result of record (The result, below)
+verity bench certifier_term --response-ids 1024 --out DIR   the result of record (The result, below)
+verity bench certifier_term --scan-delta D               each execution phase's scan at δ = D, in place of the default
 verity bench certifier_term --help                       every parameter and its default
 ```
 
@@ -32,7 +33,7 @@ under the label: the row's own `with_set_time_card` is the label, where every ot
 print the row's name with the label.
 
 The card is an input of the document, `set_time_card`, the one input marked `simulated`. Its source is what a
-figure under the label rests on, a clause of `trusted-host`: the network certifier's card releases each bucket at
+figure under the label rests on, a clause of `trusted-device`: the network certifier's card releases each bucket at
 the tick its record names, whatever the host and the server send it. The clause holds only of a calibrated hardware
 card; no such card is deployed, and the software pacer that stands in for it does not meet it.
 
@@ -42,11 +43,12 @@ With `--out DIR` the runner also writes its result, through the harness kit's wr
 and through nothing else. The kit says where the file is, `DIR/result.json` outside a research run
 (`benchmarks/harness/README.md`). The result holds the amounts every resource's benchmark reports, for the row the
 term of record is read from, the `scan` row at D_j = 2, at each scope and monitoring period the command prints. What
-it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
+it prints doesn't change. Every measurement is the model's, and its mark (`modeled`) and every name but the metric's
+say so; none is computed from a run's K.
 
-- `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
-  Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
-  scan's over the world's year, whichever rows the command prints.
+- `network-accounting/certifier-term`, the metric's id: the term of record, the document's `value`, in GB, against
+  the document's target. Its verdict, `within target` or `over target`, is the document's multiple of the target in
+  words. Its row is the scan's over the world's year, whichever rows the command prints.
 - `certifier_term/modeled/simulated/metric`: the card's figure, the same row's term at D_j = 1, which the document
   gives as `with_set_time_card`, in GB, against the same target. It is no term of record. Its name says `simulated`,
   the card's mark, and its `inputs` open with the row it is of and the card as the document states it, whose source
@@ -56,7 +58,8 @@ it prints doesn't change. Every measurement is the model's and its name says so;
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
   the period, the scope's machines × a registered uplink's `beta` × the period's ticks. `beta` is bits a tick each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
-  registration log, `--registration FILE` (`verity.hardware.registration`'s committed log): the boundary link of its
+  registration log, `--registration FILE`
+  (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the boundary link of its
   one host that a network certifier splits. The log is read as given, and one that registers anything but the
   model's machine, one host behind one network certifier, is refused. Every machine of the scope is taken as
   registered like that one, which is the model's statement and no registration's. With no `--registration` the
@@ -65,33 +68,42 @@ it prints doesn't change. Every measurement is the model's and its name says so;
 - `certifier_term/modeled/<scope>/<period>/verified`: capacity less free, in bits, where both have a value. It
   isn't clamped, so it is negative where the term is more than the links carry.
 - `certifier_term/modeled/<scope>/<period>/error`: the row's ε, a probability, which the calculator's document holds
-  as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (`--scan-delta`).
-
-A row whose error is 1 or more has no bound at its period, since a union bound of 1 bounds nothing. Its `free` and
-`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so are
-`metric` and the card's figure where the row is the term of record's. Its `error` is written with its value, and its
-`capacity`, which no error enters. What the command prints is the calculator's still, those rows' terms among it.
+  as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (The scans' δ,
+  below).
 
 A measurement's `inputs` name what it was computed from: its row, the document's inputs with their values, marks and
 sources, the registration read, and the measurements it is a difference of. Every one names the class the term is at,
 the most ids a response holds, and the scan's δ its error is at, as the document states them: terms at two classes
-don't compare, and neither do errors at two δ. A δ the command gives is named as given and assumed, since no scan
-has run at it.
+don't compare, and neither do errors at two δ.
 
-The command of record passes its class and its scan's δ, whatever the calculator's defaults are: `--response-ids 1024`
-and `--scan-delta D`, and the result's `inputs` name both. `D` is the δ at which the world's year has an error of
-2^-20, so that every row is bounded: 2^-20 divided by the world year's execution phases, which the command's own
-document counts (the `scan` row's `phases`). It is computed from them each time and never copied, and `--scan-delta`
-takes a fraction, so it holds `D` exactly. No term depends on the scan's δ: only the errors move with it.
+The command of record passes its class, whatever the calculator's default is, and no δ:
 
 ```text
-verity bench certifier_term --json --response-ids 1024 --scope world --period year |
-    python3 -c '
-import fractions, json, sys
-phases = next(r["phases"] for r in json.load(sys.stdin)["rows"] if r["row"] == "scan")
-print(fractions.Fraction(1, 2 ** 20) / fractions.Fraction(phases))'
-verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR
+verity bench certifier_term --response-ids 1024 --out DIR
 ```
+
+### The scans' δ
+
+A row's ε is its execution phases' scans' δ summed, a union bound, so a δ that suits one execution phase bounds
+nothing over the world's year. With no `--scan-delta`, each execution phase's scan is at the δ at which the row
+that pools the most execution phases, the largest scope's longest period, fails with at most 2^-20 over its
+monitoring period: that error divided by the row's execution phases. The calculator finds that row and counts its
+execution phases from its inputs each time, so neither the row nor the δ is typed in, and both follow the inputs:
+with today's it is the world's year. It is one δ for every row. That row's ε is then 2^-20 and every other row's is
+less, in proportion to its execution phases: a datacenter's rows are stated at a δ stricter than they need, and two
+rows' errors compare.
+
+Every row of the document states the δ and the error it is taken from (`scan_delta`, `eps_target`) beside its `eps`,
+and the document's `scan` says where the δ is from: whether it is given, the error, and the row whose execution
+phases it is spread over. The δ is the input `scan_delta`, marked assumed whoever chose it, since no scan has run at
+it. No term depends on it: only the errors move with it.
+
+`--scan-delta D` gives another δ, as a fraction or a decimal. No error is then set (`eps_target` is null), a row's ε
+is what `D` sums to, and a row whose ε is 1 or more has no bound at its period, since a union bound of 1 bounds
+nothing. In the result its `free` and `verified` are written with no value and the reason, `no bound at this period`,
+in their `inputs`, and so are the metric and the card's figure where the row is the term of record's. Its `error` is
+written with its value, and its `capacity`, which no error enters. What the command prints is the calculator's
+still, those rows' terms among it.
 
 The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
 the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
@@ -107,7 +119,11 @@ and each row says where it stands:
 
 - `scan` (on main): the rows form, the scan on the network certifier's own run, as the check charges it today. A
   connection is charged for its schedule and again for its fail cell, one connection a request, so these two terms
-  are counted by request. The jitter is counted by link, for each of its execution phases.
+  are counted by request. The jitter is counted by link, for each of its execution phases. Its accept is run, not
+  proved, whatever its bound and its δ: it rests on verdicts the scan's driver hands the compiled record check, and
+  nothing compiled ties them to the sessions' runs. So the row carries the mark `run, not proved`, the exfiltration
+  command's mark of that name, in its legend line and in each of its rows of the document (`mark`; no other row
+  carries one).
 - `N2` (on main): the clock form. The schedules are counted by link, over its execution phases, whatever it serves.
   Its parameters list no connection, so it has no fail cell. The jitter is the scan's.
 - `lengths`, `timing`, `entries` (each a change to the scan's check) and `all three`: the scan with a response's
@@ -179,8 +195,8 @@ with none given it moves only as the least lanes that serve them do.
   (`--phase-buckets`, `--bucket-s`), and the schedule the count is at (`--lanes`, `--classes`, `--delay`,
   `--ingress-buckets`).
 - **The scopes**: the compute each row covers, which is all its scope serves: machines, GPU-seconds, requests and
-  execution phases, and ε, the scan's execution phases' δ summed (`--scan-delta`). ε is a union bound, so at 1 or more
-  it bounds nothing.
+  execution phases, the δ each execution phase's scan is at with the error it is taken from, and ε, those δ summed
+  (The scans' δ, above). ε is a union bound, so at 1 or more it bounds nothing.
 - **request count**: a column of every table, and `request_count` on every row of the document and at its top:
   `plan`, `census` or `given`, the request the row's requests are counted of. One table holds one request count;
   rows of two don't compare.

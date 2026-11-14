@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.TmplFold
+public import Std.Data.HashMap.Basic
+
+/-!
 The lincheck fold of a templated unit, split: `Tmpl.fold`'s sum, with each Definition that the call tree
 reaches on more than one path folded once per class into a table and each placement combining the table, so the fold
 reads each such Definition's description once per lane scale, not once per call path. No verifier path reads it yet.
@@ -22,10 +27,6 @@ Cost: per class of a Definition reached on more than one path, its own entries a
 its table's entries (at most `4^T` chunk pairs under layout `hybrid T`, times 64 slots while explicit) and its bound
 inputs' table entries times its copies.
 -/
-module
-
-public import Flock.TmplFold
-public import Std.Data.HashMap.Basic
 
 @[expose] public section
 

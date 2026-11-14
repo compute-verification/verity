@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """The onsite demo's minutes from its first command to its verdict, read off its two runs' records: the metric
-``vllm/onsite-demo-minutes`` (`benchmarks/metrics.toml`). Standard library only.
+``vllm/onsite-demo-minutes`` (`demos/onsite_served/metrics.toml`). Standard library only.
 
     research run --cwd source -- python3 demos/onsite_served/minutes.py PROVER_RUN AUDITOR_RUN [--runs-dir DIR] [--main REF]
 
 A run of record runs the demo's two commands (README.md, "Running it") each under ``research run``: PROVER_RUN is the
-prover node's, AUDITOR_RUN the auditor host's, whose log (``stdout.log``) holds the period's ``VERDICT`` line. The
+prover node's, AUDITOR_RUN the auditor device's, whose log (``stdout.log``) holds the period's ``VERDICT`` line. The
 minutes run from PROVER_RUN's ``started_utc`` to AUDITOR_RUN's ``ended_utc``. Finding the runs, the served commit (the
 prover node's run's), what is refused and what is written are `demos/vllm/minutes.py`'s, the remote demo's reader,
 whose code this one runs with its own verdict (`verdict`). It also refuses an AUDITOR_RUN whose log holds no
