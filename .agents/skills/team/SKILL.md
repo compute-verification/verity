@@ -77,9 +77,9 @@ fast-forwards `main` to one with no new failure:
   `main` moves only to regenerated records.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate beside them (under `--gate
   check`, every step in shards), judged on the merge gate, where an unexpired allowance of policy.toml at its base
-  covers a failure. On a pass `main` moves to it. Under `--gate verdict` a plain candidate (no Lean, lock, move or
-  landing code) lands on its members' land verdicts and the quick tier; `main`'s whole check follows, and its
-  red reverts the one culprit or, with none, sends plain candidates back to the whole check. A failure its base shares
+  covers a failure. On a pass `main` moves to it. Under `--gate verdict` a plain candidate (no move, nothing in
+  drive.toml's `lowrisk_excludes` or `verdict_excludes`) lands on land verdicts and the quick tier; `main`'s
+  whole check follows; its red reverts the culprit or, with none, sends plain ones to the whole check. A failure its base shares
   blames no PR: @ci and the owners of what fails are rung once. Otherwise the PRs whose change touches what failed are its suspects
   (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks' logs,
   several are bisected, and in the same tick the candidate and those above it are rebuilt without them; a PR held,
