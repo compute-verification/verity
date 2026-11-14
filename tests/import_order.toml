@@ -325,7 +325,6 @@ loaded_by = [
     "verity/hardware/tests/test_cards.py",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
-    "verity/hardware/tests/test_policy.py",
 ]
 
 [[place]]

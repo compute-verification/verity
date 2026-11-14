@@ -13,7 +13,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # over `verity`. The run's variables are read through `verity_config.settings`, and the count's executable and module
 # are named by its Lake package's `lakefile.toml`. The served number is written into the run's result by the harness
 # kit's writer (`benchmarks/harness/verity_bench`: `kit` and its `settings`). The tests check the count's refusal with its Python reference
-# (`nci_reference.py`), which the count's difftest holds the Lean to, so the suite builds no Lake package.
+# (`nci_reference.py`), which the count's difftest holds the Lean to, so the suite builds no Lake package. The class's
+# card and the calculator's H200 servers are read from the card files (`verity.device`).
 inputs = ["benchmarks/rho",
           "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/served_overhead.py",
@@ -26,4 +27,5 @@ inputs = ["benchmarks/rho",
           "benchmarks/census/hardware.json", "benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
           "benchmarks/nci/tiers.py", "benchmarks/nci/slowdown.py",
           "benchmarks/nci/catalog.py", "benchmarks/nci/algorithms.json",
-          "benchmarks/nci/calibrations.json", "tools/config/verity_config"]
+          "benchmarks/nci/calibrations.json", "tools/config/verity_config",
+          "hardware/cards/h200-sxm-141gb.toml", "hardware/cards/dgx-h200.toml"]

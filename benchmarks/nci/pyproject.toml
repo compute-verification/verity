@@ -24,10 +24,13 @@ inputs = [
   "benchmarks/rho/rho/__init__.py",
   "benchmarks/rho/rho/theorem.py",
   # a model's shape is the slowdown calculator's (kappa.py reads its models, imported by path), whose registry reads
-  # core's monitoring periods and per-window delta
+  # core's monitoring periods and per-window delta, and the H200 servers' cards
   "benchmarks/rho/rho/instances.py",
   "benchmarks/rho/rho/params.py",
   "benchmarks/rho/data",
+  "verity/device.py",
+  "hardware/cards/h200-sxm-141gb.toml",
+  "hardware/cards/dgx-h200.toml",
   "verity/__init__.py",
   "verity/errors.py",
   "verity/protocol.py",
