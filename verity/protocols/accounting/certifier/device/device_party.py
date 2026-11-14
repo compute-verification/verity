@@ -115,9 +115,12 @@ class NetworkCertifier:
         return actions
 
     def open_session(self, identity: Identity) -> Opened:
-        """Start the relay on its listener and the publisher on the key (`identity.capabilities["signing-key"]`), and
-        return the run's deployment and load. Seam: the relay listens on a socket the auditor host's relay session
-        holds and binds its own connections, I/O done outside the runtime (`device_needs.HeldSession`)."""
+        """Start the relay on its listener and the publisher on the key (`identity.capabilities["signing-key"]`), sign
+        the run's start, and return the run's deployment and load. The start is the run's base and ordinal in the key's
+        life (`certificate.DeviceState.start`, over a span of windows · window · bucket_ms), certified by
+        `certificate.Issuer.certify_start` under `certificate.start_link`. Seam: the relay listens on a socket the
+        auditor host's relay session holds and binds its own connections, I/O done outside the runtime
+        (`device_needs.HeldSession`)."""
         raise NotImplementedError(f"{GOAL}: open_session, the relay's session on its held listener")
 
     def certify(self, window: int) -> tuple[Kept, ...]:

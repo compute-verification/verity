@@ -20,7 +20,7 @@ from collections import defaultdict
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.device.coin_link import (COIN, COINS, COUNTED, REQUESTS, CoinLink, CoinLinkParams,
                                                        canonical, recut)
 from verity.protocols.accounting.certifier.verifier.grid import Reason

@@ -66,10 +66,16 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_the_period_check_agrees_with_its_mirror(server):
-    """Lean and the mirror agree on every case, and each change of either form reaches its verdict at least once."""
+    """Lean and the mirror agree on every case, and each change of either form reaches its verdict at least once: a
+    change the run's draw leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its
+    draws."""
     SEEN.clear()
     examples = 1200
     stats = D.run(PORT, examples=examples, server=server)
+    for tag in (tag for tag in EXPECT if not any(SEEN[(tag, v)] for v in (ACCEPT, REJECT, UNDECIDED))):
+        case = build(tag, 0)
+        TAGS[D.canonical(case)] = tag
+        D.replay(PORT, case, server)
     print("\n".join(f"{tag:22} {verdict:10} {k}" for (tag, verdict), k in sorted(SEEN.items())))
     missed = [tag for tag, verdict in EXPECT.items() if not SEEN[(tag, verdict)]]
     assert not missed, (missed, SEEN)
@@ -1288,7 +1294,8 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
     every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
     before its cells, which a period that long could never list, by Lean and the mirror alike, and the honest period's
     schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
-    mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
+    mirror's check shows at an empty period whose B is 2^32, with no entries and so no starts to show: no parameters
+    `params` reads reach it."""
     fragment = "rows format: a frame's ordinal and payload length are u32s"
     for n in range(2):
         case = build("rows-honest", n, small=True)
@@ -1301,10 +1308,10 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
         assert reference(broken)["reason"].startswith(f"params: {fragment}"), (n, reference(broken))
         verdict, out = D.replay(PORT, broken, server)
         assert verdict == REJECT and json.loads(out)["reason"].startswith(f"params: {fragment}"), (n, out)
-        empty = dataclasses.replace(p, audits=(), windows=0)
+        empty = dataclasses.replace(p, audits=(), windows=0, entries=())
         for b, refused in ((PC.U32 - 1, False), (PC.U32, True)):
             q = dataclasses.replace(empty, schedule=dataclasses.replace(p.schedule, cell_bytes=b))
-            got = PC.check(q, PC.Commitment([], [], b""), ([], []))
+            got = PC.check(q, PC.Commitment([], [], b""), ([], [], []))
             assert (got[0] == REJECT and got[1].startswith(fragment)) == refused, (n, b, got)
 
 

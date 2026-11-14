@@ -1,7 +1,7 @@
 {
   "rule": "P16 (every CLI command has a caller)",
   "public": {
-    "advice": "benchmarks/network_e2e/e2e.py",
+    "advice": "benchmarks/network_traces/chain_record.py",
     "advice-windows": "benchmarks/one_stage/a5_tp.sh",
     "block-counts": "benchmarks/one_stage/served_verdicts.sh",
     "build": "benchmarks/stacked_share/job.sh",

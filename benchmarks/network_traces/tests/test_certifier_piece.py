@@ -62,6 +62,7 @@ from benchmarks.network_traces import warden_serve as WS  # noqa: E402
 from test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import warden as W  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
@@ -113,7 +114,7 @@ def warden(tmp_path_factory):
             tar.add(run, arcname=RUN)
     cells = [json.loads(x)["registration"] for x in (run / "witness" / "cells.jsonl").read_text().splitlines()]
     registrations = [r for d_ in (Direction.INGRESS, Direction.EGRESS) for r in cells
-                     if (r["link"], r["direction"], r["window"]) == (WC.WS.LINK, d_.value, w)]
+                     if (r["link"], r["direction"], r["window"]) == (RC.LINK, d_.value, w)]
     return {**fetches, "w": w, "records": by[w][:4], "others": [r for x, rs in by.items() if x != w for r in rs],
             "windows": WC.deployment(run)[0]["windows"], "registrations": registrations,
             "deployment": json.loads((run / "out" / "deployment.json").read_text())}
@@ -274,8 +275,8 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
     assert signed["rows"] == [{"link": r["link"], "direction": r["direction"], "window": r["window"],
                                "key_id": r["certificate"]["key"], "digest": r["certificate"]["digest"],
                                "signature": r["certificate"]["signature"]} for r in window["registrations"]]
-    key, session = WC.cs.read_public(warden["deployment"]["key"]), bytes.fromhex(warden["deployment"]["session"])
-    assert all(WC.cs.certificate_from_json(c).verify(key, session) for c in signed["records"] + signed["rows"])
+    key, session = RF.read_public(warden["deployment"]["key"]), bytes.fromhex(warden["deployment"]["session"])
+    assert all(RF.certificate_from_json(c).verify(key, session) for c in signed["records"] + signed["rows"])
     assert {(c["direction"], c["window"]) for c in signed["rows"]} == {(Direction.INGRESS.value, warden["w"]),
                                                                        (Direction.EGRESS.value, warden["w"])}
     log = (piece / "piece.log").read_text()
@@ -691,7 +692,7 @@ def test_network_rows_accepts_the_network_certifiers_records_and_refuses_cells_c
     on real records, which the stand-ins above don't."""
     honest = published(tmp_path / "honest")
     record = WC.own_record(honest)
-    (rec,) = [r for r in WS.read_records(honest, sz.W63.params)[WS.EGRESS] if r.window == 0]
+    (rec,) = [r for r in RC.read_records(honest, sz.W63.params)[RC.EGRESS] if r.window == 0]
     assert [W.read_cell(c, B)[:2] for c in rec.grid[27][:R]] == [(W.DATA, 1)] * (R - 1) + [(W.END, 1)]
     assert [W.read_cell(c, B)[:2] for c in rec.grid[26][:R]] == [(W.PAD, 1)] * R
     assert [W.read_cell(c, B)[1] for c in rec.grid[2] if c is not None] == [1] * R + [2] * R + [3] * R
