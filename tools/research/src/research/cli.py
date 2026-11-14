@@ -251,12 +251,12 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--exclusive", action="store_true", help="with --on: refuse if another research run is live on the machine")
     ap.add_argument("--wait", action="store_true",
                     help="with --on (or --queue): block until the run ends and exit with its rc (else 1; 3 if refused), for at most "
-                         f"{waitcap.WAIT_CAP_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
+                         f"{waitcap.WAIT_LIMIT_S} s with the launch (20 minutes: no tool call blocks longer): then it stops waiting, "
                          f"cancels nothing, names the check-back command (`research status RUN`) and exits {waitcap.STILL_GOING}. "
                          "Without it, run returns once the machine has started the run, so a loop of launches doesn't serialize them")
     ap.add_argument("--wait-every", type=float, default=30.0, metavar="S", help="with --wait: fetch the run's records every S seconds (30)")
     ap.add_argument("--wait-max", type=float, default=None, metavar="S",
-                    help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_CAP_S}; never more than {waitcap.WAIT_CAP_S}")
+                    help=f"with --wait: stop waiting after S seconds instead of {waitcap.WAIT_LIMIT_S}; never more than {waitcap.WAIT_LIMIT_S}")
     ap.add_argument("--mem-gb", type=float, default=None, metavar="N",
                     help="with --on: admit only if the machine's memory cgroup has N GB free after live reservations (/workspace/ramlock), "
                          "and reserve them for the run, which the workload reads as $RESEARCH_RUN_MEM_GB (a reservation sets no cgroup "
@@ -393,9 +393,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     if ns.wait_max is not None:
         try:
             if not ns.wait:
-                raise waitcap.OverCap("--wait-max is for --wait")
+                raise waitcap.OverLimit("--wait-max is for --wait")
             waitcap.max_s(ns.wait_max)
-        except waitcap.OverCap as e:
+        except waitcap.OverLimit as e:
             print(f"research run: {e}", file=sys.stderr)
             return 2
     if ns.mem_limit_gb is not None and not (ns.mem_limit_gb > 0 and ns.lane):
@@ -1553,7 +1553,7 @@ def _moved_to(run_dir: Path) -> Path | None:
         return None
 
 
-def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_CAP_S, fetch=None, sleep=None,
+def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = waitcap.WAIT_LIMIT_S, fetch=None, sleep=None,
                 clock=None, moved=_moved_to) -> int:
     """`research run --on ... --wait`: fetch the run's records every `every_s` seconds until it has ended, and return its rc (1 when
     it ended without one, 3 when the machine refused it). A run that left its line without starting while its late twin may
