@@ -158,15 +158,15 @@ def AcceptsOneRecordEach : Prop :=
 
 /-- Every link-window of the unit is accepted: the evidence fits, the parameters have their digests, every egress
 link-window is `EgressAccepted` and every ingress link-window `IngressAccepted`. -/
-def LinkWindowsAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+def TransferBlocksAccepted (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   EvidenceFits p e ∧ ∃ eg ig, ParamsDigests p eg ig ∧
     (∀ l link, (l, link) ∈ p.egress.toList.zip e.links.toList → ∀ w < p.windows, EgressAccepted p c e eg l link w) ∧
     ∀ l ∈ p.ingress.toList, ∀ w < p.windows, IngressAccepted p c ig l w
 
-/-- **An accepted unit has every link-window accepted** (`LinkWindowsAccepted`). (Its converse, that the check accepts
-such a unit, is completeness: `accepts_of_linkWindowsAccepted`.) -/
-def AcceptsLinkWindows : Prop :=
-  ∀ (p : Params) c e, protocol.Accepts p c e → LinkWindowsAccepted p c e
+/-- **An accepted unit has every link-window accepted** (`TransferBlocksAccepted`). (Its converse, that the check accepts
+such a unit, is completeness: `accepts_of_transferBlocksAccepted`.) -/
+def AcceptsTransferBlocks : Prop :=
+  ∀ (p : Params) c e, protocol.Accepts p c e → TransferBlocksAccepted p c e
 
 /-! ## (3) Undecided -/
 
