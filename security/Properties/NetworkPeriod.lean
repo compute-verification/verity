@@ -292,14 +292,17 @@ def OkEntry (m : String × String × ℕ) (e : Lean.Json) : Prop :=
 /-- What `RowsOkHeld` says of a period its check accepted: in the rows form under a schedule of `T` ticks, of each
 execution phase's scan's registration `reg`: `T` is at least 2; each member of the scan at `T` (`ScanOk.members`) has
 a `roots` entry (`ScanOk.rootsOf`) that is its constant (`OkEntry`); and every `roots` entry whose port ends `/o0`
-(`ScanOk.okPort`) is the constant of a member of the scan at `T`. -/
+(`ScanOk.okPort`) but the start unit's (`ScanOk.START`, `start/o0`) is the constant of a member of the scan at `T`.
+The start unit's `o0` is the state it copies, a row of the scan's state, and no ok bit; no statement here reads its
+entry. -/
 def RowsOkHeldAt (p : Params) (c : Commitment) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json), c.windows[i]? = some reg →
       2 ≤ s.window ∧
       (∀ m ∈ NetworkCheck.ScanOk.members s.window, ∃ e ∈ NetworkCheck.ScanOk.rootsOf reg, OkEntry m e) ∧
       ∀ e ∈ NetworkCheck.ScanOk.rootsOf reg, ∀ q : String, e.getObjValD "port" = .str q →
-        NetworkCheck.ScanOk.okPort q = true → ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
+        NetworkCheck.ScanOk.okPort q = true → q ≠ NetworkCheck.ScanOk.START →
+          ∃ m ∈ NetworkCheck.ScanOk.members s.window, OkEntry m e
 
 /-- `RowsOkHeld` of the period check `chk`: `RowsOkHeldAt` of every period `chk` accepts. -/
 def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
@@ -309,13 +312,17 @@ def RowsOkHeldOf (chk : Params → Commitment → Evidence → Core.Outcome Publ
 /-- **The rows form accepts no execution phase whose scan's ok bits are registered anywhere but at the constants of
 its schedule.** If the check accepts a period in the rows form under a schedule of `T` ticks, then `T ≥ 2` wherever it
 has an execution phase, and each execution phase's scan's registration names, for each member of the scan at `T`
-(`ScanOk.members`: `first`, `ingress-0` at `T ≥ 3`, `last` and `egress-0`), the port `<member>/o0` at the member's
-proof blocks' count, at its `o0` frame domain and at the root of that many ok rows under the public salts
-(`OkEntry`), and names no other port ending `/o0`: every such entry is a member's constant. The domain and the root
-are functions of `T` alone, which the check computes (`ScanOk.consts`), so a registration that names a member's `o0`
-at a root of the prover's choosing, at another count or domain, or under a name no member has, is refused. A member's
-proof blocks' ok words are rows of the tree its statement reads at `o0`; that the statement reads the tree at the root
-the registration names is the registration's check's, which the period check does not read. -/
+(`ScanOk.members`: `ingress-0`, buckets `0 … T − 2`, `last`, bucket `T − 1`, and `egress-0`, the `T` egress buckets),
+the port `<member>/o0` at the member's proof blocks' count, at its `o0` frame domain and at the root of that many ok
+rows under the public salts (`OkEntry`), and names no port ending `/o0` other than a member's constant and the start
+unit's (`ScanOk.START`, `start/o0`). The domain and the root are functions of `T` alone, which the check computes
+(`ScanOk.consts`), so a registration that names a member's `o0` at a root of the prover's choosing, at another count
+or domain, or under a name neither a member nor the start unit has, is refused. A member's proof blocks' ok words are
+rows of the tree its statement reads at `o0`; that the statement reads the tree at the root the registration names is
+the registration's check's, which the period check does not read. The start unit's `o0` is the state it copies, a row
+of the scan's state, and no ok bit, and its entry is at any root, leaves and domain here: `RowsStateTied` holds the
+scan's reads of its state, unit 0's `o0` at leaf 0 (`stateRead`), and no statement here holds the entry `start/o0` to
+that state's root. -/
 def RowsOkHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsOkHeldAt p c
