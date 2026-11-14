@@ -694,7 +694,7 @@ def audit_negatives(result: dict, sampling_design: dict, delta: float, session_r
                                                                    for k, v in vs.items()}),
            "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),
            "session-root-not-registered": decide(session_roots={**session_roots, port: "00" * 64})}
-    opened = audit.session_registered(vs, base["registration"])
+    opened = audit.session_registered(vs, base["docket"])
     if opened:
         value = next(iter(opened))
         neg["registered-read-opened-against-another-root"] = decide(verdicts={
