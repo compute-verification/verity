@@ -64,10 +64,12 @@ open FlockSoundness.Discharge.Composed (outJ repJ)
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-- **Flock ZK's level 0 is M1's**: at `m ∈ [25, 35]`, level 0's `d` is M1's level-0 `logLen`. -/
-theorem zkLevel0_d_eq : ∀ m : Fin 11, (Claims.Flock.zkLevel0 (m.val + 25)).d =
-    ((Accounting.m1Schedule (m.val + 25)).levels.headD default).logLen := by
-  decide +kernel
+theorem zkLevel0_d_eq : ∀ m : Fin 11, (Claims.Flock.zkLevel0 wideLeaf (m.val + 25)).d =
+    ((Accounting.m1Schedule wideLeaf (m.val + 25)).levels.headD default).logLen := by
+  cases wideLeaf <;> decide +kernel
 
 namespace Gen
 
@@ -79,7 +81,7 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {j : ℕ} (hj : j < (tables true x).length) :
@@ -93,7 +95,7 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
   obtain ⟨h25, h35, -⟩ := zk_scopeJ hs hin hset hj
   rw [zkTabs_of_lt h0 L hz hk hlay hj, (zkTab_m1 (L j hj) (hz j hj) (hk j hj) spec (hlay j hj)).1,
     Claims.Flock.lvOf_zero]
-  have he := zkLevel0_d_eq ⟨sts[j].m - 25, by omega⟩
+  have he := zkLevel0_d_eq (wideLeaf := sts[j].wideLeaf) ⟨sts[j].m - 25, by omega⟩
   simp only [Nat.sub_add_cancel h25] at he
   unfold wordLenJ
   rw [ht]
@@ -107,7 +109,7 @@ theorem wordLenJ_zkTabs {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
     (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     {j : ℕ} (hj : j < (tables true x).length) :
@@ -125,7 +127,7 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
@@ -216,7 +218,7 @@ def ZkXferWJ (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s)
     (ins : Ins) (spec : SessionSpec) (sts : Array Stmt) (hset : setupOf true x = some (ins, spec, sts))
     (h0 : 0 < sts.size) (L : (j : ℕ) → (h : j < sts.size) → Layout sts[j])
-    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].m = .ok (Claims.Flock.zkSched sts[j].m))
+    (hz : ∀ j (h : j < sts.size), Zk.schedule sts[j].wideLeaf sts[j].m = .ok (Claims.Flock.zkSched sts[j].wideLeaf sts[j].m))
     (hk : ∀ j (h : j < sts.size), sts[j].c.kLog ≤ 27)
     (hlay : ∀ j (h : j < sts.size), ((L j h).model (Refine.regionsOf sts[j])).LinkLayout PT_LOCAL spec.mPts)
     (d : Lean.Json) (hd : ins.read.draw = some d) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),

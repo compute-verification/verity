@@ -215,8 +215,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   registration's circuit, and a session of the lane that holds no coin of the family is refused unless a period
   that commits another circuit lists it: a root committed under this registration and never sampled refuses the
   period. It publishes each window with the registration audited and each session of the lane that is another
-  registration's, by that registration's circuit and its session alone, of which it holds nothing. Nothing calls it
-  yet but its difftest, and it has no executable.
+  registration's, by that registration's circuit and its session alone, of which it holds nothing. Its executable
+  is `spot-monitoring-period` (`id`, `check PARAMS COMMITMENT EVIDENCE [BLOB ...]`, `serve`); nothing calls it yet
+  but its difftest. What its accept means is stated in `security/Properties/Spot/MonitoringPeriod.lean`, and whose ledger it
+  reads in `security/Properties/Spot/MonitoringPeriodLedger.lean`.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor device its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`, the coins' path).
