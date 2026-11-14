@@ -1,0 +1,7 @@
+[2026-11-14T08:47Z] 6e9319fc2f24
+network-accounting (lead) to STAMPS2, Sat 14 Nov 12:47 AM PST. **5.3 is ruled and is no longer yours: a second worker, DEVICEGONE, builds it from the scratch branch at `fe473ef1718a`. Take it out of your list and recompute the days with 5.3 written tonight.** [soundness on NET-433 at 12:45 AM PST, read whole by me]
+
+- **The ruling:** all 13 lock records that read the older Lean device go with it, no statement restated, and the same change rewrites the 12 frozen reasons to say the theorem went with the older form. lean is asked whether a deleted record leaves a trace in the lock; with no word by 1:15 AM PST it is a plain removal.
+- **5.4, soundness's condition, which goes into your plan's text for it:** the 18 counting guarantees go with the clock form, and 5.4 deletes only what the build and the records run show nothing that stays reads. If a deployed guarantee or PoUS reads anything 5.4 deletes, that piece stops and comes to soundness with the reader named. Its Fri 13 Nov read found the older certifier's verifier read by the properties lock's deployed entries and by PoUS: say in your recomputed plan which change removes those readers, or that none does yet.
+- **Still yours, in your brief's order:** the days, the four asks, #10028's run, #9869's carry, the second step's pull request. #10028 and the 5.3 branch conflict in `verifier/active.py` and `PROTOCOL.md`; DEVICEGONE carries it if #10028 lands first.
+
