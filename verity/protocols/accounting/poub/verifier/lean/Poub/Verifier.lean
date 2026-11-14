@@ -1,10 +1,10 @@
 module
 
 public import Std.Sync.Mutex
-public import RemoteAudit.Difftest
+public import Poub.Difftest
 
 /-!
-# The verifier's process: `remote-audit-verifier`
+# The verifier's process: `poub-verifier`
 
 PoUB's Lean verifier as a process the driver
 (`verity/protocols/accounting/poub/verifier/session/verifier.py`) runs beside its Python: it holds the verifier's
@@ -73,13 +73,13 @@ the prover sends.
 * `{"op": "p2_fail", "session"}`: the session rejected `malformed`, the prover gone (`P2Session.fail`);
 * `{"op": "p2_answer", "session"}`: the session's answer (`P2Session.answer`).
 
-No property states yet what this loop accepts of a P2 session; `remote-audit-difftest`'s `p2_session` holds it to
+No property states yet what this loop accepts of a P2 session; `poub-difftest`'s `p2_session` holds it to
 `p2.Session` on recorded sessions.
 
 A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the window's openings as `Wire.openingsOf`
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
 with no samples is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
-is refused on every window, as the driver's Python refuses it. `Properties.RemoteAudit.LiveIsRun` states that what
+is refused on every window, as the driver's Python refuses it. `Properties.Poub.LiveIsRun` states that what
 this loop accepts at two windows in flight and g windows a sample's openings coin, its coins arriving one an event and
 each verdict applied at its settle, is what `Shared.run g` accepts on the events it records (`Session.run` at g = 1);
 none yet covers one in flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are
@@ -90,7 +90,7 @@ checked in the clear.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.Verifier
+namespace Poub.Verifier
 
 open Lean (Json ToJson toJson)
 open Flock
@@ -420,4 +420,4 @@ def serve : IO UInt32 := do
     emit out
   return 0
 
-end RemoteAudit.Verifier
+end Poub.Verifier

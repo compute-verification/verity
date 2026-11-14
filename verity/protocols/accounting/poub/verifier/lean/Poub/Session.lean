@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Window
+public import Poub.Window
 
 /-!
 # A session's bookkeeping: `audit.py`'s `Session`
@@ -32,7 +32,7 @@ is `refused`. After a rejection every later call but `start` is refused, as `_li
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.Session
+namespace Poub.Session
 
 def STEP_LIMIT : Nat := 2 ^ 64
 
@@ -391,4 +391,4 @@ def State.summary (s : State) : Option Summary :=
         appends := s.head
         windows := (Array.range s.windows.size).map window }
 
-end RemoteAudit.Session
+end Poub.Session

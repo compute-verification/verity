@@ -1,5 +1,5 @@
-"""PoUB's window decided from a span (`RemoteAudit.Span`, `Session.verifySpan`), at 16 sketch rows on a p512 store whose
-passes read it whole (the identity plan), against `remote-audit-difftest`.
+"""PoUB's window decided from a span (`Poub.Span`, `Session.verifySpan`), at 16 sketch rows on a p512 store whose
+passes read it whole (the identity plan), against `poub-difftest`.
 
 The verifier's own copy of each sample's two public rows (`span_public`) is held to the Python the prover commits them
 by (`span.public_rows`, `block_check.opening_public_v2`'s), at an unmasked and a masked codec. The rest is the Lean's

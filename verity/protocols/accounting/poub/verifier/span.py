@@ -1,5 +1,5 @@
 """What a window's span hands the verifier in place of its openings: the proof system's accepted runs of PoUB's opening unit
-(`BlockOpeningCheck_v2`, one unit a sample), which the Lean decides (`RemoteAudit.Span.checkSpan`, through
+(`BlockOpeningCheck_v2`, one unit a sample), which the Lean decides (`Poub.Span.checkSpan`, through
 `Session.verifySpan`). This module decides nothing: it computes no verdict and holds no row to a commitment.
 
 A span is one or more statements of the sampled proof system's one-stage audit (`verity/sampled-proofs/one-stage/v2`),
@@ -11,7 +11,7 @@ bits (`auditor`, `layout`).
 
 `public_rows` is the unit's two public rows for a sample as the verifier derives them (`block_check.opening_public_v2`'s,
 for a registered block of a pass whose plan is the identity), which the prover commits and the Lean derives again for
-itself (`RemoteAudit.Span.publicWords`, `signWords`); the difftest holds the two to each other."""
+itself (`Poub.Span.publicWords`, `signWords`); the difftest holds the two to each other."""
 from __future__ import annotations
 
 import hashlib

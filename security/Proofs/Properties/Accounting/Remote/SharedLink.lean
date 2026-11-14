@@ -28,9 +28,9 @@ passed with, `acceptedSamplesOpenable`.
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit.Shared
+namespace Properties.Poub.Shared
 
 /-! ## Accepts -/
 
@@ -421,7 +421,7 @@ def SamplesIn (ws : Array Win) : Prop :=
 theorem samplesIn_modify {ws : Array Win} (u : Nat) (f : Win → Win) (hf : ∀ w, (f w).drawn = w.drawn)
     (hp : ∀ w, (f w).plans = w.plans) (h : SamplesIn ws) : SamplesIn (ws.modify u f) := by
   intro v d hd k hk
-  rw [Properties.RemoteAudit.getElem!_modify'] at hd ⊢
+  rw [Properties.Poub.getElem!_modify'] at hd ⊢
   by_cases hc : u = v ∧ v < ws.size
   · rw [ite_eq_left hc] at hd ⊢
     rw [hf] at hd
@@ -435,7 +435,7 @@ theorem samplesIn_sample {ws : Array Win} (u : Nat) (d : Array (Nat × Nat)) (f 
     (hd : ∀ k (hk : k < d.size), d[k].1 < ws[u]!.plans.size ∧ d[k].2 < ws[u]!.plans[d[k].1]!.length) :
     SamplesIn (ws.modify u f) := by
   intro v d' hd' k hk
-  rw [Properties.RemoteAudit.getElem!_modify'] at hd' ⊢
+  rw [Properties.Poub.getElem!_modify'] at hd' ⊢
   by_cases hc : u = v ∧ v < ws.size
   · rw [ite_eq_left hc] at hd' ⊢
     rw [hf] at hd'
@@ -447,7 +447,7 @@ theorem samplesIn_sample {ws : Array Win} (u : Nat) (d : Array (Nat × Nat)) (f 
 
 theorem plans_modify (ws : Array Win) (u v : Nat) (f : Win → Win) (hp : ∀ w, (f w).plans = w.plans) :
     (ws.modify u f)[v]!.plans = ws[v]!.plans := by
-  rw [Properties.RemoteAudit.getElem!_modify']
+  rw [Properties.Poub.getElem!_modify']
   split
   · exact hp _
   · rfl
@@ -466,7 +466,7 @@ theorem close_samplesIn {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : S
     | skip
   all_goals
     have hdr := ‹receiptSample _ _ _ _ _ = some _›
-    obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hdr
+    obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdr
     refine samplesIn_sample _ _ _ (fun _ => rfl) (fun _ => rfl)
       (samplesIn_modify _ _ (fun _ => rfl) (fun _ => rfl) h) fun k hk => ?_
     obtain ⟨hi, hp, -⟩ := hrange k hk
@@ -749,7 +749,7 @@ theorem samplesIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpr
   subst hshu
   obtain ⟨m, hm, h1, h2, hx⟩ := shareOf_spec (Array.getElem_mem hk)
   rw [hx]
-  obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hdraws
+  obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdraws
   obtain ⟨-, hp, -⟩ := hrange m hm
   refine ⟨by omega, ?_⟩
   have hu : u / g * g + (u - u / g * g) = u := by omega
@@ -994,7 +994,7 @@ theorem runSamplesRecords : RunSamplesRecords := by
     obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hc
     have hW : c < s.params.windows := by rw [hp]; exact hcW
     have hdraws := hL c d hd
-    obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hdraws
+    obtain ⟨_, _, -, -, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdraws
     have hall : shareOf d 0 s.windows[c]!.plans.size = d :=
       shareOf_all d _ fun k hk => by simpa using (hrange k hk).1
     refine link_out hInv hp hr hco hdig hA c d (by rw [sampleLengths_one hW]; exact hdraws) ?_
@@ -1033,4 +1033,4 @@ theorem acceptedSamplesOpenable : AcceptedSamplesOpenable := by
   rw [dite_eq_left hk']
   exact Classical.choose_spec (hex k hk')
 
-end Properties.RemoteAudit.Shared
+end Properties.Poub.Shared

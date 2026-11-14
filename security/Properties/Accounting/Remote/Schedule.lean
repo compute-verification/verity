@@ -1,13 +1,13 @@
 module
 
 public import Definitions.Accounting.Schedule
-public import RemoteAudit.Schedule
+public import Poub.Schedule
 public import Properties.Accounting.Remote
 
 /-!
-# The schedule check fixes each credited pass's plan (`RemoteAudit.Schedule`)
+# The schedule check fixes each credited pass's plan (`Poub.Schedule`)
 
-`RemoteAudit.Schedule.check` (`verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Schedule.lean`, which
+`Poub.Schedule.check` (`verity/protocols/accounting/poub/verifier/lean/Poub/Schedule.lean`, which
 `schedule.py` is held to by the difftest, and without whose acceptance `audit.ledger` credits nothing after the seed)
 holds a session's passes and appends to the schedule the prover publishes, at the cap on the schedule's bits the
 prover committed before the session's first coin, and returns the schedule's bits.
@@ -41,9 +41,9 @@ would take (`planBlocks_nontrivial`, `codeLayoutTiles_nontrivial`, `opensAtPosit
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- Whenever the schedule check accepts schedule `sc` over `blocks` registered blocks at cap `cap` for passes
 `(step, runs)` and appends `(first, count)`, returning `b`: `sc` is well formed, the passes are at its steps in order,
@@ -150,4 +150,4 @@ def OpensAtPosition : Prop :=
         (appendDomain reg.digest a.first a.count).verifyOpening a.root (appendDomain reg.digest a.first a.count).count
           j (hidden payload o.payloadSalt) SCHEMA o.payloadPath = true)
 
-end Properties.RemoteAudit
+end Properties.Poub

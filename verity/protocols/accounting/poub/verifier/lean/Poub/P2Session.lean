@@ -1,9 +1,9 @@
 module
 
 public import Flock.Canon
-public import RemoteAudit.P2
-public import RemoteAudit.Pooled
-public import RemoteAudit.Session
+public import Poub.P2
+public import Poub.Pooled
+public import Poub.Session
 
 /-!
 # A session over a P2 store, of record: `p2_parties.py`
@@ -35,7 +35,7 @@ unit's four blocks, on the registered vk root.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.P2Session
+namespace Poub.P2Session
 
 open Lean (Json ToJson toJson)
 open Flock
@@ -180,7 +180,7 @@ def paramsOf (held : Held) (a : Auditor) (line : ByteArray) : V Session.Params :
 
 /-- The registration `Session` keeps a P2 session's books on: the store's U units as its blocks, which is all of it
 `Session` reads here (the session's digest is the P2 registration's, `init`, and an opening is checked by
-`checkOpenings`, never `RemoteAudit.checkWindow`). -/
+`checkOpenings`, never `Poub.checkWindow`). -/
 def standIn (r : P2.Registration) : Registration :=
   let codec : Codec.Codec := ⟨Codec.P512, 2, false⟩
   { node := r.node, blocks := r.units, payloadRoot := zeros DIGEST_BYTES, codecSeed := zeros Codec.SEED_BYTES, codec,
@@ -331,4 +331,4 @@ def answer (held : Held) (s : Session.State) : Json :=
       ("span_ns", toJson c.spanNs),
       ("credited_bytes_per_s", if c.spanNs > 0 then toJson (c.qBytes * 10 ^ 9 / c.spanNs) else .null)])
 
-end RemoteAudit.P2Session
+end Poub.P2Session

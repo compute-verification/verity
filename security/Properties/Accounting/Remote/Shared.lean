@@ -1,13 +1,13 @@
 module
 
 public import Properties.Accounting.Remote.Coins
-public import RemoteAudit.Shared
+public import Poub.Shared
 
 /-!
-# One openings coin per sample (`RemoteAudit.Shared`)
+# One openings coin per sample (`Poub.Shared`)
 
-`Properties.RemoteAudit.Coins` and the sample's statement in `Properties.Accounting.Remote`, for a session that samples its
-openings `g` windows at a time (`audit.Params.groups_per_coin`, `RemoteAudit.Shared.run g`): sample `c` is windows
+`Properties.Poub.Coins` and the sample's statement in `Properties.Accounting.Remote`, for a session that samples its
+openings `g` windows at a time (`audit.Params.groups_per_coin`, `Poub.Shared.run g`): sample `c` is windows
 `c·g … min(c·g + g, W) − 1` (`sampleWindows`), sampled together at the close of the last of them by one coin,
 `coins[W + c]`, on the openings key of `c`, over the sample's receipts in order, numbered across its windows
 (`sampleLengths`). Each window gets the samples in its passes, renumbered to its own (`shareOf`, `passesBefore`), and
@@ -35,7 +35,7 @@ sample `c`'s, `W + c`.
   agree below `W + c`, wherever two sessions have taken sample `c`, each window of it has the same record and the same
   openable receipts.
 
-At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` is the window, and sample `c` is window
+At `g = 1`, `Shared.run 1` is `Session.run` (`Poub.Shared.run_one`), `c` is the window, and sample `c` is window
 `c` alone (`sampleWindows_one`, `sampleLengths_one`): `OpeningsUnreadUntilSampled` and `RecordKeptAfterSample` give today's,
 `ReleaseOrder 1` and `LiveUnder 1` are today's, and `AcceptSamplesOpenable` on a sample of one window gives today's
 (`Proofs.Properties.Accounting.Remote.Shared`'s `*_one`). Today's `SampleIsSubset` is on `draws` alone, which knows no `g`;
@@ -44,9 +44,9 @@ this one states it for `Shared.close`'s sample.
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit.Shared
+namespace Properties.Poub.Shared
 
 /-- Sample `c`'s windows, at `g` windows a sample and `W` in all: `c·g … min(c·g + g, W) − 1`, the windows
 `Shared.close` samples together. -/
@@ -200,4 +200,4 @@ def LiveUnder (g : Nat) (params : Session.Params) (reg : Registration) (appendCo
       s'.record t = s.record t ∧
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
-end Properties.RemoteAudit.Shared
+end Properties.Poub.Shared

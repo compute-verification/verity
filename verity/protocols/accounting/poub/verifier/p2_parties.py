@@ -29,7 +29,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
 - `{"case": {...}}`: the session's core case (`p2_case`), the log of every request the Lean answered with the
   registration, the request, the verifier's clock floor, the session id and the memory challenger's close of the case
   (its registration's digest, its clock floor and its log), signed with its key (`Closer`), which
-  `RemoteAudit.P2Protocol` checks and replays; it is witness, which the prover
+  `Poub.P2Protocol` checks and replays; it is witness, which the prover
   keeps private. A session the books vetoed, or one with no memory challenger to sign it, has none.
 - `{"answer": {...}}` ends the session (`answer`): the verdict, the failure and where, and on acceptance the credited
   reads `q_bytes`, the receipts less the wrong ones the pooled bound leaves (`pooled.bound` at δ = 2^-40), a unit's
@@ -44,8 +44,8 @@ channel failing (`broken`). The runtime starts the verifier from a configuration
 `STARTS`): its closer's key is refused unless the configuration pins it (`pinned_signer`).
 
 The verifier is the Lean, since the trusted base is the compiled Lean verifier, which parses bytes of
-untrusted provenance, and Python is never trusted: the process `remote-audit-verifier` (`p2_lean.py`,
-`RemoteAudit.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
+untrusted provenance, and Python is never trusted: the process `poub-verifier` (`p2_lean.py`,
+`Poub.P2Session`) holds the registration file's bytes, recomputes the registration's digest from its fields, and
 reads the prover's request and every root and openings line as the prover sent it, each opening's four blocks checked
 on the registered vk root, and its answer is the session's. The Python's books (`Books`, `audit.AuditRun` over the
 P2 codec) take every event beside it and can only veto (`Twin`): an event, a held store or an answer on which the two
@@ -58,7 +58,7 @@ Lean takes as given is the clock's readings and the coins the challenger (`coins
 --session SID]` is the verifier's side (`main`), each session with fresh coins, the memory challenger's key and session
 log in `--challenger`'s directory (`pous.device.onsite.device_key`) signing the close of the one session the auditor
 named `--session SID`, which is claimed in its log before the session's first coin, the
-Lean built in its package (`lake build remote-audit-verifier`) unless `--lean-exe` names a built one, or, without `lake`
+Lean built in its package (`lake build poub-verifier`) unless `--lean-exe` names a built one, or, without `lake`
 on the PATH, the one already built there (`p2_lean.exe`). Listening, it prints `{"listening": port}` and then each
 session's `{"answer"}` on stdout, the shape of a party the auditor's gate starts over ssh with its `--device` directory
 (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s party verbs), where it keeps each session's case's
@@ -132,7 +132,7 @@ DISAGREEMENT = "disagreement"
 #: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
-EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `RemoteAudit.Protocol.certify` sums; "
+EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `Poub.Protocol.certify` sums; "
              "not the sketch's term at units (`SketchBoundP2`, drafted), and not Σ_t adv_t (SHA-512 stream as PRF: "
              "not priced, not assumed)")
 #: what an accepted session's `gamma` is against, and what it and `q_bytes` are before (`core_answer`)
@@ -468,7 +468,7 @@ class _Ended(Exception):
 
 
 class Twin:
-    """A P2 session through the Lean verifier (session `k` of `lean`, `RemoteAudit.P2Session`) with the
+    """A P2 session through the Lean verifier (session `k` of `lean`, `Poub.P2Session`) with the
     Python's books beside it (`books`), which can only veto: each event goes to both and its result is the Lean's
     where the two agree; where they differ, or the Lean answers an error, the session is rejected `disagreement` at
     the event's window (`disagreement` says where and what each answered) and the event raises `_Ended`."""
@@ -479,7 +479,7 @@ class Twin:
         self.request, self.not_before_ns = request, not_before_ns
         self.disagreement: dict[str, Any] | None = None
         self.log: list[dict[str, Any]] = []
-        """Every request after the session opened, as `RemoteAudit.P2Protocol` replays them (`p2_case`), each coin
+        """Every request after the session opened, as `Poub.P2Protocol` replays them (`p2_case`), each coin
         whole, as the challenger released it, where the Lean is sent its first `coins.COIN_BYTES`."""
 
     @classmethod

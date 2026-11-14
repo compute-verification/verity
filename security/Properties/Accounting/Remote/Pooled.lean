@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Remote.Draw
-public import RemoteAudit.Line
+public import Poub.Line
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,10 +35,10 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The verifier's pooled bound covers the sample's (`RemoteAudit.Pooled`)
+# The verifier's pooled bound covers the sample's (`Poub.Pooled`)
 
-`RemoteAudit.Pooled.pooled` (`verity/protocols/accounting/poub/verifier/lean/RemoteAudit/Pooled.lean`, which `pooled.py`
-is held to by the difftest, and whose W the memory line reads: `RemoteAudit.Line.line`) computes a session's pooled
+`Poub.Pooled.pooled` (`verity/protocols/accounting/poub/verifier/lean/Poub/Pooled.lean`, which `pooled.py`
+is held to by the difftest, and whose W the memory line reads: `Poub.Line.line`) computes a session's pooled
 bound from its windows' receipts `U_t` and samples `s_t` at `δ`, in exact rationals: the budget from above by a certified
 rational root, and W by the fractional knapsack's greedy. The sample's model reads the bound as a supremum
 (`Accounting.Remote.Draw.pooled`, which `Accounting.Guarantees.Remote.PooledSample` reads).
@@ -57,9 +57,9 @@ verifier's record holds them, `audit.Record`) is the record's, outside this stat
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- Whenever `pooled` gives a bound for windows of sizes `U` sampling `d` at `δ`, its wrong receipts are at least the
 sample's pooled bound of the same windows (`Accounting.Remote.Draw.pooled`) at `δ`. -/
@@ -77,7 +77,7 @@ def PooledCoversRun : Prop :=
     Pooled.pooled (Array.ofFn fun t => ((D.size t ω : ℕ), D.samples t ω)) δ = .ok b →
       D.pooled δ ω ≤ b.wrong
 
-/-- Whenever the memory line (`RemoteAudit.Line.line`) gives a line for a session's windows at outcome `ω` at `δ`, the
+/-- Whenever the memory line (`Poub.Line.line`) gives a line for a session's windows at outcome `ω` at `δ`, the
 wrong receipts it reads are at least the session's pooled bound at `δ` (`Draw.Run.pooled`). -/
 def LineCoversRun : Prop :=
   ∀ (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) (D : Accounting.Remote.Draw.Run n m s κ X)
@@ -87,4 +87,4 @@ def LineCoversRun : Prop :=
       rates = .ok l →
       D.pooled δ ω ≤ l.wrong
 
-end Properties.RemoteAudit
+end Properties.Poub

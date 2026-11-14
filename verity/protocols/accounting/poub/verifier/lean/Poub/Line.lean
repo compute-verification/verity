@@ -1,7 +1,7 @@
 module
 
-public import RemoteAudit.Pooled
-public import RemoteAudit.Shared
+public import Poub.Pooled
+public import Poub.Shared
 
 /-!
 # The memory line held over time
@@ -14,10 +14,10 @@ rationals, every refusal the Python's word for word. `lineOfRecord` reads the se
 registered blocks off the Lean verifier's record of it (`Session.Summary`), each group's times and reads beside it
 (`Seen`), refused unless the record is of the registration given with it (`lineOfRegistered`); `line` takes them
 given. The wrong receipts W are the pooled bound of the record's windows
-(`RemoteAudit.Pooled.pooled`: their receipts and samples at δ). A record sampled g > 1 windows a coin (`Shared`) has the
+(`Poub.Pooled.pooled`: their receipts and samples at δ). A record sampled g > 1 windows a coin (`Shared`) has the
 same groups, and its pooled bound reads its samples, each its g windows' receipts and samples summed (`ofSummaryAt`,
 `lineOfRecordAt`); at one window in flight it has no line (`SHARED`). `line.py`'s docstring has the form;
-`tests/test_line.py` holds the two together through `RemoteAudit.Difftest`'s `line` and `line_record`. Code: Lean core
+`tests/test_line.py` holds the two together through `Poub.Difftest`'s `line` and `line_record`. Code: Lean core
 only.
 -/
 
@@ -25,7 +25,7 @@ only.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.Line
+namespace Poub.Line
 
 /-- One group: its coin's release and its last root's arrival (ns, on one clock), its passes, the registered blocks
 its least pass read, and the registered blocks its passes read in all, by kind. -/
@@ -218,7 +218,7 @@ deriving instance Inhabited for Session.WindowSummary
 def receipts (w : Session.WindowSummary) : Nat := w.lengths.toList.sum
 
 /-- Why a record sampled more than one window a coin (`groups_per_coin`, `Shared`) at one window in flight has no line:
-no property of the code covers its samples there (`Properties.RemoteAudit.Live`'s `LiveIsRun` is at two). -/
+no property of the code covers its samples there (`Properties.Poub.Live`'s `LiveIsRun` is at two). -/
 def SHARED : String :=
   "a record drawn more than one window a coin (groups_per_coin) at one window in flight has no line: no property " ++
     "of the code covers its draws there"
@@ -265,7 +265,7 @@ def samplesOf (g : Nat) (ws : Array Session.WindowSummary) : Array (Nat × Nat) 
 window, and the record's samples in place of its windows (`samplesOf`), refused unless each sample drew `min(s, U)` of its
 `U` receipts at the session's `samples` `s`, as `Shared.close`'s sample does, and has fewer than `RECEIPT_LIMIT` (2^64)
 receipts, as `receive` holds each window to: the memory model's sample reads at most `2^64 − 1` receipts a sample
-(`Properties.RemoteAudit.Line.receiptMax`), and a sample's windows' receipts, each below the limit, need not be. -/
+(`Properties.Poub.Line.receiptMax`), and a sample's windows' receipts, each below the limit, need not be. -/
 def ofSummaryAt (g : Nat) (sm : Session.Summary) (samples : Nat) (seen : Array Seen) :
     Except String (Array Group × Array (Nat × Nat)) :=
   if g ≤ 1 then ofSummary sm samples seen
@@ -369,4 +369,4 @@ def ratOf? (s : String) : Option Rat := do
     if d = 0 then none else pure (mkRat (sign (← digits? a)) d)
   | _ => none
 
-end RemoteAudit.Line
+end Poub.Line

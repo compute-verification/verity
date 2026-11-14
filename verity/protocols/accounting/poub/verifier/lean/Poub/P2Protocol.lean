@@ -6,15 +6,15 @@ public import CoreProtocol.Protocol
 public import CoreProtocol.Ratio
 public import Lms.Sign
 public import MemoryChallenger.Verdict
-public import RemoteAudit.P2Close
-public import RemoteAudit.Verifier
+public import Poub.P2Close
+public import Poub.Verifier
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
 meta import Lms.Sign
 meta import MemoryChallenger.Verdict
-meta import RemoteAudit.P2Close
-meta import RemoteAudit.Verifier
+meta import Poub.P2Close
+meta import Poub.Verifier
 
 /-!
 # A session over PoUS's P2 store as a core protocol
@@ -50,7 +50,7 @@ store it audits is the one PoUS's setup published. Its bytes are canonical JSON 
   session; it is undecided while a window is unverified; it accepts once every window is.
 
 On acceptance it publishes `{"eps", "q_bytes", "span_ns"}`: the credited reads (`P2Session.credit`, the answer's),
-their span, and the error they hold at, ε = δ + S/2^64 for S the samples, `RemoteAudit.Protocol.certify`'s terms (not
+their span, and the error they hold at, ε = δ + S/2^64 for S the samples, `Poub.Protocol.certify`'s terms (not
 the sketch's term at units, `SketchBoundP2`, which is drafted). The profile is the rest of the session's answer.
 No property states yet what this check accepts; `p2_case.py`'s tests hold it to the live process's answer.
 -/
@@ -59,7 +59,7 @@ No property states yet what this check accepts; `p2_case.py`'s tests hold it to 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.P2Protocol
+namespace Poub.P2Protocol
 
 open Lean (Json JsonNumber ToJson toJson)
 open Flock
@@ -365,4 +365,4 @@ private def coinLog (n : Nat) : Evidence :=
 #guard coinRefusal (coinLog Codec.COIN_BYTES) == some "log entry 0: a coin is the challenger's 64 bytes, not 32"
 #guard account.Formed ∧ account.protocol = protocol.id
 
-end RemoteAudit.P2Protocol
+end Poub.P2Protocol

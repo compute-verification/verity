@@ -185,8 +185,8 @@ def test_a_structure_states_mu_and_none_defaults_it():
         classes.structure(without, "reference")
 
 
-def test_a_class_caps_a_block_of_gates_through_the_one_conversion():
-    """`q_T(c, k)` on gates is the FLOP-model statement at `c / G` FLOPs, and a gate holds `w = κ / (2G)`: the capacity
+def test_a_class_bounds_a_block_of_gates_through_the_one_conversion():
+    """`q(c, k)` on gates is the FLOP-model statement at `c / G` FLOPs, and a gate holds `w = κ / (2G)`: the capacity
     `w c` is `κ/2` a FLOP."""
     u = hardware.units(Registry.load())
     a = CLASSES["fanout-priced"].allowance(KIMI)

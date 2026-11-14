@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Window
+public import Poub.Window
 
 /-!
 # The openings frame: `verity/protocols/accounting/poub/verifier/wire.py`'s `decode_openings`
@@ -17,7 +17,7 @@ opening   u32be pass ‖ u64be position ‖ block (4096) ‖ u16be len(leaf) ‖
 
 @[expose] public section
 
-namespace RemoteAudit.Wire
+namespace Poub.Wire
 
 /-- A read position in a body. -/
 structure Cursor where
@@ -79,4 +79,4 @@ difftest a transcript's (`Difftest.eventOf`'s `frames`), as `wire.openings_of` d
 def openingsOf (frames : Array ByteArray) : Array Opening :=
   ((frames.mapM decodeOpenings).map (·.flatten)).getD #[]
 
-end RemoteAudit.Wire
+end Poub.Wire

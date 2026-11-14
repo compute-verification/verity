@@ -29,18 +29,18 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-open private RemoteAudit.Session.live from RemoteAudit.Session
+open private Poub.Session.live from Poub.Session
 
-namespace Properties.RemoteAudit.Live
+namespace Properties.Poub.Live
 
 /-! ## The session on other coins -/
 
 /-- The session `s` with the coins `c` and the append coins `a`. -/
 abbrev W (c a : Array ByteArray) (s : State) : State := { s with coins := c, appendCoins := a }
 
-theorem live_W (c a : Array ByteArray) (s : State) : RemoteAudit.Session.live (W c a s) = RemoteAudit.Session.live s :=
+theorem live_W (c a : Array ByteArray) (s : State) : Poub.Session.live (W c a s) = Poub.Session.live s :=
   rfl
 
 theorem record_W (c a : Array ByteArray) (s : State) (t : Nat) : (W c a s).record t = s.record t := rfl
@@ -150,7 +150,7 @@ theorem receive_W {s : State} {c a : Array ByteArray} {t i : Int} {root : ByteAr
     intro x hx hx'
     dsimp only [jp] at hx
     dsimp only [jp', W] at hx'
-    simp only [State.deadline, Properties.RemoteAudit.staleBelow_staleOf, State.isReleased] at hx hx'
+    simp only [State.deadline, Properties.Poub.staleBelow_staleOf, State.isReleased] at hx hx'
     repeat' (split at hx <;> (try simp only [*] at hx'))
     all_goals (cases hx; cases hx'; exact ⟨rfl, rfl⟩)
   split at h₁ <;> split at h₂
@@ -343,7 +343,7 @@ theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s
     Shared.step g (W c a s) e = .ok (r, W c a s₁) := by
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
   · obtain rfl : g = 1 := by omega
-    rw [RemoteAudit.Shared.step_one] at he ⊢
+    rw [Poub.Shared.step_one] at he ⊢
     exact step_W he hs (fun t now d he' hr => by simpa only [Nat.div_one] using hd t now d he' hr) ha
   · rcases Shared.sstep_of hg2 he with ⟨t, now, rfl, hc⟩ | ⟨hn, hs'⟩
     · rw [sstep_close hg2]
@@ -543,7 +543,7 @@ theorem verifyBy_congr {s : State} {t : Int} {f g : Array (Nat × Nat) → Verdi
     have hf : s.failed = none := by
       cases hs : s.failed with
       | none => rfl
-      | some _ => exact (hl _ (by unfold RemoteAudit.Session.live; rw [hs]; rfl)).elim
+      | some _ => exact (hl _ (by unfold Poub.Session.live; rw [hs]; rfl)).elim
     have ha : s.awaiting t = some (s.record t.toNat, d) := by
       unfold State.awaiting
       simp only [hf, Option.isSome_none, Bool.false_or]
@@ -735,9 +735,9 @@ theorem run_sim {chunk g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registra
       rw [results_snoc]
       exact srunL_snoc' ihr hstep
 
-end Properties.RemoteAudit.Live
+end Properties.Poub.Live
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 open Live in
 theorem liveIsRun : LiveIsRun := by
@@ -745,4 +745,4 @@ theorem liveIsRun : LiveIsRun := by
   rw [Shared.srun_toArray]
   exact (run_sim hg hm qs h (c := c) (a := a) ⟨hc, ha⟩).1
 
-end Properties.RemoteAudit
+end Properties.Poub

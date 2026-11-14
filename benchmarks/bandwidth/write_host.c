@@ -1,5 +1,5 @@
 // Host DRAM write ceilings on vy-nebius (two Xeon 6776P sockets, 16 channels of DDR5-6400): the fastest the host's
-// cores write labels into its DRAM, for remote_bandwidth's `timing.HOST_WRITE_BYTES_PER_S`.
+// cores write labels into its DRAM, for poub's `timing.HOST_WRITE_BYTES_PER_S`.
 //
 //   nt     labels derived on the core (write.cu's `label`, 16 words at a time), 64-byte non-temporal stores, which
 //          skip the read for ownership

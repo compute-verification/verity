@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Span
+public import Poub.Span
 public import Definitions.Core.Interaction
 public import Properties.Verity.Sha512
 
@@ -8,7 +8,7 @@ public import Properties.Verity.Sha512
 # PoUB's read session proved in zero knowledge, as deployed: stated, unproved
 
 The memory-read session once its openings stay inside proofs. The auditor's session decides window `w` by
-`RemoteAudit.Span.checkSpan` on the span the prover sends: the sampled proof system's accepted one-stage statements, one
+`Poub.Span.checkSpan` on the span the prover sends: the sampled proof system's accepted one-stage statements, one
 opening unit a sample. `checkSpan` reads three rows of each unit, `pub`, `signs` and `o0`, none in the clear: it computes
 the `pub` and `signs` rows itself (`publicWords`, `signWords`) and takes the verdict word the prover sends, and holds
 each to the unit's `b ‖ c` in the accepted public file by opening it under a salt the prover sends (`rowBc`: hm96-sha512
@@ -24,16 +24,16 @@ hold a collision, `n · (ε_ks + ε_bind)` over the span's `n` statements and th
 It is stated and not proved. What closes it is proofs' period form of V5 with every unit proved:
 `Flock.Guarantees.IntegrityAllProvedCarried` at `I` the window's statements (each proves all its units, `kd = n`, and no
 leaf is carried), whose conclusion is `Verity.InProofs.Gives` at `K₀ = 1` for the run whose failing units are the game's
-wrong ones. `Properties.RemoteAudit.InProofs.SecurityProofs.spanGives` (`Proofs.Properties.Accounting.Remote.InProofs`)
+wrong ones. `Properties.Poub.InProofs.SecurityProofs.spanGives` (`Proofs.Properties.Accounting.Remote.InProofs`)
 then carries it from the opening unit's circuit to `checkWindow`, once `RowsBind` holds each unit's bound `pub` and `signs`
 rows to the verifier's own.
 -/
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.SpanDeployed
+namespace Properties.Poub.SpanDeployed
 
-open _root_.RemoteAudit _root_.RemoteAudit.Span
+open _root_.Poub _root_.Poub.Span
 
 /-- **One opening unit's values, as its proof binds them**: the opening it checks, the words of its `pub`, `signs` and
 `o0` rows, and the salts those rows are committed under. -/
@@ -111,4 +111,4 @@ def SpanInProofsDeployed (H : Claims.Msg → Claims.Msg) (εKs εBind γ : ℝ) 
                 ¬ Hash.CollisionIn Verity.sha512 (spanInputs a reg w drawn sp us)) ≤
           n * (εKs + εBind) + Real.sqrt (γ * Claims.PrB H V P x)
 
-end Properties.RemoteAudit.SpanDeployed
+end Properties.Poub.SpanDeployed

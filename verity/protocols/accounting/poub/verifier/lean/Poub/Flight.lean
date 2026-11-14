@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Shared
+public import Poub.Shared
 
 /-!
 # One window in flight: `audit.Pace.in_flight`
@@ -19,7 +19,7 @@ and the registry `step f g`.
 
 @[expose] public section
 
-namespace RemoteAudit.Flight
+namespace Poub.Flight
 
 open Session
 
@@ -54,4 +54,4 @@ theorem step_two (g : Nat) (s : State) (e : Event) : step 2 g s e = Shared.step 
 
 theorem run_two (g : Nat) (s : State) (events : Array Event) : run 2 g s events = Shared.run g s events := rfl
 
-end RemoteAudit.Flight
+end Poub.Flight

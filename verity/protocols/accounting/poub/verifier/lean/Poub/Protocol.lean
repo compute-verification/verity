@@ -3,24 +3,24 @@ module
 public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import CoreProtocol.Ratio
-public import RemoteAudit.Difftest
+public import Poub.Difftest
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import CoreProtocol.Ratio
-meta import RemoteAudit.Difftest
+meta import Poub.Difftest
 
 /-!
 # A PoUB session as a core protocol
 
 The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`).
-No composite lists it: onsite's bandwidth component is `RemoteAudit.P2Protocol.protocol` (`Core.Onsite.components`,
+No composite lists it: onsite's bandwidth component is `Poub.P2Protocol.protocol` (`Core.Onsite.components`,
 `verity/protocols/compose/verifier/onsite`). Its bytes are canonical JSON, in the forms the difftest's `session` reads
 (`Difftest.sessionFn`):
 
 * params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
   sample's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
   property of the code covers (`sessionOf`): a session at one window in flight (the pace's `in_flight` 1, `Flight`), so
-  what it replays is `Shared.run g` (`Session.run` at g = 1), which `Properties.RemoteAudit.Shared` and the memory line
+  what it replays is `Shared.run g` (`Session.run` at g = 1), which `Properties.Poub.Shared` and the memory line
   are stated on;
 * the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
   kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
@@ -29,7 +29,7 @@ No composite lists it: onsite's bandwidth component is `RemoteAudit.P2Protocol.p
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
+  (a window not yet verified); it accepts once every window is. `Properties.Poub.Subprotocol.AcceptIsVerified`
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
   session's parameters and g.
 
@@ -38,11 +38,11 @@ the session's receipts U less the wrong ones its openings leave, W rounded up (`
 and openings at `DELTA`), one `BLOCK_BYTES` block each, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉` openings
 coins at its `samples` s each (at least the per-sample term of `Accounting.Guarantees.Remote.PooledSample`, s/2^256; its
 PRF advantages and binding term are left out of ε, not numbers, and so are its hiding terms, each 0 where the records
-read no commitment): at least the sample term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
+read no commitment): at least the sample term of the bound `Properties.Poub.Subprotocol.LineHeldAtSubprotocol`
 proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the openings a session made
 (`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
 not taken off: `q_bytes` is the receipts the session's openings don't show wrong, in bytes, which
-`Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
+`Properties.Poub.Subprotocol.QBytesAtSubprotocol` states is at most the right ones' except with its bound. When
 the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile says why.
 -/
 
@@ -50,7 +50,7 @@ the pooled bound refuses the windows, `q_bytes` and `eps` are 0 and the profile 
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.Protocol
+namespace Poub.Protocol
 
 open Lean (Json JsonNumber)
 open Flock
@@ -126,7 +126,7 @@ structure Public where
 def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
 
 /-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows sampled `g` a coin (`coins.openings_coins`), one
-a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
+a window at g ≤ 1, as `Properties.Poub.Line.Node.samples`. -/
 def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
   if g ≤ 1 then params.windows else (params.windows + g - 1) / g
 
@@ -193,4 +193,4 @@ private def three : Session.Params :=
   { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
 #guard (ratio (eps three 2)).toString == "1374389534721/2535301200456458802993406410752"
 
-end RemoteAudit.Protocol
+end Poub.Protocol

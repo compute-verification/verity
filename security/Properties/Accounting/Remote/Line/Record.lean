@@ -2,7 +2,7 @@ module
 
 public import Definitions.Accounting.Remote.Held
 public import Definitions.Accounting.Remote.Draw
-public import RemoteAudit.Line
+public import Poub.Line
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -36,22 +36,22 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The line of record's inputs, read as the memory model's (`Properties.RemoteAudit.Line`)
+# The line of record's inputs, read as the memory model's (`Properties.Poub.Line`)
 
-What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one session, and the paced session
+What a gate run's memory line (`Poub.Line.lineOfRecordAt`) reads of one session, and the paced session
 (`Accounting.Remote.Held.Pace`) the memory model reads it as:
 
 * `Node`: what is fixed before the coins: the session's parameters, the windows a sample (`groups_per_coin`, g) and the
   registration it runs on (so its windows, one group each, `Node.windows`, its samples, `Node.samples`, and its registered
   blocks, `Node.blocks`), the groups a stretch, a block's bytes, the node's on-chip storage and memory in bytes, its
-  rates (`RemoteAudit.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks`
+  rates (`Poub.Line.Rates`) and the δ the line reads its pooled bound at. `Node.squarings` … `Node.chipBlocks`
   are those rates in the model's units: a tick is a nanosecond on the record's clock and a block is `blockBytes`. Its
   δ is a nonnegative rational (`ℚ≥0`): the line computes at no δ outside `(0, 1)`.
 * `Record`: what one outcome gives: the verifier's inputs (its coins, the earliest coin release and the session's
-  events in order) and what the auditor saw of each window (`RemoteAudit.Line.Seen`: its coin's release and last root,
+  events in order) and what the auditor saw of each window (`Poub.Line.Seen`: its coin's release and last root,
   and its passes' reads by kind).
 * `Verified`: the Lean verifier accepts the record's session (`Shared.run` at the node's g from `State.init` at its
-  parameters and registration, then `outcome`; at g = 1 `Session.run`, `RemoteAudit.Shared.run_one`).
+  parameters and registration, then `outcome`; at g = 1 `Session.run`, `Poub.Shared.run_one`).
 * `Record.summary`: the Lean verifier's record of the session (`Session.State.summary`), which is some summary
   exactly where it accepts. The line reads it (`lineOf`, `lineOfRecordAt`): each window's passes, each sample's receipts
   and samples (`sampleReceipts`: sample `c` is windows `c·g … (c + 1)·g − 1`, a window at g = 1), and the registered blocks;
@@ -77,19 +77,19 @@ What a gate run's memory line (`RemoteAudit.Line.lineOfRecordAt`) reads of one s
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Line
+namespace Properties.Poub.Line
 
-open Accounting.Remote.Held _root_.RemoteAudit.Line
+open Accounting.Remote.Held _root_.Poub.Line
 
 /-- The node and the session's structure the line reads, fixed before the coins. -/
 structure Node where
   /-- the session's parameters: its windows, one group each, and the receipts each sample samples -/
-  params : RemoteAudit.Session.Params
+  params : Poub.Session.Params
   /-- the windows a sample, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one openings coin; at most 1,
   one a window -/
   groupsPerCoin : ℕ
   /-- the registration the session runs on, its registered blocks among it -/
-  reg : RemoteAudit.Registration
+  reg : Poub.Registration
   /-- the groups a stretch -/
   per : ℕ
   blockBytes : ℕ
@@ -103,7 +103,7 @@ structure Node where
 /-- The session's windows, one group each: its parameters'. -/
 def Node.windows (n : Node) : ℕ := n.params.windows
 
-/-- The session's samples: its windows `g` a sample, `⌈W/g⌉` of them (`RemoteAudit.Line.samplesOf`), one a window at
+/-- The session's samples: its windows `g` a sample, `⌈W/g⌉` of them (`Poub.Line.samplesOf`), one a window at
 g ≤ 1. -/
 def Node.samples (n : Node) : ℕ :=
   if n.groupsPerCoin ≤ 1 then n.windows else (n.windows + n.groupsPerCoin - 1) / n.groupsPerCoin
@@ -116,21 +116,21 @@ structure Record where
   coins : Array ByteArray
   appendCoins : Array ByteArray
   notBeforeNs : ℕ
-  events : Array RemoteAudit.Session.Event
+  events : Array Poub.Session.Event
   seen : Array Seen
 
 /-- The record's session through the Lean verifier, at the node's parameters, windows a sample and registration. -/
 def Record.run (node : Node) (r : Record) :
-    Except String (Array RemoteAudit.Session.Result × RemoteAudit.Session.State) :=
-  _root_.RemoteAudit.Shared.run node.groupsPerCoin
-    (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) r.events
+    Except String (Array Poub.Session.Result × Poub.Session.State) :=
+  _root_.Poub.Shared.run node.groupsPerCoin
+    (Poub.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) r.events
 
 /-- The Lean verifier accepts the record's session: every event runs and the session ends accepted. -/
 def Verified (node : Node) (r : Record) : Prop :=
   ∃ rs s, r.run node = .ok (rs, s) ∧ s.outcome = some "accepted"
 
 /-- The Lean verifier's record of the session (`Session.State.summary`): some summary exactly where it accepts. -/
-def Record.summary (node : Node) (r : Record) : Option RemoteAudit.Session.Summary :=
+def Record.summary (node : Node) (r : Record) : Option Poub.Session.Summary :=
   match r.run node with
   | .ok (_, s) => s.summary
   | .error _ => none
@@ -160,18 +160,18 @@ def lineOf (node : Node) (r : Record) : Except String Line :=
       node.nodeBytes node.delta node.rates
   | none => .error "the Lean verifier gave the session no record"
 
-/-- The groups the record's line reads (`RemoteAudit.Line.ofSummaryAt`), none where it reads none. -/
+/-- The groups the record's line reads (`Poub.Line.ofSummaryAt`), none where it reads none. -/
 def Record.groups (node : Node) (r : Record) : Array Group :=
   match r.summary node with
-  | some sm => match _root_.RemoteAudit.Line.ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen with
+  | some sm => match _root_.Poub.Line.ofSummaryAt node.groupsPerCoin sm node.params.samples r.seen with
     | .ok (gs, _) => gs
     | .error _ => #[]
   | none => #[]
 
 /-- Each sample's receipts among windows `ws` sampled `g` windows a coin: each window's `Σ lengths_t` at g ≤ 1, and above
-it sample `c`'s windows' summed (`RemoteAudit.Line.samplesOf`). -/
-def sampleReceipts (g : ℕ) (ws : Array RemoteAudit.Session.WindowSummary) : Array ℕ :=
-  if g ≤ 1 then ws.map _root_.RemoteAudit.Line.receipts else (_root_.RemoteAudit.Line.samplesOf g ws).map (·.1)
+it sample `c`'s windows' summed (`Poub.Line.samplesOf`). -/
+def sampleReceipts (g : ℕ) (ws : Array Poub.Session.WindowSummary) : Array ℕ :=
+  if g ≤ 1 then ws.map _root_.Poub.Line.receipts else (_root_.Poub.Line.samplesOf g ws).map (·.1)
 
 /-- `U_c`, each sample's receipts in the Lean verifier's record of the session (a window's at one window a coin), none
 where it has none. -/
@@ -182,24 +182,24 @@ def Record.receipts (node : Node) (r : Record) : Array ℕ :=
 
 /-- One event through the Lean verifier at `g` windows a sample: the state it leaves, or the state it was given where it
 throws. -/
-def reachStep (g : ℕ) (s : RemoteAudit.Session.State) (e : RemoteAudit.Session.Event) :
-    Except RemoteAudit.Session.State RemoteAudit.Session.State :=
-  match _root_.RemoteAudit.Shared.step g s e with
+def reachStep (g : ℕ) (s : Poub.Session.State) (e : Poub.Session.Event) :
+    Except Poub.Session.State Poub.Session.State :=
+  match _root_.Poub.Shared.step g s e with
   | .ok (_, s') => .ok s'
   | .error _ => .error s
 
 /-- The state the record's session reaches in the Lean verifier: its run's last where every event runs, else the
 state before the first event that throws. -/
-def Record.reached (node : Node) (r : Record) : RemoteAudit.Session.State :=
+def Record.reached (node : Node) (r : Record) : Poub.Session.State :=
   match r.events.foldlM (reachStep node.groupsPerCoin)
-      (RemoteAudit.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) with
+      (Poub.Session.State.init node.params node.reg r.coins r.appendCoins r.notBeforeNs) with
   | .ok s => s
   | .error s => s
 
 /-- Window `t`'s receipts in the state the record's session reaches, its passes' lengths summed (`Session.Win.receipts`),
 `0` for a window it never opened. -/
 def Record.receiptsAt (node : Node) (r : Record) (t : ℕ) : ℕ :=
-  ((r.reached node).windows[t]?.map RemoteAudit.Session.Win.receipts).getD 0
+  ((r.reached node).windows[t]?.map Poub.Session.Win.receipts).getD 0
 
 /-- Sample `c`'s receipts in the state the record's session reaches: window `c`'s at g ≤ 1 (`receiptsAt`), and above it
 those of its windows `c·g … (c + 1)·g − 1` the state has, summed. -/
@@ -209,9 +209,9 @@ def Record.sampleReceiptsAt (node : Node) (r : Record) (c : ℕ) : ℕ :=
     (fun a w => a + w.receipts) 0
 
 /-- `m`, the most receipts a sample the line reads has: `receive` rejects a pass that would take its window's receipts to
-`RECEIPT_LIMIT` (`Properties.RemoteAudit.ReceiptsBelowLimit`), and the line refuses a sample of `g` > 1 windows with
-`RECEIPT_LIMIT` or more (`RemoteAudit.Line.ofSummaryAt`). -/
-def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
+`RECEIPT_LIMIT` (`Properties.Poub.ReceiptsBelowLimit`), and the line refuses a sample of `g` > 1 windows with
+`RECEIPT_LIMIT` or more (`Poub.Line.ofSummaryAt`). -/
+def receiptMax : ℕ := Poub.Session.RECEIPT_LIMIT - 1
 
 /-- **The record's opening sample**: the session's samples, sample `c` of outcome `ω` with the receipts its windows have in
 the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
@@ -291,4 +291,4 @@ def spanStart (gs : Array Group) (per m : ℕ) : ℕ := if m = 0 then ended gs 0
 /-- Stretch `m`'s end, group `(m + 1)·per`'s coin. -/
 def spanStop (gs : Array Group) (per m : ℕ) : ℕ := gs[(m + 1) * per]!.releasedNs
 
-end Properties.RemoteAudit.Line
+end Properties.Poub.Line

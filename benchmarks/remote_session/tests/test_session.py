@@ -162,7 +162,7 @@ def run(plan: str, *, blocks: int = 16, windows: int = 3, samples: int = 6, sess
     """The verifier's sessions and the prover's over one registration, each paced by its entry in
     `paces` if given, its coins from `challenger` (the verifier's own by default), `appends` append coins a session
     (by default as the prover's hello says, `Verifier.appends_of`), `groups_per_coin` windows a sample; `then(v)` once
-    they end. With `store` (a `remote_bandwidth.store.Store`) the prover's blocks are that store's, and with `node` its
+    they end. With `store` (a `poub.store.Store`) the prover's blocks are that store's, and with `node` its
     ledgers are on that node."""
     clock = PassClock()
     vconn, pconn = clock.conns()
@@ -753,7 +753,7 @@ def test_the_memory_line_credits_the_labelled_weights_and_kv_only_on_a_verdict(m
     less the blocks the node's squarings could rebuild in its span (none here: the clock's spans are ticks, so the
     session runs at no squarings, and a rate is put back below); the KV the session appended is held and read but
     credited only on the property's verdict and the session's schedule check (its verdict stood in here: the check's
-    own tests are `remote_bandwidth`'s), then less its carriers; the share and residual are of the node's HBM.
+    own tests are `poub`'s), then less its carriers; the share and residual are of the node's HBM.
     Unlabelled, the whole registered store is filler and no weights are credited.  The node has no on-chip storage
     here, which would hold the whole store."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
@@ -1427,7 +1427,7 @@ def test_a_window_the_lean_rejects_is_rejected_on_the_books_at_its_sample(monkey
 
 def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers(tmp_path, monkeypatch):
     """`--transcript DIR`: each session's difftest case, written as it runs, which `replay.py transcript` replays
-    through `RemoteAudit.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
+    through `Poub.Session` and `audit.AuditRun` alike: the honest session accepted, every window verified, and
     the prover that dropped half its blocks rejected at the window and sample it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)

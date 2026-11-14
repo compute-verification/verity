@@ -42,7 +42,7 @@ period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes |
 | the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | |
-| PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
+| PoUB-P2 | `.poub` | `Poub.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | |
 | the wipe | | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | yes | |
 
@@ -187,7 +187,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
     else PouwCheck.Period.protocol
   | .inferenceOnly, _ => InferenceOnlyCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
-  | .poub, _ => RemoteAudit.P2Protocol.protocol
+  | .poub, _ => Poub.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
   | .wipe, _ => MemoryChallenger.WipeProtocol.protocol
 

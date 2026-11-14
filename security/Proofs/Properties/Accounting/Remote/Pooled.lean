@@ -56,9 +56,9 @@ sorts them (`List.pairwise_mergeSort`), so every share vector `Draw.pooled` rang
 
 @[expose] public section
 
-open RemoteAudit Pooled
+open Poub Pooled
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 namespace Greedy
 
@@ -407,4 +407,4 @@ theorem lineCoversRun : LineCoversRun := by
   rw [hw]
   exact pooledCoversRun n _ _ _ _ D ω δ b hb
 
-end Properties.RemoteAudit
+end Properties.Poub

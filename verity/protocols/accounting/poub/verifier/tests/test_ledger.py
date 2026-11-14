@@ -11,8 +11,8 @@ import math
 from fractions import Fraction
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
-from test_remote_bandwidth import (  # noqa: F401
+from poub_fakes import Clock, Entropy
+from test_poub import (  # noqa: F401
     SCHEDULE,
     A,
     N,

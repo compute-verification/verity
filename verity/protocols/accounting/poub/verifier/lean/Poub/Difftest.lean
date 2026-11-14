@@ -1,13 +1,13 @@
 module
 
 public import Difftest
-public import RemoteAudit.Line
-public import RemoteAudit.P2
-public import RemoteAudit.P2Session
-public import RemoteAudit.Registry
-public import RemoteAudit.Schedule
-public import RemoteAudit.Span
-public import RemoteAudit.Wire
+public import Poub.Line
+public import Poub.P2
+public import Poub.P2Session
+public import Poub.Registry
+public import Poub.Schedule
+public import Poub.Span
+public import Poub.Wire
 
 /-!
 # The difftest's Lean half
@@ -18,24 +18,24 @@ the record), and the pieces a mismatch there would point to (the codec's decode,
 opening, a leaf's receipt, a window's samples and a registration's digest), the registration `audit.register` makes
 with its codec seed, the verifier's registry (`registry`: registrations, sessions over them and their events,
 closes, and `registry/v0` both ways), `line.py`'s memory line (`line` of groups and windows given, `line_record` read
-off an accepted session's record, `RemoteAudit.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled
+off an accepted session's record, `Poub.Line`: rationals as strings `n` or `n/d`) and `pooled.py`'s pooled
 bound, which the line
-reads (`pooled`, `RemoteAudit.Pooled`), whose refusals are outputs (`{"refused": why}`),
-so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `RemoteAudit.Schedule`).
-`p2.py`'s P2 store (`RemoteAudit.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
+reads (`pooled`, `Poub.Pooled`), whose refusals are outputs (`{"refused": why}`),
+so their reasons are compared, as are those of `schedule.py`'s schedule check (`schedule`, `Poub.Schedule`).
+`p2.py`'s P2 store (`Poub.P2`): a registration's digest (`p2_registration_digest`), a unit's partials, sketch
 and receipt (`p2_sketch`) and an opening's check on PoUS's vk (`p2_opening`); and a whole P2 session as
-`p2_parties.py` runs it (`p2_session`, `RemoteAudit.P2Session`), on the registration file's bytes and the prover's lines.
-The span's check (`RemoteAudit.Span`): on a session run to its samples, the rows the verifier derives for each sample
+`p2_parties.py` runs it (`p2_session`, `Poub.P2Session`), on the registration file's bytes and the prover's lines.
+The span's check (`Poub.Span`): on a session run to its samples, the rows the verifier derives for each sample
 (`span_public`), the window decided on public files taken as accepted (`span_held`), and decided from the statements
 the proof system's audit must accept (`span`).
-`remote-audit-difftest` serves them.
+`poub-difftest` serves them.
 -/
 
 @[expose] public section
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit.Difftest
+namespace Poub.Difftest
 
 open Lean (Json ToJson toJson)
 open Flock
@@ -738,4 +738,4 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("p2_registration_digest", p2RegistrationDigestFn), ("p2_sketch", p2SketchFn), ("p2_opening", p2OpeningFn),
   ("p2_session", p2SessionFn), ("span_public", spanPublicFn), ("span_held", spanHeldFn), ("span", spanFn)]
 
-end RemoteAudit.Difftest
+end Poub.Difftest

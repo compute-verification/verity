@@ -3,7 +3,7 @@ module
 public import Properties.Accounting.Remote
 
 /-!
-# When the verifier reads a window's openings coin (`RemoteAudit`)
+# When the verifier reads a window's openings coin (`Poub`)
 
 The code's half of the opening sample's premises (`Accounting.Remote.Draw.Assumptions`): what `verifyWindow` and the
 session give of `Refused` and of `Live`, stated against the verifier's functions, for every input of their types.
@@ -42,9 +42,9 @@ before it is sampled), which `audit.py`'s `Params` and the difftest's `positive`
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- Receipt `u` of window `w` (its index among the window's receipts in pass order, `receiptIndex`) has an opening
 that passes `checkOpening` under its pass's receipter: some pass `i` and position `p < L_i` with index `u`. -/
@@ -115,4 +115,4 @@ def LiveUnder (params : Session.Params) (reg : Registration) (appendCoins : Arra
       s'.record t = s.record t ∧
         ∀ u, Openable reg s'.appends (s'.record t) u ↔ Openable reg s.appends (s.record t) u
 
-end Properties.RemoteAudit
+end Properties.Poub

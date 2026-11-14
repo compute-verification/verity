@@ -17,9 +17,9 @@ function that keeps `[0, n)` and is injective there, and swap `i` composes it wi
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 theorem uniform_lt {m : Nat} {src : ByteArray} : ∀ {fuel pos r p : Nat},
     Flock.Draw.uniform m src fuel pos = some (r, p) → r < m := by
@@ -295,4 +295,4 @@ theorem sampleIsSubset : SampleIsSubset := by
     have : us.toList[k₁]'(by simp; omega) = us.toList[k₂]'(by simp; omega) := by simpa using e₂
     exact (List.Nodup.getElem_inj hnodup).1 this
 
-end Properties.RemoteAudit
+end Properties.Poub

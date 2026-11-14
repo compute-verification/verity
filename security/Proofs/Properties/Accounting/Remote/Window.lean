@@ -23,9 +23,9 @@ value is its function's (`Task.spawn`'s definition), so the threads change nothi
 
 @[expose] public section
 
-open RemoteAudit
+open Poub
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 /-- `ByteArray`'s `==` is its arrays', which is lawful. -/
 instance lawfulBEqByteArray : LawfulBEq ByteArray where
@@ -381,4 +381,4 @@ theorem chunkedIsWhole : ChunkedIsWhole := by
     subst key
     cases List.findSome? (rejectAt reg digest appends w drawn openings) (List.range drawn.size) <;> rfl
 
-end Properties.RemoteAudit
+end Properties.Poub
