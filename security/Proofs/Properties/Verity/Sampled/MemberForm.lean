@@ -108,13 +108,13 @@ by) give of the bytes and the release log they accept, each stated at the code's
   accepts, the window the verifier sets up is laid out and each member's files pass (`windowPasses_members`), so
   the verifier sets the deployment's window up at every accepted play (`executionPhaseAt_form`), and each play has the
   window's read (`windowReads_members`).
-* `MemberForm.OpensOwn`: a checked member whose commitment is ready for its openings opens only at its own files'
-  places (`opensOwn_of_ready`), so at a window the verifier sets up the vocabulary's openings hold wherever each
-  member's deployed commitment opens (`MembersSetUp.opensWith`), where each member's commitment is ready for them.
+* `MemberForm.OpensOwn`: a checked member whose files are ready for its commitment's openings opens only at its own
+  files' places (`opensOwn_of_ready`), and files that pass the files check are ready for them (`FilesPass.ready`),
+  so at a window the verifier sets up the vocabulary's openings hold wherever each member's deployed commitment
+  opens (`MembersSetUp.opensWith`).
 * `MemberForm.ClaimReads`: what the claim reads at the windows the verifier sets up (`claimReads`): each
   window laid out with its own share and units, and the committed files read at the claim by the window's members
-  in order, at the seats' traces side by side (`readsWith_of`), where each member's commitment is ready for its
-  openings.
+  in order, at the seats' traces side by side (`readsWith_of`).
 * `MemberForm.Sound`: SPOT's soundness and remote's over windows of several members, at the three facts above as
   proved of the per-member form (`spotSound_form`, `soundnessAt_form`), with what is left as their premises.
 -/

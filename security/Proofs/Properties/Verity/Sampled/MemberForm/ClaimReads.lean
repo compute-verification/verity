@@ -21,8 +21,7 @@ of the windows the verifier sets up at the per-member form (`WindowInstance.wind
   that hold wherever each member's deployed commitment opens (`OpensWith`) and at each member's constants
   (`ConstsWith`).
 * **A deployment's windows** (`claimReads`): at each window the verifier sets up, the window is laid out, the
-  published share and the units are the window's, and the committed files are read at the claim at every strategy,
-  where each member's commitment is ready for its openings (`Commit.Ready`).
+  published share and the units are the window's, and the committed files are read at the claim at every strategy.
 
 The verifier parses parameters in either form (`Spot.OneStageZk.paramsEitherOfJson`), so it sets up a window of
 members where they name members, and `claimReads` speaks of those windows. Its proof reads none of that.
@@ -125,11 +124,8 @@ each window the verifier sets up is laid out, with the published share and the c
 (`MembersSetUp`); and at every strategy the committed files are read at the claim at the projected strategy, by
 the window's members in order (`WindowOn.reads_toV5`), each `Checked` (`MembersSetUp.checked`), under the
 vocabulary's openings, which hold wherever each member's deployed commitment opens (`MembersSetUp.opensWith`, at
-the instance's places) and at each member's constants (`constsWith_read`), at the seats' traces side by side. It
-takes each member's commitment ready for its openings (`Commit.Ready`). -/
-theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base)
-    (hready : ∀ θ F W, I.windows θ F = some W → ∀ m ∈ W.ms, Commit.Ready m.D m.hU m.n {} m.pub) :
-    I.ClaimReads K where
+the instance's places) and at each member's constants (`constsWith_read`), at the seats' traces side by side. -/
+theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base) : I.ClaimReads K where
   laid θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).laid
   share θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).toWindowOn.share
   units θ F W hW := (show MembersSetUp I.base θ F W from (I.windows_some hW).2).toWindowOn.units
@@ -137,6 +133,6 @@ theorem claimReads (I : WindowInstance d α) (K : WindowConstructions I.base)
     have h : MembersSetUp I.base θ F W := (I.windows_some hW).2
     exact readsWith_members (I.base.read θ F).first (I.base.read θ F).rest (I.base.Opens θ F c) _
       (seats_members _ _) (h.toWindowOn.reads_toV5 _) (fun _ hM => h.checked hfix _ hM)
-      (h.opensWith c (I.place θ F c) (hready θ F W hW) _) (constsWith_read I.base θ c F)
+      (h.opensWith c (I.place θ F c) _) (constsWith_read I.base θ c F)
 
 end Verity.Sampled.MemberForm
