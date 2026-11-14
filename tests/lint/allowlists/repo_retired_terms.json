@@ -2296,7 +2296,6 @@
     {"file": "adapters/vllm/tests/commit/test_native_host_security.py", "count": 1},
     {"file": "adapters/vllm/tests/commit/test_openings_after_release.py", "count": 5},
     {"file": "adapters/vllm/tests/commit/test_pinned_pool_exact.py", "count": 1},
-    {"file": "adapters/vllm/tests/commit/test_production_vectors.py", "count": 2},
     {"file": "adapters/vllm/tests/commit/test_rows_cuda.py", "count": 7},
     {"file": "adapters/vllm/tests/commit/test_served_record.py", "count": 2},
     {"file": "adapters/vllm/tests/commit/test_serving_rows.py", "count": 16},
@@ -5087,6 +5086,7 @@
     {"file": "security/Proofs/WeightSecurity/RegMonitoringPeriod.lean", "count": 20},
     {"file": "security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean", "count": 90},
     {"file": "security/Proofs/Slowdown/RemoteMonitoringPeriod.lean", "count": 67},
-    {"file": "security/Definitions/Compose/Remote/Node.lean", "count": 3}
+    {"file": "security/Definitions/Compose/Remote/Node.lean", "count": 3},
+    {"file": "adapters/vllm/tests/commit/test_serving_vectors.py", "count": 2}
   ]
 }

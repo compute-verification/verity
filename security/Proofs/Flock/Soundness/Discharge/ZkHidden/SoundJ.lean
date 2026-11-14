@@ -20,7 +20,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 /-!
 # The soundness half of one hidden-output `--zk` sampled session of `J` tables
 
-`zk_session_soundHJ`: `zk_session_soundJ` under hidden outputs, the configuration production `--zk` runs (the default
+`zk_session_soundHJ`: `zk_session_soundJ` under hidden outputs, the configuration the prover's `--zk` runs (the default
 `--statement`, whose tables `Stmt.setupTables` sets up with `Stmt.setupHidden`, at `--session-tables J`). For any live
 prover `τ` of a hidden-output `--zk` session of `J ≥ 1` tables (`J = nTab I`),
 `Pr[verity-verify-proof --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's

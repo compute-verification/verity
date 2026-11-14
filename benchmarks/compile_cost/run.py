@@ -20,7 +20,7 @@ measurement: its digests are another model's), `--profile` writes cProfile's sta
 `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window.
 
 The two numbers are `long-w0`'s wall minutes and peak GiB on one core, against a target of 10 minutes and 16 GiB: a
-production window (256 sequences, 8,192-token steps, 40k context) is compiled ahead of time from the same code.
+serving window (256 sequences, 8,192-token steps, 40k context) is compiled ahead of time from the same code.
 """
 from __future__ import annotations
 
