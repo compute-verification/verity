@@ -165,6 +165,23 @@ def test_a_binding_records_composition_error_and_missing_are_each_printed_under_
         line.format(pair=pair) for pair in (0, 1) for line in [BINDING_LINE.format(pair=pair, ok=ok, missing=missing), *more]]
 
 
+def test_a_runs_binding_record_is_built_from_that_runs_commitment_and_the_workload_as_it_was_read(tmp_path, stand_ins, capsys, monkeypatch):
+    """Each run's binding record is handed that run's own commitment, and the workload's requests and sampling record as the
+    workload's reader hands them (`vllm_adapter.load_workload`)."""
+    handed = []
+
+    def binding_record(com, rc, reqs, sampling, args, pair, **kw):
+        handed.append({"root": rc.run_root.hex(), "reqs": reqs, "sampling": sampling})
+        return copy.deepcopy(M.BINDING)
+
+    monkeypatch.setattr(commit, "binding_record", binding_record)
+    stand_ins.verdicts = [(True, None)]
+    ended = kept(tmp_path, capsys)
+    [com] = made()
+    workload = M.va.load_workload(str(tmp_path / "workload.json"))
+    assert ended.exit is None and handed == [{"root": root, "reqs": workload["requests"], "sampling": workload["sampling"]} for root in com.roots[1:]]
+
+
 def test_a_binding_record_that_raises_is_recorded_with_where_it_raised_and_fails_the_run(tmp_path, stand_ins, capsys, monkeypatch):
     """The record is then the error, the frames it came through and the rules' version, the row names no rules version of its
     own, and the real verdict fails the run on the map that was not built."""
@@ -257,7 +274,8 @@ def after_release(s: SimpleNamespace, monkeypatch: Any, **answer: Any) -> Record
     def openings_after_release(com, rc, eng, reqs, sampling, base, args, pair, tokens_ref=None):
         assert eng is s.engine and isinstance(args, commit.Options) and [r["request_id"] for r in reqs] == ["a", "b"]
         carried = list(getattr(com, "_oar_deferred", []))
-        s.released.append({"com": com, "root": rc.run_root.hex(), "pair": pair, "tokens_ref": tokens_ref, "deferred": carried})
+        s.released.append({"com": com, "root": rc.run_root.hex(), "pair": pair, "tokens_ref": tokens_ref, "deferred": carried,
+                           "sampling": sampling, "base": base})
         return copy.deepcopy(doc)
 
     monkeypatch.setattr(commit, "openings_after_release", openings_after_release)
@@ -298,16 +316,20 @@ def test_the_leaves_left_to_the_replay_are_recorded_by_position_and_carried_to_t
 def test_the_openings_after_the_release_are_recorded_and_a_replay_among_them_is_a_component_of_the_value_correspondence(
         tmp_path, stand_ins, capsys, monkeypatch, answer, argv, result, why, replay):
     """A committer with a staging to release: after each run's value correspondence the openings after the release are made
-    once, with the first run's tokens, recorded whole and printed.  Where their source is a replay, the replay's root against
+    once, with the first run's tokens, the workload's sampling record and the engine's state as it stood before a committer
+    was attached (`baseline_state`), recorded whole and printed.  Where their source is a replay, the replay's root against
     the committed one is a component: it sets a result no component had set, and never turns a failed one."""
     M.MAKE.update(releases=True)
     doc = after_release(stand_ins, monkeypatch, **answer)
     stand_ins.verdicts = [(True, None)]
+    base = commit.baseline_state(stand_ins.engine)
     ended = kept(tmp_path, capsys, *argv)
     [com] = made()
     rows = instrumented(ended)
+    sampling = M.va.load_workload(str(tmp_path / "workload.json"))["sampling"]
     assert ended.exit is None and com.calls == ["register_weights", *WARMUP, *RUN, *RUN, "close"]
-    assert stand_ins.released == [{"com": com, "root": root, "pair": pair, "tokens_ref": M.TOKENS, "deferred": []} for pair, root in enumerate(com.roots[1:])]
+    assert stand_ins.released == [{"com": com, "root": root, "pair": pair, "tokens_ref": M.TOKENS, "deferred": [], "sampling": sampling, "base": base}
+                                  for pair, root in enumerate(com.roots[1:])]
     assert [row["commit"]["openings_after_release"] for row in rows] == [doc, doc]
     assert lines(ended, "OPENINGS AFTER RELEASE") == [
         AFTER_RELEASE_LINE.format(pair=pair, source=doc["source"], replay_n=doc["replay_n"], families=doc["replay_families"],
@@ -844,6 +866,11 @@ SCHEDULE_BASIS = ("engine schedule of record: per-committed-step request rows (t
 PLACED_LINE = ("[delta] manifest requirement placed over the executed prefix of record (pair {pair}): identities not-executed {dropped} (by family "
                "{families}; manifest of record untouched: {n} identities, digest eeeeeeeeeeeeeeee), composition members dropped {members} over "
                "{changed} steps, steps not executed {steps}")
+#: A committer's rows by step where request b first ran at step 1, and `IDENTITIES` as that arrival places them: b's one
+#: engine step later, each with the engine step its declared arrival gave it kept beside.
+B_LATER = {0: [("a", 0, 1)], 1: [("a", 0, 1), ("b", 1, 2)], 2: [("a", 0, 1), ("b", 1, 2)]}
+B_LATER_IDENTITIES = [identity(0, 0, engine_step_declared=0), identity(1, 0, engine_step=1, engine_step_declared=0), identity(0, 1, engine_step_declared=1),
+                      identity(1, 1, engine_step=2, engine_step_declared=1), identity(0, 2, engine_step_declared=2)]
 
 
 def test_a_manifests_identities_are_placed_over_the_executed_prefix_of_record_before_they_are_checked(tmp_path, manifest, capsys):
@@ -896,17 +923,31 @@ def test_a_request_the_committer_saw_arrive_later_than_declared_has_its_identiti
     step kept beside it, and the compositions are restricted to the steps of that schedule."""
     s = manifest
     s.verdicts = [(True, None)]
-    M.MAKE.update(step_rows={0: [("a", 0, 1)], 1: [("a", 0, 1), ("b", 1, 2)], 2: [("a", 0, 1), ("b", 1, 2)]})
+    M.MAKE.update(step_rows=B_LATER)
     doc = {**M.MANIFEST, "identities": IDENTITIES, "engine_steps": COMPOSITIONS}
     ended = under(tmp_path, capsys, doc)
-    moved = [identity(0, 0, engine_step_declared=0), identity(1, 0, engine_step=1, engine_step_declared=0), identity(0, 1, engine_step_declared=1),
-             identity(1, 1, engine_step=2, engine_step_declared=1), identity(0, 2, engine_step_declared=2)]
     schedule = {"use": "observed", "basis": SCHEDULE_BASIS, "why": None, "all_equal_declared": False, "declared_arrive_steps": {"r0": 0, "r1": 0},
                 "observed_arrive_steps": {"r0": 0, "r1": 1}}
-    handed_on, coverage = placed(doc, moved, [composition(0, 0), composition(1, 0, 1), composition(2, 0)], schedule=schedule)
+    handed_on, coverage = placed(doc, B_LATER_IDENTITIES, [composition(0, 0), composition(1, 0, 1), composition(2, 0)], schedule=schedule)
     assert ended.exit is None and [m for m, _, _ in s.checked] == [handed_on, handed_on] and coverages(ended) == [coverage, coverage]
     assert lines(ended, "executed prefix") == [PLACED_LINE.format(pair=pair, dropped=0, families={}, n=5, members=1, changed=1, steps=0)
                                                for pair in (0, 1)]
+
+
+@pytest.mark.parametrize(("lists", "step_rows", "required", "handed_on"), [
+    ({}, None, None, None),
+    ({"identities": [*IDENTITIES, identity(1, 2)], "engine_steps": COMPOSITIONS}, None, IDENTITIES, [*IDENTITIES, identity(1, 2)]),
+    ({"identities": IDENTITIES, "engine_steps": COMPOSITIONS}, B_LATER, B_LATER_IDENTITIES, B_LATER_IDENTITIES),
+], ids=["lists-none", "one-not-executed", "arrived-later"])
+def test_a_runs_replay_is_handed_every_identity_the_manifest_lists_at_the_engine_step_the_coverage_placed_it_at(
+        tmp_path, manifest, bundles, capsys, lists, step_rows, required, handed_on):
+    """What a run's coverage hands on to its replay, here the deferred one's bundle: nothing under a manifest that lists no
+    identity; else every identity it lists, the one the requirement leaves out as not executed too, each at the engine step
+    the schedule of record puts it at."""
+    M.MAKE.update(declare=M.CLASSES, step_rows=step_rows)
+    ended = under(tmp_path, capsys, {**M.MANIFEST, **lists}, "--replay-deferred", "--program-dir", str(tmp_path / "program"))
+    assert ended.exit is None and [m.get("identities") for m, _, _ in manifest.checked] == [required, required]
+    assert [h[2]["ids_full"] for h in bundles.handed if h[0] == "defer"] == [handed_on, handed_on]
 
 
 def test_an_executed_prefix_that_cannot_be_placed_fails_a_coverage_the_check_passed(tmp_path, manifest, capsys, monkeypatch):
