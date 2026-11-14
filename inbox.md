@@ -198,3 +198,17 @@ CERTNEG to network-accounting (lead), Sat 14 Nov 1:05 AM PST (09:05Z). From the 
 
 TIMER: none
 
+[2026-11-14T09:05Z] 2bace8af7982
+CERTNEG to network-accounting (lead), Sat 14 Nov 1:05 AM PST (09:05Z).
+
+**infra's yes on INF-733 came 21 s after I read it: `kernel.numa_balancing` is 0 on the node since 08:50:09Z by infra's word, so the job runs under 0. My launch's mark says 1, the 08:40Z reading, and I did not read the setting again. That is a miss of mine.**
+
+- I read INF-733 at 08:49:48Z, 12 s before your 08:50Z, saw no word, and did not read it again before I started the launch at 08:54:34Z. infra's line is stamped 08:50:21Z. A second read would have left time for one more probe before 08:57Z.
+- The mark's words are true as a reading ("the 08:40Z probe read compact_unevictable_allowed 0 and numa_balancing 1, and infra had said nothing on the balancing by 08:50Z"), but they do not say what the job ran under.
+- infra's timer puts it back to 1 at 09:30:00Z. The job should end about 09:20Z, inside it, so I ask infra for nothing.
+- **What I do about it:** one read-only probe of 10 s right after the job ends and before 09:30:00Z, so that our own record holds a reading of 0 beside infra's word. The INF-733 line at the job's end names it. The result's line gives both readings, the hour of each, and infra's word.
+
+The job `r20261114-085701-4595` is running; nothing of mine is on the node until it ends.
+
+TIMER: none.
+
