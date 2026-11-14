@@ -178,3 +178,27 @@ Runs: suites at head (--changed 29a70d9b1b72a83d56b26b2ad118551e56cb727f) r20261
 #10103 body replaced once: Base, What this head holds, Statements changed, Ratchet gate. [ran]
 TIMER: none
 
+[2026-11-14T17:05Z] afc341088d80
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:05 AM PST. **#10134 gained a fourth commit at 8:41 AM PST, after your note: `f3cbbe0aa6872b4cde9cd5c2c5ffdc2c3af3fe2d`, which undoes the move's rewrites inside seven Lean files' string literals. It touches none of the rename's files and picks clean in both orders. The trees are still the same content.** Order 1 ends at `8b1e408bd176c1e266015f0d1a1e9fd64fc7ecc3`, tree `decd1a0203c21abbb74a6edddf12a99b72bf0c24`. Order 2 ends at `cd6a28ac2674612a704f2ac63d7eba797f1f171f`, tree `0c0fc2edfe1d4d9a9cc0f2a74d8b5b6845ecd70e`. They differ only in the order of `security/lean-audit.json` and `moves.json`, as in my 8:52 AM line, since the new commit touches neither file. [ran]
+
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:05 AM PST. **The rename is rebuilt on `main` `723560c29ec1c06f82fda210e974a0f9ebee218b` with #10013 merged, at `40d936872d5486d197e423899a5b41547072cbd8`, on the new branch `cursor/na-certifier-rename-3-b51f`. Its suites run is `r20261114-165746-86e1`, still waiting for a slot at 9:04 AM PST. The pull request is not open.** Per my 8:52 AM yes/no, I took yes and went on.
+
+- **Build:** the base `be292b53fcb759eed357ee459f118578e78be60e` is `main` plus #10013's maps, merged clean. `stage.py` certifies both moves (`5ccedccf8c56`: 72 edits; `037a20079ccb`: 1 rename, 171 path-only edits). The third step and the eight hand commits apply clean. 198 files, the same count as before. [ran]
+- **Checks** [ran]:
+  - The counting test: 610 sites, each kind exactly at its cap, none outside, no certifier warning. #10070's new sites were all renamed by the maps.
+  - The ratchet gate: `723560c29ec1..40d936872d54: 1 change(s), 0 failed`.
+  - The `dest=` diff is the same as `bb7073f355ec`.
+  - `main`'s Lean and locks are unchanged since `a116c5614312`, so the picked records stand.
+- **The old run:** `r20261114-155511-1c54` is cancelled. Its check never started.
+- **The old branch:** `cursor/na-certifier-rename-2-b51f` stays at `d67ed3d45c80`. I pushed to a new branch rather than force-push.
+- **The body** is ready, with no `Move:` line. It says the change lands behind #10134 and crosses it with `restack.py`, and it has your `STANDIN=network_certifier` sentence under what breaks at the move.
+- **Opening:** when the run is green I open it unmarked with `research queue open --head cursor/na-certifier-rename-3-b51f --sha 40d936872d5486d197e423899a5b41547072cbd8 … --issue NET-100`. That needs a turn of mine: the run's asker lives on this machine, and a turn you did not open reads nothing.
+
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:05 AM PST. **By `git merge-tree`, the rebuilt head `40d936872d5486d197e423899a5b41547072cbd8` conflicts with #10134 in one file, with #10088 in none and with `main` in none.** [ran]
+
+- **With #10134, at both `13ed09d7bbc2180658ef8053096156f4f3857926` and `f3cbbe0aa6872b4cde9cd5c2c5ffdc2c3af3fe2d`:** only `tools/research/src/research/store/moves.json`. That is a plain merge's conflict; the carry across lean's move regenerates the file.
+- **With #10088 at `6f7a39eba31dcae547a6d3d49f822544774e619e`:** clean. Its branch has not moved.
+- **With `main` `723560c29ec1`:** clean. The old head `d67ed3d45c80` conflicted in `auditor.py` and its test.
+
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 9:05 AM PST. **The rename's table went at 9:03 AM PST, at the rebuilt head.** Kept: rows 1 to 11, 17 and 26. Renamed or gone: rows 12 to 16, 18 to 25 and 27 to 29, with no site left. The kinds equal their caps.
+
