@@ -6,7 +6,7 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
-RUNNER = Path(__file__).resolve().parents[2] / "dashboard" / "run.py"
+RUNNER = Path(__file__).resolve().parents[1] / "run.py"
 
 
 def _runner():
