@@ -183,14 +183,14 @@ theorem firstRead_second {sample ns ks : Array ℕ} {m : ℕ} {parsed : Flock.Dr
   rfl
 
 /-- **The second stage's units are not sampled with probability at most `|sample| · Σ_t k_t · 2⁻⁶⁴`**, on a uniform
-stream of at least `secondRead` bytes: where `secondProblem` passes, `Draw.drawUnits` under what `Draw.flockLaw` reads
+stream of at least `secondRead` bytes: where `secondProblem` passes, `Draw.sampleUnits` under what `Draw.flockLaw` reads
 from `secondLaw` returns no sample only where some cell's first read samples nothing. -/
 theorem drawUnits_second_error_le {sample ns ks : Array ℕ} (hp : Select.secondProblem sample ns ks = none)
     {parsed : Flock.Draw.Law}
     (h : Draw.flockLaw (Select.secondLaw sample ns ks) (sample.size * ns.toList.sum) = .ok parsed) (len : ℕ)
     (hlen : secondRead sample.size ns ks ≤ len) :
     prCoin (fun f : Fin len → Fin 256 => ¬ ∃ units read,
-      Draw.drawUnits parsed (sample.size * ns.toList.sum) (bytesOf f) = .ok (units, read)) ≤
+      Draw.sampleUnits parsed (sample.size * ns.toList.sum) (bytesOf f) = .ok (units, read)) ≤
       ((sample.size * ks.toList.sum : ℕ) : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ :=
   Flock.Bridge.units_error_le (lawOn_second hp h) (cellSizes_sum _ _) len (by rw [firstRead_second h]; exact hlen)
 

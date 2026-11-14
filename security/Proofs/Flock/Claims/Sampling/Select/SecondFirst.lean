@@ -4,7 +4,7 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondUnits
 import Spot.Draw
 import Proofs.Core.QSort
 import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.Soundness.ExecSample
 
 /-!
 # A uniform subset sample is a replay sample the second stage's first check passes
@@ -32,14 +32,14 @@ open FlockSoundness FlockSoundness.Audit
 theorem subset_ascending {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.toList.Pairwise (· < ·) := by
   have hnd : D.toList.Pairwise (fun x y => x ≠ y) := (subset_nodup h).1
-  rw [DrawExec.subset_eq] at h
+  rw [SampleExec.subset_eq] at h
   obtain ⟨sw, -, rfl⟩ := Option.map_eq_some_iff.1 h
   exact ((Verity.QSort.ByKey.qsort_sorted (fun x : ℕ => x) _).and hnd).imp fun hab => lt_of_le_of_ne hab.1 hab.2
 
 /-- A subset sampling design's sample that ends is strictly ascending. -/
 theorem drawUnits_subset_ascending {k n read : ℕ} {src : ByteArray} {units : Array ℕ}
-    (h : Draw.drawUnits (.subset k) n src = .ok (units, read)) : units.toList.Pairwise (· < ·) := by
-  unfold Draw.drawUnits at h
+    (h : Draw.sampleUnits (.subset k) n src = .ok (units, read)) : units.toList.Pairwise (· < ·) := by
+  unfold Draw.sampleUnits at h
   cases hw : (Flock.Draw.drawWith (fun _ need => Draw.take src need) (.subset k) n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok x =>

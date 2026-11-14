@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.Sampling.Select.SecondFirst
 
 The second stage (`Spot.Select.selectSecond`) refuses where the replay sample and the cells are not a second stage's
 (`secondProblem`), where its sampling design is not well formed (`Spot.Draw.flockLaw`, `Spot.Draw.checkDraw`), or
-where a cell's sample does not end on the stage's bytes (`Spot.Draw.drawUnits`). The first two read no coin of the
+where a cell's sample does not end on the stage's bytes (`Spot.Draw.sampleUnits`). The first two read no coin of the
 second stage, and
 the second never happens where `secondProblem` passes (`Properties.Spot.SecurityProofs.secondFormed`). The third
 happens with probability at most `k_d · 2⁻⁶⁴` on a uniform stream that holds every cell's first read, `k_d` the
@@ -60,7 +60,7 @@ theorem select_subset_ascending {g : Reg} {K : ℕ} (hK : firstK g = some K) {sr
   · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
     rw [hf] at hp'
     obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
-    have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu
+    have hu' : Spot.Draw.sampleUnits (.subset K) n src = .ok (units, read') := hu
     exact drawUnits_subset_ascending hu'
 
 /-- **Where a first stage of count `K` accepts, `secondProblem` passes** at cells it passes on some replay sample: the
