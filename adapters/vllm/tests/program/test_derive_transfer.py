@@ -45,7 +45,7 @@ from tests.program.test_derive_negative import (
     Outcome,
     run_importer,
 )
-from verity_vllm.program.frontend.provenance import registry_version
+from verity_torch.frontend.provenance import registry_version
 
 # ---------------------------------------------------------------------------------------------------------
 # the second family
@@ -530,7 +530,7 @@ def test_audit_s3_derived_b0_serve_digest_and_kv_ownership():
         check_cache_ownership_by_kind,
     )
     from verity_vllm.program.frontend import derive_examples as dex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     rep = derive_report(dex.GreedyServe(B0_CONFIG, 15), (torch.zeros(32, dtype=torch.int32),), mode="profile", profile="b1-eager",
                         config=B0_CONFIG)
     assert rep.ok, rep.unsupported
