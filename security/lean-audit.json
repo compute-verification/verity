@@ -390,11 +390,6 @@
    "digest": "09284aa232f552a0416a8d518fa2518c1c997eb3a933eb8dbdca298eda283ea1",
    "why": "`SampledKSTwo` is stated over a code, its registration and its design: `RegMatchesTwo` says the registration's samples are the design's, a fact of the code. SPOT[Flock]'s code has it (`regMatchesTwo_wired`). (met by `SampledKSTwo_honest`)"
   },
-  "SpotFlock.Built": {
-   "owner": "@proofs",
-   "digest": "b127ee90592d546378395533b5ffa6452b8b69a90df932b25cdb015cbd28dd9b",
-   "why": "The two-stage guarantees are stated at SPOT[Flock]'s own frame: `Built` says the held code's frame is the one `frameAt` builds from its slots and its reveal code, as the verifier's run sets it. (met by `built_spot`)"
-  },
   "SpotFlock.BuiltWired": {
    "owner": "@proofs",
    "digest": "efe3282e5ca8a279d33994de93b05a28cab7f72104bc6fe55f31190b9494e21d",
@@ -3062,12 +3057,6 @@
    "issue": "PRF-460",
    "due": "2026-11-30"
   },
-  "SpotFlock.Addresses": {
-   "owner": "@proofs",
-   "digest": "5a41733162d8750a1f6962991c0d2ef715cd3c4d19fd288b14ea68a2b48accd9",
-   "issue": "PRF-460",
-   "due": "2026-11-30"
-  },
   "SpotFlock.AddressesConnected": {
    "owner": "@proofs",
    "digest": "938986b5fbb10ed3bca096bd4f957e4039c2de248e253e7fedf1770a7c48f2d9",
@@ -4686,6 +4675,9 @@
   "Verity.Sampled.remote_soundness_deployedReady": {
    "honest": ["Verity.Sampled.remote_soundness_deployedReady_honest"],
    "nontrivial": "Verity.Sampled.remote_soundness_deployedReady_nontrivial"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "nontrivial": "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5312,6 +5304,11 @@
   },
   "Flock.SecurityProofs.SpotKSTwo": {
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372",
    "missing": "honest",
    "why": "honest instance needs a built two-stage layout and frame"
   },
@@ -13137,6 +13134,24 @@
    },
    "type_hash": "791097081f3e7b50579e4ab8db33f0a47fda4245185e1d8516ab0ad01ead91c2"
   },
+  "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.CompiledTwo.OneWaitTwoXAt FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool)",
+    "      List.nil Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart Claims.Witness.SamplingGeneric.toyTwo",
+    "      Claims.Witness.silentP 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9fcae30504dd02d8369e243d98a93d0b3c6b4acd3b803d76becf4a46e2bda05e"
+  },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerZK : Claims.SamplingGeneric.CompilerZK"],
@@ -16478,8 +16493,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["SpotFlock.Built"],
-    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"],
+    "domain": ["SpotFlock.BuiltWired"],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.AddressesConnected"],
     "reads": []
    },
    "type_hash": "542bec717239108d25c9aad4002dae67c607c347ce3ddae3b51c50ae7498324f"
@@ -16495,6 +16510,18 @@
     "reads": []
    },
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SpotOneWaitTwo : Flock.Guarantees.SpotOneWaitTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["SpotFlock.BuiltWired"],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.AddressesConnected"],
+    "reads": []
+   },
+   "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372"
   },
   "Flock.SecurityProofs.StreamStopBudget": {
    "owner": "@network-accounting",
@@ -26030,14 +26057,15 @@
    "Verity.SecurityProofs.ImprintRootHidden": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
    "Verity.SecurityProofs.TransportDelivers": "frozen (no-function): It is stated over an arbitrary site, channel, coalition and wire (or exchange, or receiver), and says what the transport's premises establish of what a coalition sees or a receiver delivers, rather than a Lean function's acceptance; verity.commitments.crypto.transport is Python, with no Lean model yet.",
    "NetTiming.SecurityProofs.EncardAccSeqsLeAdviceBits": "frozen (no-function): It bounds AccSeqs, the observation sequences an abstract Program accepts with fixed-length advice, not runs of the network check's code; AcceptedRunsAreProgramRuns carries an accepted run to NetTiming.Accepted, which is the restatement path.",
-   "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code (SpotFlock.code_bconfX_le_at, code_offRegX_le_cls_at, code_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SpotFirstHitTwo": "frozen (obligation,no-function): ksFirstHitTwoX at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace read at the statement (KSRegTwoX's event and threshold form, HeadlineTwoX's headline) at the first-hit error εfirstTwoX = κ_s + √(k·γ_s·Pr[B]) + (2·c_R + 4·c_F)/2^256 in place of εregTwoX, at a statement in scope (CompiledTwo.Scope) and every prover, at c_R = Compiled.runCost and c_F = Compiled.firstHitCost, closed expressions of the most SHA-512 calls a run of the prover makes (Compiled.runCalls) and three expectations over the run's coins, each fixed by an equation of the statement and none a hypothesis on the prover; its one premise on SHA-512 is the linear expected-time bound (Claims.ExpectedCR) at B_conf,X and at the two by-class first-hit finders (Compiled.finderXCls, CompiledTwo.finderICls) at every number of tries, from which the three masses the form bounds are proved at the code at the connected program (SpotFlock.connected_bconfX_le_at, connected_offRegX_le_cls_at, connected_offIreg_le_cls_at); the scope and that bound are hypotheses of its own statement, so that its record names them; with the code's other facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), open until the frame's slots prove it; it reads SpotFirstHitTwo (security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
    "Pouw.SecurityProofs.PearlC.GapDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1W1 (the device's timing at the cap at the W1 machine, W1.w1Priced) at every device record and W1 setting it ranges over, the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (security/Definitions/Pouw/PearlC/FlockTile/Audit.lean:52, :93-97), and it holds trivially for an empty class until TileRead lands. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8Llama32_1b": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
-   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record."
+   "Pouw.SecurityProofs.PearlC.SampledH100Rev1S8_8192": "falsified (conjecture,no-function,hash): It is conditional on two open premises, W1CompleteH100 (w1-complete-h100, falsified on the H200: every adversary of the cost model within a cost and a query count has a W1 adversary on the H100 with INT8 at the adversary's best prices within them whose good-tile credit exceeds every threshold at least as often) and the open conjecture TTOutTilePearlCH100Rev1S8 (tt-out-tile-pearl-c-h100-rev1, whose TT_OUT rev1 the proofs red team's rating refutes: TT_OUT per audit tile at the H100 rev1's tensor-clock record, over that W1 device), stated over the PoUW game whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean), not over a Lean function. The cost model is arbitrary: TT_OUT per audit tile at it on that record (TTOutTilePearlCDevRev1 at devH100Tensor) follows from the two (Pouw.PearlC.ttOutTile_of_dominatedWithin), and the two together say more than it. It is an implication from refuted premises, kept for the record.",
+   "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs with every read sent through the code's own wiring map, SpotFlock.wireMap, returning SpotFlock.returned): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from one fact of that frame, an address at the connected program for each gate a needed unit opens (SpotFlock.AddressesConnected), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -50671,6 +50699,14 @@
     "Flock.Guarantees.SpotKSTwo": "920013bcf254c576602bfeb1df3942c6b725046ba3f6891145ef4975ec111656"
    }
   },
+  "Proofs.Flock.SamplingGeneric.OneWait": {
+   "digest": "b5f4244478e93e51ea07c03b2c6b463fd4599d73b4a170b7e0b6e311bdbdd5cd",
+   "definitions": {
+    "Claims.SamplingGeneric.Arg.oneWait": "df569a960fdc793ad4cce5bc194d72e7bdcaf7e430d58de6c0b43b965d77be91",
+    "Claims.SamplingGeneric.Compiled.oneWait": "fec07a11f379a50ecd880dd76743c4551f6601113b89dc06558992402fca439c",
+    "Claims.SamplingGeneric.CompiledTwo.oneWait": "5de96ec89d5d3b4dc3e650eb061a6ce50e4303297515f67db5db0664f62b1941"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.OpensTwo": {
    "digest": "3b04380d4516b54b6847950f2087aa97237b215dce937da5db38264cc635989f",
    "definitions": {
@@ -50686,9 +50722,9 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.SpotFirstHit": {
-   "digest": "6398718f854be2df0e596c87ea9a9ca344e274ea7b57fb00e7fba5bbe67e3bc8",
+   "digest": "5efca78da58a2bbdd35bd0df6ea9d79125b51f9337b3b7ddd68e9a69e9627d30",
    "definitions": {
-    "Flock.Guarantees.SpotFirstHitTwo": "5b8387fc5be3a8aeac2996466fa1290b4add1f35b997cfe6282b5c0677a61a52"
+    "Flock.Guarantees.SpotFirstHitTwo": "3646319c03372507919b997b0e66611db97bb2f202ba09bf56b8ee7f7d76b186"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
@@ -50746,6 +50782,18 @@
    "digest": "459744ddd4daa1419bac132b2e39b3cdac17fba17c6932b2263642e9ce700cd7",
    "definitions": {
     "Claims.SamplingGeneric.Compiled.runCalls": "bc66b6c7f196ab9080fc0cd99f62cd480457bf06a13e102ed8ec89be9bf6cc51"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOneWaitAt": {
+   "digest": "83a313f338ad9f470f502f3c4530cae2739feeda52c7346450a18f12a2f74f97",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.εclsOneWait": "9a099a82e81a12e079edb3610636315ca94acf016581c641fa0957b642996a65"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOneWaitKS": {
+   "digest": "79e5ac293ce06ff9865f5436f1462e3d7178908753c122d1b3b86f60a1ad1566",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.OneWaitTwoXAt": "e1b6c8db409445ad622c3894562dcadbc6693be228a465edbb9f3e0b12fd2b2d"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoReg": {
@@ -54226,7 +54274,7 @@
    }
   },
   "Proofs.Flock.SpotFlock.Code": {
-   "digest": "b507a2820f47c266896af4c088d5ccc5941ef6a2f85400c81146d826468f675e",
+   "digest": "4d0a06bd3c5929ef8981ae0203d2b1fb17d711d71a21c745833e38d272cf923b",
    "definitions": {
     "SpotFlock.Held": "d8bf02cc78697e9b0bafb7166fc4f554d7d44e5196379a868867da619089e125",
     "SpotFlock.Held.boundaryNames": "33f16aae45218ba384824fa13e5ffa780b3f9bf825f3edbbec11c60e4dcea7f6",
@@ -54260,7 +54308,6 @@
     "SpotFlock.base": "60555d0a3b161d8ffe001235c611a3cb14081bec8a02a6dc854693f2ce246a8c",
     "SpotFlock.blocksOf": "1e08e138e19d4a1f2095452b4786c1ceaa5f66ab94794dc46376c48d00567d3a",
     "SpotFlock.cellRow": "a90749c700525c67303c32471dbf8ea1cb5b2b93426e7fa2d60273f3923ee251",
-    "SpotFlock.code": "898d1a6ba4389c8b296baef3f41b5b77f63a93f2f566ac68b7975a4e7e7ec52f",
     "SpotFlock.codesOk": "d9ae987441691fd73fe381a2d25304bccbc824d299e60f52de8e4ee04dc9f759",
     "SpotFlock.coinByte": "43927e511fb1a08e5466102b42a5299ff18dfcce23d44a15b9f4f051c0dfa44c",
     "SpotFlock.constAt": "750c06f31897d99e7a2754f10a89663282019f01e71579e19f2c4ebd1c67de7e",
@@ -54314,7 +54361,6 @@
     "SpotFlock.replayDesign": "485c3e90580781e7ae0392a00b9968e4a00775dd3821f20961342e1f30170a4d",
     "SpotFlock.returned": "7074a4e9da40d414f89ec0d0002fde6972c721309cf9ace05914d545bee55c7a",
     "SpotFlock.returnedWhole": "8710ef01d626d34c5569d6eb0cdec1627914024bef01558ca47e968f55495315",
-    "SpotFlock.rs": "10d87b9e650669b7f50fffa6667865dadc175edfd1ed4d57bf65ff7a8f2c2bc2",
     "SpotFlock.scopeOk": "f77fc0a54d5080bcc76510fde22b6da68f6309bbeddfa21600dadc125cc6f6e9",
     "SpotFlock.secondDraw": "d814e5ff64df5bc3afb14396ccdf0ab8d31ccb653890d327de10829c423f3b44",
     "SpotFlock.sessStep": "e5867be6dd526bde4a2e80e92933f5209bce0c678287d95b8ad1589b440d9451",
@@ -54353,6 +54399,14 @@
     "SpotFlock.writtenRead": "30244ceae0beb890757163ffb00fc2bae435987c8705e034ec736b2fd563e95d",
     "SpotFlock.writtenUnwired": "f94f31bc4545176136183e00d23f94d073b5087b893d55c1510a6636938e1f3d",
     "SpotFlock.zkOk": "2693efaed2bfc2b4d301af0a0624291a6b2da6b6dfb09394c2445a27ff753365"
+   }
+  },
+  "Proofs.Flock.SpotFlock.ConnectedClassAt": {
+   "digest": "752b61288e13acec0dedd298e54436049fee8091e9c45ca6f33838d5037ce5b0",
+   "definitions": {
+    "SpotFlock.clsConnected": "8cb785156c6cae9e7edf4c170a6ac8eec9392973cd4484a93e2f80c0a926bbdc",
+    "SpotFlock.gateKeyConnected": "135b2852a7d3f76953cd6451838a09fd4cf808d464a0422c229836159f663ab5",
+    "SpotFlock.needsConnected": "4f8d5817fe2d3910504f4b1396951ba6242c951815b8f19b2ac4d5a81b8c6b56"
    }
   },
   "Proofs.Flock.SpotFlock.Format": {
@@ -54412,12 +54466,6 @@
     "SpotFlock.readsInterior": "ab04560bc4f8404ae016141b7a0e8ea4d4367d68613bc3e9df107a442e7fbd0a"
    }
   },
-  "Proofs.Flock.SpotFlock.FrameIsBuilt": {
-   "digest": "c2e5c98b6c17de7d37f01545239353185392560e0c3c3a0044a8988017960575",
-   "definitions": {
-    "SpotFlock.Built": "b127ee90592d546378395533b5ffa6452b8b69a90df932b25cdb015cbd28dd9b"
-   }
-  },
   "Proofs.Flock.SpotFlock.LayoutAt": {
    "digest": "6ca994a082432034efa2e44364141a8c1f1ba38ff4236c8717bfedbddb2a76ad",
    "definitions": {
@@ -54427,17 +54475,18 @@
     "SpotFlock.pickAny": "7035d3477e163a89b58e7da0fe0d14f1fe02bff0bfc9e443e5fb84baabf5037b"
    }
   },
+  "Proofs.Flock.SpotFlock.OneWaitTwo": {
+   "digest": "96372e736cb61617fbc81c62eeeaeba3f44abd534882093571f9bdb5db12bfec",
+   "definitions": {
+    "Flock.Guarantees.SpotOneWaitTwo": "3d697acbfd8d7aaeca6e975e853054d284e09920e0391cfaec0e83d53eaa29e1",
+    "SpotFlock.εoneWaitAt": "8a602bec0564c57dfe6c88add9930ff630960647421e6e36211cc72212c84357"
+   }
+  },
   "Proofs.Flock.SpotFlock.Opens": {
    "digest": "d643b2043be515565265141125bf9b95bf82fb5574b1381fd8db46cc13afb71b",
    "definitions": {
     "SpotFlock.seenAt": "cc2b5db558db502f8081781f2ceacf47cc23f29588dc4e8fe23be764a5fe3849",
     "SpotFlock.unitStmt": "7a42f82f5bbb0b9dddd5105c74e740a3cfedae6a54789fb2e500e98b085fe3b5"
-   }
-  },
-  "Proofs.Flock.SpotFlock.OpensWhole": {
-   "digest": "0fcaea2e64eba7e45ef124ef56bd680df04e6e77b3b04c18d6c18a878b1bf455",
-   "definitions": {
-    "SpotFlock.gateKey": "1208d994ab45752f2fcb3e9205e5fed36b0d54229f99888657a3d2f8ce78a7b4"
    }
   },
   "Proofs.Flock.SpotFlock.Placement": {
@@ -54447,7 +54496,7 @@
    }
   },
   "Proofs.Flock.SpotFlock.RevealAt": {
-   "digest": "854b6a7ffc5ba1ac5ec46c544b89af3a373ac0c9932ead2326bc82a3f46f7458",
+   "digest": "190c4800de79a98eb02058c6cb161d6d57654b8c520c613956ff0e573a012ee4",
    "definitions": {
     "SpotFlock.Address": "f2ae1912f5a64b323e0e5dad7505c423b89d5d9cd5ab34b27612e928210eba5b",
     "SpotFlock.Address.place": "6df3d50f6aec9891a4bccd4991d832d33e814141e8c872f04874623ae40583c4",
@@ -54467,7 +54516,6 @@
     "SpotFlock.CheckedRun.p": "53bff413afeee2e3ec3ff30262768bc228b06f1b3b0c6db8324d4e060be8b56c",
     "SpotFlock.CheckedRun.rb": "41e0bde127a590225789539123af9af3c8bd2ebcafdaaf03745ddfba02869fb4",
     "SpotFlock.CheckedRun.rest": "fce2d7f64472fabb6e4dd291deeb3f3bf6f574d5943a1c71f68c9156653e5d3e",
-    "SpotFlock.CheckedRun.roots": "0f0acccb44b56199a070db31a1710a51ce7af558e32e7051173ac0777e5b1e44",
     "SpotFlock.CheckedRun.s": "c2d697e874ebebcad7d55267da25949c57e86daf719350a57d96c21d90fdb732",
     "SpotFlock.CheckedRun.seen": "3caada48e47b6a62fc6bbda790e1ff7078b35d1ec07853542504661755367699",
     "SpotFlock.CheckedRun.sts": "ab755d6b5481dab7ddb22ba7473a88b53ffdd1bc1c0a28594f102ba5b2ef074a",
@@ -54500,9 +54548,8 @@
    }
   },
   "Proofs.Flock.SpotFlock.Reveals": {
-   "digest": "522eed6d3c6d821ec4c1894d078f5b59c855bfc4dc40702ea7f979f7f4a60165",
+   "digest": "7df7a94c950ec849ff717843211b8aaf44010493c0536c6dc68f97013b8d9dda",
    "definitions": {
-    "SpotFlock.Reveal.frameAt": "ecba04565fb818a391dc59201edf0efe2b086051f05a480ad626d1f9d12780cd",
     "SpotFlock.Reveal.needs": "212844efd51d420480ff736d223063122f18402315d65b8524d5b4abd9d61a8a",
     "SpotFlock.Reveal.openAt": "c67b82dc94405fb1be5ba610e661b743e145ba6084eccaa3825f07bfbfad269f",
     "SpotFlock.Reveal.reveal": "4462d248baf9cad217658943093e2bbb4b2f065c193a46c33decfac4a77f3cf6",
@@ -54534,16 +54581,17 @@
    }
   },
   "Proofs.Flock.SpotFlock.SlotsAt": {
-   "digest": "9cc9fb29b4b3e3931ec131b9c45f273b444e3ed98086f7036a4ead19229ae730",
+   "digest": "8ae32b9055a128744a6b1d414d2ad803cc9345f77125a007658801d3e5e82592",
    "definitions": {
-    "SpotFlock.Addresses": "5a41733162d8750a1f6962991c0d2ef715cd3c4d19fd288b14ea68a2b48accd9",
-    "SpotFlock.CheckedRun.AddressHolds": "2f926a6ad9658474fd30446485e76ec1e5e2169f24fdbb66fb85de649e9b851c",
     "SpotFlock.CheckedRun.Counted": "71f24515800af763adfdc688ec27f879f698aea286396cbe3e4fbdf4225b94f3",
-    "SpotFlock.CheckedRun.ReadsInterior": "e8d88250bded4b8b898f91bd774179eab8edaafbbc2c499316e51839b6673c95",
-    "SpotFlock.CheckedRun.ReadsRegistered": "420a811fb903fe0fe66acd2b463bd510170648608290408c3c0b321c1d6c8609",
-    "SpotFlock.addressMap": "51f9b9b60a64f2b901eaee6af75fdc3e94c9bfb924e4c46702f3b22f3ff5f247",
-    "SpotFlock.slotMap": "9b94ed5a76675960e80cdfaecba63eb9eb642bb5d9420173cdb63743e666694b",
     "SpotFlock.slotsOf": "c35a8e1acac89d66d137661d6ec6e4e5481431c364caae23fd12cd051a20beb8"
+   }
+  },
+  "Proofs.Flock.SpotFlock.WiredClass": {
+   "digest": "4cd0bb340f203b1ee0121d6a447c88d7e9af23493eb5ce84b0f27cc2295c3379",
+   "definitions": {
+    "SpotFlock.gateKeyWired": "ef3cf235b76725335cebf4f345c476fbc46cff7416cde5d05f5782946a8407dd",
+    "SpotFlock.needsWired": "435f0e9e6b2b864886034d2636242344f505dfffb55bd5ac36731a0ac93f54e5"
    }
   },
   "Proofs.Flock.SpotFlock.WiredCode": {
@@ -56874,7 +56922,7 @@
    }
   },
   "Spot.OneStageZk": {
-   "digest": "1b0f7a45eb85f4798107a7d1c4152d551ce16d6c407427cc1a657274b1f89416",
+   "digest": "769f5c33a5143bbf3e6408a75c7fae8bd7a119fed8eb3ce128f5d47cf15ceeed",
    "definitions": {
     "Spot.OneStageZk.EVIDENCE_FITS": "33f8f6fbb586fcb57dae3c7bed6c76ad5db01ca4720f43a6ca18ab4f9dd6d705",
     "Spot.OneStageZk.Evidence": "f5fc59dc0b4a0d0d0732da27e636afe6ec207cbbf2bbe5666d18c048c5459e52",
@@ -56902,7 +56950,7 @@
     "Spot.OneStageZk.Member.population": "81e3406eda7c41e3d668ce6012fb4411754f7c5b210c2c335363008f0aa14aa2",
     "Spot.OneStageZk.Member.sizes": "83d83de467d70df47e36f1a49d7893540b0cbc5d3c5811e67df7b4b2059a8fdf",
     "Spot.OneStageZk.Member.slice": "2a3c790d5a655d8876ca9a414792460781acb34bfcecb4e73922cac83cb1cbdb",
-    "Spot.OneStageZk.Member.statement": "30e311b3d47a705b5a884c52b9f0250b55d0d94856370525cefebfdcc5fb35e2",
+    "Spot.OneStageZk.Member.statement": "4392042dfb712c3a9a74235891962cb58c51e65d4b664c2dd49c1e79718a6f3a",
     "Spot.OneStageZk.Member.units": "dd005d06e519bda7d52b15749294ce030cd25dafbc83f4b5787d56fb77384d8d",
     "Spot.OneStageZk.NO_CHALLENGER": "e162a96e930d08f9754dac695c52dafc52cfd3daf4b4792302f54b06244b1df8",
     "Spot.OneStageZk.NO_ROW_WHY": "bdb3c1dcd200ed424ffe254184c9b7cfd1e66da41f66c6808dfba2643fd103e6",
@@ -56943,7 +56991,7 @@
     "Spot.OneStageZk.StepAt.I": "c9098a37b34f14defb8c930a14d29140369c805e2b0a9604a6c858ce1c5eb073",
     "Spot.OneStageZk.StepAt.filesHeld": "b7e67a7b73f04fd0a5856895c0575666c6ae4ae0250da18d0a3fb0ad7567763b",
     "Spot.OneStageZk.StepAt.ksFiles": "5638c90ef4a18c1bdd57e1e0e6eb8675c70068451ba246ece9e4aff72dca0f00",
-    "Spot.OneStageZk.StepAt.ofOwn": "0d1bfb5ff48fa6d1ff90118a5988bf1b8ce946e4aa222cf54bc15a0703439e33",
+    "Spot.OneStageZk.StepAt.ofOwn": "416b46873d9a784a088020a11219ddf7bc7fd6e9c7b2953b9cf88b090fe271fb",
     "Spot.OneStageZk.StepAt.population": "157a90dafc8b73826e2b986fdb086f7916a6a02fb03b2f437da8c9ee1b18d1e0",
     "Spot.OneStageZk.StepAt.programSha": "53d78db10adf4850663a8e948118627eb446b99090425e7a9784eecf1feffb48",
     "Spot.OneStageZk.StepAt.rd": "9add8f49cef3ea96532b757653e1924bb5425c5fc102db30e589bc23f61db997",
@@ -56976,6 +57024,7 @@
     "Spot.OneStageZk.headerHeld": "87b50ae60313bc6c9ba5ab9b986af8018e979addd113b6b8382879ecbc4991c3",
     "Spot.OneStageZk.heldStep": "fc3d6c8735b36690b931183b552bb2be3a46a7cfe055835054d518fc57b19a7a",
     "Spot.OneStageZk.indicesHeld": "e9746ee698ca819e30d0d5cd63b4517294296935fae4ed58514a77972cd26b41",
+    "Spot.OneStageZk.inputsAt": "f7ca332506c98144b8a95d5d07abc55838926c43ad625218ff48cf798841ed43",
     "Spot.OneStageZk.inputsOf": "222d59018519d209ecf764ecb2bf0a3ccff5ccbdd9ccd7d9676bee0acb75466e",
     "Spot.OneStageZk.laidHeld": "62fee0acf3a5a492387a44adf427ef87c0cf94e9ad0468c226f74cf3f8c22754",
     "Spot.OneStageZk.linesOf": "ea58ef2214221f1a7075a8c0461ce4a6a8eb9a06da64fcf96eb7b0bc64f6a5c0",
@@ -56984,9 +57033,11 @@
     "Spot.OneStageZk.membersHeld": "e1935c3cf06b4978654a7630080695cbf6e68f7d3384158ec88fe98a4fcaf628",
     "Spot.OneStageZk.membersRun": "11970b1124378a8e9310ff14a664652cc30af648c0bc30d8385ec5d1880f6d32",
     "Spot.OneStageZk.membersStructure": "3b7b22a494729000cc32e110e06859a9217db437d951327a45d13409c4d7f98c",
-    "Spot.OneStageZk.membersTreesHeld": "1a49768f7524b12bf5c7aa7bd332cb41d4bb9698167d8d73b3960ad1e4180176",
+    "Spot.OneStageZk.membersTreesHeld": "f8ffb341a371bb5b09919370591016bca648e677ea8042e54cc2d22a8b61b72f",
     "Spot.OneStageZk.oneSession": "3b5bc4ea098e1bcb9df88afa7689c9c6acaaf3fd29e1c6297447b1ce3a7ecf15",
     "Spot.OneStageZk.orderHeld": "dc4a26c43f92f5ac3e26f531238cf4bbaafb16dce2a97cb2859661952f44e482",
+    "Spot.OneStageZk.ownRootBTables": "f86de124c954335842942c7da247bb0eb9788a2f7773867368b981e18e5cb604",
+    "Spot.OneStageZk.ownTables": "bd6eeaf05373f1e9a9420338aa4b9ed59ae03e489ce5fb1b90040d1e366eefb9",
     "Spot.OneStageZk.paramsOfJson": "a0b18722533d23f0fff8909c606a3e5a55d7ac9fc0d181cdd1c9bae0a7eb70dc",
     "Spot.OneStageZk.popHeld": "79397b8b5dd1ea4686f741751aebd72fe40b040263f878dbb15c1da9d2a8827c",
     "Spot.OneStageZk.printedSize": "21773a089e602e511fa7324868a990d5499b94c52cff27aef4fb036abe58a528",
@@ -57002,7 +57053,8 @@
     "Spot.OneStageZk.registeredInputName": "c6582b919f149bc9efda4240e584136f699ac37376281eb59712a127011aeaae",
     "Spot.OneStageZk.returnedBits": "526678a1f372ad9a8c1a8ab31a6f4abda9941e3417acc4670186ca4ae5b341cb",
     "Spot.OneStageZk.rootBLen": "359e9143fb2577a63416c3c7d2dd23cd9967ff6754c73170e9dc2184d1f4aae8",
-    "Spot.OneStageZk.rootBTables": "6b297e93074460ce370b991a3670df0c454272aa6b118dd5666bf54af1475493",
+    "Spot.OneStageZk.rootBTables": "415b49e203f04218c934b3d70015b425e4b6d4f9f8856dc0fefbc31314780a81",
+    "Spot.OneStageZk.rootBTablesAt": "717d55a5142485aa4fac15f67f64abaf44a409c363d4bfa64ebc0563a6a4ce76",
     "Spot.OneStageZk.rootStep": "35f0955dc6910d71f09e66b5f919c325363d8bc044725f05f2c8560015999c0a",
     "Spot.OneStageZk.rootsOf": "be102973e9ad3f0e573b77acb39b0598169f767ea5ae9afff50054dd677c8f0d",
     "Spot.OneStageZk.run": "417702f7ff36f19de4c4154b15cb9e47bd97c3b635e68ed7446afe853918c8cc",
@@ -57017,10 +57069,12 @@
     "Spot.OneStageZk.splitsFrom": "7181b0742833f22184fa0565070c0368a19952f2d0b0f9fbfa91483c6034f3ed",
     "Spot.OneStageZk.splitsOf": "d18169c4bc3a4ed7a2bbcd18fe4ad3536f51583a85d0683fa7b3c78447fa7255",
     "Spot.OneStageZk.statementAt": "e569643c828f2a85cabb02918dfbc3c2cac9f1dd861f7872a40db6a2a20f6a45",
-    "Spot.OneStageZk.statementOf": "5abb49800bbc7e224ac319a29853e4382d6ea3c6e5289fc9894213d84fae8b33",
+    "Spot.OneStageZk.statementOf": "73071f2600e90690cc6a9c4351e38c6888054efb72440cfbb6e8665a317d61f8",
     "Spot.OneStageZk.step": "3b03721d6ced6798eddc70854cb60612be4c38b1ec6167f44f123f4f83aa40d3",
     "Spot.OneStageZk.stepMember": "608e8bfd59a145d82a09efdf39d95d03dc071160e50ca520bbb0721df6e0a32a",
+    "Spot.OneStageZk.tablesAmong": "f8245c860a29504cee2b5f7ef295a4aba575f5a4a4fc64d37aaed895db5a9ee2",
     "Spot.OneStageZk.tablesHeld": "000574eb0376f78d18d1f42de1622518420348bb5ed5667796faa54c6b7b20c4",
+    "Spot.OneStageZk.tablesMatch": "2f706dd65934e1397e74bebd5b82c9ff7dd77c4ad38b554324894bb58b2b1f51",
     "Spot.OneStageZk.tablesOf": "5d14cb4d8454567b99bad8463df6f9d6fe7503bb6809976e46259cec2c5d008b",
     "Spot.OneStageZk.templateOk": "a5e4e652dc1d4c9f51482b0b140519c4aaa029fbe83144a590e35a907e5d1348",
     "Spot.OneStageZk.treesHeld": "ceb3e31246a635beb0beffb8e7c2db3c5a23fb50a610abc780ed02952b5cce5f",
