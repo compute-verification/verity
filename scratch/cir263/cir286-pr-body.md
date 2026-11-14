@@ -34,7 +34,7 @@ PENDING
 - `RoPEHeadGptJ_v2{D=64}`: ok, 0 failures, 0 unchecked [run].
 - 3 targets, 0 failures, each compared with a realization on random vectors [run].
 
-No Definition, binding or pin changes here, so circuit-check's inputs are `main`'s but for the merged CIR-263 below it [read].
+No Definition, binding or pin changes here [read].
 
 ## Checks at this head
 
