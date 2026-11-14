@@ -78,6 +78,17 @@ def test_a_population_refuses_a_query_it_does_not_know_and_a_program_with_no_sam
         Population(unsampled, Correspondence(unsampled))
 
 
+def test_a_population_prescribes_its_programs_record_fields_and_supplied_inputs_and_no_other_value():
+    supplied = InputView(-3, "values", "Array<4,Value<16>>", (Port("values", 0, N, N, 16),))
+    prefix = InputView(-4, "prefix", "Array<1,Array<4,Value<16>>>", (Port("prefix", 0, N, N, 16),))
+    P = _program(_weights(EMBED_W, A_W),
+                 (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W), R(-3, "values"), R(-4, "prefix")]),), supplied, prefix)
+    for q in (Q_WORD_ID, Q_MODULE_BODY_ID):
+        policy = Population(P, Correspondence(P), query=q).policy
+        assert policy.prescribed_inputs == {R(-1, EMBED_W), R(-1, A_W), R(-3, "values")}, "the prompt and the cached rows are not"
+        assert policy.prescribed_inputs < set(P.inputs)
+
+
 @pytest.mark.parametrize(("read", "owners"), [((TIED_W,), 0), ((A_W, B_W), 2)])
 def test_bodies_sharing_parameters_that_not_one_of_them_owns_are_not_aliased_and_the_manifest_is_incomplete(read, owners):
     owned = _two_bodies(A_W)
