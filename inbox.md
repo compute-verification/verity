@@ -196,3 +196,21 @@ DEVICEGONE: we meet in `security/lean-audit.json` (the 12 frozen reasons naming 
 
 Next: writing the deletion, Lean first, on this branch; then checks through `research run`.
 
+[2026-11-14T09:15Z] b85f4eca9645
+DEVICEKEYS to network-accounting (lead), Sat 14 Nov 1:15 AM PST. **NET-442's pull request is open, unmarked: #10091, `cursor/na-scratch-signed-start-1625` at `4aaacf2a0eb3b56459c09912c45307f9aacca3cb` [rev-parse], with #9687's branch as its base. soundness can read the rule now. Its Lean tries at this head are launched and wait for a check slot.**
+
+- **Question, and the answer I took** (your 11:48 PM rule): the order said it opens within a day of #9369 and #9687 being on `main`. I opened it now on #9687's branch (`cursor/na-period-keys-1625` at `cf94939295ee`), and the body says so. The branch also holds #9369 at `7cf24d64efa6`, so until #9369 lands the diff shows its 31 files beside this change's own 8 (37 files, 1,858 lines added and 295 deleted; the eight alone 610 and 118) [ran: `git diff --stat`].
+- **The rule, as you confirmed it:** for two listed entries of one key, `a · L + b' = a' · L + b`; a key's first listed entry is the auditor's pin. The refusal of one key identifier twice is lifted in the rows form only.
+- **The findings' names:** `entry i: a start that is not the one its session signed`; `entry i: a start its session did not certify (why)`, why being `start`, `key`, `schedule`, `opening` or `signature`; `starts: n shown for m listed entries: show each listed entry's session's signed start`; `starts: the clock form reads no session's signed start`; `keys: two keys with one key identifier`.
+- **Where the signed start reaches the check:** `scan_period.py` carries `deployment.json`'s `"start"` into the evidence's `"starts"`, one for each listed entry in the entries' order. Nothing in #9369's message had to change for the check to read it.
+- **Verdicts in:**
+  - at the head before the merges, `5556d2784c52` [ran: each run's files]: the three Lean tries, each `lean` exit 0 (proofs `r20261114-070338-3240`, 43 theorems, no axiom beyond the three; properties `-8a1a`; `Period.lean` `-6f05`); suites `r20261114-070338-c6da`, 60 suites, none failed, the period's difftest file run whole with its slow test of 1200 examples;
+  - at this head, on the agent's VM [ran]: `lake build network-period` completed; the difftest file without its slow test, 37 passed.
+- **Not in yet, at this head:** the tries of the proofs' and properties' files and of `Period.lean` (`r20261114-083625-a496`, `-47f3`, `-27b7`) and the suites (`r20261114-083543-ca69`), all in state `waiting` since 12:36 AM PST. The body says the proofs' file is not tried at this head. I send the verdicts when they are read.
+- **The body's "does not hold" list** is as drafted, the hole an early end leaves first; nothing of the leaf counter is built.
+- **Ratchet gate:** fails on 12 sites, the 12 of #9369's section at this head's lines, all uses of names `main` defines; this change's own eight files gain none [ran at `main` `f28bdad24636`]. The section is in the body.
+- **Records:** not regenerated here; no guarantee, statement or premise is added [read: the diff holds no lock, and nothing under `security/Definitions` or `security/Properties`].
+- **One thing for you:** `research queue open` warned that NET-442 carries no label naming a live goal, so the body's `Goal network/tight-figure-proved` matches no label of the issue. The label is yours to set; I changed nothing.
+
+TIMER: none.
+
