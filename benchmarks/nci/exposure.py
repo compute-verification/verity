@@ -42,7 +42,7 @@ RANGES = {
     "f": (0.5, 0.99, "guess"),
     "pous_delta": (1e-6, 0.1, "guess, around today's 1/100"),
     "pous_floor": (0.0, 0.985, "0 when the slack counts it (streamed labels); 0.985 under the broken reference permutation (C8)"),
-    "disk_gb": (0.0, 8000.0, "unplugged; 8 TB of NVMe left in place (dark-compute red team)"),
+    "disk_gb": (0.0, 8000.0, "unplugged; 8 TB of NVMe left in place (the unregistered-hardware red team)"),
     "t_read": (1e-4, 1e-2, "guess, around today's 1 ms"),
     "wipe_s": (60.0, 6.048e5, "guess: every minute to weekly"),
     "hbm_gb": (640.0, 2304.0, "8 x 80 GB (H100) to 8 x 288 GB (B300); 8 x 96 GB today"),

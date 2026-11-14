@@ -89,7 +89,7 @@ def test_the_gpus_residual_leaves_pouws_deficit_to_eps_w():
     assert T.DEFAULTS["residual"] == pytest.approx(1 - ((1 - phi) / q_sched + phi) / q_clock, abs=5e-4)
 
 
-def test_unmonitored_compute_trains_at_full_efficiency():
+def test_unregistered_compute_trains_at_full_efficiency():
     r = T.evaluate(T.DEFAULTS | {"residual": 0.0, "host_share": 0.0, "clock_share": 0.0, "unregistered": 0.3}, T.TIERS["T5"])
     assert r["unregistered"] == pytest.approx(0.3, rel=1e-6)
 

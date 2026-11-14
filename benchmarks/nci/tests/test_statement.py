@@ -124,7 +124,7 @@ def test_the_fit_bound_rows_are_fits_with_chi_on_top():
     assert F.row(edge, N, L)["fit_over_closed"] == pytest.approx(1.0, rel=1e-6)
 
 
-def test_the_regimes_add_unmonitored_compute_at_full_efficiency():
+def test_the_regimes_add_unregistered_compute_at_full_efficiency():
     """With today's wipes the fit bound caps nothing; at 6 GB it caps the best design's residual, which trains at
     MFU_0 (reference efficiency) where the cap and nu are counted multiplications."""
     q = P | S.BEST
