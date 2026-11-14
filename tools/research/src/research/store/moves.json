@@ -3346,6 +3346,12 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/filler/pfill_ref.py": "benchmarks/pouw/filler/pfill_ref.py",
+        "verity/protocols/accounting/pouw/prover/kernels/filler/dfill_ref.py": "benchmarks/pouw/filler/dfill_ref.py"
+      }
+    },
+    {
+      "paths": {
         "security/Proofs/Pouw/EndToEndWindow/": "security/Proofs/Pouw/EndToEndExecutionPhase/",
         "security/Proofs/Properties/Verity/Sampled/MemberForm/WindowPasses.lean": "security/Proofs/Properties/Verity/Sampled/MemberForm/ExecutionPhasePasses.lean",
         "security/Proofs/Properties/Verity/WindowFiles.lean": "security/Proofs/Properties/Verity/ExecutionPhaseFiles.lean",
