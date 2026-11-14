@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[4]
 spec = importlib.util.spec_from_file_location("post_train_under_test", ROOT / "tools" / "verity" / "check" / "post_train.py")
 PT = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(PT)
+PASSED = PT.passed
 
 
 def _junit(tmp_path: Path, cases: dict[str, str]) -> Path:
@@ -66,6 +67,113 @@ def test_a_train_drive_fast_forwarded_main_to_is_a_landing_of_the_check_that_pas
     monkeypatch.setattr(PT, "passed", checked.get)
     assert PT.check_attempt(train, cwd=repo) == "r20261012-141854-3bba"
     assert PT.check_attempt(lane, cwd=repo) is None, "a checked commit main doesn't contain is no landing"
+
+
+class _Store:
+    """The store's attempts index (the columns `passed` reads) and each attempt's result.json steps."""
+    remote = None
+
+    def __init__(self, attempts: list[tuple], steps: dict[str, dict[str, str]]):
+        import sqlite3
+        from types import SimpleNamespace
+
+        db = sqlite3.connect(":memory:")
+        db.execute("CREATE TABLE attempts(id TEXT PRIMARY KEY, tool TEXT, state TEXT, rc INTEGER, start_utc TEXT, "
+                   "source_commit TEXT, source_dirty INTEGER, manifest_json TEXT)")
+        db.executemany("INSERT INTO attempts VALUES (?, ?, ?, ?, ?, ?, ?, ?)", attempts)
+        self.index = SimpleNamespace(sql=lambda q, p=(): db.execute(q, p).fetchall())
+        self.steps = steps
+        self.get_manifest = lambda art: SimpleNamespace(meta={"steps": [{"step": s, "status": v}
+                                                                         for s, v in self.steps[art].items()]})
+
+    def get_attempt(self, rid):
+        return {"outputs": {"result": rid}} if rid in self.steps else {}
+
+
+def _shard(rid: str, sha: str, shard: str, rc: int, tool: str = "python3", dirty: int = 0, deferred: bool = True) -> tuple:
+    """An attempt of the verified queue's check of ``sha``, as `train.sh --shard` launches it (``shard`` None: no --shard)."""
+    argv = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "ci", "--", "uv", "run", "python",
+            "tools/verity/check/check.py", "--keep-going", *(["--deferred", "pytest,lean-build,circuit-check"] if deferred else []),
+            "--no-regenerate", *(["--shard", shard] if shard else [])]
+    return (rid, tool, "done" if rc == 0 else "failed", rc, f"2026-11-14T{rid[10:12]}:{rid[12:14]}:{rid[14:16]}Z", sha, dirty,
+            json.dumps({"argv": argv, "params": {"argv": argv}}))
+
+
+def _landed(tmp_path: Path) -> tuple[Path, str, str]:
+    """A repository whose origin/main holds a landing; the landing's commit and one off main."""
+    origin, repo = tmp_path / "origin.git", tmp_path / "repo"
+    _git(tmp_path, "init", "-q", "--bare", "-b", "main", str(origin))
+    _git(tmp_path, "clone", "-q", str(origin), str(repo))
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "Queue: #1 a change\n\nPR: #1")
+    landed = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "push", "-q", "origin", "HEAD:refs/heads/main")
+    _git(repo, "commit", "-q", "--allow-empty", "-m", "a candidate the queue dropped")
+    off = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "fetch", "-q", "origin")
+    return repo, landed, off
+
+
+def _store(monkeypatch, attempts: list[tuple], steps: dict[str, dict[str, str]] | None = None) -> None:
+    import research.store.local as L
+
+    passed = {rid: {"pytest": "passed", "lean-build": "passed", "circuit-check": "passed"} for rid, *_ in attempts}
+    monkeypatch.setattr(L, "LocalStore", lambda: _Store(attempts, {**passed, **(steps or {})}))
+    monkeypatch.setattr(PT, "passed", PASSED)
+    monkeypatch.setattr(PT, "off_gate", lambda sha: {"circuit-check", "ratchet-gate"})
+
+
+def test_a_verified_queue_landing_is_labelled_on_shard_1_of_its_sharded_check(tmp_path, monkeypatch):
+    """The verified queue checks a candidate in shards (`train.sh --shard K/N`, recorded with no `--tool check`) and fast-forwards
+    main to it: its landing is found by every shard of that check passing, and labelled on shard 1, whichever ended first."""
+    repo, landed, off = _landed(tmp_path)
+    shards = [_shard("r20261114-171306-0003", landed, "3/3", 0), _shard("r20261114-171305-0002", landed, "2/3", 0),
+              _shard("r20261114-171304-0001", landed, "1/3", 0), _shard("r20261114-171304-0004", off, "1/3", 0)]
+    _store(monkeypatch, shards)
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001"
+    assert PT.check_attempt(off, cwd=repo) is None, "a checked candidate main doesn't contain is no landing"
+    _store(monkeypatch, shards[1:])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", "a shard still running counts neither way"
+    _store(monkeypatch, [*shards[:2], _shard("r20261114-171304-0005", landed, "auto:1/3", 0)])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0005", "a shard of an auto plan"
+    _store(monkeypatch, [_shard("r20261114-171304-0006", landed, None, 0, deferred=False, tool="check"), *shards])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0006", "drive's whole check comes first"
+
+
+def test_a_shard_that_failed_on_the_gate_makes_no_landing(tmp_path, monkeypatch):
+    """A shard that failed a step on the merge gate, or was killed, means the check didn't pass; one that failed only steps
+    policy.toml takes off the gate (circuit-check, ratchet-gate) passed it, as the queue reads it; a shard's newest result counts."""
+    repo, landed, _ = _landed(tmp_path)
+    ok = [_shard("r20261114-171304-0001", landed, "1/3", 0), _shard("r20261114-171306-0003", landed, "3/3", 0)]
+    for rc, steps in ((1, {"pytest": "failed", "circuit-check": "passed"}), (1, {"pytest": "passed", "lean-build": "skipped"}),
+                      (137, {"pytest": "passed"}), (143, {}), (1, None)):
+        two = _shard("r20261114-171305-0002", landed, "2/3", rc)
+        _store(monkeypatch, [*ok, two], {"r20261114-171305-0002": steps} if steps is not None else {})
+        if steps is None:
+            monkeypatch.setattr(_Store, "get_attempt", lambda self, rid: {})
+        assert PT.check_attempt(landed, cwd=repo) is None, (rc, steps)
+        monkeypatch.undo()
+    _store(monkeypatch, [*ok, _shard("r20261114-171305-0002", landed, "2/3", 1)],
+           {"r20261114-171305-0002": {"pytest": "passed", "circuit-check": "failed", "ratchet-gate": "failed"}})
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", "failed off the gate only"
+    _store(monkeypatch, [*ok, _shard("r20261114-171305-0002", landed, "2/3", 0), _shard("r20261114-171205-0002", landed, "2/3", 137)])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001", "a shard relaunched after it was killed"
+    _store(monkeypatch, [*ok, _shard("r20261114-181305-0002", landed, "2/3", 1), _shard("r20261114-171305-0002", landed, "2/3", 0)],
+           {"r20261114-181305-0002": {"pytest": "failed"}})
+    assert PT.check_attempt(landed, cwd=repo) is None, "its newest result failed"
+
+
+def test_an_unrun_twin_is_no_shard_result(tmp_path, monkeypatch):
+    """With no free slot a shard launches twins, one per machine: the first to take a slot runs it and the others exit 75,
+    not started.  Those neither fail the check nor stand for a shard, nor does any other run of the commit than a shard of it."""
+    repo, landed, _ = _landed(tmp_path)
+    twins = [_shard(f"r20261114-17140{k}-00{k}{k}", landed, f"{k}/3", PT.UNRUN) for k in (1, 2, 3)]
+    shards = [_shard("r20261114-171304-0001", landed, "1/3", 0), _shard("r20261114-171305-0002", landed, "2/3", 0)]
+    _store(monkeypatch, [*twins, *shards])
+    assert PT.check_attempt(landed, cwd=repo) == "r20261114-171304-0001"
+    others = [_shard("r20261114-171304-0007", landed, None, 0), _shard("r20261114-171304-0008", landed, "1/3", 0, dirty=1),
+              (*_shard("r20261114-171304-0009", landed, None, 0)[:7], json.dumps({"params": {"argv": ["bash", "-c", "--shard 1/3"]}}))]
+    _store(monkeypatch, [*twins, *others, shards[1]])
+    assert PT.check_attempt(landed, cwd=repo) is None, "no shard 1: a twin, an unsharded run, a dirty tree, another command"
 
 
 def test_only_a_landing_has_a_check_attempt_to_label(tmp_path):

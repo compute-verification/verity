@@ -14,7 +14,8 @@ rebuilds' rows (`regression fail:<row>`), and the owner of the rows of record (`
 as ci, with the run to read.  A carried verdict rings no one: the run it carries from rang.
 
 COMMIT (default origin/main) must be a landing: its `Check: <attempt>` trailer names the check that let it in, or, for a train
-`research queue drive` fast-forwarded main to, the store's passing check of that commit does.  Drive passes the check it landed
+`research queue drive` or the verified queue fast-forwarded main to, the store's passing check of that commit does (`passed`:
+the whole check, or shard 1 of the queue's sharded one).  Drive passes the check it landed
 on as `--attempt RID`, taken when RID ran on COMMIT or on the train COMMIT merges onto a moved main (its second parent): a landing
 with deferred steps has no passing check in the store when this starts.  Its tree is checked
 out in a worktree of its own and the rebuilds run there through `research run --on MACHINE`, pinned to --cores, under
@@ -85,6 +86,10 @@ CHECK_RE = re.compile(r"^Check: (r20\d{6}-\d{6}-[0-9a-f]{4})$", re.M)
 #: regenerated
 LOCKS_RE = re.compile(r"^Regenerated: \S", re.M)
 ROW_RE = re.compile(r"-(r\d+)\]$")
+CHECK_PY = "tools/verity/check/check.py"
+SHARD_RE = re.compile(r"(?:auto:)?([1-9]\d*)/([1-9]\d*)")
+#: a twin launch that never took a slot exits this, not started (`train.sh`)
+UNRUN = 75
 
 JOB = """set -u
 out=$RESEARCH_RUN_DIR/out; mkdir -p "$out"
@@ -112,8 +117,9 @@ def git(*args: str, cwd: Path = ROOT, check: bool = True) -> str:
 
 def check_attempt(commit: str, cwd: Path = ROOT, attempt: str | None = None) -> str | None:
     """The attempt a landing of main was admitted on: its `Check:` line (`research merge`; a paragraph of its own, which git's
-    `%(trailers)` doesn't read), else, for a commit on origin/main, the newest check that passed on its clean tree (`passed`): a
-    train `research queue drive` fast-forwards main to was checked as it is, so it has no trailer.  None for any other commit.
+    `%(trailers)` doesn't read), else, for a commit on origin/main, the check that passed on its clean tree (`passed`): a train
+    `research queue drive` or the verified queue fast-forwards main to was checked as it is, so it has no trailer.  None for any
+    other commit.
 
     With ``attempt`` (`--attempt`, the check drive landed on), that attempt, when it ran on the commit (a fast-forward) or on the
     commit's second parent, the train drive merged onto a moved main, whose body records it (`Checked: RID (full check of ...`;
@@ -163,8 +169,8 @@ def source_of(rid: str) -> str | None:
 
 
 def passed(sha: str) -> str | None:
-    """The newest `check` attempt that passed on ``sha``'s clean tree, as the merge gate reads the store; None when the store
-    can't be read."""
+    """The check that passed on ``sha``'s clean tree, from the store: the newest whole `check` attempt that passed, as the merge
+    gate reads it, else the verified queue's sharded check of it (`sharded`); None when the store can't be read."""
     try:
         from research.store.local import LocalStore
 
@@ -173,10 +179,64 @@ def passed(sha: str) -> str | None:
             store.refresh(attempts_only=True)
         rows = store.index.sql("SELECT id FROM attempts WHERE tool = 'check' AND source_commit = ? AND source_dirty = 0 "
                                "AND state = 'done' AND rc = 0 ORDER BY start_utc DESC LIMIT 1", (sha,))
+        if rows:
+            return rows[0][0]
+        shards = store.index.sql("SELECT id, rc, manifest_json FROM attempts WHERE source_commit = ? AND source_dirty = 0 AND "
+                                 "manifest_json LIKE ? ORDER BY start_utc DESC", (sha, f"%{CHECK_PY}%--shard%"))
+        got = [(rid, rc, (json.loads(m or "{}").get("params") or {}).get("argv") or []) for rid, rc, m in shards]
+        return sharded(got, lambda rid: unpassed(store, rid), off_gate(sha))
     except Exception as e:  # noqa: BLE001  (no attempt found: the caller says the commit is no landing)
         print(f"post-train: the store can't be read for {sha[:12]}'s check ({type(e).__name__}: {e})", file=sys.stderr)
         return None
-    return rows[0][0] if rows else None
+
+
+def shard_of(argv: list[str]) -> tuple[int, int] | None:
+    """K and N of a shard of the verified queue's check, by its command (`train.sh` runs `check.py ... --shard [auto:]K/N`)."""
+    if CHECK_PY not in argv or "--shard" not in argv[:-1]:
+        return None
+    m = SHARD_RE.fullmatch(argv[argv.index("--shard") + 1])
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def sharded(rows: list[tuple[str, int | None, list[str]]], unpassed_of, off: set[str]) -> str | None:
+    """Shard 1's attempt of the verified queue's newest sharded check in ``rows`` (each attempt's id, rc and command, newest first),
+    when that check passed so far: shard 1 has a result, and the newest result of each shard K of its N passed, or failed (rc 1)
+    only on steps ``off`` the gate (``unpassed_of(rid)``: the steps its result.json didn't pass; None when unreadable).  A twin
+    that exited UNRUN never ran and is no result; a shard with no attempt yet counts neither way, since the queue lands a
+    candidate once every step on the gate passed while a shard still runs one off it (circuit-check).  Shard 1 is the one
+    labelled because every plan has one, so the label sits on one attempt whichever shard ends first, and `carried` and
+    `later_landing`, which ask again later, find the same; in ci.toml's three-shard plan it is also the one that runs pytest."""
+    newest: dict[int, tuple[str, int | None]] = {}
+    n = None
+    for rid, rc, argv in rows:
+        if rc == UNRUN or (kn := shard_of(argv)) is None:
+            continue
+        n = n or kn[1]
+        if kn[1] == n:
+            newest.setdefault(kn[0], (rid, rc))
+    if 1 not in newest:
+        return None
+    for rid, rc in newest.values():
+        if rc != 0 and (rc != 1 or not (left := unpassed_of(rid)) or not left <= off):
+            return None
+    return newest[1][0]
+
+
+def unpassed(store, rid: str) -> set[str] | None:
+    """The steps attempt ``rid``'s result.json ran and didn't pass; None when it has no readable result."""
+    art = (store.get_attempt(rid) or {}).get("outputs", {}).get("result")
+    steps = store.get_manifest(art).meta.get("steps") if art else None
+    if not isinstance(steps, list):
+        return None
+    return {str(s.get("step")) for s in steps if isinstance(s, dict) and s.get("status") != "passed"}
+
+
+def off_gate(sha: str) -> set[str]:
+    """policy.toml's `off_gate` at ``sha``: none when it can't be read, so every failed step counts."""
+    from research import policy
+
+    got = policy.at(ROOT, sha)
+    return set() if isinstance(got, str) else set(got.off_gate)
 
 
 def _order(row: str) -> tuple[int, int, str]:
