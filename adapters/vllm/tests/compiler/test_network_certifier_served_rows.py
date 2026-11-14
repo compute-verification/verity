@@ -13,7 +13,7 @@ import pytest
 
 from verity_vllm.compiler import compile_slice as CS, served_rows as SR
 from verity_vllm.compiler import served_statics as SS
-from adapters.vllm.tests.compiler.test_network_certifier_compile_slice import BOOK
+from tests.compiler.test_network_certifier_compile_slice import BOOK
 
 FIXTURE = Path(__file__).parent.parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "tests" / "fixtures" / "compile_slice_smallkv.json"
 ROWS = 1 << CS.FLAGS.index("rows")

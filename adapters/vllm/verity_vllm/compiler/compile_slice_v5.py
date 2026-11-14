@@ -413,7 +413,7 @@ def _step(C, S, carry, srv_u, backs, hits, evs, rets, win, valid, ids):
     the steps', cache and served flags so far) and the step's records, field by field."""
     sh = _step_shape(S)
     Sc, St = CS.chain(S), CS.step_statics(S)
-    Z, Wd, PWD, CW, A, R, CA = sh.Z, RC.width(Sc), pool_width(S), sh.CW, S.A, S.R, sh.CA
+    Z, Wd, PWD, CW, A = sh.Z, RC.width(Sc), pool_width(S), sh.CW, S.A
     cur, prow, oks = list(carry[:Wd]), list(carry[Wd:Wd + PWD]), list(carry[Wd + PWD:])
     wf = RC._split(win, RC.window_fields(Sc))
     r = RC._split(cur, RC.row_fields(Sc))
@@ -536,7 +536,7 @@ def _sig_key(S):
 
 def _verdict(C, S, load, ids, oks, cur, win, prow, cout, spad, rpad, pool, calls, Ps, seq, P, kok, left, live, r, k,
              Pk, Pa, alpha):
-    RW, KW = _bitlen(S.K), _bitlen(S.CU)
+    KW = _bitlen(S.CU)
     last = mul_forms(C, list(Pk), _factor(C, live[0], alpha, list(r) + RS._add(C, list(k), [ONE], KW)))
     flags = [and_reduce(C, [load[0], ids[0], RC._zero(C, list(rpad))]), oks[0], oks[1],
              C.AND(oks[2], RC._zero(C, list(spad))), RC._eq(C, list(cur) + list(win) + list(prow), list(cout)),
