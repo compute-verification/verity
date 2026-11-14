@@ -26,11 +26,52 @@ In a NAME, a `-` stands for a `_`.
 | `verity_cli/__init__.py` | the dispatch, `verity check`, `verity verify proof` and `verity lean try` |
 | `verity_cli/deployed.py` | `verity lean deployed`, over `tools/verity/lean/check.py`'s `trust_gaps` |
 | `verity_cli/run.py` | `verity run` and `verity config`, over `verity.config` |
+| `verity_cli/served_table.py` | the served window's table `verity run` loads (`run.REGISTRY`): each subprotocol's declaration, the workload, each demo's configuration and each party's piece |
 | `verity_cli/settings.py` | the environment variables `verity run` reads, declared once |
 
-`verity run` and `verity config` refuse a configuration (`no-table`) until a workload's protocols bring a table of parties;
-the suite runs one of its own (`tests/step0.py`).
+The suite runs a table of its own (`tests/step0.py`), and `tests/lifecycle/` steps both composites through one monitoring
+period on CPU with every party simulated in one process (`tests/lifecycle/README.md`).
 
 ~~~sh
 uv run tools/check/suites.py tools/verity/cli   # the suite, on a node through `research run --on auto`
 ~~~
+
+## The onsite served window
+
+`demos/onsite_full.toml` is one deployment configuration (`verity/config/v0`, `verity.config`) of onsite's seven
+subprotocols on the `served-window` workload: one window of Llama-3.2-1B in int8 served through the vLLM integration's
+committing endpoint. `verity run` executes it, reading `verity_cli/served_table.py`. The file is
+`served_table.configuration` rendered by `verity.config.render`, and `tests/test_onsite_served.py` holds it to that byte for
+byte, as it does each other demo file. It names no host and no address: those are the deploy bindings' (`verity_cli.run`'s
+docstring), so binding another host changes no hash. It pins the memory challenger's two keys, one for PoUS's sessions
+and one for the wipe's (`[[pin]]`, `served_table.PINS`), and they are inside its hash, which `tests/configurations.toml`
+holds.
+
+### Interface
+
+| Entry point | What it is |
+|---|---|
+| `verity run demos/onsite_full.toml [--dry-run] [--on MACHINE] [--bindings FILE] [--state DIR]` | Reads the configuration and the deploy bindings, runs the pieces of the parties placed on this machine, and keeps the run under `STATE`: the served window's public record in `STATE/out`, and the monitoring period's `VERDICT` line, printed and written to `STATE/record/verdicts.jsonl`. |
+| `served_table.configuration(commit: str, demo: str = "onsite_full") -> dict[str, Any]` | A demo file's configuration as data (`served_table.DEMOS`). |
+| `served_table` | What `verity run` reads of the served window: `MANIFESTS` (each subprotocol's declaration, a `Component`), `WORKLOADS` (the workload's declaration with its piece), `PARTIES` (each subprotocol's piece for each of its parties, a `Piece`), `ORDER`, and `live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result`, which runs the pieces of the parties here and returns each party's outcome or refusal. |
+
+### Running it
+
+Every party resolved, every channel and piece, and nothing run (no GPU); with `--bindings`, a missing binding refused:
+
+    verity run demos/onsite_full.toml --dry-run --bindings BINDINGS
+
+On the prover node, from the commit `research deploy install` installed (set `[program] commit` to it, else the verdict
+names the difference under `simulated`): the served window, every piece inside it, the auditor's sides opened through
+their bindings:
+
+    verity run demos/onsite_full.toml --on prover-node --bindings BINDINGS --state STATE
+
+The gate's and the auditor device's sides are started by their gates when the prover's pieces open them, so
+`verity run --on gate-host` starts nothing. On the auditor device, with `STATE/out` holding the served window's public
+record, the onsite check and the period's verdict:
+
+    verity run demos/onsite_full.toml --on auditor-host --state STATE
+
+A run of record launches each of the two commands under `research run`, and `benchmarks/demo_minutes/onsite_minutes.py`
+reads the minutes from those two runs (`vllm/onsite-demo-minutes` in `benchmarks/demo_minutes/metrics.toml`).
