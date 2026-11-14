@@ -1,6 +1,7 @@
-"""`benchmarks/compute/h200_share.py`: goal 14's number, the share of one H200's capacity an honest Pearl+ prover is
-credited, at each data-sheet reading of the card's tensor clock. Modeled: it multiplies two recorded runs' figures and
-the card file's ceilings, and nothing ran the product.
+"""`benchmarks/compute/h200_share.py`: the number of the goal `accounting/h200-97-percent` ("An H200's capacity
+credited at the data sheet's ceilings"), the share of one H200's capacity an honest Pearl+ prover is credited, at each
+data-sheet reading of the card's tensor clock. Modeled: it multiplies two recorded runs' figures and the card file's
+ceilings, and nothing ran the product.
 
     uv run python benchmarks/compute/h200_share.py --from RUN --duty RUN
 
@@ -12,16 +13,18 @@ reading credit defaults to):
                wgmma alone) on uniform operands at the driver's default clocks, its MACs over the host's interval
                around the kernel, read from that run's `out/beside.jsonl` (`--duty RUN`)
     ceiling(r) the card's peak e4m3 MACs a second at reading r (`verity.device.rate` on `hardware/cards/` `CARD`)
-    share      goal 10's number: the MACs the Pearl+ verifier credits over the MACs the served model computes, on a
-               served run of record (`run.py --from RUN`, which refuses an answer that isn't an accept)
+    share      `compute-accounting/verified-compute-share`: the MACs the Pearl+ verifier credits over the MACs the
+               served model computes, on a served run of record (`run.py --from RUN`, which refuses an answer that
+               isn't an accept)
 
 Credit counts each MAC at its pipe's data-sheet ceiling, so a span of T seconds holds ceiling(r) * T MACs of capacity,
-and a prover that computes every MAC of the served model at `rate` is credited share * rate * T of them. What the model
-leaves out makes the number an upper bound on the served share: Pearl+'s own work beside its matmuls (its commitments'
-hashing, the overhead `benchmarks/pearl-plus-gamma-*-h200` measures) takes time and earns nothing; attention, the norms
-and the rest run below the dense loop's rate; and a served matmul's operands are not uniform bytes. Uniform operands are
-the goal's stated case: of the duty run's operand classes they draw the most power, and the tensor pipe held its lowest
-clock on them.
+and a prover that computes every MAC of the served model at `rate` is credited share * rate * T of them. So the goal's
+target is the honest rate's share of each ceiling (77% at `clock.sm`, 83% at `clock.tensor`) times the verified share
+(95.44% on the run of record): 73% and 79%. What the model leaves out makes the number an upper bound on the served
+share: Pearl+'s own work beside its matmuls (its commitments' hashing, the overhead `benchmarks/overhead/run.py table`
+measures on the H200) takes time and earns nothing; attention, the norms and the rest run below the dense loop's rate;
+and a served matmul's operands are not uniform bytes. Uniform operands are the goal's stated case: of the duty run's
+operand classes they draw the most power, and the tensor pipe held its lowest clock on them.
 
 It prints the number at each reading as text and one line of JSON; exits 0 with it, 1 with none (the record's answer is
 not an accept, or the Lean verifier's verdict is not the same) and 2 when a run can't be read or holds no such point.
@@ -83,7 +86,7 @@ def duty_points(store: compute.EvidenceStore, run: str) -> list[dict]:
 
 
 def document(share_doc: dict, rate: Fraction, duty_run: str) -> dict:
-    """The printed document: the number at each reading, from goal 10's document `share_doc` and the honest `rate`."""
+    """The printed document: the number at each reading, from `run.py`'s document `share_doc` and the honest `rate`."""
     card = load_card(CARD)
     share = Fraction(share_doc["credited_macs"], share_doc["model_macs"])
     readings = {}
@@ -105,7 +108,7 @@ def text(doc: dict) -> str:
                      f"{100 * r['value']:.2f}%, the honest rate being {100 * r['utilization']:.2f}% of the ceiling")
     lines.append(f"  honest rate {doc['honest_rate_macs_per_s'] * 1e-12:.2f} T e4m3 MACs/s, arm {ARM} on {CLASS} operands "
                  f"at the {CLOCK} clocks, run {doc['duty_run']}")
-    lines.append(f"  verified compute share {100 * doc['verified_compute_share']:.2f}%, goal 10's number, run {doc['run']}, "
+    lines.append(f"  verified compute share {100 * doc['verified_compute_share']:.2f}% ({compute.METRIC}), run {doc['run']}, "
                  f"commit {doc['commit'] or 'unknown'}")
     lines.append("  an upper bound on the served share: Pearl+'s work beside its matmuls, the non-matmul work and served "
                  "operands are not in it")
@@ -129,7 +132,7 @@ def main(argv: list[str] | None = None, *,
          store_of: Callable[[], compute.EvidenceStore] = compute.opened) -> int:
     ap = argparse.ArgumentParser(prog="h200_share.py", description=__doc__.split("\n\n")[0])
     ap.add_argument("--from", dest="run", metavar="RUN", required=True,
-                    help="a served run of record: goal 10's number read from its record (run.py --from)")
+                    help="a served run of record: its verified compute share read from its record (run.py --from)")
     ap.add_argument("--duty", metavar="RUN", required=True,
                     help="a benchmarks/tensor_duty --arms fp32-beside run on an H200: its honest arm A rate")
     a = ap.parse_args(argv)

@@ -1,8 +1,9 @@
-"""`h200_share.py`: goal 14's number is the honest arm A rate over the H200 card's e4m3 ceiling at each reading of its
-tensor clock, times goal 10's verified compute share, held here to the same arithmetic in fractions on made-up duty
-points and `test_compute`'s fixture record (credit three quarters of the model's MACs). Only arm A on uniform operands
-at the default clocks is read; a record whose answer isn't an accept prints no number, and a duty run with no such point
-can't be read. Under a research run the metric is written once a reading, marked modeled, the default reading last."""
+"""`h200_share.py`: the number of `accounting/h200-97-percent` is the honest arm A rate over the H200 card's e4m3
+ceiling at each reading of its tensor clock, times `compute-accounting/verified-compute-share`, held here to the same
+arithmetic in fractions on made-up duty points and `test_compute`'s fixture record (credit three quarters of the
+model's MACs). Only arm A on uniform operands at the default clocks is read; a record whose answer isn't an accept
+prints no number, and a duty run with no such point can't be read. Under a research run the metric is written once a
+reading, marked modeled, the default reading last."""
 from __future__ import annotations
 
 import json
