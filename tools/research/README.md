@@ -96,7 +96,7 @@ research fetch RUN [--all]               # records only, or every file sha256-ve
 research status [RUN] [--refresh] [--all] [--json]   # under each active run, a `mem` line per cgroup it executes in (scopemem.py):
                                          # current, peak, limit, growth from its own samples, NEAR LIMIT within 10%; remote: with RUN or --refresh
 research inspect RUN [--json|--py-spy]   # fetch, status RUN and inspect take a run another VM launched (a full id): found on
-                                         # --on NAME, else on each ssh machine but the auditor hosts, and its records fetched here
+                                         # --on NAME, else on each ssh machine but the auditor devices, and its records fetched here
 research data SUBCOMMAND ...             # the store: put/show/fetch/select/... and lookup / pull / attempt publish
 research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, leases, the budgets guard (src/research/pods/README.md)
 research tele SUBCOMMAND ...             # the harness's own surface (below)

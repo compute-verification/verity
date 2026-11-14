@@ -1,14 +1,15 @@
-/-
+module
+
+public import Flock.Zk
+meta import Flock.Zk
+
+/-!
 A `--zk` statement's digest hashes its identity as upstream's `Stmt::new` does, `serde_json::to_vec(&sorted(identity))`
 (`Flock.identityBytes`): strings in UTF-8. The identity's `hooks` name `veil (ePrint 2026/683 §4.1, …)`, so `§` enters
 the digest as its bytes `c2 a7`. Canonical JSON's escape (`canon`) would give another digest and Σ, and the prover's
 `Hello` would fail R7. `HOOKS` is upstream's `zk_identity` at `mask_log` 14 (`flock-circuit.rs`), as `serde_json`
 writes it.
 -/
-module
-
-public import Flock.Zk
-meta import Flock.Zk
 
 @[expose] public section
 
@@ -48,5 +49,57 @@ def identity : Json :=
 #guard (bytesOf (Zk.hooks 14 false true)).data == HOOKS.toUTF8.data
 #guard (String.fromUTF8? (bytesOf identity)).map (fun s => (s.splitOn ("\"hooks\":" ++ HOOKS)).length) == some 2
 #guard (canon (Zk.hooks 14 false true)).toOption != some HOOKS
+
+/-! ## The wide-leaf statement
+
+Its `--zk` schedule is `fast100`'s up to `m = 31` and holds level 0 at `2^19` symbols from 32 to 35. Its identity and its
+`Hello` are its own at every `m`, so a session of one version is refused as one of the other even where the two
+schedules are one: the statement digest hashes the identity, Σ the digest, and `Hello` carries Σ and the profile, which
+S2 compares with the record's byte for byte. -/
+
+/-- A string field of a JSON object, `""` when absent. -/
+def strOf (j : Json) (k : String) : String := (j.getObjValAs? String k).toOption.getD ""
+
+def wide : Json := (Zk.tags Tags.circuitWideLeaf 14 1).identity
+
+-- today's version reads the schedule it read
+#guard (List.range 40).all fun m => reprStr (Zk.schedule false m) ==
+  reprStr (match Zk.queries0 false m, fast100 m with
+    | .ok q0, some sch =>
+      let l0 := sch.levels[0]!
+      let strata := decompose q0 l0.d
+      (.ok ({ sch with levels := sch.levels.set! 0 { l0 with q := q0, strata, cap := strata.getD 0 0 } }, 2 * q0) :
+        V (Schedule × Nat))
+    | .error e, _ => .error e
+    | _, none => .error s!"m = {m}: no fast100 schedule")
+#guard [32, 33, 34, 35].all fun m => (Zk.queries0 false m).toOption == some 218
+-- up to m = 31 the two versions' schedules are one
+#guard (List.range 32).all fun m => reprStr (Zk.schedule true m) == reprStr (Zk.schedule false m)
+-- 32 to 35: level 0 of 2^19 symbols with m − 25 lanes and 219 queries, the levels after it those of m = 31
+#guard [32, 33, 34, 35].all fun m => match Zk.schedule true m with
+  | .ok (s, tPad) => tPad == 438 && s.k0 == m - 25 && s.levels.map (·.q) == #[219, 106, 71, 53, 43, 36] &&
+      s.levels.map (·.d) == #[19, 17, 15, 13, 11, 9] && s.levels[0]!.lanes == m - 25 &&
+      s.levels[0]!.strata == decompose 219 19 && s.levels[0]!.cap == 7
+  | .error _ => false
+#guard [36, 37].all fun m => (Zk.schedule true m).toOption.isNone && (Zk.schedule false m).toOption.isNone
+#guard (List.range 25).all fun m => (Zk.schedule true m).toOption.isNone
+-- `queries0`'s rule at `L = 2^18`: 219 is the least count at 100 bits
+#guard [218, 219].map (fun q : Nat =>
+  let rho := (2 ^ 18 + 2 * q).toFloat / (2 ^ 19 : Nat).toFloat
+  decide (q.toFloat * Float.log2 (1 / (Float.sqrt rho + 0.02)) ≥ 100)) == [false, true]
+-- the identity: the profile and the query rule's text are the wide leaf's, and nothing else of the hooks differs
+#guard strOf identity "profile" == "fast100" && strOf wide "profile" == Tags.WIDE_LEAF_PROFILE
+#guard strOf (Zk.hooks 14 false true true) "ligerito_level0_queries" ==
+  strOf (Zk.hooks 14 false true) "ligerito_level0_queries" ++
+    "; wide leaf: level 0 of 2^19 symbols at m = 32..35 (k_0 = m - 25, L = 2^18), where q_0 = 219"
+#guard bytesOf wide != bytesOf identity
+#guard (bytesOf ((Zk.hooks 14 false true true).setObjVal! "ligerito_level0_queries" Json.null)).data ==
+  (bytesOf ((Zk.hooks 14 false true).setObjVal! "ligerito_level0_queries" Json.null)).data
+-- `Hello`: the two versions' differ at the same Σ, link size and coins
+#guard (helloOf Tags.circuitWideLeaf ByteArray.empty 20 .seed).toOption != (helloOf Tags.circuit ByteArray.empty 20 .seed).toOption
+#guard ((helloOf Tags.circuitWideLeaf ByteArray.empty 20 .seed).toOption.map
+  fun h => (h.splitOn "\"profile\":\"fast100-wide-leaf\"").length) == some 2
+#guard ((helloOf Tags.circuit ByteArray.empty 20 .seed).toOption.map
+  fun h => (h.splitOn "\"profile\":\"fast100\"").length) == some 2
 
 end Flock.Test.ZkIdentity

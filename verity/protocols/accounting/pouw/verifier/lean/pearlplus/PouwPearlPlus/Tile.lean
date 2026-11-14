@@ -13,7 +13,7 @@ public import PouwCommit.Rows
    load's refusal, `DomainError`; `load` refuses such a pass first, and here it holds for any `Pass`, so the words are
    formed only at k ≤ 2^16, where `s5Stats`' `Words.ofInt` of ⌈k/8⌉ is below 2^24 and exact);
 1. the openings cover the tile (A's rows and B's columns at the tile's positions, in order);
-2. each A row opens against the call's activation root (`activation opening`), each B row against its weight's root
+2. each A row opens against the call's activation root (`activation opening`), each B row against its fixed operand's root
    (`weight opening`), and the transcript leaf at the tile's id against the pass's transcript root (`transcript opening`),
    all `hm96-sha512` trees (`PouwCommit.Rows`);
 3. the tile's words from the opened values (`Words.encode`, `Words.checked`; a non-finite value is `inadmissible inputs`),
@@ -25,7 +25,7 @@ public import PouwCommit.Rows
    (`the opened row holds N words`: the opening binds a row's value, of any length) and each word is the unscale of the
    tile's U (`Rule.yReason`), over the bound or not.
 
-`wn` is the fixed operand's noise (`Words.fixedNoise`), once per pass and weight; its failure is the tile's
+`wn` is the fixed operand's noise (`Words.fixedNoise`), once per pass and fixed operand; its failure is the tile's
 `inadmissible inputs`, where Python's `encode` meets it.
 -/
 

@@ -650,7 +650,7 @@ theorem outer_of_answer {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {j r e s
     rw [show (2 * j + r) / 2 = j by omega]
     exact getElem!_pos _ j hj
   have hstj : (Masked.stsOf x)[j]! = (Masked.stsOf x)[j] := getElem!_pos _ j hj
-  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
+  have hz : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * j + r) / 2]!.wideLeaf (Masked.stsOf x)[(2 * j + r) / 2]!.m = .ok (y.sch, y.tPad) := by
     rw [hst]; exact y.hz
   have hk6 : 6 ≤ (Masked.stsOf x)[(2 * j + r) / 2]!.c.kLog := by rw [hst]; exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[(2 * j + r) / 2]! +
@@ -689,7 +689,7 @@ theorem outer_of_answer {x : Msg} (hx : Masked.Live x) (hSv : Serves x) {j r e s
   dsimp only at ha
   obtain ⟨alg, sched, hal, hsc⟩ := repState_ok ha
   obtain ⟨hts', -, -⟩ := Count.placeholder_tab hph
-  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule _ = .ok (y.sch, y.tPad) from hz)
+  obtain ⟨hm36, -, -, -⟩ := Count.sched_facts (show _root_.Flock.Zk.schedule _ _ = .ok (y.sch, y.tPad) from hz)
   obtain ⟨-, hdom', -, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   obtain ⟨lay, mask, hds, hc', hdm, -⟩ := placeholder_ok hph
   have hdg : t.st.digest.size < 2 ^ 64 := by

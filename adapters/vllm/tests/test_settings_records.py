@@ -80,7 +80,8 @@ def test_the_commit_stages_as_before(commit, env: pytest.MonkeyPatch, values: di
         env.setenv(k, v)
     ns = cli.parse("commit", ["--out", "o", *argv], {})
     commit.staging_environ(commit.resolve_staging(ns))
-    assert _digest({k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}) == digest
+    got = _digest({k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"})
+    assert got == digest
 
 
 @pytest.mark.parametrize(("retain", "values", "digest"), [
