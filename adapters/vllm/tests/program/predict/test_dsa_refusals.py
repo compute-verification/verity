@@ -1,8 +1,10 @@
-"""verity_vllm.program.predict.dsa: three things the sparse-attention decoder refuses, each by name.  A target whose device has
+"""verity_vllm.program.predict.dsa: what the sparse-attention decoder refuses, each by name.  A target whose device has
 no tuned fused-MoE tile (`engine.profiles.devices.FUSED_MOE_CONFIGS`) is `Unexpressible` where the MoE block is written, and
-nowhere before it; a node of such ranks (`node.build_node_program`) is refused in the same words.  A history opens once,
-before a layer's first call, and an edge is every layer's rows at one length: a caller that breaks either gets the decoder's
-own `AssertionError`, which `build_program`'s order of calls never does.
+nowhere before it; a node of such ranks (`node.build_node_program`) is refused in the same words.  A block's all-reduce on a
+route that no capture covers under the engine's switches is `Unexpressible` naming the route and the switches; under the
+row's own it fuses with its norm up to the rows vLLM hands FlashInfer.  A history opens once, before a layer's first call,
+and an edge is every layer's rows at one length: a caller that breaks either gets the decoder's own `AssertionError`, which
+`build_program`'s order of calls never does.
 
 GLM-5.3's checkpoint is cut to its first 4 layers: three dense MLPs and then one MoE block, three full indexers and then one
 that shares the third's top-k."""
@@ -28,6 +30,8 @@ LAYERS, H200, H100 = 4, "NVIDIA H200", "NVIDIA H100 80GB HBM3"
 GROUPS = ("prefix", "prefix_ik", "prefix_iks")
 NO_TILE = (f"vocabulary cannot express: no tuned fused-MoE config for E=256, N=256 on {H100!r} "
            f"(engine.profiles.devices.FUSED_MOE_CONFIGS)")
+SWITCHES = {"custom_all_reduce": True, "symmetric_memory": True, "flashinfer": True, "batch_invariant": False, "nccl_transport": None}
+NO_CAPTURE = " (no capture covers it: tp_allreduce.covered)"
 
 
 @pytest.fixture
@@ -57,6 +61,30 @@ def _model(phi: Phi, C: int):
     return net.model(B, inputs[-1], _Peers([], net.world, net.rank)), inputs[0].refs, inputs[1:4], B
 
 
+def _engine(phi: Phi, env: dict | None = None, **options) -> Phi:
+    """φ with these engine options, and `env` set in the environment its engines run under."""
+    return Phi.from_json({**phi.to_json(), "engine": {**phi.engine, **options, "env": {**phi.engine["env"], **(env or {})}}})
+
+
+def _reduced(phi: Phi, M: int) -> Counter:
+    """`reduce_norm` over M rows as a Program of its own (the rows' partials on this rank, their residuals, the partials on
+    each of the 7 other ranks and the weights), with no launch batch -> its calls by family.  Each row's norm is a call of
+    its own, the last M: its normed row is the call's first output and its residual row the second."""
+    net = decoder(phi)
+    H = int(net.C["H"])
+    rows = Array(M, Array(H, Value(16)))
+    params = [("parts", rows), ("res", rows), *((f"peers_{k}", rows) for k in range(net.world - 1)), ("weights", RecordType(*net.leaves()))]
+    B = Builder(params, Value(1))
+    inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
+    model = net.model(B, inputs[-1], _Peers(inputs[2:-1], net.world, net.rank))
+    parts, res = ([c.refs.slice(i * H, (i + 1) * H) for i in range(M)] for c in inputs[:2])
+    normed, residual = model.reduce_norm(parts, res, model.w[(0, "ln2")])
+    at = len(B.nodes) - M
+    assert [(runs(n), runs(r)) for n, r in zip(normed, residual)] == [([("n", at + i, 0, H)], [("n", at + i, H, 2 * H)]) for i in range(M)]
+    assert model.peers.n == net.world - 1
+    return Counter(n.fn.id.split("{", 1)[0] for n in B.nodes)
+
+
 def _rows(model) -> list[tuple[int, ...]]:
     """Per layer, in layer order, the rows its latent, index-K and scale histories hold."""
     return [tuple(len(model.logs[L][h]) for h in ("latent", "ik", "iks")) for L in sorted(model.logs)]
@@ -82,6 +110,34 @@ def test_a_node_of_refused_ranks_is_refused_in_the_ranks_words(cut):
         phi = cut(device=H100)
         with pytest.raises(Unexpressible, match=re.escape(NO_TILE)):
             build_node_program(Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": rank}}), "step", M=1, pos0=0, with_desc=False)
+
+
+def test_a_blocks_all_reduce_fuses_with_its_norm_up_to_the_rows_vllm_hands_flashinfer(cut):
+    """After a block the rows' partials are all-reduced, added to the residual and normed.  vLLM hands FlashInfer's fused
+    kernel at most 512 KiB of bf16, 42 rows of 6144: up to there each row is one fused call, and past it the rows are one
+    all-reduce and a fused norm each.  With FlashInfer's all-reduce off nothing fuses, and the all-reduce vLLM then takes
+    has no capture: it is refused as that all-reduce, by its route and the switches."""
+    assert _reduced(cut(), 1) == {"AllReduceRmsNormMnnvl_v1": 1}
+    assert _reduced(cut(), 42) == {"AllReduceRmsNormMnnvl_v1": 42}
+    assert _reduced(cut(), 43) == {"AllReduceMultimem_v1": 1, "RMSNormFusedCudaVector8_v3": 43}
+    off = {**SWITCHES, "flashinfer": False}
+    with pytest.raises(Unexpressible, match=re.escape(f"vocabulary cannot express: an all-reduce of 1 x 6144 on route 'ca_comm' under {off}" + NO_CAPTURE)):
+        _reduced(_engine(cut(), {"VLLM_ALLREDUCE_USE_FLASHINFER": "0"}), 1)
+
+
+def test_the_all_reduces_switches_are_the_engines(cut):
+    """The decoder reads vLLM's all-reduce switches from φ's engine: its `disable_custom_all_reduce` and its environment's.
+    Without symmetric memory 43 rows take the custom all-reduce; with that off too vLLM takes NCCL's, and one row
+    FlashInfer's fused kernel, neither of which a capture covers under these switches: each is refused as what it is,
+    naming the switches as the engine states them."""
+    assert decoder(cut()).settings == SWITCHES
+    symm_off = _engine(cut(), {"VLLM_ALLREDUCE_USE_SYMM_MEM": "0"})
+    assert _reduced(symm_off, 43) == {"AllReduceCustom_v1": 1, "RMSNormFusedCudaVector8_v3": 43}
+    both_off = {**SWITCHES, "custom_all_reduce": False, "symmetric_memory": False}
+    with pytest.raises(Unexpressible, match=re.escape(f"vocabulary cannot express: an all-reduce of 43 x 6144 on route 'pynccl_comm' under {both_off}" + NO_CAPTURE)):
+        _reduced(_engine(symm_off, disable_custom_all_reduce=True), 43)
+    with pytest.raises(Unexpressible, match=re.escape(f"vocabulary cannot express: a fused all-reduce + norm of 1 x 6144 under {both_off}" + NO_CAPTURE)):
+        _reduced(_engine(symm_off, disable_custom_all_reduce=True), 1)
 
 
 def test_a_history_opens_once_and_before_a_layers_first_call(cut):
