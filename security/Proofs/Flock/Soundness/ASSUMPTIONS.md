@@ -38,7 +38,7 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit sample (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, flipped after the prover's message; under `--zk` or `--coins tree`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
-| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample (`SampleFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `Law.execOS` is `sampleOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `sampleOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `sampleOkZKHJ_of_file`) |
+| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `verity-verify-proof draw` printed for the verifier's own sample (`SampleFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `SamplingDesign.execOS` is `sampleOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `sampleOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `sampleOkZKHJ_of_file`) |
 | `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `SampleOk` (`SampleOkZK`, and forms) at each sample of the sampling design | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
@@ -223,7 +223,7 @@ budget `qR`).
   (`pp : ProgPlaces`);
 - **the hash** is SHA-512 (`Refine.H512`, `Refine.enc512`), for the session's leaves and nodes and for the rows' commit
   strings, with the rows' value binding (`flock_e2e_count_hm96`);
-- **the sample** is the live one (`Law.execOS`: `Flock.Draw.drawWith`'s stratified sample on a byte source `src`, the
+- **the sample** is the live one (`SamplingDesign.execOS`: `Flock.Draw.drawWith`'s stratified sample on a byte source `src`, the
   challenger's coins), under A3 (`hA3`).
 
 It is proved under the assumptions its footprint lists. Its bound is `miss(K) + ksAvgStrict + ε_bind + δ_tree`.
@@ -242,7 +242,7 @@ intended to prove, or a numeric condition on the bound's parameters.
 | `hHm`; `lay`, `rs` | intended to prove | `HmRowComputes`, and the layout's facts (in place of `vb`) |
 | `tr` | intended to prove | the serving roots' rewinding, in place of `hExec`, which gives one at `δ_tree = 0` (`TreeRewind.ofNever`) |
 | `hConst`, `hZero` | intended to prove | the constants' and the zero's columns |
-| `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht` | numeric condition | conditions on the bound's parameters, and the executable's strata matching `Law.stratified`'s |
+| `hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht` | numeric condition | conditions on the bound's parameters, and the executable's strata matching `SamplingDesign.stratified`'s |
 | `qF`, `qS`, `qT` | numeric condition | conditions Lean doesn't check: `qF ≥ 2t′ + 2v`, `qS ≥ t′ + v`, `qT ≥ 2t′ + 2v` (`SHA512CRStrict`, above) |
 
 Nothing else in it is assumed. The four `flock_e2e_*_hm96` forms have the same footprint, with `dp : DerivedPlaces` (intended
@@ -347,7 +347,7 @@ wipe's labels `SHA-512(LABEL_TAG ‖ K ‖ u64 i)` (`Assumptions.Keyed`).
 - **Statement.** A source is a finite probability space and, on each outcome, the secret. `UniformSecret sec` says every
   event about the secret has the probability it has for `S` uniform bytes. `keyedExecutionPhase` samples over the real secret
   source, and its theorems take A5 as `hsec`. It is satisfiable: the identity source satisfies it
-  (`Law.uniformSecret_id`, `KeyedSample.lean`).
+  (`SamplingDesign.uniformSecret_id`, `KeyedSample.lean`).
 - **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
   sampled once the window's receipt is complete and used for that window alone (`Ledger.open`). A
   secret reused across windows is outside it, since later windows would be committed after earlier samples were seen.

@@ -96,7 +96,8 @@ class GitTimes:
     def _git(self, *args: str, timeout: float = 30) -> str | None:
         try:
             r = subprocess.run(["git", "-C", str(self.root), *args], capture_output=True, text=True, timeout=timeout)
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"steward: git {args[0] if args else ''} in {self.root} did not run ({type(e).__name__})", file=sys.stderr, flush=True)
             return None
         return r.stdout if r.returncode == 0 else None
 
@@ -128,7 +129,7 @@ class S3LeaseBackend:
 
     def read(self) -> tuple[dict, str] | None:
         try:
-            with self.remote._request("GET", self.key) as r:  # noqa: SLF001
+            with self.remote._request("GET", self.key) as r:
                 body, etag = r.read(), r.headers.get("ETag")
         except urllib.error.HTTPError as e:
             if e.code == 404:
@@ -136,14 +137,15 @@ class S3LeaseBackend:
             raise
         try:
             doc = json.loads(body)
-        except ValueError:
+        except ValueError as e:
+            print(f"steward: the lease's body is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
             doc = {}
         return (doc if isinstance(doc, dict) else {}), etag or ""
 
     def write(self, doc: dict, etag: str | None) -> None:
         cond = {"if-none-match": "*"} if etag is None else {"if-match": etag}
         try:
-            with self.remote._request("PUT", self.key, body=_encode(doc), headers=cond):  # noqa: SLF001
+            with self.remote._request("PUT", self.key, body=_encode(doc), headers=cond):
                 pass
         except urllib.error.HTTPError as e:
             if e.code in (409, 412):
@@ -180,7 +182,8 @@ class FileLeaseBackend:
             return None
         try:
             doc = json.loads(raw)
-        except ValueError:
+        except ValueError as e:
+            print(f"steward: {self.path} is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
             doc = {}
         return (doc if isinstance(doc, dict) else {}), hashlib.sha256(raw).hexdigest()
 
@@ -281,8 +284,8 @@ class Lease:
         if cur and cur[0].get("token") == self.token:
             try:
                 self.backend.write(self._doc(cur[0].get("acquired_at"), released=True), cur[1])
-            except LeaseConflict:
-                pass
+            except LeaseConflict as e:
+                print(f"steward: the lease changed before its release was written, so it is left as it is ({e})", file=sys.stderr, flush=True)
         self.held = False
 
 
@@ -290,7 +293,7 @@ def holder(doc: dict | None, now: float | None = None) -> str:
     """`<owner> (host H, pid P) until HH:MMZ` for a lease document."""
     if not doc:
         return "nobody (no lease document)"
-    until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.timezone.utc)
+    until = dt.datetime.fromtimestamp(float(doc.get("expires_at") or 0), dt.UTC)
     left = (float(doc.get("expires_at") or 0) - (now or time.time())) / 60
     return f"{doc.get('owner')} (host {doc.get('host')}, pid {doc.get('pid')}) until {until:%H:%MZ} ({left:.0f} min)"
 

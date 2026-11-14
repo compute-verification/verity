@@ -71,8 +71,9 @@ def _cgroup_of(proc: Path, pid: int) -> str | None:
 def workload(run_dir: Path, proc: Path) -> list[int]:
     """The run's pid (unless reused) and every live member of its workload's process group."""
     try:
-        st = json.loads((run_dir / "status.json").read_text())
-    except (OSError, ValueError):
+        st = json.loads((run_dir / "status.json").read_text()) if (run_dir / "status.json").exists() else {}
+    except (OSError, ValueError) as e:
+        print(f"scopemem: {run_dir / 'status.json'} unread, so the run's pid is not known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         st = {}
     pid, pgid, start = st.get("pid"), st.get("pgid"), st.get("starttime_ticks")
     pids: list[int] = []
@@ -83,7 +84,8 @@ def workload(run_dir: Path, proc: Path) -> list[int]:
     if isinstance(pgid, int) and (pids or not isinstance(pid, int)):
         try:
             entries = sorted(int(e) for e in os.listdir(proc) if e.isdigit())
-        except OSError:
+        except OSError as e:
+            print(f"scopemem: {proc} unlisted, so the group's members are not known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             entries = []
         pids += [p for p in entries if p not in pids and (_stat(proc, p) or [None] * 3)[2] == str(pgid)]
     return pids
@@ -103,13 +105,16 @@ def locate(run_dir: Path, proc: Path, cg_root: Path, pids: list[int] | None = No
 
 def samples(run_dir: Path) -> list[dict[str, Any]]:
     """The cgroup records in the last SAMPLES_TAIL bytes of the run's resources.jsonl, oldest first."""
+    if not (run_dir / "resources.jsonl").exists():
+        return []
     try:
         with open(run_dir / "resources.jsonl", "rb") as f:
             f.seek(0, os.SEEK_END)
             size = f.tell()
             f.seek(max(0, size - SAMPLES_TAIL))
             lines = f.read().decode("utf-8", "replace").splitlines()[1 if size > SAMPLES_TAIL else 0:]
-    except OSError:
+    except OSError as e:
+        print(f"scopemem: {run_dir / 'resources.jsonl'} unread, so no sample ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return []
     return list(cgroup_records(lines))
 
@@ -122,7 +127,8 @@ def cgroup_records(lines: Iterable[str]) -> Iterator[dict[str, Any]]:
             continue
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"scopemem: a cgroup sample line is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if isinstance(rec.get("cgroup"), dict) and isinstance(rec.get("t_mono"), (int, float)):
             yield rec
@@ -214,9 +220,12 @@ def _locked(p: Path, held: set[tuple[int, int, int]]) -> bool:
 def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, Any] | None:
     """gpu-lease's directory `d`: its GPUs, how many are locked (a lease, or on node 1 a fence), each live lease's owner line
     and each live waiter's wait line, oldest first, and node 1's pool record; None when `d` doesn't exist."""
+    if not os.path.isdir(d):
+        return None
     try:
         names = sorted(os.listdir(d))
-    except OSError:
+    except OSError as e:
+        print(f"scopemem: {d} unlisted, so no GPU lease is read ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     gpus = sorted(int(n[:-5]) for n in names if n.endswith(".lock") and n[:-5].isdigit())
     owners = []
@@ -227,9 +236,10 @@ def leases(d: Path, proc: Path, held: set[tuple[int, int, int]]) -> dict[str, An
     waits = [{"file": n, **fields(_text(d / n) or "")} for n in names
              if n.startswith("wait.") and n.rsplit(".", 1)[-1].isdigit() and _locked(d / n, held)]
     try:
-        pool = json.loads((d / "n1-lease.json").read_text())
-        pool = {k: pool.get(k) for k in ("t", "pool", "pool_name", "blocked")} | {"pending_holders": len(pool.get("pending_holders") or [])}
-    except (OSError, ValueError, AttributeError):
+        pool = json.loads((d / "n1-lease.json").read_text()) if (d / "n1-lease.json").exists() else None
+        pool = None if pool is None else {k: pool.get(k) for k in ("t", "pool", "pool_name", "blocked")} | {"pending_holders": len(pool.get("pending_holders") or [])}
+    except (OSError, ValueError, AttributeError) as e:
+        print(f"scopemem: {d / 'n1-lease.json'} unread, so no pool record ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         pool = None
     return {"gpus": len(gpus), "locked": sum(_locked(d / f"{i}.lock", held) for i in gpus), "owners": owners, "waits": waits,
             "pool": pool, "limits": _text(d / "n1-lease.limits")}

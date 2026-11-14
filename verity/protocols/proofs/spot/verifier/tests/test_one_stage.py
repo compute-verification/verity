@@ -265,7 +265,7 @@ def test_registration_refusals():
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
 
 
-def test_the_window_runs_its_days_declared_circuit():
+def test_the_window_runs_its_days_registered_circuit():
     """R2 holds the record's program to the one circuit the registration log declares for the window's day, read off the
     accepted log's view: another day's program is `R2-declared`, a day the log declares nothing for `R2-undeclared`, and
     a day declared twice, which the log's own check refuses, `R2-declared-twice`. A verifier passes the day and the

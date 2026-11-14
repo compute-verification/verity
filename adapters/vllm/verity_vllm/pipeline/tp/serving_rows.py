@@ -158,7 +158,7 @@ def write_node_window(st: Mapping[str, Any], request: Mapping[str, Any], tp: Map
     class window), its values (`node_window_rows.served_values`), `expert_rows.commit_bnk` for each ``/bnk`` name its
     circuit registers (refused when the request has no ``tables``), and the window committed
     (`node_window_rows.commit_rank_window`) under ``run`` = `run_of` (TP run root, rank), the string `write` uses, and the
-    partition's law. Returns `write`'s five keys and ``window``, the rank's H, which `gather` writes into ``tp.json``.
+    partition's sampling design. Returns `write`'s five keys and ``window``, the rank's H, which `gather` writes into ``tp.json``.
     The request's ``joined`` is the joined record registered before the serve: `require` refuses, before the engine, a
     node-window request without ``cap``, ``partition``, ``joined`` or a Program for every rank, or whose joined record
     names free rows (`node_window_rows.check_free`); `commit` holds the ranks' ``circuit.json`` to it

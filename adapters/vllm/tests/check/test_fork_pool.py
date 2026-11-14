@@ -157,6 +157,27 @@ def test_oom_kills_is_the_cgroups_count_and_none_where_none_is_read(tmp_path, mo
     assert FK.oom_kills() is None
 
 
+def test_the_cpu_quota_is_the_cgroups_where_it_states_one_and_the_machines_count_otherwise(tmp_path, monkeypatch):
+    """A cgroup file that is not `<quota> <period>` in integers, or cannot be read, states no quota."""
+    assert FK.CGROUP_CPU_MAX == "/sys/fs/cgroup/cpu.max"                             # cgroup v2's, of the process's own group
+    f = tmp_path / "cpu.max"
+    monkeypatch.setattr(FK, "CGROUP_CPU_MAX", str(f))
+    machine = os.cpu_count() or 1
+    assert FK.cpu_quota() == machine                                                 # no cgroup v2 CPU controller
+    f.write_text("max 100000\n")
+    assert FK.cpu_quota() == machine
+    f.write_text("250000 100000\n")
+    assert FK.cpu_quota() == 2
+    f.write_text("50000 100000\n")
+    assert FK.cpu_quota() == 1                                                       # half a CPU is one worker
+    for text in ("250000\n", "many 100000\n", "250000 x\n", "1 2 3\n", ""):
+        f.write_text(text)
+        assert FK.cpu_quota() == machine
+    f.unlink()
+    f.mkdir()                                                                        # there, and not a file that reads
+    assert FK.cpu_quota() == machine
+
+
 def test_the_cgroups_memory_is_none_where_it_states_no_limit_or_a_file_of_it_does_not_open(tmp_path, monkeypatch):
     lim, cur = tmp_path / "memory.max", tmp_path / "memory.current"
     monkeypatch.setattr(DR, "CGROUP_MEMORY", (str(lim), str(cur)))

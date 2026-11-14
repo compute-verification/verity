@@ -114,7 +114,7 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
     elif head["bytes"] != len(m.canonical()):
         rep["errors"].append(f"{mkey}: remote size {head['bytes']} != {len(m.canonical())}")
     else:
-        err = st._readback(r, mkey, hex_)  # noqa: SLF001
+        err = st._readback(r, mkey, hex_)
         if err:
             rep["errors"].append(err)
         else:
@@ -149,7 +149,7 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
             else:
                 rep["errors"].append(f"{key}: remote multipart ETag {head['etag']} is not what the local blob yields")
             continue
-        err = st._readback(r, key, h)  # noqa: SLF001
+        err = st._readback(r, key, h)
         if err:
             rep["errors"].append(err)
         else:

@@ -166,7 +166,7 @@ def test_streams_are_prefix_consistent_and_index_separated():
     assert KEY.stream(("a", "b"), 32) != KEY.stream("ab", 32)
 
 
-def test_sharded_draws_equal_unsharded_draws():
+def test_sharded_samples_equal_unsharded_samples():
     """Samples are addressed by index, so each shard reproduces its slice of the population on its own."""
     population = range(1000)
     whole = [KEY.bernoulli(Fraction(1, 5), ("ru", i)) for i in population]
@@ -177,9 +177,9 @@ def test_sharded_draws_equal_unsharded_draws():
 
 @pytest.mark.parametrize("n", [1, 2, 3, 7, 10])
 def test_uniform_is_in_range_and_balanced(n):
-    draws = Counter(KEY.uniform(n, i) for i in range(2000 * n))
-    assert set(draws) == set(range(n))
-    assert all(abs(c - 2000) < 5 * 2000 ** 0.5 for c in draws.values())
+    samples = Counter(KEY.uniform(n, i) for i in range(2000 * n))
+    assert set(samples) == set(range(n))
+    assert all(abs(c - 2000) < 5 * 2000 ** 0.5 for c in samples.values())
 
 
 def test_uniform_handles_large_ranges():
@@ -209,9 +209,9 @@ def test_subset_shape(k, n):
 
 
 def test_subset_is_uniform_over_subsets():
-    draws = Counter(KEY.subset(2, 5, i) for i in range(10000))
-    assert set(draws) == set(combinations(range(5), 2))
-    assert all(abs(c - 1000) < 5 * 1000 ** 0.5 for c in draws.values())
+    samples = Counter(KEY.subset(2, 5, i) for i in range(10000))
+    assert set(samples) == set(combinations(range(5), 2))
+    assert all(abs(c - 1000) < 5 * 1000 ** 0.5 for c in samples.values())
 
 
 def test_subset_refuses_bad_sizes():
