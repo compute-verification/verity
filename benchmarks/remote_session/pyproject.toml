@@ -71,7 +71,7 @@ inputs = ["verity/protocols/accounting/poub/prover/remote_session/prover.py", "v
           "verity/protocols/compose/device/live_challenger/auditor.py", "verity/protocols/compose/device/live_challenger/host.json", "verity/protocols/compose/device/live_challenger/serve.py",
           "verity/protocols/compose/device/live_challenger/tests/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
-          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
+          "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/poub",
           "verity/protocols/__init__.py",
           # auditor_line.py: a line whose summed error is 1 or more holds no share, by the reporting grid's one rule
           "verity/protocol.py", "verity/protocols/proofs/__init__.py",

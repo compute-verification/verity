@@ -6,7 +6,7 @@ public import Definitions.Pouw.TS.Play
 public import Definitions.Pouw.TS.Receipt
 public import Definitions.Pouw.TS.Slots
 public import Definitions.Pouw.TS.ProofLayer
-public import Definitions.Pouw.TS.Drawn
+public import Definitions.Pouw.TS.Sampled
 public import Definitions.Pouw.TS.Hashed
 public import Definitions.Pouw.TS.FanIn
 public import Definitions.Pouw.TS.Stages
