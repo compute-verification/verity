@@ -91,6 +91,18 @@ def test_the_configuration_is_the_tables_byte_for_byte():
     assert R.load(CONFIG, REG)["params"]["verity/pous/p2/v4/run"] == {"challenges": 320}
 
 
+@pytest.mark.parametrize("demo", sorted(set(T.DEMOS) - {"onsite_full"}))
+def test_each_smaller_demo_is_the_tables_byte_for_byte_and_its_own_composite(demo):
+    """Each other demo file is the table's configuration of its subprotocols, at onsite_full's commit, whose composite
+    (or onsite's smaller set) is its own id; only the subprotocols it lists have parameters and pins."""
+    path = ROOT / "demos" / f"{demo}.toml"
+    cfg = T.configuration(K.parse(CONFIG.read_text())["program"]["commit"], demo)
+    assert K.render(cfg, T.HEADERS[demo]) == path.read_text()
+    assert K.composite(cfg["protocols"], REG.components) in {**K.COMPOSITES, **K.UNACCEPTED}
+    assert K.composite(cfg["protocols"], REG.components) != T.ONSITE
+    assert {p["protocol"] for p in cfg["pin"]} == {"pous", "wipe"} & set(T.DEMOS[demo])
+
+
 def test_the_configuration_states_no_host_or_address():
     cfg = K.parse(CONFIG.read_text())
     assert not [(p["name"], f) for p in cfg["party"] for f in p if f in K.TRANSPORT]
