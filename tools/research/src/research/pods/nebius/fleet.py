@@ -167,9 +167,12 @@ def sample(now: float | None = None) -> list[dict]:
     with open(FLEET_DIR / f"samples-{utc(now)[:10].replace('-', '')}.jsonl", "a") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
-    tmp = FLEET_DIR / f".{LAST_SAMPLE}.{os.getpid()}"
-    tmp.write_text(json.dumps({"t": utc(now), "rows": rows}) + "\n")
-    os.replace(tmp, FLEET_DIR / LAST_SAMPLE)
+    try:
+        tmp = FLEET_DIR / f".{LAST_SAMPLE}.{os.getpid()}"
+        tmp.write_text(json.dumps({"t": utc(now), "rows": rows}) + "\n")
+        os.replace(tmp, FLEET_DIR / LAST_SAMPLE)
+    except Exception as e:  # noqa: BLE001 (only infra/control/loop_metrics.py reads it: the pass goes on without it)
+        print(f"{utc(now)} {LAST_SAMPLE} failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
     record_deadlines(rows, reg)
     return rows
 

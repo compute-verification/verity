@@ -167,6 +167,30 @@ def test_each_sample_pass_replaces_its_last_sample_whole_with_no_vm_running_too(
     assert [p.name for p in F.FLEET_DIR.iterdir() if p.name.startswith(".")] == []
 
 
+def test_a_last_sample_write_that_raises_is_one_line_and_the_pass_publishes_as_before(tmp_path, monkeypatch, capsys):
+    """The last sample is only for infra/control/loop_metrics.py: when it can't be written, the pass's samples, deadlines,
+    reachability watch and panels go on as before, and the failure is one line where the loop logs."""
+    monkeypatch.setattr(F, "FLEET_DIR", tmp_path / "fleet")
+    monkeypatch.setattr(F, "MACHINES_D", tmp_path / "machines.d")
+    monkeypatch.setattr(F, "sync_registry", lambda m: None)
+    monkeypatch.setattr(F, "instances", lambda: [{"name": "vy-nebius-cpu-1", "id": "i1", "state": "RUNNING", "platform": "cpu-d3",
+                                                  "preset": "p", "region": "r"}])
+    (F.FLEET_DIR / F.LAST_SAMPLE).mkdir(parents=True)                       # replacing a directory with a file raises
+    calls: dict[str, list] = {}
+    for name in ("record_deadlines", "watch_unreachable", "publish", "daily"):
+        monkeypatch.setattr(F, name, lambda *a, _n=name, **k: calls.setdefault(_n, []).append(a[0]) or [])
+    monkeypatch.setattr(F, "quota_findings", lambda: [])
+    monkeypatch.setattr(F, "archive", lambda now: None)
+    t = int(datetime(2026, 11, 14, (F.REPORT_HOUR_UTC + 1) % 24, tzinfo=UTC).timestamp())
+    assert F.loop(clock=lambda: t, sleep=lambda s: None, send=lambda args, text: None, passes=1) == 0
+    names = lambda rows: [r["name"] for r in rows]                             # noqa: E731
+    assert {k: [names(v) for v in vs] for k, vs in calls.items()} == {
+        "record_deadlines": [["vy-nebius-cpu-1"]], "watch_unreachable": [["vy-nebius-cpu-1"]], "publish": [["vy-nebius-cpu-1"]]}
+    assert names(F.load_samples(t - 1, t + 1)) == ["vy-nebius-cpu-1"]
+    err = capsys.readouterr().err.splitlines()
+    assert len(err) == 1 and err[0].startswith(f"{F.utc(t)} {F.LAST_SAMPLE} failed: IsADirectoryError"), err
+
+
 def test_the_card_alerts_at_80_percent_of_its_daily_limit_only_when_one_is_set(monkeypatch):
     rows = [{"rate_usd_per_hour": 120.0}] * 100                                  # 100 samples of 5 min at $120/h: $1,000
     monkeypatch.delenv("FLEET_CARD_DAILY_USD", raising=False)
