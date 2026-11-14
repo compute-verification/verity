@@ -16,7 +16,8 @@ directory: under a research run, the run's). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its `mark`, its
 95% interval (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was
 computed from (other measurements' names, run or `art:` ids) and the `host` stamp it was written under; a measurement with
-no value (`value` None) may say why (`why`, held only where given). **A mark** says how the value was had, one of `MARKS`,
+no value (`value` None) may say why (`why`, held only where given), and any measurement may carry keys of its
+benchmark's own (`extra`), such as what its number rests on. **A mark** says how the value was had, one of `MARKS`,
 which every measurement gives, one with no value the mark it would have had: ``"measured"``, computed from a run of
 record's own records (its timings, its verifier's output, the registered parameters it ran at); ``"modeled"``, from a
 model or stated figures no run measured, or scaled past what a run covered; ``"partial"``, measured on part of what its
@@ -262,17 +263,19 @@ class Writer:
 
     def measurement(self, name: str, value: float | None, unit: str, interval: Sequence[float] | None = None,
                     target: float | None = None, verdict: str | None = None, inputs: Iterable[str] = (),
-                    why: str | None = None, *, mark: str | None = None) -> dict:
-        """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has no
-        finite value to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high), which the
-        result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check against that
-        target, and the `inputs` it was computed from, with this run, its commit and the host stamp. The mark, one of
-        `MARKS`, is required, a value of None's too, which takes the mark its value would have had. It is also the first
-        of `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
-        console's Metrics tab reads it from until it reads `mark`. It refuses what isn't a measurement (a value that isn't
-        a number, a verdict with no target or in a verdict of record's or a seal's words, a `why` beside a value), a
-        missing or unknown mark and a first input that opens with another one, a name the result already holds, and a
-        result of another run."""
+                    why: str | None = None, *, mark: str | None = None,
+                    extra: Mapping[str, Any] | None = None) -> dict:
+        """Appends one measurement to `out/result.json` and returns it: `value` in `unit` (None where the benchmark has
+        no finite value to give, and then `why`, in words, where given), its `mark`, its 95% `interval` (low, high),
+        which the result holds as `ci95`, the key `paired` gives it under, its `target`, the `verdict` of its check
+        against that target, and the `inputs` it was computed from, with this run, its commit and the host stamp, and
+        beside them the keys of `extra`, each a JSON value the benchmark states of the number. The mark, one of `MARKS`,
+        is required, a value of None's too, which takes the mark its value would have had. It is also the first of
+        `inputs`, the bare word, unless the given first input already opens with it (``"modeled: ..."``), which the
+        console's Metrics tab reads it from until it reads `mark`. It refuses what isn't a measurement (a value that
+        isn't a number, a verdict with no target or in a verdict of record's or a seal's words, a `why` beside a value),
+        a missing or unknown mark and a first input that opens with another one, an `extra` key the entry already has a
+        meaning for or a value that isn't JSON, a name the result already holds, and a result of another run."""
 
         if not isinstance(name, str) or not name.strip():
             raise ValueError(f"a measurement has a name, not {name!r}")
@@ -307,6 +310,14 @@ class Writer:
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
         if why is not None:
             entry["why"] = why
+        for key, held in (extra or {}).items():
+            if not isinstance(key, str) or key in entry or key == "why":
+                raise ValueError(f"{name}'s extra key {key!r} is a key the measurement already has a meaning for")
+            try:
+                json.dumps(held, allow_nan=False)
+            except (TypeError, ValueError):
+                raise ValueError(f"{name}'s extra {key} is a JSON value, not {held!r}") from None
+            entry[key] = held
         with self._open() as (path, doc):
             if any(m.get("name") == name for m in doc["measurements"]):
                 raise ValueError(f"{path} already holds a measurement named {name}: a result holds one a name (a rerun writes "
