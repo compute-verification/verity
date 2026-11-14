@@ -355,7 +355,14 @@ def new_state(mode: str) -> dict:
 
 
 def run_mode(args) -> int:
+    """One forward per window and every mode of ``--mode`` (comma-separated) on it: modes listed together must agree on
+    every product but the head (pearl and pearl-head), which then share the layers' Pearl+ products, noise included, and
+    differ only in the head's."""
     import e2e
+    modes = args.mode.split(",")
+    if any(m not in MODES for m in modes) or len(set(modes)) != len(modes) or (
+            len(modes) > 1 and not set(modes) <= {"pearl", "pearl-head"}):
+        raise SystemExit(f"--mode {args.mode}: one of {MODES}, or pearl,pearl-head (which share every product but the head)")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(args.threads)
@@ -368,35 +375,46 @@ def run_mode(args) -> int:
     print(json.dumps({"mode": args.mode, "windows": len(windows), "range": [lo, hi], "tokens": sum(len(w) - 1 for w in windows),
                       "windows_sha256": ids_digest, "threads": torch.get_num_threads()}), flush=True)
     model = load(args.model)
-    state = new_state(args.mode)
+    state = new_state(modes[0])
     groups = install(model, state)
-    nll, count, top1, per_window, t0 = 0.0, 0, [], [], time.perf_counter()
+    acc = {m: {"nll": 0.0, "count": 0, "top1": [], "per_window": []} for m in modes}
+    t0 = time.perf_counter()
     for i in range(lo, hi):
         w = windows[i]
-        state["window"] = i
+        state["window"], state["mode"] = i, modes[0]
         for g in groups:
             g.calls = 0
         ids = torch.tensor([w])
         with torch.inference_mode():
-            logits = model(input_ids=ids, use_cache=False).logits[0, :-1]
-            lp = logits.to(_F32).log_softmax(-1)
-            got = lp.gather(1, ids[0, 1:, None])[:, 0].to(torch.float64)
-            top1 += lp.argmax(-1).tolist()
-        part = -float(got.sum())
-        nll, count = nll + part, count + got.shape[0]
-        per_window.append(part)
-        print(f"WINDOW {i + 1}/{len(windows)} nll {part:.3f} ppl_so_far {math.exp(nll / count):.4f} "
-              f"t {time.perf_counter() - t0:.0f}s", flush=True)
-    doc = {"schema": "verity-pouw/pearl-c-cpu-quality/v1", "mode": args.mode, "scheme": None if args.mode == "bf16" else
-           "pearl-c-h100-v1-h3 (emulated)", "model": args.model, "windows": len(windows), "windows_sha256": ids_digest,
-           "range": [lo, hi],
-           "seed": SEED, "atoms": ATOMS["mode"], "threads": torch.get_num_threads(), "seconds": time.perf_counter() - t0,
-           "nll": nll, "tokens": count, "perplexity": math.exp(nll / count), "per_window_nll": per_window, "top1": top1,
-           "excluded_b_rows": {k: {"floor": v[0], "live": v[1]} for k, v in state["excluded_b"].items()},
-           "excluded_a_rows": {k: {"floor": v[0], "live": v[1], "rows": v[2]} for k, v in state["excluded_a"].items()},
-           "rows_b": {"linear": sum(g.n for g in groups if g.kind == "linear"), "head": groups[-1].n}}
-    (out / f"quality-{args.mode}-{shard}of{shards}.json").write_text(json.dumps(doc))
-    print(json.dumps({k: v for k, v in doc.items() if k not in ("per_window_nll", "top1")}), flush=True)
+            hidden = model.model(input_ids=ids, use_cache=False).last_hidden_state
+            for mode in modes:
+                state["mode"] = mode
+                groups[-1].calls = 0
+                lp = model.lm_head(hidden)[0, :-1].to(_F32).log_softmax(-1)
+                got = lp.gather(1, ids[0, 1:, None])[:, 0].to(torch.float64)
+                a = acc[mode]
+                a["top1"] += lp.argmax(-1).tolist()
+                part = -float(got.sum())
+                a["nll"], a["count"] = a["nll"] + part, a["count"] + got.shape[0]
+                a["per_window"].append(part)
+                print(f"WINDOW {i + 1}/{len(windows)} {mode} nll {part:.3f} ppl_so_far {math.exp(a['nll'] / a['count']):.4f} "
+                      f"t {time.perf_counter() - t0:.0f}s", flush=True)
+    for mode in modes:
+        a = acc[mode]
+        head = mode == "pearl-head"
+        doc = {"schema": "verity-pouw/pearl-c-cpu-quality/v1", "mode": mode, "scheme": None if mode == "bf16" else
+               "pearl-c-h100-v1-h3 (emulated)", "model": args.model, "windows": len(windows), "windows_sha256": ids_digest,
+               "range": [lo, hi], "run_with": modes,
+               "seed": SEED, "atoms": ATOMS["mode"], "threads": torch.get_num_threads(), "seconds": time.perf_counter() - t0,
+               "nll": a["nll"], "tokens": a["count"], "perplexity": math.exp(a["nll"] / a["count"]),
+               "per_window_nll": a["per_window"], "top1": a["top1"],
+               "excluded_b_rows": {k: {"floor": v[0] if head or k == "linear" else 0, "live": v[1] if head or k == "linear" else 0}
+                                   for k, v in state["excluded_b"].items()},
+               "excluded_a_rows": {k: dict(zip(("floor", "live", "rows"), v if head or k == "linear" else [0, 0, 0]))
+                                   for k, v in state["excluded_a"].items()},
+               "rows_b": {"linear": sum(g.n for g in groups if g.kind == "linear"), "head": groups[-1].n}}
+        (out / f"quality-{mode}-{shard}of{shards}.json").write_text(json.dumps(doc))
+        print(json.dumps({k: v for k, v in doc.items() if k not in ("per_window_nll", "top1")}), flush=True)
     return 0
 
 
@@ -433,7 +451,9 @@ def reference_tile(x: torch.Tensor, w: torch.Tensor, tag: bytes) -> dict:
     codes_a, alpha_a, _, _ = form(x.to(_F32), _values(e_a), _values(fa))
     exact = x.to(_F32) @ w.to(_F32).T
     rms = lambda t: float(t.pow(2).mean().sqrt())  # noqa: E731
-    return {"rows": x.shape[0], "cols": w.shape[0], "k": k,
+    differ = [[j, float(emu.alpha_b[j]), float(f32(b.alpha[j])), float(f32(C.s5_stats(_words(w[j:j + 1])[0])[2]))]
+              for j in torch.nonzero(emu.alpha_b != f32(b.alpha))[:, 0].tolist()[:8]]
+    return {"rows": x.shape[0], "cols": w.shape[0], "k": k, "alpha_b_differ": differ,
             "alpha_a_equal": float((alpha_a == f32(a.alpha)).float().mean()),
             "alpha_b_equal": float((emu.alpha_b == f32(b.alpha)).float().mean()),
             "a_codes_equal": float((codes_a == _values(a.codes)).float().mean()),
@@ -546,7 +566,7 @@ def summary(args) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--model", help="the checkpoint's directory (unsloth/Llama-3.2-1B at the run of record's revision)")
-    ap.add_argument("--mode", choices=MODES)
+    ap.add_argument("--mode", help=f"one of {', '.join(MODES)}; or pearl,pearl-head, one pass through the layers for both")
     ap.add_argument("--windows", type=int, help="the first N windows (default all 141)")
     ap.add_argument("--part", default="0/1", metavar="I/N",
                     help="the I-th of N contiguous ranges of the windows; --summary joins a mode's parts")
