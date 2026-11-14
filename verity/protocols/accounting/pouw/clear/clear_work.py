@@ -77,10 +77,11 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120, Prices
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_work import ALIGN, BAND, Split, UnitRecord, records_root
 from verity.protocols.accounting.pouw.verifier.serving import HASH_FORMATS
+from verity.commitments.domains import POUW_PEARL_C_SAMPLING, POUW_PEARL_C_SAMPLING_AFTER
 from verity.commitments.randomness import Key, derive
 
-DRAW_DOMAIN = "verity/pouw/pearl-c-draw/v1"
-DRAW_AFTER_TAG = "verity/pouw/pearl-c/draw-after/v1"
+DRAW_DOMAIN = POUW_PEARL_C_SAMPLING
+DRAW_AFTER_TAG = POUW_PEARL_C_SAMPLING_AFTER
 
 
 #: V-EX's count caps: at most ⌈m/64⌉ voluntary A rows per unit and ⌈n/64⌉ voluntary B rows per weight.
