@@ -41,7 +41,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_design
+from verity.protocols.proofs.spot.verifier.one_stage.draw import parse_rate, parse_strata_rate
 from verity.channel import Refused
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -66,10 +66,14 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 # --- what each component and the workload declare -------------------------------------------------------------------
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
-    try:
-        parse_design(law)
-    except ValueError as e:
-        raise Refused("law", str(e)) from None
+    """The served window's rule is a rate, which its audit states to its stream (`service.Law`): a fixed count is refused
+    by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
+    strata = parse_strata_rate(law)
+    if parse_rate(law) is None and (strata is None or strata[0]):
+        raise Refused("law", f"the served window's rule is a rate (rate:NUM/DEN or stratified-rate:NUM/DEN), not {law!r}: its "
+                             "audit states it to its stream, which refuses a fixed count (subset:K, stratified:K, work:K), "
+                             "since K of N falls as the prover pads the N it registers. In place of a count K, state K over "
+                             "the proof blocks N the window's class registers: rate:K/N, or stratified-rate:K/N")
 
 
 def _pous(params: Mapping[str, Any]) -> dict[str, Any]:
@@ -110,7 +114,7 @@ _PROVER = Role(PROVER, "developer", per="server", needs=("store",))
 _MEMORY_CHALLENGER = Role(MEMORY_CHALLENGER, "auditor", needs=("clock", "coins", "signing-key"))
 MANIFESTS: dict[str, Component] = {c.name: c for c in (
     Component("sampled-proofs", SP.IDS["sampled-proofs"], parties=SP.MANIFEST.parties, channels=SP.MANIFEST.channels,
-              needs=frozenset({"windows"}), law=_law, default_law="subset:1"),
+              needs=frozenset({"windows"}), law=_law, default_law="rate:1/3481648"),
     Component("pouw", SP.IDS["pouw"], parties=(Role(CHALLENGER, "auditor", needs=("host",)),
                                                Role(WORKERS, "developer", needs=("serve",)), _VERIFIER),
               channels=(Channel(CHALLENGER, WORKERS, ("H1Coins",), carries_coins=True),
