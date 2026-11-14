@@ -85,7 +85,7 @@ PUBLIC = {
     "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
                                                 "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
                                                 "circuit cut at its linears (PearlTables)",
-    "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
+    "verity_torch.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
@@ -204,7 +204,7 @@ PUBLIC = {
     "verity_vllm.correspondence.reader_for_query": "I7: the per-Call runtime correspondence of a derived Program for the query, "
                                                    "and a Call's name (call_name_of, parse_call_name), which "
                                                    "benchmarks/served_commit's granularity reads",
-    "verity_vllm.correspondence.runtime": "I7: runtime-correspondence/v1: per Call, the facts that resolve a Program's logical "
+    "verity_torch.correspondence.runtime": "I7: runtime-correspondence/v1: per Call, the facts that resolve a Program's logical "
                                           "value to a runtime occurrence (RuntimeCorrespondence), which "
                                           "benchmarks/served_commit's granularity reads",
     "verity_vllm.llm": "I1: the pinned engine's own module: LLM, the protocol options it resolves and the context it hands them "
@@ -317,7 +317,7 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.tp.warmup",
     "verity_vllm.pipeline.window_advice",
     "verity_vllm.program.compact",
-    "verity_vllm.program.frontend.derive",
+    "verity_torch.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
     "verity_vllm.program.frontend.rules.family",
