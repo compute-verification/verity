@@ -119,14 +119,14 @@ the verifier expects values registered, the pool its window opens and no output 
 verdict log names refused. SPOT's one-stage form and the recursive audit read SPOT's acceptance through that
 check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's facts off it (`CallerCheckSound`). -/
 def CallerCheckMeans : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
 
 /-- **Where the caller's check finds nothing, the record keeps the caller's facts**: `CallerCheckMeans`' forward half,
 which is all `StageHeld` reads. On every record and every verifier, where `VStar.Recursive.Caller.check` returns no
 code, the record keeps `Properties.Spot.CallerHeld` against that verifier. -/
 def CallerCheckSound : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
 
 /-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
@@ -145,7 +145,7 @@ def StageHeld (k : Case) : Prop :=
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier ∧
     Properties.Spot.CallerHeld c.record p.base.verifier) ∨
   (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
-    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
+    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr (.inl q)) ∧
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier ∧
     Properties.Spot.CallerHeld c.record q.base.verifier)
 

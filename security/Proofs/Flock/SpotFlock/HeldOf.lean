@@ -70,7 +70,7 @@ structure Unread where
 /-! ## The fields -/
 
 /-- **A registration's names**: its verifier's ports and registered values, in its order. -/
-def namesOf (v : Spot.Registration.Verifier) : Names :=
+def namesOf (v : Spot.Docket.Verifier) : Names :=
   ⟨(v.ports.map (·.1)).toList, (v.registered.map (·.1)).toList⟩
 
 /-- **The boundary registration the first stage samples on**, as `Run.run` hands it to `Select.select`: the verifier's

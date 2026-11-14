@@ -10,7 +10,7 @@ meta import CoreProtocol.Ratio
 meta import RemoteAudit.Difftest
 
 /-!
-# A remote bandwidth session as a core protocol
+# A PoUB session as a core protocol
 
 The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
 the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
@@ -171,17 +171,15 @@ def protocol : Core.Protocol where
   publicJson := Public.toJson
   profileJson := id
 
-/-- **What a session accounts for** (`Core.Account`): the reads of the node's memory its openings certify
-(`q_bytes`), verified from below at `eps`, over the session. A session the pooled bound refuses publishes 0 reads at
-`eps` 0, a true lower bound, so nothing is flagged.
+/-- **What a session accounts for** (`Core.Account`): the reads of the node's memory its openings certify (`q_bytes`),
+verified from below at `eps`, over the session. A session the pooled bound refuses publishes 0 reads at `eps` 0, a true
+lower bound, so nothing is flagged.
 
-It names no device and no registration's head, and states no span: the session publishes none. What it would say
-beyond what `Core.Account` holds: which tiers the registered blocks were read from, which the answer doesn't publish
-(the node's GPUs' memory and its host's DRAM, the session ledger's two tiers); and the bytes the node held through the
-session, which is the ledger's line on these reads and the node's rates, an amount of memory over a span, not an
-answer of this protocol. -/
+Its answers name no auditor's device's key, so they are of the whole site (`witness`), and no span: the session
+publishes none. Its part is the session ledger's two tiers, the node's GPUs' memory and its host's DRAM; the answer
+names neither (`tiers`). The bytes the node held through the session are the ledger's line, not this answer. -/
 def account : Core.Account :=
-  { protocol := ID, head := none
+  { protocol := ID, witness := none
     amounts := [{ metric := "reads", part := .read [.hbm, .dram], key := .published "q_bytes",
                   unit := Core.Account.bytes, side := .verified, time := .unstated, error := .published "eps",
                   uncertified := .safe }] }

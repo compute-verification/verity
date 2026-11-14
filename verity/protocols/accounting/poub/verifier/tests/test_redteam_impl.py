@@ -8,6 +8,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from test_remote_bandwidth import SCHEDULE, N, drive, finish, params, store  # noqa: F401
 
+from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import (
     audit,
     codec,
@@ -72,8 +73,8 @@ def test_rb2_the_record_names_its_codec(store) -> None:
     assert led.rebuild == pytest.approx(stated * BLOCK / (65_344 * CAPACITY))
 
 
-def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, bytes], reads: list[int],
-               entropy) -> tuple[audit.Pass, audit.Pass]:
+def joint_pass(store: audit_prover.Store, window: int, i: int, seeds: tuple[bytes, bytes], reads: list[int],
+               entropy) -> tuple[audit_prover.Pass, audit_prover.Pass]:
     """Pass i of two sessions' chains at once: each block is read once and serves a receipt of each."""
     plan = receipts.Plan.whole(N)
     rs = [receipts.receipter(store.registration.receipt, sd) for sd in seeds]
@@ -86,7 +87,7 @@ def joint_pass(store: audit.Store, window: int, i: int, seeds: tuple[bytes, byte
     out = []
     for k in (0, 1):
         salts = tuple(entropy(receipts.SALT_BYTES) for _ in range(receipts.leaves(N)))
-        out.append(audit.Pass(window, i, seeds[k], plan, tuple(ys[k]), salts,
+        out.append(audit_prover.Pass(window, i, seeds[k], plan, tuple(ys[k]), salts,
                               receipts.tree(seeds[k], plan, ys[k], salts)))
     return out[0], out[1]
 
@@ -103,7 +104,7 @@ def test_rb3_a_session_refuses_to_start_while_another_reads_the_store(store) -> 
     sessions = [AuditRun(p, store.registration, None,
                          coins.local(store.registration.digest, k, p.windows, Entropy(b"coins %d" % k), appends=1),
                          not_before_ns=0, clock=clock) for k in (0, 1)]
-    provers = [audit.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
+    provers = [audit_prover.Prover(store, None, entropy=Entropy(b"unused")) for _ in sessions]
     reads, entropy = [0], Entropy(b"joint salts")
     challenges = [s.start() for s in sessions]
     previous = [store.registration.digest] * 2

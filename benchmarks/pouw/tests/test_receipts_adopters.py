@@ -24,7 +24,7 @@ def test_pfill_cuh_runs_the_reference_folds():
     """pf_absorb, pfill's key rules, pf_keys and its lane starts, in its default, LI and XIN13 builds (g++)."""
     if not shutil.which("g++"):
         pytest.skip("no g++ for pfill.cuh's host build")
-    assert C.pfill_cuh(POUW / "filler/pfill.cuh") > 500
+    assert C.pfill_cuh(POUW.parents[1] / "verity/protocols/accounting/pouw/prover/kernels/filler" / "pfill.cuh") > 500
 
 
 def test_the_scorers_fold_table_is_the_references():

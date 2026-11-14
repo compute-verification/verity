@@ -199,7 +199,7 @@ open Lean (Json)
 private def rep (b : String) : String := String.join (List.replicate 64 b)
 private def jsonOf (s : String) : Json := (Json.parse s).toOption.getD .null
 private def textOf (j : Json) : String := (Flock.canon j).toOption.getD ""
-private def digestOf (j : Json) : String := (Spot.Registration.digestHex j).toOption.getD ""
+private def digestOf (j : Json) : String := (Spot.Docket.digestHex j).toOption.getD ""
 
 /-- A table of `leaves` rows of one 16-bit word. -/
 private def tableEntry (value root domain : String) (leaves : Nat) : Json :=
@@ -210,7 +210,7 @@ private def executionPhaseA : Json := tableEntry "pouw/h1/a/64@0" (rep "ab") (re
 private def executionPhaseIds : Json := tableEntry "pouw/h1/ids@0" (rep "ba") (rep "a2") 8
 
 private def recW : Json := Json.mkObj [("format", "verity/registration/v2"), ("previous", Json.null),
-  ("program", rep "11"), ("protocol", Spot.Registration.PROTOCOL),
+  ("program", rep "11"), ("protocol", Spot.Docket.PROTOCOL),
   ("registered", Json.arr #[executionPhaseA, executionPhaseIds]),
   ("window", Json.mkObj [("entry", 0), ("kind", "served"), ("open_root", rep "0e"), ("refused", Json.arr #[])])]
 
@@ -237,8 +237,8 @@ private def ports : Json := Json.mkObj [("out", Json.mkObj [("domain", rep "d1")
 private def runRecord (previous : Json) (registered : Array Json) : Json := Json.mkObj [("anchors", Json.arr #[]),
   ("format", "verity/registration/v2"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("partition", (Spot.Partition.digest partition).getD ""), ("population", 1), ("previous", previous),
-  ("program", circuit), ("protocol", Spot.Registration.PROTOCOL),
-  ("query", (Spot.Registration.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
+  ("program", circuit), ("protocol", Spot.Docket.PROTOCOL),
+  ("query", (Spot.Docket.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
   ("roots", Json.arr #[Json.mkObj [("domain", rep "d1"), ("leaves", 2), ("port", "out"), ("root", rep "cd")],
     Json.mkObj [("domain", rep "d2"), ("leaves", 1), ("port", "x"), ("root", rep "ab")]]),
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window", Json.mkObj [("kind", "served"), ("run", "r-1")])]
