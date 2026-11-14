@@ -3,6 +3,8 @@
 # which gives the sampling design, is `setup_proof.sampling_design`, with its test. The claim's field `law`, the evidence
 # record's key `"law"` that it writes and `PousCheck`'s Lean field keep the word, as stored bytes and their mirror.
 
+[words]
+
 [rewrite]
 exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "GLOSSARY.md", "tests/lint/**",
            "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
