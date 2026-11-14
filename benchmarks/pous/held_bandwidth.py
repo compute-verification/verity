@@ -50,7 +50,7 @@ import numpy as np
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[2] / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
 
-import bandwidth as B  # noqa: E402
+import bandwidth as B
 
 from verity.protocols.accounting.pous.verifier import period
 from verity.protocols.accounting.pous.verifier import verifier as V

@@ -65,7 +65,7 @@ reason = "the PoUS Lean check (`pous-check`), whose Python is run by path beside
 [[distribution]]
 directory = "verity/protocols/accounting/poub/prover"
 owner = "memory-accounting"
-reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name"
+reason = "PoUB's prover, which runs on a GPU through torch, which `verity` never imports: loaded by path under its own names (`prover`, `device`, `kv`, `paged`) by the vLLM adapter and by its harness in `benchmarks/`; the session's prover party (`session_prover.py`), which only tests load by name; and the honest provers, the period's prover side and the P2 session's (`audit_prover.py`, `p2_prover.py`, `period_prover.py`, `opening_prover.py`, `p2_party_prover.py`), which tests, `benchmarks/` and the vLLM adapter load by name; and the P2 session's staging (`p2_stage/`: `bandwidth.py`, run as a script, and the `stage` and `layout` it loads), which `benchmarks/` loads by path under those names"
 
 [[distribution]]
 directory = "verity/protocols/accounting/pous/prover/p2"
@@ -453,6 +453,7 @@ loaded_by = [
     "verity/protocols/accounting/poub/prover/p2_party_prover.py",
     "verity/protocols/accounting/poub/prover/opening_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
     "verity/protocols/accounting/poub/prover/period_prover.py",
     "verity/protocols/accounting/poub/prover/remote_session/device.py",
     "verity/protocols/accounting/poub/prover/remote_session/prover.py",
@@ -542,6 +543,8 @@ reaches = [
 loaded_by = [
     "verity/protocols/accounting/pous/prover/challenger_prover.py",
     "verity/protocols/accounting/poub/prover/p2_prover.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py",
+    "verity/protocols/accounting/poub/prover/p2_stage/layout.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/load.py",
     "verity/protocols/accounting/pous/prover/p2/p2_store/store.py",

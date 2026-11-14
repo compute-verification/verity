@@ -15,12 +15,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/poub/prover/p2_stage/bandwidth.py").parent))
 
-import bandwidth as B  # noqa: E402
-from p2_store import store as ST  # noqa: E402
-from p2_v1 import serve as SV  # noqa: E402
+import bandwidth as B
+from p2_store import store as ST
+from p2_v1 import serve as SV
 
-from verity.protocols.accounting.poub.verifier import p2  # noqa: E402
-from verity.protocols.accounting.pous.verifier import verifier as V  # noqa: E402
+from verity.protocols.accounting.poub.verifier import p2
+from verity.protocols.accounting.pous.verifier import verifier as V
 
 
 def toy(out: Path) -> p2.Registration:
