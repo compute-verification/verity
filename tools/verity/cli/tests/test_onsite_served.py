@@ -9,8 +9,11 @@ record are stand-ins written by each test."""
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
+import re
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -19,6 +22,7 @@ from verity import config as K
 from verity.protocol import Channel
 from verity.channel import Refused
 from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier.service import Law
 from verity_cli import run as R
@@ -115,11 +119,53 @@ def test_the_configuration_states_no_host_or_address():
 
 def test_the_memory_challenger_s_two_keys_are_pinned_and_hashed():
     cfg = R.load(CONFIG, REG)
-    assert [(p["party"], p["protocol"], p["scheme"], p["key-sha512"]) for p in cfg["pin"]] == [
-        ("memory-challenger", "pous", K.SCHEMES[0], T.PINS["pous"]),
-        ("memory-challenger", "wipe", K.SCHEMES[0], T.PINS["wipe"])]
+    assert [(p["party"], p["protocol"], p["scheme"]) for p in cfg["pin"]] == [
+        ("memory-challenger", "pous", K.SCHEMES[0]), ("memory-challenger", "wipe", K.SCHEMES[0])]
+    stated = {p["protocol"]: p["key-sha512"] for p in tomllib.loads(CONFIG.read_text())["pin"]}
+    assert {p["protocol"]: p["key-sha512"] for p in cfg["pin"]} == stated
+    assert all(re.fullmatch("[0-9a-f]{128}", k) for k in stated.values()) and stated["pous"] != stated["wipe"]
+    assert T.configuration(cfg["program"]["commit"])["pin"] == cfg["pin"]   # the table states no key of its own
     bare = {k: v for k, v in K.parse(CONFIG.read_text()).items() if k != "pin"}
     assert K.digest(K.check(bare, REG.components, REG.workloads)) != K.digest(cfg)
+
+
+def test_a_memory_challengers_placement_reads_the_configurations_pins_under_its_hash(monkeypatch):
+    """The table's placement of a memory challenger's session: `trusted-device` holds only for the key the onsite
+    configuration pins for that protocol, under its committed hash; another protocol's pin, no key or a configuration
+    nobody committed reads rehearsal. No other party gets a placement."""
+    cfg = R.load(CONFIG, REG)
+    piece = {c: p for c in ("pous", "wipe") for p in [T.PARTIES[c]["memory-challenger"]]}
+    pin = {p["protocol"]: p["key-sha512"] for p in cfg["pin"]}
+    key = {c: "ab" * 32 + c.encode().hex() for c in pin}
+    monkeypatch.setitem(cfg, "pin", [p | {"key-sha512": hashlib.sha512(bytes.fromhex(key[p["protocol"]])).hexdigest()}
+                                     for p in cfg["pin"]])
+    monkeypatch.setattr(mc, "committed", lambda: frozenset({K.digest(cfg)}))
+    for c in ("pous", "wipe"):
+        where = T.placement(cfg, piece[c], {"public_key": key[c]})
+        assert mc.holds(where) and K.digest(cfg) in where[mc.PREMISE] and f"{c} sessions" in where[mc.PREMISE]
+        other = "wipe" if c == "pous" else "pous"
+        assert not mc.holds(T.placement(cfg, piece[c], {"public_key": key[other]}))
+        assert not mc.holds(T.placement(cfg, piece[c], None))
+    monkeypatch.setattr(mc, "committed", lambda: frozenset())
+    assert T.placement(cfg, piece["wipe"], {"public_key": key["wipe"]})[mc.PREMISE].startswith(mc.UNCOMMITTED)
+    assert T.placement(cfg, T.PARTIES["pous"]["prover"], {"public_key": key["pous"]}) is None
+    assert pin.keys() == {"pous", "wipe"}
+
+
+def test_the_registration_names_the_runs_own_configuration_and_is_not_written_yet(tmp_path):
+    """The run's registration reads the configuration's hash from ``run.json``: no ``run.json``, or one under another
+    hash, is refused; under this configuration's own hash it raises with its goal, since no log item names a
+    configuration yet."""
+    cfg = R.load(CONFIG, REG)
+    with pytest.raises(Refused) as no_run:
+        T.registration(cfg, tmp_path)
+    assert no_run.value.name == "registration"
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": "00" * 64}))
+    with pytest.raises(Refused):
+        T.registration(cfg, tmp_path)
+    (tmp_path / "run.json").write_text(json.dumps({"configuration": K.digest(cfg)}))
+    with pytest.raises(NotImplementedError, match=T.REGISTRATION_GOAL):
+        T.registration(cfg, tmp_path)
 
 
 def test_the_parties_are_the_manifests_names_and_onsite_is_the_product():
@@ -215,10 +261,11 @@ def test_a_dry_run_on_a_machine_resolves_its_parties(capsys):
 
 def test_the_runners_variables_and_the_bindings_keys_are_these():
     cfg = R.load(CONFIG, REG)
-    assert T.variables(cfg, BINDINGS) == VARIABLES
+    deployed = {"VERITY_CONFIGURATION": K.digest(cfg), "VERITY_PINS": json.dumps(cfg["pin"], sort_keys=True)}
+    assert T.variables(cfg, BINDINGS) == VARIABLES | deployed
     assert T.unbound(cfg, {}) == KEYS and T.unbound(cfg, BINDINGS) == [] and sorted(KEYS) == UNBOUND
     unbound = T.variables(cfg, {})
-    assert set(unbound) == set(VARIABLES)
+    assert set(unbound) == set(VARIABLES) | set(deployed)
     assert unbound["CERTIFIER_FRONT"].endswith("--gate '<network-certifier.certifier.gate>'")
     assert unbound["CERTIFIER_CMD"] == VARIABLES["CERTIFIER_CMD"]
 
