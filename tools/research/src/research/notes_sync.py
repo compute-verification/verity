@@ -412,7 +412,8 @@ def created_at(text: str) -> tuple[str, dt.datetime] | None:
         return None
     try:
         t = dt.datetime.fromisoformat(f"{m[2]}T{m[3]}{m[4] if m[4] and m[4].upper() != 'Z' else ''}")
-    except ValueError:
+    except ValueError as e:
+        print(f"notes sync: {m[0][:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     return m[1], t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)
 
@@ -434,8 +435,8 @@ def future_stamps(root: Path, paths: list[str], now: dt.datetime) -> dict[str, s
         if old is None and (m := STAMP_RE.match(p.name)):
             try:
                 found.append(("stamp", m[1], dt.datetime.strptime(m[1], "%Y%m%dT%H%MZ").replace(tzinfo=dt.timezone.utc), "%Y%m%dT%H%MZ"))
-            except ValueError:
-                pass
+            except ValueError as e:
+                print(f"notes sync: {path}'s stamp {m[1]} is not a time, so it is not checked ({e})", file=sys.stderr, flush=True)
         c, prev = created_at(text), created_at(old) if old is not None else None
         if c and (prev is None or prev[1] != c[1]):
             found.append(("created:", *c, "%Y-%m-%dT%H:%MZ"))

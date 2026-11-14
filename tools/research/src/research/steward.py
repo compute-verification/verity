@@ -96,7 +96,8 @@ class GitTimes:
     def _git(self, *args: str, timeout: float = 30) -> str | None:
         try:
             r = subprocess.run(["git", "-C", str(self.root), *args], capture_output=True, text=True, timeout=timeout)
-        except (OSError, subprocess.SubprocessError):
+        except (OSError, subprocess.SubprocessError) as e:
+            print(f"steward: git {args[0] if args else ''} in {self.root} did not run ({type(e).__name__})", file=sys.stderr, flush=True)
             return None
         return r.stdout if r.returncode == 0 else None
 
@@ -136,7 +137,8 @@ class S3LeaseBackend:
             raise
         try:
             doc = json.loads(body)
-        except ValueError:
+        except ValueError as e:
+            print(f"steward: the lease's body is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
             doc = {}
         return (doc if isinstance(doc, dict) else {}), etag or ""
 
@@ -180,7 +182,8 @@ class FileLeaseBackend:
             return None
         try:
             doc = json.loads(raw)
-        except ValueError:
+        except ValueError as e:
+            print(f"steward: {self.path} is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
             doc = {}
         return (doc if isinstance(doc, dict) else {}), hashlib.sha256(raw).hexdigest()
 
@@ -281,8 +284,8 @@ class Lease:
         if cur and cur[0].get("token") == self.token:
             try:
                 self.backend.write(self._doc(cur[0].get("acquired_at"), released=True), cur[1])
-            except LeaseConflict:
-                pass
+            except LeaseConflict as e:
+                print(f"steward: the lease changed before its release was written, so it is left as it is ({e})", file=sys.stderr, flush=True)
         self.held = False
 
 

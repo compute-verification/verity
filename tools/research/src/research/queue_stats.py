@@ -15,6 +15,7 @@ import concurrent.futures
 import json
 import re
 import statistics
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -75,21 +76,27 @@ def parse(log: str) -> tuple[list[Launch], list[Landing]]:
 
 
 def slot_took(run_dir: Path) -> datetime | None:
+    if not (run_dir / "slot.json").exists():
+        return None
     try:
         took = json.loads((run_dir / "slot.json").read_text()).get("took")
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"queue stats: {run_dir / 'slot.json'} unread, so no slot time ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return ts(took) if took else None
 
 
 def verdict_at(run_dir: Path, landed: datetime) -> datetime | None:
     ends = []
+    if not (run_dir / "steps.jsonl").exists():
+        return None
     try:
         for line in (run_dir / "steps.jsonl").read_text().splitlines():
             rec = json.loads(line)
             if rec.get("ended_utc") and (end := ts(rec["ended_utc"])) <= landed:
                 ends.append(end)
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"queue stats: {run_dir / 'steps.jsonl'} unread, so no step end ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return max(ends, default=None)
 

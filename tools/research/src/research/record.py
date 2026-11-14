@@ -15,6 +15,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -30,7 +31,8 @@ V2_SECTIONS = ("tool", "run", "workload_fingerprint", "cost", "store")   # store
 def _git(args: list[str], cwd: Path) -> str | None:
     try:
         r = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, timeout=3)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"record: git {args[0] if args else ''} in {cwd} did not run ({type(e).__name__})", file=sys.stderr, flush=True)
         return None
     return r.stdout.strip() if r.returncode == 0 else None
 
@@ -81,9 +83,12 @@ def extend_job(job: dict[str, Any], *, run_id: str, runs_root: Path, expected_fi
 def read_job(run_dir: str | Path) -> dict[str, Any] | None:
     """Normalized read.  Unknown schema -> None.  v0.1 -> v0.2 sections present and None (unknown)."""
     p = Path(run_dir) / "job.json"
+    if not p.exists():
+        return None
     try:
         doc = json.loads(p.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"record: {p} unread, so the run has no record ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     if not isinstance(doc, dict) or doc.get("schema") not in READABLE_JOB_SCHEMAS:
         return None

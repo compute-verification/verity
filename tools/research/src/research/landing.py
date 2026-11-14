@@ -213,9 +213,12 @@ def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None 
 
 def _epoch(ts: object) -> float | None:
     """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
+    if ts is None or ts == "":
+        return None
     try:
         t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
-    except ValueError:
+    except ValueError as e:
+        print(f"landing: {str(ts)[:40]!r} is not a time, read as none ({e})", file=sys.stderr, flush=True)
         return None
     return (t if t.tzinfo else t.replace(tzinfo=UTC)).timestamp()
 
@@ -355,20 +358,25 @@ def failing(run_dir: Path) -> str | None:
     """What has failed so far in a check still running under `--keep-going`, which fails it whatever else it finds, or None."""
     out = []
     try:
-        lines = (run_dir / PROGRESS[0]).read_text().splitlines()
-    except OSError:
+        lines = (run_dir / PROGRESS[0]).read_text().splitlines() if (run_dir / PROGRESS[0]).exists() else []
+    except OSError as e:
+        print(f"landing: {run_dir / PROGRESS[0]} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         lines = []
     for line in lines:
         try:
             rec = json.loads(line)
-        except ValueError:
+        except ValueError as e:
+            print(f"landing: a line of {PROGRESS[0]} is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if rec.get("status") == "failed":
             out.append(f"step {rec.get('step')}")
     for name in PROGRESS[1:]:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         for s in doc if isinstance(doc, list) else ():
             tests = s.get("failed_tests") or []
@@ -604,9 +612,12 @@ def _docs(run_dir: Path, *names: str) -> list[dict]:
     """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
+        if not (run_dir / name).exists():
+            continue
         try:
             doc = json.loads((run_dir / name).read_text())
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            print(f"landing: {run_dir / name} unread, skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
@@ -642,7 +653,8 @@ def suite_pyproject(repo: Path, commit: str, suite: str) -> dict:
     r = _git(repo, "show", f"{commit}:{own}", check=False)
     try:
         return tomllib.loads(r.stdout) if not r.returncode else {}
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"landing: {own} at {commit[:12]} did not parse, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
 
 
@@ -1142,7 +1154,8 @@ class Landing:
             r = _git(self.repo, "show", f"origin/main:{REGISTRY}", check=False)
             try:
                 reg = json.loads(r.stdout) if not r.returncode else {}
-            except ValueError:
+            except ValueError as e:
+                print(f"landing: origin/main's {REGISTRY} is not JSON, so no handle owns a path ({e})", file=sys.stderr, flush=True)
                 reg = {}
             self._reg = reg = reg if isinstance(reg, dict) and isinstance(reg.get("handles"), list) else {"handles": []}
         try:

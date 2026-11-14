@@ -1181,8 +1181,8 @@ def _push_main(ssh: list[str], repo: str, git_dir: Path, size: int) -> None:
     try:
         subprocess.run(["git", "-c", "protocol.ext.allow=always", "push", "-q", git_push_url(ssh, repo), f"{main}:refs/heads/main"],
                        cwd=git_dir, capture_output=True, text=True, timeout=ship_timeout(size))
-    except subprocess.TimeoutExpired:
-        pass
+    except subprocess.TimeoutExpired as e:
+        print(f"research: the push of origin/main to the machine timed out after {e.timeout:.0f} s, so its main may be older", file=sys.stderr, flush=True)
 
 
 def _push_commit(ssh: list[str], repo: str, git_dir: Path, sha: str, size: int) -> str | None:
@@ -1484,10 +1484,13 @@ def _pid_alive(pid: int | None) -> bool:
 
 
 def _read_json(p: Path) -> dict[str, Any] | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
         return d if isinstance(d, dict) else None
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
@@ -1589,9 +1592,12 @@ def _environ_of(path: str) -> dict[str, str]:
 
 def _guard_pid(gdir: Path) -> int | None:
     """The pid in <root>/guard/guard.pid when it is a live guard daemon (not a recycled pid), else None."""
+    if not (gdir / "guard.pid").exists():
+        return None
     try:
         pid = int((gdir / "guard.pid").read_text().strip())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research: {gdir / 'guard.pid'} unread, so no guard daemon is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     if not _pid_alive(pid):
         return None
@@ -1962,8 +1968,9 @@ def _runner_failed(req: dict[str, Any], request_path: Path, run_dir: Path, proc:
         reason, fault = str(own.get("reason")), str(own.get("fault") or "Refused")
     else:
         try:
-            tail = _tail((run_dir / "launcher.log").read_text(errors="replace"))
-        except OSError:
+            tail = _tail((run_dir / "launcher.log").read_text(errors="replace")) if (run_dir / "launcher.log").exists() else []
+        except OSError as e:
+            print(f"research: {run_dir / 'launcher.log'} unread ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             tail = []
         reason = (f"the runner exited {proc.returncode} before writing {FIRST_RECORD}: "
                   + ("; ".join(tail[-RUNNER_FAILED_LINES:]) or "nothing in launcher.log"))
@@ -2049,9 +2056,13 @@ def gpu_lease_wrap(req: dict[str, Any]) -> list[str]:
 def direct_cpus() -> set[int]:
     """The CPUs a direct run starts on, from DIRECT_CPUS_FILE (tests: $DIRECT_CPUS_FILE), intersected with this process's own; empty
     when the file is absent or names none of them."""
+    path = Path(os.environ.get("DIRECT_CPUS_FILE") or DIRECT_CPUS_FILE)
+    if not path.exists():
+        return set()
     try:
-        text = Path(os.environ.get("DIRECT_CPUS_FILE") or DIRECT_CPUS_FILE).read_text()
-    except OSError:
+        text = path.read_text()
+    except OSError as e:
+        print(f"research: {path} unread, so a direct run names no CPUs ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return set()
     want: set[int] = set()
     for part in text.replace("\n", ",").split(","):
@@ -2164,7 +2175,8 @@ def workload_cwd(harness_args: list[str], tool_pkg: Path | None) -> str:
     if tool_pkg is not None:
         try:
             knows = "WORKLOAD_CWD_DEFAULT" in (Path(tool_pkg) / "remote.py").read_text()
-        except OSError:
+        except OSError as e:
+            print(f"research: the tool's remote.py unread, so it counts as not knowing --cwd ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             knows = False
         if not knows:
             return "source (the shipped tree's research package predates the per-run workload cwd: it runs in <root>/src/<sha>/)"
@@ -2484,7 +2496,8 @@ def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 
     try:
         probe = ssh_run(ssh, ["sh", "-c", f"cat /proc/sys/kernel/random/boot_id; hostname; kill -0 {pid} 2>/dev/null && echo alive "
                                           "|| echo gone"], timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
+        print(f"research: the machine's liveness probe timed out after {e.timeout:.0f} s, so it is not known", file=sys.stderr, flush=True)
         return None
     lines = probe.stdout.decode(errors="replace").split() if probe.returncode == 0 else []
     if len(lines) != 3:
@@ -2571,7 +2584,8 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
         try:
             probe = ssh_run(ssh, ["sh", "-c", f"cd {shlex.quote(rd)} && if kill -0 {pid} 2>/dev/null; then echo alive; "
                                               f"else echo exited; tail -n 1 launcher.log 2>/dev/null; fi"], timeout=within(120))
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
+            print(f"research: the runner's probe timed out after {e.timeout:.0f} s, so its state is not known", file=sys.stderr, flush=True)
             probe = None
         lines = probe.stdout.decode(errors="replace").splitlines() if probe and probe.returncode == 0 else []
         if lines and lines[0] == "exited":
@@ -2612,9 +2626,12 @@ def node_payload(check_dir: Path = CHECK_DIR) -> bytes:
     from . import scopemem
 
     def src(p: Path) -> str | None:
+        if not p.exists():
+            return None
         try:
             return p.read_text()
-        except OSError:
+        except OSError as e:
+            print(f"research: {p} unread, so the node reading goes without it ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             return None
 
     srcs = {"scopemem": Path(scopemem.__file__).read_text(), "slot": src(check_dir / "slot.py"), "lean": src(check_dir / "lean_slot.py")}

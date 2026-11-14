@@ -92,16 +92,20 @@ def live_tickets(q: Path, *, is_alive: Callable[[int, str], bool] = alive) -> li
 
 
 def _last_release(q: Path) -> int | None:
+    if not (q / "last-release").exists():
+        return None
     try:
         return int((q / "last-release").read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"disk: {q / 'last-release'} unread, so no release is known ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
 
 
 def _note_release(q: Path, now: int) -> None:
     try:
         fd = os.open(q / "last-release", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o666)
-    except OSError:
+    except OSError as e:
+        print(f"disk: {q / 'last-release'} not written, so this release is not noted ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return
     try:
         os.fchmod(fd, 0o666)

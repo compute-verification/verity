@@ -301,7 +301,8 @@ def booked(text: str) -> list[list]:
             s = datetime.fromisoformat(f[0])
             s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
             out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
-        except (IndexError, ValueError):
+        except (IndexError, ValueError) as e:
+            print(f"monitors: a window line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
     return out
 
@@ -437,7 +438,8 @@ def held_back(waiters: list[dict], usable: Callable[[dict], int], now: float) ->
     for w in waiters:
         try:
             waited = now - epoch(w["since"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print(f"monitors: a waiter without a time skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if waited >= MIN_WAIT_S and int(w.get("n") or 1) <= usable(w):
             return w, waited
@@ -528,7 +530,8 @@ def fast_preemptions(lines: list[str], now: float) -> list[dict]:
         v = fields(m[7])
         try:
             t, since = epoch(m[1]), epoch(v["since"])
-        except (KeyError, ValueError):
+        except (KeyError, ValueError) as e:
+            print(f"monitors: a preempted line without a time skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
             continue
         if now - t > PREEMPT_WINDOW_S or not 0 <= t - since <= PREEMPT_WITHIN_S or (v.get("pid"), m[3]) in seen:
             continue
@@ -871,7 +874,8 @@ def submitter(ctx: Ctx, rid: str) -> str | None:
     """Who sent run `rid`: its request's `submitted_by`, else the `--by` its command passes (check's slot.py)."""
     try:
         req = json.loads(_read(ctx.path(REQUESTS) / rid / "request.json") or "{}")
-    except ValueError:
+    except ValueError as e:
+        print(f"monitors: run {rid}'s request.json is not JSON, so its sender is not known ({e})", file=sys.stderr, flush=True)
         return None
     if req.get("submitted_by"):
         return str(req["submitted_by"])
@@ -1087,7 +1091,8 @@ def lost_checks(ctx: Ctx) -> list[Finding]:
     for d in sorted(ctx.path(RUNS).glob(f"r{day}-*")):
         try:
             req = json.loads(_read(ctx.path(REQUESTS) / d.name / "request.json") or "{}")
-        except ValueError:
+        except ValueError as e:
+            print(f"monitors: run {d.name}'s request.json is not JSON, skipped ({e})", file=sys.stderr, flush=True)
             continue
         if not is_full_check(req) or (d / "refused.json").exists():
             continue
@@ -1887,7 +1892,8 @@ class Source:
 def _event(line: str) -> dict:
     try:
         ev = json.loads(line)
-    except ValueError:
+    except ValueError as e:
+        print(f"monitors: an event line is not JSON, read as empty ({e})", file=sys.stderr, flush=True)
         return {}
     return ev if isinstance(ev, dict) else {}
 

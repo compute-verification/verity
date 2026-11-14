@@ -121,9 +121,12 @@ def hold_of(argv: list[str] | None, acks: set[str]) -> str | None:
 
 
 def _read(p: Path) -> dict[str, Any] | None:
+    if not p.exists():
+        return None
     try:
         d = json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError) as e:
+        print(f"research cancel: {p} unread, read as none ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return None
     return d if isinstance(d, dict) else None
 
@@ -190,11 +193,11 @@ def _release(run_dir: Path, req_dir: Path, args: dict[str, Any]) -> list[str]:
                     gone.append(str(p))
     lock = run_dir.parent / ".exclusive.lock"
     try:
-        if lock.read_text().strip() == run_dir.name:
+        if lock.exists() and lock.read_text().strip() == run_dir.name:
             lock.unlink()
             gone.append(str(lock))
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"research cancel: {lock} not released ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return gone
 
 
@@ -289,8 +292,8 @@ def _withdraw_locked(args: dict[str, Any], procs: Procs, run_dir: Path, req_dir:
         with open(run_dir / "launcher.log", "a") as log:
             log.write(f"research cancel: withdrawn from its {', '.join(h['hold'] for h in held)} (pid "
                       f"{', '.join(str(h['pid']) for h in held)}): {reason}; released {len(released)} file(s)\n")
-    except OSError:
-        pass
+    except OSError as e:
+        print(f"research cancel: {run_dir / 'launcher.log'} not written ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
     return {"outcome": "withdrawn", "holds": held, "refused": doc, "released": released}
 
 

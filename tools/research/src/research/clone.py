@@ -121,15 +121,19 @@ def sweep(runs_root: Path, scratch: Path) -> None:
     """Remove each scratch/<run id> whose run is over (`not_over`): a runner that could not remove its clone, or was killed before
     it did, leaves it on the machine's disk, and only this and a node's eviction pass (`store.leftovers.evict_clones`) remove it.
     A live run's clone is never touched.  Each removal, and each failure, is one line on stderr."""
+    if not os.path.isdir(scratch):
+        return
     try:
         entries = list(os.scandir(scratch))
-    except OSError:
+    except OSError as e:
+        print(f"clone: {scratch} unlisted, so no clone is removed ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
         return
     for e in entries:
         try:
             if e.is_symlink() or not e.is_dir(follow_symlinks=False) or not_over(runs_root / e.name) is not None:
                 continue
-        except OSError:
+        except OSError as err:
+            print(f"clone: {e.path} not checked, so it stays ({type(err).__name__}: {err})", file=sys.stderr, flush=True)
             continue
         why = remove(Path(e.path))
         print(f"research: --cwd clone: removed {e.path}, the clone of finished run {e.name}" if why is None else
