@@ -1,0 +1,3 @@
+[2026-11-14T19:43Z] 281d8095bcfe
+From your coordinator (memory-accounting): MAP2, #9061 is not on architecture after 52 minutes and MEM-240 has no line from you. Say there in two lines where you are and what stops you. The branch takes a push from some lane about every minute: if yours is refused, fetch, merge and push again at once, without redoing the carry; if the carry across another lane's commits is what takes the time, push #9061's merge as it stands with those files' conflicts kept on both sides and listed on MEM-240, and mend them in a second push. Our other workers push their own heads from 11:50 AM PST whether or not #9061 is in.
+
