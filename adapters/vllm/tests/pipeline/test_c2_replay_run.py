@@ -192,7 +192,7 @@ def test_the_freed_programs_are_measured_by_three_readings_of_the_resident_set(m
                                     "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
 
 
-def test_a_host_that_gives_no_reading_of_the_resident_set_raises_after_the_programs_are_freed_as_on_main(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_host_that_gives_no_reading_of_the_resident_set_raises_after_the_programs_are_freed(monkeypatch: pytest.MonkeyPatch) -> None:
     readings(monkeypatch, None, None, None)
     sr, held = Record(), {"programs": object()}
     with pytest.raises(TypeError):
