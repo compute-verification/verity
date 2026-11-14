@@ -7,4 +7,5 @@
 
 [rewrite]
 exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "GLOSSARY.md", "tests/lint/*.py",
-           "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**"]
+           "tests/test_retired_terms.py", "verity/protocols/accounting/certifier/**", "security/**/Certifier/**",
+           "verity/protocols/accounting/pouw/**"]
