@@ -77,9 +77,13 @@ lowrisk_per_tick = 20
 # (.gitattributes), and the landing rules themselves (queue.py); and what
 # runs with the control pod's or every agent's credentials once it is on main: infra/, the research tool (tools/research/),
 # the move scripts and maps the loop runs and certifies a move against (tools/move/), the agent guard and its hooks
-# (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock)
+# (tools/agent-guard/, .cursor/), and the environment (pyproject.toml, uv.lock). Every `device/` and `verifier/` is excluded
+# whole, by its own entry or one above it, so a file added there later is too (tests/test_lowrisk_excludes.py), among them:
+# the registration log's verifier (verity/protocols/accounting/registration/verifier/), not only its files' names;
+# compose's verifier (verity/protocols/compose/verifier/), not only its lean/, onsite/ and remote/
 lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
                     "verity/claims/", "verity/runtime/", "verity/circuits/evaluate/", "verity/circuits/requirement/", "tools/difftest/", "verity/protocols/interface/world/", "record.py", "registration.py", "verity/protocols/accounting/certifier/device/", "verity/protocols/accounting/certifier/verifier/", "verity/protocols/proofs/flock/sigma/", "verity/protocols/proofs/flock/verifier/", "verity/protocols/policy/inference_only/verifier/", "verity/protocols/interface/", "verity/protocols/compose/verifier/onsite/", "verity/protocols/accounting/poub/verifier/", "verity/protocols/accounting/pous/device/", "tools/pous_grader/", "verity/protocols/accounting/pous/verifier/", "verity/protocols/accounting/pouw/verifier/", "verity/protocols/proofs/recursion/verifier/", "verity/protocols/compose/verifier/remote/", "verity/protocols/compose/verifier/lean/", "verity/protocols/proofs/spot/", "verity/protocols/tests/",
+                    "verity/protocols/accounting/registration/verifier/", "verity/protocols/compose/verifier/",
                     "verity/party.py", "verity/protocol.py", "verity/config.py", "verity/channel.py", "verity/device.py", "verity/errors.py", "verity/tests/", "hardware/",
                     "verity/protocols/compose/device/", "verity/protocols/accounting/poub/device/", "benchmarks/network_traces/", "adapters/vllm/manifests/checkpoints-int8.json",
                     "benchmarks/one_stage/", "benchmarks/pous/p2_v1/bandwidth-mem69-v2.json", "benchmarks/remote_session/auditor_line.py",
