@@ -1192,13 +1192,13 @@ def test_a5_holds_a_history_tables_registered_root_to_the_one_over_its_writers_b
     assert not seen
 
 
-def _audited(window: Path, out: Path, registration: dict | None = None, accepted: bool = True) -> Path:
+def _audited(window: Path, out: Path, docket: dict | None = None, accepted: bool = True) -> Path:
     """What the records audit leaves under its ``--out`` ``out`` for ``window``: the population Program it sampled, its
     summary, and an audit record of ``registration`` (default the window's) accepting a subset sample of 2 proof blocks
     on coins its check verified, which says its audit wrote the case for the compiled check (`served_integrity.answer`
     accepts with no less); or, not ``accepted``, a check before the sample that failed."""
     mine, _doc, _sets = RA.verifier_window(window, D.parse_design(SAMPLING_DESIGN), None)
-    rec = registration or json.loads((window / "registration.json").read_text())
+    rec = docket or json.loads((window / "registration.json").read_text())
     (out / "window").mkdir(parents=True)
     (out / "window" / "program.json").write_bytes(canonical_json(encode_program(mine.program)))
     if not accepted:
