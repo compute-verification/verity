@@ -206,7 +206,10 @@ def test_custody(tmp_path):
     (run / "out" / "honest" / "a.json").write_text("{}")
     digest = hashlib.sha512(b"{}").hexdigest()
     (run / "end.json").write_text(json.dumps({"ended": "ended", "files": {"honest/a.json": digest}}))
-    assert cr.custody(tmp_path)["verdict"] == "accepted"
+    (run / "request.json").write_text(json.dumps({"peer": "a-node", "by": "a-lane", "port": 8011, "requests": 4}))
+    got = cr.custody(tmp_path)
+    assert got["verdict"] == "accepted" and got["gate_runs"][0]["request"] == {"port": 8011, "requests": 4}
+    assert "ended_utc" not in got["gate_runs"][0]
     (run / "out" / "honest" / "a.json").write_text("{ }")
     got = cr.custody(tmp_path)
     assert got["verdict"] == "refused" and got["gate_runs"][0]["mismatches"] == {"honest/a.json": "sha512 differs"}

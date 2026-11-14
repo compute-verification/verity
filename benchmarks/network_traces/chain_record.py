@@ -206,7 +206,9 @@ def custody(gates: Path) -> dict:
             got = hashlib.sha512(f.read_bytes()).hexdigest() if f.is_file() else None
             if got != want:
                 bad[rel] = "missing" if got is None else "sha512 differs"
-        request = _json(root / "request.json") or {}
+        # a gate's fetch names no peer and no lane in the run's request (`auditor.REQUEST_WITHHELD`); a copy kept
+        # from a gate that still did loses the two here
+        request = {k: v for k, v in (_json(root / "request.json") or {}).items() if k not in ("peer", "by")}
         summary = _json(root / "out" / "summary.json") or {}
         runs.append({"gate_run": root.name, "dir": str(root.relative_to(gates)), "ended": doc.get("ended"),
                      "files": len(files), "mismatches": bad,

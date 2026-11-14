@@ -491,6 +491,43 @@ def test_fetch_gives_a_warden_rehearsals_witness_to_its_own_lane_and_vy_admin_al
                 f"{run}/witness/rehearse.log", f"{run}/witness/tunnel.log"} <= hidden
 
 
+@pytest.mark.parametrize("argv, own", [
+    (["--ssh", "{verb} {run}"], False),
+    (["--ssh", "{verb} {run}", "--key", "-"], False),
+    (["--ssh", "{verb} {run}", "--key", "memory-accounting"], False),
+    (["--ssh", "{verb} {run}", "--key", LANE], True),
+    (["{verb}", "{run}"], True),
+])
+def test_a_runs_peer_and_the_lane_that_asked_go_to_its_own_lane_and_vy_admin_alone(host, argv, own):
+    """The request names the peer, a machine, and the lane that asked. `status` gives any other key the request
+    less the two. A fetch's `request.json` is that form for every key, so what a record releases of a fetch names
+    no peer, and the request whole is in the fetch's `witness/`, which only the run's own lane and vy-admin get.
+    The gate reads its own copy whole."""
+    run, _ = run_warden(host)
+    whole = json.loads((host.certifier / run / "request.json").read_text())
+    shown = {k: v for k, v in whole.items() if k not in A.REQUEST_WITHHELD}
+    assert A.REQUEST_WITHHELD == ("peer", "by") and set(whole) - set(shown) == {"peer", "by"}
+    assert A.certifier_request(run, host) == whole and A.public_request(whole) == shown
+
+    def ask(verb: str) -> bytes:
+        rc, out = A.gate([w.format(verb=verb, run=run) for w in argv], host, by="root",
+                         certifier_active=lambda r: False)
+        assert rc == 0
+        return out
+
+    assert json.loads(ask("status"))["request"] == (whole if own else shown)
+    with tarfile.open(fileobj=io.BytesIO(ask("fetch"))) as tar:
+        names = tar.getnames()
+        assert names.count(f"{run}/request.json") == 1
+        assert json.loads(tar.extractfile(f"{run}/request.json").read()) == shown
+        assert (f"{run}/witness/request.json" in names) == own
+        if own:
+            assert tar.extractfile(f"{run}/witness/request.json").read() == (
+                host.certifier / run / "request.json").read_bytes()
+        public = b"".join(tar.extractfile(m).read() for m in tar if m.isfile() and "/witness/" not in m.name)
+    assert whole["peer"].encode() not in public
+
+
 def test_of_the_word_that_an_execution_phase_has_no_head_the_rehearsal_publishes_its_certificate(host):
     """A line of `rows.jsonl` that holds, in place of a registration, the network certifier's word that its
     execution phase has no head stays whole in `witness/`. `out/` holds its certificate in the fields a head's has,
@@ -803,7 +840,8 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
         assert rc == 0
         return json.loads(st)
 
-    assert status() == {"run": run, "request": req, "end": None, "active": True, "relay": None}
+    shown = A.public_request(req)
+    assert status() == {"run": run, "request": shown, "end": None, "active": True, "relay": None}
     deployment = {"listen": ["127.0.0.1", 40003], "windows": 20, "origin_unix": 1.5, "session": "00" * 32}
     (d / A.WITNESS).mkdir(mode=0o700)
     (d / A.WITNESS / "deployment.json").write_text(json.dumps(deployment)[:-9])
@@ -827,7 +865,7 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     assert {k: end["verdict"][k] for k in ("windows", "certified_windows", "certificates")} == {
         k: CHECK["summary"][k] for k in ("windows", "certified_windows", "certificates")}
     assert not (d / A.WITNESS / "client.json").exists() and "deployment.json" in end["files"]
-    assert status() | {"active": False} == {"run": run, "request": req, "end": end, "active": False,
+    assert status() | {"active": False} == {"run": run, "request": shown, "end": end, "active": False,
                                            "relay": {"client": "127.0.0.1:8012", "deployment": deployment}}
     rehearsal_status = json.loads(A.gate(["--ssh", f"status {run_warden(host, token='cd34')[0]}"], host,
                                          certifier_active=lambda r: False)[1])

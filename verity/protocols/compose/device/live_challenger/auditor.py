@@ -201,10 +201,11 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   verdict, network verdict, audit, salt and what a second reveal of window 0's salt got). The sentence the word stands
   for, with the peer, the port and for an unruled line the line and the fix, is the run's `witness/ended.txt`, for
   the run's own lane and vy-admin alone, as every run's is. The end holds no time: when a run ended follows what
-  the peer sent and when. `status RUN` and `fetch RUN` return the end. The rehearsal's keys are made in a scratch
-  directory and removed, and `out/` holds no salt. A rehearsal is
-  no window of the challenger's: it takes no coin and writes no ledger entry (the ledger's kinds are the verifier's,
-  `verify_ledger`'s).
+  the peer sent and when. `status RUN` and `fetch RUN` return the end, and the request less its peer and the lane
+  that asked (`REQUEST_WITHHELD`), which only the run's own lane and vy-admin are given: in `status`, and in a
+  fetch as `witness/request.json`. The rehearsal's keys are made in a scratch directory and removed, and `out/`
+  holds no salt. A rehearsal is no window of the challenger's: it takes no coin and writes no ledger entry (the
+  ledger's kinds are the verifier's, `verify_ledger`'s).
 - **A warden rehearsal** (`warden-rehearse`, a lane's own gate key or vy-admin): the byte-cell warden
   (`verity.protocols.accounting.certifier.verifier.warden`) as the auditor's device, `benchmarks/network_traces/warden_serve.py
   rehearse`, with the warden and its client here and the server the peer's endpoint, reached through the same tunnel:
@@ -2007,16 +2008,32 @@ def gate_certifier(argv: list[str], host: Host, *, by: str, now: datetime, token
     return req | {"unit": f"vy-certifier@{run}.service"}
 
 
-def certifier_status(run: str, host: Host, active: Callable[[str], bool]) -> dict:
+#: what a run's request holds that only its own lane and vy-admin are given: the peer, a machine's name, and the lane
+#: that asked. The gate reads both in its own copy, `request.json`
+REQUEST_WITHHELD = ("peer", "by")
+
+
+def certifier_request(run: str, host: Host) -> dict:
+    """A run's request whole, as the gate wrote it: the gate's own read."""
     d = host.certifier / run
     if not CERTIFIER_RUN.fullmatch(run) or not (d / "request.json").is_file():
         raise Refused(f"no certifier rehearsal {run!r}")
+    return json.loads((d / "request.json").read_text())
 
-    def read(path: Path) -> dict | None:
-        return json.loads(path.read_text()) if path.is_file() else None
-    end = read(d / "end.json")
-    status = {"run": run, "request": read(d / "request.json"), "end": end, "active": end is None and active(run)}
-    return status | {"relay": session_relay(d, status["request"])} if "client_port" in status["request"] else status
+
+def public_request(req: dict) -> dict:
+    """A run's request as any key is given it: less `REQUEST_WITHHELD`."""
+    return {k: v for k, v in req.items() if k not in REQUEST_WITHHELD}
+
+
+def certifier_status(run: str, host: Host, active: Callable[[str], bool], *, own: bool = False) -> dict:
+    """A run's request, its end once it has one and whether its unit runs. The request is whole only for the run's
+    `own` lane or vy-admin (the gate's to say); any other key gets `public_request`'s."""
+    d, req = host.certifier / run, certifier_request(run, host)
+    end = json.loads((d / "end.json").read_text()) if (d / "end.json").is_file() else None
+    status = {"run": run, "request": req if own else public_request(req), "end": end,
+              "active": end is None and active(run)}
+    return status | {"relay": session_relay(d, req)} if "client_port" in req else status
 
 
 def session_relay(d: Path, req: dict) -> dict | None:
@@ -2031,16 +2048,27 @@ def session_relay(d: Path, req: dict) -> dict | None:
 
 
 def certifier_fetch(run: str, host: Host, *, witness: bool = False) -> bytes:
-    """The rehearsal's directory (its request, out/ and end) as a gzipped tar, with a warden rehearsal's `witness/`
-    only when `witness` (the gate's: the run's own lane, or vy-admin)."""
-    certifier_status(run, host, lambda _: False)
-    hidden = f"{run}/{WITNESS}"
+    """The rehearsal's directory (its request, out/ and end) as a gzipped tar, with its `witness/` only when
+    `witness` (the gate's: the run's own lane, or vy-admin). Its `request.json` is `public_request`'s for every
+    key, so what is released of a fetch names no peer; the request whole is `witness/request.json`, with the
+    witness."""
+    req = certifier_request(run, host)
+    d, hidden, request = host.certifier / run, f"{run}/{WITNESS}", f"{run}/request.json"
 
     def keep(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
-        return info if witness or (info.name != hidden and not info.name.startswith(hidden + "/")) else None
+        return info if info.name != request and (
+            witness or (info.name != hidden and not info.name.startswith(hidden + "/"))) else None
+
+    def add(tar: tarfile.TarFile, name: str, data: bytes) -> None:
+        info = tar.gettarinfo(d / "request.json", arcname=name)
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        tar.add(host.certifier / run, arcname=run, filter=keep)
+        tar.add(d, arcname=run, filter=keep)
+        add(tar, request, (json.dumps(public_request(req), indent=1, sort_keys=True) + "\n").encode())
+        if witness:
+            add(tar, f"{hidden}/request.json", (d / "request.json").read_bytes())
     return buf.getvalue()
 
 
@@ -2198,11 +2226,11 @@ def gate(argv: list[str], host: Host = Host(), **hooks: Any) -> tuple[int, bytes
             return 0, host.models.read_bytes() if host.models.exists() else b""
         elif verb == "policies" and not rest:
             return 0, host.policies.read_bytes() if host.policies.exists() else b""
-        elif verb == "status" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
-            doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active)
-        elif verb == "fetch" and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
-            request = certifier_status(rest[0], host, lambda _: False)["request"]
-            return 0, certifier_fetch(rest[0], host, witness=admin or (by is not None and by == request.get("by")))
+        elif verb in ("status", "fetch") and len(rest) == 1 and CERTIFIER_RUN.fullmatch(rest[0]):
+            own = admin or (by is not None and by == certifier_request(rest[0], host).get("by"))
+            if verb == "fetch":
+                return 0, certifier_fetch(rest[0], host, witness=own)
+            doc = certifier_status(rest[0], host, hooks.get("certifier_active") or certifier_unit_active, own=own)
         elif verb == "status" and len(rest) == 1:
             doc = gate_status(rest[0], host, active, now)
         elif verb == "ledger" and not rest:

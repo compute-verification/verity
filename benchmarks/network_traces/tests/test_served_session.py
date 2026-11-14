@@ -505,11 +505,13 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     (tmp_path / "gate-key").write_text("")
     (tmp_path / "main.txt").write_text("abc\n")
     buf = io.BytesIO()
-    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
-        data = json.dumps({"device": "warden", "peer": peer}).encode()
-        info = tarfile.TarInfo(f"{RUN}/request.json")
-        info.size = len(data)
-        tar.addfile(info, io.BytesIO(data))
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:  # as the gate's fetch gives the run's own lane its request
+        for name, doc in ((f"{RUN}/request.json", {"device": "warden"}),
+                          (f"{RUN}/witness/request.json", {"device": "warden", "peer": peer})):
+            data = json.dumps(doc).encode()
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
     (tmp_path / "keep" / RUN).mkdir(parents=True, exist_ok=True)
     (tmp_path / "keep" / RUN / "fetch.tar.gz").write_bytes(buf.getvalue())
     return ["chain", "--run", RUN, "--keep", str(tmp_path / "keep"), "--coins", "gate", "--draw", "8",

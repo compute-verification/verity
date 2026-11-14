@@ -526,11 +526,14 @@ def session(a: argparse.Namespace, data: bytes, ps: list[list[int]]) -> int:
 
 
 def served_peer(fetch: Path) -> str | None:
-    """The node the kept gate run served on: its ``request.json``'s peer."""
+    """The node the kept gate run served on: its request's peer, which the gate's fetch holds in the witness's
+    ``request.json`` alone (`auditor.certifier_fetch`), so in a fetch with the run's own lane's key. A fetch kept
+    from a gate that still named the peer in the run's own ``request.json`` is read there."""
     with tarfile.open(fetch, "r:gz") as tar:
         for m in tar:
-            if m.isfile() and m.name.count("/") == 1 and m.name.endswith("/request.json"):
-                return json.loads(tar.extractfile(m).read()).get("peer")
+            if m.isfile() and m.name.split("/")[1:] in ([A.WITNESS, "request.json"], ["request.json"]):
+                if (peer := json.loads(tar.extractfile(m).read()).get("peer")) is not None:
+                    return peer
     return None
 
 
@@ -564,7 +567,8 @@ def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
         raise Refused("--coins gate draws --draw K of the scan's units: give K")
     served = served_peer(fetch)
     if served is None:
-        raise Refused(f"{fetch} holds no request.json naming the node it served on, so the coin peer can't be checked")
+        raise Refused(f"{fetch} holds no request naming the node it served on (the gate gives it in witness/request.json, "
+                      "to the run's own lane's key), so the coin peer can't be checked")
     if a.coin_peer in (served, PEER):
         raise Refused(f"--coin-peer {a.coin_peer} is the served node, the prover's: the gate key and the warden run's "
                       f"witness are the auditor's, so the draw runs where the chain does, {AUDITOR} by default")
