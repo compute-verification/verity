@@ -337,6 +337,21 @@ def test_a_long_contraction_alone_binds_where_a_short_one_holds_most_of_the_wire
     assert best.bound.blocks == pytest.approx(m) and best.bound.slowdown == pytest.approx(m * c / gates)
 
 
+def test_a_group_with_no_edge_leaves_f_the_graphs_of_the_others():
+    """One group multiplies four arrays pairwise and the other states no pair: `F` is `share(4)` of the first's graph,
+    not the kinds' rule. Its bound is the count's least `m` on both groups at that `F`, solved here."""
+    k, c, gates = 65536.0, 1e12, 10 ** 15
+    k4 = frozenset(frozenset(p) for p in ("WX", "WY", "WZ", "XY", "XZ", "YZ"))
+    a = WK.Group("a", (16, 16), (True, False), 16, 4096, 10 ** 13, 10 ** 10, k4, beta=(2.0, 2.0))
+    b = WK.Group("b", (16, 16), (False, True), 16, 4096, 10 ** 13, 10 ** 10, frozenset(), beta=(2.0, 2.0))
+    best = WK.bound(WK.Work(k, gates, [a, b]), c)
+    F, q, bits, N, O = math.sqrt(2 * (1 - 1 / 4)), 4.0, 16.0, 2e13, 2e10
+    A, D = k + F * math.sqrt(k ** 3 / (q * bits)) / 2, F * (k / 2) * math.sqrt(O / q)
+    m = ((-D + math.sqrt(D * D + 4 * A * N)) / (2 * A)) ** 2
+    assert best.groups == (a, b) and best.omega == 4 and best.bound.F == pytest.approx(F)
+    assert best.bound.blocks == pytest.approx(m) and best.bound.slowdown == pytest.approx(m * c / gates)
+
+
 def test_every_operand_is_at_most_bf16_and_beta_k():
     for k in (KB, 8e6):
         (g,) = WK.read(carried_loop(), k).groups
