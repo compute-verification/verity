@@ -148,16 +148,25 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
     return summary | {"relayed": relayed}, problems + found
 
 
-def check(run: Path) -> dict:
+def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
-    gives as ``audit: PROBLEM`` without their execution phase, among its first 50."""
+    gives as ``audit: PROBLEM`` without their execution phase, among its first 50. ``under`` is what the auditor hands
+    it: the SHA-512 of the network certifier's public key (`connection_rows_check.key_sha512`) and its session, which the
+    run's deployment record is held to, a problem of it the first of the problems. With ``registrations`` it leaves
+    the registrations' file there: what it was checked under and each registration of connection rows it held,
+    where it found no problem at all, and no file where it found one or didn't end. ValueError, before the run is
+    read, for ``registrations`` without ``under``; a file already there is removed first."""
+    CRC.open_registrations(registrations, under)
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     certified, refused = read_certified(run / "certified.jsonl")
     records = read_records(run, params)
-    problems = [] if params.digest.hex() == dep["digest"] else ["the deployment's digest isn't its parameters'"]
+    # first what the whole check is held under: a reader that cuts the problems' list must not lose it
+    problems = [] if under is None else CRC.not_under(dep, under)
+    if params.digest.hex() != dep["digest"]:
+        problems.append("the deployment's digest isn't its parameters'")
     problems += [f"the deployment holds {k}, an address: it goes in {ENDPOINTS}, which is never published"
                  for k in ADDRESSES if k in dep]
     load, load_problems = check_load(run, dep, key, session)
@@ -179,8 +188,7 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
     cells_summary, cells_problems = check_cells(run, dep, params, records)
     problems += cells_problems
-    rows_summary, rows_problems = CRC.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK)
-    problems += rows_problems
+    rows_at = len(problems)
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
@@ -234,7 +242,13 @@ def check(run: Path) -> dict:
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
         **({} if load is None else {"load": load}),
-        **({} if rows_summary is None else {"connection_rows": rows_summary}),
     }
+    # the connection rows last, their problems at their old place: the registrations' file is written only where
+    # the whole check found no problem, so nothing of the check comes after it
+    rows_summary, rows_problems = CRC.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK,
+                                            registrations, problems, under)
+    problems[rows_at:rows_at] = rows_problems
+    if rows_summary is not None:
+        summary["connection_rows"] = rows_summary
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "audit_windows": verdict["windows"], "connections": rows}

@@ -4,6 +4,7 @@ public import Difftest
 public import Lms.Sign
 public import Attest.Period
 public import MemoryChallenger.WipeJudge
+public import MemoryChallenger.WipeCount
 
 /-!
 # The difftest's Lean half
@@ -11,7 +12,8 @@ public import MemoryChallenger.WipeJudge
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
 `MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
-signed message, its start and end messages and an egress count's unit, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
+signed message, its start and end messages, an egress count's unit and what a composition's tie reads off a wipe's case
+(`MemoryChallenger.WipeCount`), and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
 `range-u64` domain id, the period tree's root, the verifier's acceptance of a period and the liveness check).
 `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
 run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
@@ -108,6 +110,22 @@ def wipeEndMessageFn (j : Json) : V Json := do
 def wipeEgressUnitsFn (j : Json) : V Json := do
   pure (Lean.toJson (StreamedWipe.egressUnits (← J.asInt (← J.get j "egress_bits" "input") "egress_bits")))
 
+/-- `wipe_period.named(commitment, signed, egress_mib)`: what a composition's tie reads off a wipe's case, `null` for
+none, refused where the session's message is. -/
+def wipeNamedFn (j : Json) : V Json := do
+  let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
+  let signed ← match ← J.get j "signed" "input" with
+    | .null => pure none
+    | s => pure (some (← StreamedWipe.Signed.ofJson s))
+  let egress ← match ← J.get j "egress_mib" "input" with
+    | .null => pure none
+    | n => pure (some (← J.asInt n "egress_mib"))
+  let named ← WipeProtocol.named c ⟨signed, egress⟩
+  pure (match named with
+    | none => .null
+    | some n => Json.mkObj [("egress_mib", Lean.toJson n.egressMib), ("end_message", hexJ n.endMessage),
+        ("start_mark", hexJ n.startMark), ("start_message", hexJ n.startMessage)])
+
 /-- `lms.party_key_message(I, deployment, party, lower)`. -/
 def partyKeyMessageFn (j : Json) : V Json := do
   pure (hexJ (← Lms.partyKeyMessage (← hex j "I") (← hex j "deployment") (← J.str j "party" "input") (← hex j "lower")))
@@ -171,7 +189,7 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("records_root", recordsRootFn), ("header", headerFn), ("message", messageFn), ("block_digest", blockDigestFn),
   ("mc_message", mcMessageFn), ("sign_at", signAtFn), ("lms_verify", lmsVerifyFn), ("wipe_message", wipeMessageFn),
   ("wipe_start_message", wipeStartMessageFn), ("wipe_end_message", wipeEndMessageFn),
-  ("wipe_egress_units", wipeEgressUnitsFn), ("party_key_message", partyKeyMessageFn),
+  ("wipe_egress_units", wipeEgressUnitsFn), ("wipe_named", wipeNamedFn), ("party_key_message", partyKeyMessageFn),
   ("period_root_message", periodRootMessageFn), ("liveness_message", livenessMessageFn), ("hss_verify", hssVerifyFn),
   ("domain_u64", domainU64Fn), ("attest_root", attestRootFn), ("attest_check", attestCheckFn),
   ("attest_liveness", attestLivenessFn)]

@@ -80,11 +80,24 @@ weights, or the command refuses.
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output
 bits at δ). The first three are the network certifier's part, the last term's second branch is the compute audit's
 part, and the command sums them per scope and monitoring period under each of the network certifier's rows of
-`TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice. The
-sums under the rows whose schedules are 0, the lengths held by a stop block, take a response's output count at 0.
-Until a served audit has sampled a stop block the server chooses that count, which the network certifier's row
-`OUTPUT_COUNT` charges as its schedules: the command prints it beside those sums, marked assumed.
+`TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice.
 
+* **How the stop class is charged** is the answer of the stop verdicts' reader
+  (`benchmarks/network_traces/stop_verdicts.py`'s `of_runs`), which the command hands the calculator (`certifier`'s
+  ``stop``). The rows the calculator reads from verdict records (its document's `stop`'s `rows`: those that hold
+  the lengths by a stop block) are charged below their schedules only on the execution phases the answer holds, and
+  their whole schedules on every other. The runs handed to the reader are every run that carries the record
+  `VERDICTS`, with those of them another run replaces: `stop_verdicts`' own list, the one the print names. With no
+  run carrying the record the reader is not asked, and the rows are the calculator's with no record read. The
+  document keeps the answer as the calculator's document states it, with the runs handed (`certifier`'s `stop`),
+  and the print says how the stop class is charged and why. A row whose stop class the answer charges its whole
+  schedule on some execution phase is called by `WHOLE`, not by `TOGETHER`: nothing holds its lengths there.
+* **The output count.** Until a served audit has sampled a stop block the server chooses a response's output count,
+  which the network certifier's row `OUTPUT_COUNT` charges as its schedules. The sums that take it at 0 are those
+  under the rows the answer names (`at_zero_in`: the rows of the document's `stop`, where the answer holds an
+  execution phase; never the rows whose schedules read 0), on the execution phases it holds. The command prints
+  the output count beside those sums and lists its 0 among the inputs, marked assumed. Where the answer holds no
+  execution phase no sum takes the count at 0: the print says so, and the inputs list no output count.
 * **The stop class's verdicts** move that mark, and only that one. A record named in the store (`VERDICTS`), its runs
   each holding verdicts' records in `VERDICTS_FILE`, one a line in the shape `VERDICT_FIELDS` (a record lacking a
   field is refused by its name), gives the four verdicts a stop class needs (`PIECES`) and the negative controls
@@ -94,7 +107,8 @@ Until a served audit has sampled a stop block the server chooses that count, whi
   its piece (`stop_class`), the output count's 0 is marked `RUN_NOT_PROVED`, printed "run (Python verifier, not
   proved)" with each verdict's run and verifier and counted apart from `measured`; it is `measured` only where every
   piece's record names the Lean guarantee that proves its verifier (`proved_by`). Otherwise the print names what is
-  missing and the mark stays assumed. With no such record the print is as it was without one.
+  missing and the mark stays assumed. With no such record the print names no class. The mark is the 0's, so it is
+  carried only where the answer names a row that takes the count at 0.
 
 The command refuses a record nothing carries and a scope two unsuperseded runs both hold, and says how to label it.
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
@@ -194,6 +208,15 @@ TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges
                          "the compute audit",
             "design, no stop block": "by the design no run has behind it, before a served audit has sampled a stop block",
             "design": "by the design no run has behind it, once a served audit has sampled a stop block"}
+#: what a row of `TOGETHER` that the calculator reads from verdict records (its document's `stop`'s `rows`) is called
+#: where the stop verdicts' reader's answer charges its stop class its whole schedule on some execution phase: there
+#: nothing holds its lengths by a stop block, and no served audit's sample of one is read
+WHOLE = {"all three": "with the timing taken once and the entries charged through the compute audit, its stop class "
+                      "charged its whole schedule",
+         "design": "by the design no run has behind it, its stop class charged its whole schedule"}
+#: the network certifier's benchmarks' module that reads the stop class's verdict records of the runs of `VERDICTS`:
+#: its `of_runs` answers how the calculator's rows read from verdict records are charged
+READER = "stop_verdicts"
 #: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
 #: it: the design before a served audit has sampled a stop block
 OUTPUT_COUNT = "design, no stop block"
@@ -214,8 +237,8 @@ BOUNDS = {"measured" + AT_MOST: "measured upper bounds", "modeled" + AT_MOST: "m
 #: `VERDICTS_FILE` in a run's files
 VERDICTS = "exfiltration-glm53-stop-verdicts"
 VERDICTS_FILE = "out/verdicts.jsonl"
-#: the four verdicts on a stop class (a verdict's `piece`), each accepted and complete, before the sums under the rows
-#: whose schedules are 0 take a response's output count at 0 on a run: one missing or not accepted, and none does
+#: the four verdicts on a stop class (a verdict's `piece`), each accepted and complete, before the output count's 0 in
+#: the sums that take it at 0 is marked a run's: one missing or not accepted, and the 0 stays assumed
 PIECES = {"stop_record": "the stop record", "response_tie": "the response tie", "request_tie": "the request tie",
           "second_stage": "the compute audit's second stage"}
 #: the negative controls (a verdict's `control`; null on the honest run): a run on the same path with one thing changed,
@@ -635,19 +658,37 @@ def _what(v: Mapping) -> str:
     return PIECES[v["piece"]] + ("" if v["control"] is None else f", the control with {CONTROLS[v['control']]}")
 
 
-def stop_verdicts(store: Any) -> tuple[list[dict], list[str], list[dict]] | None:
-    """The stop class's verdicts of record (`verdict`), the runs read and the runs left out with why; None where
-    nothing in the store carries `run_of_record=VERDICTS`. Every labelled run not superseded is read, each verdict's
-    record a line of its `VERDICTS_FILE`, and a verdict on one piece and control that two records hold is refused."""
+def verdict_runs(store: Any) -> dict[str, list[str]]:
+    """Every run that carries `run_of_record=VERDICTS`, each with the runs that replace it (`SUPERSEDED_BY`; none
+    where it is not superseded). It is the one list of the record's runs: `stop_verdicts` reads or leaves out each
+    of them, the print names each as read or as refused, and `stop_charge` hands the same runs to the stop
+    verdicts' reader, those with a replacement as its superseded ones."""
 
-    labelled = record_runs(store, records(store).get(VERDICTS, []))
+    return {run: [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]
+            for run in sorted({run for run, _ in record_runs(store, records(store).get(VERDICTS, []))})}
+
+
+def stop_charge(root: Path, store: Any, labelled: Mapping[str, Sequence[str]]) -> Any:
+    """How the stop class is charged by the records the runs of ``labelled`` (`verdict_runs`) hold: the stop
+    verdicts' reader's answer (`READER`'s `of_runs`), which `certifier` hands the calculator. The reader is handed
+    every run of ``labelled`` and, as superseded, those another run replaces; this reads none of their files itself."""
+
+    return _load(root, "network_traces", READER).of_runs(store, list(labelled), [run for run, by in labelled.items() if by])
+
+
+def stop_verdicts(store: Any, labelled: Mapping[str, Sequence[str]]) -> tuple[list[dict], list[str], list[dict]] | None:
+    """The stop class's verdicts of record (`verdict`), the runs read and the runs left out with why; None where
+    nothing in the store carries `run_of_record=VERDICTS`. ``labelled`` is the record's runs (`verdict_runs`): every
+    one not superseded is read, each verdict's record a line of its `VERDICTS_FILE`, and a verdict on one piece and
+    control that two records hold is refused."""
+
     if not labelled:
         return None
     held: dict[tuple, tuple[str, dict]] = {}
     runs, refused = [], []
-    for run in sorted({run for run, _ in labelled}):
+    for run, superseded in labelled.items():
         at, why = None, None
-        if superseded := [str(lab.value) for lab in store.labels(run, key=SUPERSEDED_BY)]:
+        if superseded:
             why = f"superseded by {', '.join(superseded)}"
         else:
             at, _, why = _run_files(store, run, (VERDICTS_FILE,))
@@ -684,8 +725,9 @@ def _read(v: Mapping) -> str:
 
 
 def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
-    """Whether the stop class's ``verdicts`` (`stop_verdicts`) let the sums under the rows whose schedules are 0 take a
-    response's output count at 0 on a run (`complete`): each of `PIECES` accepted and complete on its honest run, and
+    """Whether the stop class's ``verdicts`` (`stop_verdicts`) put a run behind the output count's 0 in the sums that
+    take it at 0 (`complete`; which sums those are is the reader's answer, never this): each of `PIECES` accepted
+    and complete on its honest run, and
     each of `CONTROLS` refused, on a piece, by the verifier that accepted that piece, and none accepted; a `withheld`
     verdict is neither, so it keeps the class short of complete and names what it was withheld for, and a control on a
     withheld piece refused by that piece's verifier counts as refused.
@@ -756,7 +798,8 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
 # ---- the network certifier's part, and the requests both parts count over --------------------------------------------
 
 
-def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None) -> dict:
+def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
+              stop: Any = None) -> dict:
     """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
     at most ``response_ids`` ids a response, over the requests its calculator counts by default, the sampling plan's,
     with each execution phase's scan at ``scan_delta``. With None the δ is the one at which the row of the document
@@ -764,14 +807,19 @@ def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction
     calculator's own document counts, no term depending on the scans' δ. The document's `scan_delta` input keeps the
     calculator's value and mark, and its source says who gave the δ and how it was chosen.
 
+    ``stop`` is how the stop class is charged, the stop verdicts' reader's answer (`stop_charge`), which the
+    calculator's rows read from verdict records are charged by; with None the calculator is handed none and charges
+    them as with no record read. The document's `stop` is the calculator's account of it.
+
     Beside the document: the jitter bound of its term of record and the one its labelled term is at, each as the
     rows' `term` names it (`of_record`, `set_time`), and the term of record at the class the calculator assumes by
     default with its ε, at the same δ (`default_class`), which is `verity bench certifier_term`'s own figure."""
 
     lb = _load(root, "network_traces", "leak_bounds")
+    charged = {} if stop is None else {"stop": stop}
 
     def read(inp: Mapping, **rows: Any) -> dict:
-        doc = lb.document(inp, **rows)
+        doc = lb.document(inp, **rows, **charged)
         if (schema := doc["schema"]) != TERM_SCHEMA:
             raise ValueError(f"the network certifier's document is `{schema}` and this command reads `{TERM_SCHEMA}`: its "
                              "term of record, its rows' terms by jitter bound, their ε and their labels may mean "
@@ -939,7 +987,9 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
             network_check: float, row: str, served: Mapping, stop: Mapping | None = None) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
     as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
-    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0.
+    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0, on the
+    execution phases the reader's answer holds (``term``'s `stop`); where it names none, no sum leaves the output
+    count out and the inputs list none.
     ``served`` is the share a served run measures (`served_share`): with a run's record, each of its fields with its
     mark, a field the record lacks marked missing with its gap. ``stop`` is the stop class's verdicts of record
     (`stop_class`): where it is complete the output count's 0 carries its mark and names each verdict, its run and
@@ -991,9 +1041,10 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
         one(audit, "advice", 0, "bit", "assumed", "not counted: no input here prices the advice"),
     ]
     charged = f"{'' if count['GB'] is None else _n(count['bits_a_request']) + ' bits a request '}as its schedules"
-    if stop and stop["complete"]:
+    under = count["at_zero_in"] and _names(count["at_zero_in"]) + _on(term["stop"])
+    if under and stop and stop["complete"]:
         out.append(one(net, "output_count", 0, "bit/request", stop["mark"],
-                       f"taken at 0 in the sums under {_names(count['at_zero_in'])}: the stop class's verdicts of record, "
+                       f"taken at 0 in the sums under {under}: the stop class's verdicts of record, "
                        f"`{VERDICTS}` ({', '.join(stop['runs'])}), are {stop['said']}, its boundary's registration "
                        f"`{stop['class']['registration']}`: "
                        + "; ".join(f"{_what(v)}, `{v['verdict']}` on {v['run']} by {_by(v)}, "
@@ -1001,9 +1052,9 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
                                    for v in stop["verdicts"])
                        + ". Without them the server chooses a response's output count, which the network certifier's "
                        f"row `{OUTPUT_COUNT}` charges {charged}"))
-    else:
+    elif under:
         out.append(one(net, "output_count", 0, "bit/request", "assumed",
-                       f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has sampled a "
+                       f"not counted in the sums under {under}: until a served audit has sampled a "
                        "stop block the server chooses a response's output count, which the network certifier's row "
                        f"`{OUTPUT_COUNT}` charges {charged}"))
     if served["run"] is not None:
@@ -1084,7 +1135,16 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
     bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
     response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
-    the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0).
+    the rows whose sums take it at 0 (`at_zero_in`). Those are named from the stop verdicts' reader's answer and
+    never from a schedule that reads 0: the rows of `TOGETHER` among the term document's `stop`'s `rows`, where the
+    answer holds an execution phase, and none where it holds none. They take it at 0 on the execution phases the
+    answer holds alone, which the document's `certifier`'s `stop` counts (`held_phases`; every one where `below`).
+
+    The answer is `stop_charge`'s on the runs that carry the stop class's record (`verdict_runs`), the ones this
+    reads or leaves out, and it is handed to the calculator (`certifier`). With no run carrying the record the
+    reader is not asked and the calculator is handed none, so its rows are as with no record read. The document's
+    `certifier`'s `stop` is the term document's own account of it (its `rows`, `held_phases`, `below`, `why` and
+    `verdicts`), with the runs handed (`runs`) and those of them handed as superseded (`superseded`).
 
     Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
     (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is its (`_row_label`).
@@ -1095,8 +1155,8 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     (`given`). Without a record, or where it lacks a field, the share is not claimed, and `why` says so.
 
     Where the store holds the stop class's verdicts (`stop_verdicts`), `stop_class` is their account (`stop_class`),
-    and where it is complete the output count's input carries its mark; the runs left out are among `refused`. With
-    none the document holds no `stop_class`, and is as it was without one."""
+    and where it is complete the output count's input, where the inputs list one, carries its mark; the runs left
+    out are among `refused`. With none the document holds no `stop_class`."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
@@ -1107,10 +1167,12 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     if not local_only:
         completion.pull_labels()
     scopes, plans, runs, refused = rows_of_record(completion.store, row=row, step=step, variant=variant)
-    stop = None
-    if (verdicts := stop_verdicts(completion.store)) is not None:
+    labelled = verdict_runs(completion.store)
+    stop, answer = None, None
+    if (verdicts := stop_verdicts(completion.store, labelled)) is not None:
         stop = stop_class(*verdicts[:2])
         refused = [*refused, *verdicts[2]]
+        answer = stop_charge(root, completion.store, labelled)
     points = {scope: at_share(scope, run, its, share, plans.get(scope)) for scope, (run, its) in scopes.items()}
     if "world year" not in points:
         held = sorted({run for run, _ in scopes.values()})
@@ -1128,7 +1190,14 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
         except ValueError as e:
             measured["no_GB"] = str(e)
 
-    term = certifier(root, response_ids, scan_delta)
+    term = certifier(root, response_ids, scan_delta, answer)
+    charged = {k: term["stop"][k] for k in ("rows", "held_phases", "below", "why", "verdicts")} | {
+        "runs": list(labelled), "superseded": [run for run, by in labelled.items() if by]}
+    if unnamed := [name for name in charged["rows"] if name in TOGETHER and name not in WHOLE]:
+        raise ValueError(f"the network certifier's rows {_names(unnamed)} are read from verdict records, and this "
+                         "command has no name for their sums where the stop class is charged its whole schedule: name "
+                         "each in `WHOLE` (benchmarks/harness/verity_bench/exfiltration.py)")
+    at_zero = [name for name in TOGETHER if name in charged["rows"]] if charged["held_phases"] else []
     of, set_time, card = term["of_record"], term["set_time"], term["with_set_time_card"]["label"]
     weights = term["inputs"]["weights"]["value"]
     if not _same(head["weights_bits"], weights):
@@ -1174,8 +1243,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                         "output_count": {"row": OUTPUT_COUNT, "GB": count["GB"], "bits": count["bits"],
                                          "bits_a_request": count["bits"] / at["requests"]
                                          if eps < 1 and at["requests"] else None,
-                                         "mark": "assumed",
-                                         "at_zero_in": [name for name in TOGETHER if not rows[name]["schedules"]["bits"]]},
+                                         "mark": "assumed", "at_zero_in": at_zero},
                         "together": together})
     year = next(p for p in periods if (p["compute"], p["period"]) == ("world", "year"))
 
@@ -1194,6 +1262,7 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                           "scan_delta": term["inputs"]["scan_delta"], "of_record": of, "set_time": set_time,
                           "with_set_time_card": {"label": card}, "default_class": term["default_class"],
                           "legend": term["legend"], "entries_rule": term["entries_rule"], "phase": term["phase"],
+                          "stop": charged,
                           "rows": [r if r["eps"] < 1 else {k: v for k, v in r.items() if k not in AMOUNTS}
                                    for r in term["rows"] if (r["scope"], r["period"]) == ("world", "year")]},
             "periods": periods}
@@ -1300,14 +1369,34 @@ def _names(names: Sequence[str]) -> str:
     return _listed([f"`{name}`" for name in names])
 
 
-def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
+def _on(stop: Mapping) -> str:
+    """Where the sums that take the output count at 0 take it so, by the reader's answer as the document holds it
+    (``stop``, `build`'s `certifier`'s `stop`): the execution phases of a link it holds, said in the calculator's
+    words, and nothing where it holds every one."""
+
+    return "" if stop["below"] else f" on {_n(stop['held_phases'])} execution phase(s) of a link"
+
+
+def _called(name: str, stop: Mapping) -> str:
+    """What the sum under the row ``name`` is printed as: `TOGETHER`'s, but for a row the calculator reads from
+    verdict records whose stop class the reader's answer (``stop``, `build`'s `certifier`'s `stop`) charges its whole
+    schedule on some execution phase, which is `WHOLE`'s, with the execution phases a link is held on where it holds
+    any."""
+
+    if name not in stop["rows"] or stop["below"]:
+        return TOGETHER[name]
+    return WHOLE[name] + (f" on all but {_n(stop['held_phases'])} execution phase(s) of a link" if stop["held_phases"] else "")
+
+
+def _labelled(year: Mapping, key: str, set_time: str, stop: Mapping) -> list[str]:
     """The world year's figures (``key`` of each of its sums) that are printed only under a label, one clause a
-    label: every row that carries its own, and every other row at the jitter bound ``set_time``."""
+    label: every row that carries its own, and every other row at the jitter bound ``set_time``; each called as the
+    reader's answer ``stop`` has it (`_called`)."""
 
     own: dict[str, list[str]] = {}
     other: dict[str, list[str]] = {}
-    for name, what in TOGETHER.items():
-        t = year["together"][name]
+    for name in TOGETHER:
+        t, what = year["together"][name], _called(name, stop)
         if t["label"]:
             own.setdefault(t["label"], []).append(f"{_n(t[key])} GB {what}")
         else:
@@ -1414,7 +1503,10 @@ def render(doc: Mapping[str, Any]) -> str:
     record = [name for name in TOGETHER if not sums[name]["label"]]
     labels = {name: sums[name]["label"] for name in TOGETHER if sums[name]["label"]}
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
-    stop = doc.get("stop_class")
+    stop, charged = doc.get("stop_class"), cert["stop"]
+    # the rows that take the output count at 0, and where; the rows of the sums that would, were an execution phase held
+    at_zero, held = count["at_zero_in"], _on(charged)
+    would = [name for name in TOGETHER if name in charged["rows"]]
     measured, parts = _share(doc["compute_share"])
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
     what = ", the plan of record's row, with every modeled lever at its measured value" if doc["row"] == ROW else ""
@@ -1435,7 +1527,7 @@ def render(doc: Mapping[str, Any]) -> str:
         certifier = [
             f"- **the network certifier's part: {_n(sums['scan']['certifier_GB'])} GB** ({on}) {TOGETHER['scan']}, "
             f"{_n(scan['term'][of]['bits_a_request'])} bits a request, and "
-            + ", ".join(f"{_n(sums[name]['certifier_GB'])} GB {TOGETHER[name]}" for name in record if name != "scan")
+            + ", ".join(f"{_n(sums[name]['certifier_GB'])} GB {_called(name, charged)}" for name in record if name != "scan")
             + f", each at D_j = {of}, its term of record, and each failing with at most ε = {_p(eps)} over the world's "
             f"year, at a scan's δ of {_p(delta['value'])}."
             + ("" if default["response_ids"] == cert["response_ids"] else
@@ -1444,7 +1536,7 @@ def render(doc: Mapping[str, Any]) -> str:
                + (f"{_n(default['value'])} {default['unit']}." if default["eps"] < 1 else
                   f"{NO_BOUND}, at an ε of {_n(default['eps'])}.")),
             *(f"- the network certifier's part {clause}; ε = {_p(eps)}."
-              for clause in _labelled(year, "certifier_GB", set_time))]
+              for clause in _labelled(year, "certifier_GB", set_time, charged))]
     else:
         certifier = [f"- **the network certifier's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
                      "and at 1 or more it bounds nothing, so no amount is printed under any of its rows."]
@@ -1452,10 +1544,10 @@ def render(doc: Mapping[str, Any]) -> str:
         together = [
             "- **together**, a link's execution phase carrying K = schedules + cells + jitter + min(entries, advice + "
             f"the compute audit's part), at D_j = {of}, with no advice priced and with a response's output count taken "
-            f"at 0 under {_names(count['at_zero_in'])}: "
-            + "; ".join(f"{_n(sums[name]['GB'])} GB {TOGETHER[name]}" for name in record)
+            f"at 0 under {_names(at_zero) + held if at_zero else 'no row'}: "
+            + "; ".join(f"{_n(sums[name]['GB'])} GB {_called(name, charged)}" for name in record)
             + f"; each failing with at most {_n(error)}, the two parts' errors summed.",
-            *(f"- together, {clause}; error {_n(error)}." for clause in _labelled(year, "GB", set_time))]
+            *(f"- together, {clause}; error {_n(error)}." for clause in _labelled(year, "GB", set_time, charged))]
     else:
         together = [f"- **together: {NO_BOUND}**. The two parts' errors over the world's year sum to {_n(error)}, and at "
                     "1 or more the sum bounds nothing, so no amount is printed for the two together."]
@@ -1480,10 +1572,24 @@ def render(doc: Mapping[str, Any]) -> str:
         + (f"{_n(count['GB'])} GB ({count['mark']}), {_n(count['bits_a_request'])} bits a request" if eps < 1 else
            f"{NO_BOUND} ({count['mark']}), under the network certifier's ε")
         + ". Until a served audit has sampled a stop block the server chooses a response's output count, and the network "
-        f"certifier's row `{count['row']}` charges it as its schedules. The sums under {_names(count['at_zero_in'])} "
-        "take it at 0, as they price no advice."
+        f"certifier's row `{count['row']}` charges it as its schedules. "
+        + (f"The sums under {_names(at_zero)} take it at 0{held}, as they price no advice." if at_zero else
+           f"No sum takes it at 0: those under {_names(would)} hold it too, their stop class charged its whole schedule.")
         + ("" if stop is None else f" The stop class's verdicts of record (`{stop['record']}`, "
            f"{', '.join(stop['runs']) or 'no run read'}): {stop['said']}."),
+        f"- the stop class of the network certifier's rows {_names(charged['rows'])} is charged "
+        + ("below its schedule" if charged["below"] else "its whole schedule" if not charged["held_phases"] else
+           f"below its schedule on {_n(charged['held_phases'])} execution phase(s) of a link and its whole schedule on "
+           "every other execution phase of a monitoring period")
+        + (f", by the answer of the stop verdicts' reader (`{READER}.of_runs`) on the runs that carry `{VERDICTS}` "
+           f"({', '.join(charged['runs'])}"
+           + (f", of which superseded: {', '.join(charged['superseded'])}" if charged["superseded"] else "") + ")"
+           if charged["runs"] else
+           ", as the calculator charges it with no record read: no run carries the stop class's record, so the stop "
+           f"verdicts' reader (`{READER}.of_runs`) was not asked")
+        + ". A sum takes the output count at 0 only on an execution phase the reader's answer holds, never because "
+          "its row's schedules read 0:",
+        *(f"  - {line}" for line in charged["why"]),
         f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The network "
         f"certifier's ε over the world's year is each execution phase's scan's δ ({delta['mark']}), "
         f"{_p(delta['value'])}, summed over every link's execution phases, {_n(year['phases'])} of them: {_p(eps)}. "
@@ -1550,8 +1656,9 @@ def render(doc: Mapping[str, Any]) -> str:
         f"The network certifier's term is the one of record, at D_j = {of}, and `together` adds the compute audit's part "
         "to it, or the entries where the row charges them and they are fewer. The output count is the schedules of "
         f"the row `{count['row']}`, what a response's output count is charged while the server chooses it "
-        f"({count['mark']}): the sum under {_names([name for name in count['at_zero_in'] if name in record])} takes it "
-        "at 0.", "",
+        f"({count['mark']}): "
+        + (f"the sum under {_names([name for name in at_zero if name in record])} takes it at 0{held}."
+           if any(name in record for name in at_zero) else "no sum of this table takes it at 0."), "",
         "Each part's amounts are followed by its error over the line's scope and monitoring period: the compute "
         "audit's δ; the network certifier's ε, its scans' δ summed over every link of the scope and every execution "
         "phase of the period; and `together`'s, the sum of the two. A figure whose error is 1 or more is printed as "
@@ -1571,8 +1678,8 @@ def render(doc: Mapping[str, Any]) -> str:
         f"## Each monitoring period over all compute, {card}: in GB", "",
         f"No amount of this table is of record. Each is under the network certifier's label, \"{card}\", which its "
         f"column carries: every amount of a row that carries the label, and every other row's at D_j = {set_time}."
-        + (f" The sum under {_names([name for name in count['at_zero_in'] if name in labels])} takes the output count "
-           "at 0 too." if any(name in labels for name in count["at_zero_in"]) else "")
+        + (f" The sum under {_names([name for name in at_zero if name in labels])} takes the output count "
+           f"at 0{held} too." if any(name in labels for name in at_zero) else "")
         + " A line's errors are those of the table above.", "",
         *_table(("compute", "period",
                  *(f"{part}, {name}, {label}" for name, label in labels.items() for part in ("certifier", "together")),

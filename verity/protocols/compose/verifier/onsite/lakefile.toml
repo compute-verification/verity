@@ -4,7 +4,7 @@
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite", "CoreComposites", "product"]
+defaultTargets = ["CoreOnsite", "onsite", "onsite-counted", "CoreComposites", "product"]
 
 [leanOptions]
 autoImplicit = false
@@ -77,6 +77,12 @@ name = "CoreOnsite"
 [[lean_exe]]
 name = "onsite"
 root = "OnsiteMain"
+
+# Onsite with the wipe's count held to the network certifier's (`Core.Onsite.counted`, `verity/onsite/counted/v0`), a
+# development composite: `onsite-counted id | check | serve`.
+[[lean_exe]]
+name = "onsite-counted"
+root = "OnsiteCountedMain"
 
 # The composite a configuration's subprotocols make, onsite or remote, and no other: `product IDS id | check | serve`
 # (CoreComposites.lean).

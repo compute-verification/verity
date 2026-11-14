@@ -57,7 +57,7 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
         --windows N [--start-in 5] [--load-heads FILE] [--paced-ms 50] [--watermark] [schedule] [--egress id|bytes]
         [--max-tokens-cap N]
     python warden_serve.py client --deployment DIR/deployment.json --traffic TRAFFIC.json --out DIR
-    python warden_serve.py check --run DIR
+    python warden_serve.py check --run DIR [--key-sha512 HEX --session HEX [--registrations FILE]]
     python warden_serve.py rehearse (--upstream HOST:PORT | --fake) --out DIR [--requests 100] [--temperature T]
         [--top-p P] [--ids [--users NAME] [--prompts FILE [--window-per-group]]] [--paced-ms 50] [--watermark] [--load-store DIR --load-sinks HOST:PORT,...
         --load-program HEX [--load-shape h200|tiny] [--load-workers N] [--load-ready-s 900]] [schedule]
@@ -97,7 +97,11 @@ loop's period of requests a group, as the gate's `warden-rehearse --scan --promp
   record's, every window of the wire's two has a registration that verifies whose root is its record's rows under
   their salts (`check_cells`), the audit (`warden.audit`) accepts the records, and every connection's client got
   exactly its egress record's cells, each in its bucket, its request is the ingress record's and its response the
-  egress record's; `check.json`.
+  egress record's; `check.json`. With `--key-sha512 HEX --session HEX`, which the auditor hands it, the SHA-512 of
+  the network certifier's public key and its session, a deployment record that names another key or session is a
+  problem, the first of the problems `check.json` lists. With `--registrations FILE` besides, a check that found no
+  problem writes there what it was checked under and then each registration of connection rows it held, one a
+  line (`connection_rows_run`'s "The registrations' file"); `--registrations` without the two is refused.
 - `rehearse` makes a key in a scratch directory, writes the traffic, starts the fake endpoint when `--fake`, and runs
   `serve` and `client` as processes, then `check`.
 
@@ -200,7 +204,7 @@ from runner_parts import _quiet_runtime, _usage
 from verity.protocols.accounting.certifier.verifier.record_files import pack_record
 from runner_parts import served_model
 from verity.protocols.accounting.certifier.verifier.record_files import certified_json
-from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier import connection_rows_check as CRC, io_tie as IT, warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer, LmsKey
 from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
@@ -1135,6 +1139,13 @@ def rehearse(args) -> int:
     return 0 if result["accepted"] else 1
 
 
+def _sha512(text: str) -> bytes:
+    """A SHA-512 from its hex, as a flag's value; ValueError for another length."""
+    if len(raw := bytes.fromhex(text)) != 64:
+        raise ValueError("a SHA-512 is 64 bytes")
+    return raw
+
+
 def parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="warden_serve.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
@@ -1233,11 +1244,23 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--deployment", required=True, type=Path)
     c.add_argument("--traffic", required=True, type=Path)
     x.add_argument("--run", required=True, type=Path)
+    x.add_argument("--key-sha512", type=_sha512,
+                   help="the SHA-512 of the network certifier's public key, its LMS public key I ‖ T[1], in hex, as "
+                        "the auditor holds it: a deployment record that names a key of another hash is a problem")
+    x.add_argument("--session", type=bytes.fromhex,
+                   help="the network certifier's session, in hex, as the auditor holds it: a deployment record that "
+                        "names another is a problem; handed with --key-sha512")
+    x.add_argument("--registrations", type=Path,
+                   help="the registrations' file (connection_rows_run's \"The registrations' file\"): what the "
+                        "check was handed, --key-sha512 and --session, then each registration of connection rows "
+                        "it held, one a line, written only where the check found no problem; refused without the "
+                        "two; a job names $OUT/registrations.jsonl")
     return ap
 
 
 def main(argv=None) -> int:
-    args = parser().parse_args(argv)
+    ap = parser()
+    args = ap.parse_args(argv)
 
     if args.command == "keys":
         ck.load_key(args.dir, args.height)
@@ -1291,7 +1314,15 @@ def main(argv=None) -> int:
         asyncio.run(client(json.loads(args.deployment.read_text()), read_endpoints(args.deployment), traffic, args.out))
         return 0
     if args.command == "check":
-        result = check(args.run)
+        under = None if None in (args.key_sha512, args.session) else (args.key_sha512, args.session)
+        try:
+            # before the refusal of a file that has nothing to be checked under, one already there is removed
+            CRC.open_registrations(args.registrations, under)
+        except ValueError as e:
+            ap.error(f"--registrations needs --key-sha512 and --session: {e}")
+        if under is None and (args.key_sha512, args.session) != (None, None):
+            ap.error("--key-sha512 and --session are handed together")
+        result = check(args.run, args.registrations, under)
         (args.run / "check.json").write_text(json.dumps(result, indent=1))
         print(table(result))
         return 0 if result["accepted"] else 1

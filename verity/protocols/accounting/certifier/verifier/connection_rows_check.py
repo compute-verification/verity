@@ -2,6 +2,7 @@
 refused by name where they don't hold."""
 from __future__ import annotations
 
+import hashlib
 import json
 import statistics
 
@@ -9,12 +10,18 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 from verity.protocols.accounting.certifier.verifier import (blob_files as bf, connection_rows as CR, content_rows as CT,
     record_files as RF, warden_rows as WR)
+from verity.protocols.accounting.certifier.verifier.certificate import LmsKey
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 
 ROWS, SALTS = "rows.jsonl", "rows.salts"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
+#: the ``format`` of the registrations' file's first line, the line that says what the file was checked under
+CHECKED = "verity-network-certifier/checked-registrations/v1"
+#: what a check says that is asked for the registrations' file and was handed nothing to check under
+UNHANDED = ("the registrations' file is written only by a check that is handed the SHA-512 of the network "
+            "certifier's public key and its session")
 
 
 def read(run: Path, params: WardenParams) -> list[tuple[dict, dict[str, list[bytes]]]]:
@@ -73,14 +80,64 @@ def _spread(xs: list[float]) -> dict:
             "max": round(max(xs), 3) if xs else None}
 
 
+def key_sha512(key: LmsKey) -> bytes:
+    """The SHA-512 a check is handed a network certifier's public key by: over the LMS public key ``I ‖ T[1]``, the
+    bytes a deployment record and the period check's parameters write in hex. The key's parameter set is not under
+    it."""
+    return hashlib.sha512(key.public).digest()
+
+
+def not_under(dep: Mapping, under: tuple[bytes, bytes]) -> list[str]:
+    """The problems of a deployment record `dep` that is not of what a check was handed, ``under``: the SHA-512 of
+    the network certifier's public key (`key_sha512`) and its session. Each says which of the two differs."""
+    key, session = key_sha512(RF.read_public(dep["key"])), bytes.fromhex(dep["session"])
+    return [f"the deployment record's {what} is not the one the check was handed: {own.hex()}, not {handed.hex()}"
+            for what, own, handed in (("key's SHA-512", key, under[0]), ("session", session, under[1]))
+            if own != handed]
+
+
+def open_registrations(path: Path | None, under: tuple[bytes, bytes] | None) -> None:
+    """What a check does about the registrations' file at `path` before it reads anything: it removes one already
+    there, so that none stands from an earlier check and a check that doesn't end leaves none, and then refuses,
+    ValueError, to go on to a file it was handed nothing to check under. Nothing for no path."""
+    if path is None:
+        return
+    path.unlink(missing_ok=True)
+    if under is None:
+        raise ValueError(UNHANDED)
+
+
+def keep_registrations(path: Path | None, held: Sequence[Mapping], problems: Sequence[str],
+                       under: tuple[bytes, bytes]) -> None:
+    """The registrations' file at `path` (`connection_rows_run`'s "The registrations' file"), where there is a
+    registration and the check found no problem: its first line, of the format `CHECKED`, what the check was handed
+    and held the deployment record to (``under``), then `held`, the registrations the check held to both, one a
+    line. Else no file. Nothing for no path."""
+    if path is None or problems or not held:
+        return
+    first = {"format": CHECKED, "checked_under": {"key_sha512": under[0].hex(), "session": under[1].hex()}}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    whole = path.with_name(path.name + ".part")
+    whole.write_text("".join(json.dumps(doc) + "\n" for doc in (first, *held)))
+    whole.replace(path)
+
+
 def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[BlockGrid],
-          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str) -> tuple[dict | None, list[str]]:
-    """The module docstring's check of a run's connection rows under its deployment record `dep`: the summary (the
+          egress: Sequence[BlockGrid], fails: Sequence[BlockGrid], link: str, registrations: Path | None = None,
+          found: Sequence[str] = (), under: tuple[bytes, bytes] | None = None) -> tuple[dict | None, list[str]]:
+    """`connection_rows_run`'s check of a run's connection rows under its deployment record `dep`: the summary (the
     registered execution phases, of those that have connection rows, the cost, and under form 2 the execution phases
-    with the word that they have no head, of those that have none) and the problems. None, and no problem, for a
-    schedule without lengths rows."""
+    with the word that they have no head, of those that have none) and the problems. None for a schedule without
+    lengths rows. ``under`` is what the auditor hands the check, the SHA-512 of the network certifier's public key
+    (`key_sha512`) and its session: a deployment record that is not of them is a problem (`not_under`), the first
+    of those returned. With ``registrations`` it leaves the registrations' file there (`keep_registrations`),
+    written only where neither it nor its caller found a problem: ``found`` is the problems of the caller's own
+    check, of which this one is the last part, and a problem of the deployment record that is already among them
+    is not returned again. ValueError for ``registrations`` without ``under``."""
+    open_registrations(registrations, under)
+    problems: list[str] = [p for p in ([] if under is None else not_under(dep, under)) if p not in found]
     if params.lengths is None:
-        return None, []
+        return None, problems
     key, session, windows = RF.read_public(dep["key"]), bytes.fromhex(dep["session"]), dep["windows"]
     kept_records = run / "certified.jsonl"
     withheld = {doc["refused"][2] for doc in map(json.loads, kept_records.read_text().splitlines())
@@ -93,7 +150,6 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     else:
         want = [w for w in range(windows - 1) if w in whole and w + 1 in whole]
     without = [w for w in range(windows) if w not in want] if params.closes else []
-    problems: list[str] = []
     kept: dict[int, tuple[dict, dict]] = {}
     try:
         for doc, salts in read(run, params):
@@ -111,7 +167,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     except ValueError as e:
         held = {}
         problems.append(f"connection rows: the records don't read as releases: {e}")
-    costs, registered, worded = [], 0, 0
+    costs, registered, worded, passed = [], 0, 0, []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
         if w not in want and not params.closes:
@@ -145,8 +201,11 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
             except ValueError as e:
                 problems.append(f"execution phase {w}'s connection rows: {e}")
         registered += ok
-        if not ok:
+        if ok:
+            passed.append(doc["registration"])
+        else:
             problems.append(f"execution phase {w}'s connection rows aren't registered")
+    keep_registrations(registrations, passed, [*found, *problems], under)
     summary = {"registered": registered, "of": len(want), "tables": sorted({c["tables"] for c in costs}),
                "rows": sorted({c["rows"] for c in costs}), "row_bytes": sorted({c["row_bytes"] for c in costs}),
                **{k: _spread([c[k] for c in costs]) for k in ("build_ms", "commit_ms", "sign_ms")}}
