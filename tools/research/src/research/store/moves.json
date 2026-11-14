@@ -3460,6 +3460,11 @@
     },
     {
       "paths": {
+        "verity/protocols/proofs/spot/device/two_stage.py": "verity/protocols/proofs/spot/prover/audit/two_stage.py"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/poub/verifier/lean/RemoteAudit.lean": "verity/protocols/accounting/poub/verifier/lean/Poub.lean",
         "verity/protocols/accounting/poub/verifier/lean/RemoteAudit/": "verity/protocols/accounting/poub/verifier/lean/Poub/",
         "verity/protocols/accounting/poub/verifier/tests/remote_bandwidth_fakes.py": "verity/protocols/accounting/poub/verifier/tests/poub_fakes.py",

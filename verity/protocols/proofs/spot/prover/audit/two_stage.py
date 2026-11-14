@@ -174,7 +174,7 @@ from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.pipeline import boundary_logits as BL, boundary_rows as BR, boundary_stop as BS, boundary_tables as BT
 from verity_vllm.pipeline import interior_links as IL, interior_rows as IR
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
 STAGE1 = "stage1.json"
