@@ -24,7 +24,7 @@ PROTOCOL SUMMARY (Match stage, GPU half: the capture entry -- one engine, one ar
   Outputs (--out DIR = match/capture or match/control): log.jsonl.gz, tokens.json (per request: prompt / generated ids, finish_reason,
     served_output_len, executed_prefix_len, cap_exhausted; `lag` = the engine's resolved async_scheduling), spec_tokens.json
     (known BEFORE execution), values/<step>/*.bin + snapshots.json, stats.json, versions.json, cos_sin_cache.npy.
-  Invariants: the two lengths stay distinct per request (executed = served + LAG only on an EOS stop before the cap) and are functions
+  Invariants: the two lengths stay distinct per request (executed = served + LAG only on an EOS stop before max_tokens) and are functions
     of the served tokens + the attested lag, never of the trace; LAG is None (unattested) when the engine does not report it -- no default;
     the warm-up runs on throwaway prompts and is never part of the record; nothing observed from the run goes into spec_tokens.json.
 """
@@ -132,7 +132,7 @@ class Options:
                                         help="comma-separated engine steps to snapshot, e.g. 0,1,8")
     snapshot_max_bytes: int = option("--snapshot-max-bytes", type=int, default=32 << 20)
     snapshot_max_bytes_op: int | None = option("--snapshot-max-bytes-op", type=int, default=None,
-                                               help="lower per-tensor cap at dispatcher-call events (aten / custom ops); Triton launch events keep --snapshot-max-bytes "
+                                               help="lower per-tensor bound at dispatcher-call events (aten / custom ops); Triton launch events keep --snapshot-max-bytes "
                                                "(a large launch output is copied once at the launch, not at every view that touches it)")
     no_observer: bool = option("--no-observer", default=False, action="store_true",
                                help="non-interference control: same workload, no observer")
@@ -198,7 +198,7 @@ def lag_record(eng: va.Engine) -> dict:
     """The record's LAG is the engine's RESOLVED async_scheduling read back after the build -- the SAME fact the RunHeader
     attests (profile.engine_kwargs.async_scheduling) and the Build's TargetProfile declares; True -> 1 post-EOS row, False -> 0, None ->
     unattested (no default).  Per request the two lengths are kept distinct: served_output_len = the tokens served (generated_token_ids,
-    the answer up to and including the EOS or the cap); executed_prefix_len = served + LAG on an EOS stop before the cap (the post-EOS row
+    the answer up to and including the EOS or max_tokens); executed_prefix_len = served + LAG on an EOS stop before max_tokens (the post-EOS row
     is active internal computation whose sampled token is NOT served).  Both are a function of the served tokens + the recorded fact,
     never of the trace; GM-01 G6 verifies them against the rows the record actually holds."""
     _asched = va.resolved_async_scheduling(eng.llm)
@@ -214,8 +214,8 @@ def request_row(r: dict, gen: list[int], acc: list[int] | None, eq: bool | None,
     where the timing has no record of it)."""
     rid = r["request_id"]
     _served = len(gen)
-    _cap = int(r["max_tokens"])
-    _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _cap
+    _max_tokens = int(r["max_tokens"])
+    _eos_stop = (str(steps_r.get("finish_reason")) == "stop") and _served < _max_tokens
     _executed = _served if not _eos_stop else (None if _lag is None else _served + _lag)
     return {"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
             "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq,
@@ -224,8 +224,8 @@ def request_row(r: dict, gen: list[int], acc: list[int] | None, eq: bool | None,
             "arrive_step": int(r.get("arrive_step") or 0), "arrive_step_realized": steps_r.get("arrive_step_realized"),
             "first_step": steps_r.get("first_step"), "finish_step": steps_r.get("finish_step"),
             "finish_reason": steps_r.get("finish_reason"),
-            # the two lengths, distinct; cap exhaustion beside them; executed None = EOS stop under an unattested lag
-            "served_output_len": _served, "executed_prefix_len": _executed, "cap_exhausted": _served == _cap,
+            # the two lengths, distinct; whether max_tokens ran out beside them; executed None = EOS stop under an unattested lag
+            "served_output_len": _served, "executed_prefix_len": _executed, "cap_exhausted": _served == _max_tokens,
             "eos_stop_before_cap": _eos_stop, "lag": _lag}
 
 
@@ -295,9 +295,9 @@ def main(args: Options) -> None:
                              module_hooks=not args.no_module_hooks, write_log=True, snapshot_steps=snap,
                              snapshot_dir=out if snap else None, snapshot_max_bytes=args.snapshot_max_bytes,
                              snapshot_max_bytes_op=args.snapshot_max_bytes_op)
-        cap = Capture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
-        cap.install()
-        print(f"[m1] observer installed: {len(cap.roots)} roots, profile_id={header.profile_id}, "
+        capture = Capture(eng, header=header, log_path=out / "log.jsonl.gz", config=cfg)
+        capture.install()
+        print(f"[m1] observer installed: {len(capture.roots)} roots, profile_id={header.profile_id}, "
               f"reenter impls={header.notes.get('reenter_impls')}", flush=True)
         plan = acq_docs.plan
         if plan is not None:
@@ -311,15 +311,15 @@ def main(args: Options) -> None:
         tokens, timing = va.run_requests(eng, wl["requests"], wl["sampling"])
         run_s = time.perf_counter() - t0
         if plan is not None:
-            acq_inst.remove()                                  # before cap.close() restores the runner's sample(): the wraps unwind in order
+            acq_inst.remove()                                  # before capture.close() restores the runner's sample(): the wraps unwind in order
             obs = acq_sink.to_json()
             obs["plan_digest"] = plan.digest
             obs["installed"] = list(map(list, acq_inst.keys()))
             (out / "acquisition_observed.json").write_text(json.dumps(obs, indent=1) + "\n")
             print(f"[m1] acquisition observed: {sum(s['occurrences'] for s in obs['sites'])} occurrences over {len(obs['sites'])} sites -> {out / 'acquisition_observed.json'}", flush=True)
-        stats = cap.close()
+        stats = capture.close()
         tl.end("work.capture_run", run_s=round(run_s, 3), events=stats.get("events_written"), steps=stats.get("steps"))
-        per_step = {str(s): ids for s, ids in cap.sample_ids.items()}
+        per_step = {str(s): ids for s, ids in capture.sample_ids.items()}
         print(f"[m1] observed run {run_s:.2f}s: {stats['events_written']} events, {stats['steps']} steps, "
               f"recorder={stats['recorder']}, storage={stats['storage']}, snapshot_bytes={stats['snapshot_bytes']}, "
               f"errors={len(stats['errors'])}", flush=True)
