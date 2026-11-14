@@ -7,7 +7,7 @@
 #            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload's Build of record
 #            (`predict row`, held to the traced workload dir placement.toml's COMMIT_RUN names), its requests
 #            (serve_load.py --varied), every closed sampling block sealed, the sampling
-#            block's sampled proofs (Flock --zk behind the Lean ZK server, and the Lean verifier's verdict), PoUW, the
+#            block's SPOT (Flock --zk behind the Lean ZK server, and the Lean verifier's verdict), PoUW, the
 #            bandwidth audit, PoUS and the network certifier where each has its piece, and one record of every verdict
 #   commit   once per workload: its Build, Match and Commit with its sealed replay bundle (commit.sh), a workload dir under
 #            LLAMA_ROOT (placement.toml's COMMIT_RUN names the one `window` and `serve` use)

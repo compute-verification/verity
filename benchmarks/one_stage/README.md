@@ -105,7 +105,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   few greedy requests from the certifier's traffic generator, and seals each window. Before the first request, the committer
   registers its weights under its own key (`prove_path.py weights-registration`). Without a docket, `NO WEIGHTS
   REGISTRATION` is printed and every weight read counts free. On the window holding the most requests, none carried, it runs
-  sampled proofs: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
+  SPOT: the window's advice under that docket (`--weights-of-record`) and its request Programs, V3b's window
   circuit at each class of `CLASSES` (V2's 4,32,4 by default), with its weight reads counted registered at the docket's
   pins. The run needs every one of those counts; the class of record is counted only where `CLASSES` names `record`.
   Then comes the records audit (`prove_path/run.sh`, `PP_RECORDS=1`), which is Flock `--zk` on the sampled proof blocks
@@ -117,7 +117,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   (`benchmarks/pous/served_piece.py`), and `BANDWIDTH_CMD` collects its answer (`served_bandwidth.py collect`).
   Finally the all-protocols window report and the block record, which accepts only when every subprotocol accepted on this
   node and names each one missing, rejecting or about another server, with its reason (PoUW's development piece: development
-  run, credits nothing). `PRODUCT=remote` composes sampled proofs and PoUW alone: the onsite pieces are dropped, not run
+  run, credits nothing). `PRODUCT=remote` composes SPOT and PoUW alone: the onsite pieces are dropped, not run
   and not composed, and the preflight refuses any onsite piece's command. An accept's clause says when its weights were held and their share of the checkpoint, where its
   profile says so (PoUS's), each δ of the block record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside it (the block record's `named_terms`). V3c runs last, within `V3C_TIMEOUT` and `V3C_AUDIT_TIMEOUT`, since nothing before it reads it, and writes its audit as the network
   certifier's period reads it (`period.json`). With `V3C_WARM_JOBS` its warm step (`records_audit.py warm`) composes the
@@ -161,7 +161,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   reads it. From a served run (`--serve-run DIR --window K`) it names the piece MISSING with why and writes no case, so
   `composite.py` leaves it out: an H1 window has no `v1` case, and no `period` case outside a period or without its sampled
   proof blocks' proof outcomes.
-- `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
+- `v2_case.py`: SPOT v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file), with its own Lean answer with `--exe`. A circuit file the run didn't
   keep is rebuilt by the command its `m0/compose.log` records and used only at the log's pin. The case names the public
   file by the digest the audit staged, where the window keeps it (`case-v2.json`), and refuses a kept file with another,

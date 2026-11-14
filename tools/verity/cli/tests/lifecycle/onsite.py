@@ -1,5 +1,5 @@
 """The onsite composite (`verity/onsite/v0`: the network certifier, the inference-only policy, PoUS, PoUW's period, the
-bandwidth audit, sampled proofs and the wipe) on the lifecycle, as a deployment of four parties: the developer and three
+bandwidth audit, SPOT and the wipe) on the lifecycle, as a deployment of four parties: the developer and three
 of the auditor's, the verifier, the network certifier splitting the site's uplink and the memory challenger at the end of
 its link to the node. Where the auditor's devices sit is part of the site's `Layout`, and the hardware registration's
 checks hold every boundary link to a certifier splitting it (`uncertified`) and every host holding the prover's memory to

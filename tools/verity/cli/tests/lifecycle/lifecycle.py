@@ -18,7 +18,7 @@ The phases, each a function here:
    blocks before are unchanged) and places it (`placement`: its units on device leaves, theta on a memory leaf, naming
    the layout's head); the block's values are committed; and its record binds the previous record and that placement.
 5. **Audit of declaration k** (`draw`, `prove`, `verify`, `pouw_window`, `inference_only`): live coins after the
-   commitment, sampled proofs' sample at PoUW's size K', each sampled proof block proved behind the ZK server and
+   commitment, SPOT's sample at PoUW's size K', each sampled proof block proved behind the ZK server and
    checked by the verifier; and the inference-only policy's check of the execution block, which reads no coins.
 6. **Accounting** (`compose`, `account`): each declaration's composite verdict by the composition's rule, the monitoring
    period's, its pooled bound, and its credit against the compute the layout holds: each subprotocol's accounting is a
@@ -815,7 +815,7 @@ def coin_bytes(k: int, n: int) -> int:
 
 
 def draw(coins: bytes, blk: Block) -> list[int]:
-    """Sampled proofs' sample (`spot.coins.draw_first`) on the verifier's live coins."""
+    """SPOT's sample (`spot.coins.draw_first`) on the verifier's live coins."""
     buf = bytearray(coins)
 
     def read(n: int) -> bytes:
@@ -914,7 +914,7 @@ def answer(protocol: str, verdict: str, commitment: str | None, reason: str | No
 
 def spot(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]],
          protocol: str = IDS["sampled-proofs"]) -> dict[str, Any]:
-    """Sampled proofs' answer for the declaration, under the composite's id for it (`SAMPLED`): every sampled proof
+    """SPOT's answer for the declaration, under the composite's id for it (`SAMPLED`): every sampled proof
     block's values check held."""
     bad = [f"unit {u}: {checks[u]['values']}" for u in units if u not in checks or checks[u]["values"]]
     law = {"law": "subset", "k": len(units)}
@@ -924,7 +924,7 @@ def spot(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, 
 
 
 def pouw_window(sp: Mapping[str, Any], blk: Block, protocol: str = IDS["pouw-period"]) -> dict[str, Any]:
-    """PoUW's window check over sampled proofs' answer: sampled proofs accepted the declaration's registration, at
+    """PoUW's window check over SPOT's answer: SPOT accepted the declaration's registration, at
     subset:K' over the grid's n units; it publishes the credited work at ε and δ. Both composites' work is PoUW's period
     (`verity/pouw/period/v1`), answered here a declaration at a time, over its one window."""
     work = pouw_window_rules.bucket(blk.real)
@@ -972,7 +972,7 @@ def policy(n: int, gamma: int, alpha: tuple[int, int]) -> dict[str, Any]:
 
 def inference_only(d: Declaration, blk: Block) -> dict[str, Any]:
     """The inference-only policy's answer for the declaration (`verity/inference-only/v0`, `NciCheck.Protocol`): the
-    record, the one sampled proofs' answer commits to, names the block's Program, and the policy's check finds that the
+    record, the one SPOT's answer commits to, names the block's Program, and the policy's check finds that the
     block's division into inference blocks complies. It has no rounds and reads no coins. Theta's provenance is the
     registration's check (`check_baseline`: theta committed under the registered builder)."""
     if d.record.get("circuit") != blk.program:
@@ -1386,7 +1386,7 @@ class Verifier:
         return "proofs" in self.parts[k]
 
     def answers(self, k: int, checks: Mapping[int, Mapping[str, Any]]) -> dict[str, dict[str, Any]]:
-        """The subprotocols' answers for declaration k beyond sampled proofs, PoUW and the inference-only policy (onsite:
+        """The subprotocols' answers for declaration k beyond SPOT, PoUW and the inference-only policy (onsite:
         the certifier, PoUS, the bandwidth audit and the wipe)."""
         return {}
 

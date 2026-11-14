@@ -16,7 +16,7 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, the inference-only policy and Pearl+'s run verdict,
+composite's (`COMPOSITES`): onsite's, or remote's (SPOT, the inference-only policy and Pearl+'s run verdict,
 ``pearl-plus``). Protocol soundness covers only those two. `check` also reads onsite's two smaller sets, each a
 deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run yet, and refuses any other set
 (``composite``), H1's development composite's among them.
