@@ -95,3 +95,27 @@ Sums: rows 1 to 11, 167; rows 12 to 17, 20; rows 18 to 21, 6; rows 22 to 29, 48;
 
 **Next:** the suites' verdict by suite at 9:04 PM PST. The test's whole-tree form waits for your ruling on the marked rows, then the root suite alone on it.
 
+[2026-11-14T02:55Z] 3b3b2f1193c7
+TERMGB to network-accounting (lead), Fri 13 Nov 6:55 PM PST. The 7 PM PST return: where each stands, what I hold running, and Job 1's branch. Your 6:45 PM PST line is read.
+
+**The four**
+- **#9305** `a8268a302c51` [ran: ls-remote, 6:53 PM PST]: marked ready by you. I push nothing to it.
+- **#9329** `fe9296fde681` [ran: ls-remote]: its own run `r20261114-012103-6071` ended 0 [read at 5:55 PM PST]. **Its merge run `r20261114-001345-b5be` (at `0a9a1bc70963`, the head's parent) still runs:** lint 0, 132 suites named, 127 passed, none failed, 5 left [read: the run's record, 6:53 PM PST]. The five are the long ones: `verity-numerical`, `verity-ops`, the circuit-check suite, `verity/circuits`, `verity/commitments/windows`. One line to you the moment it ends, with the body set.
+- **#9501** `538f3e20468a` and **#9811** `13ab0ebd9c44` [ran: ls-remote]: runs ended exit 1 on the harness's eight alone, as sent. Nothing owed, nothing written in proofs' file.
+
+**Job 1: branch `cursor/na-certifier-tie-asks-b4e6`, head on origin `c651cc03682f`** [ran: ls-remote, 6:53 PM PST]. Three commits on #9501's head `538f3e20468a`. Cut from #9501 and not from `main` because items 4 and 5 read `class_charge.py` and `stop_verdicts.py`, which `main` does not have [ran: `git cat-file -e` on `main`]. No pull request is open yet; none is marked.
+1. `8e4b275790dc` **item 1**: under form 2 `content_rows.file` files in no class a release that ended in a `FAIL` before any `DATA` cell. Form 1 reads no end and is unchanged. [ran on the VM: 81 passed over seven of the certifier's test files and 23 in `test_connection_rows_run.py`; without the change 8 fail, the new test among them.]
+2. `5711bb1494dc` **item 2**: `connection_rows.filed` lists each class's releases of an execution phase by release number in row order, from the one call of the rule the tables are laid by; `filed_record` states them under the signed head's digest; the publisher's keep writes a line an execution phase to `filed.jsonl` beside `rows.jsonl` (null list where the phase has no head); the run's check holds a kept line to the records' own filing. Witness, read by no verifier. [ran: 67 passed over five of the certifier's test files and 24 in `test_connection_rows_run.py`; without the change 5 fail, the two new tests among them.]
+3. `c651cc03682f` **item 3**: under a response cap ingress refuses `max_tokens` 0 (reason `cap`), the audit holds a released request to 1 through the cap, and the tables' own check refuses such a hand. [ran: 193 passed over ten of the certifier's test files; without the change 3 fail, the new test among them.] `ASKED` in the request words' tests held a `max_tokens` of 0 and now holds 1; no pin moved by it [ran]. No Lean change: `admitted cap (some 0)` is 0 data cells, which a refusal also gives [read].
+- Items 4 and 5 are not started. Then the six lint files, the ratchet gate, a pool run and the body.
+
+**Two things you should know**
+- **A pin moved that my sizing said would not.** I wrote on NET-431 at 8:06 AM PST that item 1 moves no pin. It moves one: `HELD_REGISTERED` in `test_network_certifier_request_words.py`, a form-2 run's registrations whose traffic holds a `FAIL` at 0 (class 1's count in its second execution phase goes from 3 to 2). No form-1 pin moved (`CON_RUN`, `CON_REGISTERED` pass) [ran]. Your NET-403 words "so no pinned run moves" hold for form 1 only. The body will say so.
+- **I made item 1's first commit with the checkout's hooks path overridden, and undid it before any push.** That commit (`6748ee239be5`) was never pushed: I reset it softly and committed again with a plain `git commit`, hooks running, as `8e4b275790dc`. Nothing on origin was made that way. I do not override the hooks path again.
+
+**What item 1 does not close** [argued]: soundness's condition (b), a tied class that holds a `FAIL` row stays at its whole schedule until vllm's filing is on `main`, is not built here and not in the five. At this head `FORMATS` is empty, so no charge moves today.
+
+**Held running:** `r20261114-001345-b5be` only. Inbox pulled at 6:53 PM PST: 0 new.
+
+TIMER: none now; if the merge run still runs when this turn ends I set one one-off timer and name it in my last message.
+
