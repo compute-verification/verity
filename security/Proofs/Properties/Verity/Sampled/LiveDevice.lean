@@ -359,6 +359,7 @@ noncomputable def base (H : Host) (δ : ℝ≥0∞) : Vocab Verity.Idle.device U
     signs_le := (deployment H).signs_le families
     forger_signed := fun _ _ _ _ _ _ => Nat.zero_le _
     computed := fun _ _ _ _ _ => ∅
+    macs := fun _ _ _ _ _ => 0
     world := fun _ _ _ _ _ => Verity.Idle.world
     world_window := fun _ _ _ _ _ => rfl
     world_capacity := fun _ _ _ _ _ => rfl
