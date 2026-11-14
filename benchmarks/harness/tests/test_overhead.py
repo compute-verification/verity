@@ -493,7 +493,7 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
         assert {v["stock_least_sm"]["kernel"] for v in p["linears"].values()} == {"k_lean"}
         assert all(v["accepted"] for v in p["verified"].values()) and len(p["verified"]) == len(LINEARS)
         assert p["epsilon"]["gate_up"] == {"epsilon": 2.0 ** -40 * 7, "delta": 1e-9, "basis": "stand-in"}
-        assert p["gate"] == {"cap": O.GAMMA_MAX, "passes": True} and p["perplexity"]["value"] is None
+        assert p["gate"] == {"gamma_max": O.GAMMA_MAX, "passes": True} and p["perplexity"]["value"] is None
         fast = p["linears"]["o"]["stock_fastest"]
         assert fast["sm_s"] == pytest.approx(pts[name.lower()] * 8192 * 8192 * 1e-12 * 1.02, rel=1e-3)
         assert fast["cpu_sm_s"] == pytest.approx(HOST * fast["sm_s"], rel=1e-3)
