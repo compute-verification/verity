@@ -9,6 +9,7 @@
 # version. No file is added, edited beyond its paths or deleted. The format is `layout_map.toml`'s.
 #
 # What stays: the layout of record (`tests/tree.toml`, whose open question on the directory its owner closes by hand),
+# the Glossary (its table of older names is the retired-terms lint's term source and names the old module as retired),
 # `verity/commitments/window.py` (the served domain's tag, a format constant), every Lean file's bytes and every kernel
 # source's ([rewrite] exclude). No root moves ([roots] old == new).
 
@@ -36,7 +37,7 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
-           "**/*.lean", "tests/tree.toml"]
+           "**/*.lean", "tests/tree.toml", "GLOSSARY.md"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
 
