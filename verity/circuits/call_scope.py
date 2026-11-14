@@ -9,13 +9,15 @@ class QueryRuleViolation(ValueError):
     """A Program whose units cannot satisfy `Q_word_v1{X,W}`: named per Definition and module, never widened."""
 
 
-def specialization(fam: str, statics: dict[str, Any]):
-    """The registered Definition `fam` bound to `statics` (a primitive as it is); function-valued statics (`DOT`, rendered
-    `{"fn": id}` or as the bare id) resolve to the registered Definition they name, a specialized id (`READ`'s
-    `EmbeddingRead_v1{V=256,H=3072}`) to its family bound to its own record."""
+def specialization(fam: str, statics: dict[str, Any], reg: Any = None):
+    """The Definition `fam` registered in ``reg`` bound to `statics` (a primitive as it is); function-valued statics (`DOT`,
+    rendered `{"fn": id}` or as the bare id) resolve to the registered Definition they name, a specialized id (`READ`'s
+    `EmbeddingRead_v1{V=256,H=3072}`) to its family bound to its own record.  ``reg`` is the registry of the catalog its
+    caller loaded (`registry.catalog.load`); by default `REGISTRY` as this process has registered it, since this module
+    loads no catalog."""
     from verity.circuits.codec import lookup_primitive
-    from verity.definitions.registry.catalog import load
-    reg, _errors = load()
+    if reg is None:
+        from verity.circuits.defs import REGISTRY as reg
     d = reg.defs.get(fam)
     if d is None:
         return lookup_primitive(reg, fam)
@@ -29,7 +31,7 @@ def specialization(fam: str, statics: dict[str, Any]):
         except KeyError:
             if fid in reg.defs:
                 return reg.defs[fid]
-            return specialization(spec_base(fid), spec_statics(fid)) if "{" in fid and spec_base(fid) in reg.defs else v
+            return specialization(spec_base(fid), spec_statics(fid), reg) if "{" in fid and spec_base(fid) in reg.defs else v
 
     return d.bind(**{k: fn_value(v) for k, v in statics.items()}) if hasattr(d, "bind") else d
 
