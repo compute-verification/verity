@@ -39,6 +39,7 @@ namespace Pous.Period.SecurityProofs
 
 open Pous.EndToEnd PousCheck PousCheck.Properties
 open PousCheck.Properties.SecurityProofs.Accepts (storeStrings keyPrefix)
+open Pous.EndToEnd.SecurityProofs.Honest
 open scoped ENNReal
 
 set_option exponentiation.threshold 20000
@@ -68,6 +69,96 @@ theorem periodHeldDeployed_honest :
     DeviceModel honestRun sidAudit honestStrategy RING_D RING_Q RING_L 1 ∧ Instantiates sidAudit honestStrategy ∧
       Fits honestDevice (honestRun.win .capacity).len 1 HONEST_S Pous.EndToEnd.S :=
   periodHeld_honestInstance
+
+private noncomputable def certifiedSetupState : Identity.Sha512.State :=
+  Classical.choose PousCheck.Properties.SecurityProofs.Accepts.commitState_deployed
+
+private theorem certifiedSetupState_spec :
+    Commit.commitState P2.Params.deployed = .ok certifiedSetupState :=
+  Classical.choose_spec PousCheck.Properties.SecurityProofs.Accepts.commitState_deployed
+
+private def certifiedSalt : ByteArray := PousCheck.Prim.zeros 24
+
+private noncomputable def certifiedStore : Array (Array ByteArray) :=
+  PousCheck.Properties.SecurityProofs.Accepts.honestEncoding (keyPrefix certifiedSalt)
+
+private noncomputable def certifiedCommitment : SetupProtocol.Commitment :=
+  ⟨PousCheck.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState, certifiedSalt⟩
+
+private noncomputable def certifiedPublic : SetupProtocol.Public :=
+  ⟨P2.Params.deployed.blocks,
+    PousCheck.Properties.SecurityProofs.Accepts.honestW certifiedSalt certifiedSetupState,
+    (Merkle.root (PousCheck.Run.rowLeaves P2.Params.deployed certifiedSalt
+      (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))).getD .empty,
+    certifiedSalt⟩
+
+private noncomputable def certifiedPrivateKey : Lms.PrivateKey :=
+  Classical.choose (Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
+    (I := PousCheck.Prim.zeros 16) (zeros_size 16) (PousCheck.Prim.zeros 64))
+
+private theorem certifiedPrivateKey_spec :
+    Lms.key Lms.deployed (PousCheck.Prim.zeros 16) (PousCheck.Prim.zeros 64) = .ok certifiedPrivateKey :=
+  Classical.choose_spec (Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
+    (I := PousCheck.Prim.zeros 16) (zeros_size 16) (PousCheck.Prim.zeros 64))
+
+private noncomputable def certifiedRecordMessage : ByteArray :=
+  Classical.choose (message_honest certifiedPublic.root
+    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
+
+private theorem certifiedRecordMessage_spec :
+    MemoryChallenger.message (honestCommitment certifiedPublic.root) MemoryChallenger.COMPLETE
+      (honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt)) =
+        .ok certifiedRecordMessage :=
+  Classical.choose_spec (message_honest certifiedPublic.root
+    (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt))
+
+private def certifiedLmsMessage : ByteArray :=
+  Flock.Sha512.hash (MemoryChallenger.field MemoryChallenger.MEMORY_CHALLENGER_TAG.toUTF8 ++
+    PousCheck.Prim.zeros 16 ++ MemoryChallenger.field (MemoryChallenger.field honestSid) ++
+    MemoryChallenger.field certifiedRecordMessage)
+
+private noncomputable def certifiedSignature : Lms.Signature :=
+  Classical.choose (MemoryChallenger.Attest.Properties.SecurityProofs.signs
+    certifiedPrivateKey_spec certifiedLmsMessage)
+
+private theorem certifiedSignature_spec :
+    Lms.signAt certifiedPrivateKey 0 certifiedLmsMessage = .ok certifiedSignature ∧
+      Lms.verify Lms.deployed certifiedPrivateKey.publicKey certifiedLmsMessage certifiedSignature = .ok true :=
+  Classical.choose_spec (MemoryChallenger.Attest.Properties.SecurityProofs.signs
+    certifiedPrivateKey_spec certifiedLmsMessage)
+
+private noncomputable def certifiedRecord : PousCheck.Run.ChallengePhaseRecord :=
+  ⟨⟨honestCommitment certifiedPublic.root, MemoryChallenger.COMPLETE,
+      honestRounds (PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt),
+      MemoryChallenger.LMS, certifiedPrivateKey.publicKey, certifiedSignature.encode⟩,
+    honestCommitment certifiedPublic.root, honestOpenings⟩
+
+/-- The honest session's coin tree: the honest session id, coin root and key, the deployed blocks, and 105 indices,
+all block 0, as `honestRounds` records them. -/
+def honestCoins : MemoryChallenger.CoinTree :=
+  ⟨honestSid, PousCheck.P2.Params.deployed.blocks, Array.replicate 105 0, honestCoinKey, #[], #[], honestCoinRoot⟩
+
+/-- The memory challenger's honest run: `honestCoins`, the deployed limit and block size, bound to `root`, observing
+`block` sent and received at time 0 in each of 105 rounds. -/
+def honestChallengerRun (root block : ByteArray) : MemoryChallenger.Properties.Run :=
+  ⟨honestCoins, PousCheck.Run.DEPLOYED.limitNs, PousCheck.P2.Params.deployed.blockBytes, root,
+    List.replicate 105 ⟨0, 0, block⟩⟩
+
+private noncomputable def certifiedBlock : ByteArray := (flat certifiedStore)[0]!
+
+/-- The closed honest audit: setup's honest store and output under the zero salt, one trusted LMS key and its accepted
+session, and that key's challenger record of 105 timely answers to block 0. -/
+noncomputable def certifiedAudit : Audits Unit Unit where
+  trusted := [certifiedPrivateKey.publicKey]
+  sid := honestSid
+  commitment _ := certifiedCommitment
+  store _ := certifiedStore
+  pub _ := certifiedPublic
+  digests _ := PousCheck.Properties.SecurityProofs.Accepts.setupDigests certifiedSalt
+  W _ _ := false
+  session _ := certifiedRecord
+  device _ := ⟨fun pk =>
+    if pk = certifiedPrivateKey.publicKey then [honestChallengerRun certifiedPublic.root certifiedBlock] else []⟩
 
 /-- **An audit of one accepted play**: the verifier's one trusted key `key`, the 32-byte session id `honestSid`, the
 commitment `c`, the store `C`, setup's public output `pub`, the row digests `digests` and the session `r`, the same on
