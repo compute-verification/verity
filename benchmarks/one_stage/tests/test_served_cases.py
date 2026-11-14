@@ -1005,7 +1005,7 @@ def test_the_policys_log_is_the_serves_h1_log_through_the_records_previous(tmp_p
 
 def test_on_a_serve_tied_to_pearl_plus_the_policys_log_is_w_and_the_serves_first_record_before_it(tmp_path):
     """A serve whose window record is Pearl+'s has no H1 log: the log before R is the W Pearl+'s case's parts hold, which
-    R is chained right after, and before it the serve's first docket where W is chained after one, each
+    R is chained right after, and before it the serve's first registration record where W is chained after one, each
     taken by the digest the next names. A W chained after nothing is the whole log, whatever first record the serve dir
     holds; an R naming no previous record has none. Parts holding another W than R names, a W naming a first record the
     serve dir doesn't hold, and one naming another than it holds are refused: the log would not chain from the
