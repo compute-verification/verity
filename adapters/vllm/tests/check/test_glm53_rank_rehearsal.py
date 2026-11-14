@@ -27,6 +27,7 @@ from tests.observe.test_fold_glm53_defaults import (
 )
 from verity_vllm.check.match import global_match_fast as GF
 from verity_vllm.check.match import program_compare as CMP
+from verity_vllm.check.match import program_loaders as PL
 from verity_vllm.observe.events import (
     DispatchEnter,
     DispatchExit,
@@ -41,7 +42,7 @@ from verity_vllm.observe.events import (
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.patterns import dsa as DSA
 from verity_vllm.observe.fold.profiles import generic as G
-from verity_vllm.pipeline.match import INSTANCES_FORM_ENV, persist_program
+from verity_vllm.pipeline.match_fold import INSTANCES_FORM_ENV, persist_program
 from verity_vllm.program import compact as K
 
 CFG = json.loads((Path(__file__).parent / "fixtures" / "glm_moe_dsa" / "config.json").read_text())
@@ -181,7 +182,7 @@ class _Rank:
         try:
             return CMP.load_oracle(d, f"{which}-{form}", compact=form == "progressions" if compact is None else compact)
         finally:
-            CMP.LOAD_NOTES.pop(d, None)
+            PL.LOAD_NOTES.pop(d, None)
 
     def prog(self, which: str, form: str) -> CMP.RootView:
         if (which, form) not in self.progs:

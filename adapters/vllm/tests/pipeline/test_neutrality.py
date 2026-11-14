@@ -136,10 +136,11 @@ def test_a_rebuild_is_the_rows_own_build_stage_into_out_with_no_device_visible(t
     def run(cmd, cwd):
         calls.append((cmd, os.environ["CUDA_VISIBLE_DEVICES"]))
         return subprocess.CompletedProcess(cmd, 0)
+    # resolved before the stand-in is in place: a tree without the row's stored workload fetches it, by `subprocess.run` too
+    role, repo, rev, world = epoch.resolve(ROW)
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "0")
     monkeypatch.setattr(subprocess, "run", run)
     assert N.rebuild(ROW, tmp_path, ["--build-jobs=2"]) == 0
-    role, repo, rev, world = epoch.resolve(ROW)
     ((cmd, visible),) = calls
     assert visible == "", "the pins' Builds saw no device; vLLM keeps Triton without a driver only so"
     assert cmd[1:] == ["-m", "verity_vllm.pipeline.cli", "row", "run", ROW, role, repo, rev, "--stages", "build", "--build-construction", "trace",
