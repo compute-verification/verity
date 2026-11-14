@@ -86,7 +86,7 @@ class Structure:
     #: the runs that measured `s_×` (`art:` ids), cited beside the straddling premise
     evidence: tuple[str, ...] = ()
 
-    #: `U / s_×` counts the operations inside the uncertified gates only if none has gates on both sides; at `s_× = 1`
+    #: `U / s_×` counts the operations inside free compute only if none has gates on both sides; at `s_× = 1`
     #: each operation is charged to one gate, its output, and none can straddle
     STRADDLE = ("draft:no-straddle",)
 

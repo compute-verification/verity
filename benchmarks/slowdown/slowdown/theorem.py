@@ -58,7 +58,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class Budget:
-    """`(c, k)`: a block's gates and its unregistered input bits, and the bits that may cross its narrowest declared
+    """`(c, k)`: a block's gates and its fresh input bits, and the bits that may cross its narrowest declared
     forward cut (`math.inf` where the policy declares none: an inference block; an episode of the proof of forward
     computation, whose operators form a one-way chain, has `n_max` positions times the write allowance)."""
 
@@ -83,7 +83,7 @@ class Blocks:
 
 @dataclass(frozen=True)
 class Cut:
-    """One valid partition of a server block: its blocks, and its uncertified gates by route (`U`, which no block
+    """One valid partition of a server block: its blocks, and its free compute by route (`U`, which no block
     constrains), valid under `cites` (the Lean guarantees and premises that put every gate in a block or in `U`)."""
 
     name: str

@@ -96,7 +96,7 @@ class Profile:
     #: bits of state one token's computation carries between blocks (`U_token`, `benchmarks/nci`): its updated weights
     #: and, inside an optimizer step, the gradient accumulators a block hands on
     token_state_bits: float | None = None
-    #: the reference circuit's FLOPs per token
+    #: the reference training algorithm's FLOPs per token
     flops_per_token: float | None = None
     #: bits per token crossing a shard boundary (crossings times the cut's width)
     cut_bits: float | None = None
