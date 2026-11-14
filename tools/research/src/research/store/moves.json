@@ -2447,6 +2447,11 @@
       "paths": {
         "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
     }
   ]
 }
