@@ -2,6 +2,11 @@
 ``recursion_e2e.json``, ``rec_profile.read``'s, with its ``session_times``):
 
     python benchmarks/recursion_figures/figures.py RESULT.json [--json]
+    python benchmarks/recursion_figures/figures.py --from RUN [--json]   a recorded run's records, from the evidence store
+
+``--from RUN`` fetches the ``out/`` of the run's record and reads it with this tree's reader (``rec_profile.read``), so a
+run recorded before ``session_times`` gives its figures too. Under a research run it also writes `METRICS` into the
+run's result (`record`).
 
 The bench is public and states what it measured; this side reads the census's fleets and the monitoring periods, which
 stay private, and scales the measurement over them: its cost, its knowledge-soundness error
@@ -42,16 +47,33 @@ import argparse
 import json
 import math
 import sys
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
+# the harness kit (`record`) and verity_config under it, for a run of this file outside the workspace's environment
+sys.path += [str(HERE.parent / "harness"), str(HERE.parents[1] / "tools" / "config")]
 
+import rec_profile as RP  # noqa: E402
 from rec_profile import SESSION_STEPS  # noqa: E402
+from verity_bench import kit, settings  # noqa: E402
 
 from verity.protocol import MONITORING_PERIODS  # noqa: E402
+
+#: the metrics `benchmarks/recursion_figures/metrics.toml` holds this benchmark to, by id: each the figure of `FIGURES` it
+#: names, recorded over each fleet's week, month and year, the world's year last, the one each id names (`record`)
+METRICS = {"benchmarks/recursion-core-years-world-year": "cost",
+           "benchmarks/recursion-ks-error-log2-world-year": "ks",
+           "benchmarks/recursion-stop-leak-bits-world-year": "leak"}
+#: the figures `record` writes, each with its unit before its fleet and period: a period's CPU core-years, its
+#: knowledge-soundness error against the fleet's own SHA-512 calls, and its stop-leak bound
+FIGURES = {"cost": "CPU core-years", "ks": "log₂ of the knowledge-soundness error", "leak": "stop-leak bits"}
+#: the figures a research run keeps beside its result, relative to the run's directory
+KEPT = "out/recursion-figures.json"
 
 FORMAT = "recursion-e2e/figures/v2"
 CENSUS = HERE.parent / "census"
@@ -236,13 +258,74 @@ def of_result(doc: dict[str, Any], census: Path = CENSUS) -> dict[str, Any]:
     return figures(doc, doc["session_times"], census, budget=int(budget) if budget else None)
 
 
+def local_store() -> Any:
+    """The evidence store this machine reads, through research's client."""
+    from research.store.local import LocalStore
+    return LocalStore()
+
+
+def recorded(run: str, to: Path, store: Callable[[], Any] = local_store) -> dict[str, Any]:
+    """Recorded run `run`'s result as this tree reads it: the ``out/`` of its record, fetched from the evidence store
+    into `to` and read with ``rec_profile.read``."""
+    s = store()
+    a = s.get_attempt(run)
+    if a is None:
+        raise SystemExit(f"figures: {run} is not in the evidence store this machine reads")
+    art = (a.get("outputs") or {}).get("run_record") or (a.get("outputs") or {}).get("run_files")
+    if not art:
+        raise SystemExit(f"figures: {run} kept no record")
+    doc = RP.read(Path(s.fetch(art, to, paths=["out"])) / "out")
+    doc["run"] = run
+    return doc
+
+
+def record(doc: dict[str, Any], fig: dict[str, Any]) -> None:
+    """Write `METRICS` into this research run's result: each figure over each fleet's week, month and year, modeled from
+    one session, the run that measured it its input. The validation passes only for figures of an accepted recursive run
+    with every figure there."""
+    w = kit.writer(settings.RESEARCH_RUN_DIR)
+    kept = w.out / KEPT
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    kept.write_text(json.dumps(fig, indent=1) + "\n")
+    run = doc.get("run")
+    w.fingerprint(benchmark="recursion_figures", format=FORMAT, run=run, statement=fig["session"]["statement"],
+                  parts=fig["session"]["parts"])
+    w.measurement_file(KEPT)
+    missing = []
+    for metric, key in METRICS.items():
+        for over in ("datacenter", "world"):
+            for period, _ in MONITORING_PERIODS:
+                r = fig["fleets"][over]["periods"][period]
+                value = {"cost": r["cost"]["core_years"], "ks": r["ks"][over]["error_log2"], "leak": r["leak"]["bits"]}[key]
+                if value is None and metric not in missing:
+                    missing.append(metric)
+                w.measurement(metric, value, f"{FIGURES[key]} a {over} {period}",
+                              inputs=[f"modeled: {fig['basis'][key]}", *([run] if run else [])],
+                              why=None if value is not None else "the session isn't whole: a step's times are missing",
+                              mark="modeled", period=period, over=over)
+    h = doc.get("headline") or {}
+    ok = bool(h.get("ok")) and not missing
+    w.validation("passed" if ok else "failed", "figures.of_result",
+                 (f"figures of {run or 'the result'}, " + ("an accepted recursive run" if h.get("ok") else "not an accepted recursive run")
+                  + (f"; none for {', '.join(missing)}" if missing else "")), [KEPT])
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("result", type=Path, help="a recursion_e2e.json")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("result", type=Path, nargs="?", help="a recursion_e2e.json")
+    src.add_argument("--from", dest="run", metavar="RUN", help="a recorded recursion bench run, read from the evidence store")
     ap.add_argument("--json", action="store_true", help="the figures as JSON, not the table")
     a = ap.parse_args(argv)
-    fig = of_result(json.loads(a.result.read_text()))
+    if a.run:
+        with tempfile.TemporaryDirectory(prefix="recursion-figures-") as tmp:
+            doc = recorded(a.run, Path(tmp))
+    else:
+        doc = json.loads(a.result.read_text())
+    fig = of_result(doc)
     print(json.dumps(fig, indent=1) if a.json else markdown(fig), end="" if not a.json else "\n")
+    if settings.is_set("RESEARCH_RUN_DIR"):
+        record(doc, fig)
     return 0
 
 
