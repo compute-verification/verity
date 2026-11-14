@@ -274,7 +274,7 @@ def test_a_window_is_named_by_its_record_less_its_run_fields():
     a = WR.replay(circuit, record)
     assert WR.window_digest(record) == h and a.id == f"WindowReplay_v1{{window='{h}'}}"
     assert WR.replay(circuit, {**record, "run": "another run", "context": "other coins"}).id == a.id
-    assert WR.replay(circuit, {**record, "cap": 2}).id != a.id
+    assert WR.replay(circuit, {**record, "name": "another name"}).id != a.id
     assert a.id != WR.replay(_whole(), _record(_whole())).id
     again = _window()
     assert P.program_digest(Program(a)) == P.program_digest(Program(WR.replay(again, _record(again))))
@@ -295,11 +295,10 @@ def test_refused_by_name():
     # another circuit's record, a record naming other external ports, one listing its members
     circuit = _whole()
     record = _record(circuit)
-    for other in (_record(_window()), {**record, "external": []}):
+    listed = {**{k: v for k, v in record.items() if k != "wires"}, "members": []}
+    for other in (_record(_window()), {**record, "external": []}, listed):
         with pytest.raises(ValueError, match="is not its record"):
             WR.replay(circuit, other)
-    with pytest.raises(ValueError, match="states its members by a cap"):
-        WR.replay(circuit, {k: v for k, v in record.items() if k != "cap"})
     # a return of 8,193 tokens of 32 bits is past the widest size class
     WR.replay(*_and_record(IF.Circuit("widest", ((C1, 8192),), external=(f"{c1}/o0",))))
     with pytest.raises(ValueError, match="262,144"):

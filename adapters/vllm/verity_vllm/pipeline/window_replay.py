@@ -28,8 +28,9 @@ Definition is a reference a test evaluates; no verifier reads it.
 
 Refused (ValueError): a wire whose reader row isn't its writer's output field leaf for leaf (the same words at another
 leaf width, as a Boolean template's bits read as words: a body's argument names each leaf at its own width); a
-circuit whose order runs a template's later units before its earlier ones; a record that lists its members or isn't
-the circuit's; and a return of more than 262,144 bits, the widest proof block's (`layout.UNIT_MAX_BITS`)."""
+circuit whose order runs a template's later units before its earlier ones; a record that isn't the circuit's (one that
+lists its members states no wires); and a return of more than 262,144 bits, the widest proof block's
+(`layout.UNIT_MAX_BITS`)."""
 from __future__ import annotations
 
 import bisect
@@ -271,15 +272,12 @@ def window_digest(record: Mapping[str, Any]) -> str:
 
 def replay(circuit: IF.Circuit, record: Mapping[str, Any]) -> SpecializedDefinition:
     """``circuit`` as one replay Definition (the module docstring), `WindowReplay_v1{window}`: ``window`` the
-    `window_digest` of ``record``, the circuit's record, which states its members by a cap and whose templates, wires,
-    declarations and external ports are the circuit's. The plan is made once, in work proportional to the circuit's ranges
-    and its arguments' parts, and the body built from it wherever the Definition is."""
+    `window_digest` of ``record``, the circuit's record: its templates, wires, declarations and external ports are the
+    circuit's. The plan is made once, in work proportional to the circuit's ranges and its arguments' parts, and the body
+    built from it wherever the Definition is."""
     plan = _plan(circuit)
-    if "cap" not in record:
-        raise ValueError(f"{circuit.name}: its record lists its members; a replay Definition's window states its members "
-                         "by a cap and its wires")
     want = {**circuit.description(), "external": list(circuit.external)}
-    if got := [k for k in sorted({*want, "external", *IF.DECLARED}) if record.get(k) != want.get(k)]:
+    if got := [k for k in sorted({*want, *IF.DECLARED}) if record.get(k) != want.get(k)]:
         raise ValueError(f"{circuit.name}: the record is not its record: its {', '.join(got)} differ")
     if (bits := sum(plan.ret.leaf_widths())) > UNIT_MAX_BITS:
         raise ValueError(f"{circuit.name}: its external ports return {bits:,} bits; a proof block returns at most "
