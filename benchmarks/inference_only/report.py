@@ -8,7 +8,7 @@ its number, and the record's three divisions. Then both over monitoring periods.
 tie (`tied.toml`, `tied.py`), at the share of a block's work that no PoUW check credits: `--uncredited-share`, which has
 no default, so without it no figure of the tied policy prints, and with it every one prints under a label saying it
 rests on no PoUW verdict. With `--served OUT`, after the stated policy, a served run's record (`record.py`): the
-check's verdicts in their public form (`NciCheck.Record.check`, `NciCheck.RecordCount.check`) and its cost, PoUW's
+check's verdicts in their public form (`InferenceOnlyCheck.Record.check`, `InferenceOnlyCheck.RecordCount.check`) and its cost, PoUW's
 share and tie, and the value at the record's share. Then one JSON object, printed last and written to `--out`, where
 the served policy's number is also written into the run's result under the metric's id (`METRIC`), unless a record
 was read.
@@ -30,7 +30,7 @@ import built as B
 import policy as P
 import record as R
 import tied as T
-from rho import lean, min_cut
+from slowdown import lean, min_cut
 from verity_bench import kit
 from verity_config.settings import SHARED
 
@@ -41,8 +41,8 @@ METRIC = "training/inference-only-slowdown"
 #: the metric's target, its goal's (the `goal` metrics.toml names): a slowdown of at least 1,000. The console's Metrics
 #: tab shows the verdict a measurement carries beside its target, and compares nothing itself
 TARGET = 1000
-#: rho's command for a deployment's slowdown per monitoring period
-CALCULATOR = "uv run python benchmarks/rho/periods.py"
+#: the slowdown calculator's command for a deployment's slowdown per monitoring period
+CALCULATOR = "uv run python benchmarks/slowdown/periods.py"
 #: the tied policy's label: what its figures are and what they rest on
 TIED_LABEL = "The served class under the value tie: NOT SERVED, and every figure of it RESTS ON NO PoUW VERDICT"
 #: `lean.status` as what the lock says of a statement
@@ -506,7 +506,7 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
                for row in P.periods(p["work"]["N"], p["bound"]["macs_a_block"])]
     print("\nOver a monitoring period, all of a fleet's compute in the policy's blocks at capacity: the training the blocks "
           "hold at most, in MACs and as a share of that compute")
-    print("  (the slowdown calculator's fleets and periods, benchmarks/rho; a fleet's rate is its "
+    print("  (the slowdown calculator's fleets and periods, benchmarks/slowdown; a fleet's rate is its "
           "cards' data-sheet dense int8 rate)")
     head = ("policy", "where", "period", "blocks", "training MACs at most", "share of the compute at most")
     table = [head] + [(r["policy"], r["where"], r["period"], _g(r["blocks"]), _g(r["training_macs"]),

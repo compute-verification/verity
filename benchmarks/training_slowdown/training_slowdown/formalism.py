@@ -1,4 +1,4 @@
-"""A record's slowdown ρ at a policy (c, k), by the training formalism v2: its theorems Fit and Slowdown per record,
+"""A record's slowdown at a policy (c, k), by the training formalism v2: its theorems Fit and Slowdown per record,
 the one bound's products term, and the attack side beside them. |C|, c, w and d are Boolean gates
 (training_slowdown.gates), every other quantity bits.
 
@@ -32,9 +32,9 @@ At (c, k), with s = c/w, w = token_gates / tokens (each part's for Fit; the reco
 
 - **Fit** (construction, checked per part): the training's three kinds of block, compute Δ + sτ ≤ k, reduction
   2Δ_grad ≤ k and update application Δ_t + Δ_grad ≤ k (Δ counts only when its decoder fits, d < c, and so does Δ_t;
-  a part with no token blocks has only the compute kind). Where every part fits, the record's ρ is c/(c − d) (`rho_fit`).
+  a part with no token blocks has only the compute kind). Where every part fits, the record's slowdown is c/(c − d) (`rho_fit`).
 - **Slowdown** (the counting lemma at B = A \\ R; stated, not yet proved in Lean): its token form with the largest
-  per-token affected count α_max where token blocks vary, ρ ≥ σ(1 − x0)·(s/s*)·(ᾱ/α_max), ᾱ the mean per-token
+  per-token affected count α_max where token blocks vary, slowdown ≥ σ(1 − x0)·(s/s*)·(ᾱ/α_max), ᾱ the mean per-token
   affected count (for identical token blocks the last factor is 1). The claim takes the assumption's upper bounds,
   never best-known values: s* ≤ max_x x(k − u(x))/a and x0 ≤ max{x : u_in(x) ≤ k} (A1). A target, not a bound: the
   one bound publishes it as a sensitivity (`token_form`).
@@ -56,12 +56,12 @@ sequence, doing a share x of each one's affected work and some of it at such a l
 starts at the sequence start and every token p it serves has a(p + 1) ≤ k − u(x). With L = ctx positions, h the share
 of a token's affected work at no such layer (`free_share`) and h' = min(h, 1 − x0), Slowdown's bound becomes
 
-    ρ ≥ σ·s·(ᾱ/α_max)·(1/L)·Σ_{p<L} [h'/max(S0, S1(p)) + (1 − x0 − h')/S1(p)],
+    the record's slowdown ≥ σ·s·(ᾱ/α_max)·(1/L)·Σ_{p<L} [h'/max(S0, S1(p)) + (1 − x0 − h')/S1(p)],
     S1(p) = max{x(k − u(x))/a : u(x) + a(p + 1) ≤ k},   S0 = max{x(k − u(x))/a : x ≤ h},
 
 which is the token form with s* the harmonic mean (1 − x0)/((1/L)·Σ_{p<L}[...]) (`s_star`; v2's A1 value is
 `s_star_a1`). S1(p) is v2's s* while p + 1 ≤ (k − u(x*))/a at v2's optimum x*, so a record whose optimal block holds
-L tokens keeps v2's ρ. S1(p) is 0 once a(p + 1) > k, so a charged share left there makes ρ infinite (s* 0). The
+L tokens keeps v2's slowdown. S1(p) is 0 once a(p + 1) > k, so a charged share left there makes the record's slowdown infinite (s* 0). The
 choices favourable to the block:
 - its span starts at the sequence start;
 - a token in its span counts as computed by it at every layer (its K/V are never charged), and K/V that depend on θ
@@ -72,8 +72,8 @@ choices favourable to the block:
 A block that computes a token from its inputs (x0) is not charged, and the attack side is v2's.
 
 **The one bound** (`bound`, which `at` reads): the counting lemma over kinds K of block work, each a lower
-bound on its own, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
-kind rests on (`RESTS_ON`). Where Fit fails ρ is the entry point's slowdown, max(1, that max); where Fit holds it is
+bound on its own, the record's slowdown ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the max, the kind it binds on and what each
+kind rests on (`RESTS_ON`). Where Fit fails the record's slowdown is the entry point's, max(1, that max); where Fit holds it is
 c/(c − d), and every term is at most that. Its one kind:
 - products: the theorem of record's count on M (`RESTS_ON` has its statement), a theorem for the run's circuit given
   (H) and (E), on a count that takes a premise on the batch (`work.batch_premise`: `work.P_REPEATS` where the job
@@ -84,7 +84,7 @@ c/(c − d), and every term is at most that. Its one kind:
   restates the count or computes the term; `training_slowdown.work` states M and `calculator` the choice. Where the
   record states no M the term is None with the entry point's reason. At a fixed k the term is linear in c.
 A kind's term is None where its inputs are unmeasured, with the reason (`unmeasured`), and the max is over the measured
-ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never in the max, the sensitivities
+ones (None, and so the record's slowdown where Fit fails, where none is). Beside the kinds, never in the max, the sensitivities
 (`SENSITIVITIES`), each labelled with what it rests on:
 - reduction: where a step's token work fills b ≥ 2 blocks by gates (b = ⌈N·w/c⌉), its b − 1 partial gradients at
   their passed width (`Part.partial_bits`) are read by blocks of k bits each, c·Σ steps·(b − 1)·partial/(k|C|)
@@ -96,7 +96,7 @@ ones (None, and so ρ where Fit fails, where none is). Beside the kinds, never i
   (assumption (D) with A1), a target.
 (R) and (U) hold only for partitions split by tokens, not by layers or tensors (a block holding only frozen layers'
 work passes no partial), and the token and decoding forms are targets, so none is a lower bound on its own; `kinds`
-refuses them. Each result is labelled "training's slowdown code VERSION" (`THE_CODE`). `published` is the console's ρ: Fit's c/(c − d)
+refuses them. Each result is labelled "training's slowdown code VERSION" (`THE_CODE`). `published` is the record's slowdown as the console shows it: Fit's c/(c − d)
 where it holds; else the entry point's slowdown and what it says binds: the products' count where it exceeds 1, None
 where the record gives none, else 1, binding none. Each comes with the kind it binds on and what that rests on, short
 (`RESTS_ON_CELL`; the products term's with the subset of M that binds, its F, β and b_y, `he_rests_on`, which
@@ -393,7 +393,7 @@ def rests_on_products(count: dict | None = None) -> str:
               "the positions sequences share")
     return ("theorem of record for this circuit: every partition into blocks of at most c gates, each "
             "reading at most k bits outside θ, does N ≤ m(k + α) + F·(k/2)·√(mO/(β_w·β_x)) of M's N MACs "
-            "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so ρ ≥ c/|C| times the least m that count "
+            "in its m blocks, α = F·½·√(k³/(β_w·β_x·b_y)), so the record's slowdown ≥ c/|C| times the least m that count "
             "allows, floored at 1, O M's output wires; given these premises "
             "on M, each refuted by a single counterexample: (H) operands are hard: every set of M's words "
             "with a cut of at most k bits from the unregistered inputs has a cut of at least each word's β, "
@@ -576,7 +576,7 @@ def he_rests_on(got: dict) -> str:
 
 def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
     """The counting lemma over the kinds of block work that are lower bounds on their own (module docstring) at (c, k):
-    each kind's term (None: no figure, its reason in `unmeasured`), ρ ≥ their max over `kinds`, the kind that max
+    each kind's term (None: no figure, its reason in `unmeasured`), the record's slowdown ≥ their max over `kinds`, the kind that max
     binds on (`binding`; None where no kind has a figure) and what each kind rests on (`rests_on`); and beside them
     the sensitivities (`SENSITIVITIES`), never in the max, reduction and update each the sum over the parts that
     measure it (None where none does; `unmeasured` names it where a part doesn't). `inputs` holds what each term
@@ -639,13 +639,13 @@ def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> di
 
 
 def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
-    """ρ at (c, k): Fit's c/(c − d) where the training fits (each part's s, w and Fit kinds under `parts`; an
+    """The record's slowdown at (c, k): Fit's c/(c − d) where the training fits (each part's s, w and Fit kinds under `parts`; an
     unmeasured decoder, d None, fits no block), else the slowdown `calculator.slowdown` gives (`bound`'s `entry`:
     None where the record gives none). Beside it the one bound (`bound`: its terms, its sensitivities, Slowdown's
     token form among them, and its label) and the attack side (module docstring)."""
     d = m.decoder_gates if m.decoder_gates is not None else math.inf
     delta, delta_t = (m.delta_bits, m.delta_t) if d < c else (None, None)
-    rho_fit = c / (c - d) if d < c else math.inf
+    slowdown_fit = c / (c - d) if d < c else math.inf
     parts, fits = [], []
     for p in m.parts:
         w = p.token_gates / p.tokens if p.tokens else math.inf
@@ -664,22 +664,22 @@ def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
                       math.floor(c / (t * m.alpha_max)) if t * m.alpha_max else math.inf) if 0 < t < 1 else 0
     s_star_known = t * tail_tokens if x0_known < 1 else 0.0
     b = bound(m, c, k, kinds)
-    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": rho_fit,
-            "rho": rho_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
+    return {"c": c, "k": k, "delta_counted": delta is not None, "parts": parts, "fit": fit, "rho_fit": slowdown_fit,
+            "rho": slowdown_fit if fit else b["entry"]["slowdown"], "x0_known": x0_known, "s_star_known": s_star_known,
             "bound": b}
 
 
 def cell_products(count: dict | None = None) -> str:
-    """What a published ρ rests on where the products term binds and names no subset of M, with the premise on the
+    """What a record's published slowdown rests on where the products term binds and names no subset of M, with the premise on the
     batch as its M took it (`work.batch_premise` of `count`, its M's `repeats`)."""
     return ("theorem of record, given (H): operands are hard at the β_w and β_x the row's products term takes, and "
             "(E): exports are wide at its b_y, premises a single counterexample refutes, and given that "
             f"{batch_premise(count)}")
 
 
-#: what a published ρ rests on, by its binding kind, short (a console cell on every row; `RESTS_ON` has each kind's in
+#: what a record's published slowdown rests on, by its binding kind, short (a console cell on every row; `RESTS_ON` has each kind's in
 #: full): Fit's c/(c − d), a kind of the one bound (the measured kind its max takes, where that exceeds 1), `none`
-#: where every kind is measured and none exceeds 1 (ρ is the floor's 1, not any kind's), or `unmeasured` (ρ None)
+#: where every kind is measured and none exceeds 1 (the record's slowdown is the floor's 1, not any kind's), or `unmeasured` (it is None)
 #: where Fit fails, no measured term exceeds 1 and a kind is unmeasured
 RESTS_ON_CELL = {
     "fit": "Fit's construction",
@@ -687,15 +687,15 @@ RESTS_ON_CELL = {
     "none": "no kind exceeds 1",
     "unmeasured": "unmeasured",
 }
-#: the sensitivities a published ρ carries beside it, so the others (`SENSITIVITIES`) stay in `bound`
+#: the sensitivities a record's published slowdown carries beside it, so the others (`SENSITIVITIES`) stay in `bound`
 CELL_SENSITIVITIES = ("reduction", "update")
 
 
 def published(m: Measured, c: float | None = None, k: float | None = None) -> dict:
-    """The published ρ at (c, k), by default the console's policy (training_slowdown.policy's `CONSOLE`, one full
+    """The record's published slowdown at (c, k), by default the console's policy (training_slowdown.policy's `CONSOLE`, one full
     session of the reference model), `at`'s: Fit's c/(c − d) where it holds; else the slowdown
     `calculator.slowdown` gives and what it says binds: `products` where the theorem's count exceeds 1, `partial`
-    where a kind is unmeasured (ρ is then only a lower bound); None (binding `unmeasured`) where the record gives
+    where a kind is unmeasured (the record's slowdown is then only a lower bound); None (binding `unmeasured`) where the record gives
     none, with `why` saying so, never 1, which would read as no slowdown; else 1, binding `none` (the count is
     computed and not above 1: the floor sets that 1). Beside it what it rests on (`RESTS_ON_CELL`; where the products
     term binds, `he_rests_on`, naming the subset of M that binds with its F, (H) with its β and (E) with its b_y),
@@ -711,7 +711,7 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
 
     v = at(m, c, k)
     b = v["bound"]
-    rho, partial, why = v["rho"], False, None
+    slowdown, partial, why = v["rho"], False, None
     off = uncomputed(b)
     if v["fit"]:
         binding = "fit"
@@ -726,8 +726,8 @@ def published(m: Measured, c: float | None = None, k: float | None = None) -> di
         binding = "none"
     he = b["inputs"]["products"]
     products = he_rests_on(he) if b["terms"]["products"] is not None else None
-    return {"label": f"{THE_CODE} {VERSION}", "rho": rho, "binding_kind": binding,
-            "rests_on": products if binding == "products" else RESTS_ON_CELL["unmeasured" if rho is None else binding],
+    return {"label": f"{THE_CODE} {VERSION}", "rho": slowdown, "binding_kind": binding,
+            "rests_on": products if binding == "products" else RESTS_ON_CELL["unmeasured" if slowdown is None else binding],
             "products_rests_on": products, "partial": partial, "why": why, "terms": dict(b["terms"]),
             "sensitivities": {name: b["sensitivities"][name] for name in CELL_SENSITIVITIES},
             "capture_code": he.get("capture_code")}
@@ -915,7 +915,7 @@ def complete(f: dict, row: dict, shape: dict) -> Measured:
         raise ValueError(f"tail share {t} is not in [0, 1)")
     u1 = f["u1_bits"] if f.get("u1_bits") is not None else (f["u"][-1][1] if f.get("u") else out["delta_bits"])
     if u1 is None:
-        raise ValueError("no update profile and no update code: rho is unmeasured")
+        raise ValueError("no update profile and no update code: the record's slowdown is unmeasured")
     u, u_in = tail(u1, t)
     for name, default, a, how in (("u", u, "A1", "done reading no update bits, the changed update even over the rest"),
                                   ("u_in", u_in, "A1", "u_in jumps to the changed layers' full update at once")):

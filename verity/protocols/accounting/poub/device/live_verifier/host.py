@@ -170,7 +170,7 @@ PRO 6000 has 96 GB of HBM)."""
 STORE_INT = re.compile(r"[1-9][0-9]{0,7}")
 MODEL_PINS = Path("verity/protocols/accounting/pouw/verifier/lean/check/models.json")
 """Core's pin of each model role, in the pinned tree: a bound run's `verifier.py --pin`."""
-PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.verifier.wipe_party", 47611),
+PARTIES = {"wipe_party": ("wipe", "verity.protocols.accounting.pous.device.wipe_challenger", 47611),
            "challenger_party": ("pous", "verity.protocols.accounting.pous.device.challenger_party", 47610),
            "bw_party": ("bw", "verity.protocols.accounting.poub.verifier.p2_parties", 47612)}
 PARTY_FIXED = {"bw_party": ["--registration", "verity/protocols/accounting/poub/verifier/bandwidth-mem69-v2.json"]}
@@ -190,7 +190,7 @@ COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
 COMPOSE_ANSWER_BYTES = 64 << 20
 """The most of its $OUT a compose answers with, in bytes; a larger file is named with its size, not sent."""
-SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock/verifier/lean/.lake/build/bin/vstar-recursive")
+SAMPLED_EXE = Path("verity/protocols/proofs/spot_flock_recursion/verifier/lean/.lake/build/bin/vstar-recursive")
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
 WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",

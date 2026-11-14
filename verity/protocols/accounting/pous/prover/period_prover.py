@@ -62,6 +62,7 @@ from verity.protocols.accounting.pous.verifier.period import (
     serve,
     setup_case,
     setup_inputs,
+    unjudged,
 )
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 
@@ -336,10 +337,12 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     which the caller that starts the run hands in, the runtime's `Side.of`; on this node by default, a process whose key
     and session log are beside the periods) and the prover is here, answering it in `session`
     (`challenger_prover.session`, which the caller hands in too). With `pous-run-protocol` and `pous-setup` among the
-    period's tools, the Lean verifier answers and must agree with the Python; it writes `out/pous.case.json` (onsite's
-    PoUS case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each
-    party, and whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
-    `period.json`'s `deployment`), go in `pous.json` and in an accepted answer's profile (`placement`)."""
+    period's tools, the Lean verifier answers and must agree with the Python; without `pous-run-protocol` the Python's
+    reject or undecided stands and its accept is undecided (`unjudged`). It writes `out/pous.case.json` (onsite's PoUS
+    case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each party,
+    whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
+    `period.json`'s `deployment`), and that setup was checked by the developer, not the auditor
+    (`challenger_session.SETUP`), go in `pous.json` and in an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
@@ -367,6 +370,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
         if {k: v for k, v in lean["run"].items() if k != "reason"} != {k: v for k, v in answer.items() if k != "reason"}:
             raise RuntimeError(f"pous-run-protocol answered {lean['run']}, the Python {answer}")
         answer = lean["run"]
+    else:
+        answer = unjudged(answer)
     if fresh and "pous-setup" in tools:
         lean["setup"] = serve(tools["pous-setup"], [period.setup_case])[0]
         if lean["setup"]["verdict"] != "accept":

@@ -213,8 +213,6 @@ protocol = true
 path = "verity/protocols/proofs/spot_flock_recursion/"
 means = "SPOT[Flock] composed with recursion: the recursive audit, on spot_flock and recursion; nothing below uses it"
 protocol = true
-owner = "proofs"
-day = "2026-11-15"
 
 [[tree]]
 path = "verity/protocols/accounting/pouw/"
@@ -321,10 +319,10 @@ day = "2026-11-15"
 
 [[not_yet]]
 path = "infra/"
-to = "the platform repository, with tools/research, tools/agent-guard and tools/move"
+to = "the platform repository (compute-verification/infra), with tools/research and tools/agent-guard; tools/move stays here, its maps being this tree's records"
 owner = "infra"
-day = "2026-11-20"
-note = "the day is top's, set 14 Nov: after the layout and the dashboard; infra confirms or corrects it"
+day = "2026-11-27"
+note = "infra's days, 14 Nov: copied there with its history by 20 Nov, cut from here 27 Nov if architecture is on main by 16 Nov and the machines' read access is settled by 17 Nov"
 
 # ---- not ruled -----------------------------------------------------------------------------------------------------
 

@@ -564,7 +564,7 @@ def project(census: dict, slots: int, prompt: int, outputs: int, target: str = "
         raise ValueError(f"the probe's token selects are group units of {sorted(groups)} logits, not one count")
     out = []
     for u in rest:
-        lab, n = CS.projected(u.label, u.n, at, to)
+        lab, n = CS.projected(u.label, u.n, at, to, CS.label(SS.bridge(to.scan, to.prompt)))
         if CS.placed(u.label, 1, at.positions) is not None:
             u = _slot_unit(u, lab, at, to, next(iter(groups), None))
         out.append(replace(u, label=lab, n=slots * n))

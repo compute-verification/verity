@@ -41,7 +41,7 @@ are held to, so what a row is declared to hold is the same under any order.
 
 @[expose] public section
 
-namespace NciCheck.RecordText
+namespace InferenceOnlyCheck.RecordText
 
 open Lean (Json toJson)
 open Flock.Program
@@ -564,4 +564,4 @@ def declared (P : Prog) (doc : Json) (r : Row) : Option Declared :=
     | .error _ => none
   | _, _ => none
 
-end NciCheck.RecordText
+end InferenceOnlyCheck.RecordText

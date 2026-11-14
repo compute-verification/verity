@@ -115,6 +115,7 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     memo = _census.setdefault(program, {})
     if boolean not in memo:
         from verity_vllm.definitions.boolean import boolean_version
+        import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 

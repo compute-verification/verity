@@ -18,7 +18,7 @@ through an opened reader, registered weights for weight slices), committed in M0
 The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": <a rate> | "subset:K" | "stratified:K" |
 "work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?:
 {<descriptor id>: cap}, "row_tables"?: true, "zk"?: true, "partition_digest"?}``, a rate (`law_of`) resolved over the window's population
-(`service.params_law`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
+(`service.params_sampling_design`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
 transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
 stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
 the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
@@ -426,7 +426,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     table = work_table_of(law, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    law, table = SV.params_law(law["rate"], program, query, table) if "rate" in law else (law, table)
+    law, table = SV.params_sampling_design(law["rate"], program, query, table) if "rate" in law else (law, table)
     window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
