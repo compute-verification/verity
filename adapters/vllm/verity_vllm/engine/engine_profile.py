@@ -29,8 +29,6 @@ __all__ = ["ENGINE_SEED", "apply_env", "checkpoint_for", "engine_kwargs", "profi
 
 logger = init_logger(__name__)
 
-DECLARED_ENV = env.ENGINE
-
 MAX_MODEL_LEN = 4096
 GPU_MEMORY_UTILIZATION = 0.80
 
