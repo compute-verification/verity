@@ -25,8 +25,8 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as W
 from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import SM120
 
-# the clear audit is a reference tool (verity/protocols/accounting/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "clear"))
+# the clear audit is a reference tool (verity/protocols/accounting/pouw/prover/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "prover" / "clear"))
 from clear_audit import Prover  # noqa: E402
 import clear_work as CW  # noqa: E402
 

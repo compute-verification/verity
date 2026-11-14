@@ -3,7 +3,7 @@
 window, and its verifier is the Lean (`verity/protocols/accounting/pouw/verifier/lean/check`, `pouw.verifier`).  Benchmarks
 replay recorded clear runs through it (`pearl_c_vllm/verify_run.py`, `pearl_c4/replay.py`), the schemes' tests run their
 end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are difftested against `Sampled.select` and
-`draw_coin`.  Each module here has two names: `verity.protocols.accounting.pouw.clear.clear_audit`, and the bare `clear_audit` for
+`draw_coin`.  Each module here has two names: `verity.protocols.accounting.pouw.prover.clear.clear_audit`, and the bare `clear_audit` for
 a caller that puts this directory on ``sys.path``.  A caller keeps to one of the two: they are two copies of every class
 here, and `Verifier.audit` tells a `Sampled` by its class.
 
@@ -45,9 +45,10 @@ from verity.protocols.accounting.pouw.verifier.coins import Challenger, coin_rea
 from verity.protocols.accounting.pouw.verifier.protocol import Certificate, Context, DomainError, PoUWScheme, Tile
 from verity.errors import ProtocolError
 from verity.commitments import Commitment, CommitmentDomain, MerkleTree, Opening, VerificationLimits, verify_opening
+from verity.commitments.domains import POUW_AUDIT_KEY
 from verity.commitments.randomness import derive
 
-AUDIT_DOMAIN = "verity/pouw/audit/v1"
+AUDIT_DOMAIN = POUW_AUDIT_KEY
 
 
 def commitment_hash(scheme: PoUWScheme) -> str:

@@ -162,8 +162,8 @@ gate_step() {
   local name=$1 verb=$2 mem=(--mem-gb "$3" --mem-wait 3600)
   shift 3
   [ -z "$DRY" ] && [ "$GATE_MEM" != 0 ] || mem=()
-  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" "${GATE_ENV[@]}" "${mem[@]}" "$@" \
-    -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
+  launch "$name" --on "$GATE_ON" --cwd clone --send "$HERE/gate.sh" --send "$HERE/main_line.sh" "${GATE_ENV[@]}" \
+    "${mem[@]}" "$@" -- bash -lc "bash \"\$RESEARCH_RUN_DIR/inputs/gate.sh\" $verb"
 }
 
 if [ "$VERB" = whatif ]; then

@@ -470,6 +470,24 @@ def test_a_measurement_with_no_why_is_written_byte_for_byte_as_it_was_and_one_wi
     assert check.valid and check.errors == []
 
 
+def test_a_measurement_carries_its_benchmarks_extra_keys_and_none_that_the_entry_already_means(tmp_path, no_gpu):
+    from research import result as research_result
+
+    w = kit.writer(tmp_path)
+    held = w.measurement("share", 0.12, "of the read rate", target=0.14, verdict="within target; the verifier held no "
+                         "checkpoint", mark="measured", extra={"bound": False})
+    assert held["bound"] is False and list(held)[-1] == "bound"
+    assert "bound" not in w.measurement("bare", 0.12, "of the read rate", mark="measured")
+    for key in ("value", "verdict", "mark", "why", 3):
+        with pytest.raises(ValueError, match="already has a meaning for"):
+            w.measurement(f"clash {key}", 1, "MAC", mark="measured", extra={key: False})
+    with pytest.raises(ValueError, match="is a JSON value"):
+        w.measurement("nan", 1, "MAC", mark="measured", extra={"bound": math.nan})
+    doc = _result(tmp_path)
+    assert [m["name"] for m in doc["measurements"]] == ["share", "bare"]
+    assert research_result.check_doc(tmp_path, doc, RUN).valid
+
+
 def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_the_kit():
     from verity_bench import overhead
 

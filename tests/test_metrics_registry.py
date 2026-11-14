@@ -1,8 +1,8 @@
 """Each benchmark declares its numbers in a `metrics.toml` beside the script its command runs (`benchmarks/README.md`'s
 "Metrics"): every metric once across all those files, with an id no other row has, under its owner's prefix, an owner
-the handle registry knows, a direction, and a command whose first script sits under the declaring file's directory and
-whose script's directory records the metric under its id. A whole-tree invariant, since it reads the handle registry
-and the benchmarks the commands run."""
+the handle registry knows and whose `owns` there covers the declaring file, a direction, and a command whose first
+script sits under the declaring file's directory and whose script's directory records the metric under its id. A
+whole-tree invariant, since it reads the handle registry and the benchmarks the commands run."""
 from __future__ import annotations
 
 import json
@@ -82,8 +82,20 @@ def _problems(m: dict, handles: set[str], where: str) -> list[str]:
     return out
 
 
+def _unowned(f: str, m: dict, reg: dict) -> list[str]:
+    """Whether row `m`'s owner owns its file `f`, the one the longest `owns` entry covering it names, with the fix."""
+    from research.slack import owner
+
+    holder, want = owner(reg, f), m.get("owner")
+    if holder == want or want not in {h["handle"] for h in reg["handles"]}:
+        return []
+    by = f"@{holder}'s" if holder else "no handle's"
+    return [f"its file is {by} by {HANDLES}'s longest `owns` entry covering it: add {f!r} to @{want}'s `owns` there"]
+
+
 def test_every_metric_is_declared_once_by_a_known_owner_beside_its_producing_script() -> None:
-    handles = {h["handle"] for h in json.loads((ROOT / HANDLES).read_text(encoding="utf-8"))["handles"]}
+    reg = json.loads((ROOT / HANDLES).read_text(encoding="utf-8"))
+    handles = {h["handle"] for h in reg["handles"]}
     files = _files()
     assert files, f"no {NAME} under {', '.join(TREES)}: the Metrics tab would show nothing"
     rows, broken = _metrics(files)
@@ -92,7 +104,7 @@ def test_every_metric_is_declared_once_by_a_known_owner_beside_its_producing_scr
     for f, m in rows:
         declared.setdefault(str(m.get("id", "?")), []).append(f)
     repeated = [f"  {i}: declared in {', '.join(fs)}; keep one row\n" for i, fs in sorted(declared.items()) if len(fs) > 1]
-    off = [f"  {f}: {m.get('id', '?')}: {p}" for f, m in rows for p in _problems(m, handles, where[f])]
+    off = [f"  {f}: {m.get('id', '?')}: {p}" for f, m in rows for p in _problems(m, handles, where[f]) + _unowned(f, m, reg)]
     assert not (broken or repeated or off), (
         "rows of the metrics.toml files break benchmarks/README.md's \"Metrics\" (fix the row):\n"
         + "\n".join(broken) + ("\n" if broken else "") + "".join(repeated) + "\n".join(off))
@@ -131,3 +143,19 @@ def test_a_row_whose_script_is_under_demos_sits_beside_it() -> None:
     assert _problems(row, {"vllm"}, "benchmarks/serve_tax") == [
         "its command's script demos/vllm/minutes.py is not under benchmarks/serve_tax/: move the row to "
         "demos/vllm/metrics.toml, beside its script"]
+
+
+def test_a_row_in_a_file_another_handle_owns_is_refused() -> None:
+    f = "benchmarks/serve_tax/metrics.toml"
+    reg = {"handles": [{"handle": "proofs", "owns": ["benchmarks/serve_tax/"]},
+                       {"handle": "vllm", "owns": ["demos/vllm/"]}]}
+    fix = f"add {f!r} to @vllm's `owns` there"
+    assert _unowned(f, {"owner": "proofs"}, reg) == []
+    assert _unowned(f, {"owner": "vllm"}, reg) == [
+        f"its file is @proofs's by {HANDLES}'s longest `owns` entry covering it: {fix}"]
+    reg["handles"][1]["owns"].append(f)
+    assert _unowned(f, {"owner": "vllm"}, reg) == []
+    assert _unowned("benchmarks/tree/metrics.toml", {"owner": "vllm"}, reg) == [
+        f"its file is no handle's by {HANDLES}'s longest `owns` entry covering it: "
+        "add 'benchmarks/tree/metrics.toml' to @vllm's `owns` there"]
+    assert _unowned(f, {"owner": "nobody"}, reg) == []
