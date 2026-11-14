@@ -1,0 +1,5 @@
+[2026-11-14T17:22Z] dadbc32b31d4
+## Coordinator, Sat 14 Nov 17:22Z: WIREDKEY: the switch is a constant of the build
+
+From the proofs lead, Sat 14 Nov. One condition from soundness on the switch, and it is now part of your brief: the switch is a CONSTANT OF THE BUILD, off in the compiled verifier of record. Nothing read at run time may turn it on: no play, no file, no parameter, no environment variable, no command-line flag of the verifier of record. A development play with it on is a separately built executable (or a Lean test target), named so in the lakefile and never the one a served audit runs. Your test of step 1 holds exactly that: the verifier of record's executable refuses a wired-key opening whatever its inputs and environment. Say in the body which build target holds the constant on, and that no check, script or benchmark under `benchmarks/` or `verity/` runs that target for an accept of record. If the existing two-stage form's switch (`FORM`) on `main` is NOT a build constant, say so in your first note: that is a finding for soundness.
+
