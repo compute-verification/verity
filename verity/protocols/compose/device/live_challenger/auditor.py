@@ -246,12 +246,12 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   The warden writes to `witness/` (0700): its three records, `certified.jsonl` (each record's head and certifier salt
   with its certificate), each row registration whole with its cost (`cells.jsonl`, the cells', and `rows.jsonl`,
   the connection rows', a line a registration), a load's registrations whole (`load.json`), the cells' salts
-  (each link-window's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
+  (each registration's rows' and wiring's), the traffic, the client's log, the check, the rehearsal's own output
   (`rehearse.log`, its stdout and stderr: free text, whose last line prints the registrations' cost) and its
   tunnels' (`tunnel.log`, what each `ssh` prints: free text, a line for each connection the peer's port refused),
   all the prover's. Its unit publishes to `out/` only what isn't:
-  `deployment.json` (the warden's key, session and schedule, `DEPLOYMENT_PUBLIC`: where the relay listened and
-  reached the peer, and the origin on the device's raw clock, stay in the witness's copy), a `--window-per-group`
+  `deployment.json` (the network certifier's key, session and schedule, `DEPLOYMENT_PUBLIC`: where the relay listened
+  and reached the peer, and the origin on the device's raw clock, stay in the witness's copy), a `--window-per-group`
   run's `groups.json`, and of a run its check accepted the lines: `certificates.jsonl`
   (the records' certificates alone), `cells-certificates.jsonl` and `rows-certificates.jsonl` (each row
   registration's certificate alone, `ROW_CERTIFICATES`; a certificate's fields are the one list
@@ -358,7 +358,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   its end carries the store's record as `out/store.json` holds it (`store`, `STORE_PUBLIC`: written or present,
   the shape and what the shape fixes; or the one word it was refused in, `LOAD_REFUSED`), and the record as the
   write left it and what the write printed (`rehearse.log`) are in its `witness/`. A request the gate refuses for
-  the store says the word too, never the store's path. `load-relay` is a warden rehearsal (all
+  the store says the word too, never the store's path. `load-relay` is a rehearsal of the same kind (all
   of `warden-rehearse`'s flags) with the load first, run by the same warden: the gate refuses it unless the store's
   record of `--shape` is interface 1's (`load_relay.read_store`), `--program` is the reading program's digest and
   `--minutes` covers `load_minutes` (the stream and its witness at `LOAD_RATE`, and `LOAD_READY_S`) and then the
@@ -385,8 +385,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   request says otherwise; recorded in every request and passed on every one. `certifier_serve.load_key` makes each
   key's 2^H one-time keys in eight processes, minutes a key at 20 (`KEYGEN_LEAVES_S`), within the run's `--minutes`:
   a certifier rehearsal makes two keys (the certifier's and the challenger's) and a warden rehearsal one, which
-  `warden_minutes` counts. A warden rehearsal's key signs a load's heads, then its session's start
-  (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures a link-window, and its signer refuses
+  `warden_minutes` counts. That one key signs a load's heads, then its session's start
+  (`START_LEAVES`), then `WARDEN_WINDOW_LEAVES` one-time signatures an execution phase, and its signer refuses
   every window past its 2^H: so a request whose `warden_windows` its height can't sign is refused, with the least
   height that can (`warden_height`; the gate's most requests at the scan's schedule take 13). The rehearsal samples
   each serve's session itself (32 fresh random bytes, `--session`), as the challenger it plays: the challenger here
@@ -547,7 +547,7 @@ WARDEN_PROMPT_REQUESTS = (1, WARDEN_REQUESTS[1])
 WARDEN_PROMPT_TOKENS = (1, SCAN_CLASSES[SCAN_CLASS][0] - 1)
 #: the prompts' file in `witness/`, the prover's: `warden_serve.py rehearse --prompts` reads it
 PROMPTS = "prompts.json"
-#: what a warden rehearsal publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
+#: what a network certifier run publishes in `out/`, beside its certificates (`certificates.jsonl`, `ROW_CERTIFICATES`)
 #: and the cells' registrations less their private keys (`ROW_REGISTRATIONS`);
 #: everything else `warden_serve.py rehearse` writes, what it prints (`rehearse.log`) and what the run's tunnels
 #: print (`tunnel.log`) are witness and stay in `witness/`, which `fetch` gives the run's own lane alone.
@@ -1748,7 +1748,7 @@ def warden_windows(requests: int, scan: bool = True, bucket_ms: int = SCAN["--bu
 
 def warden_height(windows: int, heads: int = 0) -> int:
     """The least key height, at least `REHEARSAL_HEIGHT`'s, whose 2^H one-time keys sign `heads` (a load's), then the
-    session's start (`START_LEAVES`) and then `windows` link-windows at `WARDEN_WINDOW_LEAVES` each."""
+    session's start (`START_LEAVES`) and then `windows` execution phases at `WARDEN_WINDOW_LEAVES` each."""
     return max(REHEARSAL_HEIGHT[0], (key_signatures(windows, heads) - 1).bit_length())
 
 
@@ -2815,9 +2815,9 @@ def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> lis
             "--out", str(out / "store.json")]
 
 
-#: the counts of `warden_serve.py check`'s summary a warden rehearsal's end carries: the schedule's execution phases,
-#: how many were certified and by how many certificates, the registered rows (cut to `CELL_ROWS`), a load's values
-#: and how many registered, and how its failed connections failed in `FAILED`'s words.
+#: the counts of `warden_serve.py check`'s summary a network certifier run's end carries: the schedule's execution
+#: phases, how many were certified and by how many certificates, the registered rows (cut to `CELL_ROWS`), a load's
+#: values and how many registered, and how its failed connections failed in `FAILED`'s words.
 #: None counts the traffic: the requests and how each ended, the cells, their bits, how many kept their bucket and
 #: the ticks' lateness follow what the peer sent and when, and stay in the witness's `check.json`. So does which
 #: execution phases the signer refused (`signer_refused`), which is the traffic's: the end holds no list and no
@@ -3146,7 +3146,7 @@ def certifier_run(host: Host, run: str, *, pinned: str,
     as `auditor`: open the tunnel to the peer's endpoint (and for a load one to its sink a stream,
     `sink_argv`), run the rehearsal through them for at most the request's minutes, close the tunnels, and write
     `end.json`. Every run's own output (`rehearse.log`) and its tunnels' (`tunnel.log`) are free text and go to
-    `witness/`. A warden rehearsal writes to `witness/` too, and its public outcome (`warden_outcome`) to `out/`
+    `witness/`. A network certifier run writes to `witness/` too, and its public outcome (`warden_outcome`) to `out/`
     and the end, its lines only when its check accepted; such a run's line of its certificates or its cells'
     registrations that its list doesn't rule (`CERTIFICATE_LINE`, `ROW_LINE`) ends it nonzero, the end saying
     `unruled` and the witness's `ENDED_WHY` the line and the fix, and so does an accepted check that counted another
