@@ -476,7 +476,7 @@ def test_the_shared_result_is_the_metric_verified_and_error_with_capacity_and_fr
 
 def h200_site(devices: int):
     """A registered site of one host with `devices` H200s, each naming the sheet its card file gives."""
-    from verity.hardware import site as S
+    from verity import device as S
     sheet = S.Sheet.of_file(C.cards.load("h200-sxm-141gb"))
     locs = [S.Loc("site", "site"), S.Loc("host", "host", "site")]
     locs += [S.Loc(f"gpu{i}", "device", "host", sheet=sheet.digest()) for i in range(devices)]
@@ -504,7 +504,7 @@ def test_capacity_is_the_registered_devices_peak_at_each_data_sheet_reading_time
 
 
 def test_capacity_refuses_hardware_it_cannot_read_a_peak_off(tmp_path):
-    from verity.hardware import site as S
+    from verity import device as S
     with pytest.raises(C.Unreadable, match="the registered hardware holds no device"):
         C.capacity(S.Site(), Fraction(1))
     one = h200_site(1)

@@ -31,7 +31,7 @@ import time
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, BinaryIO
 
-from verity.configuration.deploy.stream import Side
+from verity.runtime.stream import Side
 
 from . import audit, wire
 from . import coins as C
