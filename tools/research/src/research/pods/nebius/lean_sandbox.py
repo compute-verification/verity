@@ -270,7 +270,7 @@ def probe(spec: dict, environ=None, connect=_connect, resolve=_resolve, sudo=_su
     for name, fn in zip(PROBES, (user, privileges, sudo_, network, sockets, secrets, writes, private, environment, processes)):
         try:
             held, detail = fn()
-        except Exception as e:                                      # noqa: BLE001: a probe that can't answer didn't hold
+        except Exception as e:                                      # noqa: BLE001 (a probe that can't answer didn't hold)
             held, detail = False, f"the probe raised {type(e).__name__}: {e}"
         out.append({"probe": name, "held": bool(held), "detail": detail})
     return out
