@@ -22,6 +22,14 @@ KERNELS += ["verity/protocols/accounting/poub/**", "verity/protocols/accounting/
             "security/*/Poub/**", "security/*/Poub.lean", "security/*/Pous/**", "security/*/Pous.lean",
             "security/Proofs/Properties/Poub/**", "security/Proofs/Properties/Pous/**"] + [
             l for l in open("/tmp/kit/mem_files.txt").read().split() if not l.startswith("verity/protocols/proofs/")]
+import os
+OFFERED = ["adapters/vllm/**", "verity/protocols/accounting/pouw/**", "benchmarks/pouw/**", "benchmarks/network_traces/**",
+           "benchmarks/network_e2e/**", "benchmarks/slowdown/**", "verity/protocols/accounting/certifier/**",
+           "security/**/Certifier/**"]
+if os.environ.get("PIECE1"):
+    KERNELS += OFFERED
+# Lean's names and the caps of the Lean lints wait for the Lean part
+KERNELS += ["tests/test_lean_packages.py", "tests/test_lean_vocabulary.py", "tools/verity/lean/**"]
 PROOFS = ["verity/protocols/proofs/**", "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**",
           "security/*/Spot.lean", "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**",
           "security/Proofs/Properties/Spot.lean", "benchmarks/one_stage/**", "benchmarks/remote_session/**"]
@@ -229,6 +237,10 @@ patterns += [
     r"(?<=for test in )drawn(?=, proved)", r"(?<=D12 \(no )draw(?=\))",
     r"(?<=write_text\(\x22def )drawn(?=\()", r"(?<=\bagree\.)drawn\b", r"(?<=export\.json \()draw\b",
     r"(?<=\x22subset )draw(?=\x22)",
+    r"\bFlock_\w+", r"(?<=setup \()drawn(?=\))", r"(?<= \\\()drawn(?=\\\))", r"\btest_pouw_h1_drawn\b", r"(?<=[\x22\x27])Draw(?=[\x22\x27])",
+    r"\bdraw(?=\.work_table)", r"(?<=os\.urandom\(64\), )drawn\b", r"(?<=every )drawn(?= instance that passed)",
+    r"(?<=no )drawn(?= instance passed)", r"(?<=unseeded )draw\b",
+    r"(?<=\bp\.)drawn\b",
 ]
 held_pattern = r"(?<![\w])" + alternation(held) + r"(?![\w])"
 dotted_pattern = r"(?<![\w.])" + alternation(dotted) + r"(?![\w])"
@@ -293,6 +305,11 @@ keep_in["benchmarks/pouw/tests/test_budget.py"] = ["draws"]
 keep_in["benchmarks/training_slowdown/tests/test_resume.py"] = ["drawn"]
 # the served check's record of `draw` outcomes, read as `record.draw` by its kept caller
 keep_in["verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py"] = ["draw"]
+# seeded random data, another sense
+keep_in["benchmarks/multi_unit/stage.py"] = ["draw"]
+keep_in["benchmarks/flock_kernels/hm96_leaves.cu"] = ["draw"]
+# coins are flipped, not sampled: the runtime's coin sources (`draw(n)`), which memory accounting's and PoUW's tests call
+keep_in["verity/runtime/**"] = ["draw", "draws", "drawn"]
 
 # a bare name that keeps its spelling where it is defined (the proof system's tree, a [keep_in] file, a name the proof
 # system's tree reads from this side) keeps it where another module imports it or reads it through its module
@@ -332,6 +349,17 @@ for r in refs.files:
                 qualified.add(f"{alias}.{name}")
 # a module that keeps a bare word whole passes it on as a parameter and an attribute (`host(draw=16)`), so a module
 # importing it keeps the word too
+# a name an excluded file reads from a rewritten module keeps its spelling there
+NAME_FAMILY = re.compile(r"(?i)draw|drew")
+for r in refs.files:
+    if not excluded(r):
+        continue
+    for kind, alias, targets, name, _ in refs.uses(r):
+        if kind == "mod" or not NAME_FAMILY.search(name):
+            continue
+        for m in targets:
+            if not excluded(m) and name not in kept_words(m):
+                keep_in[m] = keep_in.get(m, []) + [name]
 graph = {m: set(ws) & BARE for m, ws in keep_in.items() if m in refs.files and not excluded(m)}
 for r in refs.files:
     if excluded(r):
@@ -483,7 +511,8 @@ L.append("""# The retired word "draw", in the Glossary's words: what `tools/move
 #   `benchmarks/one_stage/`, `benchmarks/remote_session/`), which proofs' workers rename, and every name, path and
 #   module of it another file spells, which follows proofs' map;
 # - the Lean: its files, and every name the Lean declares or spells wherever another file names it, which the family's
-#   Lean map renames after lean's names move;
+#   Lean map renames after lean's names move, with the Lean lints and tools that spell them (`tests/test_lean_packages.py`,
+#   `tests/test_lean_vocabulary.py`, `tools/verity/lean/`);
 # - what recorded data or another system reads ([keep]): data files (JSON, JSONL, CSV, TSV, text), record keys and reason
 #   codes (a quoted lowercase token), kebab-case names and flags with the attributes argparse makes of them, environment
 #   variables and other upper-case snake-case names, domain tags and format ids, coin labels (`draw/0`), a Definition's
@@ -494,6 +523,10 @@ L.append("""# The retired word "draw", in the Glossary's words: what `tools/move
 # - memory accounting's files (PoUB, PoUS, `benchmarks/pous/` and their Lean), which its own maps rename
 #   (`draw_bare_map.toml`, `draw_poub_*`), and every name of theirs another file reads; and the other names terms_map.toml
 #   keeps beside the name they would become ([keep_in]);
+""" + ("""# - the paths whose owners run their own map over them (`adapters/vllm/`, PoUW's protocol and `benchmarks/pouw/`, the
+#   network certifier's files and `benchmarks/network_traces/`, `network_e2e/`, `benchmarks/slowdown/`), and every name
+#   of theirs another file reads;
+""" if os.environ.get("PIECE1") else "") + """# - the deployment runtime (`verity/runtime/`), whose coin sources' `draw(n)` flips coins, which other lanes' tests call;
 # - the kernel Definitions' registry (`prims.py`, `b1.py`, `ref_prims.py`), whose source a manifest's digest hashes;
 # - records of what was (earlier maps, changelogs, the archive), the Glossary's table, the retired-words lints and their
 #   lists, fixtures, pinned and lock files.
@@ -501,27 +534,28 @@ L.append("""# The retired word "draw", in the Glossary's words: what `tools/move
 L.append("[words]")
 L += [f"{q(k)} = {q(v)}" for k, v in words]
 L.append("")
-L.append("# the PoUW budget's plan point, which would otherwise be the `Sample` that `Draw` becomes")
-L.append("[[words_in]]")
-L.append('files = ["benchmarks/pouw/budget.py"]')
-L.append('words = { "Sample" = "PlanPoint" }')
-L.append("")
-L.append("# the replay's sampling design, by the vLLM adapter's names for it")
-L.append("[[words_in]]")
-L.append('files = ["adapters/vllm/verity_vllm/pipeline/c2_replay.py", "adapters/vllm/verity_vllm/pipeline/replay_plan.py"]')
-L.append('words = { "draw_of" = "sampling_design_of" }')
-L.append("[[words_in]]")
-L.append('files = ["adapters/vllm/verity_vllm/check/replay/driver.py"]')
-L.append('words = { "DRAWS" = "DESIGNS", "draw" = "design" }')
-L.append("[[words_in]]")
-L.append('files = ["adapters/vllm/tests/pipeline/test_config_run.py"]')
-L.append('words = { "draw_of" = "sampling_design_of", "draw=" = "design=", "replay draw" = "replay design" }')
-L.append("")
-L.append("# the served check's sampled rows, by the vLLM adapter's name")
-L.append("[[words_in]]")
-L.append('files = ["adapters/vllm/verity_vllm/check/replay/served_check.py"]')
-L.append('words = { "_draw(" = "_sample_rows(" }')
-L.append("")
+if not os.environ.get("PIECE1"):
+    L.append("# the PoUW budget's plan point, which would otherwise be the `Sample` that `Draw` becomes")
+    L.append("[[words_in]]")
+    L.append('files = ["benchmarks/pouw/budget.py"]')
+    L.append('words = { "Sample" = "PlanPoint" }')
+    L.append("")
+    L.append("# the replay's sampling design, by the vLLM adapter's names for it")
+    L.append("[[words_in]]")
+    L.append('files = ["adapters/vllm/verity_vllm/pipeline/c2_replay.py", "adapters/vllm/verity_vllm/pipeline/replay_plan.py"]')
+    L.append('words = { "draw_of" = "sampling_design_of" }')
+    L.append("[[words_in]]")
+    L.append('files = ["adapters/vllm/verity_vllm/check/replay/driver.py"]')
+    L.append('words = { "DRAWS" = "DESIGNS", "draw" = "design" }')
+    L.append("[[words_in]]")
+    L.append('files = ["adapters/vllm/tests/pipeline/test_config_run.py"]')
+    L.append('words = { "draw_of" = "sampling_design_of", "draw=" = "design=", "replay draw" = "replay design" }')
+    L.append("")
+    L.append("# the served check's sampled rows, by the vLLM adapter's name")
+    L.append("[[words_in]]")
+    L.append('files = ["adapters/vllm/verity_vllm/check/replay/served_check.py"]')
+    L.append('words = { "_draw(" = "_sample_rows(" }')
+    L.append("")
 L.append("# the SHA-512 row engine's salts and seed tiles are derived from a key or a seed, not sampled")
 L.append("[[words_in]]")
 L.append('files = ["benchmarks/torch_gpu/sha512_rows/**", "verity/commitments/cuda/sha512_rows/**"]')
@@ -532,7 +566,7 @@ L.append("# Never rewritten: records of what was, the term source and the lints 
 L.append("# pinned and lock files; data files, which records and vectors are; the Lean; the proof system's own tree;")
 L.append("# `benchmarks/hash/`, whose Dither names kernels' own map renames; the registry files a digest hashes; and memory")
 L.append("# accounting's files, which its own maps rename")
-ex = RECORDS + DATA + LEAN + PROOFS + KERNELS
+ex = [g for g in RECORDS + DATA + LEAN + PROOFS + KERNELS if any(R._match(f, g) for f in files)]
 L.append("exclude = [" + ", ".join(q(g) for g in ex) + "]")
 L.append("")
 L.append("[keep]")

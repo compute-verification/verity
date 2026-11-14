@@ -1,6 +1,6 @@
 import io, os, re, subprocess, tokenize, sys
-A, B = "/tmp/kit/tipA", "/tmp/kit/tipB"
-moves = dict(l.rstrip("\n").split("\t")[::-1] for l in open("/tmp/kit/m2_moves.tsv"))
+A, B = os.environ.get("MSG_A", "/tmp/kit/tipA"), os.environ.get("MSG_B", "/tmp/kit/tipB")
+moves = dict(l.rstrip("\n").split("\t")[::-1] for l in open(os.environ.get("MOVES", "/tmp/kit/m2_moves.tsv")) if l.strip())
 def is_test(p): return "/tests/" in p or os.path.basename(p).startswith("test_") or p.startswith("tests/")
 def corpus(root):
     fs = subprocess.run(["git", "ls-files", "*.py", "*.lean"], cwd=root, capture_output=True, text=True).stdout.split()
