@@ -22,12 +22,12 @@ guarantee or of the model's accounting:
 * incorrect proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' sample
   establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
 * the memory cap bounds the residual and the declared computation on the monitored servers together,
-  `M_r + M_d ≤ μ κ C/2`: `DampenerWindows` derives it, with `μ` the memory cap and one window of rounding, from the
+  `M_r + M_d ≤ μ κ C/2`: `DampenerServerBlocks` derives it, with `μ` the memory cap and one window of rounding, from the
   servers' windows, each holding at most `K Λ(K)/b_a` counted multiplications: the memory cap over threads
   (`Accounting.Guarantees.Actual.ThreadedRuntime`) at a whole-tick window `ω = L`, when one threading of the servers'
   computation counts the residual and the declared computation together.
 
-`Dampener` takes all five as hypotheses; `DampenerWindows` derives the memory cap's from the windows; `DampenerThreaded`
+`Dampener` takes all five as hypotheses; `DampenerServerBlocks` derives the memory cap's from the windows; `DampenerThreaded`
 also discharges the declared computation's with `ThreadedThrottled`, and `DampenerThreadedSlots` with
 `ThreadedThrottledSlots`, weights charged per parameter slot.
 -/
@@ -61,7 +61,7 @@ holds at most `K Λ(K)/b_a` counted multiplications of the residual and the decl
 `b_a (M_r + M_d) ≤ n ⌈H/L⌉ K Λ(K)`, and `Λ(2R)` is in its quadratic regime (`e ≤ reuse · 2R/(4 d b_w)`), then
 `η ≤ s + min(r, μ (1 + L/H)) + ν + χ` with `μ = 2 reuse · R α/(κ d b_w b_a)`: the factor `1 + L/H` is the last window,
 cut at `H`, and is 1 + R/(αFH). -/
-def DampenerWindows : Prop :=
+def DampenerServerBlocks : Prop :=
   ∀ (κ C U W ρ χ : ℝ) (M Mu Mr Md Mx n : ℕ) (F H L R α reuse e d b_w b_a : ℝ),
     0 < κ → 0 < C → 0 ≤ U → 0 < H → 0 < L → 0 ≤ R → 0 ≤ α → 0 ≤ reuse → 0 < d → 0 < b_w → 0 < b_a →
     M ≤ Mu + Mr + Md + Mx →
@@ -72,7 +72,7 @@ def DampenerWindows : Prop :=
         unregisteredShare C U + min (residualShare W C) (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) +
           declaredShare κ ρ C U + χ
 
-/-- **The compute dampener over the inference-only policy's thread bound.** As `DampenerWindows`, with the declared
+/-- **The compute dampener over the inference-only policy's thread bound.** As `DampenerServerBlocks`, with the declared
 computation's bound proved: the declared circuit `d` contains the reference training circuit `r` (`Mc`), threaded by `T`
 and with incompressible weights, and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
 reference circuit's fresh input (`ThetaRegistered`), so its counted multiplications `|T.M|` number at most
@@ -88,8 +88,8 @@ def DampenerThreaded : Prop :=
     Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → Assumptions.WindowLength α F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    Assumptions.WindowsHold T Mr n α F H L R b_w b_a dd e →
+    n * F * H ≤ C → Assumptions.ServerBlockLength α F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    Assumptions.ServerBlocksHold T Mr n α F H L R b_w b_a dd e →
       efficiency κ M C U ≤
         unregisteredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ
@@ -107,8 +107,8 @@ def DampenerThreadedSlots : Prop :=
     Assumptions.WeightsIncompressibleSlots r T σ Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     M ≤ Mu + Mr + T.M.card + Mx →
     (Mu : ℝ) ≤ κ * U / 2 → (Mr : ℝ) ≤ κ * (C - W) / 2 → (Mx : ℝ) ≤ κ * χ * (C + U) / 2 →
-    n * F * H ≤ C → Assumptions.WindowLength α F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
-    Assumptions.WindowsHold T Mr n α F H L R b_w b_a dd e →
+    n * F * H ≤ C → Assumptions.ServerBlockLength α F L R → (e : ℝ) ≤ T.reuse * (2 * R) / (4 * dd * b_w) →
+    Assumptions.ServerBlocksHold T Mr n α F H L R b_w b_a dd e →
       efficiency κ M C U ≤
         unregisteredShare C U + min (residualShare W C) (memoryCap T.reuse κ R α dd b_w b_a * (1 + L / H)) +
           declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ

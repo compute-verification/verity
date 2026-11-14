@@ -43,9 +43,9 @@ open Pouw.GameStatements Finset
 
 /-- **Work between the salt and the deadline.** Under TT(g₀), the `Ω_max` bound and an honest clock, for every in-domain
 workload, adversary, timed run, deadline `td` and budget: if the run spends at most `T` after the salt's release `ts` and
-by `td`, and makes at most `q` oracle calls, then the audit with `t` work-weighted samples accepts a transcript received
+by `td`, and makes at most `q` oracle calls, then the audit with `t` work-weighted samples accepts a trace received
 by `td` while `T < (1 − g)(1 − ε_s)·W`, `g = 1 − (1 − g₀)/Ω_max`, and the run doesn't break SHA-512, with probability
-at most `(1 − ε_s)^t + δ(q, N)`. That is, except with that probability, an accepted transcript means at least
+at most `(1 − ε_s)^t + δ(q, N)`. That is, except with that probability, an accepted trace means at least
 `(1 − g)(1 − ε_s)·W` of cost spent between the salt and the deadline, or a collision among the run's own SHA-512
 inputs. -/
 def WorkBetweenSaltAndDeadline : Prop :=
@@ -59,14 +59,14 @@ def WorkBetweenSaltAndDeadline : Prop :=
     Assumptions.HonestClock (CM.adversaries U) A run td →
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.BoundedBy U run td T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-          AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - reductionGap g₀ Ωmax) * (1 - εs) * totalWref P U.layout ∧ ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **Remote's exhaustion: the spare capacity at the deadline.** A declared fleet of capacity `C` per unit of time can
 spend `C·(td − ts)` between the salt's release and the deadline. If the run's spending in that window and undeclared
 work `Y` together fit in it on every oracle and salt, then, except with probability `(1 − ε_s)^t + δ(q, N)`, an
-accepted transcript received by `td` from a run that doesn't break SHA-512 leaves `Y ≤ C·(td − ts) − (1 − g)(1 − ε_s)·W`: the undeclared spare capacity is at
+accepted trace received by `td` from a run that doesn't break SHA-512 leaves `Y ≤ C·(td − ts) − (1 − g)(1 − ε_s)·W`: the undeclared spare capacity is at
 most the fleet's capacity less the work the audit certifies. -/
 def SpareCapacityAtDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
@@ -82,14 +82,14 @@ def SpareCapacityAtDeadline : Prop :=
       A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-          AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           C * (td - run.ts) - (1 - reductionGap g₀ Ωmax) * (1 - εs) * totalWref P U.layout < Y ∧
           ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **Pearl-C's sampled audit by the deadline.** `GGapSampled` and an honest clock give, for every in-domain workload,
 adversary, timed run and deadline `td`, every run spending at most `T` after the salt's release and by `td` with at most
-`q` oracle calls, and every sample weighted by the tiles' `W_ref`: the audit accepts a transcript received by `td` while
+`q` oracle calls, and every sample weighted by the tiles' `W_ref`: the audit accepts a trace received by `td` while
 `T` is below `1 − g` of the claimed work less `ε_s` of the layout's with probability at most `(1 − ε_s)^t + δ(q, N)`. -/
 def PearlCSampledByDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S)
@@ -101,9 +101,9 @@ def PearlCSampledByDeadline : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - g) * (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
+          T < (1 - g) * (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 8192³**: `PearlCSampledByDeadline` at
@@ -127,10 +127,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((1648180439 / 446072750000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 16384³**: `PearlCSampledByDeadline` at
@@ -152,10 +152,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((1058166877 / 294158650000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Qwen3-8B's served layout**:
@@ -177,10 +177,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((74663501 / 19190030000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Llama-3.1-8B's served layout**:
@@ -202,10 +202,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((3045273083 / 782596025000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 end Pouw.Guarantees

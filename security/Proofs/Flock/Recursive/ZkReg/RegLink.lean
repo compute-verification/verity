@@ -23,7 +23,7 @@ extracted opening and `wo c`, which a one-trial finder outputs (`regFinderZC`, a
 * `RegCRZC`, `regTermZC`: `cr/sha-512` for the registered-value finders of one prover at budget `qW` on every outcome,
   and its term `Q_s/(1 − ρ)·(qW²/2^513 + k/(eR_w))`, `Q_s = Σ_c π_c` as in `linkBoundZC`;
 * `zk_flock_regValsC_cr`: `Pr[accept ∧ a drawn unit reads a registered-value disagreement] ≤ ε_ks + δ_link + δ_reg`;
-  `zk_flock_regDrawnC_cr`: the same with a wrong sampled proof block counted too.
+  `zk_flock_regDrawnC_cr`: the same with a incorrect sampled proof block counted too.
 
 `qW` bounds the SHA-512 evaluations of one trial: a fresh run and at most `k` waits of at most `R_w` reruns each, so
 `t'(1 + k R_w)` at `t'` per run is an honest budget. Lean counts no evaluations; whoever instantiates `RegCRZC` states it.
@@ -93,7 +93,7 @@ noncomputable def analysisRegZC
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Reg × (Fin C.N → Bool)
-  wrong t := P.wrong t.2 ∪ regWrongZ A P planZ tab vb wo t.1 t.2
+  incorrect t := P.incorrect t.2 ∪ regWrongZ A P planZ tab vb wo t.1 t.2
   committed R τ := (R, Xc R τ)
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link := linkTermRegZC A Hs P planZ tab vb wo k
@@ -103,7 +103,7 @@ noncomputable def analysisRegZC
       fun T hc => ⟨hc, fun M _ hsat => by
         rcases Finset.mem_union.1 hu with hw | hw
         · by_contra hno
-          refine P.mem_wrong.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
+          refine P.mem_incorrect.1 hw (P.correct_congr (fun g hg => ?_) (hlow S R u hS M hsat))
           by_contra hne
           exact hno ⟨g, hg, Or.inl (Ne.symm hne)⟩
         · obtain ⟨g, hg, hcom, hne⟩ := (Finset.mem_filter.1 hw).2
@@ -520,7 +520,7 @@ theorem zk_flock_regValsC_cr (hA : A.Correct)
     exact add_le_add (add_le_add (ksAvgZC_le_strict A Hs planZ k (reg σ) (cont σ) hCR) le_rfl) le_rfl
 
 /-- **`zk_flock_regValsC_cr` with the incorrect proof blocks counted too**: on its assumptions,
-`Pr[accept ∧ a drawn unit is wrong or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
+`Pr[accept ∧ a drawn unit is incorrect or reads a wire disagreeing with its registered value] ≤ ε_ks + δ_link + δ_reg`, the
 event `analysisRegZC`'s at its committed transcript. -/
 theorem zk_flock_regDrawnC_cr (hA : A.Correct)
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
@@ -531,7 +531,7 @@ theorem zk_flock_regDrawnC_cr (hA : A.Correct)
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) (reg σ)) j (zcStrat A Hs planZ (cont σ ω)) qF qS)
     {qW : ℝ} (hW : RegCRZC A Hs P planZ tab vb wo (reg σ) (cont σ) k Rw qW) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw) ∪
           regWrongZ A P planZ tab vb wo (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgStrictZ planZ L k qF qS (reg σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) +

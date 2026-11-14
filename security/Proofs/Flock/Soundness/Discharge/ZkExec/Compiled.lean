@@ -37,7 +37,7 @@ That table's `sessionZC` is `ZkLink.batchedSessionZC` at the one-table plan (`se
 applies:
 
 * `zk_headline_exec_zc`: against any live prover, at any sampling design,
-  `Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`;
+  `Pr[flock-verify --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`;
 * `zk_headline_exec_zc_execOS`: the same at the live sample (`Law.execOS`, `drawWith`'s stratified sampling design) under A3
   (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
 
@@ -120,14 +120,14 @@ theorem zk_headline_exec_zc (hlow : LoweringSoundZK A P (planOne T) tab decode) 
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     let σ := simAuditZC A Hs T I wr opn dg dec one fin capOf N hdec τ
     prob (fun o => LiveAcceptsZK I o ∧
-        K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOf dg mPts N wr)) τ ≤
       L.miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
         ZkLink.linkBoundZC A Hs P (planOne T) tab vb k Rw M ρ t' (reg σ) (cont σ) := by
   intro σ
   have hB := ZkLink.zk_flock_countC A Hs P (planOne T) tab vb hlow hRw hM hρ hr hj ht K σ
   have hc := prob_cast (congrArg (audit L Reg) (sessionZC_repZ A Hs T))
-    (fun o => o.1 = true ∧ K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+    (fun o => o.1 = true ∧ K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
     (simAuditZK (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N
       (fun S R pts r => ZkLink.allInh_repZCAt A Hs (T S R) pts r) hdec τ)
   exact zk_headline_exec_one (repZ A Hs T) (outZ Hs T) (accZ T) I wr opn dg dec one fin capOf N L _ hdec τ _ _
@@ -150,7 +150,7 @@ theorem zk_headline_exec_zc_execOS (hlow : LoweringSoundZK A P (planOne T) tab d
       (liveOf dg mPts N wr))) :
     let σ := simAuditZC A Hs T I wr opn dg dec one fin capOf N hdec τ
     prob (fun o => LiveAcceptsZK I o ∧
-        K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
       (Law.stratified σs ks hks).miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
         ZkLink.linkBoundZC A Hs P (planOne T) tab vb k Rw M ρ t' (reg σ) (cont σ) :=

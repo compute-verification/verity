@@ -55,15 +55,15 @@ variable {n : ℕ}
 /-- **The design condition** with unit weights `π`: every set `B` fixed before the coins escapes
 with probability at most `exp(−Σ_{u ∈ B} π_u)`. -/
 def Design (L : Law n) (π : Fin n → ℝ) : Prop :=
-  ∀ B : Finset (Fin n), L.escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u))
+  ∀ B : Finset (Fin n), L.missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u))
 
 /-- The design condition pays for `exp(λ h(B))` when `λ h ≤ π`. -/
 theorem Design.escape_mul_le {L : Law n} {π h : Fin n → ℝ} {lam : ℝ} (hL : L.Design π)
     (hlam : ∀ u, lam * h u ≤ π u) (B : Finset (Fin n)) :
-    L.escape B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) ≤ 1 := by
+    L.missProb B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) ≤ 1 := by
   have hsum : lam * ∑ u ∈ B, h u ≤ ∑ u ∈ B, π u := by
     rw [Finset.mul_sum]; exact Finset.sum_le_sum fun u _ => hlam u
-  calc L.escape B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u))
+  calc L.missProb B * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u))
       ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u)) * ENNReal.ofReal (Real.exp (lam * ∑ u ∈ B, h u)) :=
         mul_le_mul_left (hL B) _
     _ = ENNReal.ofReal (Real.exp (-∑ u ∈ B, π u + lam * ∑ u ∈ B, h u)) := by
@@ -89,8 +89,8 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
     (bernoulli n num den).Design fun _ => (num : ℝ) / den := by
   intro B
   have hden : 0 < den := Nat.pos_of_ne_zero (NeZero.ne den)
-  show (bernoulli n num den).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
-  calc (bernoulli n num den).escape B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
+  show (bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (num : ℝ) / den))
+  calc (bernoulli n num den).missProb B = (((den - num : ℕ) : ℝ≥0∞) / den) ^ B.card := by
         rw [bernoulli_escape h, bernFactor_zero_div]
     _ ≤ ENNReal.ofReal (Real.exp (-((num : ℝ) / den))) ^ B.card :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp h hden) _
@@ -101,8 +101,8 @@ theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
 /-- A uniform `k`-subset of `n` meets the design condition with `π_u = k/n`. -/
 theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : (subset n k hk).Design fun _ => (k : ℝ) / n := by
   intro B
-  show (subset n k hk).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
-  calc (subset n k hk).escape B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := subset_escape hk B
+  show (subset n k hk).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k : ℝ) / n))
+  calc (subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := subset_escape hk B
     _ ≤ (((n - B.card : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞)) ^ k := choose_div_le_pow' hk hn
     _ ≤ ENNReal.ofReal (Real.exp (-((B.card : ℝ) / n))) ^ k :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp (by simpa using Finset.card_le_univ B) hn) _
@@ -114,7 +114,7 @@ theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : (subset n k hk).De
 theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) :
     (stratified σ k hk).Design fun u => (k (σ u) : ℝ) / (stratum σ (σ u)).card := by
   intro B
-  show (stratified σ k hk).escape B ≤
+  show (stratified σ k hk).missProb B ≤
     ENNReal.ofReal (Real.exp (-∑ u ∈ B, (k (σ u) : ℝ) / (stratum σ (σ u)).card))
   have hfac : ∀ s, (((stratum σ s).card - (B.filter (σ · = s)).card).choose (k s) : ℝ≥0∞) /
       ((stratum σ s).card.choose (k s) : ℝ≥0∞) ≤
@@ -146,19 +146,19 @@ theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
 theorem work_design {m : ℕ} (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < totalWork σ w) : (work σ w f K).Design fun u => (K : ℝ) * w (σ u) / totalWork σ w := by
   intro B
-  show (work σ w f K).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (K : ℝ) * w (σ u) / totalWork σ w))
+  show (work σ w f K).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, (K : ℝ) * w (σ u) / totalWork σ w))
   have hB : workOf σ w B ≤ totalWork σ w := Finset.sum_le_sum_of_subset (subset_univ B)
   have hsum : ∑ u ∈ B, (K : ℝ) * w (σ u) / totalWork σ w = K * ((workOf σ w B : ℝ) / totalWork σ w) := by
     rw [workOf, Nat.cast_sum, Finset.sum_div, Finset.mul_sum]
     exact Finset.sum_congr rfl fun u _ => mul_div_assoc _ _ _
-  calc (work σ w f K).escape B
+  calc (work σ w f K).missProb B
       ≤ (((totalWork σ w - workOf σ w B : ℕ) : ℝ≥0∞) / (totalWork σ w : ℝ≥0∞)) ^ K :=
         work_escape_le σ w f K hf hW B
     _ ≤ ENNReal.ofReal (Real.exp (-((workOf σ w B : ℝ) / totalWork σ w))) ^ K :=
         pow_le_pow_left₀ zero_le (natFrac_le_exp hB hW) _
     _ = _ := by rw [← ENNReal.ofReal_pow (Real.exp_pos _).le, ← Real.exp_nat_mul, hsum, mul_neg]
 
-/-- The Bernoulli escape rate per unit, `−ln(1 − q)` for `q = num/den`. -/
+/-- The Bernoulli missProb rate per unit, `−ln(1 − q)` for `q = num/den`. -/
 noncomputable def bernRate (num den : ℕ) : ℝ := -Real.log (((den - num : ℕ) : ℝ) / den)
 
 theorem bernRate_nonneg {num den : ℕ} (h : num < den) : 0 ≤ bernRate num den := by
@@ -186,7 +186,7 @@ theorem ofReal_exp_bernRate {num den : ℕ} (h : num < den) (k : ℕ) :
 theorem bernoulli_design_exact {num den : ℕ} [NeZero den] (h : num < den) :
     (bernoulli n num den).Design fun _ => bernRate num den := by
   intro B
-  show (bernoulli n num den).escape B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
+  show (bernoulli n num den).missProb B ≤ ENNReal.ofReal (Real.exp (-∑ u ∈ B, bernRate num den))
   refine le_of_eq ?_
   rw [bernoulli_escape h.le, Finset.sum_const, nsmul_eq_mul, ofReal_exp_bernRate h]
 
@@ -445,8 +445,8 @@ theorem oneShot_drawn (L : Law n) (B : Finset (Fin n)) : (oneShot L B).Drawn (fu
   by_cases hd : Disjoint (L.draw ω) B <;> simp [hd, pass_stop]
 
 theorem oneShot_prEv (L : Law n) (B : Finset (Fin n)) :
-    (oneShot L B).prEv (fun _ => 1) (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 = L.escape B := by
-  rw [oneShot, prEv_round, Verity.Law.escape, ← avg_ite_eq_prCoin]
+    (oneShot L B).prEv (fun _ => 1) (fun acc x => acc = true ∧ (B.card : ℝ) ≤ x) 0 = L.missProb B := by
+  rw [oneShot, prEv_round, Verity.Law.missProb, ← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω => ?_)
   by_cases hd : Disjoint (L.draw ω) B
   · have hE : decide (Disjoint (L.draw ω) B) = true ∧ (B.card : ℝ) ≤ 0 + ∑ u ∈ B, (1 : ℝ) :=

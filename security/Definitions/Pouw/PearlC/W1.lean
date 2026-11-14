@@ -596,7 +596,7 @@ def init (salt : List ℕ) (pr : CodeImage) (U : Workload) (act : ℕ → Codes)
 
 /-- The committed transcript of a final memory: every declared unit's activations (within its shape as the program
 left them, outside it as supplied), ticket words and useful words. -/
-def readout (U : Workload) (act : ℕ → Codes) (M : Mem) : Transcript := fun u =>
+def readout (U : Workload) (act : ℕ → Codes) (M : Mem) : Trace := fun u =>
   if u < U.layout.N then
     some ⟨fun i l => if i < (U.layout.shape u).m ∧ l < (U.layout.shape u).k then M (actAt u i l) else act u i l,
       fun i j => M (ticketAt u i j), fun i j => M (usefulAt u i j)⟩
@@ -610,7 +610,7 @@ variable {Q R S : Type}
 
 /-- A first fetch W1 does not charge: an activation within a correct unit's shape, or a weight row and column a correct
 unit of that weight reads. -/
-def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) (a : Addr) : Prop :=
+def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) (a : Addr) : Prop :=
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
   (a.1 = 4 ∧ x.1 ∈ correctSet P U H s τ ∧ y.1 < (U.layout.shape x.1).m ∧ y.2 < (U.layout.shape x.1).k) ∨

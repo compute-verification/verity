@@ -65,7 +65,7 @@ sampling block `S.W t`. Every field is a property of the deployed run:
 * `accepts_iff`: the period's sampled audit accepts exactly when flock-verify accepts every sampling block of the
   server-time block.
 * `wrong_eq`: the incorrect proof blocks of the period's partition in its committed trace are, in number, the block's
-  sampling blocks' incorrect proof blocks (`CarriedBlocks.wrongSet`: `wrongRegZ` in the trace fixed at registration, over the
+  sampling blocks' incorrect proof blocks (`CarriedBlocks.incorrectSet`: `incorrectRegZ` in the trace fixed at registration, over the
   key program's partition, each carried leaf read at its one value). This is the program-from-circuit correspondence (M1: the key program and its partition are
   the circuit `C`'s lowering and `r.parts`), which the bridge PRs land as `Lowers`/`progOf`/`partOf`; until then it is
   this field.
@@ -88,7 +88,7 @@ structure RealizesIntegrityOfIntegrityBlock {ι : Type} {d : Device ι} {α : Ty
   /-- the sampled audit accepts exactly when flock-verify accepts every sampling block of the server-time block -/
   accepts_iff : ∀ ξ, r.accepts .sampled ξ ↔ ∀ w ∈ record ξ, w.accepted
   /-- the period's incorrect proof blocks are its sampling blocks' (M1, the program-from-circuit correspondence) -/
-  wrong_eq : ∀ ξ, (r.parts.wrong (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.wrong).sum
+  wrong_eq : ∀ ξ, (r.parts.incorrect (r.trace ξ)).card = ((record ξ).map Flock.Guarantees.WindowRec.incorrect).sum
   /-- the partition's units are the block's sampling blocks' units -/
   units_eq : r.units = ∑ t ∈ S.sessions b, (S.W t).n
   /-- every unit of the partition has at least one gate -/

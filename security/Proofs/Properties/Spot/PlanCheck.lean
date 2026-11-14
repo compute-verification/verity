@@ -19,7 +19,7 @@ arithmetic:
 * `locBits_le_upper`: `locBits n K ≤ locBitsUpper n K`, with `log₂ e ≤ log2eUp` from `ln 2 > 0.6931471803`;
 * `rateCovers_sound`: a design's `rateCovers` gives `(1 − num/den)^(count + 1) < delta`, since `1 − q < e^{−q}`.
 
-The leak check is then `bern_certifies`, its count `bern_miss_lt`, and the work check the per-unit escape `∏ (1 − q_u) ≤ e^{−λ ∑ w_u / C}`.
+The leak check is then `bern_certifies`, its count `bern_miss_lt`, and the work check the per-unit missProb `∏ (1 − q_u) ≤ e^{−λ ∑ w_u / C}`.
 Each check passes at a design the planner emits (`_honest`), and each conclusion fails at a design a check accepting
 everything would pass (`_nontrivial`).
 -/
@@ -223,7 +223,7 @@ theorem leakCheckSound : LeakCheckSound := by
   push_cast
   linarith
 
-/-- Independent samples at `num / N` let more than `K` units escape with at most `(1 − num/N)^(K + 1)`. -/
+/-- Independent samples at `num / N` let more than `K` units missProb with at most `(1 − num/N)^(K + 1)`. -/
 theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
     (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) : (Law.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ := by
   have hN : (0 : ℝ) < N := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne N)
@@ -235,7 +235,7 @@ theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
     linarith
   have hδ : 0 < δ := lt_of_le_of_lt (pow_nonneg ht0 _) hesc
   have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
-      (Law.bernoulli n num N).escape B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
+      (Law.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
     rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (Law.escape_le_one _ B))
       (pow_nonneg ht0 _), FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal h]
@@ -391,7 +391,7 @@ theorem leakCountSound_nontrivial :
     ∀ k : ℕ, ¬ (Law.bernoulli 1 0 (k + 1)).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
   intro k h
   have he := Law.escape_le_miss (Law.bernoulli 1 0 (k + 1)) (K := 0 + 1) (B := {0}) (by simp)
-  have h1 : ((Law.bernoulli 1 0 (k + 1)).escape {0}).toReal = 1 := by
+  have h1 : ((Law.bernoulli 1 0 (k + 1)).missProb {0}).toReal = 1 := by
     rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal (Nat.zero_le _)]
     simp
   have hlt := lt_of_le_of_lt he h

@@ -177,7 +177,7 @@ theorem flock_headline_exec_hidden {Lp : Merkle.Leaf (List FlockLevel3.GF128) (L
       (batchStratL H512 enc512 Lp (planAtH dj x₀)
         (cont (simAuditOn H512 enc512 Lp (tablesAtH dj x₀) I wr opn dg dec one fin capOf N hdec τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 Lp (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding

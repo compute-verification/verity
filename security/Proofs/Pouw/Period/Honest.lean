@@ -45,7 +45,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 # An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
 
 The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
-`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` windows at H1's
+`Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` executionPhases at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
 parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`).
@@ -60,7 +60,7 @@ witness use are the deployed check's own.
   `1/128` (`shareCone_eq`) and `ρ = 8/9` meets `ρ·N_p·share ≤ 1` with equality.
 * The scheme is the ComposeMonitoringPeriod twin's (operand luck pinned, `r_B = ½`, guess `½`), so the lucks are `½ ≤ 7/8` and
   `½ ≤ ½`.
-* The windows (`windows`): every window registers the loop's honest registration (`Accept.h1Reg`) and the service
+* The executionPhases (`executionPhases`): every window registers the loop's honest registration (`Accept.h1Reg`) and the service
   answers it with the units of the model's sample at the window's sampling coin, ascending (`unitsOf`), so the check accepts
   every window on every path (`accepted_all`, from `Accept.check_h1`), publishes `N = 144`, `K′ = 24` and exactly
   those units (`sampleIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeDraw`).
@@ -68,7 +68,7 @@ witness use are the deployed check's own.
   right, and the openings are in `Unit`, so binding holds at `δ_bind = 0`, the service's soundness at `δ_ks = 0`, and
   the staged and flat relations are `True` (`StagedPins`).
 
-The conclusion then speaks of the whole period: its accepted prefix is all `n` windows (`prefixLen_all`) and its
+The conclusion then speaks of the whole period: its accepted prefix is all `n` executionPhases (`prefixLen_all`) and its
 credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditPeriod`'s bound at `128·n` live
 words, not at none.
 -/
@@ -196,7 +196,7 @@ theorem scope {δs : ℝ} (hδs : 0 < δs) : Scope Honest.scheme circuit δs :=
   ⟨circuit_wf, fun _ _ _ => rfl, hδs, fun _ => by norm_num [Honest.scheme, LuckForm.value],
     fun _ _ => Or.inl (Nat.zero_le _)⟩
 
-/-! ## The period, its windows and its proofs -/
+/-! ## The period, its executionPhases and its proofs -/
 
 /-- A window's coins: its round's coin, the sample's permutation and the proofs' (none). -/
 abbrev Ω1 : Type := Paths Bool circuit.rounds × (Equiv.Perm (Fin 144) × Unit)
@@ -205,7 +205,7 @@ abbrev Ω1 : Type := Paths Bool circuit.rounds × (Equiv.Perm (Fin 144) × Unit)
 def stages : SplitStages Bool (Fin 144) 1 :=
   .stage (fun _ _ => .paid) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
-/-- The honest period of `n` windows: every tile live, each window's stages `stages`, whatever the past. -/
+/-- The honest period of `n` executionPhases: every tile live, each window's stages `stages`, whatever the past. -/
 def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
@@ -214,15 +214,15 @@ def period : (n : ℕ) → ExecutionPhasePlay Bool Ω1 (Fin 144) circuit.rounds 
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/
-def reg : PouwCheck.WindowCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
+def reg : PouwCheck.ExecutionPhaseCommitmentRecord := h1Reg "" "" "" "" ByteArray.empty
 
 /-- The units of the model's sample at permutation coin `β`, ascending. -/
 noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=
   (Finset.sort (Finset.univ.image fun i : Fin 24 => (drawOf hK24 β i).val) (· ≤ ·)).toArray
 
-/-- The period's windows as the check reads them: the honest registration, and the service's answer accepting the
+/-- The period's executionPhases as the check reads them: the honest registration, and the service's answer accepting the
 units of the window's sample. -/
-noncomputable def windows (n : ℕ) : Executions Ω1 n where
+noncomputable def executionPhases (n : ℕ) : Executions Ω1 n where
   reg := fun _ _ => reg
   ev := fun x w => h1Evidence reg (unitsOf (coinAt x w).2)
 
@@ -242,11 +242,11 @@ def flat : ByteArray → Fin 144 → (ℕ → Unit) → Prop := fun _ _ _ => Tru
 
 /-- The period's proofs under the check. -/
 noncomputable def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 144) × Unit) circuit.rounds 24 144 n Unit :=
-  checkedRun hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
+  checkedRun hK24 prm (executionPhases n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 noncomputable def layer (n : ℕ) :
     SampledLayer Bool (Equiv.Perm (Fin 144) × Unit) n circuit.rounds 24 (Fin 144) ℕ (Fin n × ℕ) Unit :=
-  checkedLayer circuit hr1 hK24 prm (windows n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
+  checkedLayer circuit hr1 hK24 prm (executionPhases n) opened (stagedAt salt staged) (flatAtCoin hr1 enc flat)
 
 /-- The honest run's anatomy: the 128 words fixed. -/
 noncomputable def anatomy : Anatomy Unit Unit Unit Unit := { Honest.anatomy with fixed := 128 }
@@ -283,14 +283,14 @@ theorem unitsOk (β : Equiv.Perm (Fin 144) × Unit) : UnitsOk (unitsOf β) 24 14
 
 /-- **The deployed check accepts every window on every path.** -/
 theorem accepted_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) :
-    Accepts prm ((windows n).reg x w) ((windows n).ev x w) :=
+    Accepts prm ((executionPhases n).reg x w) ((executionPhases n).ev x w) :=
   ⟨_, _, check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _)⟩
 
-theorem acceptedUpTo_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) : (windows n).AcceptedUpTo prm x w :=
+theorem acceptedUpTo_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) : (executionPhases n).AcceptedUpTo prm x w :=
   fun w' _ => accepted_all n x w'
 
 /-- **The check's sample is the period's sampling coin**: it publishes `N = 144`, `K′ = 24` and the sample's units. -/
-theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (windows n) := by
+theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (executionPhases n) := by
   intro x w pub prof hc
   have he := hc.symm.trans (check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _))
   injection he with hp
@@ -299,15 +299,15 @@ theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (windows n) := by
   show u ∈ (unitsOf (coinAt x w).2).toList ↔ _
   simp only [unitsOf, List.toList_toArray, Finset.mem_sort, Finset.mem_image, Finset.mem_univ, true_and]
 
-theorem serviceSound (n : ℕ) : ServiceSound prm (windows n) opened (stagedAt salt staged) 0 :=
+theorem serviceSound (n : ℕ) : ServiceSound prm (executionPhases n) opened (stagedAt salt staged) 0 :=
   fun _ => le_of_eq (Honest.prob_none fun _ ⟨_, _, _, _, _, h⟩ => h trivial)
 
-theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (windows n).prefixLen prm x = n := by
+theorem prefixLen_all (n : ℕ) (x : Paths Ω1 n) : (executionPhases n).prefixLen prm x = n := by
   classical
   unfold Executions.prefixLen
   rw [Finset.filter_true_of_mem fun w _ => acceptedUpTo_all n x w, Finset.card_univ, Fintype.card_fin]
 
-/-! ## The honest windows' claims -/
+/-! ## The honest executionPhases' claims -/
 
 theorem period_every {P : (Fin 144 → Bool) → SplitStages Bool (Fin 144) 1 → Prop} (h : P (fun _ => true) stages) :
     ∀ n, (period n).EveryExecutionPhase P
@@ -328,7 +328,7 @@ theorem liveWords_true (t : Fin 144) :
 
 /-- **The accepted prefix's live words are `128·n`.** -/
 theorem checkedLive_all (n : ℕ) (x : Paths Ω1 n) :
-    checkedLive Honest.scheme circuit (period n) prm (windows n) x = 128 * n := by
+    checkedLive Honest.scheme circuit (period n) prm (executionPhases n) x = 128 * n := by
   unfold checkedLive
   calc _ = ∑ _w : Fin n, (128 : ℝ) := Finset.sum_congr rfl fun w _ => by
           rw [if_pos (acceptedUpTo_all n x w), liveAt_period n x w]
@@ -389,8 +389,8 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     (period n).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme circuit 144 live) ∧
     PrefixOf (layer n) (play n).game ∧
     (∀ w, prob (fun x => (layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (windows n) ∧ SampleIsCoin hK24 prm (windows n) ∧
-    ServiceSound prm (windows n) opened (stagedAt salt staged) 0 ∧
+    RegisteredBeforeDraw (executionPhases n) ∧ SampleIsCoin hK24 prm (executionPhases n) ∧
+    ServiceSound prm (executionPhases n) opened (stagedAt salt staged) 0 ∧
     SaltIsLiveCoin hr1 (salt (n := n)) enc ∧ StagedPins staged flat ∧
     (period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k G _ => OperandHMu (Honest.scheme.mu k) G)) ∧
@@ -400,9 +400,9 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       (fun live W => PerLiveTile Honest.scheme circuit live W (fun k _ G0 => GuessLuckAt (Honest.scheme.guess k) G0)) ∧
     UnitFixed (play n) (layer n) (monitoringPeriodMode circuit (period n) (run n))
       (fun _ t => (tileWords Honest.scheme circuit 144 t : ℝ)) (fun _ => 128) ∧
-    (∀ x w, Accepts prm ((windows n).reg x w) ((windows n).ev x w)) ∧
-    (∀ x, (windows n).prefixLen prm x = n) ∧
-    ∀ x, checkedLive Honest.scheme circuit (period n) prm (windows n) x = 128 * n := by
+    (∀ x w, Accepts prm ((executionPhases n).reg x w) ((executionPhases n).ev x w)) ∧
+    (∀ x, (executionPhases n).prefixLen prm x = n) ∧
+    ∀ x, checkedLive Honest.scheme circuit (period n) prm (executionPhases n) x = 128 * n := by
   refine ⟨by decide, rfl, scope hδs, fun t => ?_, fun j => ?_, fun t ht => ?_, rfl,
     period_every (P := fun live _ => DeadConeDead Honest.scheme circuit 144 live) (fun _ _ ht _ => by simp at ht) n,
     fun x j _ => acceptsUpTo_period _ _ _ n j x, fun w => ?_, fun _ _ _ => rfl, sampleIsCoin n, serviceSound n,
@@ -448,11 +448,11 @@ theorem h1_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
 premise, so except with probability `δ_s` its fixed words are at least `(1 − ε(n))₊` of its `128·n` live words. -/
 theorem h1_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧ n * ((play n).run x).fixed <
-      creditPrefix Honest.scheme circuit 144 ((windows n).prefixLen prm x)
-        (checkedLive Honest.scheme circuit (period n) prm (windows n) x) 1 1 (67 / 8) δs) ≤ δs + n * (0 + 0) := by
+      creditPrefix Honest.scheme circuit 144 ((executionPhases n).prefixLen prm x)
+        (checkedLive Honest.scheme circuit (period n) prm (executionPhases n) x) 1 1 (67 / 8) δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hStaged, hMu, hRB, hGs,
     hUF, -, -, -⟩ := h1_meets n hn hδs
-  exact h1CheckedCreditPeriod Honest.scheme circuit hn hN hr1 hM hK24 prm (windows n) opened salt enc staged flat
+  exact h1CheckedCreditPeriod Honest.scheme circuit hn hN hr1 hM hK24 prm (executionPhases n) opened salt enc staged flat
     (period n) (play n) (fun _ => 128) δs 0 0 hS hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hStaged hMu
     hRB hGs hUF
 

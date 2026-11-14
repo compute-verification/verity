@@ -8,7 +8,7 @@ public import Proofs.Properties.NetworkCertifier.DeviceOutput.Instance
 /-!
 # A later window's sync never changes an earlier window's rows (5c)
 
-`Properties.NetworkCertifier.ExpectedGridCausal` and `Properties.NetworkCertifier.EncardProgramRunsLeWindows`, with the
+`Properties.NetworkCertifier.ExpectedGridCausal` and `Properties.NetworkCertifier.EncardProgramRunsLeExecutionPhases`, with the
 latter's honest and nontrivial lemmas.
 
 The program hands frame `f` at `max(eligible f, last)` in canonical order (`NetworkCertifier.handingFrom`), and a frame
@@ -23,7 +23,7 @@ At the reference's constant-rate Program of one execution block of the `W` windo
 (`programFrames`), a step's rows read the content advice and the syncs of the windows up to its own
 (`tiedRows_causal`). So an accepted sequence of the first `m` windows is fixed by the content advice, the syncs of its
 windows below `min W m` and its jitter classes, and those sequences number at most `#Ac · |Σ_sync|^min(W, m) · D^(m·T)`,
-by the injection of `NetTiming.encard_accSeqs_le_constantRate_executionPhases` (`encardProgramRunsLeWindows`). An accepted run of
+by the injection of `NetTiming.encard_accSeqs_le_constantRate_executionPhases` (`encardProgramRunsLeExecutionPhases`). An accepted run of
 the check is a run of that Program (`acceptedRunsAreProgramRuns`), whose first `m·T` buckets it accepts
 (`NetTiming.accepted_take`), so the check's accepted runs over their first `m ≤ W` windows number at most
 `#Ac · |Σ_sync|^m · D^(m·T)`, or one carries a break (`encard_acceptedObservations_take_le`).
@@ -205,7 +205,7 @@ theorem tiedRows_causal (cfg : _root_.CertifierDevice.Config) {In Ac : Type}
     exact expectedRow_congr_syncs _ _ _ _ _ _ _ fun w hw => congrArg SyncValue.sync (hσ w hw)
   · rfl
 
-theorem encardProgramRunsLeWindows : EncardProgramRunsLeWindows := by
+theorem encardProgramRunsLeExecutionPhases : EncardProgramRunsLeExecutionPhases := by
   intro cfg K In Ac _ frames op m D
   classical
   by_cases hne : Nonempty (Fin 1 → Ac × (Fin cfg.windows → SyncValue cfg.syncSet))
@@ -279,7 +279,7 @@ open _root_.CertifierDevice
 windows of the observation sequences of its accepted runs number at most `#Ac · |Σ_sync|^m · D^(m·T)`, or some accepted
 run carries a break (`ObservationsBounded`'s): an accepted run is a run of the tied Program
 (`acceptedRunsAreProgramRuns`), the Program accepts its first `m·T` buckets (`NetTiming.accepted_take`), and those
-number at most `encardProgramRunsLeWindows`'s count. -/
+number at most `encardProgramRunsLeExecutionPhases`'s count. -/
 theorem encard_acceptedObservations_take_le (device : DeviceInput → DeviceOutput) (cfg : Config)
     (key : Lms.PrivateKey) {K : ℕ} {In Ac : Type} [Fintype Ac]
     (frames : List In → Ac → Fin 1 → List _root_.NetworkCertifier.LogicalFrame)
@@ -299,7 +299,7 @@ theorem encard_acceptedObservations_take_le (device : DeviceInput → DeviceOutp
         ∃ r ∈ c.records.toList, ∃ msg, certMessage x.issuer.session r = some msg ∧
           LmsVerifies (deviceParams x) msg r.certificate.signature ∧ ¬ Signed x.issuer.session (device x) msg)
   · exact Or.inr hb
-  have hbound := encardProgramRunsLeWindows cfg frames op m D
+  have hbound := encardProgramRunsLeExecutionPhases cfg frames op m D
   rw [min_eq_right hm] at hbound
   refine Or.inl (le_trans (Set.encard_le_encard ?_) hbound)
   rintro _ ⟨o, ⟨hlen, hjit, x, c, e, a, hrun⟩, rfl⟩
@@ -318,9 +318,9 @@ end Check
 /-! ## Its honest and nontrivial lemmas -/
 
 /-- **The program's honest run is counted**: at `Instance.config` (one window of one bucket, allocation 1, Σ_sync of
-one value), the honest record of one frame anchored at bucket 0 is among the sequences `EncardProgramRunsLeWindows`
+one value), the honest record of one frame anchored at bucket 0 is among the sequences `EncardProgramRunsLeExecutionPhases`
 counts over the first window. -/
-theorem encardProgramRunsLeWindows_honest :
+theorem encardProgramRunsLeExecutionPhases_honest :
     honestObs ∈ NetTiming.AccSeqs (NetTiming.constantRate (S := config.egress.allocation)
       config.egress.buckets config.windows 1 (programFrames config oneFrame))
       (fun _ _ => ()) (1 * config.egress.buckets) 1 := by
@@ -354,10 +354,10 @@ theorem two_le_acceptAll {S : ℕ} (hS : 0 < S) :
   rw [← Set.encard_pair hne]
   exact Set.encard_le_encard (by rintro x (rfl | rfl) <;> exact hmem _)
 
-/-- **`EncardProgramRunsLeWindows`'s bound fails at the verifier that accepts everything**: there, at
+/-- **`EncardProgramRunsLeExecutionPhases`'s bound fails at the verifier that accepts everything**: there, at
 `Instance.config`'s parameters (one window of one bucket, allocation 1, Σ_sync of one value, the content advice `Unit`,
 `D = 1`), the bucket's one slot carries `[true]` or `[false]`, two sequences against the bound's one. -/
-theorem encardProgramRunsLeWindows_nontrivial :
+theorem encardProgramRunsLeExecutionPhases_nontrivial :
     ¬ (NetTiming.AccSeqs (L := 1) (K := 1) (S := config.egress.allocation) (In := Unit)
         (Adv := ℕ → Fin 1 → Fin config.egress.allocation → Option (List Bool)) ⟨fun t _ a => a t⟩
         (fun _ _ => ()) (1 * config.egress.buckets) 1).encard ≤

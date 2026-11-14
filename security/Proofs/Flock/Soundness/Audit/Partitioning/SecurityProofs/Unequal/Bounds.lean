@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Audit.Law
 as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
 
 * `achievability`: independent samples with `q_u = min(1, Λ/C · w u)` rounded up to multiples of `1/den`. Rounding up
-  only lowers each escape, and `1 − q_u ≤ e^{−Λ w_u / C}`, so a set doing work at least `C` escapes with at most
+  only lowers each missProb, and `1 − q_u ≤ e^{−Λ w_u / C}`, so a set doing work at least `C` escapes with at most
   `e^{−Λ} = δ`.
 * `granularityOptimum`: the lower side is `ConverseAsymptotic` at `K = ⌈C/s⌉` (`granularity_arith`); the upper side is
   `achievability` at `ε/(n·c(s) + 1)`. `granularityChoice` composes the two.
@@ -63,7 +63,7 @@ theorem cost_const {n : ℕ} (L : Law n) (c : ℝ) : cost L (fun _ => c) = meanD
 
 /-- A sampling design under which every set of at least `K` units escapes with at most `δ` misses `K` units with at most `δ`. -/
 theorem miss_toReal_le_of {n : ℕ} {L : Law n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
-    (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.escape B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
+    (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.missProb B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
     (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.escape_le_one B)) hδ).2 (h B hB)
   calc (L.miss K).toReal ≤ (ENNReal.ofReal δ).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle

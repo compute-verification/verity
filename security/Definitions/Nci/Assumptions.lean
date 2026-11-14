@@ -28,10 +28,10 @@ that share. -/
 def Coverage (κ : ℝ) (r : RegisteredCircuit) (x : ℝ) : Prop :=
   κ * r.D.size r.D.computed ≤ x
 
-/-- **Sessions of exactly `c` gates, each reading its own prompt of at most `k` bits**: each block `u` of the division
+/-- **InferenceBlocks of exactly `c` gates, each reading its own prompt of at most `k` bits**: each block `u` of the division
 `P` of `d` has exactly `c` gates, padding included, and reads from outside itself only registered information and its
 prompt `prompt u`, at most `k` bits wide. It is the layout an inference deployment declares, a session per block. -/
-def Sessions (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)) (c k : ℕ) : Prop :=
+def InferenceBlocks (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)) (c k : ℕ) : Prop :=
   (∀ u, (P.gates u).card = c) ∧ (∀ u, d.D.into (P.gates u) ⊆ d.θ ∪ prompt u) ∧ (∀ u, d.D.width (prompt u) ≤ k)
 
 end Nci.Assumptions

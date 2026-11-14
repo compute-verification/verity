@@ -265,33 +265,33 @@ theorem tree_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm
     {batches : Array StreamedWipe.Batch} {vs : Array ByteArray}
     (hv : batches.mapM StreamedWipe.Batch.value = .ok vs) {x : ByteArray}
     (hx : x ∈ wipeTreeStrings (domain StreamedWipe.RECORD_BINDING c.session batches.size) vs) :
-    x ∈ wipeSessionStrings pk c e sm fs fe batches := by
-  simp only [wipeSessionStrings, hv, List.mem_append]
+    x ∈ signedWipeStrings pk c e sm fs fe batches := by
+  simp only [signedWipeStrings, hv, List.mem_append]
   exact Or.inl (Or.inl hx)
 
-theorem session_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
+theorem signedWipe_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
     {batches : Array StreamedWipe.Batch} {root : ByteArray}
     (hr : StreamedWipe.recordsRoot c.session batches = .ok root) :
     StreamedWipe.SESSION_TAG ++ be64 (StreamedWipe.header c e sm fs fe batches.size).toUTF8.size.toUInt64 ++
         (StreamedWipe.header c e sm fs fe batches.size).toUTF8 ++ root ∈
-      wipeSessionStrings pk c e sm fs fe batches := by
-  simp [wipeSessionStrings, hr]
+      signedWipeStrings pk c e sm fs fe batches := by
+  simp [signedWipeStrings, hr]
 
 theorem signed_mem {pk : ByteArray} {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {fs fe : Int}
     {batches : Array StreamedWipe.Batch} {rec : ByteArray}
     (hm : StreamedWipe.message c e sm fs fe batches = .ok rec) (hI : (pk.extract 0 16).size = 16) :
     field MEMORY_CHALLENGER_TAG.toUTF8 ++ pk.extract 0 16 ++ field (field c.session) ++ field rec ∈
-      wipeSessionStrings pk c e sm fs fe batches := by
-  simp [wipeSessionStrings, hm, hI]
+      signedWipeStrings pk c e sm fs fe batches := by
+  simp [signedWipeStrings, hm, hI]
 
 theorem own_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {x : ByteArray}
-    (hx : x ∈ wipeSessionStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches) :
+    (hx : x ∈ signedWipeStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches) :
     x ∈ wipeRunStrings s dev :=
   List.mem_append_left _ (List.mem_append_left _ hx)
 
 theorem wipe_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : WipeRun} (hr : r ∈ dev.wipes s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
-    (hx : x ∈ wipeSessionStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs
+    (hx : x ∈ signedWipeStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs
       r.recorded.batches) :
     x ∈ wipeRunStrings s dev := by
   refine List.mem_append_left _ (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩))
@@ -299,7 +299,7 @@ theorem wipe_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : WipeRun}
 
 theorem pous_mem {s : StreamedWipe.Signed} {dev : SignedWipeParty} {r : Run} (hr : r ∈ dev.device.sessions s.publicKey)
     {e : String} (he : r.recorded.ended = some e) {x : ByteArray}
-    (hx : x ∈ sessionStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ wipeRunStrings s dev := by
+    (hx : x ∈ challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds) : x ∈ wipeRunStrings s dev := by
   refine List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, ?_⟩)
   simpa only [he] using hx
 
@@ -324,7 +324,7 @@ theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wip
     obtain ⟨-, hMM⟩ := Inputs.signedMessage_ok hmcm
     have e1 := cf _ (own_mem (signed_mem hm' hI)) _ (pous_mem hr hend (Device.signed_mem hmsg hI)) hMM
     have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
-    have e3 := cf _ (own_mem (session_mem hroot)) _ (pous_mem hr hend (Device.session_mem hroot')) e2
+    have e3 := cf _ (own_mem (signedWipe_mem hroot)) _ (pous_mem hr hend (Device.challengePhase_mem hroot')) e2
     exact WipeInputs.tags_differ _ _ _ _ _ _ e3.symm
   · have hmsg' : StreamedWipe.message r.commitment ended r.startMark r.fillStartNs r.fillEndNs r.recorded.batches =
         .ok rec := hmsg
@@ -333,8 +333,8 @@ theorem same_run {s : StreamedWipe.Signed} {dev : SignedWipeParty} (cf : CF (wip
     obtain ⟨-, hMM⟩ := Inputs.signedMessage_ok hmcm
     have e1 := cf _ (own_mem (signed_mem hm' hI)) _ (wipe_mem hr hend (signed_mem hmsg' hI)) hMM
     have e2 := Inputs.signed_split (by rw [Tree.hash_size, Tree.hash_size]) e1
-    have e3 := cf _ (own_mem (session_mem hroot)) _ (wipe_mem hr hend (session_mem hroot')) e2
-    obtain ⟨e4, e5⟩ := WipeInputs.session_split (by rw [WipeTree.root_width, WipeTree.root_width]) e3
+    have e3 := cf _ (own_mem (signedWipe_mem hroot)) _ (wipe_mem hr hend (signedWipe_mem hroot')) e2
+    obtain ⟨e4, e5⟩ := WipeInputs.signedWipe_split (by rw [WipeTree.root_width, WipeTree.root_width]) e3
     obtain ⟨hc, hen, hsm, hfs, hfe, hn⟩ := WipeHeader.header_inj (String.toByteArray_inj.mp e4)
     rw [hc, hn] at e5
     have hsz : vs.size = vs'.size := by rw [WipeInputs.mapM_size hvs, WipeInputs.mapM_size hvs', hn]
@@ -547,32 +547,32 @@ private theorem measured_values (digest : Nat → ByteArray) :
   exact ⟨l.toArray, by rw [hl]; rfl⟩
 
 private theorem measured_message (digest : Nat → ByteArray) (pk sig : ByteArray) :
-    ∃ m, (measuredSession digest pk sig).message = .ok m := by
+    ∃ m, (measuredWipe digest pk sig).message = .ok m := by
   obtain ⟨vs, hvs⟩ := measured_values digest
-  have hvs' : (measuredSession digest pk sig).batches.mapM StreamedWipe.Batch.value = .ok vs := hvs
+  have hvs' : (measuredWipe digest pk sig).batches.mapM StreamedWipe.Batch.value = .ok vs := hvs
   unfold StreamedWipe.Signed.message StreamedWipe.message StreamedWipe.recordsRoot
   rw [hvs']
   exact ⟨_, rfl⟩
 
 private theorem measured_size (digest : Nat → ByteArray) (pk sig : ByteArray) :
-    (measuredSession digest pk sig).batches.size = measuredCommitment.params.batches := by
-  simp [measuredSession, measuredCommitment, measuredParams, StreamedWipe.Params.batches]
+    (measuredWipe digest pk sig).batches.size = measuredCommitment.params.batches := by
+  simp [measuredWipe, measuredCommitment, measuredParams, StreamedWipe.Params.batches]
 
 /-- Each batch of the measured session passes the verdict's checks: it is the session's batch, has no wrong answer,
 took the slowest round trip measured, 1.40 ms, within the 20 ms deadline, and the first was revealed 7.6 ms after the
 fill ended. -/
 private theorem measured_batch (digest : Nat → ByteArray) (pk sig : ByteArray) (b : Nat)
-    (hb : b < (measuredSession digest pk sig).batches.size) :
-    (measuredSession digest pk sig).batches[b].b = (b : Int) ∧
-      (measuredSession digest pk sig).batches[b].first = ((b * measuredCommitment.params.batch : Nat) : Int) ∧
-      (measuredSession digest pk sig).batches[b].count =
+    (hb : b < (measuredWipe digest pk sig).batches.size) :
+    (measuredWipe digest pk sig).batches[b].b = (b : Int) ∧
+      (measuredWipe digest pk sig).batches[b].first = ((b * measuredCommitment.params.batch : Nat) : Int) ∧
+      (measuredWipe digest pk sig).batches[b].count =
         min (measuredCommitment.params.batch : Int)
-          ((measuredCommitment.params.k : Int) - (measuredSession digest pk sig).batches[b].first) ∧
-      (measuredSession digest pk sig).batches[b].wrong = 0 ∧ 0 ≤ (measuredSession digest pk sig).batches[b].elapsedNs ∧
-      (measuredSession digest pk sig).batches[b].elapsedNs ≤ (measuredCommitment.params.limitNs : Int) ∧
-      (b = 0 → (measuredSession digest pk sig).fillEndNs ≤ (measuredSession digest pk sig).batches[b].sendNs) := by
-  have hb' : b < 2152 := by simpa [measuredSession, measuredParams] using hb
-  simp only [measuredSession, measuredCommitment, Array.getElem_map, Array.getElem_range, measuredBatch, measuredParams,
+          ((measuredCommitment.params.k : Int) - (measuredWipe digest pk sig).batches[b].first) ∧
+      (measuredWipe digest pk sig).batches[b].wrong = 0 ∧ 0 ≤ (measuredWipe digest pk sig).batches[b].elapsedNs ∧
+      (measuredWipe digest pk sig).batches[b].elapsedNs ≤ (measuredCommitment.params.limitNs : Int) ∧
+      (b = 0 → (measuredWipe digest pk sig).fillEndNs ≤ (measuredWipe digest pk sig).batches[b].sendNs) := by
+  have hb' : b < 2152 := by simpa [measuredWipe, measuredParams] using hb
+  simp only [measuredWipe, measuredCommitment, Array.getElem_map, Array.getElem_range, measuredBatch, measuredParams,
     StreamedWipe.Batch.elapsedNs, MEASURED_FILL_END_NS, MEASURED_FIRST_SEND_NS, MEASURED_MAX_READ_NS]
   refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_⟩ <;> first | trivial | omega | simp | (intro h; subst h; omega)
 
@@ -585,7 +585,7 @@ theorem measured_accepts (digest : Nat → ByteArray) {I seed : ByteArray} {k : 
     (hk : Lms.key Lms.deployed I seed = .ok k) :
     ∃ (sig : ByteArray) (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int),
       WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
-        ⟨some (measuredSession digest k.publicKey sig), none⟩ = .accept out prof := by
+        ⟨some (measuredWipe digest k.publicKey sig), none⟩ = .accept out prof := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
   subst hIk
   have hroot : (k.tree[1]!).size = Lms.deployed.N :=
@@ -605,8 +605,8 @@ theorem measured_accepts (digest : Nat → ByteArray) {I seed : ByteArray} {k : 
   have hlms : lmsVerify Lms.deployed k.publicKey MEASURED_SESSION m sig.encode = .ok true := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind] <;> rfl
-  exact ⟨sig.encode, _, _, check_accepts _ _ ⟨some (measuredSession digest k.publicKey sig.encode), none⟩
-    (measuredSession digest k.publicKey sig.encode) rfl rfl rfl
+  exact ⟨sig.encode, _, _, check_accepts _ _ ⟨some (measuredWipe digest k.publicKey sig.encode), none⟩
+    (measuredWipe digest k.publicKey sig.encode) rfl rfl rfl
     (show (0 : Int) ≤ StreamedWipe.EGRESS_MAX_UNITS by decide) (Int.le_refl _)
     ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩ rfl rfl rfl (measured_size digest _ _)
     (measured_batch digest _ _)⟩
@@ -652,7 +652,7 @@ theorem unencoded_finder : wipeFinder unencoded idleChallenger = none := by
   have h3' : StreamedWipe.message unencoded.commitment unencoded.ended unencoded.startMark unencoded.fillStartNs
       unencoded.fillEndNs unencoded.batches = .error e3 := h3
   have hs : wipeRunStrings unencoded idleChallenger = [] := by
-    unfold wipeRunStrings wipeSessionStrings
+    unfold wipeRunStrings signedWipeStrings
     rw [h1, h2, h3'] <;> rfl
   unfold wipeFinder
   rw [hs] <;> rfl
@@ -705,7 +705,7 @@ theorem wipeSigned_honest :
       (prof : StreamedWipe.Params × Int),
       Lms.keygen Lms.deployed seed = .ok k ∧
         WipeProtocol.protocol.check (measuredWipeParams k.publicKey) measuredCommitment
-          ⟨some (measuredSession (measuredDigest K c) k.publicKey sig), none⟩ = .accept out prof := by
+          ⟨some (measuredWipe (measuredDigest K c) k.publicKey sig), none⟩ = .accept out prof := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
   obtain ⟨sig, out, prof, h⟩ := Wipe.measured_accepts (measuredDigest .empty id) hk
   exact ⟨_, .empty, id, k, sig, out, prof, hkg, h⟩

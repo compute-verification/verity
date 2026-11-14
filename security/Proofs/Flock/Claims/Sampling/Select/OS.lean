@@ -259,7 +259,7 @@ theorem select_subset_escape_le (rule : Select.Rule) (hne : rule ≠ .all) (d : 
     (ht : FlockSoundness.Assumptions.UniformRandomBytes L t) (B : Finset (Fin n)) :
     prCoin (fun ω => ∃ draw proved read,
       Select.select rule d query table none (Law.streamOf (t ω 0)) = .ok (draw, proved, read) ∧
-        ∀ u ∈ B, u.val ∉ proved) ≤ (Law.subset n k hkn).escape B := by
+        ∀ u ∈ B, u.val ∉ proved) ≤ (Law.subset n k hkn).missProb B := by
   refine le_trans (prCoin_mono fun ω hω => ?_) (Law.drawOS_subset_escape_le n k hkn L t ht B)
   obtain ⟨draw, proved, read, hs, hm⟩ := hω
   obtain ⟨dr, hdr, hsub⟩ := select_subset_runOS rule hne d query table n named k hn hnamed hk (t ω) draw proved read hs

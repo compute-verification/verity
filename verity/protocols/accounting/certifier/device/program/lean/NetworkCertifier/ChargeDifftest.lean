@@ -13,16 +13,16 @@ results from the program's definitions (`NetworkCertifier.AdviceV1`), gives ever
 (`runs` in `lean-audit.json`): compiled evaluation, a test and not a proof. `Proofs.NetworkCertifier.Code`
 (`CodeChargesV1`) proves `charges` equal to the reference's (`Security/Definitions/NetworkCertifier/AdviceV1.lean`).
 
-An instance is a window size `N`, a book (`arrived`, n_arrived's bin frequencies at bins `0 … bitlen N`, its `total`,
+An instance is a executionPhase size `N`, a book (`arrived`, n_arrived's bin frequencies at bins `0 … bitlen N`, its `total`,
 each zero count's `(freq, total)`, and the contexts' `priors`), a first carry, and windows, each `N` slots that ask or
-not (`en`) with their decisions (`bit`), as `ChargeCount_v1{N}`'s witness holds them. A window's decision stream is the
+not (`en`) with their decisions (`bit`), as `ChargeCount_v1{N}`'s witness holds them. A executionPhase's decision stream is the
 decisions of the slots that ask, in order.
 
 `evaluate` gives, from the definitions themselves:
-* `steps`: from the instance's carry, each window's `window`, its charge and the carry it passes on (`[charge, counts,
-  run]`), up to and including the first window it refuses (`null`): Python's `reference_charge` window by window, each
+* `steps`: from the instance's carry, each executionPhase's `executionPhase`, its charge and the carry it passes on (`[charge, counts,
+  run]`), up to and including the first executionPhase it refuses (`null`): Python's `reference_charge` executionPhase by executionPhase, each
   `ok` 0 a `null`;
-* `charges`: `charges` of the decision streams, from the book's priors and run 0, or `null` when a window refuses.
+* `charges`: `charges` of the decision streams, from the book's priors and run 0, or `null` when a executionPhase refuses.
 -/
 
 @[expose] public section
@@ -65,23 +65,23 @@ def rawOfJson (j : Json) : Except String Raw := do
       pure ((← (← fromJson? (α := List Json) (← w.getObjVal? "en")).mapM bitOfJson),
         (← (← fromJson? (α := List Json) (← w.getObjVal? "bit")).mapM bitOfJson)) }
 
-/-- A window's decision stream: the decisions of the slots that ask, in order. -/
+/-- A executionPhase's decision stream: the decisions of the slots that ask, in order. -/
 def stream (w : List Bool × List Bool) : List Bool :=
   (w.1.zip w.2).filterMap fun (e, b) => if e then some b else none
 
 def pairsJson (l : List (Nat × Nat)) : Json := toJson (l.map fun p => [p.1, p.2])
 
-/-- `window` from `cy` on each window in turn, up to and including the first it refuses. -/
+/-- `executionPhase` from `cy` on each executionPhase in turn, up to and including the first it refuses. -/
 def steps (bk : Book) (N : Nat) : Carry → List (List Bool) → List Json
   | _, [] => []
-  | cy, ds :: ws => match window bk N cy ds with
+  | cy, ds :: ws => match executionPhase bk N cy ds with
     | none => [.null]
     | some (L, cy') => .arr #[toJson L, pairsJson cy'.counts, toJson cy'.run] :: steps bk N cy' ws
 
 /-- What the program's definitions give on an instance, in the shape of `reference_charge`'s results. -/
 def evaluate (r : Raw) : Except String Json := do
   unless r.windows.all fun w => w.1.length = r.N ∧ w.2.length = r.N do
-    throw "a window has N slots"
+    throw "a executionPhase has N slots"
   unless r.book.arrived.length = bitlen r.N + 1 do
     throw "the book's arrived bins are 0 … bitlen N"
   let ds := r.windows.map stream

@@ -819,7 +819,7 @@ def INTERIOR_ROOT : String := "verity-vllm/interior-run/v1"
 /-- **The interior window's open root**, for the boundary registration of digest `boundary` (lowercase hex) and the
 replay sample `sample`, in order: SHA-512 over `INTERIOR_ROOT`, a zero byte and the canonical JSON
 `{"boundary", "replay_sample"}`, in lowercase hex. The verifier computes it, so a second stage sampled on a session of
-its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorWindowOk`). None
+its own is sampled on the one window its boundary registration and replay sample name (`Run.interiorRunOk`). None
 where `Flock.canon` fails. -/
 def interiorRoot (boundary : String) (sample : Array Nat) : Option String := do
   let m ← (Flock.canon (Json.mkObj [("boundary", .str boundary), ("replay_sample", Lean.toJson sample)])).toOption

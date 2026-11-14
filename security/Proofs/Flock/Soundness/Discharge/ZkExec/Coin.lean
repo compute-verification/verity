@@ -139,7 +139,7 @@ theorem zk_headline_exec_zc_runs (hlow : LoweringSoundZK A P (planOne T) tab dec
     let σ := simAuditZC A Hs T I wr opn dg dec (fun _ _ _ => true) fin capOf N
       (decodesZK_of_runsZC A Hs T I wr opn dec fin capOf hrun) τ
     prob (fun o => LiveAcceptsZK I o ∧
-        K ≤ (P.wrong (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (P.incorrect (ZkLink.XplurZC A Hs P (planOne T) tab vb (reg σ) (cont σ) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg mPts N wr)) τ ≤
       (Law.stratified σs ks hks).miss K + ZkLink.ksAvgZC A Hs (planOne T) k a (reg σ) (cont σ) +
         ZkLink.linkBoundZC A Hs P (planOne T) tab vb k Rw M ρ t' (reg σ) (cont σ) :=

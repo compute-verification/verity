@@ -14,7 +14,7 @@ import Mathlib.Tactic.SetLike
 
 `message`, `recordsRoot` and `memoryChallengerMessage` unfolded to the SHA-512 inputs they hash (`message_ok`,
 `recordsRoot_ok`, `signedMessage_ok`), and each input split back into what it frames: the session input into its header
-and records root (`session_split`), the signed message's input into its record (`signed_split`), a round's value into
+and records root (`challengePhase_split`), the signed message's input into its record (`signed_split`), a round's value into
 its round (`value_inj`, `rounds_inj`).
 -/
 
@@ -129,7 +129,7 @@ theorem recordsRoot_ok {session root : ByteArray} {rounds : Array Round} (h : re
     simp only [hv, bind, Except.bind, pure, Except.pure, Except.ok.injEq] at h
     exact ⟨vs, rfl, h.symm⟩
 
-theorem message_ok {c : SessionCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
+theorem message_ok {c : ChallengePhaseCommitment} {e : String} {rounds : Array Round} {rec : ByteArray}
     (h : message c e rounds = .ok rec) :
     ∃ root, recordsRoot c.session rounds = .ok root ∧
       rec = Sha512.hash (SESSION_TAG ++ be64 (header c e rounds.size).toUTF8.size.toUInt64 ++
@@ -151,7 +151,7 @@ theorem signedMessage_ok {I session rec m : ByteArray} (h : memoryChallengerMess
     exact ⟨not_not.mp hI, h.symm⟩
 
 /-- The session input, with records roots of one width, determines the header and the root. -/
-theorem session_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
+theorem challengePhase_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
     (e : SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r = SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
     h = h' ∧ r = r' := by
   have e := congrArg bs e

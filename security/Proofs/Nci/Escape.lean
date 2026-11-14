@@ -3,13 +3,13 @@ module
 public import Definitions.Nci.Assumptions.Remote
 
 /-!
-# The escaped blocks under sampled proofs
+# The missed blocks under sampled proofs
 
-`sampled_escape` bounds the work each identity's escaped blocks skip by `((1 − q)/q) B` in expectation under
+`sampled_escape` bounds the work each identity's missed blocks skip by `((1 − q)/q) B` in expectation under
 `SampledDetection`. Its proof is Wald's identity on one identity's faulty blocks with no earlier detection: they are
-the escaped ones and at most one detected block (two detected blocks of one identity can't each run strictly before the
-other), so their expected work is at most the escaped blocks' plus `B`; and each is undetected with probability at most
-`1 − q` given that it is reached, so the escaped blocks' expected work is at most `(1 − q)` times theirs
+the missed ones and at most one detected block (two detected blocks of one identity can't each run strictly before the
+other), so their expected work is at most the missed blocks' plus `B`; and each is undetected with probability at most
+`1 − q` given that it is reached, so the missed blocks' expected work is at most `(1 − q)` times theirs
 (`expected_filter` swaps the expectation into each block's probability).
 -/
 
@@ -66,10 +66,10 @@ theorem expected_filter {Ω β : Type} [Fintype Ω] (μ : PMF Ω) (bad : Ω → 
     ring
   · simp only [if_neg h, mul_zero]
 
-/-- A faulty block is escaped exactly when it has no earlier detection and isn't detected itself. -/
+/-- A faulty block is missed exactly when it has no earlier detection and isn't detected itself. -/
 theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β → ι} {τ : β → ℝ} {b : β} :
-    b ∈ escaped bad detected ident τ ↔ b ∈ bad ∧ b ∉ detected ∧ noDetectionBefore bad detected ident τ b := by
-  simp only [escaped, Finset.mem_filter, noDetectionBefore]
+    b ∈ missed bad detected ident τ ↔ b ∈ bad ∧ b ∉ detected ∧ noDetectionBefore bad detected ident τ b := by
+  simp only [missed, Finset.mem_filter, noDetectionBefore]
   constructor
   · rintro ⟨hb, hall⟩
     exact ⟨hb, fun hd => lt_irrefl _ (hall b hb hd rfl), fun b' hb' hd _ hid => hall b' hb' hd hid⟩
@@ -79,21 +79,21 @@ theorem mem_escaped_iff {β ι : Type} {bad detected : Finset β} {ident : β �
     · exact (hnd (e ▸ hd)).elim
     · exact hC b' hb' hd e hid
 
-/-- **Sampled proofs bound the escaped work** ([SAMPLED-DETECTION]): under `SampledDetection` at a chance
+/-- **Sampled proofs bound the missed work** ([SAMPLED-DETECTION]): under `SampledDetection` at a chance
 `q ∈ (0, 1]`, with each faulty block skipping `w_b ∈ [0, B]`, the declared work that identity `j`'s faulty blocks
-accepted before its first detection (`escaped`) skip is at most `((1 − q)/q) B` in expectation.
+accepted before its first detection (`missed`) skip is at most `((1 − q)/q) B` in expectation.
 
 Each faulty block is caught with probability at least `q` whatever came before, its coins live and sampled independently,
 so the number an identity runs before its first detection is stochastically dominated by a geometric variable with mean
 `∑_{k ≥ 1} (1 − q)^k = (1 − q)/q`: it runs `k` or more with probability at most `(1 − q)^k`. The proof is the same
 count in Wald's form, over the outcomes with no independence beyond that premise: the identity's faulty blocks with no
-earlier detection are its escaped blocks and at most one detected block, which skips at most `B`, and each of them is
-undetected with probability at most `1 − q` given that it is reached, so the escaped work `X` has
+earlier detection are its missed blocks and at most one detected block, which skips at most `B`, and each of them is
+undetected with probability at most `1 − q` given that it is reached, so the missed work `X` has
 `E[X] ≤ (1 − q) (E[X] + B)`. With every faulty block caught, `q = 1`, and none escapes. -/
 theorem sampled_escape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
     (ident : β → ι) (τ w : β → ℝ) (q B : ℝ) (hq : 0 < q) (hq1 : q ≤ 1) (hB : 0 ≤ B) (hw : ∀ b, 0 ≤ w b)
     (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B) (hS : Assumptions.SampledDetection μ bad detected ident τ q) (j : ι) :
-    ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ with ident b = j, w b ≤ (1 - q) / q * B := by
+    ∑ ω, (μ ω).toReal * ∑ b ∈ missed (bad ω) (detected ω) ident τ with ident b = j, w b ≤ (1 - q) / q * B := by
   classical
   let U : Finset β := Finset.univ.biUnion bad
   have hU : ∀ ω, bad ω ⊆ U := fun ω b hb => Finset.mem_biUnion.2 ⟨ω, Finset.mem_univ _, hb⟩
@@ -103,7 +103,7 @@ theorem sampled_escape {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF
     ∑ b ∈ (bad ω).filter (fun b => ident b = j ∧ b ∈ detected ω ∧ noDetectionBefore (bad ω) (detected ω) ident τ b), w b
   let Y : Ω → ℝ := fun ω =>
     ∑ b ∈ (bad ω).filter (fun b => ident b = j ∧ noDetectionBefore (bad ω) (detected ω) ident τ b), w b
-  have hesc : ∀ ω, ∑ b ∈ escaped (bad ω) (detected ω) ident τ with ident b = j, w b = X ω := by
+  have hesc : ∀ ω, ∑ b ∈ missed (bad ω) (detected ω) ident τ with ident b = j, w b = X ω := by
     intro ω
     refine Finset.sum_congr ?_ fun _ _ => rfl
     ext b

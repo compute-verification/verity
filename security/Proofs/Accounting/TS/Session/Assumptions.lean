@@ -75,7 +75,7 @@ def AcceptedLive (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → F
 **At each round and proof, the window's coins read through the session have the session game's law**: for every event
 `E` of a session's outcome, its probability over the window's paths at `(w, i)` is at most the average over the paths
 of its probability in the session's own game (`Flock.SoundAtBridge.SessionLaw`). Read with every `E` it is equality of
-the two laws; `Flock.SoundAtBridge.WindowLaw` is the same `Prop`. The equality rests on five facts of the proof system
+the two laws; `Flock.SoundAtBridge.ExecutionPhaseLaw` is the same `Prop`. The equality rests on five facts of the proof system
 and of how `sess` is built:
 1. **No retry or resample.** `out x w i` is the outcome of the session's one run on its sample: a refused session is a
    visible failure and is never rerun on a fresh sample. Otherwise the kept outcome leans toward acceptance, and `δ`
@@ -109,7 +109,7 @@ def ExecutionPhaseDesign [Fintype Ω] (sess : Paths Ω S → Fin S → Fin nπ �
 
 /-- `accounting-ts-served-checks` (a fact of each served Definition's circuit, to be computed by a check). **The served
 Definition's check holds at its session's value layer wherever the sampled proof blocks are right**: on every path, when
-flock-verify accepts proof `i` of round `w`'s session and every sampled proof block is right (`WrongAt` fails) with its rows
+flock-verify accepts proof `i` of round `w`'s session and every sampled proof block is right (`IncorrectAt` fails) with its rows
 right at its own owned reads (`RowsAt`), `pf`'s relation (`rel x w i`, the proof's Definition) holds at `rows` of the
 session's value layer (`XplurZC`). It is `Flock.SoundAtBridge.RelOfRows` on the accepted sessions. Under a sampled
 sample it holds only for a relation that reads the sampled proof blocks alone: an unsampled unit can be wrong while every sampled one
@@ -117,7 +117,7 @@ is right. -/
 def ServedChecksHold (pf : ProofLayer Ω S nπ V) (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) : Prop :=
   ∀ x w i, LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) →
-    (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) →
+    (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u) →
     pf.rel x w i (rows (sess x w i) (sess x w i).Xv)
 
 /-- `accounting-ts-served-roots-linked` (Flock's rows link at the served roots). **Where the sampled
@@ -134,7 +134,7 @@ def ServedRootsLinked [Fintype Ω] (pf : ProofLayer Ω S nπ V) (sess : Paths Ω
     (out : ∀ x w i, (sess x w i).Out) (rows : ∀ s : RowsSession, (Fin s.Circ.N → Bool) → V) (δs : ℝ) : Prop :=
   ∀ w i, Pouw.RelativeSecurity.prob (fun x =>
     LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
-      (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
+      (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
       rows (sess x w i) (sess x w i).Xv ≠ pf.opened x w i) ≤ δs
 
 end Accounting.Assumptions.TS

@@ -212,8 +212,8 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.WindowDelta`, and
-`Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
+Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.ExecutionPhaseDelta`, and
+`Pouw.Guarantees.Window.ServiceMissProb` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
 Dither's guarantees (`security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
 per-model instances (`security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
 is stated yet; `Properties.Composition` (`security/Properties/Composition.lean`) proves the composition's accept rule

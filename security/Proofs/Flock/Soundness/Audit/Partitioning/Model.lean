@@ -22,7 +22,7 @@ the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
   proof blocks out of `N`, when the verifier samples the replay unit with probability `p` and then `k` of its proof blocks
   uniformly;
 * `nested R N k a b`, the sampling design that samples so: over `R` replay units of `N` proof blocks each, numbered as `R * N` proof
-  blocks, each replay unit with probability `a / b`, then `k` of its proof blocks uniformly; and `wrongIn B i`, the number
+  blocks, each replay unit with probability `a / b`, then `k` of its proof blocks uniformly; and `incorrectIn B i`, the number
   of proof blocks of `B` in replay unit `i`.
 -/
 
@@ -66,7 +66,7 @@ def nested (R N k a b : ℕ) [NeZero b] (hk : k ≤ N) : Law (R * N) where
       (finProdFinEquiv.symm v).2 ∈ (Law.subset N k hk).draw (ω.2 (finProdFinEquiv.symm v).1)
 
 /-- The number of proof blocks of `B` in replay unit `i`, numbered as in `nested`. -/
-def wrongIn {R N : ℕ} (B : Finset (Fin (R * N))) (i : Fin R) : ℕ :=
+def incorrectIn {R N : ℕ} (B : Finset (Fin (R * N))) (i : Fin R) : ℕ :=
   (Finset.univ.filter fun j : Fin N => finProdFinEquiv (i, j) ∈ B).card
 
 end FlockSoundness.Audit.Partitioning

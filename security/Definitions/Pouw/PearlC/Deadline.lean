@@ -25,9 +25,9 @@ def Adversary.BoundedBy {CM : CostModel Q R S} (A : Adversary CM) (U : Workload)
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
 /-- The adversaries of Pearl-C's cost model `CM` on the workload `U`, as the deadline reads them. -/
-def CostModel.adversaries (CM : CostModel Q R S) (U : Workload) : Adversaries Q R S (Adversary CM) Transcript where
+def CostModel.adversaries (CM : CostModel Q R S) (U : Workload) : Adversaries Q R S (Adversary CM) Trace where
   pre A := A.pre
-  transcript A := A.transcript U
+  trace A := A.trace U
   cost A H s := CM.cost A.online H U A.act (A.pre.eval H) s
   calls A H s := CM.calls A.online H U A.act (A.pre.eval H) s
 

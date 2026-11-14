@@ -20,27 +20,27 @@ the receipt's digest (C1). Then each call's sampled proof blocks are proved in a
 session reading only its call's share of the sample and `R`. The window accepts when every call's session accepts.
 
 This is the vocabulary of that game, in the form of Flock's one-stage audit (`FlockSoundness.Audit`, which the window
-guarantee `audit_window_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
+guarantee `audit_executionPhase_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
 
 * `Game`, `Strategy`, `prob`, `avg` and `prCoin`, core's (`Verity.Game`): a public-coin interaction with live coins, a
   deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
   and probability;
-* `Law`, a sampling design over units, and its escape (`L.escape B`), the probability that its sample misses a set, both core's
+* `Law`, a sampling design over units, and its missProb (`L.missProb B`), the probability that its sample misses a set, both core's
   (`Verity.Law`, `Definitions.Core.Draw`); `Law.prod`, the calls' laws each sampled on its own coins, the product distribution that
   distinct contexts give (M1);
 * `auditReg`: the registration, then the coin of the sampling design at that registration, then the session on its sample (C1);
-* `WUnit`, `slice`, `seqCalls`, `windowSession`: a window's units (a call and a unit of that call), a call's share of a
+* `WUnit`, `slice`, `seqCalls`, `executionPhaseSession`: a window's units (a call and a unit of that call), a call's share of a
   sample, and the calls' sessions in order;
 * `SeedIn`, `UnitStmts`: a unit's seed inputs (tag, salt, position, root(A_j), root(B_j)) and the units' statements, each
   a self-contained tile (decision 106) whose position and roots are functions of its place and the committed transcript
-  (`UnitStmts.seedIn`), and `UnitStmts.wrong`, the units whose committed outputs aren't their function of their inputs;
+  (`UnitStmts.seedIn`), and `UnitStmts.incorrect`, the units whose committed outputs aren't their function of their inputs;
 * `harmSets`: PoUW's harm family, the incorrect sets holding a share of the window's work by the scheme's work table;
 * `CallAnalysis`: what the analysis of one call fixes, in the randomized-extraction form: from each state of the call's
   session, the probabilities that it accepts while a sampled proof block's extraction fails (`ks`) or succeeds but disagrees with
   a transcript on the unit's wires (`link`). The transcripts and the units' statements are the window's;
 * `thenExp`, `along`: a quantity of each call's session state, summed over the calls along the window's run;
 * the premises of the window's composition, each in the shape of a compiled bound, a constant plus a term of the
-  prover's state: `EscapesWithin` (the sample's escapes on a family within `η` of the product distribution's at every
+  prover's state: `MissProbWithin` (the sample's escapes on a family within `η` of the product distribution's at every
   registration), `CallAnalysis.KnowledgeSound` (a call's extraction, `κ_c` plus a term `g_c` of its session's state)
   and `BindSoundIn` (a call's binding error in the window, against the window's committed transcript, a function of the
   window's state);
@@ -55,8 +55,8 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
 * the deployed sample, sampled proofs' service (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
   the `N` tiles; `share` and `sessionLaw`, each session's own uniform law; `CopyClosed`, the unit sets that hold a tile
-  in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `WrongCopyClosed`,
-  statements whose wrong sets are copy-closed.
+  in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `IncorrectCopyClosed`,
+  statements whose incorrect sets are copy-closed.
 -/
 
 @[expose] public section
@@ -159,8 +159,8 @@ def seedIn (U : UnitStmts Tr n) (X : Tr) (v : WUnit n) : SeedIn U.Tag U.Salt U.P
 open Classical in
 /-- **The incorrect proof blocks of a transcript**: those whose committed outputs in `X` aren't their function of their inputs at
 their seed inputs. Wrong is about values, not work: a deficient unit whose committed outputs came out right by luck isn't
-wrong. -/
-noncomputable def wrong (U : UnitStmts Tr n) (X : Tr) : Finset (WUnit n) :=
+incorrect. -/
+noncomputable def incorrect (U : UnitStmts Tr n) (X : Tr) : Finset (WUnit n) :=
   Finset.univ.filter fun v => ¬ U.computes v (U.seedIn X v) X
 
 end UnitStmts
@@ -168,7 +168,7 @@ end UnitStmts
 /-- **PoUW's harm family** (the `𝓑` the window audit reads for compute): the incorrect sets whose work is at least the
 share `ε` of the window's, `∑_{v ∈ B} W_ref(v) ≥ ε · W` with `W = ∑_v W_ref(v)`, where `Wref` is the scheme's work
 table read at each unit's template. Under decision 106 a unit is a self-contained `r × c` tile (`UnitStmts`), so its
-harm is its own `W_ref(tile)`, `r·c` dots. That is fan 1, since a wrong tile is charged its own work and no other
+harm is its own `W_ref(tile)`, `r·c` dots. That is fan 1, since a incorrect tile is charged its own work and no other
 unit's, and there is no steering term, since no unit sets the noise another reads. -/
 def harmSets {C : ℕ} {n : Fin C → ℕ} (Wref : WUnit n → ℕ) (ε : ℝ≥0∞) (B : Finset (WUnit n)) : Prop :=
   ε * ((∑ v, Wref v : ℕ) : ℝ≥0∞) ≤ ((∑ v ∈ B, Wref v : ℕ) : ℝ≥0∞)
@@ -215,7 +215,7 @@ def seqCalls (sess : Fin C → Game Bool) : List (Fin C) → Game Bool
 
 /-- **The window's session** on the sample `S` against the registration `R`: each call's session on its share of `S`, the
 calls in order. -/
-def windowSession {Reg : Type} (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool) (S : Finset (WUnit n))
+def executionPhaseSession {Reg : Type} (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool) (S : Finset (WUnit n))
     (R : Reg) : Game Bool :=
   seqCalls (fun c => sess c (slice S c) R) (List.finRange C)
 
@@ -233,18 +233,18 @@ noncomputable def along (sess : Fin C → Game Bool) (F : (c : Fin C) → Strate
 * `ks S R τ u`: `Pr[the session accepts ∧ extraction of the drawn unit u fails]`;
 * `link S R τ u X`: `Pr[it accepts ∧ extraction of u succeeds but differs from the transcript X on u's wires]`, the
   roots its seed reads among them;
-* `cover`: when `u` is sampled and wrong in `X` (`UnitStmts.wrong`), `Pr[accept] ≤ ks + link`.
+* `cover`: when `u` is sampled and incorrect in `X` (`UnitStmts.incorrect`), `Pr[accept] ≤ ks + link`.
 
 Extraction is against `u`'s statement at its place `⟨c, u⟩`: its relation derives the seed from the place and what its
 witness opens to the window root, the position and roots among it. A witness that opens anything but `X`'s differs from
-`X` on `u`'s wires, which `link` counts, and `UnitStmts.wrong` reads the seed inputs at the same place in `X`. So
+`X` on `u`'s wires, which `link` counts, and `UnitStmts.incorrect` reads the seed inputs at the same place in `X`. So
 `cover` can hold only for a session that checks unit `u` at its place, never at one the prover picks. The transcripts
 `Tr` and the units' statements `U` are the window's. -/
 structure CallAnalysis {Reg Tr : Type} (U : UnitStmts Tr n) (c : Fin C)
     (sess : Finset (Fin (n c)) → Reg → Game Bool) where
   ks : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → Fin (n c) → ℝ≥0∞
   link : (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess S R) → Fin (n c) → Tr → ℝ≥0∞
-  cover : ∀ S R (τ : Strategy (sess S R)) u X, u ∈ S → (⟨c, u⟩ : WUnit n) ∈ U.wrong X →
+  cover : ∀ S R (τ : Strategy (sess S R)) u X, u ∈ S → (⟨c, u⟩ : WUnit n) ∈ U.incorrect X →
     prob (· = true) (sess S R) τ ≤ ks S R τ u + link S R τ u X
 
 /-- **A call's knowledge soundness, as a compiled table bounds it** (premises `κ_c`, `g_c`): whatever the sample, the
@@ -272,9 +272,9 @@ picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or 
 its seed reads are the committed transcript's, fixed before the sample. -/
 def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
-    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
-    (c : Fin C) (δlink : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
-  ∀ (R : Reg) (τ : Cont Lw (windowSession sess) R) (tgt : (Lw R).Ω → Option (WUnit n)),
+    (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
+    (c : Fin C) (δlink : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
+  ∀ (R : Reg) (τ : Cont Lw (executionPhaseSession sess) R) (tgt : (Lw R).Ω → Option (WUnit n)),
     avg (fun ω => along (fun c' => sess c' (slice ((Lw R).draw ω) c') R)
       (fun c' τc => if c' = c then
           atTgt (slice ((Lw R).draw ω) c') (pick (tgt ω) c')
@@ -292,7 +292,7 @@ program's run at each oracle (`CollCounted`). -/
 noncomputable def coll {Reg : Type} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess c S R) → ℝ≥0∞) (R : Reg)
-    (τ : Cont Lw (windowSession sess) R) : ℝ≥0∞ :=
+    (τ : Cont Lw (executionPhaseSession sess) R) : ℝ≥0∞ :=
   avg fun ω => along (fun c => sess c (slice ((Lw R).draw ω) c) R)
     (fun c τc => g c (slice ((Lw R).draw ω) c) R τc) (List.finRange C) (τ ω)
 
@@ -318,19 +318,19 @@ recheck's (c)). -/
 def CollCounted {O Reg : Type} [Fintype O] (Lw : O → Reg → Law (WUnit n))
     (sess : O → (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (g : (H : O) → (c : Fin C) → (S : Finset (Fin (n c))) → (R : Reg) → Strategy (sess H c S R) → ℝ≥0∞)
-    (qs : (H : O) → Strategy (auditReg (Lw H) (windowSession (sess H))) → ℕ) (f : ℕ → ℝ≥0∞) : Prop :=
-  ∀ (q : ℕ) (σ : (H : O) → Strategy (auditReg (Lw H) (windowSession (sess H)))), (∀ H, qs H (σ H) ≤ q) →
+    (qs : (H : O) → Strategy (auditReg (Lw H) (executionPhaseSession (sess H))) → ℕ) (f : ℕ → ℝ≥0∞) : Prop :=
+  ∀ (q : ℕ) (σ : (H : O) → Strategy (auditReg (Lw H) (executionPhaseSession (sess H)))), (∀ H, qs H (σ H) ≤ q) →
     avg (fun H => coll (Lw H) (sess H) (g H) (reg (σ H)) (cont (σ H))) ≤ f q
 
 /-- **The window's sample is within `η` of the product distribution on the family `𝓑`** at every registration (premise): the
-escape of every unit set in `𝓑` under the sampling design the verifier runs at `R` is at most its escape under the calls' laws at
+missProb of every unit set in `𝓑` under the sampling design the verifier runs at `R` is at most its missProb under the calls' laws at
 `R`, sampled independently, plus `η`, the same `η` for every `R`. The window's guarantee reads it only at its committed
 transcript's incorrect proof blocks, when they're in `𝓑`. For the keyed sample this is the pseudorandomness of the keyed streams at
 the context `digest(R)` (A4, `prf/sha-512`), from a fresh uniform source (A5), with a distinct context for every call
 (M1), on every family. For the service's sample it holds at `η = 0` on the copy-closed sets (`CopyClosed`). -/
-def EscapesWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fin C) → Law (Fin (n c)))
+def MissProbWithin {Reg : Type} (Lw : Reg → Law (WUnit n)) (L : Reg → (c : Fin C) → Law (Fin (n c)))
     (𝓑 : Finset (WUnit n) → Prop) (η : ℝ≥0∞) : Prop :=
-  ∀ R B, 𝓑 B → (Lw R).escape B ≤ (Law.prod (L R)).escape B + η
+  ∀ R B, 𝓑 B → (Lw R).missProb B ≤ (Law.prod (L R)).missProb B + η
 
 /-- **What the served pass committed**, as the window's units read it, fixed before the window's registration:
 * `anchor p`: the words the served pass committed for the inputs (activations and weights) of the tile at position
@@ -365,9 +365,9 @@ the words that unit reads from the `-h3` leaf at its position. -/
 def Served {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
   P.rootOf X = P.rootH3 ∧ ∀ v, P.outputs X v = P.tileRead (P.leaf (U.pos X v)) v
 
-/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowDelta`; open on main): every prover's window
+/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `ExecutionPhaseDelta`; open on main): every prover's window
 accepts while its committed transcript isn't anchored and served (`Anchored`, `Served`, against the served pass `P`)
-with probability at most `δin(R, τ)`, a function of the window's state. `WindowDelta` bounds the incorrect proof blocks of whatever
+with probability at most `δin(R, τ)`, a function of the window's state. `ExecutionPhaseDelta` bounds the incorrect proof blocks of whatever
 transcript the analysis commits; this is what makes that transcript the served computation's, not a self-consistent copy
 the prover chose. The units' statements `U` and the served pass `P` are fixed before the window, so the prover picks
 neither.
@@ -381,12 +381,12 @@ requires: then the
 outputs' half is that Program's opening of the `-h3` root, and the inputs' half is Flock's `AnchorsSound` (`δ_in`,
 `Proofs/Flock/Soundness/Audit/OneStage.lean`), each a binding term at the window's state. -/
 def ServedTie {Reg Tr : Type} (Lw : Reg → Law (WUnit n)) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
-    (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos)
-    (δin : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
-  ∀ σ : Strategy (auditReg Lw (windowSession sess)),
+    (committed : (R : Reg) → Cont Lw (executionPhaseSession sess) R → Tr) (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos)
+    (δin : (R : Reg) → Cont Lw (executionPhaseSession sess) R → ℝ≥0∞) : Prop :=
+  ∀ σ : Strategy (auditReg Lw (executionPhaseSession sess)),
     prob (fun o => o.1 = true ∧
         ¬ (Anchored U P (committed (reg σ) (cont σ)) ∧ Served U P (committed (reg σ) (cont σ))))
-      (auditReg Lw (windowSession sess)) σ ≤ δin (reg σ) (cont σ)
+      (auditReg Lw (executionPhaseSession sess)) σ ≤ δin (reg σ) (cont σ)
 
 end Window
 
@@ -430,7 +430,7 @@ def sessionLaw (N K cap σ : ℕ) : Law (Fin N) where
 
 /-- **Copy-closed unit sets**: a set that holds tile `t` in one session holds it in every session. The service's units'
 statements read the tile and not the session that proves it, so a transcript's incorrect proof blocks are copy-closed
-(`WrongCopyClosed`). -/
+(`IncorrectCopyClosed`). -/
 def CopyClosed {S N : ℕ} (B : Finset (WUnit fun _ : Fin S => N)) : Prop :=
   ∀ (σ σ' : Fin S) (t : Fin N), (⟨σ, t⟩ : WUnit fun _ : Fin S => N) ∈ B → ⟨σ', t⟩ ∈ B
 
@@ -451,11 +451,11 @@ def UnitStmts.copies {Tr : Type} {N : ℕ} (V : UnitStmts Tr fun _ : Fin 1 => N)
   rootB X v := V.rootB X ⟨0, v.2⟩
   computes v si X := V.computes ⟨0, v.2⟩ si X
 
-/-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowDelta`, which it reads at
-`𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceEscapes`'s family): at every transcript, the incorrect proof blocks hold a tile
-in every session or in none. It holds for the service's statements (`Pouw.Window.wrongCopyClosed_copies`), and there
+/-- **The deployed incorrect sets are copy-closed** (PoUW's reading of `ExecutionPhaseDelta`, which it reads at
+`𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceMissProb`'s family): at every transcript, the incorrect proof blocks hold a tile
+in every session or in none. It holds for the service's statements (`Pouw.Window.incorrectCopyClosed_copies`), and there
 `𝓑`'s copy-closed conjunct is automatic (`Pouw.Window.harmSets_copyClosed_iff`). -/
-def WrongCopyClosed {Tr : Type} {S N : ℕ} (U : UnitStmts Tr fun _ : Fin S => N) : Prop :=
-  ∀ X, CopyClosed (U.wrong X)
+def IncorrectCopyClosed {Tr : Type} {S N : ℕ} (U : UnitStmts Tr fun _ : Fin S => N) : Prop :=
+  ∀ X, CopyClosed (U.incorrect X)
 
 end Pouw.Window

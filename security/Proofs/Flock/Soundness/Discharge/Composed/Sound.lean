@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.Exec.Headline
 
 `zk_session_sound`: `zk_session_composed`'s soundness conjunct, at the same law and parameters, with the same proof.
 For any live prover `τ` of a public-output one-table `--zk` session,
-`Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
+`Pr[flock-verify --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key
 program's partition (`keyProg c hU n`), each read at its `--zk` site and bound to the rows it commits (lp-zkbind's
 `sitesZAt`, `rsZAt`): `ZkBind.zk_flock_countC_execOS_at` at the simulated prover `simZ … τ`, with `δ_tree = 0`
 (`execAccept` is acceptance, so the tree's event is empty: `TreeRewind.ofNever`), carried to flock-verify's acceptance
@@ -92,7 +92,7 @@ theorem zk_session_sound
       (zcStrat execArith hs512 (planZAt dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
             ((rsZAt ht dj y₀ hc hU hpub hpt hscope).bindingZ (rsZAt_computes ht dj y₀ hc hU hpub hpt hscope))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))

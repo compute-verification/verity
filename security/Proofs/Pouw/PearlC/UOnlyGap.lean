@@ -32,7 +32,7 @@ section
 variable {Q R S : Type}
 
 open Classical in
-theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) :
+theorem correctSet_subset_correctSetU (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Trace) :
     correctSet P U H s τ ⊆ correctSetU P U H s τ := by
   intro u hu
   unfold correctSet at hu
@@ -63,15 +63,15 @@ theorem gapFromTTOutU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : 
   refine le_trans (Pouw.pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   intro x hwin
   unfold WinsU at hwin
-  have hsum : ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2), P.Wref U.layout u ≤
-      Ω * ∑ u ∈ correctSetU P U x.1 x.2 (A.transcript U x.1 x.2),
-        P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u) := by
+  have hsum : ∑ u ∈ correctSetU P U x.1 x.2 (A.trace U x.1 x.2), P.Wref U.layout u ≤
+      Ω * ∑ u ∈ correctSetU P U x.1 x.2 (A.trace U x.1 x.2),
+        P.credit x.1 x.2 U u (actOf (A.trace U x.1 x.2) u) := by
     rw [mul_sum]
     refine sum_le_sum fun u hu => ?_
     unfold correctSetU at hu
     rw [mem_filter] at hu
     obtain ⟨hu, c, hc, hcor⟩ := hu
-    have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
+    have hact : actOf (A.trace U x.1 x.2) u = c.act := by simp [actOf, hc]
     rw [hact]
     exact hW U hU x.1 x.2 u (mem_range.mp hu) c.act hcor.1 hcor.2.1
   have hden : 1 - (1 - (1 - g₀) / Ω) = (1 - g₀) / Ω := by ring
@@ -116,7 +116,7 @@ theorem ttOutPearlCDevRev1_of_uOnly [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
   obtain ⟨hur, c, hc, _, hcap, _⟩ := hu
   obtain ⟨_, _, hk, _, hg, _⟩ := hU.2 u (mem_range.mp hur)
   have hcr := creditDevRev1_nonneg d hadd hbf (U.layout.shape u) hk hg
-  have hact : actOf (A.transcript U x.1 x.2) u = c.act := by simp [actOf, hc]
+  have hact : actOf (A.trace U x.1 x.2) u = c.act := by simp [actOf, hc]
   rw [hact]
   have h1 : sem.unitDebitRev1 d x.1 x.2 U u c.act ≤ ρ * creditDevRev1 d (U.layout.shape u) := hcap
   have h0 := unitDebitRev1_nonneg sem d hadd x.1 x.2 U u c.act

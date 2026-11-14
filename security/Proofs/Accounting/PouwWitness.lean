@@ -30,7 +30,7 @@ variable {Q R S : Type}
 
 open Classical in
 /-- The output-priced cost of the transcript `τ` on workload `U`: its committed units' GEMMs. -/
-noncomputable def pricedCost (U : Pouw.Workload) (τ : Pouw.Transcript) : ℝ :=
+noncomputable def pricedCost (U : Pouw.Workload) (τ : Pouw.Trace) : ℝ :=
   ∑ u ∈ (Finset.range U.layout.N).filter (fun u => (τ u).isSome), ((U.layout.shape u).Wmm : ℝ)
 
 /-- The program `prog`, committing blanks when its transcript costs more than `b`. -/

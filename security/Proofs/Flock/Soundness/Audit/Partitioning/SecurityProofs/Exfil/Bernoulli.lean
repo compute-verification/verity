@@ -7,7 +7,7 @@ import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 /-!
 # Exfiltration: a sampling design that certifies the target
 
-Independent samples with probability `q = num/N` (`Law.bernoulli`) give a set of `K + 1` or more units the escape
+Independent samples with probability `q = num/N` (`Law.bernoulli`) give a set of `K + 1` or more units the missProb
 `(1 − q)^(K+1)` at most. When that is below `δ`, the harm bound `b·K` and the count `K` certify `b·K + locBits n K`
 (`bern_certifies`). Taking `q` just above `Λ/(K+1)`, or `1` when that is at least `1`, makes `1 − q < e^{−Λ/(K+1)}`, so the
 sampling design certifies at `n·q ≤ n·Λ/(K+1) + ε` samples (`exists_certifying_law`). At `δ = 1` this still samples every unit with a small
@@ -29,7 +29,7 @@ theorem meanDraws_nonneg {n : ℕ} (L : Law n) : 0 ≤ meanDraws L :=
   Finset.sum_nonneg fun _ _ => ENNReal.toReal_nonneg
 
 theorem bern_escape_toReal {n num N : ℕ} [NeZero N] (h : num ≤ N) (B : Finset (Fin n)) :
-    ((Law.bernoulli n num N).escape B).toReal = (1 - (num : ℝ) / N) ^ B.card := by
+    ((Law.bernoulli n num N).missProb B).toReal = (1 - (num : ℝ) / N) ^ B.card := by
   have hN : (N : ℝ) ≠ 0 := by exact_mod_cast NeZero.ne N
   rw [Law.bernoulli_escape h, ENNReal.toReal_pow]
   congr 1
@@ -62,7 +62,7 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
     linarith
   have hδ : 0 < δ := lt_of_le_of_lt (pow_nonneg ht0 _) hesc
   have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
-      (Law.bernoulli n num N).escape B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
+      (Law.bernoulli n num N).missProb B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
     intro B hB
     rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (Law.escape_le_one _ B))
       (pow_nonneg ht0 _), bern_escape_toReal h]
@@ -95,7 +95,7 @@ theorem exists_certifying_law (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 : 0 < δ) (h
   have : NeZero N := ⟨by exact_mod_cast hNpos.ne'⟩
   set num := min N (⌊x * N⌋₊ + 1) with hnumdef
   have hnum : num ≤ N := min_le_left _ _
-  -- the escape factor is below `e^{-x}`
+  -- the missProb factor is below `e^{-x}`
   have hfac : 1 - (num : ℝ) / N < Real.exp (-x) := by
     rcases min_cases N (⌊x * N⌋₊ + 1) with ⟨he, -⟩ | ⟨he, -⟩
     · rw [← hnumdef] at he

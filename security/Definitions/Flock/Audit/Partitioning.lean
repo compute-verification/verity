@@ -29,7 +29,7 @@ variable {n : ℕ}
 /-- **The free-compute target**: every set of incorrect proof blocks whose work is at least `C` escapes with probability at most
 `δ`. -/
 def MeetsTarget (L : Law n) (w : Fin n → ℝ) (C δ : ℝ) : Prop :=
-  ∀ B : Finset (Fin n), C ≤ ∑ u ∈ B, w u → (L.escape B).toReal ≤ δ
+  ∀ B : Finset (Fin n), C ≤ ∑ u ∈ B, w u → (L.missProb B).toReal ≤ δ
 
 /-- The location term of `audit_exfiltration`: `log₂ ∑_{j ≤ K} C(n, j)`, the bits that say which units are wrong when at
 most `K` of `n` are. -/

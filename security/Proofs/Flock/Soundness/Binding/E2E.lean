@@ -69,7 +69,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   {L : Law n}
 
 /-- **The end-to-end count curve, with the rows' value binding**: `flock_e2e_count` at `vb := HmRows.binding rs hHm`.
-If `execAccept` holds, the probability that at least `K` units of the committed circuit are wrong at the committed values
+If `execAccept` holds, the probability that at least `K` units of the committed circuit are incorrect at the committed values
 is at most `miss_L(K) + ε_ks + δ_link + δ_tree`: `ε_ks` and `δ_tree` under `SHA512CRStrict` of `H` (`cr/sha-512`,
 through `hKS` and `hT`), `δ_link` under `SHA512CRExpected` of SHA-512 (`ecr/sha-512`, through `hCR`). Beyond the
 skeleton's `dp`, `hConst` and `hZero`, it takes the rows' layout (`lay`, `rs`), `HmRowComputes` (`hHm`) and the serving
@@ -90,7 +90,7 @@ theorem flock_e2e_count_hm96
     (tr : StrictCR.TreeRewind H (audit L Reg (batchedSession H E plan)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSession H E plan)) σ ≤
       L.miss K + StrictCR.ksAvgStrict plan L k qF qS (reg σ) +
         P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ t' + ENNReal.ofReal (tr.bound qT) :=
@@ -119,7 +119,7 @@ theorem flock_e2e_drawn_hm96
     (tr : StrictCR.TreeRewind H (audit L Reg (batchedSession H E plan)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       StrictCR.ksAvgStrict plan L k qF qS (reg σ) + P.linkBoundE (L := L) plan tab (rs.binding hHm) k Rw M ρ t' +
         ENNReal.ofReal (tr.bound qT) :=
@@ -151,7 +151,7 @@ theorem flock_e2e_drawn_exec_hm96
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))) o.2)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ t' +
@@ -184,7 +184,7 @@ theorem flock_e2e_count_exec_hm96 (σs : Fin n → Fin m) (ks : Fin m → ℕ)
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (P.Xplur H E plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       (Law.stratified σs ks hks).miss K + StrictCR.ksAvgStrict plan (Law.execStratified St Ls) k qF qS (reg σ) +
         P.linkBoundE (L := Law.execStratified St Ls) plan tab (rs.binding hHm) k Rw M ρ t' +

@@ -300,11 +300,11 @@ theorem boolean : d.D.Boolean := ⟨fun _ => rfl, by decide⟩
 theorem computeBlock (u : Fin 2) : ComputeBlock d (P.gates u) 1 1 1 :=
   ⟨{2}, fun _ => {1}, by decide, fun _ => (card_singleton _).le, by revert u; decide⟩
 
-theorem sessionBlocks : SessionBlocks d P 1 0 1 1 1 := fun u =>
+theorem inferenceBlocks : InferenceBlocks d P 1 0 1 1 1 := fun u =>
   ⟨by revert u; decide, by revert u; decide, computeBlock u⟩
 
 theorem trainingBlocks : TrainingBlocks d P 1 0 1 1 1 1 1 := fun u =>
-  ⟨(sessionBlocks u).1, (sessionBlocks u).2.1, Or.inl (computeBlock u)⟩
+  ⟨(inferenceBlocks u).1, (inferenceBlocks u).2.1, Or.inl (computeBlock u)⟩
 
 /-- No partition into inference blocks at `(c, k) = (1, 1)`: gate `3`'s block is gate `3`, which reads two values. -/
 theorem not_isCK {B : ℕ} (P' : Partition d.D B) : ¬ P'.IsCK d 1 1 := by
@@ -360,10 +360,10 @@ theorem Security_nontrivial : Guarantees.Security_nontrivial := by
     ENNReal.ofReal_one, mul_one, Chain.honestCost_eq, ENNReal.top_mul (by norm_num), top_le_iff]
   exact ENNReal.natCast_ne_top _
 
-theorem FitServing_honest : Guarantees.FitServing_honest := ⟨Honest.boolean, Honest.sessionBlocks, le_rfl⟩
+theorem FitServing_honest : Guarantees.FitServing_honest := ⟨Honest.boolean, Honest.inferenceBlocks, le_rfl⟩
 
 theorem FitServing_nontrivial : Guarantees.FitServing_nontrivial :=
-  ⟨Honest.boolean, Honest.sessionBlocks, by unfold ServingFits; decide, Honest.not_bound⟩
+  ⟨Honest.boolean, Honest.inferenceBlocks, by unfold ServingFits; decide, Honest.not_bound⟩
 
 theorem FitTraining_honest : Guarantees.FitTraining_honest :=
   ⟨Honest.boolean, Honest.trainingBlocks, le_rfl, le_rfl, le_rfl⟩

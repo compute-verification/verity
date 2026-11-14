@@ -198,7 +198,7 @@ def checkDrawFull (draw population law : Json) : Check := Id.run do
     match problem with
     | some why => c := c.fail "strata" (Json.str why)
     | none =>
-      let wrong := (match getD draw "strata" with | .arr ss => ss | _ => #[]).filterMap fun s =>
+      let incorrect := (match getD draw "strata" with | .arr ss => ss | _ => #[]).filterMap fun s =>
         let rs := (ranges? (getD s "units")).getD #[]
         let drawn := units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
         if int? (getD s "k") != some (drawn : Int) then
@@ -206,7 +206,7 @@ def checkDrawFull (draw population law : Json) : Check := Id.run do
           | .str t => some (t, Json.mkObj [("drawn", Lean.toJson drawn), ("k", getD s "k")])
           | _ => none
         else none
-      if !wrong.isEmpty then c := c.fail "strata-count" (Json.mkObj wrong.toList)
+      if !incorrect.isEmpty then c := c.fail "strata-count" (Json.mkObj incorrect.toList)
   if closure then
     let raw := getD draw "closure"
     let cs := match raw with

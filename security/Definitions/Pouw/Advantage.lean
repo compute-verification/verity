@@ -31,7 +31,7 @@ def Gε [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R 
     (D : Layout → Prop) (ε : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-        (1 + ε) * T < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ∧
+        (1 + ε) * T < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2), (P.Wref U.layout u : ℝ) ∧
           ¬ A.Breaks U x.1 x.2)
       ≤ δ q U.layout.N
 
@@ -45,7 +45,7 @@ def AuditGε [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     ∀ (t : ℕ) (εs : ℝ), εs < 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket (P.Wref U.layout) U.layout.N) =>
-          AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AuditAccepts (correctSet P U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           (1 + ε) / (1 - εs) * T < totalWref P U.layout ∧ ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + δ q U.layout.N
 
@@ -67,7 +67,7 @@ least the honest work of its correct units over `1 + ε`, except with probabilit
 def Gε [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (D : Layout → Prop) (ε : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => (1 + ε) * T < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), P.Wref U.layout u)
+    pr (fun x : (Q → R) × S => (1 + ε) * T < ∑ u ∈ correctSet P U x.1 x.2 (A.trace U x.1 x.2), P.Wref U.layout u)
       ≤ δ q U.layout.N
 
 end Pouw.PearlC

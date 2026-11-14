@@ -70,7 +70,7 @@ theorem strataSizes_sum (c : List (List (List ℕ))) : (strataSizes c).sum = c.f
   unfold strataSizes
   rw [List.length_flatten]
 
-/-- At a `SubsetDesign`, `P_a(B)` is the hypergeometric escape over the partition's proof blocks. -/
+/-- At a `SubsetDesign`, `P_a(B)` is the hypergeometric missProb over the partition's proof blocks. -/
 theorem Pa_subset {d : Design} {kd : ℕ} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))}
     (hP : P.classes = [c]) (B : Finset ℕ) :
     d.Pa P B = ((P.blocks.length - (window 0 P.blocks.length B).card).choose kd : ℝ) /
@@ -101,7 +101,7 @@ theorem execOS_escape_le_Pa (n kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype �
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : FlockSoundness.Assumptions.UniformRandomBytes Lb src)
     {d : Design} (hd : SubsetDesign d kd) {P : Partition} {c : List (List (List ℕ))} (hP : P.classes = [c])
     (hn : P.blocks.length = n) (B : Finset (Fin n)) :
-    (FlockSoundness.Audit.Law.execOS (n := n) src (.subset kd) n).escape B ≤
+    (FlockSoundness.Audit.Law.execOS (n := n) src (.subset kd) n).missProb B ≤
       ENNReal.ofReal (d.Pa P (B.map Fin.valEmbedding)) := by
   refine (FlockSoundness.Audit.Law.execOS_subset_escape_le n kd hkd Lb src hA3 B).trans (le_of_eq ?_)
   rw [FlockSoundness.Audit.Law.subset_escape, Pa_subset hd hP, hn,

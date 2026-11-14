@@ -279,7 +279,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 
 /-- **The compiled `--zk` count curve at the live sample, with `ε_ks` discharged** (`zk_flock_countC_execOS` at
 `jointZC_ksBound`): for `k ≥ 1` accepted reruns,
-`Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `ε_ks` the compiled analysis's
+`Pr[execAccept ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `ε_ks` the compiled analysis's
 knowledge term at `ksBoundAccZ`, every table's fork terms at its committed objects and its level-0 term in the session. -/
 theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
@@ -294,7 +294,7 @@ theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P p
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
       (Law.stratified σs ks hks).miss K +
         ksAvgZC A Hs planZ k (fun S R τ j => ksBoundAccZ A Hs (planZ S R) j k τ) (reg σ) (cont σ) +
@@ -306,7 +306,7 @@ theorem zk_flock_countC_execOS_ks (hA : A.Correct) (hlow : LoweringSoundZK A P p
 `Flock.Draw.drawWith`'s stratified sampling design on a byte source that A3 makes uniform (`hA3`), every table's finders after each
 sample under A1 at budgets `qF`, `qS` (`hCR`), the link finders under A2 (in `linkBoundZC`) and the serving roots'
 rewinding finder under A1 at budget `qT` (`hT`):
-`Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s count
+`Pr[execAccept ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s count
 curve and `ε_ks = ksAvgStrictZ`. -/
 theorem zk_flock_countC_execOS_strict (hA : A.Correct) (hlow : LoweringSoundZK A P planZ tab decode)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
@@ -324,7 +324,7 @@ theorem zk_flock_countC_execOS_strict (hA : A.Correct) (hlow : LoweringSoundZK A
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
       (Law.stratified σs ks hks).miss K +
         ksAvgStrictZ planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
@@ -346,7 +346,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 (`zk_flock_count_execOS_m1_cr`'s compiled counterpart at any table parameters; `zk_flock_countC_execOS_m1_cr` is the one
 at Flock ZK's). Each sampled proof block is read from its table at its place (`place`),
 and the committed transcript is the plurality value layer of a binding of wires to registered commit strings (`vb`).
-Then `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s
+Then `Pr[execAccept ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, with `miss(K)` `Law.stratified`'s
 count curve on bytes A3 makes uniform (`hA3`), `ε_ks = ksAvgStrictZ` under A1 for every table's finders after each sample
 (`hCR`), `δ_link = linkBoundZC` under A2 for the link finders (`⊤` at a prover whose finders fail it), and
 `δ_tree = tr.bound qT` under A1 for the serving roots' rewinding finder (`hT`). -/
@@ -369,7 +369,7 @@ theorem zk_flock_countC_execOS_cr (hA : A.Correct)
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
       (Law.stratified σs ks hks).miss K +
         ksAvgStrictZ planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +
@@ -400,7 +400,7 @@ theorem zk_flock_countC_execOS_m1_cr (hA : A.Correct)
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC A Hs planZ)) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+    prob (fun o => execAccept o ∧ K ≤ (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (batchedSessionZC A Hs planZ)) σ ≤
       (Law.stratified σs ks hks).miss K +
         ksAvgStrictZm1 planZ (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS (reg σ) +

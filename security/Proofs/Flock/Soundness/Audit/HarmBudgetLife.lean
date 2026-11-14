@@ -17,7 +17,7 @@ proof blocks being those of its committed transcript (`Analysis.committedOf`), w
 registration fixes before the round's sample. It is faithful: its acceptance is the lifetime's
 (`life_accept`). Each round's drawn-unit bound is `audit_drawn` (`drawn_lifePlay`), so `harm_budget`
 gives the lifetime's bound (`life_harm_budget`):
-$$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{wrong}(X_t)) \ge H\Big]
+$$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{incorrect}(X_t)) \ge H\Big]
   \le e^{-\lambda H} + \sum_{m < N} (\varepsilon_{ks,m} + \delta_{link,m}).$$
 -/
 
@@ -134,7 +134,7 @@ proof blocks. -/
 noncomputable def roundPlay (A : Analysis L Reg session) {next : Game Bool} {N : ℕ}
     (rest : Strategy next → Play n N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     Play n (N + 1) :=
-  .round L (A.wrong (A.committedOf (Strategy.ofBind (afterAudit next) (audit L Reg session) t))) fun ω =>
+  .round L (A.incorrect (A.committedOf (Strategy.ofBind (afterAudit next) (audit L Reg session) t))) fun ω =>
     ofBindPlay (afterAudit next) (fun o => contPlay rest o.1)
       ((session (L.draw ω) t.1).map fun ok => (ok, L.draw ω)) (t.2 ω)
 
@@ -171,7 +171,7 @@ theorem prEv_roundPlay (A : Analysis L Reg session) (h : Fin n → ℝ) (Ev : Bo
     (roundPlay A rest t).prEv h Ev x =
       avg fun ω => (ofBindPlay (afterAudit next) (fun o => contPlay rest o.1)
         ((session (L.draw ω) t.1).map fun ok => (ok, L.draw ω)) (t.2 ω)).prEv h Ev
-          (x + ∑ u ∈ A.wrong (A.committedOf (Strategy.ofBind (afterAudit next) (audit L Reg session) t)), h u) :=
+          (x + ∑ u ∈ A.incorrect (A.committedOf (Strategy.ofBind (afterAudit next) (audit L Reg session) t)), h u) :=
   rfl
 
 /-- One round's drawn-unit term is the audit's drawn-unit event. -/
@@ -315,7 +315,7 @@ theorem life_accept (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) (h : 
 
 /-- **The cumulative harm budget over a lifetime of one-stage audits.** For laws meeting the design
 condition with weights `π`, harms `h` with `λ h ≤ π` and `λ ≥ 0`, and every prover strategy, the
-lifetime accepts with total harm `Σ_t h(wrong(X_t))` at least `H` with probability at most
+lifetime accepts with total harm `Σ_t h(incorrect(X_t))` at least `H` with probability at most
 `e^{−λH} + Σ_{m<N} (ε_ks,m + δ_link,m)`. -/
 theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
     (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m))

@@ -12,10 +12,10 @@ coins any run of the device released whose commitment and roots are that session
 The session is one a run of the device under the key closed with that commitment and those roots, its log that run's
 lines (`ChallengePhase.challengePhaseOf_run`), and the device's own ledger opens it withheld on the window (`Window.run_opens`), or a
 break; so that run released the coins, its log the session's, and the stream `challengerStream` accepted is read under
-that run's commitment and its family's roots (`session_run`, with `drawn_log` from it), and `DrawnByDevice` holds
+that run's commitment and its family's roots (`challengePhase_run`, with `drawn_log` from it), and `DrawnByDevice` holds
 (`drawn`, `drawnByDevice`), with `CoinsFromLog` from it (`coinsFromLog_holds`). `challengerStream` accepts those roots
 only when every one is the sample's `after` (`Coins.stream_ok`), so the run's own log shows no other root in the family
-(`session_family`, `family`), and `FamilyOneCommitment` holds (`familyOneCommitment`). `coinsReason` reads what
+(`challengePhase_family`, `family`), and `FamilyOneCommitment` holds (`familyOneCommitment`). `coinsReason` reads what
 `drawCoins` reads from the same evidence, under the key it is handed (`Coins.coinsReason_none`), so the same holds of
 the bytes a stream's run read (`familyOneCommitmentRead`).
 -/
@@ -35,7 +35,7 @@ session's commitment and its roots of the family, a run the device's own ledger 
 stream as its coins of `label` after `after`, the commitment and the roots that run's own (`releasedRootsOf` over its
 log, which is the session's); or the finder outputs a break. What `drawCoins` checks (`Coins.drawCoins_ok`), and
 `coinsReason` through it. -/
-theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
+theorem challengePhase_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
     (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
       (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") w = true)
@@ -57,9 +57,9 @@ theorem session_run {w : String} {after ξ : ByteArray} {c : LiveCommitment} {ro
     · exact .inr b
   · exact .inr b
 
-/-- The run `session_run` gives shows no root in the family but `after`: `challengerStream` accepted its roots
+/-- The run `challengePhase_run` gives shows no root in the family but `after`: `challengerStream` accepted its roots
 (`Coins.stream_ok`). -/
-theorem session_family {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
+theorem challengePhase_family {w : String} {after ξ : ByteArray} {c : LiveCommitment} {roots : Roots}
     (ht : trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str w)]) key
       (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots))
     (hw : withheldOn (getD coins "ledger") w = true)
@@ -69,7 +69,7 @@ theorem session_family {w : String} {after ξ : ByteArray} {c : LiveCommitment} 
     (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
       ∀ r ∈ s.roots label, r = after) ∨
       Break dev key label coins :=
-  (session_run ht hw hl hst).imp (fun ⟨s, hs, ho, e, hc, hr, _⟩ => ⟨s, hs, ho, e, by
+  (challengePhase_run ht hw hl hst).imp (fun ⟨s, hs, ho, e, hc, hr, _⟩ => ⟨s, hs, ho, e, by
     obtain ⟨_, _, _, _, -, -, -, -, -, -, hall⟩ := Coins.stream_ok hst
     simpa only [Run.roots, hc, hr] using hall⟩) id
 
@@ -82,7 +82,7 @@ theorem drawn_log {w : String} {after ξ : ByteArray} (h : drawCoins key w label
       ∃ ls : Array Json, getD (getD coins "session") "log" = .arr ls ∧ ls.toList = s.log.map Json.str) ∨
       Break dev key label coins := by
   obtain ⟨c, roots, ht, hl, hst⟩ := Coins.drawCoins_ok h
-  exact (session_run ht (Window.drawCoins_withheld h) hl hst).imp
+  exact (challengePhase_run ht (Window.drawCoins_withheld h) hl hst).imp
     (fun ⟨s, hs, ho, e, hc, hr, hlog⟩ => ⟨s, hs, ho, e, ⟨c, roots, hc, hr⟩, hlog⟩) id
 
 /-- **A sample `drawCoins` accepts reads a family that holds no other root**: the run that released its coins shows, in
@@ -93,7 +93,7 @@ theorem family {w : String} {after ξ : ByteArray} (h : drawCoins key w label af
       ∀ r ∈ s.roots label, r = after) ∨
       Break dev key label coins := by
   obtain ⟨c, roots, ht, hl, hst⟩ := Coins.drawCoins_ok h
-  exact session_family ht (Window.drawCoins_withheld h) hl hst
+  exact challengePhase_family ht (Window.drawCoins_withheld h) hl hst
 
 /-- **A sample `drawCoins` accepts reads the coins a run of the device released**, a run the device's own ledger opens
 withheld on the sample's window, or the finder outputs a break: `DrawnByDevice` at one sample. -/

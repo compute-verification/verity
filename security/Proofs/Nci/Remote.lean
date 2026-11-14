@@ -8,11 +8,11 @@ public import Proofs.Nci.Cut
 /-!
 # Proofs of the compute dampener, remote protocol
 
-`CertificateSlack` is Markov's inequality on a finite outcome space (`markov`), applied to the wrong windows' capacity,
-whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLag` splits off the escaped blocks
+`CertificateSlack` is Markov's inequality on a finite outcome space (`markov`), applied to the incorrect windows' capacity,
+whose expectation `expected_wrong` swaps into the windows' marginals. `VerdictLag` splits off the missed blocks
 (`Finset.sum_sdiff`) and sums the rest by identity (`Finset.sum_fiberwise_of_maps_to`): under `TerminalDetection` one
 identity's faulty blocks at or after its first detected one all lie within `Δ` of it, so they skip at most `Φ Δ`.
-`escape_slack` is Markov's inequality again, on the escaped blocks' skipped work, whose expectation `expected_escaped`
+`escape_slack` is Markov's inequality again, on the missed blocks' skipped work, whose expectation `expected_escaped`
 sums the per-identity bound `sampled_escape` derives from `SampledDetection`. `DampenerRemote` reads the residual's
 hypothesis outside both events as `DampenerThreaded`'s at `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − θ C`, bounds the
 declared computation by its count verdict (`Nci.Cut.SecurityProofs.CountHE`, read at `ρ = C/X`: `declaredShare_div`),
@@ -83,49 +83,49 @@ theorem markov {Ω : Type} [Fintype Ω] (μ : PMF Ω) (Z : Ω → ℝ) (hZ : ∀
   · rw [if_neg h, mul_zero]
     exact mul_nonneg hq (hZ ω)
 
-/-- The expected capacity of the wrong windows is the sum of each window's capacity times its probability of being
-wrong. -/
-theorem expected_wrong {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) :
-    ∑ ω, (μ ω).toReal * wrongCapacity c (wrong ω) = ∑ i, c i * prob μ (fun ω => wrong ω i) := by
+/-- The expected capacity of the incorrect windows is the sum of each window's capacity times its probability of being
+incorrect. -/
+theorem expected_wrong {Ω : Type} [Fintype Ω] (μ : PMF Ω) {N : ℕ} (c : Fin N → ℝ) (incorrect : Ω → Fin N → Prop) :
+    ∑ ω, (μ ω).toReal * wrongCapacity c (incorrect ω) = ∑ i, c i * prob μ (fun ω => incorrect ω i) := by
   unfold wrongCapacity
   simp only [prob_eq_sum]
   simp only [Finset.mul_sum]
   refine Finset.sum_comm.trans (Finset.sum_congr rfl fun i _ => Finset.sum_congr rfl fun ω _ => ?_)
-  by_cases h : wrong ω i <;> simp [h, mul_comm]
+  by_cases h : incorrect ω i <;> simp [h, mul_comm]
 
 theorem CertificateSlack : Guarantees.CertificateSlack := by
-  intro Ω _ μ N c wrong p ε C hp hε hC hc hcC hsound
-  have hZ : ∀ ω, 0 ≤ wrongCapacity c (wrong ω) := by
+  intro Ω _ μ N c incorrect p ε C hp hε hC hc hcC hsound
+  have hZ : ∀ ω, 0 ≤ wrongCapacity c (incorrect ω) := by
     intro ω
     unfold wrongCapacity
     refine Finset.sum_nonneg fun i _ => ?_
-    by_cases h : wrong ω i <;> simp [h, hc i]
-  have hEp : ∑ i, c i * prob μ (fun ω => wrong ω i) ≤ p * C :=
-    calc ∑ i, c i * prob μ (fun ω => wrong ω i) ≤ ∑ i, c i * p :=
+    by_cases h : incorrect ω i <;> simp [h, hc i]
+  have hEp : ∑ i, c i * prob μ (fun ω => incorrect ω i) ≤ p * C :=
+    calc ∑ i, c i * prob μ (fun ω => incorrect ω i) ≤ ∑ i, c i * p :=
           Finset.sum_le_sum fun i _ => mul_le_mul_of_nonneg_left (hsound i) (hc i)
       _ = (∑ i, c i) * p := (Finset.sum_mul _ _ _).symm
       _ ≤ C * p := mul_le_mul_of_nonneg_right hcC hp
       _ = p * C := mul_comm _ _
-  have hm : ε * C * prob μ (fun ω => ε * C < wrongCapacity c (wrong ω)) ≤ p * C :=
-    ((markov μ (fun ω => wrongCapacity c (wrong ω)) hZ (ε * C)).trans_eq (expected_wrong μ c wrong)).trans hEp
+  have hm : ε * C * prob μ (fun ω => ε * C < wrongCapacity c (incorrect ω)) ≤ p * C :=
+    ((markov μ (fun ω => wrongCapacity c (incorrect ω)) hZ (ε * C)).trans_eq (expected_wrong μ c incorrect)).trans hEp
   rw [le_div_iff₀ hε]
   exact le_of_mul_le_mul_right (by linarith) hC
 
-/-- A block is escaped when it is faulty and no detected faulty block of its identity runs at or before it. -/
+/-- A block is missed when it is faulty and no detected faulty block of its identity runs at or before it. -/
 theorem mem_escaped {β ι : Type} {bad detected : Finset β} {ident : β → ι} {τ : β → ℝ} {b : β} :
-    b ∈ escaped bad detected ident τ ↔ b ∈ bad ∧ ∀ b' ∈ bad, b' ∈ detected → ident b' = ident b → τ b < τ b' := by
-  simp only [escaped, Finset.mem_filter]
+    b ∈ missed bad detected ident τ ↔ b ∈ bad ∧ ∀ b' ∈ bad, b' ∈ detected → ident b' = ident b → τ b < τ b' := by
+  simp only [missed, Finset.mem_filter]
 
 theorem VerdictLag : Guarantees.VerdictLag := by
   intro β ι _ bad detected I ident τ w Φ Δ H C hH hΔ hΦ hI hT hcap
   classical
-  have hEsub : escaped bad detected ident τ ⊆ bad := fun b hb => (mem_escaped.1 hb).1
-  have hfib : ∀ j ∈ I, ∑ b ∈ bad \ escaped bad detected ident τ with ident b = j, w b ≤ Φ * Δ := by
+  have hEsub : missed bad detected ident τ ⊆ bad := fun b hb => (mem_escaped.1 hb).1
+  have hfib : ∀ j ∈ I, ∑ b ∈ bad \ missed bad detected ident τ with ident b = j, w b ≤ Φ * Δ := by
     intro j _
     by_cases hne : (bad.filter (fun b => b ∈ detected ∧ ident b = j)).Nonempty
     · obtain ⟨b₀, hb₀, hmin⟩ := Finset.exists_min_image _ τ hne
       obtain ⟨hb₀bad, hb₀det, hb₀j⟩ := Finset.mem_filter.1 hb₀
-      have e : (bad \ escaped bad detected ident τ).filter (fun b => ident b = j) =
+      have e : (bad \ missed bad detected ident τ).filter (fun b => ident b = j) =
           bad.filter (fun b => ident b = j ∧ τ b₀ ≤ τ b ∧ τ b ≤ τ b₀ + Δ) := by
         ext b
         simp only [Finset.mem_filter, Finset.mem_sdiff]
@@ -142,7 +142,7 @@ theorem VerdictLag : Guarantees.VerdictLag := by
           exact absurd ((mem_escaped.1 hbE).2 b₀ hb₀bad hb₀det (hb₀j.trans hj.symm)) (not_lt.2 h0)
       rw [e]
       exact hcap j (τ b₀)
-    · have e : (bad \ escaped bad detected ident τ).filter (fun b => ident b = j) = ∅ := by
+    · have e : (bad \ missed bad detected ident τ).filter (fun b => ident b = j) = ∅ := by
         rw [Finset.filter_eq_empty_iff]
         intro b hb hj
         refine (Finset.mem_sdiff.1 hb).2 (mem_escaped.2 ⟨(Finset.mem_sdiff.1 hb).1, fun b' hb' hdet hid => ?_⟩)
@@ -162,10 +162,10 @@ theorem VerdictLag : Guarantees.VerdictLag := by
     rw [le_div_iff₀ hH]
     exact hΦ
   have hJ : (0 : ℝ) ≤ I.card * Δ := mul_nonneg (Nat.cast_nonneg _) hΔ
-  have hmaps : ∀ b ∈ bad \ escaped bad detected ident τ, ident b ∈ I := fun b hb => hI b (Finset.mem_sdiff.1 hb).1
-  have hrest : ∑ b ∈ bad \ escaped bad detected ident τ, w b ≤ lagShare I.card Δ H * C :=
-    calc ∑ b ∈ bad \ escaped bad detected ident τ, w b
-        = ∑ j ∈ I, ∑ b ∈ bad \ escaped bad detected ident τ with ident b = j, w b :=
+  have hmaps : ∀ b ∈ bad \ missed bad detected ident τ, ident b ∈ I := fun b hb => hI b (Finset.mem_sdiff.1 hb).1
+  have hrest : ∑ b ∈ bad \ missed bad detected ident τ, w b ≤ lagShare I.card Δ H * C :=
+    calc ∑ b ∈ bad \ missed bad detected ident τ, w b
+        = ∑ j ∈ I, ∑ b ∈ bad \ missed bad detected ident τ with ident b = j, w b :=
           (Finset.sum_fiberwise_of_maps_to hmaps w).symm
       _ ≤ ∑ _j ∈ I, Φ * Δ := Finset.sum_le_sum hfib
       _ = I.card * Δ * Φ := by
@@ -178,17 +178,17 @@ theorem VerdictLag : Guarantees.VerdictLag := by
   have hsplit := Finset.sum_sdiff hEsub (f := w)
   linarith
 
-/-- The expected work the escaped blocks skip is at most `J ((1 − q)/q) B`: `sampled_escape`'s bound, summed over the
+/-- The expected work the missed blocks skip is at most `J ((1 − q)/q) B`: `sampled_escape`'s bound, summed over the
 identities. -/
 theorem expected_escaped {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF Ω) (bad detected : Ω → Finset β)
     (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B : ℝ) (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hq : 0 < q)
     (hq1 : q ≤ 1) (hB : 0 ≤ B) (hw : ∀ b, 0 ≤ w b) (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B)
     (hS : Assumptions.SampledDetection μ bad detected ident τ q) :
-    ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b ≤ I.card * ((1 - q) / q * B) := by
-  have hmaps : ∀ ω, ∀ b ∈ escaped (bad ω) (detected ω) ident τ, ident b ∈ I :=
+    ∑ ω, (μ ω).toReal * ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b ≤ I.card * ((1 - q) / q * B) := by
+  have hmaps : ∀ ω, ∀ b ∈ missed (bad ω) (detected ω) ident τ, ident b ∈ I :=
     fun ω b hb => hI ω b (mem_escaped.1 hb).1
-  calc ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b
-      = ∑ j ∈ I, ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ with ident b = j, w b := by
+  calc ∑ ω, (μ ω).toReal * ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b
+      = ∑ j ∈ I, ∑ ω, (μ ω).toReal * ∑ b ∈ missed (bad ω) (detected ω) ident τ with ident b = j, w b := by
         rw [Finset.sum_comm]
         refine Finset.sum_congr rfl fun ω _ => ?_
         rw [← Finset.mul_sum, Finset.sum_fiberwise_of_maps_to (hmaps ω) w]
@@ -202,13 +202,13 @@ theorem escape_slack {Ω β ι : Type} [Fintype Ω] [DecidableEq ι] (μ : PMF �
     (I : Finset ι) (ident : β → ι) (τ w : β → ℝ) (q B θ C : ℝ) (hθ : 0 < θ) (hC : 0 < C) (hw : ∀ b, 0 ≤ w b)
     (hI : ∀ ω, ∀ b ∈ bad ω, ident b ∈ I) (hq : 0 < q) (hq1 : q ≤ 1) (hB : 0 ≤ B) (hwB : ∀ ω, ∀ b ∈ bad ω, w b ≤ B)
     (hS : Assumptions.SampledDetection μ bad detected ident τ q) :
-    prob μ (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b) ≤
+    prob μ (fun ω => θ * C < ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b) ≤
       I.card * ((1 - q) / q * B) / (θ * C) := by
-  have hZ : ∀ ω, 0 ≤ ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b :=
+  have hZ : ∀ ω, 0 ≤ ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b :=
     fun ω => Finset.sum_nonneg fun b _ => hw b
-  have hm : θ * C * prob μ (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b) ≤
-      ∑ ω, (μ ω).toReal * ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b :=
-    markov μ (fun ω => ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b) hZ (θ * C)
+  have hm : θ * C * prob μ (fun ω => θ * C < ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b) ≤
+      ∑ ω, (μ ω).toReal * ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b :=
+    markov μ (fun ω => ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b) hZ (θ * C)
   have hE := expected_escaped μ bad detected I ident τ w q B hI hq hq1 hB hw hwB hS
   rw [le_div_iff₀ (mul_pos hθ hC)]
   linarith
@@ -303,24 +303,24 @@ theorem declared_le_div {C X Md : ℝ} (hC : 0 < C) (h : Md ≤ X) : Md ≤ C / 
   rwa [div_div_cancel₀ hC.ne']
 
 theorem DampenerRemote : Guarantees.DampenerRemote := by
-  intro Ω _ μ N cap wrong p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx d c k n γ V _ _ _
+  intro Ω _ μ N cap incorrect p ε β ι _ bad detected I ident τ w Φ Δ H q B θ εW κ C U W χ mfu M Mu Mr Mx d c k n γ V _ _ _
     Wd val βw βx b hp hε hcap0 hcC hsound hH hΔ hΦ hI hT hcap hθ hw hq hq1 hB0 hwB hS hκ hC hU hmfu hmfu1 hβw hβx hb
     hcomp hval hshare hHard hExp hM0 hM hu hres hx
   have hdecl : (Wd.N : ℝ) ≤ C / (C / Cut.workHE n k (βw * βx) b Wd.O) :=
     declared_le_div hC (Cut.SecurityProofs.CountHE γ V d Wd val c k n βw βx b hβw hβx hb hval hshare hHard hExp hcomp).1
-  refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (wrong ω))
-    (fun ω => θ * C < ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b)).trans
-      (add_le_add (CertificateSlack Ω μ N cap wrong p ε C hp hε hC hcap0 hcC hsound)
+  refine prob_ge_of_not μ ?_ ((prob_or_le μ (fun ω => ε * C < wrongCapacity cap (incorrect ω))
+    (fun ω => θ * C < ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b)).trans
+      (add_le_add (CertificateSlack Ω μ N cap incorrect p ε C hp hε hC hcap0 hcC hsound)
         (escape_slack μ bad detected I ident τ w q B θ C hθ hC hw hI hq hq1 hB0 hwB hS)))
   intro ω hbad
   by_contra hgood
   apply hbad
-  have hwrong : wrongCapacity cap (wrong ω) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl h)
-  have hesc : ∑ b ∈ escaped (bad ω) (detected ω) ident τ, w b ≤ θ * C := not_lt.1 fun h => hgood (Or.inr h)
+  have hwrong : wrongCapacity cap (incorrect ω) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl h)
+  have hesc : ∑ b ∈ missed (bad ω) (detected ω) ident τ, w b ≤ θ * C := not_lt.1 fun h => hgood (Or.inr h)
   have hlag := VerdictLag β ι (bad ω) (detected ω) I ident τ w Φ Δ H C hH hΔ hΦ (hI ω) (hT ω) (hcap ω)
   have hr : (Mr ω : ℝ) ≤ κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) / 2 := by
-    have h1 : (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) / 2 := hres ω
-    have h2 : κ * (C - (1 - εW) * W + wrongCapacity cap (wrong ω) + ∑ b ∈ bad ω, w b) ≤
+    have h1 : (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + wrongCapacity cap (incorrect ω) + ∑ b ∈ bad ω, w b) / 2 := hres ω
+    have h2 : κ * (C - (1 - εW) * W + wrongCapacity cap (incorrect ω) + ∑ b ∈ bad ω, w b) ≤
         κ * (C - ((1 - εW) * W - ε * C - lagShare I.card Δ H * C - θ * C)) :=
       mul_le_mul_of_nonneg_left (by linarith) hκ.le
     linarith

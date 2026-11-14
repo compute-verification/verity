@@ -52,16 +52,16 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
   (`Verity.Boolean.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
-  `Verity.Partition.wrong_ofAudit` says the incorrect proof blocks are the game's, so every statement about the game's incorrect proof blocks
+  `Verity.Partition.incorrect_ofAudit` says the incorrect proof blocks are the game's, so every statement about the game's incorrect proof blocks
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
-  embed (by definition), and `partsOf_wrong` its incorrect proof blocks as theirs.
-* The wrong-units bridge: a unit wrong in the wire values a witness opens (`openedOf`) is faulty in the sampling
-  statement (`wrong_subset_faulty`), because a unit that is not faulty is correct on its openings
+  embed (by definition), and `partsOf_incorrect` its incorrect proof blocks as theirs.
+* The incorrect-units bridge: a unit incorrect in the wire values a witness opens (`openedOf`) is faulty in the sampling
+  statement (`incorrect_subset_faulty`), because a unit that is not faulty is correct on its openings
   (`correct_of_progCorrect`), under any design and strata. So `RelS` at
-  `δ = C(n − K₀, kd)/C(n, kd)` under `subset kd` leaves fewer than `K₀` incorrect proof blocks (`card_wrong_lt_of_relS`), at every
+  `δ = C(n − K₀, kd)/C(n, kd)` under `subset kd` leaves fewer than `K₀` incorrect proof blocks (`card_incorrect_lt_of_relS`), at every
   circuit, every witness and every strata, with no side condition, and at the parsed file's circuit
-  (`card_wrong_partsOf_lt`).
+  (`card_incorrect_partsOf_lt`).
 * At the committed files: `parsedOf_eq` and `parse_of_parsedOf` relate `parsedOf` to the verifier's parse
   (`Flock.Desc.parse`, `HmOut.loadPublic`), and `ofFile_iff` restates any statement about the committed files' circuit,
   units and partition as one about `circuitOf`, `n` and `partsOf` at the parse.
@@ -154,11 +154,11 @@ theorem Partition.localEval_ofAudit_bit (tr : (Circuit.ofAudit C).Trace) (u : Fi
 
 /-- **The incorrect proof blocks are the game's**: core's partition of a game circuit has the game partition's incorrect proof blocks, on
 the same bits. -/
-theorem Partition.wrong_ofAudit (xs : Fin C.N → Bool) :
-    (Partition.ofAudit P).wrong (Circuit.ofBits xs) = P.wrong xs := by
+theorem Partition.incorrect_ofAudit (xs : Fin C.N → Bool) :
+    (Partition.ofAudit P).incorrect (Circuit.ofBits xs) = P.incorrect xs := by
   classical
   ext u
-  rw [Partition.mem_incorrect, FlockSoundness.Audit.Partition.mem_wrong]
+  rw [Partition.mem_incorrect, FlockSoundness.Audit.Partition.mem_incorrect]
   refine not_congr ⟨fun h g hg hu => ?_, fun h g hg hu => ?_⟩
   · have e := h g ((Partition.mem_committed_ofAudit P g).2 hg) hu
     rw [Partition.localEval_ofAudit] at e
@@ -298,15 +298,15 @@ theorem correct_of_progCorrect {κ : Fin C.N → Option Bool} {n : ℕ} (P : Flo
   rw [hrun] at hrun'
   exact Option.some_injective _ hrun'
 
-/-- **A unit wrong in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`, under any
+/-- **A unit incorrect in the wire values a witness opens is faulty** in the sampling statement of `progOf C κ`, under any
 design and strata. -/
-theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem incorrect_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool)
-    (w : Wit) {u : Fin n} (hu : u ∈ P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))) :
+    (w : Wit) {u : Fin n} (hu : u ∈ P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))) :
     u.val ∈ faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) w := by
   classical
-  rw [FlockSoundness.Audit.Partition.mem_wrong] at hu
+  rw [FlockSoundness.Audit.Partition.mem_incorrect] at hu
   have hlt := u.isLt
   refine Finset.mem_filter.2 ⟨Finset.mem_range.2 (by rw [blocks_length_partOf P hns]; omega), ?_⟩
   rintro ⟨b, hb, ι, hι⟩
@@ -316,24 +316,24 @@ theorem wrong_subset_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (
   rw [ref_blockOf, correct_blockOf] at hι
   exact hu (correct_of_progCorrect P u _ ι hι.1)
 
-theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+theorem card_incorrect_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit) :
-    (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))).card ≤
+    (P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ r desc q roots)))).card ≤
       ((faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) w).filter (· < n)).card :=
   Finset.card_le_card_of_injOn Fin.val
-    (by intro u hu; exact Finset.mem_filter.2 ⟨wrong_subset_faulty P κ hns r desc q roots H Cm w hu, u.isLt⟩)
+    (by intro u hu; exact Finset.mem_filter.2 ⟨incorrect_subset_faulty P κ hns r desc q roots H Cm w hu, u.isLt⟩)
     (by intro a _ b _ h; exact Fin.ext h)
 
 /-- **The sampling relation bounds the incorrect proof blocks**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` under
-`subset kd` leaves fewer than `K₀` of the circuit's units wrong in the wire values it opens, whatever the strata. -/
-theorem card_wrong_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+`subset kd` leaves fewer than `K₀` of the circuit's units incorrect in the wire values it opens, whatever the strata. -/
+theorem card_incorrect_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
     (H : Claims.Msg → Claims.Msg) (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) (stmtOf P κ (.subset kd) desc q roots)
       (partOf P κ ns) w) :
-    (P.wrong (openedOf C κ (w.val H Cm (stmtOf P κ (.subset kd) desc q roots)))).card < K₀ := by
-  have hle := card_wrong_le_faulty P κ hns (.subset kd) desc q roots H Cm w
+    (P.incorrect (openedOf C κ (w.val H Cm (stmtOf P κ (.subset kd) desc q roots)))).card < K₀ := by
+  have hle := card_incorrect_le_faulty P κ hns (.subset kd) desc q roots H Cm w
   have hpa : ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) <
       (designOf (.subset kd)).Pa (partOf P κ ns)
         (faulty H Cm (stmtOf P κ (.subset kd) desc q roots) (partOf P κ ns) w) := h
@@ -350,7 +350,7 @@ end Opened
 /-! ## The parsed file's circuit -/
 
 /-- **The transcript the witness opens**, at `circuitOf`'s wires: `openedOf`'s bits. -/
-noncomputable def transcriptOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
+noncomputable def traceOf (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
     (κ : Fin (keyCircuit D hU n).N → Option Bool) (val : ℕ → Option Bool) : (circuitOf D hU n).Trace :=
   Verity.Circuit.ofBits (openedOf (keyCircuit D hU n) κ val)
 
@@ -368,22 +368,22 @@ theorem partsOf_eq : partsOf D hU n =
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
 
 /-- **`partsOf`'s incorrect proof blocks are the key program's**, on the same bits. -/
-theorem partsOf_wrong (xs : Fin (keyCircuit D hU n).N → Bool) :
-    (partsOf D hU n).wrong (Verity.Circuit.ofBits xs) = (keyPartition D hU n).wrong xs :=
-  Verity.Partition.wrong_ofAudit _ xs
+theorem partsOf_incorrect (xs : Fin (keyCircuit D hU n).N → Bool) :
+    (partsOf D hU n).incorrect (Verity.Circuit.ofBits xs) = (keyPartition D hU n).incorrect xs :=
+  Verity.Partition.incorrect_ofAudit _ xs
 
-/-- **The wrong-units bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
+/-- **The incorrect-units bridge at the parsed file's circuit**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)`, in
 the sampling statement of the key program at constants `κ` under `subset kd`, at strata `ns` that sum to `n`, leaves
-fewer than `K₀` of `partsOf`'s units wrong in the transcript it opens. -/
-theorem card_wrong_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) {ns : List ℕ} (hns : ns.sum = n)
+fewer than `K₀` of `partsOf`'s units incorrect in the transcript it opens. -/
+theorem card_incorrect_partsOf_lt (κ : Fin (keyCircuit D hU n).N → Option Bool) {ns : List ℕ} (hns : ns.sum = n)
     (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg) (H : Claims.Msg → Claims.Msg)
     (Cm : CommitmentScheme Bool) (w : Wit)
     (h : RelS H Cm (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ))
       (stmtOf (keyPartition D hU n) κ (.subset kd) desc q roots) (partOf (keyPartition D hU n) κ ns) w) :
-    ((partsOf D hU n).wrong
-      (transcriptOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ (.subset kd) desc q roots)))).card < K₀ := by
-  rw [transcriptOf, partsOf_wrong]
-  exact card_wrong_lt_of_relS _ κ hns kd K₀ desc q roots H Cm w h
+    ((partsOf D hU n).incorrect
+      (traceOf D hU n κ (w.val H Cm (stmtOf (keyPartition D hU n) κ (.subset kd) desc q roots)))).card < K₀ := by
+  rw [traceOf, partsOf_incorrect]
+  exact card_incorrect_lt_of_relS _ κ hns kd K₀ desc q roots H Cm w h
 
 end Parsed
 

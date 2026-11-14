@@ -252,7 +252,7 @@ theorem ttOutPearlCH100Rev1Witness :
       have hT' : T ≤ T / (1 - 1 / 400) := by
         rw [le_div_iff₀ (by norm_num)]
         nlinarith
-      unfold Adversary.transcript at hx
+      unfold Adversary.trace at hx
       linarith
   · exact wide_inDomain P
   · exact wide_weightsOK
@@ -335,7 +335,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
       have hT' : T ≤ T / (1 - 1 / 400) := by
         rw [le_div_iff₀ (by norm_num)]
         nlinarith
-      unfold Adversary.transcript at hx
+      unfold Adversary.trace at hx
       linarith
   · exact wide_inDomain P
   · exact wide_weightsOK

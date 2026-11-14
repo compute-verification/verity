@@ -30,7 +30,7 @@ public import Definitions.Nci.Formalism.Circuits
   tokens; a **reduction block** (`ReductionBlock`) the gradient and optimizer state of two children in a reduction tree;
   an **update application block** (`UpdateBlock`) the weights in the form the update rule reads and writes, `Δ_t`
   values (a straight-through run's latents; for any other run the description of the update, `Δ_t = Δ`), and the
-  reduced state. A partition into **session blocks** (`SessionBlocks`) has only compute blocks, one into **training
+  reduced state. A partition into **session blocks** (`InferenceBlocks`) has only compute blocks, one into **training
   blocks** (`TrainingBlocks`) any of the three, and each block holds between `c - d` and `c` gates of the computation,
   `d` the decoder's. `ServingFits` and `TrainingFits` are Fit's conditions on what they read.
 -/
@@ -103,7 +103,7 @@ def UpdateBlock (d : RegisteredCircuit) (I : Finset (Fin d.D.N)) (Δt Δgrad : �
 
 /-- **Session blocks**, beside a decoder of `dg` gates: every block of `P` holds between `c - dg` and `c` gates and is a
 compute block, reading beyond `θ` a description of at most `Δ` values and the data of at most `s` tokens. -/
-def SessionBlocks (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (c dg Δ s τ : ℕ) : Prop :=
+def InferenceBlocks (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (c dg Δ s τ : ℕ) : Prop :=
   ∀ u, c - dg ≤ (P.gates u).card ∧ (P.gates u).card ≤ c ∧ ComputeBlock d (P.gates u) Δ s τ
 
 /-- **Training blocks**, beside a decoder of `dg` gates: every block of `P` holds between `c - dg` and `c` gates and is a
