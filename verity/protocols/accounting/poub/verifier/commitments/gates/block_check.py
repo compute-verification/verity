@@ -103,17 +103,23 @@ functions for it.
 
 **v2's legal range,** to which `_check_opening_v2` holds a binding, refusing any other by the static that takes it out and
 why (`LIMITS_V2`, `LEVELS`): a field of `FIELDS` at K 2 or 3, masked or not; a 4,096-byte block (the toy's a power of two from
-64); ROWS and LEAF 1 to 16; DR 1 to 28 (a u32 pos's leaf pos >> 4), DP and DV 1 to 32 (u32 ranks); and DR + DP + DV at most
-`LEVELS`. Every binding in it is one Flock block within K_MAX: its unit's useful cells are below its 2^26 slot. Each static
-only adds cells as it grows, and the other fields' decodes cost less, so the costliest bindings are p1024/k3/masked at 16
-rows and LEAF 16, and the limits are chosen there, from its parts' lowerings summed (an upper bound on the whole lowering's
-ANDs). At a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them the 789 GB store's 192,626,953) that
-unit has at most 63,989,121 useful cells, 3,119,743 short of 2^26, and a tree level costs 235,000 to 239,000 (three
-compressions and its sibling's 512 input bits): room for 13 levels past those 53. `LEVELS` takes 11 and keeps two: the
-costliest binding it admits, DR 1, DP 31, DV 32, has at most 66,615,297, 493,567 short, and every binding of at most 66
-levels fits. p512's and the toy's fit at every depth the width limits admit. A fourth round (32 more word rounds, about 15.1M
-ANDs) takes the masked p1024 unit past 2^26 even at DR = DP = DV = 1, and 64 sketch rows (about 2.9M more cells) take it
-past at a whole node's depths.
+64); ROWS 1 to 64 and LEAF 1 to 16; DR 1 to 28 (a u32 pos's leaf pos >> 4), DP and DV 1 to 32 (u32 ranks); and DR + DP + DV
+at most `LEVELS`' bound for its rows: 64 levels at 1 to 16 rows, 52 at 17 to 64. Every binding in it is one Flock block
+within K_MAX: its unit's useful cells are below its 2^26 slot. Each static only adds cells as it grows, and the other fields'
+decodes cost less, so the costliest bindings are p1024/k3/masked at LEAF 16 and each bound's most rows, 16 and 64, and the
+limits are chosen there, from its parts' lowerings summed (an upper bound on the whole lowering's ANDs). A tree level costs
+235,800 to 239,300 cells (three compressions and its sibling's 512 input bits), the more the more bytes its node's index
+takes, so a deeper tree's upper levels cost the most and a level count's costliest split fills one tree to its 32 levels
+before another. At 16 rows and a whole node's depths (DR 24, DP 28, DV 1: up to 2^28 blocks, among them the 789 GB store's
+192,626,953) the unit has at most 63,989,121 useful cells, 3,119,743 short of 2^26: room for 13 levels past those 53.
+`LEVELS` takes 11 and keeps two: the costliest 16-row binding it admits, DR 1, DP 31, DV 32, has at most 66,615,297, 493,567
+short, and every 16-row binding of at most 66 levels fits. 64 rows are about 3.1M cells more (a row is 56,605 ANDs and 4,096
+sign bits, and every 32 rows take the receipt a compression more): the costliest 64-row binding of 52 levels, DR 1, DP 19,
+DV 32, has at most 66,898,177, 210,687 short, and the costliest of 53 is 26,881 past. So a 64-row binding admits a store of
+up to 2^27 blocks (DR 23, DP 27, with DV 1 or 2), among them a whole node's 130,023,424, and none past it: the 789 GB store's
+needs 53. At 17 to 63 rows the unit costs less than at 64. p512's and the toy's 16-row units fit at every depth the width
+limits admit. A fourth round (32 more word rounds, about 15.1M ANDs) takes the masked p1024 unit past 2^26 even at
+DR = DP = DV = 1.
 """
 from __future__ import annotations
 
@@ -679,7 +685,7 @@ LEVELS = {16: 64, 64: 52}
 #: v2's limits, each a static's largest value and the reason a binding past it is refused
 LIMITS_V2 = (
     ("K", 3, "a fourth round is 32 more word rounds, about 15M ANDs at p1024, past a masked unit's 2^26 cells at every depth"),
-    ("ROWS", max(LEVELS), "LEVELS bounds the trees' levels only up to 64 sketch rows, and each row more is about 65,000 cells"),
+    ("ROWS", max(LEVELS), "LEVELS bounds the trees' levels only up to 64 sketch rows, and a row more is about 60,700 cells"),
     ("LEAF", PER_LEAF, "a receipt leaf holds 16 receipts"),
     ("DR", 28, "a u32 position's receipt leaf, pos >> 4, is below 2^28"),
     ("DP", 32, "a payload's rank and position j are u32s"),
