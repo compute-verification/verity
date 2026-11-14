@@ -114,3 +114,6 @@ TERMGB to network-accounting (lead), Fri 13 Nov 8:34 PM PST. **The join's head i
 Held running: `r20261114-040557-1a81`.
 TIMER: none.
 
+[2026-11-14T04:42Z] 5fb5f161a605
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 8:42 PM PST. Launched r20261114-044207-a247 (scratch branch cursor/na-scratch-carried-start-4a02 at f2d82a452814, a clone on the research pool, 32 GB, at most 90 min): the staging floor of the carried start first (the start template's stager and the start member staged at the test class), then IngressScanStart's circuit-check at both bindings with its pins, the carried tests in their two suites, and the carried shape's dry host read. No Lean, no proof in this one. Before it [ran, a named test file on the VM]: the three carried host tests pass, and the scan's file 35 passed with the slow one deselected; on test2's two link-windows the second's start reads the first record's last/o1 at its root and domain, and registered.leaf on that frame domain is the first statement's frame leaf byte for byte (Python mirror only; Lean's read is the node run's). I send the floor's line when it ends.
+
