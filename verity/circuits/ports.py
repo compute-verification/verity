@@ -46,7 +46,7 @@ declares one, so an undeclared Definition's entry, id and digests are what they 
   return, one row it writes. The label matches the word types' pattern and is the Program's; the certified values it stands
   for are the verifier's. No rule here reads it and it types no leaf: a primitive, a program function and the root never
   declare it (`E_PORT_DECL`), and a harness (`forward`) drops it. Which row a proof block's port is, from its place in the
-  root, is the sampled-proofs verifier's reading (`Spot.CertifiedRows`).
+  root, is the SPOT verifier's reading (`Spot.CertifiedRows`).
 * **Coin flow.** A primitive with a coin port is a noise primitive when its return isn't all sinks (it derives noise, or
   adds it to an operand it takes) and a receipt fold when it is (the coin is its key). A Definition, primitive or composite,
   with a coin port and a position port whose return holds no sink is a seed: it derives a unit's seed from the coin and the

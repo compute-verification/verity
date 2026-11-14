@@ -6,8 +6,9 @@ A template's port may be one row of a certified table (PROTOCOL.md §12, `ports.
 stands for are the verifier's: `labels`, ``{label: [value, ...]}`` in order, and `certified`, ``{value: {"root",
 "leaves", ...}}``. No check calls this yet.
 
-* `marks`: the Program's marked ports, sorted by template and port. A marked parameter is read by the port of its own
-  name, a marked field `j` of the return by the output port ``o<j>``. Refused (`CertifiedRowsError`, its codes sorted):
+* `read`, and `marks`, which raises its refusal: the Program's marked ports, sorted by template and port. A marked
+  parameter is read by the port of its own name, a marked field `j` of the return by the output port ``o<j>``. Refused
+  (`read`'s codes, sorted; `marks` raises them as `CertifiedRowsError`):
   a mark that is not one whole parameter or field (``certified-whole``), one label on two ports of a template
   (``certified-twice``), a mark on a Definition any node but a root call or batch calls (``certified-called``). The
   decoder and `program.Program` already refuse a mark on a primitive or the root and a label that is no name, which the
@@ -75,7 +76,8 @@ def _covers(rows: Sequence[tuple[int, int, str]], a: int, b: int) -> bool:
     return at == b
 
 
-def _def_marks(key: str, fn: Any) -> list[Mark]:
+def _def_marks(key: str, fn: Any) -> tuple[list[Mark], str | None]:
+    """`CertifiedRows.defMarks`: one Definition's marks, or its refusal's code."""
     pt = port_types(fn)
     params, ret = fn.signature()
     out = []
@@ -83,7 +85,7 @@ def _def_marks(key: str, fn: Any) -> list[Mark]:
         mine = [(lo, hi, p.certified) for lo, hi, p, _w in rs if p.certified is not None]
         if mine:
             if not _covers(mine, 0, t.leaves):
-                raise CertifiedRowsError(["certified-whole"])
+                return [], "certified-whole"
             out.append(Mark(key, name, mine[0][2], False))
     fs = _fields(ret)
     offs = [0]
@@ -92,21 +94,21 @@ def _def_marks(key: str, fn: Any) -> list[Mark]:
     rows = [(lo, hi, o.certified) for lo, hi, o, _w in pt.ret if o.certified is not None]
     field = [next((j for j in range(len(fs)) if offs[j] <= lo and hi <= offs[j + 1]), None) for lo, hi, _l in rows]
     if None in field:
-        raise CertifiedRowsError(["certified-whole"])
+        return [], "certified-whole"
     for j in range(len(fs)):
         mine = [r for r, f in zip(rows, field) if f == j]
         if mine:
             if not _covers(mine, offs[j], offs[j + 1]):
-                raise CertifiedRowsError(["certified-whole"])
+                return [], "certified-whole"
             out.append(Mark(key, f"o{j}", mine[0][2], True))
     if len({m.label for m in out}) != len(out):
-        raise CertifiedRowsError(["certified-twice"])
-    return out
+        return [], "certified-twice"
+    return out, None
 
 
-def marks(program: Any) -> list[Mark]:
-    """The marks of `program` (a `Program` or a decoded one), sorted by template and port; `CertifiedRowsError` with
-    every Definition's refusal. Each Definition once and each node once."""
+def read(program: Any) -> tuple[list[Mark], list[str]]:
+    """The marks of `program` (a `Program` or a decoded one), sorted by template and port, and its refusal's codes, each
+    once and sorted; no marks beside a code. Each Definition once and each node once."""
     root = program.root
     defs: dict[str, Any] = {}
     root_called: set[str] = set()
@@ -121,21 +123,29 @@ def marks(program: Any) -> list[Mark]:
             if hasattr(node.fn, "body") and id(node.fn) not in seen:
                 seen.add(id(node.fn))
                 todo.append(node.fn)
-    codes: list[str] = []
+    codes: set[str] = set()
     out: list[Mark] = []
     for key, fn in defs.items():
         pt = port_types(fn)
         if pt is None or not any(r[-2].certified is not None for rs in (*pt.params, pt.ret) for r in rs):
             continue
         if key not in root_called or key in other:
-            codes.append("certified-called")
-        try:
-            out += _def_marks(key, fn)
-        except CertifiedRowsError as e:
-            codes += e.codes
+            codes.add("certified-called")
+        ms, code = _def_marks(key, fn)
+        out += ms
+        if code is not None:
+            codes.add(code)
+    if codes:
+        return [], sorted(codes)
+    return sorted(out, key=lambda m: (m.template, m.port)), []
+
+
+def marks(program: Any) -> list[Mark]:
+    """`read`'s marks; `CertifiedRowsError` with its codes when it has any."""
+    ms, codes = read(program)
     if codes:
         raise CertifiedRowsError(codes)
-    return sorted(out, key=lambda m: (m.template, m.port))
+    return ms
 
 
 def layout(program: Any, ms: Sequence[Mark]) -> list[Layout]:

@@ -589,7 +589,7 @@ it writes. The label is the Program's; the certified values it stands for, and t
 Program's digest names no value. It is declared only on a composite the root calls or batches, a template of the proof
 blocks: a primitive's ports, a program function's and so the root's `inputs` and `ret` never carry it (`E_PORT_DECL`). It
 types no leaf (no rule below reads it), and a harness (`ports.harness`) leaves it out. Which row of the table a proof
-block's port is follows from the Program's description alone: the sampled-proofs verifier numbers a label's rows from 0
+block's port is follows from the Program's description alone: the SPOT verifier numbers a label's rows from 0
 over the root's nodes in order, each call or batch of a template marking it taking one row per member, and refuses a mark
 that is not one whole parameter or one whole field of the return (the output port `o<j>` of field `j`, or `o0` of a
 return that is no tuple or record), a label on two ports of one template, and a mark on a Definition any node but a root

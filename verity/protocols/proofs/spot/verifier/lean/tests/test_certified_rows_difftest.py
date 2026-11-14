@@ -21,7 +21,7 @@ import verity_difftest as D
 from verity.circuits.codec import decode_program, descriptor_id, encode_program
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind, primitive
 from verity.circuits.partition_object import evaluate, template_instances_query
-from verity.circuits.ports import In, Leaves, Out, PortError, Ports
+from verity.circuits.ports import In, Leaves, Out, Ports
 from verity.circuits.program import Program
 from verity.circuits.refs import tuple_of
 from verity.circuits.types import Array, Tuple, Value
@@ -97,9 +97,12 @@ def reference(j):
     """`CertifiedRows.piece` on `certified_rows`, over the descriptor as `codec.decode_program` decodes it."""
     if not isinstance(j, dict):
         raise D.Reject("not an object")
+    templates = j.get("templates")
+    if not (isinstance(templates, list) and all(isinstance(t, str) for t in templates)):
+        raise D.Reject("templates is not a list of strings")
     try:
         prog = decode_program(j.get("program"), REGISTRY)
-        ranges = evaluate(prog, template_instances_query(j.get("templates"))).ranges
+        ranges = evaluate(prog, template_instances_query(templates)).ranges
     except Exception as e:  # noqa: BLE001 -- what the decoder or the query refuses, Lean's decoder or query refuses
         raise D.Reject(str(e)) from None
     certified, labels = j.get("certified"), j.get("labels")
@@ -110,10 +113,9 @@ def reference(j):
     if not (isinstance(labels, dict) and all(isinstance(vs, list) and all(isinstance(v, str) for v in vs)
                                              for vs in labels.values())):
         raise D.Reject("labels is not an object of lists of strings")
-    try:
-        ms = C.marks(prog)
-    except C.CertifiedRowsError as e:
-        return {"refused": e.codes}
+    ms, codes = C.read(prog)
+    if codes:
+        return {"refused": codes}
     ls = C.layout(prog, ms)
     population = sum(r[3] for r in ranges)
     return {"marks": [[m.template, m.port, m.label, m.output] for m in ms],
@@ -233,10 +235,8 @@ def cases(pick):
     entry added; and at times a field of the input replaced by arbitrary JSON."""
     prog = _program(_a(pick(st.sampled_from(PORTS_A))), _b(pick(st.sampled_from(PORTS_B))),
                     pick(st.integers(1, 3)), pick(st.integers(1, 3)))
-    try:
-        ls = C.layout(prog, C.marks(prog))
-    except C.CertifiedRowsError:
-        ls = []
+    ms, codes = C.read(prog)
+    ls = [] if codes else C.layout(prog, ms)
     names = iter(f"v{i}" for i in range(99))
     certified, labels = {}, {}
     for lay in ls:
