@@ -8,7 +8,8 @@ public import Lms.Sign
 public import Proofs.Properties.Accounting.InProofs
 public import Proofs.Properties.Pous.MemoryChallenger
 import Proofs.Properties.Pous.WipeSigned
-import Proofs.Properties.Certifier.Device.Lms
+import Proofs.Properties.Pous.MemoryChallenger.Session
+import Proofs.Properties.Hash.Lms
 
 /-!
 # PoUS's session inside proofs: an accepted run gives a session `verdict` accepts
@@ -195,7 +196,8 @@ theorem runGives : RunGives := by
 def honestWipe : ByteArray := ⟨Array.replicate 32 0⟩
 def honestCoinKey : ByteArray := ⟨Array.replicate 256 0⟩
 def honestSalt : ByteArray := ⟨Array.replicate 192 0⟩
-def honestRound : Round := ⟨0, 0, 0, 0, ⟨Array.replicate 64 0⟩⟩
+def honestDigest : ByteArray := ⟨Array.replicate 64 0⟩
+def honestRound : Round := ⟨0, 0, 0, 0, honestDigest⟩
 def honestOpening : CoinOpening := ⟨0, 0, honestSalt, #[]⟩
 
 theorem honest_leaf : ∃ leaf, coinLeaf honestCoinKey honestWipe 0 0 honestSalt = .ok leaf := by
@@ -220,9 +222,10 @@ theorem honest_coin {leaf : ByteArray} (h : coinLeaf honestCoinKey honestWipe 0 
     Flock.FV3.Sha512.scheme, Properties.Certifier.Bytes.hash_size]
   exact ⟨by decide, Properties.CertifierDevice.Proofs.Lms.beq_self _⟩
 
-theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m := by
-  simp [message, recordsDigest, recordsStream, Round.value, honestRound, ByteArray.size, beN, Bind.bind, Except.bind,
-    Pure.pure, Except.pure]
+theorem honestDigest_size : honestDigest.size = 64 := by decide
+
+theorem honest_message (leaf : ByteArray) : ∃ m, message (honestCommitment leaf) COMPLETE #[honestRound] = .ok m :=
+  MemoryChallenger.Session.Properties.SecurityProofs.message_one _ _ honestDigest_size
 
 theorem runGives_honest : RunGivesHonest := by
   obtain ⟨k, hkg, I, hk⟩ := Wipe.honest_keygen
@@ -249,7 +252,8 @@ theorem runGives_honest : RunGivesHonest := by
   have hcoin := honest_coin hleaf
   let V : Vals := ⟨m, sig.encode, COMPLETE, #[honestRound], honestRound⟩
   have hlook : SCHEMES.lookup LMS = some Lms.deployed := rfl
-  have hpiece : ∀ u, PieceOk SCHEMES LMS k.publicKey (honestCommitment leaf) (fun _ => some .empty) (fun _ => 0) u V := by
+  have hpiece : ∀ u, PieceOk SCHEMES LMS k.publicKey (honestCommitment leaf) (fun _ => some honestDigest) (fun _ => 0) u
+      V := by
     rintro ⟨u, hu⟩
     have hu' : u < 3 := hu
     rcases u with _ | _ | _ | u
@@ -269,7 +273,7 @@ theorem runGives_honest : RunGivesHonest := by
     refine ⟨⟨_, hlook⟩, List.mem_singleton.2 rfl, fun j hj => ?_⟩
     obtain rfl : j = 0 := by simp [honestCommitment] at hj; omega
     exact ⟨honestOpening, by simp [honestOpening], rfl, hcoin⟩
-  refine ⟨_, k, fun _ => some .empty, honestCommitment leaf, #[honestOpening], fun _ => 0, fun _ => V, hkg, rfl,
+  refine ⟨_, k, fun _ => some honestDigest, honestCommitment leaf, #[honestOpening], fun _ => 0, fun _ => V, hkg, rfl,
     ?_, ?_, hclear, ?_⟩
   · simp [Gives, prPMF, Run.failing, constRun, hpiece]
   · intro _ _

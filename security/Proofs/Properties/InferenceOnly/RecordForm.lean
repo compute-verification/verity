@@ -3,14 +3,13 @@ module
 public import Properties.InferenceOnly.Record
 public import Proofs.Properties.InferenceOnly.RecordRead
 public import Proofs.Properties.InferenceOnly.Lemmas
+public import Properties.InferenceOnly.RecordForm
 
 /-!
-# The record check's own form, and what it carries and rates
+# What the record check's own form carries and rates
 
-`form` is the record check (`Record`) as a `Properties.Record.Form`: the functions the record check exports, each the
-check's own. Its instance is the one `read` parsed, its wiring, slots and held rows the ones `read` gives, its
-summary the two counts of `summarize` that the rate rule reads, its rate rule `failure` on that one pair, and its
-layout `layoutOf`'s. `form_rate`: on a record's summary the form's rate rule is `rate`, the one `evaluate` decides by.
+`form` (`Properties.InferenceOnly.RecordForm`) is the record check as a `Properties.Record.Form`. `form_rate`: on a record's
+summary the form's rate rule is `rate`, the one `evaluate` decides by.
 
 Two of the four statements `Properties.Record.Complies` follows from, of this form:
 
@@ -28,18 +27,6 @@ namespace InferenceOnlyCheck.Record.SecurityProofs
 
 open RecordText
 open Lean (Json)
-
-/-- **The record check's form**: what `Record` exports, as the statements about a record check read it. -/
-def form : Properties.Record.Form where
-  Case := Record.Case
-  read := Record.read
-  inst c := ⟨c.f.i.program, c.f.i.record, c.f.i.gamma, c.f.i.num, c.f.i.den, c.f.i.pins.toList⟩
-  wiring c := c.W
-  slot := Record.Case.slot
-  held := Record.Case.heldAt
-  summarize c := ⟨(Record.summarize c).gates, (Record.summarize c).fresh⟩
-  rate Γ num den s := (failure Γ num den #[(s.gates, s.fresh)]).map (·.2)
-  layout d := (Record.layoutOf d).map fun l => ⟨l.key, l.root, l.domain, l.ports, l.verdict⟩
 
 /-- On a record's summary, the form's rate rule is the check's. -/
 theorem form_rate (Γ num den : Nat) (c : Record.Case) :

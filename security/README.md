@@ -83,8 +83,8 @@ premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `
 **Start here: training's bound of record.** Two theorems state it, both proved; (H) and (E) are the first one's named
 assumptions.
 
-- **The min-cut theorem**, `InferenceOnly.Cut.Guarantees.HE` and `HEShared` (`Definitions/InferenceOnly/Guarantees/Cut.lean`, proved in
-  `Proofs/InferenceOnly/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
+- **The min-cut theorem**, `InferenceOnly.Cut.Guarantees.HE` and `HEShared` (`Definitions/Slowdown/Guarantees/Cut.lean`, proved in
+  `Proofs/Slowdown/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
   outside θ, has N ≤ m·(k + α) + (k/2)·√(m·O/(β_w·β_x)), α = ½·√(k³/(β_w·β_x·b)), for the N MACs and O output wires
   of its charged matmuls, so the slowdown m·c/|C| is bounded below at every c; `HEShared` is it for matmuls sharing arrays,
   each term times F = √(2(1 − 1/ω)), and `CountHE` is it at the count's verdict, `InferenceOnly.CompliesAtMost c k m`.
@@ -94,7 +94,7 @@ assumptions.
 - **(E), exports**, `InferenceOnly.Cut.Assumptions.Exports` (`Definitions/Assumptions.lean`), conjectured: every set B of
   computed gates has κ(B → E(B)) ≥ b·|E(B)|, E(B) the outputs a MAC inside B feeds that have no wire in B.
 - **The counting bound over kinds of work**, `InferenceOnly.Formalism.Guarantees.Counting`
-  (`Definitions/InferenceOnly/Guarantees/Formalism.lean`, proved in `Proofs/InferenceOnly/Formalism/Slowdown.lean`): every partition into
+  (`Definitions/Slowdown/Guarantees/Formalism.lean`, proved in `Proofs/Slowdown/Formalism/Slowdown.lean`): every partition into
   inference blocks has slowdown ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
   the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
   it takes the token kind's cap from the named assumption `training-token-work`.
@@ -244,7 +244,7 @@ bound has three ingredients, each with its own premises: **information** (which 
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
 block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
 `InferenceOnly.Capability` (vocabulary), `InferenceOnly.Assumptions` (premises) and `InferenceOnly.Guarantees` (the repertoire), one module per role;
-`security/Definitions/InferenceOnly/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
+`security/Definitions/Slowdown/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
 test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
 named as one.
 
@@ -452,7 +452,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `InferenceOnly.Assumptions.DescriptionHard`, `InferenceOnly.Assumptions.MinEntropyHard`, `InferenceOnly.Assumptions.SourceHard`, `InferenceOnly.Assumptions.Recovers`, `InferenceOnly.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
 | Structure | `InferenceOnly.Capability.Consumers`, `InferenceOnly.Capability.Consumers.Upstream`, `InferenceOnly.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `InferenceOnly.Guarantees.HeldBudget`, `InferenceOnly.Guarantees.StatHeldBudget`, `InferenceOnly.Guarantees.RecoveredBudget`, `InferenceOnly.Guarantees.ImportOrRecompute`, `InferenceOnly.Guarantees.RecomputeByGates`, `InferenceOnly.Guarantees.RecomputeByState` | Proved (`Proofs/InferenceOnly/Capability/`), over premises not yet tested |
+| The repertoire | `InferenceOnly.Guarantees.HeldBudget`, `InferenceOnly.Guarantees.StatHeldBudget`, `InferenceOnly.Guarantees.RecoveredBudget`, `InferenceOnly.Guarantees.ImportOrRecompute`, `InferenceOnly.Guarantees.RecomputeByGates`, `InferenceOnly.Guarantees.RecomputeByState` | Proved (`Proofs/Slowdown/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `InferenceOnly.Threading.Threaded`, `InferenceOnly.Assumptions.WeightsIncompressible`, `InferenceOnly.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |

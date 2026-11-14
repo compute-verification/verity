@@ -4,7 +4,7 @@ public import Definitions.Accounting.Carrier
 public import Definitions.Assumptions.Accounting
 
 /-!
-# Stacking's named assumptions: bound keys, the declared circuit's carriers, the steered layout (trusted)
+# Stacking's named assumptions: bound keys, the registered circuit's carriers, the steered layout (trusted)
 
 What the stacking guarantees (`Definitions/Accounting/Guarantees/Stacking.lean`, `RegisteredCircuit.lean`) assume beyond
 PoUB's own and the gate model's `Accounting.Assumptions.SquaringFloor` and `Accounting.Assumptions.ChainSum`,
@@ -16,7 +16,7 @@ each a named `Prop` taken as a hypothesis, never an `axiom`:
   from the encodings are on every event at most `δ` likelier than uniform blocks (claim `key-binding`).
 * `CircuitCarriers A store layout joined X L B εnum εden W Aud`: when each append's blocks are read within `L` windows
   of the one it joined (`RateSketch.LifetimeCapped`), every pass device rebuilds at most `X` bits of its appended tiles
-  besides the sectors of one carrier, and that carrier is the declared circuit `W`'s computation over at most `L` of
+  besides the sectors of one carrier, and that carrier is the registered circuit `W`'s computation over at most `L` of
   the audit's windows (`RateSketch.Provenance.OfCircuit`). Registered tiles, whose keys are fixed for the
   registration, are not bounded.
 * `SteeredLayout layout steer`: at each prefix of the session's coins, a pass's layout reads the codec and the append
@@ -33,7 +33,7 @@ open Pous (pr)
 open scoped ENNReal
 
 /-- **Under the lifetime cap `L`, every rebuild of an appended tile beyond `X` is decoded from a carrier of the
-declared circuit's over `L` windows.** Let each append's blocks be read within `L` windows of the one it joined
+registered circuit's over `L` windows.** Let each append's blocks be read within `L` windows of the one it joined
 (`RateSketch.LifetimeCapped layout joined L`, `joined x t` the window append `t` joined). Then every pass device, on the
 store `store c y` the pass certifies, rebuilds at most `X` bits of its appended tiles (`RateSketch.appendedTiles`: those
 the layout `layout c y` puts at positions of appends after the registration) besides the sectors of one carrier
@@ -47,9 +47,9 @@ filler) are not bounded, so a guarantee that reads this credits no registered bl
 
 **Why it should hold.** In the verbatim class a device obtains a sector it doesn't hold, read or take over the link by
 rebuilding it: computing it from memory whose contents are a circuit's values. The rebuilds the node's compute pays
-for, beyond the declared circuit's own, are `X`: the squaring ceiling's bits a pass (`b·F/(rounds·c_root)`,
+for, beyond the registered circuit's own, are `X`: the squaring ceiling's bits a pass (`b·F/(rounds·c_root)`,
 `SquaringCeiling` with `WorkHardness`, within the pass's deadline). Every other rebuild of an appended block comes from
-memory the declared circuit wrote, a credited KV page, so its provenance is `W`'s computation. An appended block's key
+memory the registered circuit wrote, a credited KV page, so its provenance is `W`'s computation. An appended block's key
 reads its append's coin, flipped after its payload is committed (`KeyBinding`), so what was computed before that coin
 carries nothing about its encoding, and only work after the coin helps rebuild it. Two claims about the code back the
 rest:

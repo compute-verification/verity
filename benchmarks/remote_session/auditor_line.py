@@ -19,7 +19,7 @@ k-th root (its boundary leaves before it), so that request leaves as the root ar
 names the same root too. At one window in flight (`audit.Pace.in_flight` 1) chal_(g+1)'s request names it and openings
 coin g's leaves once chal_(g+1) is back, so this reading, which doesn't take f, ends L_g about a round trip to the
 challenger past s_(g+1). Sampled G > 1 windows a coin (`groups_per_coin`), openings coin c's request names only the last
-root of draw c's last window, and another window's A_g is the first request that leaves after its last root,
+root of sample c's last window, and another window's A_g is the first request that leaves after its last root,
 chal_(g+2)'s at the earliest, which above k = 1 names a root of window g + 1 and so ends L_g later than the window did.
 Both times are the challenger's monotonic clock in its release log, whose lines its close signs
 (`challenger.session_of`), and whose close, record and refused hellos the auditor's ledger sealed at the session's end
@@ -27,7 +27,7 @@ Both times are the challenger's monotonic clock in its release log, whose lines 
 after its coin, whose seed they take, and before its last root, which chains them.
 
 Beside the times the line reads the Lean verifier's record of the session (`verifier.lean_record`, `verifier.json`'s
-`lean_record`): each group's passes, its windows' receipts and draws, whose pooled bound (`poub.pooled`)
+`lean_record`): each group's passes, its windows' receipts and samples, whose pooled bound (`poub.pooled`)
 is its wrong receipts, and its registered blocks, the registration's; and the verifier's verdict, and each group's
 held bytes by kind (`ledger.memory`), which the record doesn't hold (they need each pass's plan and the store's
 regions). The verifier runs on the audit's machine, not
@@ -301,7 +301,7 @@ def auditor_seen(lines: list[str], seen: list[dict], per_coin: int = 1) -> tuple
     naming the same value (chal_(g+1)'s, or another window's) would.
 
     Sampled `per_coin` G > 1 windows a coin (`groups_per_coin`), only a sample's last window closes, so openings coin c's
-    request names the last root of draw c's last window and no request names another window's by place. A_g is then
+    request names the last root of sample c's last window and no request names another window's by place. A_g is then
     the first receipt of the requests that leave only once window g's last root has come: openings coin g // G's and
     chal_(g+2)'s, which at k = 1 names window g's root and above it a root of window g + 1, whose roots come after g's.
     That time is at or after A_g, so L_g is at least window g's own and the line credits no more."""
@@ -477,7 +477,7 @@ def session_error(session: dict) -> dict:
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
     from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
     (`recorded_binding`, as `ledger.binding` reads them), reading Q off the record's sketch term (`sketch_failure`),
-    so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
+    so a record with none has no binding term here, and the rejection at its windows' requested samples (the session's
     `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
     total. `{"undecided": why}` where the ledger's declared outputs are undecided."""

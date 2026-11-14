@@ -14,21 +14,21 @@ line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"err
 `Difftest.eventOf`):
 
 * `{"op": "init", "source", "registry", "chunk"}`: the verifier's secret, the registry `registry/v0` reads back (`null`
-  for none), and the draws a thread checks at once; the answer is the registry;
+  for none), and the samples a thread checks at once; the answer is the registry;
 * `{"op": "register", "node", "blocks", "payload_root", "codec", "receipt", "bind", "rows", "layout", "nonce"}`:
-  `Registry.register`'s draw, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
+  `Registry.register`'s sample, `{"codec_seed", "digest"}`, or `{"refused": true}` (an error for a node with none live
   whose registration would bind PoUW's tile outputs: receipts here are of a block alone);
 * `{"op": "session", "node", "params", "coins", "append_coins", "not_before_ns", "index"}`: the next session over the
   node's live registration sampled here (`Registry.session`), `{"session": k}`, or `{"refused": true}`, its windows in
-  flight and the windows a draw's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
+  flight and the windows a sample's openings coin covers (`groups_per_coin` g, `Shared`) its parameters', and an error
   at one window in flight with g above 1, which no property covers (`Flight`); `coins` `null` takes its W + ⌈W/g⌉
   live, each with the event that releases it (`event`'s `coin`);
 * `{"op": "event", "node", "session", "event", "coin"}`: one event through session k at its windows in flight and its
   g (`eventOn`, refused as `Registry.step` refuses a session it isn't running), its result as the difftest writes it
   (`Difftest.resultJ`); `coin` (or `null`) is the coin the challenger released for the event,
   set first (`withCoin`): a start's or a boundary's the challenge of the window it releases, a close's window t's
-  draw's openings coin, `W + t / g`, which only the draw's last window's close releases, an append's pushed onto the
-  session's append coins. A coin set is never replaced by another, and an event that releases a challenge or draws a
+  sample's openings coin, `W + t / g`, which only the sample's last window's close releases, an append's pushed onto the
+  session's append coins. A coin set is never replaced by another, and an event that releases a challenge or samples a
   window's openings from a coin never set is an error (`unset`);
 * `{"op": "openings", "node", "session", "t", "bytes": n}` and then n bytes: one frame of window t's openings as the
   wire carries them (`Wire.decodeOpenings`), kept until the window is verified;
@@ -46,7 +46,7 @@ line on stdin, each answered by one line on stdout, `{"answer": JSON}` or `{"err
   "node_bytes", "delta", "rates"}`, with `"clock"` and `"session"` if given: an accepted paced session's memory line
   read off its record (`record`, as `outcome` gives it: `Line.lineOfRecordOn`, its groups, windows and registered
   blocks the record's, the times and reads beside each group `seen`, held to the record's times on its `clock`, its W
-  the pooled bound of its windows, or at `groups_per_coin` g > 1 of its draws, `Pooled.pooled`), refused unless the
+  the pooled bound of its windows, or at `groups_per_coin` g > 1 of its samples, `Pooled.pooled`), refused unless the
   record is of `registration` (`Line.lineOfRegistered`), or off the record `Shared.run g` makes of the session's
   transcript `session` (`Line.lineOfRun`), as the difftest's `line_record` writes it (`Difftest.lineRecordFn`), or
   `{"refused": why}`, a record sampled g > 1 a coin at one window in flight among them (`Line.SHARED`): the line of
@@ -59,7 +59,7 @@ which can only veto: the process holds one P2 store and its sessions, each read 
 the prover sends.
 
 * `{"op": "p2_hold", "bytes": n, "chunk", "session"}` and then n bytes, the auditor's registration file
-  (`p2_parties.registration_json`'s): the store held (`P2Session.heldOf`), the draws a thread checks, and the session
+  (`p2_parties.registration_json`'s): the store held (`P2Session.heldOf`), the samples a thread checks, and the session
   parameters every request must restate, `session` (`P2Session.Auditor.ofJson`, a toy party's) or, without one,
   `P2Session.SESSION`; `{"digest", "plan", "plan_units", "session", "units"}`;
 * `{"op": "p2_session", "bytes": n, "not_before_ns"}` and then the prover's request line: `{"session": k}`, its coins
@@ -78,9 +78,9 @@ No property states yet what this loop accepts of a P2 session; `poub-difftest`'s
 
 A window's verdict is `checkWindowChunked`'s, which is `checkWindow`'s, on the window's openings as `Wire.openingsOf`
 reads its frames: any frame that doesn't decode leaves it none, and the transcript records the frames so. A window
-with no draws is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
+with no samples is rejected `malformed` at its settle (`Session.verifyBy`), whatever its frames, so an undecodable frame
 is refused on every window, as the driver's Python refuses it. `Properties.Poub.LiveIsRun` states that what
-this loop accepts at two windows in flight and g windows a draw's openings coin, its coins arriving one an event and
+this loop accepts at two windows in flight and g windows a sample's openings coin, its coins arriving one an event and
 each verdict applied at its settle, is what `Shared.run g` accepts on the events it records (`Session.run` at g = 1);
 none yet covers one in flight (`Flight`), and the `session` request refuses one in flight at g above 1. Openings are
 checked in the clear.
@@ -149,7 +149,7 @@ private def runOf (r : Registry) (node : ByteArray) (k : Nat) : Option Registry.
   (r.live.find? (·.node == node)).bind (·.sessions[k]?)
 
 /-- Session `s`, sampled `g` windows a coin, with the coin `c` the challenger released for event `e` (module docstring),
-or why not: a close's is its draw's openings coin, `W + t / g`, and only the draw's last window's close releases it. -/
+or why not: a close's is its sample's openings coin, `W + t / g`, and only the sample's last window's close releases it. -/
 def withCoin (g : Nat) (s : Session.State) (e : Session.Event) (c : ByteArray) : Except String Session.State := do
   if c.size ≠ Codec.COIN_BYTES then throw "a coin is 32 bytes"
   let set (i : Nat) : Except String Session.State :=
@@ -183,7 +183,7 @@ def unset (g : Nat) (s : Session.State) (e : Session.Event) (res : Option Sessio
     else none
   | _, _ => none
 
-/-- Event `e` through running session `s` at its `f` windows in flight and `g` windows a draw's openings coin
+/-- Event `e` through running session `s` at its `f` windows in flight and `g` windows a sample's openings coin
 (`Flight.step f g`, as `Registry.step` steps it), the challenger's coin for it set first (`withCoin`), refused as
 `unset` refuses an event that read a coin never sent. -/
 def eventOn (f g : Nat) (s : Session.State) (e : Session.Event) (coin : Option ByteArray) :

@@ -69,7 +69,7 @@ sys.path.insert(0, str(HERE.parent / "prove_path"))
 from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-from verity.protocols.proofs.spot.device import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402

@@ -43,7 +43,7 @@ import Proofs.Pous.Prob
 # The receipts' binding bound: the proof
 
 Fix window `t` and a receipt `p`, and read a cut of coins and its continuations `cont t` (the other coins and the
-earlier windows' openings coins kept, window `t`'s and the later ones fresh), which have `spliceAt`'s two laws
+earlier windows' openings coins kept, window `t`'s and the later ones fresh), which have `spliceAt`'s two identities
 (`Binding.cont_left`, `Binding.cont_swap`).
 
 * **The held row** (`Binding.held_cont`, `Binding.tally_le_held`). `Receipts.held` is the plurality of the rows the
@@ -137,7 +137,7 @@ theorem claims_pr {α : Type} [Fintype α] (P : α → Prop) : Claims.Pr P = pro
   unfold Claims.Pr prob Claims.prUniform
   congr
 
-/-- A window opens at most `s_t` receipts: its draws, `min(s_t, U_t)`. -/
+/-- A window opens at most `s_t` receipts: its samples, `min(s_t, U_t)`. -/
 theorem card_opened_le (D : Remote.Draw.Run n m s κ X) (prf : Fin n → Pous.Bits κ → Blocks m)
     (rest : DrawCoins n κ X → Fin n → ℕ → ℕ) (t : Fin n) (ω : DrawCoins n κ X) : (D.opened prf rest t ω).card ≤ s t := by
   unfold Run.opened openings

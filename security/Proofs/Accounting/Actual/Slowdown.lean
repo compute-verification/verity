@@ -33,8 +33,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Actual.Threaded
-import Proofs.InferenceOnly.Fit
-import Proofs.InferenceOnly.Threads
+import Proofs.Slowdown.Fit
+import Proofs.Slowdown.Threads
 
 /-!
 # The slowdown's windows from the memory cap over threads

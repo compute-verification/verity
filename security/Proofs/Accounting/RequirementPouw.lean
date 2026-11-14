@@ -4,7 +4,7 @@ public import Mathlib.Algebra.Order.BigOperators.Group.Finset
 public import Proofs.Accounting.Lemmas.RequirementPouw
 
 /-!
-# PoUW's credits and help when a node runs a declared circuit as placed
+# PoUW's credits and help when a node runs a registered circuit as placed
 
 The actual run of a placed execution has `W`'s regions (`Placement.region_actual`): its computed gates are the values the
 execution produces but the registered ones and the run's inputs, each at its device and its step's tick. Its wires into

@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The verifier's pooled bound covers the draw's (`PooledCovers`)
+# The verifier's pooled bound covers the sample's (`PooledCovers`)
 
 The budget: `powUp` is at least the power it rounds (`powUp_ge`, each product rounded up), so a numerator `below`
 accepts has `(m/2^64)^S ≤ δ` (`below_le`), and since `x ↦ x^S` is monotone on `[0, ∞)`, the root is at most `δ^(1/S)`

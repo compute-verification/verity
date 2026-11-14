@@ -132,7 +132,7 @@ def CodeLayoutTiles : Prop :=
     ∀ i : Fin N, tileAt blocks appends pl.runs i =
       some (((codeLayout blocks dflt appends pl.runs i).1 : ℕ), ((codeLayout blocks dflt appends pl.runs i).2 : ℕ))
 
-/-- **The verifier checks each opened block at its position.** Whenever `checkOpening` accepts draw `(i, p)`'s opening
+/-- **The verifier checks each opened block at its position.** Whenever `checkOpening` accepts sample `(i, p)`'s opening
 `o` (under the registration's digest and the receipter of pass `i`'s seed, as `Session` checks it), the block opened is
 store index `j`, the block at position `p` of pass `i`'s plan, and `position` puts it at `(t, j)`: `t = 0` and its
 decoding under the registration's key at index `j` is a payload at leaf `j` of the registration's payload tree, or

@@ -8,7 +8,7 @@ public import Properties.Accounting.Remote.Line
 
 The bandwidth component here is `Poub.Protocol.protocol` (`verity/remote-bandwidth/v0`), which no composite lists
 (onsite's is `Poub.P2Protocol.protocol`, `verity/remote-bandwidth/p2/v0`), and the properties below are stated on
-v0. Its check replays the verifier's log of a session through `Shared.run g` at the session's windows a draw g
+v0. Its check replays the verifier's log of a session through `Shared.run g` at the session's windows a sample g
 (`groups_per_coin`; `Session.run` at g = 1) and accepts once the session does, publishing `certify` of the run's record
 at the session's parameters and g. The composition reads of it that the check accepts three byte strings
 (`Properties.Composition.DecodedAccepted` at the component, which `Verity.ComponentAccepts` reads); PoUB's guarantees
@@ -29,7 +29,7 @@ statement in `Properties.Accounting.Remote.SubprotocolDeployed`:
   messages entering the node and the record's line credits more bits read than the trace's passes read is at most
   `LineHeld`'s bound, term for term.
 * **PublishedEps**: what the component publishes as `eps` on acceptance is `δ + Σ_c s/2^64` over the session's `⌈W/g⌉`
-  draws at its `samples` s, at the component's δ (`Poub.Protocol.DELTA`), at least that bound's draw term
+  samples at its `samples` s, at the component's δ (`Poub.Protocol.DELTA`), at least that bound's sample term
   `δ + Σ_c s/2^256`, or nothing certified at all.
 * **QBytesAtSubprotocol** and **PublishedQBytes**: what the subprotocol publishes as `q_bytes` on acceptance. The first
   bounds, except with the samples' part of `LineHeldAtSubprotocol`'s bound at `DELTA`, the trace's wrong receipts among
@@ -39,7 +39,7 @@ statement in `Properties.Accounting.Remote.SubprotocolDeployed`:
 `Plays` is the component's acceptance (`DecodedAccepted` unfolded at `Poub.Protocol.protocol`, whose decoders
 are `decodeParams`, `decodeCommitment` and `decodeEvidence`) with what picks out the record the line reads: the
 commitment decodes to the node's registration, and the parameters and the log to the node's session parameters and
-windows a draw and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a log
+windows a sample and the record's coins, append coins, clock floor and events. It is in the event, not a hypothesis: a log
 that is not the record's is an outcome the bound counts nothing for, not one the statement assumes away.
 
 Each property is its verifier's instance of a form over the verifier, so that its witnesses can say what the verifier
@@ -68,7 +68,7 @@ open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote
 commitment `b` and the evidence `e` decode under the component's decoders, its check accepts them
 (`Properties.Composition.DecodedAccepted` at `Poub.Protocol.protocol`), the commitment is the node's
 registration, and the session the parameters and the log decode to (`Poub.Protocol.sessionOf`) is the node's
-session parameters and windows a draw with the record's coins, append coins, clock floor and events. -/
+session parameters and windows a sample with the record's coins, append coins, clock floor and events. -/
 def Plays (node : Node) (rec : Record) (a b e : ByteArray) : Prop :=
   ∃ (p : Poub.Protocol.Params) (ev : Poub.Protocol.Evidence),
     (Core.canonicalJson a >>= Poub.Protocol.decodeParams) = .ok p ∧
@@ -253,8 +253,8 @@ def QBytesAtSubprotocolBy
         (∑ t, F.hide com prf (Poub.Protocol.DELTA : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal
 
 /-- The deployed period's parameters (`period.run`'s defaults): two windows of 100 ms, one pass each, the audit's
-33 273 samples a draw, a 500 ms deadline, the lifetime cap of 300 windows, unpaced and not deferred, one window a
-draw, from clock 0. -/
+33 273 samples a sample, a 500 ms deadline, the lifetime cap of 300 windows, unpaced and not deferred, one window a
+sample, from clock 0. -/
 def honestParams : Poub.Protocol.Params where
   notBeforeNs := ((0 : ℕ) : Lean.Json)
   params := Lean.Json.mkObj [("deadline_ns", (500000000 : ℕ)), ("deferred", .bool false), ("lifetime", (300 : ℕ)),
@@ -290,7 +290,7 @@ def noOutside {Ω : Type} (T : Trace Ω) : Outside T := ⟨fun _ _ => ∅, fun _
 /-- Nothing but the verifier's messages enters the node, and the certifiers count nothing else. -/
 def quietIngress (Ω : Type) : Ingress Ω := ⟨fun _ _ => 0, fun _ _ => 0⟩
 
-/-- **An honest node's schedule**: the session has a window; its passes take a tick or more each; each draw's
+/-- **An honest node's schedule**: the session has a window; its passes take a tick or more each; each sample's
 receipts are the store's, the same at every commitment and every coin; and wherever the Lean verifier accepts, the
 auditor saw every window, so the line's groups are the session's windows, each of one pass or more with its last root
 no sooner than its coin, the coins in order, `passes` at least the session's passes, and each pass run inside its
