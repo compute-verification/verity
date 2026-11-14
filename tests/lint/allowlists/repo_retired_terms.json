@@ -4047,7 +4047,7 @@
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/HiddenDraw.lean", "count": 3},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Json.lean", "count": 9},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/OneStage.lean", "count": 130},
-    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean", "count": 77},
+    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZk.lean", "count": 28},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Partition.lean", "count": 22},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/Pieces.lean", "count": 104},
     {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/PlanCheck.lean", "count": 5},
@@ -4675,6 +4675,7 @@
     {"file": "verity/protocols/accounting/pouw/prover/serving/lead/feed.py", "count": 1},
     {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/host.py", "count": 2},
     {"file": "verity/protocols/accounting/pouw/prover/serving/pearl_c/manifest.py", "count": 1},
-    {"file": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/receipt_folds_r9.py", "count": 1}
+    {"file": "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/receipt_folds_r9.py", "count": 1},
+    {"file": "verity/protocols/proofs/spot/verifier/lean/Spot/OneStageZkStatement.lean", "count": 49}
   ]
 }

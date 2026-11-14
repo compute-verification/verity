@@ -84,9 +84,10 @@ acceptance rests on that later check.
 
 A verifier of the per-member form (`OneStageZk`) names its members (`members`: each its units and its circuit's units a
 proof block, META `vus_per_block`), and after R8 the check refuses a member whose fewest and most sampled proof blocks under the
-sampling design the sample runs on, over the samples that end, give different link points, a sampling design it can't sample on, or one no sample of
-which ends (`link-points`, `linkRefused`): some sample ends, a sample that ends gives each member one count, and one that
-runs out of coins fails the window (`OneStageZk.RAN_OUT`).
+sampling design the sample runs on, over the samples that end, give different link points, a member some sample that
+ends misses (its fewest is none), a sampling design it can't sample on, or one no sample of which ends (`link-points`,
+`linkRefused`): some sample ends, a sample that ends holds a proof block of each member and gives each one count, and
+one that runs out of coins fails the window (`OneStageZk.RAN_OUT`).
 -/
 module
 
@@ -214,8 +215,9 @@ structure Verifier where
   /-- run Inputs, by parameter name, whose rows a later check ties to the registrations that computed them, which R8 lets
   through though several proof blocks read them, on that later check alone (`tiedThrough`) -/
   tied : Array String := #[]
-  /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, whose
-  link points `link-points` holds to one count (`linkRefused`); none in the one-statement form -/
+  /-- the per-member form's members, each its units as `[lo, hi)` ranges and its circuit's units a proof block, which
+  `link-points` holds to a sampled proof block at every sample that ends and to one count of link points
+  (`linkRefused`); none in the one-statement form -/
   members : Array (Array (Nat × Nat) × Nat) := #[]
   /-- the registration log's registered compiler, its digest and the public length ℓ in bits of the advice it reads,
   from the log it holds when it samples: `some none` when the log registers none; none when it reads no log's
@@ -535,7 +537,7 @@ def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
 /-- `registration.link_refused`: the verifier names members, and the sampling design the sample runs on doesn't derive, no sample under
 it ends, or some member's fewest and most sampled proof blocks under it, over the samples that end, give different link points
-(`LinkPoints.refused`). -/
+or its fewest is none, a sample that ends missing it (`LinkPoints.refused`). -/
 def linkRefused (v : Verifier) : Bool :=
   !v.members.isEmpty &&
     match LinkPoints.lawOf v.program v.query v.law v.workTable >>= fun (l, n) => LinkPoints.refused l n v.members with

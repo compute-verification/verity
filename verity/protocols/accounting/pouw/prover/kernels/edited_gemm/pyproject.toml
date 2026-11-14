@@ -21,6 +21,8 @@ inputs = ["benchmarks/pouw/exact_kit", "verity/protocols/accounting/pouw/prover/
           "benchmarks/machine_model/verity_machine_model/__init__.py",
           "benchmarks/machine_model/verity_machine_model/model.py", "benchmarks/pouw/theory/checked_strip.py",
           "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
+          "verity/protocols/accounting/pouw/prover/__init__.py", "verity/protocols/accounting/pouw/prover/kernels/__init__.py",
+          "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/__init__.py",
           "verity/protocols/accounting/pouw/verifier/__init__.py", "verity/protocols/accounting/pouw/verifier/receipts/__init__.py",
           "verity/protocols/accounting/pouw/verifier/receipts/receipt_conform.py",
           "verity/protocols/accounting/pouw/verifier/receipts/receipt_folds.py", "verity/protocols/accounting/pouw/verifier/receipts/vectors.json"]

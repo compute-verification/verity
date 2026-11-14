@@ -10,7 +10,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
 * `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
   walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
-* `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query;
+* `registration`: R1–R8's failure codes for a record against the parameters, with the fan-out under a template query,
+  and `link-points` after them where it is handed the per-member form's members;
 * `fanout`: a template query's fan-out and the run Input nodes its proof blocks don't each read alone;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
@@ -99,6 +100,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   audit's session records, each on its tables with their `root_B` lengths, held to them, one tree a session
   (`sessions_tree_reason`), and the log's order, the sample, then the link, then the other rounds
   (`sample_link_first`).
+* `challenger_links_first`: several members' sessions' trees in one release log, each tree's link opened before its
+  other rounds (`links_first`, `Challenger.linksFirst`).
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s live-coin part
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 * `period_windows`: a lane's sessions of a monitoring period as the auditor's ledger opens them, and which of them
@@ -114,8 +117,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `public_units`: whether a public file's `units.indices` are exactly given units, ascending (`PublicUnits.exactly`),
   which the per-member form holds each statement's file to.
 * `link_points`: each member's fewest and most sampled proof blocks under a sampling design over the samples that end, and the members whose
-  link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the per-member form's registration
-  refuses.
+  fewest is none or whose link points differ between them (`LinkPoints.bounds`, `LinkPoints.refused`), which the
+  per-member form's registration refuses.
 * `history_root`, `history_check`, `history_order`, `history_strings`, `history_roots`: a history table
   (`HistoryTable`): its domain, placeholder and root over its writers' `b ‖ c` at a capacity, the registered root held
   to that root, each position's source from the program's runs, the strings at those sources from the writer's members'
@@ -251,9 +254,14 @@ def fanout (j : Json) : V Json := do
 
 /-- `{"params", "record"}` to R1–R8's codes, and under a template query that applies the fan-out the verdict publishes
 (`Partition.fanout?`) and, when any, the tied values R8 let through (`Registration.tiedThrough`), whatever the
-record. -/
+record. With `"members"` (`LinkPoints.membersOfJson`), the per-member form's members, the check holds them to
+`link-points` after R8, as it does the ones `OneStageZk.membersParamsOfJson` hands it from a case's parameters. -/
 def registration (j : Json) : V Json := do
   let v := (← params (getD j "params")).verifier
+  let members ← match field? j "members" with
+    | some ms => LinkPoints.membersOfJson ms
+    | none => pure #[]
+  let v := { v with members }
   let cs := (Registration.check (getD j "record") v).map Json.str
   let through := Registration.tiedThrough v
   return Json.mkObj (("codes", Json.arr cs) :: ((Partition.fanout? v.program v.query).map ("fanout", Lean.toJson ·)).toList
@@ -1055,6 +1063,8 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
+   ("challenger_members_order", Challenger.membersOrderPiece),
+   ("challenger_links_first", Challenger.linksFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece), ("period_windows", MonitoringPeriod.windowsPiece),
    ("period_asked", MonitoringPeriod.askedPiece), ("period_check", MonitoringPeriod.checkPiece),
    ("period_check_stub", MonitoringPeriod.checkStubPiece),

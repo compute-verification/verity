@@ -370,17 +370,16 @@ theorem bind_ok {ε α β : Type} {x : Except ε α} {g : α → Except ε β} {
   | error e => rw [hx] at h; cases h
   | ok a => rw [hx] at h; exact ⟨a, rfl, h⟩
 
-/-- **v2's acceptance holds its sessions to the challenger's trees**: an audit `checkBlobs` accepts read the trees
-(`treesOf`), and its sessions' records hold to them on the verifier's own files (`treesHeld`). -/
-theorem accepted_trees {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+/-- **The one statement's acceptance holds its sessions to the challenger's trees**: on parameters that name no
+members, an audit `checkBlobsAt` accepts read the trees (`treesOf`), and its sessions' records hold to them on the
+verifier's own files (`treesHeld`). -/
+theorem accepted_trees {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} {ξ : ByteArray}
     {e : Spot.OneStageZk.Evidence} {bs : Core.Blobs} {pub : Spot.OneStage.Public}
-    {prof : Core.Integrity} (h : Spot.OneStageZk.checkBlobs p c e bs = .accept pub prof) :
+    {prof : Core.Integrity} (hm : p.members = none)
+    (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ ts, Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  unfold Spot.OneStageZk.checkBlobs Core.atCoins at h
-  split at h
-  case h_2 => cases h
-  replace h := (Spot.OneStageZk.checkBlobsAt_accept h).1
+  replace h := (Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h

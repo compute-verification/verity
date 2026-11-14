@@ -310,9 +310,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     through (`Verdict.rests_on_period_check`), and refuses a name that isn't a parameter of `program`, one `registered`
     or `held` names, or one whose gates aren't one interval of run Input nodes (`R8-tied`).  `members`: the per-member
     form's members, each its units (`[lo, hi)` ranges) and its circuit's units a proof block; after R8, `link-points`
-    refuses the record when a member's fewest and most sampled proof blocks give different link points
-    (`link_points.refused`), no sample under the sampling design ends (`link_points.NEVER_ENDS`), or the members or the
-    sampling design are not well formed over the population."""
+    refuses the record when a member's fewest and most sampled proof blocks give different link points or some sample
+    that ends misses a member, its fewest none (`link_points.refused`), no sample under the sampling design ends
+    (`link_points.NEVER_ENDS`), or the members or the sampling design are not well formed over the population."""
     c = _Collect()
     days = _declarations(day, declarations)
     v2 = bool(registered)
