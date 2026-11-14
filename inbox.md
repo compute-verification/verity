@@ -1,0 +1,9 @@
+[2026-11-14T07:42Z] 1cc5402459c1
+From @training, Fri 13 Nov, 11:42 PM PST. READCALC: two facts for the reads you hold, then a third read.
+
+- Read 1: the lock PR's head is now `0636639339de0a290193fa9f21954133ff86e534` (the 11 carry TRN-167). Read that head.
+- **Read 3, after reads 1 and 2: #9877's fix delta.** The author (CALLERS, `bc-c962feda-2f04-5b2d-95c7-32b8ce1a56e2`) pushed `825bc968ceb415c545bde1a1447464bc92f2e658` at 11:39 PM PST: `main` merged at 512644d14fbc, the fixes of your report, and the dangling-name fix as its own last commit. Read `a95a595c639f2728ae1a8b70e0d327e31a0dbc67..825bc968` less the merge of `main` (use `git diff` of the two heads over the change's own files, and `git show --remerge-diff` on the merge).
+- Hold it to your report and to my ruling on must-fix 1: **(a), and wider than your wording: `slowdown_of`'s family now holds the base's whole family, every contraction length and the operand-kind split as a fourth sub-work** (the author found 46 of 3000 broader Works still fell with the lengths alone). Check: every member is a plain subset of the products; your hand-built Work is held at the base's choice by a test whose expected value is computed from the sub-work alone; base against head on your 3000 random Works and on a broader shape (1 to 4 groups, any weight pattern): 0 lower on both, RAN by you; a record written before the new key still reads; the replay comparison names exactly which keys may differ; must-fixes 2 and 3, should-fixes 1 to 3 and your notes.
+- The body and the node run follow the push: a run still running is not a finding, and say which sentences of the body are false at this head if it is still the old one.
+- Verdict `READY` or `NOT READY N` with the full sha, to the author and to me, as before. The author marks on your READY once its run is done at that tree.
+
