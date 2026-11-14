@@ -1,0 +1,31 @@
+[2026-11-14T07:46Z] 3f29995ddc21
+READ502, Fri 13 Nov, 11:45 PM PST
+
+**#9565's code, lock and data are right at 9f58712fcfa8ef03b47c9b0fde04541b93def9d3; only the body is untrue at that head.**
+
+NOT READY 1 9f58712fcfa8ef03b47c9b0fde04541b93def9d3
+
+Head unchanged; it holds #9502 at f8a2cf09506e. The `main` it merged (49d12bdc) is inside #9502, so `f8a2cf..9f58712` is #9565's own change (READ).
+
+MUST FIX
+1. PR body (READ). It describes `fe31b503bb`: "671 cases, against `main` before #9502: 600 random and 71 shaped", "args and why to 671", "stays a draft until [#9502] is on `main`; then I merge `main`", and "(head, `main` merged)". The head merges #9502's head directly and has 690 (600 + 90). The body names no run at 9f58712. Its runs all finished at their stated trees (RAN, by `state`/`rc`/`tree_sha`): d314, 3c61, 5874, a2c3, 5236 and 3407 done rc 0 at e57681171b; 9eba cancelled rc 130 there; 517d done rc 0 at 66a3543f46; c5aa and e198 done rc 0 at fe31b503bb. Paths are pre-move (`verity/protocols/inference_only/…`, `verity/protocols/spot/…`). Cure: rewrite "The record difftest", "Overlaps" and "What was run" for 9f58712: 690, holds #9502 at f8a2cf, the records and suites runs at the head, and the current paths.
+
+SHOULD FIX: none.
+
+NOTE
+1. The copies were not identical; the body names the difference and a test holds it (READ, RAN). Old `RecordText.fieldsOf`: `| .tuple fs => if fs.isEmpty then [t] else fs.toList` (same for record). Surviving `Flock.Program.fieldsOf` (`Circuits/Program.lean:186`): `| .tuple fs => fs.toList`, as `Spot.Bits` had it. `tmplOf:98` refuses an empty return first, with code `templates` as before; `leavesOf` sees only `tmplOf`'s templates, and `layoutOf` needs ≥2 fields. Verdicts are identical on every case.
+2. No reader of a removed name is left in Lean, Python, locks, lakefiles or docs (RAN, `rg`).
+3. Locks (READ): `security/Properties` changes only `reads` of `Circuits.Program` (+`fieldsOf`), `NciCheck.RecordText` (−`fieldsOf`, `tmplOf` re-hashed) and `Properties.Nci.Record` (`OutLeaf`, `TemplateOf`, `outRow`); no statement record changes. The check's lock changes `runs.NciCheck.RecordDifftestMain` (args 690, why 690/600/90, two digests) plus a no-op reorder of `exempt.NciCheck.RecordCheckMain` from the merge. `test_the_data_is_what_the_audit_pins` passes at the head (RAN: 20 passed, 0 skipped). Lock, docstrings and `total()` all say 690; the body says 671.
+4. Combined cases (RAN, both generators): all 600 random cases are byte-identical; all 89 shaped cases from #9502 are present, in order, with the same verdicts; the new case is "2x3 a template that returns a Record of no field" → `templates`. 24 later shaped cases change bytes only, because seeds are positional (`47 + len(TWICE) + k`, vectors:1087).
+5. Mutations of `fields_of` (RAN, each undone, tree clean). Empty → `(ret,)` (old rule): fails only `test_an_output_has_a_bit`; the pinned data does not tell the two rules apart. Guard at reference:181 dropped: fails `test_the_data_is_what_the_audit_pins`, `test_the_generator_covers_what_it_says` and `test_an_output_has_a_bit` (`wires` ≠ `templates`). No Lean mutation was run (INFERRED: the Lean half would pass the first too).
+6. No run id, issue id, PR number, date or worker name in the diff (RAN).
+
+Nothing addressed to @training reached me.
+
+For the lead to read
+1. `verity/circuits/lean/Circuits/Program.lean:184-189`
+2. `verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean:89-98`
+3. `security/Properties/Nci/Record.lean:97-100` (statements now name `Flock.Program.fieldsOf`)
+4. `verity/protocols/policy/inference_only/verifier/nci/lean/scripts/nci_record_reference.py:124-131,181-182`
+5. `verity/protocols/accounting/certifier/verifier/network/tests/test_nci_record_difftest.py:658-679`
+
