@@ -52,7 +52,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path[:0] = [str(HERE), str(REPO / "benchmarks" / "prove_path"), str(REPO / "benchmarks" / "one_stage" / "interfaces"),
-                str(REPO / "verity" / "protocols" / "flock" / "agreement")]
+                str(REPO / "verity" / "protocols" / "flock" / "prover" / "agreement")]
 
 import a0  # noqa: E402
 import a5 as A5  # noqa: E402
