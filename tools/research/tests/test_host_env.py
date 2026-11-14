@@ -14,6 +14,7 @@ import pytest
 from research import cli, remote
 from research.env import DIRTY_CAPTURE
 from research.pods import registry
+from research.store.attempt import store_root
 
 CHALLENGER, AUDITOR, JUMP, IN_COMMAND = "192.0.2.10", "198.51.100.7", "203.0.113.5", "203.0.113.6"
 #: a workload that writes down the challenger's variable as its process starts with it
@@ -86,7 +87,7 @@ def test_env_host_goes_to_the_machine_in_the_launch_requests_env(reg, tmp_path, 
 def test_the_record_keeps_a_host_variables_name_and_redacts_its_value(reg, tmp_path, monkeypatch):
     """For --env-host, for an --env X_HOST= given by hand, and on the machine for a request's env: no file of the run dir or the
     store holds the address."""
-    store = Path(os.environ["RESEARCH_STORE"])
+    store = store_root()
     for case, flags in (("env-host", ["--env-host", "vy-challenger-1"]), ("by-hand", ["--env", f"VY_CHALLENGER_1_HOST={CHALLENGER}"])):
         runs = tmp_path / case
         assert cli.main(["run", "--runs-dir", str(runs), "--no-sampler", *flags, "--", "true"]) == 0, case
@@ -107,7 +108,7 @@ def test_the_record_keeps_a_host_variables_name_and_redacts_its_value(reg, tmp_p
 def test_fleet_jump_and_a_host_variable_in_the_command_are_redacted_too_and_other_keys_are_not(tmp_path):
     """FLEET_JUMP given with --env is in no file of the run dir or the store. A `K=V` word of the command is redacted in job.json
     and the attempt by the same rule (`redact_argv`); the harness's status.json keeps the command as given."""
-    runs, store = tmp_path / "runs", Path(os.environ["RESEARCH_STORE"])
+    runs, store = tmp_path / "runs", store_root()
     argv = ["run", "--runs-dir", str(runs), "--no-sampler", "--env", f"FLEET_JUMP=research@{JUMP}", "--env", "PLAIN=kept",
             "--", "env", f"VY_X_HOST={IN_COMMAND}", "true"]
     assert cli.main(argv) == 0
