@@ -55,9 +55,9 @@ ConnectX-7/BlueField-3 400 Gb/s = 50 GB/s a NIC; NVLink4 450 GB/s and NVLink5 90
 NVLink; HBM3e 4.8 (H200) / 8 (B200) TB/s, GDDR7 ~1.8 TB/s (sm_120); H1's smallest tile
 4 x 8 at K = 64 (`h1tile.circuit-check.py`). Host rates: measured per core, each cited where it's set (the AMX
 bench, `ncp_amx`, is not in this tree); the Xeon 6776P's and 8468's cores, AMX rate and max turbo from their host
-cards, and the GPUs beside them from their node files (verity.device.load_node); the other hosts' core counts from each
-run's lscpu and NVIDIA's DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); the Xeon 8480C's, 8570's and 8580's
-clocks and every base clock from Intel ARK.
+cards, the GPUs beside each host written in `HOSTS`; the other hosts' core counts from each run's lscpu and NVIDIA's
+DGX H200 / B200 data sheets (2 x 56 cores beside 8 GPUs); the Xeon 8480C's, 8570's and 8580's clocks and every base
+clock from Intel ARK.
 """
 from __future__ import annotations
 
@@ -71,7 +71,7 @@ from verity_machine_model.eps import design, machine, setup
 from verity_machine_model.headline import CREDIT, OPERANDS, READINGS, row, spec
 from verity_machine_model.model import device as family_data
 
-from verity.device import load_card, load_node, number, rate
+from verity.device import load_card, number, rate
 
 MAC_PER_WORD = 32  # a committed word sums 32 int8 products (FOLD-BW)
 BYTES_PER_WORD = 4  # a fresh s32
@@ -132,10 +132,8 @@ AMX_RESIDENT_BY_HOST = {"vy-dc-h200 slot, Xeon 8468": 4.4278e12 / 8, "DGX H200, 
 # (Xeon 8580), priced at the design's own lane instructions a word.
 LANE_PER_CORE = 5.1349e11 / 10
 
-# The host cards (hardware/cards) the RTX PRO 6000's and the H200's node files name, and the GPUs each node carries.
-RTX_NODE, H200_NODE = load_node("rtx-pro-6000-server-x8"), load_node("h200-sxm-141gb-x1")
-XEON_6776P, XEON_8468 = (load_card(node["host"]["sku"]) for node in (RTX_NODE, H200_NODE))
-RTX_GPUS, H200_GPUS = (int(number(node["device"]["count"])) for node in (RTX_NODE, H200_NODE))
+# The host cards (hardware/cards) of the RTX PRO 6000's and the H200's nodes; the GPUs beside each host are literals.
+XEON_6776P, XEON_8468 = load_card("xeon-6776p-2s"), load_card("xeon-platinum-8468-2s")
 CPU_6776P, CPU_8468 = ({k: int(number(e)) for k, e in card["cpu"].items()} for card in (XEON_6776P, XEON_8468))
 TURBO_6776P, TURBO_8468 = (float(number(card["clock"]["turbo"]) * 10**9) for card in (XEON_6776P, XEON_8468))
 AMX_MACS_PER_CYCLE = int(number(XEON_6776P["rate"]["amx"]))  # TDPBSSD: int8 MACs a cycle a core
@@ -144,10 +142,10 @@ AMX_MACS_PER_CYCLE = int(number(XEON_6776P["rate"]["amx"]))  # TDPBSSD: int8 MAC
 # card, a node's VM gives each GPU cpu.vm_cores cores, bare metal has cpu.sockets x cpu.cores, max turbo is clock.turbo.
 HOSTS = {
     "sm_120 RTX PRO 6000": [
-        ("node 2 VM, 2 x Xeon 6776P", CPU_6776P["vm_cores"] * RTX_GPUS, RTX_GPUS, 2.3e9, TURBO_6776P),
-        ("node 2 bare metal, 2 x Xeon 6776P", CPU_6776P["sockets"] * CPU_6776P["cores"], RTX_GPUS, 2.3e9, TURBO_6776P),
+        ("node 2 VM, 2 x Xeon 6776P", CPU_6776P["vm_cores"] * 8, 8, 2.3e9, TURBO_6776P),
+        ("node 2 bare metal, 2 x Xeon 6776P", CPU_6776P["sockets"] * CPU_6776P["cores"], 8, 2.3e9, TURBO_6776P),
     ],
-    "H200 sm_90": [("vy-dc-h200 slot, Xeon 8468", CPU_8468["vm_cores"] * H200_GPUS, H200_GPUS, 2.1e9, TURBO_8468),
+    "H200 sm_90": [("vy-dc-h200 slot, Xeon 8468", CPU_8468["vm_cores"], 1, 2.1e9, TURBO_8468),
                    ("DGX H200, 2 x Xeon 8480C", 112, 8, 2.0e9, 3.8e9)],
     "B200 sm_100": [("vy-dc-b200 slot, Xeon 8580", 10, 1, 2.0e9, 4.0e9),
                     ("DGX B200, 2 x Xeon 8570", 112, 8, 2.1e9, 4.0e9)],
