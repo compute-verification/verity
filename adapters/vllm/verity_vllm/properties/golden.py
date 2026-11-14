@@ -28,6 +28,7 @@ from typing import Any
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import UsageError, option
 from verity_vllm.records.property_record import REGISTRY, seal
+from verity_vllm.records.schema_ids import GOLDEN_CORPUS_SCHEMA
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 
@@ -66,7 +67,7 @@ def _fetch(log: Path) -> str | None:
 
 def load_corpus(path: Path = CORPUS) -> dict[str, Any]:
     if not path.exists():
-        return {"schema": "verity-gen/golden/v1", "entries": []}
+        return {"schema": GOLDEN_CORPUS_SCHEMA, "entries": []}
     return json.loads(path.read_text())
 
 
