@@ -607,6 +607,27 @@ def records(period_dir: str | os.PathLike, skip: Collection[str] = ("answers",))
     return bytes(out)
 
 
+DEPLOYMENT = ("configuration", "pins")
+PIN_FIELDS = ("key-sha512", "party", "protocol", "scheme")
+
+
+def deployment(doc: Mapping[str, Any]) -> dict[str, Any]:
+    """`period.json`'s `deployment`, what `trusted-device`'s premise reads (`memory_challenger.trusted_device`):
+    `configuration`, the hash of the configuration the run is under (`verity config hash`), and `pins`, that
+    configuration's `[[pin]]` entries, with `committed`, the hashes `tests/configurations.toml` commits. With none, the
+    premise reads rehearsal; an unknown key or a malformed pin raises."""
+    got = doc.get("deployment") or {}
+    if unknown := set(got) - set(DEPLOYMENT):
+        raise ValueError(f"period.json's deployment has unknown keys {sorted(unknown)}: it takes {sorted(DEPLOYMENT)}")
+    pins, configuration = got.get("pins") or [], got.get("configuration")
+    if not (isinstance(pins, list) and all(isinstance(e, dict) and sorted(e) == sorted(PIN_FIELDS)
+                                           and all(type(v) is str for v in e.values()) for e in pins)
+            and (configuration is None or type(configuration) is str)):
+        raise ValueError(f"period.json's deployment: configuration a hash and pins a list of pins, each "
+                         f"{list(PIN_FIELDS)} as strings, not {got!r}")
+    return {"pins": pins, "configuration": configuration, "committed": mc.committed()}
+
+
 SETUP_WORKERS = 32
 """The processes the leg encodes a node's `C*` in, and the memory challenger's side makes its key in, at most, within the
 CPUs each may run on (`setup_store`; `challenger`, from `challenger_party.main`)."""
@@ -626,13 +647,12 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     (`challenger_prover.session`, which the caller hands in too). With `pous-run-protocol` and `pous-setup` among the
     period's tools, the Lean verifier answers and must agree with the Python; it writes `out/pous.case.json` (onsite's
     PoUS case), `out/pous.json` and, in a period that set a store up, `out/pous-setup.case.json`. Which host ran each
-    party, and whether `trusted-device`'s premise holds (`challenger_session.placement`), go in `pous.json` and in an
-    accepted answer's profile (`placement`)."""
+    party, and whether `trusted-device`'s premise holds for the session's key (`challenger_session.placement`, under
+    `period.json`'s `deployment`), go in `pous.json` and in an accepted answer's profile (`placement`)."""
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools, small = doc.get("tools") or {}, (doc.get("pous") or {}).get("point") == "small"
     workers = min(SETUP_WORKERS, len(os.sched_getaffinity(0)))
     party = side_of(doc, node, "pous", challenger_session.command(Path(period_dir).parent / "pous-challenger"))
-    where = challenger_session.placement(node, party.host)
     kept = Path(period_dir).parent / "pous-store"
     t = time.monotonic()
     if small or not (kept / "store.json").exists():
@@ -648,6 +668,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     t = time.monotonic()
     period = audit(node, held, secrets.token_bytes(64), party=party, session=session)
     seconds = round(time.monotonic() - t, 2)
+    key_sha512 = hashlib.sha512(bytes.fromhex(period.case["params"]["trusted"][0])).hexdigest()
+    where = challenger_session.placement(node, party.host, key_sha512, **deployment(doc))
     answer, lean = period.answer, {}
     if "pous-run-protocol" in tools:
         lean["run"] = serve(tools["pous-run-protocol"], [period.case])[0]
@@ -672,8 +694,8 @@ def leg(period_dir: Path, node: str, out: Path, *, side_of: Callable[..., challe
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL", "EncodedStore", "Period",
+__all__ = ["DEPLOYMENT", "LEDGER_SCHEMAS", "PIN_FIELDS", "PROTOCOL", "SETUP_ACCEPTED", "SETUP_WORKERS", "SIGNED_GAPS", "SIGNED_PROTOCOL", "EncodedStore", "Period",
            "Prover", "Run", "SetupInputs", "answer", "answer_signed", "audit", "case", "case_signed", "certificate",
-           "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "openings_of", "point_for",
+           "certify", "challenger", "cite", "cited", "deployment", "encode", "gaps", "honest", "leg", "openings_of", "point_for",
            "point_of", "profile", "profile_signed", "records", "run", "serve", "setup_case", "setup_inputs",
            "setup_store", "tie"]

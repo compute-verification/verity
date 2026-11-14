@@ -1,5 +1,5 @@
 """Evaluating one sampled VU: its operands from the committed store and the weights, the registered row kernel
-(`verity.definitions.numerics.rows`), and the comparison of every member it produces with the committed words.  A VU whose
+(`verity_vllm.definitions.numerics.rows`), and the comparison of every member it produces with the committed words.  A VU whose
 inputs cannot be resolved is not evaluable by name (`_Unresolved`), never skipped."""
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
-from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.numerics.rows import EVALUATORS, ROWS
+from verity_vllm.definitions.numerics.kernel_registry import Declined
+from verity_vllm.definitions.numerics.rows import EVALUATORS, ROWS
 
 from verity_vllm.check.replay.compare import (
     _interior_slice,
@@ -73,7 +73,7 @@ ROW_EVALUATORS: list[Callable[..., dict[str, np.ndarray]]] = []
 
 def evaluate(family: str, statics: dict[str, Any], inputs: list[list[np.ndarray]], weights: list[np.ndarray | None], *,
              refs: list[dict[str, Any] | None] | None = None) -> dict[str, np.ndarray]:
-    """F_V for the supported families: the family's row kernel (`verity.definitions.numerics.rows`) on the row's operands (`_Operands`).
+    """F_V for the supported families: the family's row kernel (`verity_vllm.definitions.numerics.rows`) on the row's operands (`_Operands`).
     Returns {member: words}."""
     k = ROWS.get(family)
     if k is None:

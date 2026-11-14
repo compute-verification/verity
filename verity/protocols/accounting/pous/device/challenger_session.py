@@ -47,7 +47,7 @@ import socket
 import sys
 import time
 from collections import deque
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, TypeVar
 
@@ -64,7 +64,7 @@ END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.protocols.accounting.pous.device.challenger_party"
-PREMISE = "trusted-device"
+PREMISE = mc.PREMISE
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
@@ -255,13 +255,20 @@ def command(device: str | Path) -> tuple[str, ...]:
     return (sys.executable, "-m", MODULE, "--device", str(device), "--listen", "127.0.0.1:0")
 
 
-def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control, which is never the developer's node."""
-    held = host != node
-    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-            PREMISE: (f"holds: the memory challenger ran on {host}, not the prover's {node}" if held else
-                      f"unmet: the memory challenger ran on the prover's node {node}")}
+def placement(node: str, host: str, key_sha512: str | None = None, *, pins: Sequence[Mapping[str, str]] = (),
+              configuration: str | None = None, committed: Collection[str] = frozenset(),
+              verifier: str | None = None) -> dict[str, Any]:
+    """Which host ran each party, what those names say (`kind`: ``own-host``, a challenger host other than the node, or
+    ``prover-node``), and `trusted-device`'s premise, `memory_challenger.trusted_device`'s for the session's key: the
+    names are the run's own, so they bound nothing, and the premise holds only for `key_sha512`, the SHA-512 of the key
+    the session was signed under, when the configuration whose hash is `configuration`, one of `committed`, pins it
+    for the challenger's PoUS sessions (`pins`, its `[[pin]]` entries)."""
+    kind = "own-host" if host != node else "prover-node"
+    names = (f"the memory challenger ran on {host}, not the prover's {node}" if kind == "own-host" else
+             f"the memory challenger ran on the prover's node {node}")
+    return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node}, "kind": kind,
+            PREMISE: mc.trusted_device(pins, CHALLENGER, "pous", key_sha512, names, configuration=configuration,
+                                       committed=committed)}
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:

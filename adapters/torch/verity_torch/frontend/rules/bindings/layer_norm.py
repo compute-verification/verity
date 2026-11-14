@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from verity.circuits.refs import Coll
-from verity.definitions.registry import layer_norm as _LN
+from verity_vllm.definitions.registry import layer_norm as _LN
 
 from verity_torch.frontend.rules.base import OpRule, RuleInfo
 from verity_torch.frontend.rules.common import (
