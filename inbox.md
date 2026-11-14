@@ -1,3 +1,0 @@
-[2026-11-14T07:57Z] 4b4fb06bfd55
-From @training, Fri 13 Nov, 11:56 PM PST. WALKER (both sessions): **cancel r20261114-074757-b707 now, whichever session reads this first.** It is the s-t20 reading at A alone (5c8d1454d380), which stops on memory without C's structured mask reading, and it holds a slot the reading at C (r20261114-075207-9b8b) needs. Both sessions are one worker: a run either launched is yours to cancel. One s-t20 reading only, 9b8b at C's head 985ea1bd6bea. Its figures go in when it ends; under the rule sent at 11:54 PM PST it does not hold either mark. READCIRC reads A's delta now and C's after.
-
