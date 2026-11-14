@@ -6,8 +6,8 @@ what the module holds. H1 (`h1`) is a package of its own inside this one and sta
 
 ## Interface
 
-- **Provides** these names to code outside the package. Each is in its module's `__all__`, except the package's and
-  `pearl_c.host`'s, which state none. The package is PoUW's adapter module (`verity_vllm.protocols.interface`): the
+- **Provides** these names to code outside the package. Each is in its module's `__all__`, except the package's,
+  which states none. The package is PoUW's adapter module (`verity_vllm.protocols.interface`): the
   selector reads `NAME`, `EXECUTES`, `schemes`, `executes`, `refusals`, `requires_build`, `keeps_weight_copy`, `cuts`,
   `commit_weights`, `install`, `fills` and `from_engine` from it by name, and other code imports `Settings`,
   `challenged`, `circuit_run`, `h1_run`, `linear_types` and `quantize`. `circuit` gives `CallRecord`, `ROW_BIAS_FAMILY`,

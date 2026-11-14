@@ -351,7 +351,7 @@ def parse_launch_context(spec: str | int | list | dict | None) -> dict[str, Any]
         s = spec.strip()
         if s.lower() == "conflict":
             return {"max_seqlen_q_by_step": {}, "conflict": True, "declared": True}
-        spec = int(s) if s.lstrip("-").isdigit() else json.loads(s)
+        spec = int(s) if s.lstrip("-").isdecimal() else json.loads(s)
     if isinstance(spec, bool):
         raise ValueError(f"launch context: {spec!r}")
     if isinstance(spec, int):
