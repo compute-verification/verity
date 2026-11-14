@@ -24,7 +24,7 @@ REWRITE = ("a change meant to add or move a family Definition rewrites the fixtu
            "`uv run python tools/verity/check/pins.py --write tools/verity/circuit_check/tests/fixtures/split/prims_serve.json`")
 #: the fixture's ``family``, which no test reads
 FAMILY = "primitives, composites and serving"
-REG = "verity.definitions.registry"
+REG = "verity_vllm.definitions.registry"
 #: the family's Definition modules (`FAMILY` of adapters/vllm `tests/program/test_prims_serve_boundaries.py`)
 DEFINITION_MODULES = ("__init__", "catalog", "prims", "ref_prims", "pad_prims", "lifted", "tables", "value_inputs", "operand_widths",
                       "b1", "b1_tp2", "serve3", "spec", "pouw_rows")

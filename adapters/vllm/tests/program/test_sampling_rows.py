@@ -1,4 +1,4 @@
-"""`verity.definitions.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
+"""`verity_vllm.definitions.registry.sampling_rows` — the vectorised twins of the sampler Definition are WORD-EQUAL to the registered scalar
 evaluators and to the lane-walk `evaluate_spec(GumbelTopPTokenSelect_v1)`.  CPU only; the `div.full` model
 (TemperatureScale) needs the in-tree MUFU tables (`rms_relation.tables`) -- those tests skip without them, the noise / log / select tests do not.
 The GPU's recorded rows and probe are `test_sampling_rows_of_record`.
@@ -10,14 +10,14 @@ import struct
 
 import numpy as np
 import pytest
-from verity.definitions.registry import sampling as SP
-from verity.definitions.registry import sampling_rows as SR
-from verity.definitions.registry import sampling_twins
+from verity_vllm.definitions.registry import sampling as SP
+from verity_vllm.definitions.registry import sampling_rows as SR
+from verity_vllm.definitions.registry import sampling_twins
 
 
 def _tables_ok() -> bool:
     try:
-        from verity.definitions.registry.prims import DivFullRcp
+        from verity_vllm.definitions.registry.prims import DivFullRcp
         DivFullRcp.evaluate(SP.f32_bits(0.8))
         return True
     except Exception:  # noqa: BLE001
@@ -214,7 +214,7 @@ def test_the_logs_outside_their_domain_are_one_pinned_nan_on_every_path():
     """`__nv_logf` of a negative word and `__nv_log1pf` of a word below -1 (-inf included) are libdevice's invalid -inf + inf:
     `sampling.LOG_INVALID_NAN` on the scalar lane, the rows twin and the float32 transcription alike, whatever the host's default
     NaN. -0 and the negative subnormals (flushed to -0) keep logf's -inf, and log1pf keeps -0 at -0 and -inf at -1."""
-    from verity.definitions.numerics import libdevice as L
+    from verity_vllm.definitions.numerics import libdevice as L
 
     rng = np.random.default_rng(5)
     edges = [0x80000000, 0x80000001, 0x807FFFFF, 0x80800000, 0xBF7FFFFF, 0xBF800000, 0xBF800001, 0xFF7FFFFF, 0xFF800000]
@@ -244,7 +244,7 @@ PROBE_EDGES = {"nv_logf": {0xBF800000: 0x7FFFFFFF, 0x80000000: 0xFF800000, 0x804
 
 def _gpu_paths(name: str) -> list:
     """The `_v2` logs: the scalar function and, for logf, the registered `NvLogf_v2`."""
-    from verity.definitions.registry import topp_word_gates as TWG
+    from verity_vllm.definitions.registry import topp_word_gates as TWG
     return [getattr(SP, f"{name}_gpu")] + ([TWG.NvLogfV2.evaluate] if name == "nv_logf" else [])
 
 
@@ -334,7 +334,7 @@ def _cases(V: int, n: int, seed: int):
 @needs_tables
 @pytest.mark.slow
 def test_the_whole_row_equals_the_lane_walk_evaluate_spec_over_temps_top_p_split_counts_ties_masks_and_nan():
-    from verity.definitions.registry import sampling_topp_difftest as D
+    from verity_vllm.definitions.registry import sampling_topp_difftest as D
 
     from verity_vllm.properties.admission import evaluate_spec
     V = 1024

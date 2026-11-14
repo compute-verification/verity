@@ -122,7 +122,7 @@ def masked(fn: SpecializedDefinition) -> SpecializedDefinition:
     serves O ids. A step's units read its bit by wire (`class_window`).
 
     NOT decided: whether each family's masked Definition is that family's next version in the catalog
-    (`verity/definitions/registry`, with its circuit-check sidecar), or one combinator registered once over any
+    (`adapters/vllm/verity_vllm/definitions/registry`, with its circuit-check sidecar), or one combinator registered once over any
     Definition, whose property check covers every family; nor how a template whose rows are near
     `interface.MAX_ROWS` takes the bit's row (CIR-290's plan counts them)."""
     raise NotImplementedError(TODO)

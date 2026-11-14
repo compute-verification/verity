@@ -33,7 +33,7 @@ from verity.circuits.defs import Builder, CompositeDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.types import Array, RecordType, Type, Value
-from verity.definitions.replay import replayer
+from verity_vllm.definitions.replay import replayer
 
 from verity_vllm.program.inputs import check_params
 

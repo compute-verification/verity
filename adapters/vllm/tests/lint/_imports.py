@@ -2,7 +2,7 @@
 are core (``core``, ``core_less_definitions``), for P1, ``conftest.py``'s guard and the boundary tests of ``tests/program``.
 
 An edge is one import statement in a library module that names another library module (``verity_vllm``'s, or the
-Definitions that moved from its ``program`` layer to ``verity.definitions``, which keep that layer): module-level and
+Definitions that moved from its ``program`` layer to ``verity_vllm.definitions``, which keep that layer): module-level and
 function-level (lazy) imports alike, plus ``importlib.import_module`` with a literal name.  ``from pkg import name``
 resolves to the submodule ``pkg.name`` when that module exists, else to ``pkg``.
 
@@ -44,7 +44,7 @@ LAYER = {
     "verity_vllm.query": "query|correspondence",
     "verity_vllm.correspondence": "query|correspondence",
     "verity_vllm.program": "program",
-    "verity.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
+    "verity_vllm.definitions": "program",                        # moved from program/; circuits', held to P9 as it stood
     "verity_vllm.program.predict": "pipeline",                         # the Program ahead of time: imports pipeline, check, acquire, engine
     "verity_vllm.engine.collectives": "collectives",
     "verity_vllm.config": "config",
@@ -66,7 +66,7 @@ LAYER = {
 OPTIONAL = ("verity_vllm.protocols.remote_bandwidth", "verity_vllm.commitments")
 
 #: the packages whose modules are graph nodes
-LIBRARY_PACKAGES = ("verity_vllm", "verity.definitions")
+LIBRARY_PACKAGES = ("verity_vllm", "verity_vllm.definitions")
 
 #: The property harnesses.
 PROPERTY_MODULES = ("verity_vllm.properties",)
@@ -252,7 +252,7 @@ SIDES: dict[str, bool] = {
     "verity.protocols.compose": False,
 }
 #: the same for a test of what the Definitions import: the integration's Definitions are not core
-SIDES_LESS_DEFINITIONS: dict[str, bool] = {**SIDES, "verity.definitions": False}
+SIDES_LESS_DEFINITIONS: dict[str, bool] = {**SIDES, "verity_vllm.definitions": False}
 
 
 def _side(name: str | None, sides: dict[str, bool]) -> bool:
