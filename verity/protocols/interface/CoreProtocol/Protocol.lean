@@ -15,6 +15,7 @@ parameters, runs the check, and turns every decoding failure into a rejection, s
 module
 
 public import Base.Canon
+public import Base.JsonParse
 public import Lean.Data.Json.Parser
 
 @[expose] public section
@@ -82,11 +83,16 @@ structure Answer where
 
 /-- Canonical JSON: text that `Flock.canon` writes back byte for byte. `canon` escapes every character outside printable
 ASCII, so a canonical text has no byte at or above `0x7f`, and one holding one is refused before it is parsed. The
-parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. -/
+parameters must be canonical, and a protocol whose commitment or evidence is JSON reads it with this too. The text is
+read by `Flock.JsonParse.parse`, a total function the kernel can unfold, so a proof can show that a text is canonical. It
+mirrors `Lean.Json.parse`, which this read before; that the two agree is held by tests, not by a proof: on the texts of
+`CoreProtocol.Cli`'s `#guard`s (`TEXTS`, `ADVERSARIAL`) and on every JSON text the verifiers' test fixtures hold
+(`tools/difftest/tests/test_flock_json_port.py`, `test_verifier_fixture_texts`), they give the same `Json` and the same
+refusal, and this the same answer. -/
 def canonicalJson (b : ByteArray) : V Json := do
   unless b.data.all (· < 0x7f) do throw "not ASCII without DEL (a byte at or above 0x7f)"
   let some s := String.fromUTF8? b | throw "not UTF-8"
-  let j ← match Json.parse s with
+  let j ← match Flock.JsonParse.parse s with
     | .ok j => pure j
     | .error e => throw s!"not JSON ({e})"
   if (← Flock.canon j) != s then throw "not canonical JSON (compact, keys sorted, integers only)"
