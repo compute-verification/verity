@@ -5,7 +5,7 @@ with the memory challenger a party of its own on the challenger host
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
-  (`benchmarks/pous/p2_v1/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
+  (`verity/protocols/accounting/pous/prover/p2/p2_store/store.py`): each tensor from a block boundary over ⌈size / payload⌉ blocks, its last block zero
   past its end, and ``W`` zero to whole segments of the point's ``2^16`` blocks (`TensorLayout.of_ranges`).  Scales,
   embeddings and norms are not in ``W``.  These are the tensors the Commit registers, read through `weights_view` while
   released.
@@ -19,7 +19,7 @@ with the memory challenger a party of its own on the challenger host
   and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
   plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
   wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the store's load
-  `p2_v1.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
+  `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
 * **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
@@ -35,7 +35,8 @@ with the memory challenger a party of its own on the challenger host
 
 Settings: ``salt_source`` (the auditor's coin: its hex, a callable of the commitment, or ``{"command": argv}``, a process
 that reads ``{"commitment", "manifest"}`` as one JSON line and prints ``{"source": HEX}``), ``p2_lib`` (``libp2v1.so``'s
-directory, built for the card by the store's ``benchmarks/pous/p2_v1/Makefile``; weights on a GPU need it) and
+directory, built for the card by the store's ``verity/protocols/accounting/pous/prover/p2/p2_store/Makefile``; weights on a GPU
+need it) and
 ``experimental`` (P2 is; `schemes.p2.EXPERIMENTAL` says why).
 
 Not here yet: TP (each rank's shard), the head and the embedding (not ``LinearBase``), and a setup case that scales:
@@ -65,9 +66,9 @@ NAME = "pous"
 DEFAULT_SCHEME = "p2-16448/v4"
 SETTINGS = ("salt_source", "p2_lib", "experimental")
 COVERS = "linears"
-#: P2's encoded weights store, loaded as the package ``p2_v1``: ``store.py``, which POUS encodes with, ``load.py``, its
-#: decode at use on the GPU, and its CUDA library's wrapper.
-P2_V1 = config.ROOT.parent.parent / "benchmarks/pous/p2_v1"
+#: P2's encoded weights store, loaded as the package its directory names (``p2_store``): ``store.py``, which POUS encodes
+#: with, ``load.py``, its decode at use on the GPU, and its CUDA library's wrapper.
+P2_V1 = (config.ROOT.parent.parent / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parent
 
 
 def schemes() -> tuple[str, ...]:
@@ -149,9 +150,9 @@ def _package(name: str, directory: Path) -> None:
 
 
 def _p2(module: str) -> Any:
-    """``store`` or ``load``, a module of `P2_V1` (as ``p2_v1.store``, ``p2_v1.load``)."""
-    _package("p2_v1", P2_V1)
-    return importlib.import_module(f"p2_v1.{module}")
+    """``store`` or ``load``, a module of the package `P2_V1` names (as ``p2_store.store``, ``p2_store.load``)."""
+    _package(P2_V1.name, P2_V1)
+    return importlib.import_module(f"{P2_V1.name}.{module}")
 
 
 # --- the weights ------------------------------------------------------------------------------------------------------------
@@ -191,7 +192,7 @@ def _flat(t: Any) -> Any:
 
 
 def _layout(scheme: str, tensors: Mapping[str, Any]) -> Any:
-    """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_v1/store.py`'s ``build``)."""
+    """The store's frozen layout over ``tensors``: each from a block boundary, in order (`p2_store/store.py`'s ``build``)."""
     from verity.protocols.accounting.pous.verifier.layout import TensorLayout
 
     base = _base(scheme)
@@ -345,7 +346,7 @@ def _encode(layout: Any, tensors: Mapping[str, Any], commitment: bytes, salt: by
     if device.type == "cuda":
         if not lib:
             raise ValueError("the weights are on a GPU and no p2_lib names libp2v1.so's directory "
-                             "(benchmarks/pous/p2_v1/Makefile builds it)")
+                             "(verity/protocols/accounting/pous/prover/p2/p2_store/Makefile builds it)")
         enc = S.GpuEncoder(q, salt, str(lib), torch.cuda.current_device() if device.index is None else device.index)
     else:
         enc = S.CpuEncoder(q, salt)
@@ -570,7 +571,7 @@ def install(scheme: str, target: Target) -> PousOption:
                    "tensor_bytes": sum(p.size for p in layout.tensors),
                    "used_blocks": sum(-(-p.size // q.payload_bytes) for p in layout.tensors), "blocks": q.blocks,
                    "c_star_bytes": q.blocks * q.block_bytes, "device": str(device), "encode": store.encode,
-                   "decode": "p2_v1.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
+                   "decode": "p2_store.load (libp2v1.so)" if device.type == "cuda" else "schemes.p2, CPU",
                    "certifies": period.certify(store.point), "certificate": None if cert is None else cert.theorem,
                    "gaps": gaps, "experimental": P2.EXPERIMENTAL}
     return opt
