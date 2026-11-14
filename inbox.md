@@ -1,0 +1,3 @@
+[2026-11-14T19:41Z] ebc20e755e25
+POLICYROWS2, push 1 of this turn: my head and the collect branch's are 6af523129e19678e31d06171d60f8b08c324dee8, nothing merged or resolved by hand, no .py changed. One commit: NciCheck.Record.SecurityProofs.form, its text cut byte for byte and its full name kept, into the new Properties.Nci.RecordForm (a root of the properties library), which Proofs.Properties.Nci.RecordForm imports. Its text reads no proofs-tree declaration: Record.Case, Record.read, Case.slot, Case.heldAt, Record.summarize and Record.layoutOf are NciCheck.Record's, fillAt is NciCheck.RecordText's, failure is NciCheck.failure (Check.lean), and Properties.Record.Form is the properties tree's. No statement or refusal changed. Pushed unbuilt; SCANLEAN2 told.
+
