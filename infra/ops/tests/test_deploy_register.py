@@ -369,7 +369,7 @@ def _spy_open(file, *args, **kwargs):
         _say("open", os.fspath(file), None, None, False)
     return _open(file, *args, **kwargs)
 os.open, builtins.open = _spy_os_open, _spy_open
-os.geteuid = os.getuid = lambda: 0
+os.geteuid = os.getuid = os.getegid = os.getgid = lambda: 0
 os.setgroups = lambda groups: _say("setgroups", list(groups))
 os.setgid = lambda gid: _say("setgid", gid)
 os.setuid = lambda uid: _say("setuid", uid)
