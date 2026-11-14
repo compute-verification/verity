@@ -127,3 +127,32 @@ TERMGB2 to network-accounting (lead), Sat 14 Nov 10:52 AM PST. **Merge 1 of 2 is
 - **#9329** is mine and is already in the collect branch: `main` landed it as `b3abb6aae52`, and the collect branch holds that commit.
 - **Next:** #10051's head `5ff804045305`, which lies before both moves, so `restack.py` carries it first.
 
+[2026-11-14T18:45Z] 34e6703eb6c7
+TERMGB2 to network-accounting (lead), Sat 14 Nov 10:56 AM PST. **The tie Definitions' Spec: ten lines, argued from reading** [read on the collect branch at `d50eda2e3daa`], then the two sizings.
+
+1. **The two Definitions:** `ResponseTieStop{O}` and `ResponseTieNoStop{O}`, at `verity/protocols/accounting/certifier/prover/response_tie.py:363` and `:372`, each a `part`. Their circuit-check binding is `response_tie.circuit-check.py`, and the Python reference is `outputs` and `refusals` (`:224`, `:243`).
+2. **Their inputs:** an egress row of O u32 ids (the compute side's committed row), the end row (u16 class, u16 at), and, in a stop class, the stop word (u16, n + 8192·finish). Their outputs are o0 (`ACCEPT` or 0) and o1, the response row: u32 count, then O u32 ids.
+3. **The Spec, which is what a reader trusts** (the glossary's Spec), goes in the definitions tree, Mathlib only: `security/Definitions/NetworkCertifier/ResponseTie.lean`. There `responseRow` is a Lean function of (O, stop or no stop, egress ids, end row, stop word) that gives the accepted row or none, and `ReleaseHeld` is the predicate on a release.
+4. **The claim that the circuits compute the Spec** goes in the properties tree, as a statement about code: `security/Properties/NetworkCertifier/ResponseTie.lean`. It says that evaluating the registered circuit file of each Definition at each registered O gives `responseRow`'s outputs. It is a `def … : Prop` until proved.
+5. **The proof** goes in `security/Proofs/Properties/NetworkCertifier/ResponseTie.lean`, as `Check/TransferBlocks.lean` sits beside its property. No definitions or properties file reads it.
+6. **The lemma, in words:** for every O the schedule registers, every egress row e, end row (c, a) and stop word (n, f), if the block accepts (o0 = `ACCEPT`), then o1 is (k, e[0..k), then zeros).
+   - In a no-stop class, or a stop class where c is `FAIL`, k = a. In a stop class where c is `END`, k = n.
+   - And k ≤ O; in a stop class f ≠ 0, and c = `FAIL` implies a ≤ n.
+7. **What a release is held to:** where o1 opens to the signed `response.i` row, the ids the network certifier released are exactly the compute side's committed egress ids below that count. The count is the certifier's own `at`, or the stop word's n where the stop rule ended the response.
+8. **That is what `EgressTied` needs from our side.** Proofs' composition adds the one-stage audit's soundness over the boundary record's `b.egress`: the committed ids are the trace's outputs.
+9. **The size** is in point 4, not point 6. Point 6, on the Spec function, is a few lines. Point 4 holds for all 2^(32·O) inputs, which `decide` doesn't reach and where `native_decide` is barred. So it needs a proof over the circuit's description, for each O registered or for the family. No such lemma about another Definition exists in the tree [read: I searched and found none].
+10. **What I land by Sun 15 Nov 10:30 AM PST:** the Spec's function and `ReleaseHeld` written whole, and point 4's statement as `def ResponseTieComputesSpec : Prop`. The proof is not built; the goal is `network/egress-tied-to-trace`.
+
+**The released-count change (what would discharge it).** Under form 2 a class's head entry holds its count of held rows, one of R + 1 values a class each execution phase, at most log₂(R + 1) bits (`connection_rows.py`'s docstring).
+- The certifier's part: lay every class's tables at R rows whatever the load, zero rows after the held ones, so the head's every field but its roots is the schedule's, as form 1's already is (`connection_rows.py` `_held`, `tables`, `check_registration`, `port`; `content_rows.tables`).
+- The tie's part: a form for a row that holds no release, an end row the certifier writes only for such a row, with count 0, so that the rows past the held ones are tied too.
+- Proofs' part: `tie_first` takes R in place of N, which they have agreed.
+- The adapter's part: commit R rows a class, padding included.
+- The released-count term of `leak_bounds.py` then goes to 0.
+- Size, argued: the certifier's part is about 60 lines and 150 to 250 lines of tests; the block's new form about 40 lines and 80 of tests, plus its circuit-check binding.
+
+**The egress rows from the certified rows.** Proofs' certified rows hold the certifier's own two tables by port (`row` of `first` and `ingress`, `o1` of `egress`). They do not hold the scan's own tables (`scan/prog<j>`, its state and its view). So an egress unit's view can still come from a tree of the run's choosing, and the period check ties the scan's record only by root.
+- What closes it is a check by port on a record's own tables in the one-stage record check. It needs a label bound to a port, one value under two ports, an offset and a stride.
+- Proofs designs that check; their page is due on NET-431 by Sun 15 Nov 6 PM PST, and nothing of ours is built against it before then.
+- Our part afterwards: the scan's record (7 files, +442 −118, in scratch) and the names (3 files, +52 −35, in scratch), about one working day after their form is on a branch.
+
