@@ -547,17 +547,14 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
-                 own_reads: bool = False) -> dict[str, Any]:
+                 window_values: Sequence[str] = ()) -> dict[str, Any]:
     """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
-    values (`audit.session_registered(verdicts, registration)`), with `own_reads` (a two-stage run's, whose round 2
-    holds those reads' rows) less the reads of the registration's own ports at their own roots (`Record.lessOwnReads`):
-    the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed
-    checks)."""
+    values less the reads of its own ports at their own roots, with the reads of the window values its caller names
+    (``window_values``) less those at the roots of their entries in the registration's `window.activations.values`
+    (`audit.held_reads`): the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each
+    side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
-    opened = audit.session_registered(verdicts, registration)
-    if own_reads and opened is not None:
-        roots = {r["port"]: r["root"] for r in registration["roots"]}
-        opened = {v: r for v, r in opened.items() if not (v in roots and roots[v] == r)}
+    opened = audit.held_reads(verdicts, registration, window_values)
     py = audit.audit_record(registration, receipt, draw, law, list(proved_units), instances, statement, verdicts, delta,
                             sessions, served, session_roots, opened)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
@@ -566,7 +563,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
                           "session_roots": None if session_roots is None else dict(session_roots),
-                          **({"own_reads": True} if own_reads else {})})
+                          **({"window_values": list(window_values)} if window_values else {})})
     if isinstance(got, str):
         try:
             got = json.loads(got)

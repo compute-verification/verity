@@ -937,8 +937,8 @@ def outcome_of(stream: S.Stream, second: S.Draw, handed: dict, evidence: Sequenc
     """The stream's outcome of the second stage's sample: the sessions delivered (`Stream.deliver`), then
     `Stream.outcome` on what the interior's audit record took (``handed``, a5's), each verdict of record naming the
     sessions, with both stages' coin evidence, the sessions' ``statements`` and the params ``proofs``: accepted, the
-    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports,
-    `verifier.audit_record`'s ``own_reads``), and the codes of round 2's check in the interior's (``statements``)."""
+    checks each stage's audit record failed (each record taking the sessions' reads of its registration's own ports at
+    their own roots, `audit.less_own_reads`), and the codes of round 2's check in the interior's (``statements``)."""
     sessions = handed["sessions"]
     verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in handed["verdicts"].items()}
     given = {x: handed[x] for x in ("proved_units", "instances", "served", "session_roots")}

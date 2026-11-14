@@ -12,8 +12,9 @@ run recorded.
   sample), each from the run's own files or the verifier's own copies (the program rebuilt from the input set the run
   names, at the population program's version the record holds, v1 or v0; the domains derived again), and how each was
   found (`provenance`). Floats in verdicts and statements, which neither side reads, are written as strings. The
-  registered roots the record's `registered` check reads are the verdicts' own, for the registration's own values
-  (`audit.session_registered(verdicts, registration)`), on both sides.
+  registered roots the record's `registered` check reads are the verdicts' own, for the registration's own values,
+  less the reads of its own ports at their own roots, with the reads of the window values the parameters name
+  (`window_values`) less those at their window entries' roots (`audit.held_reads`), on both sides.
 * **The public file.** A0's check of the verifier's own public file against the record (`matches_public`: the scheme,
   the roots, their domains and the instance count in the header of `stage/pub-<n>.bin`), the honest one and each
   recorded refusal, by the verifier's Lean (`one_stage.verifier.lean`) and the current Python.
@@ -594,7 +595,7 @@ def python(c: Case) -> dict:
         return out("reject", f"draw: {', '.join(dv.codes)}")
     a = audit.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"],
                            e["verdicts"], delta, e["sessions"], e["served"], e["session_roots"],
-                           audit.session_registered(e["verdicts"], rec))
+                           audit.held_reads(e["verdicts"], rec, p.get("window_values") or ()))
     failed = [k for k in CHECKS if k in a["checks"] and not a["checks"][k]["ok"]]
     if failed:
         return out("reject", f"the audit's checks failed: {', '.join(failed)}")
@@ -631,7 +632,8 @@ def whole_record(c: Case) -> dict | None:
     except (P.QueryRefused, ValueError):
         return None
     r = V.audit_record(rec, e["receipt"], e["draw"], mine, e["proved_units"], e["instances"], e["statement"], e["verdicts"],
-                       float(Fraction(p["delta"])), e["sessions"], e["served"], e["session_roots"])
+                       float(Fraction(p["delta"])), e["sessions"], e["served"], e["session_roots"],
+                       window_values=p.get("window_values") or ())
     v = r["verifiers"]
     out = {"agree": v["agree"], "lean": v["lean"], "python": v["python"]}
     if not v["agree"]:
