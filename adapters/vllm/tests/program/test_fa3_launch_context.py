@@ -3,7 +3,7 @@
 Torch-free: the registry helpers (`parse_launch_context`, `launch_seqlen_q`, `attention_geometry` on a cc 9.0 / cc 8.9 profile) and the
 workload-side derivation (`verity_vllm.pipeline.launch_context`).  The measured case: Llama-3.2-1B (NH 32, KVH 8, D 64: g = 4) -- an 8-token
 prompt alone runs the 64 x 192 tile (kBlockN 192), the same prompt in a prefill launch with a 1024-token prompt runs 192 x 128 (kBlockN 128).
-The measured workload file is `test_fa3_launch_context_of_record`.
+The stored Llama-3.2-1B B8 workload's launch contexts are `test_fa3_launch_context_of_record`.
 """
 from __future__ import annotations
 
