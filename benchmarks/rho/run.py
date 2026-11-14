@@ -3,9 +3,9 @@
     uv run python benchmarks/rho/run.py [--scenario NAME ...] [--target 10 --target 100] [--set KEY=VALUE ...]
                                         [--out DIR] [--figures DIR]
 
-Each scenario gets one slowdown number, its lower bound (every bound met at once): the hardware multiple over the
-reference training algorithm at its MFU, with its status, where its premises stand and the padded size ratio `|A| / T_0`
-it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
+Each scenario gets one slowdown number, its lower bound (every bound a lock states met at once, `bounds.lock_only`):
+the hardware multiple over the reference training algorithm at its MFU, with its status, where its premises stand and
+the padded size ratio `|A| / T_0` it comes from; the inference overhead beside it (or that it isn't modeled); and its best known attack in a table of its
 own, a construction beside the bound rather than an end of it.
 
 Prints Markdown; with `--out DIR` (default `$OUT`) also writes `rho.md`, `rho.json` and the figures (in `figures/`)
@@ -41,6 +41,7 @@ def row(e: Estimate) -> dict:
     s = e.overhead
     return {"argument": e.argument, "side": e.side, "status": e.status, "premise": e.premise, "rho": s.rho if s else None,
             "padded": s.padded if s else None, "g": s.g if s else None, "declared_rho": e.declared, "outside": e.outside, "excluded": list(e.excluded),
+            "drafts": list(e.drafts),
             "binding": {k: v.cut for k, v in s.serving.items()} if s else {},
             "terms": dict(s.terms) if s else {}}
 
@@ -69,7 +70,8 @@ def best_attack(r: Result) -> tuple[FamilyResult, Estimate] | None:
 def setter(f: FamilyResult) -> Estimate | None:
     """The bound that sets the lower bound: of those it admits, the one with the most slowdown alone at a standing
     short of refuted."""
-    met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in f.combined.excluded]
+    out = (*f.combined.excluded, *f.combined.drafts)
+    met = [e for e in f.bounds if e.overhead and e.premise != "refuted" and e.argument not in out]
     return max(met, key=lambda e: e.rho, default=None)
 
 
@@ -196,6 +198,9 @@ def estimates_md(f: FamilyResult) -> list[str]:
     if c.excluded:
         out += [(f"Left out of the lower bound at the block that binds, their premises refuted there: "
                  f"{', '.join(c.excluded)}."), ""]
+    if c.drafts:
+        out += [(f"Left out of the lower bound at every block, a `draft:` statement among their own citations "
+                 f"(`bounds.lock_only`): {', '.join(c.drafts)}."), ""]
     out += ["| attack | status | slowdown | padded size ratio | g | overhead in one inference block | layout |",
             "|---|---|---|---|---|---|---|"]
     for e in f.attacks:
@@ -333,7 +338,10 @@ def main() -> None:
                ("The slowdown is the hardware multiple over the reference training algorithm at its MFU, MFU₀: the "
                 "adversary's GPU-hours to the target over the reference's, at least 1 (Lean's `hardwareMultiple`), so "
                 "no protocol gives 1. The claim is its lower bound, every bound met at once; a bound whose premises "
-                "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted. The "
+                "are refuted at a block doesn't bound that block, and is still listed alone, tagged refuted."
+                + (" Only a bound a lock states bounds a block: a class one of whose own citations is a `draft:` "
+                   "statement bounds none (`bounds.lock_only`), and is still listed alone, labeled draft."
+                   if reg["bounds.lock_only"] else "") + " The "
                 "padded size ratio `|A| / T_0`, the actual circuit's size over the reference's with each server block "
                 "padded to capacity, is the intermediate it comes from. The time to the target, wall-clock, is at "
                 "least the slowdown times `T_0 / (MFU₀ Φ_total)`."), "", head,
@@ -381,7 +389,8 @@ def main() -> None:
         record["scenarios"][name] = {
             "slowdown": r.lo, "status": best.combined.status if best else None,
             "premise": best.combined.premise if best else None, "set_by": sets.argument if sets else None,
-            "excluded": list(best.combined.excluded) if best else [], "padded": padded(r), "mfu": s.mfu,
+            "excluded": list(best.combined.excluded) if best else [],
+            "drafts": list(best.combined.drafts) if best else [], "padded": padded(r), "mfu": s.mfu,
             "inference_overhead": {"value": policy.inference_overhead,
                                    "source": reg.param(f"policy.{policy.name}.inference_overhead").source
                                    if f"policy.{policy.name}.inference_overhead" in reg else "not modeled"},
@@ -400,6 +409,7 @@ def main() -> None:
             "operating": [{"name": p.name, "kind": p.kind, "seconds": dict(p.seconds)} for p in points],
             "incorrect_outputs": {"capacity_bits": inc.capacity, "detect": dict(inc.detect)},
             "families": {f.family: {"slowdown": f.lo, "attack": f.attack, "excluded": list(f.combined.excluded),
+                                    "drafts": list(f.combined.drafts),
                                     "contradictions": list(f.contradictions),
                                     "bounds": [row(e) for e in f.bounds], "combined": row(f.combined),
                                     "attacks": [row(e) for e in f.attacks]}

@@ -251,7 +251,7 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
                          "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
                          "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "rho": e.rho}
                                     for e in f.bounds],
-                         "excluded": list(f.combined.excluded),
+                         "excluded": list(f.combined.excluded), "drafts": list(f.combined.drafts),
                          "attacks": [{"argument": e.argument, "status": e.status, "rho": e.rho} for e in f.attacks],
                          "contradictions": list(f.contradictions)})
     finite = [v for row in rows for v in (row["lo"], *row["lo_by_status"].values(),
