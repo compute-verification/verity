@@ -11,12 +11,12 @@ public import Proofs.Properties.Pous.MemoryChallenger.Attest
 given (`liveReason`), concatenates their coins, and requires their indices to be exactly those the family's roots, as
 the run's release log shows them, released after `after`, every one of those roots `after` (`stream_ok`). So when the commitment and the roots are a
 run's (`s.commitment`, `releasedRootsOf`), the stream is `Run.released`, the run's own coins at those indices
-(`stream_released`), or the fixed finder outputs a break. `drawCoins` reads the stream under the commitment and roots
+(`stream_released`), or the fixed finder outputs a break. `sampleCoins` reads the stream under the commitment and roots
 of the session the ledger opens (`drawCoins_ok`), and that commitment is its record's (`trustedChallengePhase_record`), so the
-coins a sample reads are any such run's released coins, or a break (`drawn_released`). `coinsReason` reads what
-`drawCoins` reads from the same evidence under the key it is handed, holds the evidence's copy of main's history to the
-one it is handed, and holds the bytes read to the start of the stream (`coinsReason_none`, `coinsReason_draw`).
-`drawCoins` compares the segment's
+coins a sample reads are any such run's released coins, or a break (`sampled_released`). `coinsReason` reads what
+`sampleCoins` reads from the same evidence under the key it is handed, holds the evidence's copy of main's history to the
+one it is handed, and holds the bytes read to the start of the stream (`coinsReason_none`, `coinsReason_sample`).
+`sampleCoins` compares the segment's
 label by `jsonStrIs`, a match the kernel reduces, so its check gives the label (`jsonStrIs_eq`).
 
 Each opening `liveReason` accepts climbs its path to the commitment's root (`Coin.reason_ok`). The run's root is
@@ -593,15 +593,15 @@ theorem trustedChallengePhase_record {ledger window pins main session : Json} {r
   obtain ⟨a, -, ha⟩ := bind_ok.1 h
   exact challengePhaseNamed_record ha
 
-/-- What `drawCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
+/-- What `sampleCoins` reads when it accepts: the session the ledger opens on `window` under `key`, a segment of family
 `label`, and the stream of its openings under that session's commitment and `label`'s roots. -/
-theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
+theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       getD (getD coins "segment") "label" = Json.str label ∧
       challengerStream c (getD coins "segment") after
         (some (((roots.find? (·.1 == label)).map (·.2)).getD [])) = .ok ξ := by
-  unfold drawCoins at h
+  unfold sampleCoins at h
   simp only [bind, Except.bind] at h
   split at h
   · split at h
@@ -615,12 +615,12 @@ theorem drawCoins_ok {window : String} {after ξ : ByteArray} (h : drawCoins key
       · cases h
   · cases h
 
-/-- What `coinsReason` reads when it gives no reason: the stream `drawCoins` reads from the same evidence under `key`,
+/-- What `coinsReason` reads when it gives no reason: the stream `sampleCoins` reads from the same evidence under `key`,
 the evidence's copy of main's history the one `coinsReason` is handed, and `read` the start of that stream, ending
 inside its last coin. -/
 theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray}
     (h : coinsReason key main coins window label after read = none) :
-    ∃ ξ, drawCoins key window label after coins = .ok ξ ∧ sameMain main (getD coins "main") = true ∧
+    ∃ ξ, sampleCoins key window label after coins = .ok ξ ∧ sameMain main (getD coins "main") = true ∧
       ξ.extract 0 read.size = read ∧ (read.size + COIN_BYTES - 1) / COIN_BYTES = ξ.size / COIN_BYTES := by
   unfold coinsReason at h
   split at h
@@ -639,20 +639,20 @@ theorem coinsReason_none {main : Json} {window : String} {after read : ByteArray
           exact ⟨ξ, hd, by simpa using hm, by simpa using hpre, by simpa using hall⟩
 
 /-- **The coin check of a stream's run reads the challenger's sample**: where `coinsReason` gives no reason under `key`,
-`drawCoins` under `key` reads, from the same evidence, coins of the same family that `read` is the start of. -/
-theorem coinsReason_draw {main : Json} {window : String} {after read : ByteArray}
+`sampleCoins` under `key` reads, from the same evidence, coins of the same family that `read` is the start of. -/
+theorem coinsReason_sample {main : Json} {window : String} {after read : ByteArray}
     (h : coinsReason key main coins window label after read = none) :
-    ∃ ξ, drawCoins key window label after coins = .ok ξ ∧ read.size ≤ ξ.size ∧ ξ.extract 0 read.size = read := by
+    ∃ ξ, sampleCoins key window label after coins = .ok ξ ∧ read.size ≤ ξ.size ∧ ξ.extract 0 read.size = read := by
   obtain ⟨ξ, hd, -, hpre, -⟩ := coinsReason_none h
   refine ⟨ξ, hd, ?_, hpre⟩
   have hs : (ξ.extract 0 read.size).size = read.size := congrArg ByteArray.size hpre
   rw [ByteArray.size_extract] at hs
   omega
 
-/-- **The coins a sample reads are the ones its session released**: when `drawCoins` reads `ξ` from a segment of family
+/-- **The coins a sample reads are the ones its session released**: when `sampleCoins` reads `ξ` from a segment of family
 `label`, `ξ` is the coins of `label` released after `after` by any run of the key's device whose commitment and roots
 are the session's, or the fixed finder outputs a break. -/
-theorem drawn_released {window : String} {after ξ : ByteArray} (h : drawCoins key window label after coins = .ok ξ) :
+theorem sampled_released {window : String} {after ξ : ByteArray} (h : sampleCoins key window label after coins = .ok ξ) :
     ∃ c roots, trustedChallengePhaseOf (getD coins "ledger") (Json.mkObj [("root", Json.str window)]) key
         (getD coins "pins") (getD coins "main") (getD coins "session") = .ok (c, roots) ∧
       ∀ s ∈ dev.runs key.pub, s.commitment = some c → releasedRootsOf c s.log = .ok roots →

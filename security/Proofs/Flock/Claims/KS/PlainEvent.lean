@@ -50,7 +50,7 @@ is the transport of the run's coins to the live session's:
 * `cols_plain`: an accepted plain run's reader looks up table 0's columns at the shape and level 0 `TxNoOff` reads, in
   its live session's rep streams and its proof files.
 * `plainVerdict_of_run`: an accepting run of `V false` at SHA-512 decides, and on a statement of sample `d` (which the
-  record's sample then is, as a value: `recordDraw_of_decide`), a run whose reader looks up no column off `C` has
+  record's sample then is, as a value: `recordSample_of_decide`), a run whose reader looks up no column off `C` has
   `plainVerdict` at its live outcome and its link's root.
 -/
 
@@ -128,7 +128,7 @@ theorem plainVerdict_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x :
   replace hacc : ((next false x ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst)
       ((List.range ((Claims.run sha512 P (V false) x ω r).msgs.map Prod.fst).length).map
         (Claims.coinSeq r))).eval sha512).1 = .acc := hacc
-  have hdraw := recordDraw_of_decide hact hacc
+  have hdraw := recordSample_of_decide hact hacc
   obtain ⟨hv, hc⟩ := (next_decide_sha512 hact).1 hacc
   have hpi := publicInputs_none_of_checks hc
   simp only [Bool.false_eq_true, ite_false] at hv

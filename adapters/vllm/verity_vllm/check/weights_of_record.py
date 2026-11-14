@@ -45,7 +45,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
@@ -90,6 +90,9 @@ from verity_vllm.records.schema_ids import (
     WEIGHTS_OF_RECORD_PRIOR_SCHEMA,
     WEIGHTS_OF_RECORD_SCHEMA,
 )
+
+if TYPE_CHECKING:
+    import torch
 
 __all__ = ["CheckpointIndex", "ENGINE_CONSTANT_RE", "EXPERTS_RE", "FUSED", "Options", "PARAM", "SCHEMA", "build_record",
            "check", "compose", "derivation_provenance", "live_param_digests", "main", "program_weight_fields",
@@ -282,7 +285,7 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
 
 # ---------------------------------------------------------------------------------------------------------------------- live side
 
-def live_param_digests(model, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = ENGINE_ROTARY_RE) -> dict[str, Any]:
+def live_param_digests(model: torch.nn.Module, *, include_buffers: bool = True, raw_for: re.Pattern[str] | None = ENGINE_ROTARY_RE) -> dict[str, Any]:
     """sha256 of every live parameter (and buffer) of the served model, by `named_parameters()` name: the SAME tensors the committer's
     weights root covers (register_weights), hashed as raw contiguous bytes (bf16 words row-major).  Tensors whose name matches `raw_for`
     (default: the rotary cos_sin table) also keep their raw words under `raw[name]` (numpy uint16, in memory only -- not for the row

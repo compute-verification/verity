@@ -10,7 +10,7 @@ import Proofs.Flock.Claims.Sampling.Select.Steps
 
 A sample reads its source in order (`Draw.take`), from position `0`, and throws where the source runs out, so the
 position only grows and a sample that ends at position `R` read only the source's first `R` bytes. It samples the same from
-any source that starts with those `R` bytes (`AgreesTo`): `drawUnits_read`, and through the stages' samples,
+any source that starts with those `R` bytes (`AgreesTo`): `sampleUnits_read`, and through the stages' samples,
 `select_read` and `selectSecond_read`. The `R` a stage reports is the `read` `Run.coinsCode` holds to the challenger's
 released coins, so a stage's sample depends on its coins only through the bytes the challenger released.
 
@@ -161,11 +161,11 @@ theorem stratifiedWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ'
   exact bind_read hz (fun r hr => onWith_read hA (by unfold Flock.Draw.Stratum.need; omega) hr)
     (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
-theorem drawWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (law : Flock.Draw.Law) (n : ℕ) {p : ℕ}
-    {x : Option Flock.Draw.UnitDraw × ℕ}
-    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) law n).run p = .ok x) :
-    p ≤ x.2 ∧ (x.2 ≤ R → (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ' need) law n).run p = .ok x) := by
-  cases law with
+theorem sampleWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (samplingDesign : Flock.Draw.SamplingDesign) (n : ℕ) {p : ℕ}
+    {x : Option Flock.Draw.UnitSample × ℕ}
+    (h : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run p = .ok x) :
+    p ≤ x.2 ∧ (x.2 ≤ R → (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ' need) samplingDesign n).run p = .ok x) := by
+  cases samplingDesign with
   | subset k =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
@@ -185,10 +185,10 @@ theorem drawWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (l
 
 /-- **A sample reads only the bytes it reports reading**: the units a sampling design samples from `ξ`, having read `r.2` bytes, are
 the same from any source that starts with `ξ`'s first `r.2` bytes. -/
-theorem drawUnits_read {ξ ξ' : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r : Array ℕ × ℕ}
-    (h : Spot.Draw.drawUnits law n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) : Spot.Draw.drawUnits law n ξ' = .ok r := by
-  unfold Spot.Draw.drawUnits at h ⊢
-  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) law n).run 0 with
+theorem sampleUnits_read {ξ ξ' : ByteArray} {samplingDesign : Flock.Draw.SamplingDesign} {n : ℕ} {r : Array ℕ × ℕ}
+    (h : Spot.Draw.sampleUnits samplingDesign n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) : Spot.Draw.sampleUnits samplingDesign n ξ' = .ok r := by
+  unfold Spot.Draw.sampleUnits at h ⊢
+  cases hw : (Flock.Draw.drawWith (fun _ need => Spot.Draw.take ξ need) samplingDesign n).run 0 with
   | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
   | ok y =>
     obtain ⟨o, rd⟩ := y
@@ -197,19 +197,19 @@ theorem drawUnits_read {ξ ξ' : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r 
     | none => cases h
     | some d =>
       obtain rfl := (Except.ok.inj h).symm
-      rw [(drawWith_read hA law n hw).2 (Nat.le_refl _)]
+      rw [(sampleWith_read hA samplingDesign n hw).2 (Nat.le_refl _)]
       rfl
 
-theorem drawFirstRead_read {law : Json} {n : ℕ} {ξ ξ' : ByteArray} {r : Json × ℕ}
-    (h : Spot.Draw.drawFirstRead law n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) :
-    Spot.Draw.drawFirstRead law n ξ' = .ok r := by
-  unfold Spot.Draw.drawFirstRead at h ⊢
+theorem sampleFirstRead_read {samplingDesign : Json} {n : ℕ} {ξ ξ' : ByteArray} {r : Json × ℕ}
+    (h : Spot.Draw.sampleFirstRead samplingDesign n ξ = .ok r) (hA : AgreesTo ξ ξ' r.2) :
+    Spot.Draw.sampleFirstRead samplingDesign n ξ' = .ok r := by
+  unfold Spot.Draw.sampleFirstRead at h ⊢
   obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
   obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
   obtain ⟨u, rd⟩ := ur
   have hr : r.2 = rd := congrArg Prod.snd (Except.ok.inj h).symm
   have hA' : AgreesTo ξ ξ' rd := by rw [← hr]; exact hA
-  rw [hp, bind_ok, drawUnits_read hu hA', bind_ok]
+  rw [hp, bind_ok, sampleUnits_read hu hA', bind_ok]
   exact h
 
 /-- **The second stage reads only the bytes it reports reading.** -/
@@ -238,7 +238,7 @@ theorem selectSecond_read {sample ns ks : Array ℕ} {ξ ξ' : ByteArray} {r : J
         | (cases h; done)
         | exact congrArg Prod.snd (Except.ok.inj h).symm
     have hA' : AgreesTo ξ ξ' rd := by rw [← hr]; exact hA
-    rw [drawFirstRead_read hd hA', bind_ok]
+    rw [sampleFirstRead_read hd hA', bind_ok]
     exact h
 
 /-- **The first stage reads only the bytes it reports reading**, with no closure map. -/
@@ -254,7 +254,7 @@ theorem select_read {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} 
   dsimp only at h ⊢
   cases rule with
   | all => exact h
-  | law text =>
+  | samplingDesign text =>
     dsimp only at h ⊢
     obtain ⟨parsed, hp, h⟩ := bind_eq_ok.1 h
     obtain ⟨ur, hu, h⟩ := bind_eq_ok.1 h
@@ -269,7 +269,7 @@ theorem select_read {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} 
         | (cases h; done)
         | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm
     have hA' : AgreesTo ξ ξ' rd := by rw [← hr]; exact hA
-    rw [hp, bind_ok, drawUnits_read hu hA', bind_ok]
+    rw [hp, bind_ok, sampleUnits_read hu hA', bind_ok]
     exact h
   | twoStage grain replay k =>
     dsimp only at h ⊢
@@ -286,7 +286,7 @@ theorem select_read {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json} 
         | (cases h; done)
         | exact congrArg (fun q => q.2.2) (Except.ok.inj h).symm
     have hA' : AgreesTo ξ ξ' rd := by rw [← hr]; exact hA
-    rw [hp, bind_ok, drawUnits_read hu hA', bind_ok]
+    rw [hp, bind_ok, sampleUnits_read hu hA', bind_ok]
     exact h
 
 /-- **Part 1, at the released bytes**: where the registration has no closure map and the first stage accepted on `ξ`
@@ -301,7 +301,7 @@ theorem sample_read {g : SamplingDeploy.RegTwo} {ξ ξ' : ByteArray} {draw : Jso
 
 /-- **Part 2, at the released bytes**: where the second stage accepted on `ξ` over the model's replay sample, having
 read `read` bytes, and the second stage's coins start with those bytes, the model's second sample is the run's. -/
-theorem secondDraw_read (h : Held) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) {ξ : ByteArray} {draw : Json} {read : ℕ}
+theorem secondSample_read (h : Held) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) {ξ : ByteArray} {draw : Json} {read : ℕ}
     (hs : Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks ξ = .ok (draw, read))
     (hA : AgreesTo ξ (stageSrc c₁) read) :
     secondDraw h c₀ c₁ = some draw := by

@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Bridge.Targets
-public import Proofs.Flock.Claims.Sampling.EndToEndDraw
+public import Proofs.Flock.Claims.Sampling.EndToEndSample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -109,7 +109,7 @@ theorem pa_all (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : n
 theorem pa_partOf (P : FlockSoundness.Audit.Partition C n) {ns : List ℕ} (hns : ns.sum = n)
     (r : Claims.Sampling.OneStage) (B : Finset ℕ) (hB : B ⊆ Finset.range n) :
     (designOf r).Pa (partOf P κ ns) B = r.Pa ns B := by
-  rw [pa_partOf_window P hns, Claims.Sampling.EndToEndDraw.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
+  rw [pa_partOf_window P hns, Claims.Sampling.EndToEndSample.window_zero fun v hv => Finset.mem_range.1 (hB hv)]
 
 theorem pa : PaTarget := fun P κ _ hns r B hB => pa_partOf (κ := κ) P hns r B hB
 

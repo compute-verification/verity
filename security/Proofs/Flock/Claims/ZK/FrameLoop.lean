@@ -65,7 +65,7 @@ namespace Claims.ZKServer
 
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.ZkServer.Frame (Cfg Masker Draws INNER_ROUNDS drawBytes)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws INNER_ROUNDS sampleBytes)
 open _root_.Flock.ZkServer.Finish (Tab tabOfLevel0 flat)
 
 namespace Loop
@@ -75,7 +75,7 @@ def zeros (n : ℕ) : ByteArray := ⟨Array.replicate n 0⟩
 
 /-- **Rep stream `k`'s frame at placeholder samples**, at the setup's statements `sts` and the `Commit`'s coins `link`: the
 frame's configuration at zero samples (`Drive.start`'s layout and mask slot), the table at a zero level 0 of the statement's
-shape (`Level0.ofDraws` of a zero witness and zero samples), the stream's domain, the extra claims at the link points and
+shape (`Level0.ofSamples` of a zero witness and zero samples), the stream's domain, the extra claims at the link points and
 zero salts for levels ≥ 1 (`hiSaltsOf`'s sizes). -/
 def placeholder (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array F128) :
     V (Cfg × Tab × ByteArray × Array (Array F128) × Array ByteArray) := do
@@ -83,11 +83,11 @@ def placeholder (spec : SessionSpec) (sts : Array Stmt) (k : ℕ) (link : Array 
   let (lay, mask) ← _root_.Flock.ZkServer.Drive.start st
   let (sch, tPad) ← _root_.Flock.Zk.schedule st.wideLeaf st.m
   let lv := sch.levels.getD 0 default
-  let l0 ← _root_.Flock.ZkServer.Level0.ofDraws st.wideLeaf st.m (Array.replicate (2 ^ (lv.lanes + lv.cols)) 0)
-    (zeros (_root_.Flock.ZkServer.Level0.drawSize lv tPad))
+  let l0 ← _root_.Flock.ZkServer.Level0.ofSamples st.wideLeaf st.m (Array.replicate (2 ^ (lv.lanes + lv.cols)) 0)
+    (zeros (_root_.Flock.ZkServer.Level0.sampleSize lv tPad))
   let t ← tabOfLevel0 (_root_.Flock.Setup.ofCircuit st) l0
   let hi := (Array.range (t.sch.levels.size - 1)).map fun j => zeros (192 * 2 ^ (t.sch.levels.getD (j + 1) default).d)
-  return (Cfg.ofDraws lay (Draws.ofBytes lay (zeros (drawBytes lay))) (some mask), t,
+  return (Cfg.ofSamples lay (Draws.ofBytes lay (zeros (sampleBytes lay))) (some mask), t,
     (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8,
     _root_.Flock.ZkServer.Drive.extras st (_root_.Flock.ZkServer.Drive.linkPoints st link), hi)
 

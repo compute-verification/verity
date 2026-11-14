@@ -1,14 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # Proofs of three of `Partitioning.Witness`'s instances
 
 `achievability_witness`, `granularity_witness` and `unequal_witness` have the statements of `Witness.achievability`,
 `Witness.granularity` and `Witness.unequal`, word for word. This file imports only `Partitioning.Model`, so `Witness` can
-import it. `Law.subset n n` samples every unit, so every set doing positive work escapes it with probability 0
+import it. `SamplingDesign.subset n n` samples every unit, so every set doing positive work escapes it with probability 0
 (`meetsTarget_subset_self`).
 -/
 
@@ -26,7 +26,7 @@ theorem log_two_le : Real.log 2 ≤ 1 := by
 
 /-- The sampling design sampling every unit meets every positive target. -/
 theorem meetsTarget_subset_self {n : ℕ} (w : Fin n → ℝ) {C δ : ℝ} (hC : 0 < C) (hδ : 0 ≤ δ) :
-    MeetsTarget (Law.subset n n le_rfl) w C δ := fun B hB => by
+    MeetsTarget (SamplingDesign.subset n n le_rfl) w C δ := fun B hB => by
   have hne : B.Nonempty := by
     rcases B.eq_empty_or_nonempty with h | h
     · rw [h, Finset.sum_empty] at hB
@@ -34,7 +34,7 @@ theorem meetsTarget_subset_self {n : ℕ} (w : Fin n → ℝ) {C δ : ℝ} (hC :
     · exact h
   have hc := hne.card_pos
   have hcn : B.card ≤ n := by simpa using Finset.card_le_univ B
-  rw [Law.subset_escape, Nat.choose_eq_zero_of_lt (by omega)]
+  rw [SamplingDesign.subset_escape, Nat.choose_eq_zero_of_lt (by omega)]
   simpa using hδ
 
 theorem sum_fin100 (a b : ℝ) : ∑ u : Fin 100, (if u.val < 50 then a else b) = 50 * a + 50 * b := by
@@ -51,8 +51,8 @@ theorem achievability_witness : min 1 (Real.log (1 / 2 : ℝ)⁻¹ / 2 * 1) + 1 
   linarith
 
 theorem granularity_witness :
-    MeetsTarget (Law.subset 1000 1000 le_rfl) (fun _ => 1) 10 (1 / 2) ∧
-    MeetsTarget (Law.subset 500 500 le_rfl) (fun _ => 2) 10 (1 / 2) ∧
+    MeetsTarget (SamplingDesign.subset 1000 1000 le_rfl) (fun _ => 1) 10 (1 / 2) ∧
+    MeetsTarget (SamplingDesign.subset 500 500 le_rfl) (fun _ => 2) 10 (1 / 2) ∧
     0 < 1 - 1 / 10 - 10 / (1000 * 1) - 1 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) ∧
     0 < 1 - 2 / 10 - 10 / (500 * 2) - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) := by
   rw [log_inv_half]
@@ -63,7 +63,7 @@ theorem granularity_witness :
 theorem unequal_witness :
     (∀ u : Fin 100, 1 ≤ (if u.val < 50 then (1 : ℝ) else 2) ∧ (if u.val < 50 then (1 : ℝ) else 2) ≤ 2) ∧
     2 * Real.log (1 / 2 : ℝ)⁻¹ ≤ 10 ∧
-    MeetsTarget (Law.subset 100 100 le_rfl) (fun u => if u.val < 50 then 1 else 2) 10 (1 / 2) ∧
+    MeetsTarget (SamplingDesign.subset 100 100 le_rfl) (fun u => if u.val < 50 then 1 else 2) 10 (1 / 2) ∧
     0 < Real.log (1 / 2 : ℝ)⁻¹ * (1 - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10)) *
       ((∑ u : Fin 100, if u.val < 50 then (1 : ℝ) else 2) / (2 * 10) * (1 - 2 / 10) -
         (⌊Real.logb 2 (2 / 1)⌋₊ + 1)) ∧

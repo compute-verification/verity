@@ -61,7 +61,7 @@ names and the rep streams' are distinct (`Names`: `tableNames_nodup`, `repNames_
 `Case.tables_nodup`), and the session returns the printed honest masked record of one `root_B` per table and sends
 the link of them, then the streams' rounds (`Session`: `sessionPZk_factsJ`); that record decodes, each table's
 `root_B` read under its name and each rep stream found under its name, reads live and carries the sample (`Decode`:
-`decode_recordObjZkJ`, `live_recordObjZkJ`, `recordDraw_recordObjZkJ`). Every table's cap and reps are what the record
+`decode_recordObjZkJ`, `live_recordObjZkJ`, `recordSample_recordObjZkJ`). Every table's cap and reps are what the record
 needs (`Prover`: `Case.points_regions`, `proverOkJ`), so the record's checks hold but what they ask of the proof files
 (`Goals`: `Run.jsonJ`, `recordJsonJ`, `FilesAt`, `recordAt_of`, `recordJ_of`), and `complete` holds with `FilesJ` for
 `RecordJ` (`completeJ`). Each table's reps' proof files decode to proofs of its parameters, its `root_B` as their cap

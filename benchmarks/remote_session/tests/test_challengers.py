@@ -610,7 +610,7 @@ def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_
         assert not credit["ok"] and any(z.endswith(why) for z in credit["zero"]), (piece, lean, credit["zero"])
 
 
-def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
+def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
     session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which

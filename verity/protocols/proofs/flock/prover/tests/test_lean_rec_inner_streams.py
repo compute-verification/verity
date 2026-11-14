@@ -641,7 +641,7 @@ def _moved(stream: str, j: int, k: int):
 
 def test_each_reps_stream_holds_its_schedules_rounds(tmp_path):
     """`RecVStar.checkCommitRounds` first holds every stream but the sparse phases' and R's to the rep's schedule at the
-    verifier's inner shape, round for round (`RepsDrawn`'s second half): `rec-c3-inner`'s reps split z_partial's round, as private
+    verifier's inner shape, round for round (`RepsSampled`'s second half): `rec-c3-inner`'s reps split z_partial's round, as private
     circuits' do (`holo_rounds`, 95 rounds), so under a shape whose circuits are public (`rep_rounds`, 94) they are
     refused for their rounds."""
     assert _covers(tmp_path, _shape(tmp_path, holo=False)) == (

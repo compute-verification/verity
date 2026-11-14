@@ -43,7 +43,7 @@ structure WindowRead (W : Window) (tb : String) (ev : ℕ → Exchange → Optio
   sessions : ∀ (κ : Fin nc → Fin 512 → Bool) (ω : W.Ω),
     _root_.Properties.Spot.bytesOf (W.src ω 0) = _root_.Properties.Spot.bytesOf (coinBytes nc 64 κ 0) →
     CoinsAgree (freshCoins label after x.log) (fillCoins κ) →
-    Flock.Guarantees.sampleEnded W.src W.law W.nJ ω = true ∧ WindowSessions W tb ev filesDec (W.L.draw ω) x
+    Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω = true ∧ WindowSessions W tb ev filesDec (W.L.draw ω) x
 
 /-- The window's sessions at an equal sample. -/
 theorem WindowSessions.of_eq {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
@@ -84,7 +84,7 @@ theorem windowSessions_of_reach (W : Window) (rd : Reading W.rounds) (hrd : Pick
       (windowFirstStop V θ F c W rd σ (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)) ω).s'
       x)
     (hR : WindowRead W tb ev filesDec label after nc x) :
-    Flock.Guarantees.sampleEnded W.src W.law W.nJ ω.1 = true ∧ WindowSessions W tb ev filesDec
+    Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω.1 = true ∧ WindowSessions W tb ev filesDec
       ((W.extend (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.draw ω) x := by
   rw [windowFirstStop_sampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc) ω] at hreach
   obtain ⟨L, hc, hO⟩ := walkFill_req (label := label) (after := after) hrd (frames (V.families θ)) (V.families θ)
@@ -109,7 +109,7 @@ theorem windowSessions_firstStop (W : Window) (rd : Reading W.rounds) (hrd : Pic
     (hz : ∃ w, z = (windowFirstStop V θ F c W rd σ
       (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)) ω).back w)
     (hR : WindowRead W tb ev filesDec label after nc (CoinTape.run (V.game θ F c) σ z)) :
-    Flock.Guarantees.sampleEnded W.src W.law W.nJ ω.1 = true ∧ WindowSessions W tb ev filesDec
+    Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω.1 = true ∧ WindowSessions W tb ev filesDec
       ((W.extend (windowSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.draw ω)
       (CoinTape.run (V.game θ F c) σ z) := by
   obtain ⟨w, hw⟩ := hz

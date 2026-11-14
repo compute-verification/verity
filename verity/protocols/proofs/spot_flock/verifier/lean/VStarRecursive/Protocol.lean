@@ -263,15 +263,15 @@ up as each part's setup is told to (`--statement verity/flock-circuit+plain-leav
 coin tree, `RecCoins`), the verifier's own partition and program, the inner statement's sample, `--stratified` at the population the verifier's partition object and
 program give (`85-rec-reprice.sh`'s inner `verify`: the inner session's full sample, `rec_live.full_draw`), no lookup
 tables, registered reads or identifier: `verifyCmd`'s plain path), its scope check passes (`ProvedScope.check`), and it
-carries a sample. The population is `HmRow.stratifiedLaw`'s at `K = 1`, which every nonempty population admits. -/
-def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
+carries a sample. The population is `HmRow.stratifiedSamplingDesign`'s at `K = 1`, which every nonempty population admits. -/
+def innerOk (o : Own) (circuitB pubB sampleB : ByteArray) : V Unit := do
   let some tags := Flock.Tags.find? INNER_STATEMENT | throw s!"the statement {INNER_STATEMENT} is not known"
   let coins := Flock.Coins.seed
-  let some t := String.fromUTF8? drawB | throw "draw: not UTF-8"
+  let some t := String.fromUTF8? sampleB | throw "draw: not UTF-8"
   let draw := some (Flock.norm (← (Flock.JsonParse.parse t).mapError fun e => s!"draw: not JSON: {e}"))
   let partition := some o.partition
   let program := some o.program
-  let (_, n) ← Flock.HmRow.stratifiedLaw o.partition o.program 1
+  let (_, n) ← Flock.HmRow.stratifiedSamplingDesign o.partition o.program 1
   if !tags.hm96Rows then
     throw s!"{tags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   Flock.RecSetup.checkInner none none (pure (none, none))
@@ -283,13 +283,13 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   Flock.RecSetup.checks none none tags [] sts circuitB partition program none none none none
   sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
   sts.forM (Flock.RecVStar.checkPubRows · none none none)
-  Flock.ProvedScope.drawLaw false tags false draw
+  Flock.ProvedScope.sampleDesign false tags false draw
   Flock.ProvedScope.check tags false circuitB pubB [] 1 false false
 
 /-- How each part's setup is told to set the inner statement up (`--rec-inner-statement`, `--rec-inner-draw`), which
-`RecSetup.checkForm` holds to the inner statement's files: no lookup table, at the inner statement's sample `drawB`. -/
-def innerForm (drawB : ByteArray) : Flock.RecCoins.InnerForm :=
-  { statement := INNER_STATEMENT, tables := [], draw := some drawB }
+`RecSetup.checkForm` holds to the inner statement's files: no lookup table, at the inner statement's sample `sampleB`. -/
+def innerForm (sampleB : ByteArray) : Flock.RecCoins.InnerForm :=
+  { statement := INNER_STATEMENT, tables := [], draw := some sampleB }
 
 /-- What every part's check reads of the inner session: the inner shape, the inner statement's files (check 5's
 source), what the inner circuit's META binds, the challenger's live-coin part's transcript as `verify` holds it and its link points. -/
@@ -312,11 +312,11 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   fits recordB "rec inner session: the record"
   let some record := String.fromUTF8? recordB
     | throw "rec inner session: the record is not UTF-8"
-  let drawB ← bs.get o.draw "the inner statement's draw"
-  (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
+  let sampleB ← bs.get o.draw "the inner statement's draw"
+  (innerOk o circuitB pubB sampleB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
-      form := some (innerForm drawB),
+      form := some (innerForm sampleB),
       program := some o.program }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let transcriptB ← bs.get pr.transcript "rec inner transcript"
@@ -388,7 +388,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
         r.2.forM (Flock.RecLinkPart.check · registered recCoins none)
         Flock.RecVStar.checkLabels draw count r.2
         pure r) with
-    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.drawLaw true tags false draw else .ok ()).map fun () =>
+    | .ok (spec, sts) => (if draw.isSome then Flock.ProvedScope.sampleDesign true tags false draw else .ok ()).map fun () =>
         (spec, sts.map Flock.Setup.ofCircuit)
     | .error e => Except.error s!"setup: {e}"
   let some record := String.fromUTF8? (← bs.get s.record s!"part {j}'s record")
@@ -407,9 +407,9 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
     Flock.Zk.verify spec tabs record proofs
     scope
     Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-    if draw.isNone then Flock.ProvedScope.drawLaw true tags false draw
-    Flock.RecSetup.fullDraw inner true draw record
-    Flock.RecSetup.innerDrawn recCoins
+    if draw.isNone then Flock.ProvedScope.sampleDesign true tags false draw
+    Flock.RecSetup.fullSample inner true draw record
+    Flock.RecSetup.innerSampled recCoins
     Flock.ProvedScope.programHeld program
     Flock.RecordText.check record
   pure verdict
@@ -437,12 +437,12 @@ def partSize (j : Nat) (p : PartOwn) (s : PartProof) (bs : Core.Blobs) : V Nat :
   let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
   let some record := String.fromUTF8? (← bs.get s.record s!"part {j}'s record")
     | throw s!"part {j}'s record is not UTF-8"
-  let drawB ← (if tags.hm96Rows then Flock.Witness.recordDraw record else none).mapM canonBytes
+  let sampleB ← (if tags.hm96Rows then Flock.Witness.recordDraw record else none).mapM canonBytes
   let regB ← p.registered.mapM canonBytes
   let partitionB ← canonBytes p.partition
   let bindingsB ← canonBytes p.bindings
   pure (STMT_OVER + STATEMENT.toUTF8.size + circuitB.size + pubB.size + p.program.size + partitionB.size +
-    (regB.map (·.size)).getD 0 + (drawB.map (·.size)).getD 0 + bindingsB.size)
+    (regB.map (·.size)).getD 0 + (sampleB.map (·.size)).getD 0 + bindingsB.size)
 
 /-- The parts' bytes in the statement, part `j` on. -/
 def partsSize (bs : Core.Blobs) : Nat → List PartOwn → List PartProof → V Nat
@@ -458,12 +458,12 @@ part's (`partsSize`). -/
 def statementSize (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Nat := do
   let circuitB ← bs.get o.circuit "the inner circuit"
   let pubB ← bs.get o.pub "the inner public file"
-  let drawB ← bs.get o.draw "the inner statement's draw"
+  let sampleB ← bs.get o.draw "the inner statement's draw"
   let regB ← o.registration.mapM fun d => bs.get d "rec inner registration"
   let partitionB ← canonBytes o.partition
   let shapeB ← canonBytes h.shape.toJson
   let partsB ← partsSize bs 0 o.parts.toList pr.parts.toList
-  pure (STMT_OVER + (STMT_OVER + INNER_STATEMENT.toUTF8.size + circuitB.size + pubB.size + drawB.size + o.program.size +
+  pure (STMT_OVER + (STMT_OVER + INNER_STATEMENT.toUTF8.size + circuitB.size + pubB.size + sampleB.size + o.program.size +
     partitionB.size) + shapeB.size + (regB.map (·.size)).getD 0 + partsB)
 
 /-- `need` on the statement's size: it is under `limit` bytes (`FIELD_MAX` in `partVerdicts`), so every part's
@@ -485,13 +485,13 @@ def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Boo
     let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
     let record := (String.fromUTF8? (← bs.get s.record "a part's record")).getD ""
     let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
-    let drawOk ← match draw with
+    let sampleOk ← match draw with
       | none => pure true
       | some d => do pure ((Flock.JsonParse.parse (← Flock.canon d)).toOption.map Flock.norm == some d)
     let regOk ← match p.registered with
       | none => pure true
       | some r => back r
-    ok := ok && drawOk && regOk && (← back p.partition) && (← back p.bindings)
+    ok := ok && sampleOk && regOk && (← back p.partition) && (← back p.bindings)
   pure ok
 
 /-- **The recursive session's verdict**: the inner session held (`innerHeld`), one part per V* statement at its shape
@@ -665,14 +665,14 @@ def main (args : List String) : IO UInt32 := do
   | _ => protocol.main args
 
 /-- The inner session's full sample over `n` units (`rec_live.full_draw`): the stratified sampling design at `K = n`, every unit sampled. -/
-private def fullDrawB (n : Nat) (k : Nat := n) : ByteArray :=
+private def fullSampleB (n : Nat) (k : Nat := n) : ByteArray :=
   let s : Flock.Draw.Stratum := { template := "t", units := #[(0, n)], k := k }
-  let d : Flock.Draw.UnitDraw := { law := .stratified k #[s], population := n, units := Array.range k }
+  let d : Flock.Draw.UnitSample := { samplingDesign := .stratified k #[s], population := n, units := Array.range k }
   d.toJson.compress.toUTF8
 
 -- each part's setup accepts the form `innerHeld` tells it, at its files' units (`checkForm` reads only `n` of them)
-#guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4))) { (default : Flock.Stmt) with n := 4 }).toOption.isSome
-#guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4 3))) { (default : Flock.Stmt) with n := 4 }).toOption.isNone
+#guard (Flock.RecSetup.checkForm (some (innerForm (fullSampleB 4))) { (default : Flock.Stmt) with n := 4 }).toOption.isSome
+#guard (Flock.RecSetup.checkForm (some (innerForm (fullSampleB 4 3))) { (default : Flock.Stmt) with n := 4 }).toOption.isNone
 #guard lineEnd "ab\ncd".toUTF8 0 == 2
 #guard lineEnd "ab\ncd".toUTF8 3 == 5
 #guard ((metaOf "c x\nMETA {\"a\":1}\nrest".toUTF8).toOption.map (·.compress)) == some "{\"a\":1}"

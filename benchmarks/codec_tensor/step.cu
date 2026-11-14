@@ -1,11 +1,11 @@
-// The HBM-exhaustion decode step's KV library (`step.py`): `benchmarks/word_codec/kv.cu` (its codec, read and
+// The HBM-exhaustion decode step's KV library (`step.py`): `verity/protocols/accounting/poub/prover/word_codec/kv.cu` (its codec, read and
 // attention) and the append, so one build holds the KV key. Build with -DKV_FIELD (and KV_MASK, KV_FOLD6) at wt.cu's
 // field and codec.
 //
 // kv_append writes `batch` sequences' new token at slot t, layers l0 .. l0 + nl - 1, into the cache in kv_attn's layout:
 // encoded at k rounds (word w of token-layer (b ctx + t) layers + l at index (((b ctx + t) layers + l) TLW + w)), or
 // plain at k = 0. `in` holds the tokens' plain words, [batch][nl][TLW] of NL limbs.
-#include "../word_codec/kv.cu"
+#include "../../verity/protocols/accounting/poub/prover/word_codec/kv.cu"
 
 namespace kv {
 

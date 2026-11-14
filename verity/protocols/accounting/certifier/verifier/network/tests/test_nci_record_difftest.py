@@ -20,7 +20,7 @@ form exports of a row: its unit's slot, and why it is held. The eighth is the ch
 does at the served class's shape, and one that does is counted. The ninth sets the form beside
 `Desc.evaluate`'s reference on the same Program: one block for the whole phase there and one a slot here,
 and input bits apart by exactly the rows no gate reads. The tenth holds the reference to
-`verity.commitments.windows.interface`, the rules a lowering states a record by: the stage that refuses a record, each unit's
+`verity.commitments.periods.interface`, the rules a lowering states a record by: the stage that refuses a record, each unit's
 slot, and `input_count`'s totals. The eleventh is that a row is declared once: the served shape's record with one
 declaration more into a row it already declares is refused, whatever the two declarations are, and the second alone
 is taken. The twelfth is that an output has a bit: a template that returns no field, a Tuple's or a Record's, or a field
@@ -81,7 +81,7 @@ ref, IF, codec = vectors.ref, vectors.IF, vectors.codec
 RUN = json.loads((LEAN / "lean-audit.json").read_text())["runs"]["NciCheck.RecordDifftestMain"]
 #: the random cases the quick tests read, enough of them to reach every way of `BROKEN`
 SEEDS = range(500)
-#: the form's own refusals of a record `verity.commitments.windows.interface` takes: a wire's leaves, a pinned reader's
+#: the form's own refusals of a record `verity.commitments.periods.interface` takes: a wire's leaves, a pinned reader's
 #: layout, and the row formats held to the registration log, which the interface does not read
 OWN = ("leaf-widths", "formats", "reader-layout", "reader-roles")
 #: the cases whose wires Python's layout has no rows for
@@ -238,7 +238,7 @@ def test_a_pinned_readers_layout(shaped, monkeypatch):
     counts none of them. The first three cases are why: with the token of the embedding read left unwired, the 48 bits
     a block reads of it are free and the rate refuses; a record that then lists the token among the opening's ports
     would have them counted with the opened rows, registered, and it is refused; under no pin the same record is taken
-    and every port of the opening is fresh. Whatever of these the form refuses, `verity.commitments.windows.interface` takes.
+    and every port of the opening is fresh. Whatever of these the form refuses, `verity.commitments.periods.interface` takes.
     The layout's stage alone refuses them: without it the reference refuses none, and accepts the token among the
     ports with a block's fresh bits those of the case that wires it."""
     assert {what for what, m in shaped.items() if m["broken"]} == {
@@ -743,14 +743,14 @@ def test_a_row_format_is_held_to_the_registration_log(shaped):
 
 
 def _formatted(made: dict) -> bool:
-    """Whether the case's record states row formats (`registered.formats`). `verity.commitments.windows.interface`
+    """Whether the case's record states row formats (`registered.formats`). `verity.commitments.periods.interface`
     states no row format and refuses such a record, which the form reads, so the tenth test leaves it out."""
     doc = json.loads(made["case"]["instance"]["record"])
     return isinstance(doc, dict) and isinstance(doc.get("registered"), dict) and "formats" in doc["registered"]
 
 
 def _interface(made: dict):
-    """The stage at which `verity.commitments.windows.interface` refuses the case's record (`wires`, `inputs` or
+    """The stage at which `verity.commitments.periods.interface` refuses the case's record (`wires`, `inputs` or
     `blocks`), else None with what it reads of it: the calls `window_of_record` makes on a stated record, which
     refuses wires that are no list and reads the record's blocks where it has them. The interface refuses with a
     `ValueError`, so that alone, from one of its own calls, is a refusal here. An error of any other type is this
