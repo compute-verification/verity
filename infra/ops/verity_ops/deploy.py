@@ -64,8 +64,8 @@ has `register = true`, and its `src` is a template that names machines: `{{NAME}
 field of its register file (`host`, its address), where NAME is one machine or a pattern (`vy-nebius-cpu-*`). A line that names
 a pattern is written once for each machine of the pattern, in the order of their names with numbers by value, so one register
 gives one text; a line names one machine or pattern, and a line that names none is copied. The register is the launcher's, the
-directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`, pulled first unless
---no-fetch), and each machine in it is one of three: live, released (`released_host` and no `host`: a pattern passes it by, so
+directory `research pods` finds a machine in ($RESEARCH_MACHINES_D, else the notes clone's `machines.d`; the launcher's own
+clone is pulled first unless --no-fetch), and each machine in it is one of three: live, released (`released_host` and no `host`: a pattern passes it by, so
 its line goes at the next install, and a template that names it is refused), or broken (a file that doesn't parse or doesn't
 validate). A stopped machine (`unreachable_since`) is live: its address is still its own, and its line stays. Nothing is written
 from a register that can't be read: `install` refuses, naming the path, when the register is off or isn't a directory, holds no
@@ -754,12 +754,13 @@ def released(node: str) -> bool:
 
 def stale_register() -> str | None:
     """Pull the notes clone the register of machines is read from, as `research notes sync` pulls it: why the register may be
-    behind, or None. A register read from $RESEARCH_MACHINES_D is whatever keeps that directory, and is left alone."""
-    from research import notes_sync
+    behind, or None. A register the environment puts elsewhere than the launcher's own notes clone ($RESEARCH_MACHINES_D,
+    $RESEARCH_NOTES: the control pod's is the steward's) is whatever keeps that directory's, and is left alone."""
+    from research import notes_sync, remote
     from research.pods import registry
 
-    root = registry.notes_root()
-    if registry.REGISTRY_ENV in os.environ or not (root / ".git").exists():
+    root = registry.notes_root({})
+    if registry.registry_dir(remote.machines_path()) != root / "machines.d" or not (root / ".git").exists():
         return None
     try:
         r = notes_sync.pull(root)

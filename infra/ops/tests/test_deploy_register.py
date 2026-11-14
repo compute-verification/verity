@@ -434,6 +434,23 @@ def test_a_roll_passes_by_a_node_that_has_no_machine_and_an_admin_only_node_unle
     assert ["vy-cpu-11" in (fleet["tmp"] / n / "etc" / "peers").read_text() for n in "abc"] == [True, False, False]
 
 
+def test_the_launchers_own_notes_clone_is_pulled_before_the_register_is_read_and_another_is_left_alone(tmp_path, monkeypatch):
+    from research import notes_sync
+
+    pulls, clone = [], tmp_path / ".research" / "notes"
+    (clone / ".git").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(notes_sync, "pull", lambda root: pulls.append(root) or subprocess.CompletedProcess([], len(pulls) - 1, "", "no route"))
+    for name in ("RESEARCH_MACHINES_D", "RESEARCH_NOTES"):
+        monkeypatch.delenv(name, raising=False)
+    assert deploy.stale_register() is None and pulls == [clone]
+    assert f"the notes clone {clone} wasn't pulled, so the register of machines may be behind: no route" == deploy.stale_register()
+    for name, where in (("RESEARCH_MACHINES_D", tmp_path / "kept" / "machines.d"), ("RESEARCH_NOTES", tmp_path / "kept")):
+        monkeypatch.setenv(name, str(where))                # the control pod's: the steward keeps that clone
+        assert deploy.stale_register() is None and len(pulls) == 2
+        monkeypatch.delenv(name)
+
+
 def test_register_is_a_copied_files_and_accept_a_register_made_files(tmp_path):
     head = '[nodes.n]\nrecord = "/r"\n[[{kind}]]\npath = "/p"\nnodes = ["n"]\n'
     for kind, rest, why in (("file", 'by = "setup.sh"\nregister = true\n', "`register` is true or false, for a file whose `src`"),
