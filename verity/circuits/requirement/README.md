@@ -49,8 +49,8 @@ malformed instances; then Programs
 end to end through `requirement.execution`, `pack` and a placement on three devices: the toy decoder, `b1.Serve` at the
 vLLM tests' tiny configuration and `b1.RMSNormFusedCudaV1` at N = 64.
 
-The vLLM adapter's `tests/protocols/remote_bandwidth/test_census_and_memory_map.py`, which loads that test by file,
-holds two more producers to the same Lean through the same instance format:
+The vLLM adapter's `test_census_and_memory_map.py` (among its PoUB tests, under `adapters/vllm/tests/protocols/`), which
+loads that test by file, holds two more producers to the same Lean through the same instance format:
 `requirement.from_census` on those Programs' censuses (a census value per value, a value of 0 bits per scheduled root
 Call), and memory-map/v1 as the vLLM integration's builder for PoUB (its `memory_map.Lines`) records it, a session's KV
 rows in the blocks it wrote under the free convention (step s's record takes effect after step s's reads). The audit
