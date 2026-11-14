@@ -803,11 +803,12 @@ def _tamper(got: SimpleNamespace, egress: list[bytes], T: int, B: int, R: int) -
                            row=bytes(x), key_of=got.key_of)
 
 
-def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace | None:
-    """The unread round's unit: the first ingress bucket b ≥ 1 at which a slot's Program starts (a request's anchor,
-    the slot due and its `occ` 1), the first such slot j, and lane j's slot entries committed with slot j's at b's
-    boundary (leaf ``entry``) absent, its read bit cleared and its outputs kept (``tree``, in place of ``prog<j>``);
-    None when no request is anchored in the group past bucket 0."""
+def _unread(cls: IS.Class, ch) -> SimpleNamespace | None:
+    """The unread round's unit: the group's first ingress bucket b ≥ 1 at which a slot's Program starts (a request's
+    anchor, the slot due and its `occ` 1), the first such slot j, and lane j's slot entries with slot j's at b's
+    boundary (row ``entry``) absent, its read bit cleared and its outputs kept (``rows``, which b's link-window
+    commits in place of its ``prog<j>``, `window_of`); None when no request is anchored in the group past bucket
+    0."""
     for b in range(1, len(ch.progs)):
         reads = [d and s.occ & 1 for d, s in zip(IS.due(cls, ch.scan[b]), ch.scan[b].slots)]
         if any(reads):
@@ -816,8 +817,7 @@ def _unread(cls: IS.Class, ch, heads: list, session: bytes) -> SimpleNamespace |
             entries[j] = (0, *entries[j][1:])
             rows, k = slot_entries(cls, ch.progs)[j], entry_at(cls, b)
             rows[k] = IS.prog_rows(cls, IS.prog_encode(cls, entries))[j]
-            return SimpleNamespace(bucket=b, slot=j, entry=k, q=ch.scan[b].slots[j].q,
-                                   tree=tree(f"prog{j}", rows, heads, session))
+            return SimpleNamespace(bucket=b, slot=j, entry=k, q=ch.scan[b].slots[j].q, rows=rows)
     return None
 
 
@@ -923,10 +923,12 @@ def v3c_trees(window: Path, cls: IS.Class, states: list[list[int]],
 def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1, start: int = 0,
          v3c: Path | None = None) -> SimpleNamespace:
     """The run (`synthetic`, or `warden_run`'s of a warden_serve run), link-windows start … start + group − 1 of each
-    link registered by the warden and read back by the verifier, the scan's chain over their rows from the empty state
-    (`scan_traffic.chain`), the prover's three registrations (the state tree the group's `ingress_scan.window_state`),
-    the chain round's state tree, the unread round's unit and slot entries' tree (`_unread`) and the tampered round's
-    egress link-window (`_tamper`). With ``v3c`` the state and slot entries' trees are V3c's (`v3c_trees`)."""
+    link registered by the warden and read back by the verifier, and the scan's chain over their rows from the empty
+    state (`scan_traffic.chain`): what each link-window's rounds are cut from (`window_of`). The group's negatives are
+    placed here, each in one link-window: the chain round's swap in bucket ``setup.A``'s, the unread round's unit
+    (`_unread`) and the tampered round's egress link-window (`_tamper`); none in a void run, whose FAILs are in its
+    last link-window (the one after a refused link-window has no start the verifier holds). With ``v3c`` the state
+    and slot entries' trees are V3c's (`v3c_trees`)."""
     t0 = time.time()
     if group < 1 or start < 0:
         raise SystemExit(f"a group is 1 or more link-windows from link-window 0 on, not {group} from {start}")
@@ -950,17 +952,13 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
         raise SystemExit(f"egress buckets {void} hold a FAIL and the warden's fails record has a reason in buckets "
                          f"{got.fail_buckets}, not the same: a failed connection's reason is in its FAIL's bucket"
                          + (f" ({'; '.join(got.failed_why)})" if got.failed_why else ""))
-    if not 1 <= setup.A < setup.A + 2 < group * T:
-        raise SystemExit(f"the chain round swaps S_A and S_(A+1), state leaves A + 1 and A + 2, 1 <= A < "
-                         f"{group * T - 2}")
-    heads = [w.head for w in got.sides["ingress"]]
-    states, entries = IS.window_state(cls, ch.states[1:], 0, group * T), slot_entries(cls, ch.progs)
-    trees = {k: tree(k, rows, heads, got.session) for k, rows in (("state", states), *zip(lane_kinds(cls), entries),
-                                                                 ("view", ch.views))}
-    if v3c is not None:
-        trees.update(v3c_trees(v3c, cls, states, entries))
-    swapped = list(states)
-    swapped[setup.A + 1], swapped[setup.A + 2] = swapped[setup.A + 2], swapped[setup.A + 1]
+    if early := sorted({windows[t // T] for t in void if t // T != group - 1}):
+        raise SystemExit(f"the warden failed a connection in link-windows {early}, which the scan refuses, and the "
+                         "link-window after a refused one has no start the verifier holds: prove the group up to "
+                         f"the first of them (--group {early[0] - start + 1})")
+    if not 0 <= setup.A < group * T or setup.A % T + 2 >= T:
+        raise SystemExit(f"the chain round swaps S_A and S_(A+1), its link-window's state leaves a + 1 and a + 2, "
+                         f"a = A mod {T}: 0 <= A < {group * T} and a < {T - 2}, not A = {setup.A}")
     admitted: dict[int, int] = {}
     for st in ch.scan:
         for s in st.slots:
@@ -968,9 +966,8 @@ def link(out: Path, run: Path | None = None, setup: Setup = W63, group: int = 1,
                 admitted.setdefault(s.q, s.admitted)
     return SimpleNamespace(setup=setup, chain=ch, T=T, G=group, windows=windows, params=got.params,
                            session=got.session, source=got.source, run_id=got.run_id, outputs=got.outputs,
-                           sides=got.sides, trees=trees, swapped=tree("state", swapped, heads, got.session),
-                           block_sets=[block_set(heads, got.session, j) for j in range(cls.NR)],
-                           unread=_unread(cls, ch, heads, got.session),
+                           sides=got.sides, swap=None if void else setup.A,
+                           unread=None if void else _unread(cls, ch),
                            tampered=None if void else _tamper(got, ch.egress, T, cls.B, cls.egress.R),
                            ordinals=sorted(admitted), admitted=dict(sorted(admitted.items())), void=void,
                            failed=got.failed, failed_why=got.failed_why, v3c=v3c, run_s=round(time.time() - t0, 1))
@@ -998,28 +995,30 @@ def registered_file(mr: SimpleNamespace) -> dict:
 
 
 def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespace:
-    """Round `name`'s member `mb` (`members_of`): each unit's input rows (in its signature's order, as bits or bytes),
-    the salts its rows, inputs and outputs, are committed under, its header's `registered` entries and the verifier's
-    own ports, one for every port of its circuit (`Flock.Registered.checkComplete`), the host's read of them
-    (`warden_rows.refusal`, `tree_refusal`: the ports in its signature's order, inputs, o0, then the other outputs),
-    each unit's o0 word and its output rows as the references compute them (``made``, None where the ingress reference
-    gives none), and the network certifier's row registration each of its ports reads (``warden``). An ingress unit's
-    ``prog<j>`` is one table row a slot entry it reads of lane j's tree (``refs``, `registered.table`), since a
-    timestep's units read their boundary's; its ``sin`` reads state leaf t and its o1 opens leaf t + 1, the group's last
-    unit's none. Lane j's block member's unit j·nb + b reads ``x``, slot entry b of the lane, its free input, and its o0,
-    that entry, is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or
-    network certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's
-    x) is the member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input
-    set ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its
-    lane's `block_set`), which the round's registration names before any coin; a public o0's rows are under the
-    public salts (`ok_salts`), every other own row's under fresh ones;
-    ``framed`` names the ports `stage` holds to their frame roots (those, and a block member's o0)."""
-    ch, T, cls = at.chain, at.T, at.setup.cls
-    tp, w, bs = mb.template, mb.window, list(mb.buckets)
-    rows = [b - w * T for b in bs]
-    state, view = (at.swapped if name == "chain" else at.trees["state"]), at.trees["view"]
+    """Round `name`'s member `mb` (`members_of`) of link-window `at` (`window_of`): each unit's input rows (in its
+    signature's order, as bits or bytes), the salts its rows, inputs and outputs, are committed under, its header's
+    `registered` entries and the verifier's own ports, one for every port of its circuit
+    (`Flock.Registered.checkComplete`), the host's read of them (`warden_rows.refusal`, `tree_refusal`: the ports in
+    its signature's order, inputs, o0, then the other outputs), each unit's o0 word and its output rows as the
+    references compute them (``made``, None where the ingress reference gives none), and the network certifier's row
+    registration each of its ports reads (``warden``). An ingress unit's ``prog<j>`` is one table row a slot entry it
+    reads of lane j's tree (``refs``, `registered.table`), since a timestep's units read their boundary's; its ``sin``
+    reads state leaf t and its o1 opens leaf t + 1, the link-window's last unit's none. The start unit's ``sin`` reads
+    the one leaf of the link-window's start (``at.start``: the verifier's own row of the empty state, or the last o1
+    of the link-window before), and its o0, that row, is a registered read of state leaf 0, no public word. Lane j's
+    block member's unit j·nb + b reads ``x``, slot entry b of the lane, its free input, and its o0, that entry, is a
+    registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or network certifier
+    row registration holds (each proof block's public o0, the last proof block's o1, a block member's x) is the
+    member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input set
+    ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its lane's
+    `block_set`), which the round's registration names before any coin; a public o0's rows are under the public salts
+    (`ok_salts`), every other own row's under fresh ones; ``framed`` names the ports `stage` holds to their frame
+    roots (those, and a block member's o0)."""
+    ch, cls = at.chain, at.setup.cls
+    kind, tp, bs = kind_of(name), mb.template, list(mb.buckets)
+    state, view = (at.swapped if kind == "chain" else at.trees["state"]), at.trees["view"]
     progs = {p: at.trees[p] for p in lane_kinds(cls)} | (
-        {f"prog{at.unread.slot}": at.unread.tree} if name == "unread" else {})
+        {f"prog{at.unread.slot}": at.unread.tree} if kind == "unread" else {})
     ins, outs = ports_of(cls)[tp]
     if tp == "block":
         p, leaves = f"prog{mb.lane}", [b - mb.base for b in bs]
@@ -1029,7 +1028,7 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
         reads, warden = {"sin": ("start", at.start, [0]), "o0": ("state", state, [0])}, {}
         outputs, made = None, {"o0": [at.claimed or _bits(at.start, 0)]}
     elif tp == "egress":
-        side = at.tampered if name == "tampered" and at.tampered.window == w else at.sides["egress"][w]
+        side = at.tampered if kind == "tampered" else at.sides["egress"]
         reads = {"state": ("view", view, bs)}
         warden = {"o1": side}
         if any(_bits(view, b) != EG.state_bits(cls.egress, ch.view(b)) for b in bs):
@@ -1043,14 +1042,13 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
             raise SystemExit(f"{mb.name}: bucket {len(state.rows) - 1}'s S_t has no state leaf, and its other units' "
                              "have: a registered port holds every instance's row, so it is a member of its own "
                              "(members_of's last)")
-        reads = {**({"sin": ("state", state, bs)} if tp == "ingress" else {}),
-                 **{p: (p, progs[p], ps) for p, ps in lanes.items()},
+        reads = {"sin": ("state", state, bs), **{p: (p, progs[p], ps) for p, ps in lanes.items()},
                  **({"o1": ("state", state, o1)} if o1[-1] < len(state.rows) else {}), "o2": ("view", view, bs)}
-        warden = {"row": at.sides["ingress"][w]}
-        got = [IS.reference(cls, ch.ingress[b], _bits(state, b) if tp == "ingress" else None,
+        warden = {"row": at.sides["ingress"]}
+        got = [IS.reference(cls, ch.ingress[b], _bits(state, b),
                             [x for p, ps in lanes.items() for x in _bits(progs[p], ps[k])]) for k, b in enumerate(bs)]
         outputs = [o for o, _s, _v in got]
-        if name == "unread":  # the read bit enters ok alone: the unit computes the honest S_t and view
+        if kind == "unread":  # the read bit enters ok alone: the unit computes the honest S_t and view
             got = [(o, *ch.outputs(b)) for o, b in zip(outputs, bs)]
         made = {"o1": [s for _o, s, _v in got], "o2": [v for _o, _s, v in got]}
     units = [tuple(ch.ingress[b] if r == "row" else made["o0"][k] if tp in ROWS_O0 else
@@ -1071,9 +1069,9 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
                         list(range(len(bs))))
     salts, entries, ports, bcs, refs = {}, {}, {}, {}, {}
     for p, side in warden.items():
-        _w, salts[p], entries[p] = side.cells.statement(rows)
-        ports[p] = {**WR.bucket_port(side.head, at.params, mb.base), "reads": rows}
-        bcs[p] = [WR.bc(made[p][k] if p in made else side.cells.rows[r], side.cells.salts[r]) for k, r in enumerate(rows)]
+        _w, salts[p], entries[p] = side.cells.statement(bs)
+        ports[p] = {**WR.bucket_port(side.head, at.params, mb.base), "reads": bs}
+        bcs[p] = [WR.bc(made[p][k] if p in made else side.cells.rows[r], side.cells.salts[r]) for k, r in enumerate(bs)]
     for p, (kind, reg, ps) in reads.items():
         table, refs[p] = REG.table(ps) if p.startswith("prog") else (ps, list(range(len(ps))))
         salts[p], entries[p] = [reg.salts[i] for i in table], tree_entry(kind, reg, table)
@@ -1085,8 +1083,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     for p, _b in sig:
         refused = refused or (WR.refusal(ports[p], warden[p].dom, entries[p], bcs[p]) if p in warden else
                               tree_refusal(ports[p], reads[p][1], entries[p], bcs[p], refs[p]))
-    changed = at.tampered.bucket if name == "tampered" and tp == "egress" and at.tampered.window == w else None
-    return SimpleNamespace(round=name, template=tp, window=w, name=mb.name, base=mb.base, n=len(bs), buckets=bs,
+    changed = at.tampered.bucket if kind == "tampered" and tp == "egress" else None
+    return SimpleNamespace(round=name, template=tp, name=mb.name, base=mb.base, n=len(bs), buckets=bs,
                            units=units, made=made, salts=salts, entries=entries, ports=ports, bcs=bcs, refused=refused,
                            refs={p: r for p, r in refs.items() if r != list(range(len(bs)))}, outputs=outputs,
                            changed=changed, warden={p: s.registration for p, s in warden.items()},
@@ -1471,7 +1469,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     (out / "registered.json").write_text(json.dumps(registered_file(mr), sort_keys=True))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
-         "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
+         "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
          "class": st.class_sha512, "set": set_name, "tables": {r: len(x) for r, x in tables.items()},
          "n": n, "base": mr.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "outputs": o0, "units": mr.units, "ins": sg.ins, "made": made,
