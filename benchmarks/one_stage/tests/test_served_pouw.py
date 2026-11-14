@@ -1,5 +1,5 @@
 """served_pouw.sh, a remote run's POUW_CMD, with stand-ins for live.sh, drawn.sh, drawn.py, served_verdicts.py,
-pouw_piece.py and lake: the live rounds from the window's --h1-prover dump and the drawn units are proved first, their
+pouw_piece.py and lake: the live rounds from the window's --h1-prover dump and the sampled proof blocks are proved first, their
 scratch and logs under the serve dir's private pouw/ (drawn.sh's kept, its check left to credit), then the piece and
 the period's case get their statements, live evidence and one memo in the verifier's own scratch (0700, outside the
 serve dir, removed on exit), each line saying what it took by key; its lines name no window and quote neither tool; and

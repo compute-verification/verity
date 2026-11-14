@@ -126,7 +126,7 @@ def test_each_commit_window_is_an_h1_window_tied_to_the_servers_commit_on_coins_
 
 def test_an_unserved_window_is_released_off_the_loop_in_window_order_and_puts_no_draw(tmp_path, monkeypatch):
     """Async scheduling's last call before the stop only returns the last outputs, so the Commit window it opens holds no
-    step. On in-process coins that window's release pads none of its S steps and draws nothing (`serve_h1.UNSERVED`); it
+    step. On in-process coins that window's release pads none of its S steps and samples nothing (`serve_h1.UNSERVED`); it
     still goes through ``closer`` behind the windows before it, so the outcomes, and the window lines that wait for
     them, stay in window order, and the draw-gated release neither waits on it nor counts it refused."""
     from verity_vllm.pipeline import serve_release as RL
