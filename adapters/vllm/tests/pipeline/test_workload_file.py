@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -128,3 +129,17 @@ def test_an_option_naming_a_changed_workload_is_a_usage_error(tmp_path, monkeypa
     with pytest.raises(SystemExit) as e:
         cli.main(["served-match", "--workload", str(tmp_path / "a.json")])
     assert e.value.code == 2 and "is not the" in capsys.readouterr().err
+
+
+def test_the_command_prints_a_row_and_a_path_one_a_line_and_with_no_workload_is_a_usage_error(tmp_path, monkeypatch, capsys):
+    data = _stored(tmp_path, {"a.json": {"x": 1}, "row-b.json": {"x": 2}})
+    monkeypatch.setattr(C, "_fetch", _fetch_from(data, []))
+    monkeypatch.setenv("VERITY_WORKLOADS", str(tmp_path))
+    assert cli.main(["workload-file", "row-b", str(tmp_path / "a.json")]) == 0
+    assert capsys.readouterr().out == f"{(tmp_path / 'row-b.json').resolve()}\n{tmp_path / 'a.json'}\n"
+    with pytest.raises(SystemExit) as e:
+        cli.main(["workload-file"])
+    assert e.value.code == 2 and capsys.readouterr().err.endswith("error: the following arguments are required: ROW_OR_PATH\n")
+    with pytest.raises(SystemExit) as e:
+        cli.main(["workload-file", "--help"])
+    assert e.value.code == 0 and re.search(r"^\s*ROW_OR_PATH\s+row ids or workload files$", capsys.readouterr().out, re.M)
