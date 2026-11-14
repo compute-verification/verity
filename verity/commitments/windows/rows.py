@@ -39,7 +39,9 @@ salt in ``index-salt.bin``; the window's provenance names its hiding leaf, `inde
 only, less the rows and salts of a port given as a registered value's, which ``v<j>-private.bin`` holds once for the
 window, and of a wired port, which its writers' own files hold) and ``m<k>-units.json`` (its global unit indices), and
 ``window.json``; ``flock_inputs.flock_input_files`` wraps member ``k``'s bodies as the circuit prover's
-``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin`` (`Bodies`).
+``m<k>-pub-<n>.bin`` (``rows: false``) and ``m<k>-inst-<n>.bin`` (`Bodies`).  A window too large to hold is committed
+into its directory (``commit``'s ``into``): the same commitment, registration and files, made a member and a run of a
+member's rows at a time, each run written at its place in the member's bodies and dropped.
 
 A window may carry row tables (:class:`RowTable`, ``Binding.row_tables``): shared tables of rows several units read, each a tree
 of ``hm96-sha512/row-seg/v1`` leaves, committed in segments, each segment's root given before that segment's live coin: a
@@ -999,7 +1001,7 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
         with open(d / f"m{k}-public.bin", "wb") as pub, _private(d / f"m{k}-private.bin") as prv:
             pub.truncate(public)
             prv.truncate(private)
-            for lo in range(0, max(m.n, *leaves.values()), step):
+            for lo in range(0, max(1, m.n, *leaves.values()), step):
                 jobs, tasks, run = {}, [], {}
                 for p, w in m.all_rows:
                     port, n = m.port(p), leaves[p]
@@ -1079,7 +1081,7 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
         for p, o, ws in m.wired:
             port, n, w = m.port(p), counts[m.port(p)], np.asarray(ws, dtype=np.int64)
             j = np.searchsorted(bases, w, side="right") - 1
-            for lo in range(0, n, step):
+            for lo in range(0, max(n, 1), step):
                 hi = min(lo + step, n)
                 if port in held:
                     s = np.array(_strings(d, int(j[0]), ms[int(j[0])], o)[lo:hi])
@@ -1091,9 +1093,10 @@ def _commit_into(window: Binding, data: Iterable[dict[str, Any]], d: Path, *, sa
                     nodes[port] += [node for _q, _start, node, _bc in _fold(
                         {port: _string_port(domains[port], s.tobytes(), schemas[port], lo)},
                         _chunks(port, n, chunk, lo, None if hi >= n else hi), workers)]
-                body = _strings(d, k, m, p, "r+")
-                body[lo:hi] = s
-                body.flush()
+                if hi > lo:
+                    body = _strings(d, k, m, p, "r+")
+                    body[lo:hi] = s
+                    body.flush()
     roots = {p: _root(domains[p], chunk, nodes[p]) for p in counts if p not in held}
     publics = {}
     for k, m in enumerate(ms):
