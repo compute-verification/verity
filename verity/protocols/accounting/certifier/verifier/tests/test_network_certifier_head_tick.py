@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_lengths import LEN, T
 from verity.protocols.accounting.certifier.verifier.tests.test_network_certifier_warden import TAU
 from verity.protocols.accounting.certifier.verifier.warden import OPTIONAL_FIELDS, Warden, WardenParams
