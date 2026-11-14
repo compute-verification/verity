@@ -154,6 +154,27 @@ def test_a_cpu_phase_with_every_stage_skipped_writes_the_manifest_the_spec_and_t
     assert (man["verify_weights"], man["sampling"]["chains"]) == (False, 5)
 
 
+@pytest.mark.parametrize("kept, steps", [({"snapshot_steps": [2, 0, 2]}, [0, 2]), ({"steps": [2, 0, 2]}, [0, 2]), ({"steps": []}, None)])
+def test_the_realized_shape_is_each_request_as_its_capture_states_it_and_the_kept_steps_under_either_name(tmp_path, monkeypatch, kept, steps):
+    """A request's lengths are its stated ones, else its token ids' counts; its arrival step is 0 unless stated.  The capture's
+    engine steps may sit under its `timing`, and its kept steps under `steps` or `snapshot_steps`."""
+    run = _one_request_run(tmp_path, monkeypatch)
+    r0 = {"request_id": "r0", "prompt_token_ids": [1, 2, 3], "generated_token_ids": [4, 5], "max_tokens": 4, "arrive_step": 2,
+          "arrive_step_realized": 3, "first_step": 3, "finish_step": 4, "finish_reason": "eos"}
+    r1 = {"request_id": "r1", "prompt_len": 6, "n_generated": 1, "max_tokens": 1, "first_step": 0, "finish_step": 0, "finish_reason": "length"}
+    _capture(run, [r0, r1], timing={"engine_steps": 5}, expected_engine_steps=7, serving_profile="sp", context_class="short")
+    (run / "capture" / "snapshots.json").write_text(json.dumps(kept))
+    assert _cpu_phase(run) == 0
+    assert json.loads((run / "run.json").read_text())["realized"] == {
+        "requests": [{"request_id": "r0", "prompt_len": 3, "max_tokens": 4, "n_generated": 2, "arrive_step": 2, "arrive_step_realized": 3,
+                      "first_step": 3, "finish_step": 4, "finish_reason": "eos"},
+                     {"request_id": "r1", "prompt_len": 6, "max_tokens": 1, "n_generated": 1, "arrive_step": 0, "arrive_step_realized": None,
+                      "first_step": 0, "finish_step": 0, "finish_reason": "length"}],
+        "prompt_lens": [3, 6], "n_generated": [2, 1], "engine_steps_capture": 5, "engine_steps_control": None,
+        "expected_engine_steps_declared": 7, "serving_profile": "sp", "context_class": "short", "snapshot_steps_realized": steps,
+        "max_concurrent_requests": 1}
+
+
 def test_a_request_that_never_ran_leaves_no_peak_and_no_capture_leaves_no_realized_shape(tmp_path, monkeypatch):
     monkeypatch.setattr(RC, "profile_config", lambda name: None)
     (tmp_path / "wl.json").write_text(json.dumps({"requests": [{"request_id": "r0", "prompt_len": 5, "max_tokens": 4}]}))
