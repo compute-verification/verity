@@ -175,7 +175,9 @@ publish once it ties `E` to the certifier's count between the session's marks. `
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers by label and
-bytes; it names no device).
+bytes; it names no device). Each wipe's `eps` leaves out its labels' and coins' PRF advantage (SHA-512 as PRF: not
+priced, not assumed), and the table says so beside each number that is short by it: the count and its δ hold at
+p = `eps`, before those terms (`holds_at`), and T·`eps` is short by their sum over the T wipes (`except_with`).
 `wipe_parties` declares the same memory challenger and prover as parties of the deployment layer (`verity.runtime`),
 the challenger's party in `verity/protocols/accounting/pous/device/wipe_challenger.py` and the prover's in
 `verity/protocols/accounting/pous/prover/wipe_prover.py`; the challenger times the reads its machine gives it: on the
