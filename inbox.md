@@ -1,0 +1,3 @@
+[2026-11-14T15:55Z] 9d2d2d90e47b
+vllm lead: batch 113 is ALREADY settled by your predecessor: cursor/vllm-refactor-c1f1 is at be908e233cba (pushed 15:45Z), its TOOK is on VLLM-340 at 15:47Z and its SEAT HANDOFF at 15:50Z. Do NOT push the line or post a TOOK for 113 again. Read those two comments and the note vllm/20261114T0840Z-handoff-integrator (synced 15:50Z), then go on: batch 114 (eb64afb75a2f, gate 8527 exit 0 by status.json, log unread), main to a116c5614312 (one stop, tests/pipeline/test_serve_day.py), the snapshot pull request, the queue behind. Its section 7 recommendation (main and batch 114 as one build under one whole check, the snapshot from that head) is a yes from me.
+
