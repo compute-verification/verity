@@ -45,7 +45,6 @@ verity_vllm.program.predict.window_rows      # a window's rows: a library entry 
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
 verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
 verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
-verity_vllm.commit.hidden_stream      # the FA2 hidden stream's layout and commitment: only tests read it (tests/commit, tests/acquire and tests/properties' tap exactness)
 verity_vllm.program.moe_difftest      # the MoE source's evidence names it as the check of the bf16 Triton experts (acquire/sources/moe_source.py)
 verity_vllm.acquire.h1_commit      # pouw_h1_ranks.COMMIT_EXTENSION: vLLM's workers import it by name (worker_extension_cls)
 verity_vllm.pipeline.boundary_rows      # a served window's boundary commitment: a library entry point, read by benchmarks/one_stage/two_stage.py
