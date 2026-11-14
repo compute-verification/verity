@@ -3314,11 +3314,9 @@
     {"file": "benchmarks/sampling_plan/tests/test_served_window.py", "count": 11},
     {"file": "benchmarks/sampling_plan/tests/test_transformer.py", "count": 17},
     {"file": "benchmarks/sampling_plan/transformer.py", "count": 54},
-    {"file": "benchmarks/serve_tax/README.md", "count": 4},
     {"file": "benchmarks/serve_tax/rebuild.py", "count": 1},
     {"file": "benchmarks/serve_tax/replay.py", "count": 1},
-    {"file": "benchmarks/serve_tax/run.sh", "count": 2},
-    {"file": "benchmarks/serve_tax/serve_tax.py", "count": 18},
+    {"file": "benchmarks/serve_tax/serve_tax.py", "count": 4},
     {"file": "benchmarks/serve_tax/servetax_plugin.py", "count": 1},
     {"file": "benchmarks/serve_tax/tests/test_boundary.py", "count": 1},
     {"file": "benchmarks/served_commit/README.md", "count": 2},
@@ -5400,7 +5398,7 @@
     {"file": "adapters/vllm/verity_vllm/records/property_record.py", "count": 1},
     {"file": "benchmarks/serve_tax/cell_shim.py", "count": 1},
     {"file": "benchmarks/serve_tax/pyproject.toml", "count": 1},
-    {"file": "benchmarks/serve_tax/tests/test_cell_shim.py", "count": 10},
+    {"file": "benchmarks/serve_tax/tests/test_cell_shim.py", "count": 4},
     {"file": "benchmarks/serve_tax/tests/test_certified.py", "count": 5},
     {"file": "verity/protocols/accounting/registration/verifier/registration.py", "count": 10}
   ]
