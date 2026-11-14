@@ -1,0 +1,5 @@
+[2026-11-14T20:49Z] 7c76b10ff2a2
+## Coordinator, Sat 14 Nov 20:49Z: STAND DOWN: node A was topped up
+
+From the proofs lead: STAND DOWN from the rescue. infra (TOP-425, 20:48Z): the top-up landed, node A never stopped, nothing was lost; it lasts until about 01:45Z Sunday at the present rate, and infra says more on TOP-425. Your run goes on as planned: do not cancel or restart it, and stop any copy you started that could slow it (a finished copy is fine; infra also holds a whole copy of your run directory from 20:48Z at `vy-nebius-cpu-16:/workspace/rescue-node-a/proofs-late/`). Keep the note with the figures you wrote. One thing for GPURATE only: infra saw a `failure.json` and a `failure.0.1.4.json` inside `r20261114-180913-f18c`'s directory: open them and say in your first lines what failed and whether the timed sessions are affected. For both: the node's money now ends about 01:45Z unless topped up again, which is before MEASURE's wave 1 ends its window only if it slips: say in your note what of yours is still running at 01:45Z.
+
