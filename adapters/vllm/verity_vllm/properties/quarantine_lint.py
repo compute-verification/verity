@@ -5,8 +5,7 @@ Rules (AST, no import of the checked modules):
   - forbidden imports: os, sys, time, datetime, random, secrets, pathlib, io, json, pickle, subprocess, socket, urllib,
     requests, torch, triton, numpy.random, verity_vllm.{observe,acquire,commit,check} (any), importlib, ctypes, threading, multiprocessing;
   - forbidden calls/names: open, eval, exec, compile, input, __import__, globals, locals, vars, getattr-with-string-env;
-  - no `global` / `nonlocal` statements; no module-level mutable state mutated in functions (best effort: assignments to
-    module names inside functions);
+  - no `global` / `nonlocal` statements, so no function rebinds a module-level name;
   - every module that defines a definition (`CompositeDefinition(`, `@composite(`, `@primitive(`, `PrimitiveDefinition(`)
     has a module-level `SEMANTIC_ID = "<area>/<Name>@v<k>"` and every definition's version argument is an int >= 1;
   - `*_difftest.py` adapters are exempt from the import rule for `torch` INSIDE functions only (module-level torch import
@@ -37,7 +36,6 @@ def lint_file(path: Path) -> dict[str, Any]:
     tree = ast.parse(src, str(path))
     problems: list[str] = []
     is_adapter = path.name.endswith("_difftest.py")
-    module_names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(getattr(n, "ctx", None), ast.Store)}
     semantic_id = None
     n_defs = 0
     for node in ast.walk(tree):
@@ -71,11 +69,6 @@ def lint_file(path: Path) -> dict[str, Any]:
             problems.append("no module-level SEMANTIC_ID = \"<area>/<Name>@v<k>\"")
         elif not SEMANTIC_ID_RE.match(semantic_id):
             problems.append(f"SEMANTIC_ID {semantic_id!r} does not match <area>/<Name>@v<k>")
-    # module-level names assigned inside functions (mutable module state)
-    for fn in [n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
-        for n in ast.walk(fn):
-            if isinstance(n, (ast.Assign, ast.AugAssign)) and n.lineno > fn.lineno:
-                pass  # locals are fine; module mutation needs `global`, caught above
     rel = str(path.relative_to(REPO)) if path.is_relative_to(REPO) else str(path)
     return {"file": rel, "semantic_id": semantic_id, "definitions": n_defs, "adapter": is_adapter,
             "status": "pass" if not problems else "fail", "problems": problems}
