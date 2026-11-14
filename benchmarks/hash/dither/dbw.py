@@ -31,7 +31,7 @@ from typing import Callable
 
 HERE = Path(__file__).resolve().parent
 TAMPER = "skip:0.0625"
-T_MS, DRAWS = 1000, 2773
+T_MS, OPENINGS = 1000, 2773
 
 
 class SideError(RuntimeError):
@@ -123,9 +123,9 @@ def plan(reps: int) -> list[str]:
 
 def paced(block_s: float, cover: float, stretch_s: float = T_MS / 1000) -> str:
     """A K = 1 run whose passes outlast `cover` times a block of `block_s` seconds, a stretch taking `stretch_s`
-    (`window_s` of an earlier run; T_MS before any): W stretches of T_MS's groups (and the closing one), DRAWS
+    (`window_s` of an earlier run; T_MS before any): W stretches of T_MS's groups (and the closing one), OPENINGS
     openings a stretch, as the audit's 1 s runs (`run.sh`'s, gate run 7's)."""
-    return f"1:{T_MS}:{DRAWS}:{max(1, math.ceil(cover * block_s / stretch_s) + 1)}"
+    return f"1:{T_MS}:{OPENINGS}:{max(1, math.ceil(cover * block_s / stretch_s) + 1)}"
 
 
 def window_s(session: dict) -> float:
