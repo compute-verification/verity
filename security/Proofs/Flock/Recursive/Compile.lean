@@ -122,7 +122,9 @@ variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintyp
 
 /-- **The compiled table's outcome on an inner transcript**: the outcome the transcript's steps on the schedule play
 `Model.tableCL` to on the hidden statement `M.toStatement regs`, when they play it to one. It is the replay of those
-steps (`Game.playT`): the finder computes the outcome from its own transcript, and none is chosen. -/
+steps (`Game.playT`): the finder computes the outcome from its own transcript, and none is chosen. Outside proofs, two
+tests under it are decided classically: the replay's, that a step's type is the node's, and the table's opening check
+(`OpensOKL`, in `Model.tableCL`). -/
 noncomputable def outCL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (cls : HClass) (regs : List (Region cls.kLog (cls.m - cls.kLog)))
     (sch : Schedule) (M : Hidden cls) (t : List (List (SMsg T) × ((k : Fin r) → CT k))) : Option (OutCL F D Sl) :=

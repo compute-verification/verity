@@ -349,7 +349,9 @@ theorem ClashRunHL.cand {H : List UInt8 → D} {E : Merkle.Enc (List F) D} {Lf :
     exact ⟨c, List.mem_append_right _ hc, hp⟩
 
 /-- **Candidate 3's table's outcome on an inner transcript**: the outcome the transcript's steps play `holoTableCL` to
-at the statement `x`, when they play it to one. It is the replay of those steps (`Game.playT`): none is chosen. -/
+at the statement `x`, when they play it to one. It is the replay of those steps (`Game.playT`): none is chosen.
+Outside proofs, two tests under it are decided classically: the replay's, that a step's type is the node's, and the
+table's opening check (`OpensOKL`, in `Model.holoTableCL`). -/
 noncomputable def outHL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (e : ExecHolo) (x : HoloReg F D)
     (t : List (List (SMsg T) × ((k : Fin r) → CT k))) : Option (OutHL F D Sl) :=

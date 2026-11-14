@@ -13,7 +13,9 @@ the game do not end together.
 
 A finder that reads the outcome of a transcript reads it with `playT`: the outcome is a function of the transcript,
 and no outcome is chosen. The one test the replay decides is that a step's type is the node's. It is a proposition
-about two types, decided classically, as the finders' other tests are (`StrictCR.collOf`).
+about two types, decided classically, as the finders' other tests are (`StrictCR.collOf`). A game it replays may decide
+tests of its own: `Model.tableCL` and `Model.holoTableCL` decide their opening checks (`OpensOKL`) classically, so
+under `Recursion.outCL` and `Recursion.outHL` those are classical steps beside this one.
 
 * `playT_eq_some`: `playT g ts = some a` exactly when `PlaysT g ts a`.
 -/
