@@ -130,7 +130,7 @@ AUDIT_BUILT_RE = re.compile(r"build: |lean: proved_in: \S+'s build did not pass 
 #: failure, not the tree's
 STORE_SAYS = re.compile(r"^\s*tamper: |the evidence store is not reachable", re.M)
 #: what a log prints when its machine failed it, beyond `vqueue_records.FAULT_RE`: `tele run` refusing a run its machine's cgroups
-#: would leave without a memory cap (`telemetry.cgroup.uncapped`)
+#: would leave without a memory limit (`telemetry.cgroup.uncapped`)
 MACHINE_SAYS = re.compile(r"refused to start the workload: this machine caps each login session")
 #: the code that decides every suite's verdict, which every suite's key holds (`suites.RUNNER`)
 SUITE_RUNNER = ("tools/verity/check/suites.py", "tools/verity/check/settings.py", "tools/verity/check/guard")

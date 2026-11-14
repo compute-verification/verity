@@ -458,7 +458,7 @@ class Steps:
 
 
 class Shadow:
-    """Where the check gates (`CHECK_GATE`), graph2's readings, in shadow, kept between ticks in ``path`` (`G2_READS`), each
+    """Where the check gates (`CHECKS`), graph2's readings, in shadow, kept between ticks in ``path`` (`G2_READS`), each
     standing `G2_READ_S` (``read_s``) from its read: a candidate's (`World.verdict`, as `_shadow_doc` keeps it: what
     `Loop._compare`, `Loop._drop`, `Loop._flaky`, `Loop._bases` and the state file read of it), under the key it was read
     with (its base and the results its retries and reruns set aside), and a followed check's word that it still runs
@@ -817,7 +817,7 @@ class Judged:
     graph2's verdict says failed or erred and the loop read passed, or the loop reads its base failing and graph2's verdict on
     the base doesn't (`Dispute`), or a listing the loop read that isn't the one graph2 runs (`Relisted`), and ``slim`` the
     verdict of the run beside the check (`vqueue_slim.judge` on its ``record``; pending until it starts), combined into
-    ``verdict``.  Where the check gates (`CHECK_GATE`), ``verdict`` is that run's alone and ``shadow`` the verdict read of
+    ``verdict``.  Where the check gates (`CHECKS`), ``verdict`` is that run's alone and ``shadow`` the verdict read of
     graph2's results.  ``tasks`` is how many of its graph's tasks on the merge gate have ended, and how many there are; None
     with no graph read."""
     verdict: Verdict
@@ -3027,7 +3027,7 @@ class Loop:
         ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says, or, where
         only its own members meet the step, until the run beside ``main``'s check says (``on_main``, its record, read as a
         base's into `vqueue.Failed.main_tests`).  Where the
-        check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
+        check gates (`CHECKS`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), a run started while graph2 gated counts as none started, and a check that took lean-audit's verdict
         from the check of a candidate below reads lean-audit as pending while that candidate is in flight, and, once it has
         landed, takes the verdict that the record ``lent`` gives keeps (`vqueue_slim.audited`, `_lent`); one that left
@@ -3960,7 +3960,7 @@ class Loop:
         again, resumes a cancelled one, and leaves one it is listing or has listed as it is.  One that fails to enqueue is
         enqueued by the next tick.  `CI` and `landing.INFRA` are rung, naming it and the candidates on it, once a base and why
         (`Past.rung`): at once when its listing failed or its graph can't be read, and when graph2 still hasn't listed it or
-        said `BASE_RING_S` after it was first asked for (`BASE_COMING`); none where the check gates (`CHECK_GATE`), since no
+        said `BASE_RING_S` after it was first asked for (`BASE_COMING`); none where the check gates (`CHECKS`), since no
         candidate waits on it there.  Nothing is ejected or bisected on its account: its candidates wait, for as long as
         `vqueue.decide`'s `pending_s` retries and rings them."""
         w, recs, rung, now = self.world, [], t.past.rung(), self.now()
@@ -4034,7 +4034,7 @@ class Loop:
         return recs
 
     def _compare(self, t: Tick) -> list[dict]:
-        """Where the check gates (`CHECK_GATE`): graph2's verdict of each candidate (`Judged.shadow`) beside its check's, once
+        """Where the check gates (`CHECKS`): graph2's verdict of each candidate (`Judged.shadow`) beside its check's, once
         both ended (neither reads pending, neither's fail has a task or a shard still running, the check's not infra, which a
         retry answers), as one line (`_versus`), logged and printed, once a candidate and line.  While the check hasn't ended,
         graph2's verdict that did is logged once (`graph2`), so the compare line to come knows how long it took."""
@@ -4050,7 +4050,7 @@ class Loop:
         return recs
 
     def _off_gate(self, t: Tick) -> list[dict]:
-        """Where the check gates (`CHECK_GATE`): ring who acts on what a candidate's check failed of each step `vqueue_slim.judge`
+        """Where the check gates (`CHECKS`): ring who acts on what a candidate's check failed of each step `vqueue_slim.judge`
         leaves out (policy.toml's `off_gate` at its base, drive.toml's `warn_steps`), once its verdict is pass or fail, and that
         the run beside its base's check (`Tick.below` beside `main`, else the base candidate's) didn't fail too (`_off_new`):
         whom `_off_owners` names, with each failure's line, once a candidate and step (`Past.rung`, by why).  Nothing is held or
@@ -4567,7 +4567,7 @@ def main(argv: list[str]) -> int:
                                                           "them; its own main is refs/vqueue/shadow in the clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
     ap.add_argument("--no-graph2-shadow", action="store_true",
-                    help=f"with --gate {CHECK_GATE}, read no graph2 verdict in shadow (no compare lines, no followed drops); "
+                    help=f"with --gate {CHECK_GATE} or {VERDICT_GATE}, read no graph2 verdict in shadow (no compare lines, no followed drops); "
                          "graph2's checks are still enqueued")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
