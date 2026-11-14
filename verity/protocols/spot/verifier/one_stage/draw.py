@@ -19,7 +19,7 @@ without replacement inside each, independently.
   `Q_template_instance` and `Q_template_instances`; another query refuses it.
 * **Sizes**: k_s = max(1, round(k n_s / n)), rounding half up in integers (`stratum_k`), so every template has a sample.
 * **The sampling design object** is `{"law": "stratified", "k": K, "strata": [{"template": <descriptor id>, "units": [[lo, hi], ...],
-  "k": k_s}, ...]}`: the law `{"law": "stratified", "k": K}` expanded by `derive`. R1 holds the registered sampling design to the verifier's
+  "k": k_s}, ...]}`: the sampling design `{"law": "stratified", "k": K}` expanded by `derive`. R1 holds the registered sampling design to the verifier's
   own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
@@ -138,7 +138,7 @@ def rate_floor(num: int, den: int, n: int, floor: int) -> int:
 
 
 def rate_need(num: int, den: int, size: int, n: int) -> int:
-    """The least K >= 1 at which the stratified sampling design draws ceil(NUM size / DEN) of a stratum of `size` of `n` proof
+    """The least K >= 1 at which the stratified sampling design samples ceil(NUM size / DEN) of a stratum of `size` of `n` proof
     blocks (`stratum_k`): ceil((2 c n - n) / (2 size)) at c = that count, and 1 where c <= 1. The Lean's `Spot.Rate.need` is
     this."""
     c = rate_count(num, den, 1, size)
@@ -147,7 +147,7 @@ def rate_need(num: int, den: int, size: int, n: int) -> int:
 
 def strat_k(num: int, den: int, sizes: Sequence[int], n: int) -> int:
     """The stratified rate's K over strata of `sizes` of `n` proof blocks: the most any stratum needs (`rate_need`), at most `n`,
-    at which each stratum draws all of its proof blocks. The Lean's `Spot.Rate.stratK` is this, and `Rate.stratK_ge` the bound."""
+    at which each stratum samples all of its proof blocks. The Lean's `Spot.Rate.stratK` is this, and `Rate.stratK_ge` the bound."""
     return min(n, max([1, *(rate_need(num, den, s, n) for s in sizes)]))
 
 

@@ -2,7 +2,7 @@
 
 `core-periods-difftest` (`Core.PeriodDifftest.table`) serves `span` (a span read from its JSON, and its stop), `within`,
 `cut` (the parts of a span's cut at its boundaries) and `monitoring` (a monitoring period read from its JSON, its execution
-blocks' spans and each block's sampling blocks' spans). Inputs are drawn valid and broken: spans with a key missing or
+blocks' spans and each block's sampling blocks' spans). Inputs are sampled valid and broken: spans with a key missing or
 extra, negative or boolean or string fields, boundaries out of order or past the span, sampling cuts too few or not of
 their block's span. Python must refuse exactly what Lean refuses.
 """

@@ -400,7 +400,7 @@ theorem certified_not_break
 /-- **`periodHeld`'s closed certified honest instance**: the honest period and strategy meet the device model at the
 literal deployed budget, the instantiation and fit; and `certifiedAudit` has an accepted play outside its own bounded
 collision event. The session challenges block 0 in each of its 105 rounds. Nothing ties that session to the ring
-game's draw at the coin, because no premise asks it. -/
+game's sample at the coin, because no premise asks it. -/
 theorem periodHeld_certified (hP : Pous.P2.Assumptions.PrimeP16448) :
     DeviceModel honestRun certifiedAudit honestStrategy RING_D RING_Q RING_L 1 ∧
       Instantiates certifiedAudit honestStrategy ∧
