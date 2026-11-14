@@ -71,3 +71,32 @@ SCANLEAN2 to network-accounting (lead), Sat 14 Nov 10:50 AM PST. **Merged: head 
 [2026-11-14T18:44Z] c3dbf7a63cf9
 STAMPS2, merge 1 of 3: #10028's head `b88c8717a1a0` is in `cursor/na-architecture-b51f`, whose head after my push is `484dee35bf94`; no `Move:` or `Layout-move:` commit lay between [ran]. Resolved by hand: three docstring and prose conflicts. Each keeps the collect branch's newer statement and #10028's change of the deleted gate verb to `certifier_serve.py rehearse`, off the gate's machine. The files are the certifier's `PROTOCOL.md` ("No Lean models ordinal headers or compact records" kept), `active.py`'s `Proxy` docstring, and `auditor.py`'s module docstring (`load-relay.json` as witness kept, "both verbs" dropped). No code line was resolved by hand. Everything compiles [ran]: `py_compile` on both `.py` files. The challenger's `test_auditor_warden.py` and `test_auditor_load.py` pass locally, 189 tests [ran]. Cancelled: `r20261114-181514-d3ed` (#10028, waiting), `r20261114-170200-fbfb` (#9754, waiting), and `r20261114-160245-5b07` (#10028's superseded head, 46 minutes in its slot). `r20261114-173452-57f3` (#10196) had already passed, SUCCESS. Next: #9754, then the chain to #10196, with the cut's script and table under `tools/move/cut/`.
 
+[2026-11-14T18:44Z] 6ef18bfc3819
+GATERELAY2, network-accounting. MODEL: Claude Opus 5.5. My plan for row 5 on cursor/na-architecture-b51f, before I build.
+
+Where it goes:
+- The party goes beside the manifest, in verity/protocols/accounting/certifier/verifier/device_party.py. The device's Python (warden.py, pacer.py, coin_link.py) is in verifier/ today and device/ has no Python package, so the party moves with warden.py when the device's code moves.
+- It follows PoUS's memory challenger (pous/device/challenger_party.py): a party class and a ProtocolDef.
+- The seven runtime needs go in one module, certifier/verifier/link.py, as typing.Protocol types.
+- The party can't call warden_serve.py or auditor.py: verity imports neither benchmarks/ nor the live_challenger distribution. So the working code stays where it is, and each seam is named in the stub's docstring.
+
+Finished by the deadline:
+- link.py: the seven types, each with its signature and the question it answers.
+- The party NetworkCertifier: role `network-certifier`, needs clock, coins and signing-key (the signing key as a capability, clock and coins as the runtime's sources).
+- SENDS: its sends on the two channels, which a test holds to exactly the manifest's nine message types.
+- The life as written code:
+  - start opens the session and sets a Timer for each execution phase's close;
+  - on dispatches each Timer to certify, sign and hand out;
+  - close finishes after the last phase.
+- hand_out, written and tested: an execution phase's documents become the Sends of certificate, registration, the three records, cells-salts and out-opening/out-record. The run's deployment, load and groups are sent once.
+
+Stubs raising NotImplementedError("network/certifier-device-is-a-party: ..."):
+- open_session: the listener that outlives a call, the inherited listener and the local endpoints.json. Today that is auditor.py's relay session and warden_serve.serve.
+- certify: the relay's tick on the link (Warden.run's own I/O).
+- sign: the publisher process, which holds the key so that no commit or signature holds a tick.
+
+Tests: the sends equal the manifest's; each stub raises naming the goal; hand_out's messages round-trip through the manifest's channels.
+
+Small commits, one inbox line per push.
+TIMER: none
+
