@@ -211,41 +211,61 @@ def labelsHeld (ls : Array Layout) (certified : Array (Registered.Entry × Strin
 
 def markJson (m : Mark) : Json := .arr #[.str m.template, .str m.port, .str m.label, .bool m.output]
 
+/-- A JSON list of strings. -/
+def stringsOf (j : Json) : Option (Array String) :=
+  match j with
+  | .arr a => a.mapM fun (v : Json) => match v with
+    | .str s => some s
+    | _ => none
+  | _ => none
+
+/-- A label's layout as `[label, [[root node, first row, template, port], ...], rows]`. -/
+def layoutJson (l : Layout) : Json :=
+  let sites : Array Json := l.sites.map fun (x : Nat × Nat × Mark) =>
+    Json.arr #[Lean.toJson x.1, Lean.toJson x.2.1, Json.str x.2.2.template, Json.str x.2.2.port]
+  Json.arr #[Json.str l.label, Json.arr sites, Lean.toJson l.rows]
+
+/-- `valueAt` at each row of `l`'s label and one past: `[value, root, row]`, or null. -/
+def valuesJson (certified : Array (Registered.Entry × String)) (labels : Array (String × Array String))
+    (l : Layout) : Json :=
+  let one : Nat → Json := fun g =>
+    match valueAt certified labels l.label g with
+    | some (v, root, r) => Json.arr #[Json.str v, Json.str root, Lean.toJson r]
+    | none => Json.null
+  Json.arr ((List.range (l.rows + 1)).toArray.map one)
+
+/-- Unit `u`'s rows as `[[port, label, row], ...]`. -/
+def unitJson (ls : Array Layout) (rs : Array TRange) (u : Nat) : Json :=
+  let one : String × String × Nat → Json := fun x => Json.arr #[Json.str x.1, Json.str x.2.1, Lean.toJson x.2.2]
+  Json.arr ((rowsAt ls rs u).map one)
+
 /-- The difftest's `certified_rows`: on `{program, templates, certified, labels}` (`certified`: `{value: {"root",
 "leaves"}}`; `labels`: `{label: [value, ...]}`), the marks, or the refusal's codes; and with marks the layout, each unit's
 rows, each label's `valueAt` at every row and one past, and `labelsHeld`. -/
 def piece (j : Json) : Except String Json := do
   let pj := getD j "program"
   let p ← Program.parse (← Flock.canon pj).toUTF8
-  let .arr tj := getD j "templates" | throw "templates is not a list"
-  let some templates := tj.mapM (fun t => match t with | .str s => some s | _ => none) | throw "a template is not a string"
+  let some templates := stringsOf (getD j "templates") | throw "templates is not a list of strings"
   let rs ← Flock.TemplateQuery.evaluate p.desc templates
-  let .obj cj := getD j "certified" | throw "certified is not an object"
-  let some certified := cj.toArray.mapM (fun (v, e) => do
-      let .str root := getD e "root" | none
-      pure (({ value := v, leaves := ← nat? (getD e "leaves"), words := 0, wordBits := 0, domain := "" } :
-        Registered.Entry), root))
-    | throw "certified is not an object of {root, leaves}"
-  let .obj lj := getD j "labels" | throw "labels is not an object"
-  let some labels := lj.toArray.mapM (fun (l, vs) => match vs with
-      | .arr a => do pure (l, ← a.mapM fun v => match v with | .str s => some s | _ => none)
-      | _ => none)
-    | throw "labels is not an object of lists of strings"
+  let .obj _ := getD j "certified" | throw "certified is not an object"
+  let certified : Array (Registered.Entry × String) ← (entries (getD j "certified")).mapM
+    fun (x : String × Json) => match getD x.2 "root", nat? (getD x.2 "leaves") with
+      | .str root, some leaves =>
+        pure (({ value := x.1, leaves := leaves, words := 0, wordBits := 0, domain := "" } : Registered.Entry), root)
+      | _, _ => throw "certified is not an object of {root, leaves}"
+  let .obj _ := getD j "labels" | throw "labels is not an object"
+  let labels : Array (String × Array String) ← (entries (getD j "labels")).mapM
+    fun (x : String × Json) => match stringsOf x.2 with
+      | some vs => pure (x.1, vs)
+      | none => throw "labels is not an object of lists of strings"
   match marks pj p.prog with
-  | .error e => return Json.mkObj [("refused", .arr ((e.splitOn ", ").map Json.str).toArray)]
+  | .error e => return Json.mkObj [("refused", Json.arr ((e.splitOn ", ").map Json.str).toArray)]
   | .ok ms =>
-    let ls := layout p.prog ms
-    let units := (List.range (Flock.TemplateQuery.population rs)).toArray.map fun u =>
-      Json.arr ((rowsAt ls rs u).map fun (q, l, g) => .arr #[.str q, .str l, Lean.toJson g])
-    let values := ls.map fun l => (l.label, Json.arr ((List.range (l.rows + 1)).toArray.map fun g =>
-      match valueAt certified labels l.label g with
-      | some (v, root, r) => .arr #[.str v, .str root, Lean.toJson r]
-      | none => .null))
-    return Json.mkObj [("marks", .arr (ms.map markJson)),
-      ("layout", .arr (ls.map fun l => .arr #[.str l.label,
-        .arr (l.sites.map fun (k, first, m) => .arr #[Lean.toJson k, Lean.toJson first, .str m.template, .str m.port]),
-        Lean.toJson l.rows])),
-      ("units", .arr units), ("values", Json.mkObj values.toList),
-      ("held", .bool (labelsHeld ls certified labels))]
+    let ls : Array Layout := layout p.prog ms
+    let units : Array Json := (List.range (Flock.TemplateQuery.population rs)).toArray.map (unitJson ls rs)
+    let values : Array (String × Json) := ls.map fun (l : Layout) => (l.label, valuesJson certified labels l)
+    return Json.mkObj [("marks", Json.arr (ms.map markJson)), ("layout", Json.arr (ls.map layoutJson)),
+      ("units", Json.arr units), ("values", Json.mkObj values.toList),
+      ("held", Json.bool (labelsHeld ls certified labels))]
 
 end Spot.CertifiedRows
