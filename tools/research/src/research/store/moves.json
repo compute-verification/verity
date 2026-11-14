@@ -3067,6 +3067,11 @@
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/program/mla_capture.py": "adapters/vllm/tests/program/mla_inputs.py"
+      }
     }
   ]
 }
