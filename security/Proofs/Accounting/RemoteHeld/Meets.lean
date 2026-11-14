@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Assumptions.RemoteHeld
+public import Definitions.Accounting.Remote.DrawInstances
 import Mathlib.Algebra.BigOperators.Group.Finset.Piecewise
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
@@ -12,9 +13,9 @@ The token-bucket ceilings (`SquaringCeiling`, `Disks`, `Links`) hold together wi
 `HeldOverTime` and `HeldOverTimeLinks` on a session whose node brings absent blocks back by all three routes at once,
 so the guarantees cover nodes that rebuild, read their disks and take blocks over their links.
 
-The session (`burst`) is two passes of `D` ticks, every receipt correct. Its node has its first `Br + Bd + Bl`
-registered blocks absent until tick `t₁` and brings them all back at `t₁`: `Br` rebuilt, `Bd` read from its disks, `Bl`
-over its links (`burst_back`). It meets every premise at any rates (`burst_meets`, and `burst_meets_held` for `Held`'s
+The session (`burst`, in `Definitions/Accounting/Remote/DrawInstances.lean` with `pulse`, `burstMem` and `burstPace`)
+is two passes of `D` ticks, every receipt correct. Its node has its first `Br + Bd + Bl` registered blocks absent until
+tick `t₁` and brings them all back at `t₁`: `Br` rebuilt, `Bd` read from its disks, `Bl` over its links (`burst_back`). It meets every premise at any rates (`burst_meets`, and `burst_meets_held` for `Held`'s
 Identity), while no rate below the burst meets the same ceiling with burst 0 (`not_bucket_pulse`): that was the
 bare-rate form, which over one-tick intervals allowed no rebuild, disk read or link block at all.
 
@@ -25,10 +26,7 @@ bare-rate form, which over one-tick intervals allowed no rebuild, disk read or l
 
 namespace Accounting.SecurityProofs.Remote.Meets
 
-open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Pouw
-
-/-- `B` blocks at tick `t₁` and none at any other. -/
-def pulse {Ω : Type} (t₁ B : ℕ) : Ω → ℕ → ℕ := fun _ t => if t = t₁ then B else 0
+open Finset Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Instances Pouw
 
 theorem over_pulse {Ω : Type} (t₁ B : ℕ) (ω : Ω) (u v : ℕ) : over (pulse t₁ B) ω u v ≤ B := by
   simp only [over, pulse, sum_ite_eq']
@@ -49,34 +47,6 @@ theorem not_bucket_pulse {r : ℝ} {t₁ B : ℕ} (hr : r < B) :
   have h3 : t₁ + 1 - t₁ = 1 := by omega
   rw [h2, h3, Nat.cast_one, mul_one, add_zero] at h1
   linarith
-
-/-- The registered blocks in node memory at tick `t`: all of them after `t₁`, and until then all but the first `k`. -/
-def burstMem (N t₁ k t : ℕ) : Finset (Fin N) :=
-  if t ≤ t₁ then (univ.filter fun j : Fin N => k ≤ (j : ℕ)) else univ
-
-/-- Two passes of `D` ticks, each reading every registered block correctly, on a node whose first `Br + Bd + Bl`
-registered blocks are absent until tick `t₁` and all come back at `t₁`: `Br` rebuilt, `Bd` read from its disks and `Bl`
-carried over its links. -/
-def burst {Ω : Type} (N D t₁ Br Bd Bl : ℕ) : Trace Ω where
-  blocks := N
-  passes := 2
-  accepts := fun _ => True
-  tick := fun _ p => p * D
-  plan := fun _ _ => univ
-  correct := fun _ _ => univ
-  mem := fun _ t => burstMem N t₁ (Br + Bd + Bl) t
-  chip := fun _ _ => ∅
-  rebuilt := pulse t₁ Br
-  disk := pulse t₁ Bd
-  link := pulse t₁ Bl
-
-/-- Its groups: each pass its own, the first credited and the second closing, each coin released as the group before
-ends. -/
-def burstPace {Ω : Type} (D : ℕ) : Pace Ω where
-  credited := 1
-  first := fun _ g => g
-  released := fun _ g => g * D
-  ended := fun _ g => (g + 1) * D
 
 variable {N D t₁ Br Bd Bl : ℕ} {Ω : Type}
 

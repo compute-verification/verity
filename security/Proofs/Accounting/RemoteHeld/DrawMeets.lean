@@ -2,6 +2,7 @@ module
 
 public import Proofs.Accounting.RemoteHeld.Meets
 public import Definitions.Accounting.Assumptions.RemoteDraw
+public import Definitions.Accounting.Remote.DrawInstances
 public import Definitions.Pous.Model.StreamedWipe
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -72,7 +73,7 @@ open Finset Accounting.Rate.Pooled
 open Pous (pr)
 open scoped ENNReal
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Accounting.SecurityProofs.Remote.Meets
+  Accounting.Remote.Draw.Assumptions Accounting.Remote.Instances Accounting.SecurityProofs.Remote.Meets
 
 /-! ## The honest session -/
 
@@ -99,11 +100,6 @@ theorem openings_zero_subset {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) :
   exact mem_range.2 (Draw.arrange_lt hk (offsets_zero_lt b hk) p (by have := mem_range.1 hp; omega))
 
 variable {n m : ℕ} {k : Fin n → ℕ} {κ : ℕ} {X : Type}
-
-/-- **The honest session**: window `t` registers `U t` receipts, every one correct, whatever the coins. -/
-def honest (k : Fin n → ℕ) (κ : ℕ) (X : Type) (U : Fin n → Fin (m + 1)) : Remote.Draw.Run n m k κ X where
-  size t _ := U t
-  correct t _ := range (U t)
 
 /-- The honest session is `Live`, `Refused` at any receipts with fallbacks `0`, `Counted` on a trace with no wrong
 receipt on an accepting outcome, and its distinguishers gain nothing. -/
@@ -194,40 +190,6 @@ theorem heldOverTimeLinksSampled_honest [Fintype X] (U : Fin n → Fin (m + 1)) 
   exact ⟨hl, hsq, hd, hS, hr, hp, hcov, hk, hL, hR, hC⟩
 
 /-! ## The toy that an audit accepting everything gets wrong -/
-
-/-- One window of one receipt, none correct, sampled once. -/
-def toy : Remote.Draw.Run 1 1 (fun _ => 1) 1 Unit where
-  size _ _ := ⟨1, by norm_num⟩
-  correct _ _ := ∅
-
-/-- An audit that accepts every outcome, its one pass's one block wrong and its node holding nothing. -/
-def acceptAll : Trace (DrawCoins 1 1 Unit) where
-  blocks := 1
-  passes := 1
-  accepts _ := True
-  tick _ _ := 0
-  plan _ _ := univ
-  correct _ _ := ∅
-  mem _ _ := ∅
-  chip _ _ := ∅
-  rebuilt _ _ := 0
-  disk _ _ := 0
-  link _ _ := 0
-
-/-- Receipts no opening verifies: every salt is empty. -/
-def unsalted : Receipts 1 1 Unit where
-  hash _ _ := 0
-  verifier _ _ _ := ⟨⟨fun _ => 0, 0, fun _ => 0⟩, [], .v2⟩
-  root _ _ _ _ := 0
-  rank _ _ _ := 0
-  opened _ _ _ := ⟨[], [], []⟩
-
-/-- Its credited span is `[0, 1)`, with no credited group. -/
-def toyPace : Pace (DrawCoins 1 1 Unit) where
-  credited := 0
-  first _ _ := 0
-  released _ _ := 1
-  ended _ _ := 0
 
 theorem toy_live : Live toy := fun _ _ _ _ _ => ⟨rfl, rfl⟩
 
@@ -447,32 +409,6 @@ theorem heldOverTimeLinksSampled_nontrivial (prf : Fin 1 → Pous.Bits 1 → Blo
   norm_num at h
   linarith
 
-/-! ## The witnesses' instances -/
-
-/-- W2's window: `130,023,424` receipts, under the cap `2^64 − 1`. -/
-def w2Window : Fin 1 → Fin (18446744073709551615 + 1) := fun _ => ⟨130023424, by norm_num⟩
-
-/-- W2's session: its one window, every receipt correct, sampled `33,273` times, on 256-bit keys. -/
-abbrev w2Session : Remote.Draw.Run 1 18446744073709551615 (fun _ => 33273) 256 Unit :=
-  honest (fun _ => 33273) 256 Unit w2Window
-
-/-- The all-zero coin stream. The honest premises hold at every stream (`honest_meets`). -/
-abbrev zeroStream : Fin 1 → Pous.Bits 256 → Blocks 18446744073709551615 := fun _ _ _ _ => false
-
-/-- W2's receipts, fixed arbitrarily: `Refused` holds at the honest session for every receipts structure. -/
-def w2Receipts : Receipts 1 256 Unit where
-  hash _ _ := 0
-  verifier _ _ _ := ⟨⟨fun _ => 0, 0, fun _ => 0⟩, [], .v2⟩
-  root _ _ _ _ := 0
-  rank _ _ _ := 0
-  opened _ _ _ := ⟨[], [], []⟩
-
-/-- W2's node on the session's coins (`Meets.burst` at W2's numbers), with `Bl` link blocks. -/
-abbrev w2Draw (Bl : ℕ) : Trace (DrawCoins 1 256 Unit) := burstOn 1 256 Unit 130023424 85000000 0 743590 1054688 Bl
-
-/-- The toy's coin stream, all zero. -/
-abbrev toyStream : Fin 1 → Pous.Bits 1 → Blocks 1 := fun _ _ _ _ => false
-
 end Accounting.SecurityProofs.Remote.DrawMeets
 
 /-! ## The witnesses
@@ -486,7 +422,8 @@ namespace Accounting.SecurityProofs.Remote
 
 open Finset Accounting.Rate.Pooled
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
-  Accounting.Remote.Draw.Assumptions Accounting.SecurityProofs.Remote.Meets Accounting.SecurityProofs.Remote.DrawMeets
+  Accounting.Remote.Draw.Assumptions Accounting.Remote.Instances Accounting.SecurityProofs.Remote.Meets
+  Accounting.SecurityProofs.Remote.DrawMeets
 
 /-- **`PooledSample`'s hypotheses hold** at W2's session, at `δ = 2^-40`. -/
 theorem PooledSample_honest :
