@@ -9,10 +9,11 @@ returns its verdict and reason.
 `members_run` is the Python of `OneStageZk.membersRun`, the part of that check that reads the per-member form: the
 statements' structure, the sessions' coins held to the trees the window's challenger session logged, each closed after
 its session's evidence before the next is opened, the members laid over the registration's population, each registered
-value one tree, the registration's roots each one member's, then each statement's session verified on its member's own
-files. It refuses with Lean's reason where Lean refuses, and is no verdict itself: its `Run` is the sessions'
-findings, which the audit above it (v1's check at the coins) reads. Each session's verdict is the
-Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `proofs.verify` runs it).
+value one tree, the registration's roots each one member's, each statement's member one the sample holds a unit of
+(`_sampled`, Lean's `sampledHeld`), then each statement's session verified on its member's own files. It refuses with
+Lean's reason where Lean refuses, and is no verdict itself: its `Run` is the sessions' findings, which the audit above
+it (v1's check at the coins) reads. Each session's verdict is the Flock verifier's own (`flock_verdict`: its
+executable's ``verify --zk``, as `proofs.verify` runs it).
 
 Before any session it holds every member's files, sampled or not, in the members' order (`OneStageZk.membersFiles`):
 the reads Lean's `Member.statement` makes of them, on the member's own lookup tables (the blobs' pinned tables its
@@ -221,7 +222,8 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)
               and bool(ms) and type(sts) is list and type(evidence["sessions"]) is list
-              and type(evidence["proved_units"]) is list and isinstance(evidence["coins"], dict)
+              and type(evidence["proved_units"]) is list and all(_nat(u) for u in evidence["proved_units"])
+              and isinstance(evidence["coins"], dict)
               and isinstance(params["challenger"], dict) and isinstance(params["partition"], dict)
               and isinstance(params["program"], dict))
         for m in ms.values() if ok else ():
@@ -331,6 +333,15 @@ def _laid(ms: Mapping[str, Any], record: Mapping[str, Any]) -> None:
     if not (all(len(m["units"]) == 1 and m["units"][0][1] <= n for m in ms.values())
             and sum(_count(m) for m in ms.values()) == n):
         raise _Refused(MEMBERS_LAID)
+
+
+def _sampled(ms: Mapping[str, Any], held: Sequence[str], want: Sequence[int]) -> None:
+    """`OneStageZk.sampledHeld`: each statement's member, in the statements' order, has a unit among the evidence's
+    ``proved_units`` `want`; the first that has none refuses (`OneStageZk.unsampled`)."""
+    for name in held:
+        if not any(lo <= u < hi for u in want for lo, hi in ms[name]["units"]):
+            raise _Refused(f"member {name}: the sample holds none of its units, and a member the sample missed has no "
+                           "statement")
 
 
 def _ports(name: str, registered: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -641,6 +652,7 @@ def members_run(params: Mapping[str, Any], record: Mapping[str, Any], evidence: 
         _laid(ms, record)
         _class(ms)
         roots = _roots(ms, record)
+        _sampled(ms, held, evidence["proved_units"])
         try:
             strata: Any = P.strata(program, params["query"])
         except (P.QueryRefused, ValueError) as e:
