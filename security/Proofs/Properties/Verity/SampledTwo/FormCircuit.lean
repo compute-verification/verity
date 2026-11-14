@@ -10,6 +10,7 @@ public import Proofs.Properties.Verity.SampledTwo.FormPrint
 public import Proofs.Properties.Verity.SampledTwo.FormDraw
 public import Proofs.Properties.Verity.SampledTwo.FormBytes
 public import Proofs.Properties.Verity.SampledTwo.FormMember
+public import Proofs.Properties.Verity.SampledTwo.FirstEarly
 
 /-!
 # The messages' piece at the form's reading, at the circuit statement's table
@@ -49,6 +50,9 @@ piece at that table, where the three are theorems, and with them the statements'
   the second stage's last round (`opensFrom_run`): from `FirstShownEarly` and `SecondShown`, each stage's sample
   being its family's after one digest (`CoinMap.StageDraws`) and `SessionCoins.InteriorLogged`. Each stage's bytes
   start the coins the log before the statements' round shows, so one of two plays' bytes starts the other's.
+* `FirstShownEarly` is `firstShownEarly` (`FirstEarly.lean`), from `CaseIsSent` and `Good` holding the check to
+  have read a log of both sessions and found it the device's (`ReadIsDevice`): the form refuses an interior audit on
+  the boundary registration's window, and on two windows the first session's read holds no opening.
 * `LastFixed` is `lastFixed_of` (`FormLast.lean`), from `StmtAtFixed`, the sessions the verdict accepted
   (`SessionCoins.verdictsAt_of`) and each session's evidence on the case (`SessionCoins.logCloses_run`).
 * `LinkFixed` is `linkFixed_of` (`FormLink.lean`), from `StmtAtFixed`, the sessions the verdict accepted and the
@@ -57,10 +61,8 @@ piece at that table, where the three are theorems, and with them the statements'
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
-**Not established here**: `StmtsRead`, `PartsHeldAt`, `PinHeldAt`, `SessionCoins.StmtsFit` and `FirstShownEarly`,
-each a hypothesis, and `agreed_form`'s `hR`. `FirstShownEarly` is a theorem on two windows
-(`firstShownEarly_two`, `FirstEarly.lean`); on one window nothing the form checks holds the first stage's coins to
-be released before a round is opened.
+**Not established here**: `StmtsRead`, `PartsHeldAt`, `PinHeldAt` and `SessionCoins.StmtsFit`, each a hypothesis,
+and `agreed_form`'s `hR`.
 -/
 
 @[expose] public section
@@ -82,14 +84,15 @@ statement prints of the member reading back (`stmtsPrint_of`). The evidence hold
 which it is where the member it names and the sample its record prints are (`stmtAtFixed_of`), both where
 one pair of stage coins carries the bytes both plays' samples read (`memberAtFixed_of_coins`, `drawAtFixed_of_coins`,
 `stageCoinsOne_of_play`), which one does where each stage's bytes start the coins the log shows before every
-opening (`playCoinsOne_of_shown`); and where its statement is fixed, a session's first message is fixed by the string shown
-at its first round (`linkFixed_of`) and its last by its evidence (`lastFixed_of`). -/
+opening (`playCoinsOne_of_shown`), as the first stage's do at the cut's read (`firstShownEarly`); and where its
+statement is fixed, a session's first message is fixed by the string shown at its first round (`linkFixed_of`) and
+its last by its evidence (`lastFixed_of`). -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf) (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (ℓ₁ ℓ₂ : String) (Good : Verity.Exchange → Prop) (L : CoinMap.Locate)
     (hL : L = SessionCoins.runLocate A (CoinMap.stageLocate ℓ₁ ℓ₂) fun _ => Flock.Tags.circuit.table) (q : ℕ)
-    (hne : ℓ₁ ≠ ℓ₂) (hFirst : FirstShownEarly C Good)
+    (hne : ℓ₁ ≠ ℓ₂) (hG : ∀ o, Good o → ReadIsDevice o)
     (hDraw₁ : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind firstDraw) ℓ₁)
     (hSecond : SecondShown C Good)
     (hDraw : CoinMap.StageDraws (fun o => FormAccepts C o ∧ Good o) (fun o => (C o).bind secondDraw) ℓ₂)
@@ -115,7 +118,8 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
   have hprint : SessionCoins.StmtsPrint C Good := stmtsPrint_of C Good
   have hcoins : PlayCoinsOne A C Good L := by
     rw [hL]
-    exact playCoinsOne_of_shown (opensFrom_run A _ _) hof hparts hFirst hDraw₁ hSecond hDraw hlog
+    exact playCoinsOne_of_shown (opensFrom_run A _ _) hof hparts (firstShownEarly C Good hG hsent) hDraw₁ hSecond hDraw
+      hlog
   have hone : StageCoinsOne A C S Good L := stageCoinsOne_of_play hparts hof hst hrounds hscope hpin hcoins
   have hdraw : DrawAtFixed A C Good L := drawAtFixed_of_coins hS hst hcount hfit hone
   have hmemb : MemberAtFixed A C Good L := memberAtFixed_of_coins hS hst hcount hfit hone (membersApart C)

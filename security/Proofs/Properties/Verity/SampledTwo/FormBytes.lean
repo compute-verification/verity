@@ -40,7 +40,8 @@ other's (`OneStarts`): the first stage's (`FirstBytesOne`) and the second's (`Se
   (`prefix_before_of_no_opening`).
 
 **Not established here**: `FirstShownEarly`, a hypothesis. `FirstShown` reads the first stage's bytes off the whole
-log, and no lemma here holds the coins it reads to be released before an opening.
+log, and no lemma here holds the coins it reads to be released before an opening; `firstShownEarly`
+(`FirstEarly.lean`) does, at the cut's read.
 -/
 
 @[expose] public section

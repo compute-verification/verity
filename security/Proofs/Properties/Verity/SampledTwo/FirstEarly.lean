@@ -3,28 +3,21 @@ module
 public import Proofs.Properties.Verity.SampledTwo.FormBytes
 public import Proofs.Properties.Verity.SampledTwo.StageAlone
 public import Proofs.Properties.Verity.SampledTwo.SessionTreeless
+public import Proofs.Properties.Verity.SampledTwo.CutAccept
 
 /-!
-# The first stage's coins before every opening, on two windows
+# The first stage's coins before every opening
 
 `FirstShownEarly` (`FormBytes.lean`) is `FirstShown` with the coins it reads released before every opening. Here it
-is a theorem on two windows (`firstShownEarly_two`): at every `Good` that holds the check to have read a log of both
-sessions and found it the device's (`ReadIsDevice`), on a case map that is the one sent (`CaseIsSent`) and whose
-accepted plays' parameters name two different windows (`TwoWindows`).
+is a theorem (`firstShownEarly`): at every `Good` that holds the check to have read a log of both sessions and found
+it the device's (`ReadIsDevice`), on a case map that is the one sent (`CaseIsSent`).
 
-On two windows the play's log is the first session's releases and then the interior's (`logsOf`). The first stage's
-bytes start the coins `drawCoins` reads from the first session (`firstDrawn_of`), which are the coins of the first
-sample that the first session's releases show (`drawn_shown`), and the first session's read holds no opening: the
-form's check refuses a first session's log that holds a coin tree's line there
-(`SessionCoins.firstTreeless_of_check`, `SessionCoins.readLog_treeless`).
-
-`TwoWindows` is the parameters': where every accepted play has the parameters `θ` and `θ` names two different
-windows (`windowsOf`), it holds (`twoWindows_of`).
-
-**Not established here.** On one window both sessions' reads are the whole log, and the form's check holds only the
-second stage's sample to come before every opening there (`Spot.OneStageZk.orderHeld`, at the interior audit's
-family and the interior registration's digest). Nothing it checks holds a coin of the first stage's family to be
-released before a round is opened, so `FirstShownEarly` on one window stays a hypothesis.
+An accepted play is on two windows: the form refuses an interior audit on the boundary registration's window, so the
+two windows its parameters name differ (`windowsOf_ne`, `CutAccept.lean`). There the play's log is the first
+session's releases and then the interior's (`logsOf`). The first stage's bytes start the coins `drawCoins` reads
+from the first session (`firstDrawn_of`), which are the coins of the first sample that the first session's releases
+show (`drawn_shown`), and the first session's read holds no opening: the form's check refuses a first session's log
+that holds a coin tree's line there (`SessionCoins.firstTreeless_of_check`, `SessionCoins.readLog_treeless`).
 -/
 
 @[expose] public section
@@ -35,27 +28,13 @@ open Lean (Json)
 open Properties.Challenger Spot.Challenger
 open Verity.Sampled (freshCoins readLog)
 
-/-- **Every accepted play's parameters name two different windows**: on a play the form accepts where `Good` holds,
-the boundary registration's window and the interior audit's (`windowsOf`) differ. -/
-def TwoWindows (C : CaseOf) (Good : Verity.Exchange → Prop) : Prop :=
-  ∀ o, FormAccepts C o → Good o → ∀ w₁ w₂, windowsOf o.sent.params = some (w₁, w₂) → w₁ ≠ w₂
-
-/-- **`TwoWindows` at parameters that name two different windows**, where every accepted play has them. -/
-theorem twoWindows_of {C : CaseOf} {Good : Verity.Exchange → Prop} {θ : ByteArray} {w₁ w₂ : String}
-    (hθ : ∀ o, FormAccepts C o → Good o → o.params = θ) (hw : windowsOf θ = some (w₁, w₂)) (hne : w₁ ≠ w₂) :
-    TwoWindows C Good := by
-  intro o ha hg v₁ v₂ hv
-  have hθo : o.sent.params = θ := hθ o ha hg
-  rw [hθo, hw] at hv
-  obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hv)
-  exact hne
-
-/-- **`FirstShownEarly` on two windows**, where `Good` holds the check to have read a log and found it the
-device's: the play's log is the first session's releases then the interior's, the first session's releases show the
-coins the first stage's bytes start (`firstDrawn_of`, `drawn_shown`), and none of them is an opening
-(`SessionCoins.firstTreeless_of_check`, `SessionCoins.readLog_treeless`). -/
-theorem firstShownEarly_two (C : CaseOf) (Good : Verity.Exchange → Prop) (hG : ∀ o, Good o → ReadIsDevice o)
-    (hC : CaseIsSent C) (hTwo : TwoWindows C Good) : FirstShownEarly C Good := by
+/-- **`FirstShownEarly`**, where `Good` holds the check to have read a log and found it the device's: the two
+windows the parameters name differ (`windowsOf_ne`), so the play's log is the first session's releases then the
+interior's, the first session's releases show the coins the first stage's bytes start (`firstDrawn_of`,
+`drawn_shown`), and none of them is an opening (`SessionCoins.firstTreeless_of_check`,
+`SessionCoins.readLog_treeless`). -/
+theorem firstShownEarly (C : CaseOf) (Good : Verity.Exchange → Prop) (hG : ∀ o, Good o → ReadIsDevice o)
+    (hC : CaseIsSent C) : FirstShownEarly C Good := by
   intro o ha hgood i read hi hread _
   have hD : FirstDrawn C := firstDrawn_of C hC
   have hfree : SessionCoins.FirstTreeless C :=
@@ -73,7 +52,7 @@ theorem firstShownEarly_two (C : CaseOf) (Good : Verity.Exchange → Prop) (hG :
   obtain ⟨lines, hlines, hrl⟩ := firstRead_some hd₁ hr₁
   obtain ⟨ls, hls, hlsl⟩ := firstLines_arr hlines
   have hpre := hD o ha i read hi hread _ _ _ key d₁ ξ hcase hkey hd₁ hξ
-  have hw : d₁.window ≠ d₂.window := hTwo o ha hgood _ _ (windowsOf_eq hcase hd₁ hc₂ hd₂)
+  have hw : d₁.window ≠ d₂.window := windowsOf_ne (windowsOf_eq hcase hd₁ hc₂ hd₂)
   unfold logsOf at hlogs
   rw [if_neg hw] at hlogs
   have hO := hg (r₁ ++ r₂) (by rw [hlogs]; simp)
