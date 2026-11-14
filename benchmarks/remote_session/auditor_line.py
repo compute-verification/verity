@@ -168,9 +168,14 @@ from verity.protocols.proofs.spot.device import challenger as Ch  # noqa: E402
 from verity.protocols.proofs.spot.device import remote  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
 
-RATES = {"disk_bytes_per_s": timing.DISK_BYTES_PER_S, "link_bytes_per_s": 5e10}
+import sheets  # noqa: E402
+
+FIGURES = sheets.figures()
+"""The node's figures, from its data sheets (`sheets.figures`)."""
+
+RATES = {"disk_bytes_per_s": FIGURES.disk_bytes_per_s, "link_bytes_per_s": 5e10}
 """The node's rates a gate run's line is read at, bytes a second (`line.Rates`): its disks' measured read
-(`timing.DISK_BYTES_PER_S`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
+(the host card's `disk.read`, `Disks`' β), which Identity leaves in, charged in both forms, and its boundary links beyond
 them, link-charged (54.311e9 in all)."""
 BURSTS = ("stated", "none")
 """What the line charges beyond the rates (`rates_at`): `ledger.Node.stated`'s bursts, the line of record's
@@ -355,7 +360,7 @@ def rates_at(disk_bytes_per_s: float = RATES["disk_bytes_per_s"],
         raise ValueError(f"bursts are one of {', '.join(BURSTS)}, not {bursts}")
     out = {"disk_bytes_per_s": disk_bytes_per_s, "link_bytes_per_s": link_bytes_per_s}
     if bursts == "stated":
-        node = ledger.Node.stated(timing.RTX_PRO_6000_NODE, disk_bytes_per_s=disk_bytes_per_s,
+        node = ledger.Node.stated(FIGURES, disk_bytes_per_s=disk_bytes_per_s,
                                   link_bytes_per_s=link_bytes_per_s)
         out |= {"rebuild_burst_bytes": node.rebuild_burst_bytes, "disk_burst_bytes": node.disk_burst_bytes,
                 "link_burst_bytes": node.link_burst_bytes}
@@ -425,7 +430,7 @@ def shares(session: dict, registration: dict, host_bytes: int, rates: dict, lean
     """A session's shares of the node in each form at `rates` (`rates_at`), on the clock its `windows_seen` read
     (`clock`: the record's, which holds its times, or another, `line.CLOCKS`), from its line (`line_of_record`, the
     Lean's with `lean`, off the record `Session.run` makes of `transcript` where given; `shares_of`)."""
-    return shares_of(line_of_record(V.recorded_inputs(session, registration, figures=timing.RTX_PRO_6000_NODE,
+    return shares_of(line_of_record(V.recorded_inputs(session, registration, figures=FIGURES,
                                                       host_bytes=host_bytes,
                                                       rates=V.recorded_rates(session, registration, **rates),
                                                       clock=clock, transcript=transcript), lean))

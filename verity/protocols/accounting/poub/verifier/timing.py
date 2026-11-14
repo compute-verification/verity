@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -192,11 +193,36 @@ class Figures:
     def squarings_per_s(self) -> dict[str, float]:
         return {width: self.gpus * rate for width, rate in self.gpu_squarings_per_s.items()}
 
+    @classmethod
+    def of_sheets(cls, node: Mapping, gpu: Mapping, host: Mapping, *, gpu_chip_bytes: int = GPU_CHIP_BYTES,
+                  gpu_sha512_per_s: float = GPU_SHA512_PER_S, gpu_squarings_per_s: Mapping[str, float] | None = None,
+                  link_window_bytes: int = LINK_WINDOW_BYTES) -> Figures:
+        """A node's figures from its registration's data sheets, each as parsed TOML (`verity.device`'s `load_node`
+        and `load_card`): the node's `device.count`; its GPU card's `memory.read`, `memory.bandwidth` and
+        `store.dram`; its host card's `memory.read`, `memory.bandwidth`, `store.chip` and `disk.read`.  The figures no
+        sheet states are handed in, each defaulting to this module's: one GPU's on-chip storage, SHA-512 rate and
+        squaring ceiling, and one link burst."""
+        for part, card in (("device", gpu), ("host", host)):
+            if node[part]["sku"] != card["sku"]:
+                raise ValueError(f"the node's {part} is {node[part]['sku']!r} and the card handed in is "
+                                 f"{card['sku']!r}: hand in the {part} card the node names")
+
+        def value(sheet: Mapping, section: str, key: str) -> int | float:
+            return sheet[section][key]["value"]
+
+        squarings = GPU_SQUARINGS_PER_S if gpu_squarings_per_s is None else gpu_squarings_per_s
+        return cls(int(value(node, "device", "count")), float(value(gpu, "memory", "read")),
+                   float(value(gpu, "memory", "bandwidth")), gpu_chip_bytes, int(value(gpu, "store", "dram")),
+                   gpu_sha512_per_s, dict(squarings), float(value(host, "memory", "read")),
+                   float(value(host, "memory", "bandwidth")), int(value(host, "store", "chip")),
+                   float(value(host, "disk", "read")), link_window_bytes)
+
 
 RTX_PRO_6000_NODE = Figures(GPUS, GPU_READ_BYTES_PER_S, GPU_SPEC_BYTES_PER_S, GPU_CHIP_BYTES, GPU_HBM_BYTES,
                             GPU_SHA512_PER_S, GPU_SQUARINGS_PER_S, HOST_READ_BYTES_PER_S, HOST_SPEC_BYTES_PER_S,
                             HOST_CHIP_BYTES, DISK_BYTES_PER_S, LINK_WINDOW_BYTES)
-"""The measured node's figures, the constants above: 8 RTX PRO 6000s on a host of two Xeon 6776P sockets."""
+"""The measured node's figures, the constants above: 8 RTX PRO 6000s on a host of two Xeon 6776P sockets.  Each one a
+sheet states is the sheet's value (`Figures.of_sheets` on `rtx-pro-6000-server-x8`)."""
 
 
 def deadline(pass_ns: int, *, gap_ns: int = 0, down_ns: int, up_ns: int, jitter_ns: int = 0) -> int:
