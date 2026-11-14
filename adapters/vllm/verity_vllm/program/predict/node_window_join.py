@@ -247,11 +247,4 @@ def free_rows(joined: Joined) -> list[dict[str, Any]]:
     return out
 
 
-def cover_weights(joined: Joined) -> Joined:
-    """``joined`` with every ``BatchedGemm_v1`` ``w`` row that reads a rank's ``/bnk`` entry (`node_window_sparse.entry`:
-    an absorbed weight, computed from registered tensors and registered as no GPU registers it) covered by the registered
-    weights it is computed from, so that no such row is left for `free_rows`."""
-    raise NotImplementedError("circuits/request-built-as-proof-blocks: CIR-287")
-
-
-__all__ = ["Joined", "Rank", "cover_weights", "free_rows", "join", "rank_window", "ranks_of"]
+__all__ = ["Joined", "Rank", "free_rows", "join", "rank_window", "ranks_of"]
