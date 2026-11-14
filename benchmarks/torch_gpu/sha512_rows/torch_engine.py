@@ -1,5 +1,7 @@
-"""The SHA-512 rows engine (`verity/commitments/cuda/sha512_rows/engine.py`) with the benchmarks' settings: its build
-directory and default variant, read from `benchmarks/torch_gpu/settings.py` and passed in, since the engine reads none.
+"""The SHA-512 rows engine (`verity/commitments/cuda/sha512_rows/engine.py`) on torch, with the benchmarks' settings: its
+build directory and default variant, read from `benchmarks/torch_gpu/settings.py` and passed in, since the engine reads
+none, and its tensor runtime (``runtime``), which verity doesn't import. torch loads at the first CUDA engine, so the
+host twin runs without it.
 """
 from __future__ import annotations
 
@@ -15,8 +17,16 @@ BUILD = Path(settings.SHA512_ROWS_BUILD or Path.home() / ".cache" / "verity" / "
 VARIANT: str = settings.SHA512_ROWS_V
 
 
-class Engine(E.Engine):
-    """`engine.Engine` building under ``BUILD``, its kernels but the row kernel on ``VARIANT`` unless given."""
+class Torch:
+    """The tensor runtime an engine's CUDA calls run on: torch."""
+
+    def runtime(self) -> Any:
+        import torch
+        return torch
+
+
+class Engine(Torch, E.Engine):
+    """`engine.Engine` on torch, building under ``BUILD``, its kernels but the row kernel on ``VARIANT`` unless given."""
 
     def __init__(self, device: Any, arch: str | None = None, key: bytes = E.KEY, default: str = VARIANT, *,
                  build: Path = BUILD) -> None:

@@ -27,12 +27,29 @@ def _cuda() -> bool:
     return torch.cuda.is_available()
 
 
+class TorchEngine(E.Engine):
+    """The engine on torch, which verity doesn't import."""
+
+    def runtime(self) -> Any:
+        import torch
+        return torch
+
+
+def _engine(device: str) -> E.Engine:
+    return (E.Engine if device == "host" else TorchEngine)(device, build=BUILD)
+
+
 ENGINES = ["host", pytest.param("cuda", marks=pytest.mark.skipif(not _cuda(), reason="no CUDA device"))]
 
 
 @pytest.fixture(scope="module", params=ENGINES)
 def engine(request: pytest.FixtureRequest) -> E.Engine:
-    return E.Engine(request.param, build=BUILD)
+    return _engine(request.param)
+
+
+def test_a_cuda_device_needs_a_runtime_verity_does_not_import() -> None:
+    with pytest.raises(NotImplementedError, match="kernels/gpu-code-out-of-benchmarks"):
+        E.Engine("cuda", build=BUILD)
 
 
 def test_row_digests_match_the_reference_at_edge_sizes(engine: E.Engine) -> None:
@@ -53,7 +70,7 @@ def test_frame_leaves_levels_pads_and_roots_match_tree_levels(engine: E.Engine) 
 
 @pytest.mark.skipif(not _cuda(), reason="no CUDA device")
 def test_the_h200_layer_matches_on_sampled_slots() -> None:
-    r = check.check_layout(E.Engine("cuda", build=BUILD), 257, [0, 31, 32, 256])
+    r = check.check_layout(_engine("cuda"), 257, [0, 31, 32, 256])
     assert r["mismatches"] == {"x": 0, "leaves": 0}, r
 
 

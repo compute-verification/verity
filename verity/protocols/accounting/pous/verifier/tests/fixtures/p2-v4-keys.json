@@ -1,6 +1,6 @@
 {
   "randomness": "verity/randomness/derive/v2",
-  "source": "benchmarks/pous/p2_v1/vectors.json, P2 v4's p2-test-vectors/v4 (the spec's section 7)",
+  "source": "verity/protocols/accounting/pous/verifier/p2_v1/vectors.json, P2 v4's p2-test-vectors/v4 (the spec's section 7)",
   "source_sha512": "959911fd371111fe20c4cee6fc532ff205bbf377962c73ac539a4d2de9b22121287e6e996d9ae4bfbef9f26fcd67ac78620873702c8b2899bc41a21bdd76e853",
   "vectors": [
     {
