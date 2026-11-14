@@ -50,7 +50,7 @@ from typing import Any
 
 import numpy as np
 from verity.circuits.defs import bind
-from verity.definitions.registry import boolean_rope as BR
+from verity_vllm.definitions.registry import boolean_rope as BR
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G

@@ -15,7 +15,7 @@ module's `__all__`. Four modules of `schemes/` state none, and six lists are sho
 `circuit.live`, `circuit.ncp2`, `circuit.pc8`, `circuit.plan` and `schemes.pearl_c4`): each by names the module only
 imports, which a test, a sidecar or a benchmark reads through it, and `circuit.live` by one name and
 `schemes.pearl_c4` by two that are retired terms. The package is stated over the
-verifier's parameters: it imports `verity.circuits`, `verity.definitions`, `verity.commitments`,
+verifier's parameters: it imports `verity.circuits`, `verity_vllm.definitions`, `verity.commitments`,
 `verity.protocols.accounting.pouw.verifier` and SPOT's verifier (`verity.protocols.proofs.spot.verifier`, for a window's Program and
 sampling design), with `verity.errors`, and nothing else of the workspace, except that `serving/` also imports SPOT's
 device code, torch and `verity_flock` (inside functions, and torch at import in `serving/h1/receipts.py`). It reads no environment variable outside `kernels/`, and nothing under

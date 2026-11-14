@@ -33,10 +33,10 @@ from verity.circuits.defs import (
 )
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType
-from verity.definitions import boolean as BB
-from verity.definitions.numerics import derived_rows as DR
-from verity.definitions.registry.catalog import load
-from verity.definitions.replay import replayer
+from verity_vllm.definitions import boolean as BB
+from verity_vllm.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.registry.catalog import load
+from verity_vllm.definitions.replay import replayer
 
 from tests.program.predict.test_predict import TINY, _phi
 from verity_vllm.check import c2_rules
@@ -275,7 +275,7 @@ def test_both_loaders_refuse_a_boolean_row_whose_kernel_is_not_its_gates(tmp_pat
 def test_the_gates_are_compared_on_the_self_check_s_own_inputs(monkeypatch):
     """The kernel is asked for the same rows twice, at the same specialisation: by its self-check against the word Definition,
     then against the gates."""
-    from verity.definitions.numerics import derived_rows as DR
+    from verity_vllm.definitions.numerics import derived_rows as DR
 
     asked, right = [], DR.silu_mul_rows
 
