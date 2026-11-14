@@ -220,7 +220,7 @@ class Net:
         are the DsaLatentRowDsMla split of a latent of 512 and a rope of 64 (`DsaLatentRowDsMla_v1`, `Fp8DsMlaUpconvertRow_v1`), and
         FlashMLA's sparse fp8 kernel takes every sparse row of a step in one mixed batch below MIN_HEADS_FOR_BF16_PREFILL heads a
         rank, over whole BN-row blocks of INDEX_TOPK rows (`FlashMlaV32Decode_v1`)."""
-        from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+        from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
         C, G = self.C, FLASHMLA_GLM53
         if self.kv_layout != "fp8_ds_mla":
             return [f"a KV cache in layout {self.kv_layout!r} (the decoder writes fp8_ds_mla's)"]
@@ -586,7 +586,7 @@ class _Model(_Calls):
         qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
         if fp8:
-            from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+            from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
             lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=FLASHMLA_GLM53["QT"], EPS=self.EPS)
             cache = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c) for q, c in zip(qkv, cs)]
             kvc, kpe = [o[0].refs.slice(0, KVL) for o in cache], [o[0].refs.slice(KVL, KVL + R) for o in cache]
@@ -689,8 +689,8 @@ class _Model(_Calls):
         FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`flashmla_twin.sched_meta`), so every row shares its SPLITS.  Row i's
         query is per head [ql | q_pe]; its INDEX_TOPK cache rows are its keys' (nope, scale, rope) in index order, then row 0's
         under index -1 (`FlashMlaV32KvRow_v1` zeroes them)."""
-        from verity.definitions.numerics import flashmla_twin as FT
-        from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53 as G
+        from verity_vllm.definitions.numerics import flashmla_twin as FT
+        from verity_vllm.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53 as G
         C = self.C
         KVL, R, NH, TOPK = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "NH", "INDEX_TOPK"))
         metas, ns = FT.sched_meta([TOPK], topk=TOPK, parts=FT.num_sm_parts(FP8_PADDED_HEADS, s_q=tokens,

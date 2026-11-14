@@ -10,8 +10,8 @@ Kernels (SmolLM2-135M, stock compiled vLLM, ``custom_ops none``, IR-op priority 
 * ``triton_per_fused_fused_add_rms_norm_t_0``  ``z = x + residual`` kept in FP32 (the graph's
   bf16 convert is elided), ``out = bf16((z * s(z)) * w)``; no residual output.
 
-The eager counterparts (vLLM CUDA / Triton kernels, modelled by W4b in ``beyond_gemm.py``) round
-the residual sum to BF16 before normalising.
+The eager counterparts (vLLM's CUDA / Triton kernels) round the residual sum to BF16 before
+normalising.
 
 The per-row scalar ``s`` is an approximate instruction on the GPU (``rsqrt.approx`` for
 libdevice.rsqrt; ``sqrt.approx`` + division in vLLM's Triton kernel), so the models take ``s`` as
