@@ -204,6 +204,14 @@ def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h20
     assert A.CERTIFIER_MINUTES[1] - A.load_minutes("h200") >= 100
 
 
+def test_the_rehearsal_units_stop_signals_certifier_run_alone_and_gives_it_time_to_write_the_end():
+    """`KillMode=mixed`: a stop's SIGTERM goes to `certifier-run` alone, which passes it to the runner, closes the
+    tunnels and writes the end (`auditor._Stop`); only what is left at `TimeoutStopSec` is killed."""
+    unit = UNIT.read_text()
+    assert re.search(r"^KillMode=mixed$", unit, re.M)
+    assert re.search(r"^TimeoutStopSec=\d+(s|min)$", unit, re.M)
+
+
 SALT = "5a" * 64
 LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
 RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
