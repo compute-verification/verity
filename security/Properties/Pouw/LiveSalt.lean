@@ -32,8 +32,8 @@ What the check accepts (`Accepted`) is a pass of `MANIFEST_SCHEMA` that names it
 * The check reads the pass's coins only through the challenger's own records, never the manifest's word. It computes the
   epoch's root `R` from the manifest's weights and `pass_index` (`EpochRoot`). The session is the one that the auditor's
   signed v2 ledger opens on `{root: R}` under the window's pinned challenger key and ends closed, run from a commit the
-  host's pins log records on main's first-parent line (`pinnedSession`).
-* The session's files are that session's (`sessionNamed`), under the commitment the session signed.
+  host's pins log records on main's first-parent line (`pinnedChallengePhase`).
+* The session's files are that session's (`challengePhaseNamed`), under the commitment the session signed.
 * The session counts (`Counts`): the commitment is Pearl-C's salt-only layout, and the session's log shows `R`, alone, as
   the one root it received, each received root followed by its coin's release.
 * The ledger shows the session in its signed order (`LedgerShows`):
@@ -91,7 +91,7 @@ namespace Properties.Pouw.LiveSalt
 open Lean (Json)
 open PouwCheck (R at? checkWorkload workloadOf weightsRootAt MANIFEST_SCHEMA)
 open Spot.Challenger (Audited ChallengerKey Families LedgerEntry LiveCommitment LiveOpening Roots ledgerEntry?
-  leafOf liveReason pinnedSession sessionNamed)
+  leafOf liveReason pinnedChallengePhase challengePhaseNamed)
 
 /-! ## The layout, the epoch's root and the salt -/
 
@@ -198,8 +198,8 @@ def Accepted (key ledger pins main session m : Json) (w : ByteArray) (k : Nat) (
   ∃ (ck : ChallengerKey) (openSeq : Nat) (received : Roots),
     ChallengerKey.ofJson key = .ok ck ∧
     at? m "schema" = .str MANIFEST_SCHEMA ∧ EpochRoot m w k ∧
-    pinnedSession ledger (rootWindow (epochOpenRoot w k)) ck pins main = .ok a ∧
-    sessionNamed a ck session = .ok (c, received) ∧
+    pinnedChallengePhase ledger (rootWindow (epochOpenRoot w k)) ck pins main = .ok a ∧
+    challengePhaseNamed a ck session = .ok (c, received) ∧
     Counts c received (epochOpenRoot w k) ∧
     LedgerShows ledger a.session (epochOpenRoot w k) a.recordLeaf openSeq ∧
     ManifestNames m a (epochOpenRoot w k) openSeq ∧
