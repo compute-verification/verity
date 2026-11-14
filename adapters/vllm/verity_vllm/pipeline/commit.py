@@ -97,14 +97,8 @@ def _rid_of(order: dict, rid) -> str:
     r = str(rid)
     if r in order:
         return order[r]
-    try:
-        from verity_vllm.engine.engine_driver import external_id
-        e = external_id(r)
-        if e in order:
-            return order[e]
-    except Exception:  # noqa: BLE001
-        pass
-    return r
+    from verity_vllm.engine.engine_driver import external_id
+    return order.get(external_id(r), r)
 
 
 def git_head() -> str | None:
@@ -112,11 +106,11 @@ def git_head() -> str | None:
         if p.exists():
             try:
                 return json.loads(p.read_text()).get("commit")
-            except Exception:  # noqa: BLE001
+            except (OSError, ValueError, AttributeError):   # unreadable, not JSON, or not an object: git's head instead
                 pass
     try:
         return subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, timeout=10).stdout.strip() or None
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError):
         return None
 
 
@@ -200,7 +194,7 @@ def nvidia_smi_used_mib() -> int | None:
         out = subprocess.run(["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"], capture_output=True, text=True,
                              timeout=20).stdout.strip().splitlines()
         return int(out[0]) if out else None
-    except Exception:  # noqa: BLE001
+    except (OSError, subprocess.SubprocessError, ValueError):
         return None
 
 

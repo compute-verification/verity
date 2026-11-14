@@ -58,8 +58,10 @@ def test_the_source_s_commit_is_the_export_s_when_the_directory_holds_one(tmp_pa
 @pytest.mark.parametrize("export, printed, head", [
     (None, "f" * 40 + "\n", "f" * 40),
     ("{not json", "f" * 40 + "\n", "f" * 40),
+    ("[1]", "f" * 40 + "\n", "f" * 40),
     (None, "", None),
     (None, FileNotFoundError("git"), None),
+    (None, subprocess.TimeoutExpired(["git"], 10), None),
 ])
 def test_else_it_is_git_s_head_and_none_where_git_names_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, export: str | None,
                                                               printed: str | Exception, head: str | None) -> None:
@@ -70,7 +72,8 @@ def test_else_it_is_git_s_head_and_none_where_git_names_none(tmp_path: Path, mon
     assert commit.git_head() == head and asked == [["git", "rev-parse", "HEAD"]]
 
 
-@pytest.mark.parametrize("printed, mib", [("1234\n5678\n", 1234), ("", None), ("[N/A]\n", None), (FileNotFoundError("nvidia-smi"), None)])
+@pytest.mark.parametrize("printed, mib", [("1234\n5678\n", 1234), ("", None), ("[N/A]\n", None), (FileNotFoundError("nvidia-smi"), None),
+                                          (subprocess.TimeoutExpired(["nvidia-smi"], 20), None)])
 def test_the_device_s_memory_in_use_is_the_first_device_s_and_none_where_it_cannot_be_read(
         monkeypatch: pytest.MonkeyPatch, printed: str | Exception, mib: int | None) -> None:
     asked = runs(monkeypatch, printed)
