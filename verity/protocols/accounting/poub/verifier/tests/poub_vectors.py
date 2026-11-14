@@ -1,5 +1,5 @@
-"""PoUB's pinned vectors (`vectors.json`): `python remote_bandwidth_vectors.py` rewrites them, and
-`test_remote_bandwidth_vectors.py` holds the code to them.
+"""PoUB's pinned vectors (`vectors.json`): `python poub_vectors.py` rewrites them, and
+`test_poub_vectors.py` holds the code to them.
 
 Payload blocks are generated, not stored: payload `j` is 64 pieces of 64 bytes, piece u the first 64 bytes of
 `SHA512("verity/remote-bandwidth/test-payload/v0\\0" ‖ u64be j ‖ u32be u)` with its top byte cleared, so every word is
@@ -36,7 +36,7 @@ import hashlib
 import json
 from pathlib import Path
 
-from remote_bandwidth_fakes import Entropy
+from poub_fakes import Entropy
 
 from verity.commitments.randomness import derive
 from verity.commitments.rowleaf import sha512_row_v2_digest

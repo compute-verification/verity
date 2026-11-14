@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Session
+public import Poub.Session
 public import Spot.OneStageZk
 
 /-!
@@ -26,13 +26,13 @@ row the verdict word under its salt. Else the window rejects `malformed` at (i, 
 `checkWindow` does.
 
 `Session.verifySpan` is `Session.verifyBy` with `checkSpan`. It is no `Session.Event`: `Session.step`, `Session.run` and
-the verifier's process don't reach it, and `remote-audit-difftest` (`span`, `span_held`, `span_public`) is its one
+the verifier's process don't reach it, and `poub-difftest` (`span`, `span_held`, `span_public`) is its one
 entry point.
 -/
 
 @[expose] public section
 
-namespace RemoteAudit.Span
+namespace Poub.Span
 
 open Lean (Json)
 open Flock (V)
@@ -208,18 +208,18 @@ def checkSpan (a : Auditor) (reg : Registration) (w : WindowRecord) (drawn : Arr
     | .error _ => return .reject .malformed none
   return spanHeld a.layout reg w drawn held
 
-end RemoteAudit.Span
+end Poub.Span
 
-namespace RemoteAudit.Session
+namespace Poub.Session
 
 /-- `verify` with window t decided from the span (`Span.checkSpan`) in place of openings. -/
 def verifySpan (s : State) (t : Int) (a : Span.Auditor) (sp : Span.Span) : Result × State :=
   verifyBy s t (Span.checkSpan a s.reg (s.record t.toNat) · sp)
 
 /-- `verify` with window t decided by `Span.spanHeld` on public files taken as accepted: the span's check past the
-proof system's audit, which `remote-audit-difftest`'s `span_held` holds on public files a test commits itself. -/
+proof system's audit, which `poub-difftest`'s `span_held` holds on public files a test commits itself. -/
 def verifyHeld (s : State) (t : Int) (l : Span.Layout) (held : Array (ByteArray × Array Span.Instance)) :
     Result × State :=
   verifyBy s t (Span.spanHeld l s.reg (s.record t.toNat) · held)
 
-end RemoteAudit.Session
+end Poub.Session

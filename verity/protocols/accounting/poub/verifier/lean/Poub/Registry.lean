@@ -1,6 +1,6 @@
 module
 
-public import RemoteAudit.Flight
+public import Poub.Flight
 
 /-!
 # The verifier's registrations: `audit.py`'s `Registry`
@@ -23,7 +23,7 @@ registration `Registration.register` refuses) is an error.
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-namespace RemoteAudit
+namespace Poub
 
 open Lean (Json)
 open Flock
@@ -184,4 +184,4 @@ def ofJson (j : Json) : Except String Registry := do
 
 end Registry
 
-end RemoteAudit
+end Poub

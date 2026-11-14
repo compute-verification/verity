@@ -13,14 +13,14 @@ whose S-th power is at most δ, certified in integers (`below`: the power by squ
 bisection finds (`root`), so B exceeds S·(1 − δ^(1/S)) by at most S·2^-`ROOT_BITS` and the power's rounding.
 
 W is the greedy over the windows by U_t/s_t falling (`order`, `fill`): each takes the largest share its cap and the
-budget left allow, the fractional knapsack's optimum. `Properties.RemoteAudit.PooledCovers` states that W is at least
+budget left allow, the fractional knapsack's optimum. `Properties.Poub.PooledCovers` states that W is at least
 `Accounting.Remote.Draw.pooled`, the bound `PooledSample` reads. `pooled.py` is held to this by the difftest
 (`tests/test_pooled.py`). Code: Lean core only.
 -/
 
 @[expose] public section
 
-namespace RemoteAudit.Pooled
+namespace Poub.Pooled
 
 /-- q's numerator's bits: q = m/2^64. -/
 def ROOT_BITS : Nat := 64
@@ -104,4 +104,4 @@ def pooled (ws : Array (Nat × Nat)) (δ : Rat) : Except String Bound := do
   let floors := ws.map (share · B)
   pure ⟨B, floors, fill ws (order ws) B, floors.foldl max 0⟩
 
-end RemoteAudit.Pooled
+end Poub.Pooled

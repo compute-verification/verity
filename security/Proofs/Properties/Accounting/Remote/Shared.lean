@@ -8,7 +8,7 @@ public import Proofs.Properties.Accounting.Remote.Order
 
 `Shared.close`'s three outcomes (`sclose_spec`): a refusal that leaves the state, a `few` or `coin` rejection after
 the group's windows are made final (`finalize`), or the draw, which gives each window of the group its share
-(`sampleStep`). `sampleIsSubset` reads the draw off it and `Properties.RemoteAudit.sampleIsSubset`, on the same `draws`.
+(`sampleStep`). `sampleIsSubset` reads the draw off it and `Properties.Poub.sampleIsSubset`, on the same `draws`.
 
 At `g ≤ 1`, `Shared.step g` is `Session.step` (`step_le_one`), and the session properties are today's. At `g ≥ 2`,
 each event keeps the invariant, the coins and every draw, and `DP`: a sampled window is below `W`, and so is sampled
@@ -22,20 +22,20 @@ its record (`sdraw_keeps`), and with `t` unsampled so is its draw's first window
 `OpeningsUnreadUntilSampled` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
 agree below `W` leave every window's openings coin free.
 
-`acceptSamplesOpenable` is `Properties.RemoteAudit.acceptSamplesOpenable`'s argument across a draw's windows: each sampled
+`acceptSamplesOpenable` is `Properties.Poub.acceptSamplesOpenable`'s argument across a draw's windows: each sampled
 `(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
 whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the draw is the receipts before window `k`
 plus its number there (`flatMap_split`, `sum_take_mid`).
 
-`*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`),
+`*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `Poub.Shared.run_one`),
 and a draw of one window is `verifyWindow`'s (`acceptSamplesOpenable_one`).
 -/
 
 @[expose] public section
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-namespace Properties.RemoteAudit.Shared
+namespace Properties.Poub.Shared
 
 /-- `Shared.close`'s group: window `t`'s draw's windows up to `t`. -/
 def grp (g t : Nat) : List Nat := (List.range (t + 1 - t / g * g)).map (t / g * g + ·)
@@ -198,7 +198,7 @@ theorem sampleIsSubset : SampleIsSubset := by
   · cases hr
   · cases hr
   cases hr
-  obtain ⟨L, us, hs, h1, h2, h3, h4⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hdraws
+  obtain ⟨L, us, hs, h1, h2, h3, h4⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hdraws
   refine ⟨L, us, hs, h1, h2, h3, h4, fun u hu => ?_⟩
   obtain ⟨j, hj, rfl⟩ := List.mem_map.1 hu
   rw [List.mem_range] at hj
@@ -285,7 +285,7 @@ theorem shareOf_mem (drawn : Array (Nat × Nat)) (base n k : Nat) (hk : k < draw
 
 theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   intro reg appends c coin samples ws drawn hd
-  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hd
+  obtain ⟨L, us, hs, hsz, -, hrange, -⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
   refine ⟨L, us, hs, fun openings hacc v hv => ?_⟩
   obtain ⟨j, hj, rfl⟩ := Array.mem_iff_getElem.1 hv
   have hjd : j < drawn.size := by omega
@@ -693,9 +693,9 @@ theorem openingsUnreadUntilSampled : OpeningsUnreadUntilSampled := by
   rcases Nat.lt_or_ge g 2 with hg | hg
   · rw [run_le_one (by omega)] at hrun ⊢
     rcases (show g = 0 ∨ g = 1 by omega) with rfl | rfl
-    · exact Properties.RemoteAudit.openingsUnreadUntilSampled params reg coins appendCoins notBeforeNs events rs s
+    · exact Properties.Poub.openingsUnreadUntilSampled params reg coins appendCoins notBeforeNs events rs s
         hrun 0 coins' hW (by simpa using hnd) (fun j hj => hag j (by omega))
-    · exact Properties.RemoteAudit.openingsUnreadUntilSampled params reg coins appendCoins notBeforeNs events rs s
+    · exact Properties.Poub.openingsUnreadUntilSampled params reg coins appendCoins notBeforeNs events rs s
         hrun c coins' hW (by simpa using hnd) hag
   · have hP := srun_inv g (fun x => Inv x ∧ x.params = params ∧ DP g params.windows x.windows)
       (fun _ _ _ _ hx₀ he' => by
@@ -824,7 +824,7 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
   intro g params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂ t d hm hd
   rcases Nat.lt_or_ge g 2 with hg | hg
   · rw [run_le_one (by omega)] at h₁ h₂
-    exact Properties.RemoteAudit.recordKeptAfterSample params reg coins appendCoins notBeforeNs events events' rs rs'
+    exact Properties.Poub.recordKeptAfterSample params reg coins appendCoins notBeforeNs events events' rs rs'
       s s' h₁ h₂ t d hm hd
   have hSF0 : SF g (State.init params reg coins appendCoins notBeforeNs) :=
     ⟨finv_init params reg coins appendCoins notBeforeNs hm, fun u h => by simp [dr, State.init] at h,
@@ -893,7 +893,7 @@ theorem sampleLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
 theorem releaseOrder_one (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Event) :
     ReleaseOrder 1 params reg appendCoins notBeforeNs D ↔
-      Properties.RemoteAudit.ReleaseOrder params reg appendCoins notBeforeNs D := by
+      Properties.Poub.ReleaseOrder params reg appendCoins notBeforeNs D := by
   constructor
   · intro h coins coins' t k rs s hag hrun hnd
     exact h coins coins' t k rs s hag hrun (by rw [Nat.mul_one]; exact hnd)
@@ -904,7 +904,7 @@ theorem releaseOrder_one (params : Params) (reg : Registration) (appendCoins : A
 theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Event) :
     LiveUnder 1 params reg appendCoins notBeforeNs D ↔
-      Properties.RemoteAudit.LiveUnder params reg appendCoins notBeforeNs D := by
+      Properties.Poub.LiveUnder params reg appendCoins notBeforeNs D := by
   constructor
   · intro h coins coins' t k k' rs rs' s s' hag h₁ h₂ hd hd'
     exact h coins coins' t k k' rs rs' s s' hag h₁ h₂ t (Nat.div_one t) hd hd'
@@ -914,11 +914,11 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
     exact h coins coins' t k k' rs rs' s s' hag h₁ h₂ hd hd'
 
 /-- A draw of one window is `verifyWindow`'s: its share is the whole draw, and its receipts are numbered from 0. -/
-theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.RemoteAudit.AcceptSamplesOpenable := by
+theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.Poub.AcceptSamplesOpenable := by
   intro reg appends w coin samples openings hv
   obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept hv
   have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
-  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hd
+  obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.Poub.sampleIsSubset _ _ _ _ _ _ hd
   have hsh : shareOf drawn 0 w.passes.size = drawn :=
     shareOf_all drawn _ fun k hk => by simpa using (hrange k hk).1
   obtain ⟨L, us, hs, hus⟩ := h reg appends w.index coin samples [w] drawn (by rw [hl]; exact hd)
@@ -1113,7 +1113,7 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
   rcases Nat.lt_or_ge g 2 with hg1 | hg2
   · obtain rfl : g = 1 := by omega
     exact (liveUnder_one params reg appendCoins notBeforeNs D).2
-      (Properties.RemoteAudit.liveUnder params reg appendCoins notBeforeNs D hW hm
+      (Properties.Poub.liveUnder params reg appendCoins notBeforeNs D hW hm
         ((releaseOrder_one params reg appendCoins notBeforeNs D).1 hD))
   intro coins coins' c k₁ k₂ rs₁ rs₂ s₁ s₂ hag h₁ h₂ t htc hd₁ hd₂
   subst htc
@@ -1221,4 +1221,4 @@ theorem liveUnder (g : Nat) (params : Params) (reg : Registration) (appendCoins 
   rw [o₂ u, o₁ u, hrB, haB, hrA, haA]
   exact Iff.rfl
 
-end Properties.RemoteAudit.Shared
+end Properties.Poub.Shared

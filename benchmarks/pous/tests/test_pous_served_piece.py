@@ -710,7 +710,7 @@ def _built(package: Path, exe: str) -> Path:
 
 @pytest.fixture(scope="module")
 def case_exe() -> Path:
-    """`remote-audit-p2-protocol`, built in PoUB's package."""
+    """`poub-p2-protocol`, built in PoUB's package."""
     return _built(p2_lean.PACKAGE, p2_case.EXE)
 
 
@@ -808,7 +808,7 @@ def registered(served, monkeypatch) -> Served:
 
 
 #: the PoUB-P2 Lean `_bandwidth_judge` stands in for
-BW_JUDGE = "remote-audit-p2-protocol-stand-in"
+BW_JUDGE = "poub-p2-protocol-stand-in"
 
 
 def _bandwidth_judge(monkeypatch) -> str:
@@ -855,7 +855,7 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
     PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
-    the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `remote-audit-p2-protocol` refuses
+    the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `poub-p2-protocol` refuses
     it, a toy party's session, naming each value off the auditor's (`p2_parties.SESSION`). The public answer, which the composed run reads as the bandwidth
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
     a P2 registration names."""
@@ -962,7 +962,7 @@ def _bandwidth_files(s: Served) -> tuple[Path, dict, dict]:
 @pytest.mark.slow
 def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_it(registered, tmp_path, monkeypatch,
                                                                                   case_exe):
-    """With ``--bw-case-exe``, `remote-audit-p2-protocol` answers the case of the session over the held store, and its
+    """With ``--bw-case-exe``, `poub-p2-protocol` answers the case of the session over the held store, and its
     answer is the one written, privately and under the hiding commitment publicly, whatever the session's own party
     said of it: the summary names the program and this host under ``decided_by``, with the Lean's seconds, where a run
     without it names the Python. PoUS's answer is its own. Run in the piece's two parts: both sessions leave only what
@@ -992,7 +992,7 @@ def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_i
 
 @pytest.mark.slow
 def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(registered, tmp_path, monkeypatch):
-    """A `remote-audit-p2-protocol` that fails on the case (`p2_case.serve` stood in for): the session's own answer is
+    """A `poub-p2-protocol` that fails on the case (`p2_case.serve` stood in for): the session's own answer is
     not taken in its place. The bandwidth answer is undecided naming the failure, no case is written, the summary names
     the Python, whose answer this is, and PoUS's answer stands."""
     exe = tmp_path / p2_case.EXE
@@ -1012,7 +1012,7 @@ def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(re
 
 @pytest.mark.slow
 def test_a_bandwidth_lean_that_refuses_the_case_undecoded_is_the_answer(registered, tmp_path, monkeypatch):
-    """A `remote-audit-p2-protocol` that decodes no commitment of the case refuses it with none, as `Protocol.answer`
+    """A `poub-p2-protocol` that decodes no commitment of the case refuses it with none, as `Protocol.answer`
     does (`p2_case.serve` stood in for): that refusal is the bandwidth answer, with no commitment to hide, and the
     summary names the Lean."""
     refusal = {"commitment": None, "profile": None, "protocol": p2_case.PROTOCOL, "public": None,
