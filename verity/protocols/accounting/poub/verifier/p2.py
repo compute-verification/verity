@@ -25,7 +25,7 @@ y_(i,p)       SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ 
 ~~~
 
 Everything else is the audit's (`audit.py`): seeds, plans (over units), leaves of sixteen receipts, their trees,
-windows, deadlines, coins and draws.  A unit is the receipt's vector so that it is whole sectors: block j starts at
+windows, deadlines, coins and samples.  A unit is the receipt's vector so that it is whole sectors: block j starts at
 byte 8j mod 32 of the store, so a receipt of one block would leave a sector half read, and the sketch's bound on a
 guessed receipt (`SketchBoundRun`, over sectors) would lose a factor 2^32 a receipt.
 
@@ -54,7 +54,11 @@ from verity.commitments.randomness import frame
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.params import SALT_BITS
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
-from verity.protocols.accounting.pous.verifier.verifier import MerkleTree, VerifierKey, leaf_hash
+from verity.protocols.accounting.pous.verifier.verifier import (
+    MerkleTree,
+    VerifierKey,
+    leaf_hash,
+)
 
 from . import audit, receipts
 from .codec import P2_LAYOUT, P2Codec
@@ -270,3 +274,7 @@ def check(registration: Registration, seed: bytes, plan: Plan, root: bytes, i: i
     if (sketcher or Sketcher(seed, registration.rows))(g, b"".join(o.blocks)) != y:
         return "receipt"
     return None
+
+
+__all__ = ["BLOCK_BYTES", "Opening", "Prover", "Registration", "Sketcher", "Store", "UNIT_BLOCKS", "UNIT_BYTES",
+           "codec_of", "register"]

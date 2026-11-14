@@ -78,6 +78,103 @@ def _records(path: str) -> list[str]:
         return [ln for ln in f if ln.startswith("{")]
 
 
+def _point_row(sd: str, settings: str, key: tuple, by_arm: dict, gates: list, wrapped: set) -> dict:
+    """The row of one point `key` = (TP, B, L) of the set in the directory `sd`. `by_arm` holds the point's records:
+    arm -> its repeats, each the list of the ranks' records. `gates` is the set's pf_gate verdicts and `wrapped` its
+    points whose KV cache wrapped."""
+    def t(arm):
+        reps = by_arm.get(arm)
+        if not reps:
+            return None
+        meds = []
+        for ranks in reps:
+            n = min(len(x["reps"]) for x in ranks)
+            meds.append(statistics.median(max(x["reps"][j][0] for x in ranks) for j in range(n)))
+        return statistics.median(meds)
+
+    def first(arm, k):
+        reps = by_arm.get(arm)
+        if not reps:
+            return None
+        vals = [r[k] for ranks in reps for r in ranks if k in r]
+        return statistics.median(vals) if vals else None
+
+    def fold_of(arm):
+        nc, xin, S = first(arm, "fold_nc"), first(arm, "fold_xin"), first(arm, "fold_s")
+        nc = int(nc) if nc is not None else None
+        return nc, bool(xin), int(S) if S is not None else None
+
+    base, nocomm, comm, phase, commphase = (t(a) for a in ("base", "nocomm", "comm", "phase", "commphase"))
+    row = {"set": os.path.basename(sd), "settings": settings, "tp": key[0], "B": key[1], "L": key[2],
+           "base_ms": base, "nocomm_ms": nocomm, "comm_ms": comm, "phase_ms": phase, "commphase_ms": commphase,
+           "gates_ok": all(gates) if gates else None, "kv_wrapped": key in wrapped}
+    if base:
+        mhz = first("base", "mhz")
+        macs = first("base", "served_macs")
+        row["served"] = macs / (base * 1e-3) / (1024 * 188 * mhz * 1e6)
+        row["idle"] = 1 - row["served"]
+        if nocomm:
+            row["comm_exposed"] = (base - nocomm) / base
+            row["idle_off_comm"] = row["idle"] - row["comm_exposed"]
+        if phase:
+            row["slowdown"] = phase / base
+            fm = first("phase", "fill_macs_rep")
+            pm = first("phase", "mhz")
+            row["fill"] = fm / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
+            nc, xin, Sf = fold_of("phase")
+            frac = proved_fraction(nc, xin, Sf)
+            row["fold"], row["fill_k"] = fold_label(nc, xin), row["fill"] * frac
+            p0 = by_arm["phase"][0][0]
+            unit = "mmas" if "fill_mmas_rep" in p0 else "steps"
+            if p0.get(f"fill_{unit}_full_rep") is not None:
+                row["fill_finished"] = row["fill"] * first("phase", f"fill_{unit}_full_rep") / first("phase", f"fill_{unit}_rep")
+            row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
+            cs = S.CERTIFIED["serving"]["fraction"]
+            row["coverage_base"] = cs * row["served"]
+            row["coverage"] = cs * row["served_phase"] + frac * row["fill"]
+            pr = [r for ranks in by_arm["phase"] for r in ranks]
+            row["rec_bad"] = sum(r.get("rec_bad", 0) for r in pr)
+            row["rec_checked"] = sum(r.get("rec_checked", 0) for r in pr)
+            row["whole_checked"] = sum(r.get("whole_checked", 0) for r in pr)
+            row["warps_checked"] = sum(r.get("warps_checked", 0) for r in pr)
+            row["shape_bad"] = sum(r.get("shape_bad", 0) for r in pr)
+            row["cut_warps"] = statistics.median(r["cut_warps"] for r in pr) if "cut_warps" in p0 else None
+    if comm and commphase:
+        row["comm_slowdown"] = commphase / comm
+        fm = first("commphase", "fill_macs_rep")
+        row["fill_in_comm"] = fm / (commphase * 1e-3) / (1024 * 188 * first("commphase", "mhz") * 1e6)
+    # the deferred pass: defer (deferred work in the gaps, overflow drained after the step) and dalone (the
+    # whole step's deferred work drained with no gaps)
+    defer, dalone = t("defer"), t("dalone")
+    row["defer_ms"], row["dalone_ms"] = defer, dalone
+    if defer and base:
+        dm = first("defer", "defer_demand_macs")
+        gap = first("defer", "defer_gap_macs_rep")
+        drain = first("defer", "defer_drain_macs_rep")
+        pm = first("defer", "mhz")
+        row["defer_gap_share"] = gap / dm if dm else None      # the step's deferred work run beside the collectives
+        row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained after the step
+        # the true step-time cost is defer_slowdown; a gap share of 1 with a slowdown > 1 means it ran in the gap
+        # windows but did not hide (the DRAM-bound load contends with the step)
+        row["defer_slowdown"] = defer / base
+        fm = first("defer", "fill_macs_rep")
+        row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
+        nc, xin, Sf = fold_of("defer")  # the filler after the deferred quota uses the same fold
+        row["defer_fold"] = fold_label(nc, xin)
+        row["defer_fill_k"] = row["defer_fill"] * proved_fraction(nc, xin, Sf)  # the filler's remaining proved fill
+        store = first("defer", "defer_store_bytes")
+        row["defer_store_gib"] = store / 2**30 if store else None  # per-shard stored operands for the sub-round
+        dr = [r for ranks in by_arm["defer"] for r in ranks]
+        row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
+        row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
+        # the remaining fill's counters against its records (kf_shape); a record without the field wasn't checked
+        row["defer_fill_bad"] = sum(r.get("fill_shape_bad", 1) for r in dr)
+        row["dcap"], row["dSd"], row["dT"] = first("defer", "dcap"), first("defer", "dSd"), first("defer", "dT")
+    if dalone and base:
+        row["dalone_cost"] = dalone / base  # the deferred pass's decode cost a step without the gaps
+    return row
+
+
 def rows(out_dir: str) -> Iterator[dict]:
     for sd in sorted(glob.glob(os.path.join(out_dir, "set*"))):
         settings = _read(os.path.join(sd, "settings.txt")).strip()
@@ -102,97 +199,7 @@ def rows(out_dir: str) -> Iterator[dict]:
                     lst.append([])
                 lst[i].append(r)
         for key, by_arm in sorted(arms.items()):
-            def t(arm):
-                reps = by_arm.get(arm)
-                if not reps:
-                    return None
-                meds = []
-                for ranks in reps:
-                    n = min(len(x["reps"]) for x in ranks)
-                    meds.append(statistics.median(max(x["reps"][j][0] for x in ranks) for j in range(n)))
-                return statistics.median(meds)
-
-            def first(arm, k):
-                reps = by_arm.get(arm)
-                if not reps:
-                    return None
-                vals = [r[k] for ranks in reps for r in ranks if k in r]
-                return statistics.median(vals) if vals else None
-
-            def fold_of(arm):
-                nc, xin, S = first(arm, "fold_nc"), first(arm, "fold_xin"), first(arm, "fold_s")
-                nc = int(nc) if nc is not None else None
-                return nc, bool(xin), int(S) if S is not None else None
-
-            base, nocomm, comm, phase, commphase = (t(a) for a in ("base", "nocomm", "comm", "phase", "commphase"))
-            row = {"set": os.path.basename(sd), "settings": settings, "tp": key[0], "B": key[1], "L": key[2],
-                   "base_ms": base, "nocomm_ms": nocomm, "comm_ms": comm, "phase_ms": phase, "commphase_ms": commphase,
-                   "gates_ok": all(gates) if gates else None, "kv_wrapped": key in wrapped}
-            if base:
-                mhz = first("base", "mhz")
-                macs = first("base", "served_macs")
-                row["served"] = macs / (base * 1e-3) / (1024 * 188 * mhz * 1e6)
-                row["idle"] = 1 - row["served"]
-                if nocomm:
-                    row["comm_exposed"] = (base - nocomm) / base
-                    row["idle_off_comm"] = row["idle"] - row["comm_exposed"]
-                if phase:
-                    row["slowdown"] = phase / base
-                    fm = first("phase", "fill_macs_rep")
-                    pm = first("phase", "mhz")
-                    row["fill"] = fm / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
-                    nc, xin, Sf = fold_of("phase")
-                    frac = proved_fraction(nc, xin, Sf)
-                    row["fold"], row["fill_k"] = fold_label(nc, xin), row["fill"] * frac
-                    p0 = by_arm["phase"][0][0]
-                    unit = "mmas" if "fill_mmas_rep" in p0 else "steps"
-                    if p0.get(f"fill_{unit}_full_rep") is not None:
-                        row["fill_finished"] = row["fill"] * first("phase", f"fill_{unit}_full_rep") / first("phase", f"fill_{unit}_rep")
-                    row["served_phase"] = macs / (phase * 1e-3) / (1024 * 188 * pm * 1e6)
-                    cs = S.CERTIFIED["serving"]["fraction"]
-                    row["coverage_base"] = cs * row["served"]
-                    row["coverage"] = cs * row["served_phase"] + frac * row["fill"]
-                    pr = [r for ranks in by_arm["phase"] for r in ranks]
-                    row["rec_bad"] = sum(r.get("rec_bad", 0) for r in pr)
-                    row["rec_checked"] = sum(r.get("rec_checked", 0) for r in pr)
-                    row["whole_checked"] = sum(r.get("whole_checked", 0) for r in pr)
-                    row["warps_checked"] = sum(r.get("warps_checked", 0) for r in pr)
-                    row["shape_bad"] = sum(r.get("shape_bad", 0) for r in pr)
-                    row["cut_warps"] = statistics.median(r["cut_warps"] for r in pr) if "cut_warps" in p0 else None
-            if comm and commphase:
-                row["comm_slowdown"] = commphase / comm
-                fm = first("commphase", "fill_macs_rep")
-                row["fill_in_comm"] = fm / (commphase * 1e-3) / (1024 * 188 * first("commphase", "mhz") * 1e6)
-            # the deferred pass: defer (deferred work in the gaps, overflow drained after the step) and dalone (the
-            # whole step's deferred work drained with no gaps)
-            defer, dalone = t("defer"), t("dalone")
-            row["defer_ms"], row["dalone_ms"] = defer, dalone
-            if defer and base:
-                dm = first("defer", "defer_demand_macs")
-                gap = first("defer", "defer_gap_macs_rep")
-                drain = first("defer", "defer_drain_macs_rep")
-                pm = first("defer", "mhz")
-                row["defer_gap_share"] = gap / dm if dm else None      # the step's deferred work run beside the collectives
-                row["defer_overflow_share"] = drain / dm if dm else None  # the overflow, drained after the step
-                # the true step-time cost is defer_slowdown; a gap share of 1 with a slowdown > 1 means it ran in the gap
-                # windows but did not hide (the DRAM-bound load contends with the step)
-                row["defer_slowdown"] = defer / base
-                fm = first("defer", "fill_macs_rep")
-                row["defer_fill"] = fm / (defer * 1e-3) / (1024 * 188 * pm * 1e6)
-                nc, xin, Sf = fold_of("defer")  # the filler after the deferred quota uses the same fold
-                row["defer_fold"] = fold_label(nc, xin)
-                row["defer_fill_k"] = row["defer_fill"] * proved_fraction(nc, xin, Sf)  # the filler's remaining proved fill
-                store = first("defer", "defer_store_bytes")
-                row["defer_store_gib"] = store / 2**30 if store else None  # per-shard stored operands for the sub-round
-                dr = [r for ranks in by_arm["defer"] for r in ranks]
-                row["dp_whole_bad"] = sum(r.get("dp_whole_bad", 0) for r in dr) + sum(r.get("dp_whole_control_equal", 0) for r in dr)
-                row["dp_whole_checked"] = sum(r.get("dp_whole_checked", 0) for r in dr)
-                # the remaining fill's counters against its records (kf_shape); a record without the field wasn't checked
-                row["defer_fill_bad"] = sum(r.get("fill_shape_bad", 1) for r in dr)
-                row["dcap"], row["dSd"], row["dT"] = first("defer", "dcap"), first("defer", "dSd"), first("defer", "dT")
-            if dalone and base:
-                row["dalone_cost"] = dalone / base  # the deferred pass's decode cost a step without the gaps
-            yield row
+            yield _point_row(sd, settings, key, by_arm, gates, wrapped)
 
 
 def _read(p: str) -> str:
