@@ -6529,6 +6529,7 @@ def main(argv: list[str]) -> int:
         if errs := move_errors(moved):
             ap.error(f"{a.moved}: " + "; ".join(errs))
     ARTIFACTS = a.artifacts.resolve() if a.artifacts else None
+    PROGRAMS = a.program_cache.resolve() if a.program_cache else None
     TREE = a.tree
     DEV_CACHE = a.dev_cache
     lifts = None
@@ -6555,7 +6556,6 @@ def main(argv: list[str]) -> int:
         if d is not None and (over := build_roots_over(d, pkgs)):
             ap.error(f"{flag} {d} overlaps {', '.join(map(str, over))}, which a build writes, so a build could forge its "
                      f"entries: put the cache outside every audited package's .lake and its path dependencies'")
-    PROGRAMS = a.program_cache.resolve() if a.program_cache else None
     if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
