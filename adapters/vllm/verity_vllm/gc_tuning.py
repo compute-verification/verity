@@ -5,15 +5,11 @@ whichever process runs it (`tuned`: a rank's Program load, `pipeline.tp.rank_rep
 Content-neutral by construction: CPython's cyclic collector only frees objects that are already unreachable; no
 artifact byte, digest, verdict or population depends on WHEN it runs. What depends on it is wall time. With the
 interpreter defaults (700, 10, 10) a full (gen-2) collection is triggered every time the long-lived heap has grown
-25 %, and each one walks the whole resident graph -- the fold at llama B8 256/32 ran 24 gen-2 + 3,073 gen-1
-collections (fold 35.5 -> 23.5 s wall with (100000, 50, 1000), peak RSS +3.5 %); at B8 1024/128 the
-resident fold graph is ~27 GB and each full collection is tens of seconds; the B8 1024/128 envelope's derive takes 203 s
-at the defaults and 173 s tuned, to the same Program. gc.disable() is NOT the choice: the replay's cyclic garbage then
-stays resident (+38 % RSS at 256/32).
+25 %, and each one walks the whole resident graph, which in a fold or a derive is the graph the process is there to
+build. TUNED spaces the collections out. gc.disable() is NOT the choice: the replay's cyclic garbage then stays resident.
 
 At exit the heap is frozen (`gc.freeze`, an atexit hook) so the interpreter's shutdown collections skip it: they walk the whole
-resident graph to free memory the process is about to return anyway. The B8 1024/128 envelope's derive ended 18.7 s after its
-`main` returned, 1.3 s frozen (the same Program); the workload compose's process ended 30.7 s after its last write. Frozen
+resident graph to free memory the process is about to return anyway. Frozen
 objects are still freed by reference count as the modules are torn down; a cycle the shutdown collection would have freed is
 left to the OS instead, so every output of these processes is closed before `main` returns (each is written in a `with` or a
 one-shot `json.dump(..., open(...))`).

@@ -264,7 +264,7 @@ def _decision(reserved: int, limit: int | None, live: dict[str, int], margin_byt
     """The refusal names what does not fit: the live terms at the peak, largest first, and the shortfall in bytes.
 
     A stage whose reservation carries a lower-bound term never reads as a plain admit -- the model knows it
-    under-fits that object (rows #57 and #60 were killed at 1.4-1.6x the prediction); admit is None with verdict LOWER_BOUND naming the
+    under-fits that object; admit is None with verdict LOWER_BOUND naming the
     terms and the observation, so the runner decides by name.  Over the limit it is still REFUSE (a lower bound above the limit is a refusal).
     """
     if limit is None:
