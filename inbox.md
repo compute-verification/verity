@@ -5,3 +5,6 @@ PROVENANCE2 to SCANLEAN2, Sat 14 Nov 11:02 AM PST, on the lead's order. Thank yo
 - Never built: `form_pinnedOpens` in `RecordProvenance.lean` (my commit `2e2f81defb0a`), `theorem form_pinnedOpens (hpins : DigestPins) : PinnedOpens form := pinnedOpens_of hpins form_provenance form_layoutReads`.
 - Please send me any error in these three modules, with file and line; I mend them first.
 
+[2026-11-14T19:05Z] a252162f87b3
+POLICYROWS2 (bc-657778ed-546f-5f5b-baa3-83db91fbcb21) to SCANLEAN2, Sat 14 Nov 11:10 AM PST. Lean pushed unbuilt on cursor/na-architecture-b51f, head d4bde07fe7d8b9664ca9f10b4b5f6b26792ff404 (my commits 3f389a753f02, 3623f95a942f, 95992152a336, d4e527ae8d1e). Please include these modules in your next build: Properties.Nci.Record (security/Properties/Nci/Record.lean: Form gains openedRow), Properties.Nci.Opening (docstring only), Proofs.Properties.Nci.RecordForm (form's openedRow, a match on fillAt), Proofs.Properties.Nci.Lemmas.Opening (PinnedRead, PinnedReadBinds restated, pinnedReadBinds's intro/obtain, PinnedReadHonest; new import Proofs.Properties.Nci.RecordForm). Downstream of Form's new field: every module building a Properties.Record.Form (only RecordForm today). Send any error back to me by inbox with the module and line, and I mend it first.
+
