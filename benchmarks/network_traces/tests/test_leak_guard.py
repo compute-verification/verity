@@ -389,14 +389,14 @@ def test_a_list_of_consecutive_integers_is_no_piece_of_the_certifiers_usage_reco
     """The certifier's run record, a witness file written indented, holds its processes' CPUs. Written as a list of
     integers they are the same bytes as any indented list of consecutive integers at their depth, so a verifier
     outcome's proved units were a find though nothing of the witness is in them. The usage record holds them as one
-    string of ranges (`active_replay._usage`), and under the declared data as shipped the outcome is no find and nothing
+    string of ranges (`runner_parts._usage`), and under the declared data as shipped the outcome is no find and nothing
     is excused. The CPUs written as a list are a find again: the guard is as it was."""
-    import active_replay as AR
+    import runner_parts as rp
 
     record = _gate(tmp_path / "G" / "g1") / "witness" / "warden.json"
-    usage = AR._usage()
-    assert isinstance(usage["cpus"], str) and AR._cpu_list(usage["cpus"]) == os.sched_getaffinity(0)
-    ranged = {k: {**usage, "cpus": AR.cpu_ranges(range(32))} for k in ("usage", "publisher_usage")}
+    usage = rp._usage()
+    assert isinstance(usage["cpus"], str) and usage["cpus"] == rp.cpu_ranges(os.sched_getaffinity(0))
+    ranged = {k: {**usage, "cpus": rp.cpu_ranges(range(32))} for k in ("usage", "publisher_usage")}
     record.write_text(json.dumps(ranged, indent=1))
     run = tmp_path / "run"
     outcome = {"audit": {"proved_units": list(range(32)), "verdict": "accept"}}

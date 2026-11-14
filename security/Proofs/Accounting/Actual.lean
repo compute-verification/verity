@@ -12,6 +12,7 @@ public import Proofs.Accounting.Actual.Bridges
 public import Proofs.Accounting.Actual.Parts
 public import Proofs.Accounting.Actual.RegisteredSite
 public import Proofs.Accounting.Actual.RegisteredWitness
+public import Proofs.Accounting.Actual.LinkEnds
 public import Proofs.Accounting.Actual.Transducer
 public import Proofs.Accounting.Defs.Actual.Source
 public import Proofs.Accounting.Actual.Sampler
@@ -72,6 +73,8 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   one-gate strategy at the certifier's place is placed at the places a link may end at and has each trusted device's
   record within one bit. `LeakPartsRegistered_nontrivial`: at the same Site a strategy whose one gate is at the
   outside, wider than the links' whole capacity a tick, does more there than the limit.
+* `Actual/LinkEnds.lean`: `B4UnderId`: `B4` on a table whose every leaf is its own link end is `B4Under` there, and
+  `B4` gives `B4Via` at a Site whose every place is its own link end (`b4Via_of_ownLinkEnds`).
 * `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values

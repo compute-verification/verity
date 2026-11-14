@@ -15,9 +15,10 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier.active import VirtualClock
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.verifier.certificate import DeviceState, StartRefused
 from verity.protocols.accounting.certifier.verifier.pacer import ClockRefused
+from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 
 from test_warden_serve import PARAMS, SESSION
 
@@ -116,8 +117,8 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
 
     for out, session, base in ((tmp_path / "first", SESSION, 0), (tmp_path / "third", THIRD, SPAN_MS)):
         dep = json.loads((out / "deployment.json").read_text())
-        start = ws.start_from_json(dep["start"])
-        assert start.verify(ws.cs.read_public(dep["key"]), session, ws.LINK, PARAMS.digest)
+        start = RC.start_from_json(dep["start"])
+        assert start.verify(ws.RF.read_public(dep["key"]), session, ws.LINK, PARAMS.digest)
         assert (start.base_ms, start.ordinal) == (base, {0: 0, SPAN_MS: 1}[base])
         assert dep["origin_raw"] == {0: 101.0, SPAN_MS: 8.0}[base] and dep["origin_unix"] == 1.0
         (out / "client.json").write_text(json.dumps({"connections": []}))
@@ -129,7 +130,7 @@ def test_a_run_holds_its_keys_device_state_and_a_session_starts_where_the_last_o
 def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one_certified(tmp_path):
     key = tmp_path / "key"
     ws.make_key(key, 4)
-    signer = ws.cs.signer(key)
+    signer = ws.ck.signer(key)
     try:
         issuer = ws.Issuer(signer, SESSION)
         start = ws.start_json(ws.certify_start(issuer, 5, 2, PARAMS))
@@ -140,10 +141,10 @@ def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one
     def problems(start_doc, session: bytes = SESSION, params=PARAMS) -> list[str]:
         dep = ws.deployment_record(params, public, session, origin_unix=0.0, windows=1, slack=0.025, start=start_doc,
                                    origin_raw=0.0)
-        return ws.check_start(dep, public, session, params)[1]
+        return RC.check_start(dep, public, session, params)[1]
 
     assert problems(start) == []
-    assert ws.check_start({}, public, SESSION, PARAMS) == \
+    assert RC.check_start({}, public, SESSION, PARAMS) == \
         ({"base_ms": None, "certified": False}, ["the session's start isn't certified (no start's certificate)"])
     assert problems(None) == ["the session's start isn't certified (no start's certificate)"]
     assert problems(start | {"base_ms": 6}) == ["the session's start isn't certified (opening)"]
@@ -158,7 +159,7 @@ def test_the_check_refuses_a_deployment_whose_start_is_missing_or_is_not_the_one
 
 def test_a_key_made_before_its_device_state_and_a_host_without_the_raw_clock_start_nothing(tmp_path):
     key = tmp_path / "key"
-    ws.cs.load_key(key, 4)
+    ws.ck.load_key(key, 4)
     clock = StepClock()
     with pytest.raises(StartRefused, match="missing"):
         asyncio.run(_serve(tmp_path / "run", key, SESSION, clock))
