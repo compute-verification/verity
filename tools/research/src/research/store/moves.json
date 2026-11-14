@@ -3072,6 +3072,11 @@
       "paths": {
         "adapters/vllm/verity_vllm/program/mla_capture.py": "adapters/vllm/tests/program/mla_inputs.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pous/verifier/continuous.py": "verity/protocols/accounting/pous/device/continuous.py"
+      }
     }
   ]
 }

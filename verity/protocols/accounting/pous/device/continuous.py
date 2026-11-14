@@ -43,14 +43,14 @@ from dataclasses import dataclass
 
 from verity.commitments.randomness import Key
 
-from .audit import (
+from verity.protocols.accounting.pous.verifier.audit import (
     DEADLINE_NS,
     RTT_ALLOWANCE_NS,
     AuditResult,
     ChallengeReply,
     UnsignedRounds,
 )
-from .verifier import VerifierKey
+from verity.protocols.accounting.pous.verifier.verifier import VerifierKey
 
 
 @dataclass(frozen=True, slots=True)
