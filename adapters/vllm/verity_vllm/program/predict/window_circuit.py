@@ -1,4 +1,4 @@
-"""I2's served window as one Circuit (`verity.commitments.windows.interface`): the window *class's* circuit, every
+"""I2's served window as one Circuit (`verity.commitments.periods.interface`): the window *class's* circuit, every
 unit's output a committed row and every input row wired or registered.
 
 A window class (`WindowClass`, N1's scan class) has a fixed number of slots a network timestep: ``lanes`` slots at each
@@ -137,7 +137,7 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.registry import io_shell as IO
 
 from verity_vllm.program.frontend.stop_rule import stop_ids as of_config

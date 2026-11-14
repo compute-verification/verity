@@ -46,7 +46,7 @@ def _loaded() -> dict[str, Any]:
 
 def test_importing_the_property_loads_no_definition_and_no_evaluator():
     """A Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
-    (`verity.commitments.windows.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
+    (`verity.commitments.periods.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
     at the module's head they are in the table from the import on, in a process that has checked no word.  The import runs in a
     process of its own: this one has loaded the Definitions for its other tests."""
     assert _loaded()["at_import"] == []

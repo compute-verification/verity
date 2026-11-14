@@ -53,7 +53,7 @@ import numpy as np
 
 # The reference evaluator and the Definitions (`verity_vllm.definitions.registry`, `numerics.derived_rows`) are imported in the five
 # functions that read them, never here: a Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its
-# module loads, and a reader of the table by id (`verity.commitments.windows.interface.resolve`) answers for it from then
+# module loads, and a reader of the table by id (`verity.commitments.periods.interface.resolve`) answers for it from then
 # on.  Importing this module loads neither the evaluator nor a module of `verity_vllm.definitions`.
 from tests.commit.hidden_stream import ROW_GUARD_FIELD, SRC_BITS, StreamLayout
 from verity_vllm.acquire.sources.hidden_source import (

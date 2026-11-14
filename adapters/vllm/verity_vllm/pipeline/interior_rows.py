@@ -58,7 +58,7 @@ from verity_vllm.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity_vllm.definitions.registry import greedy_stages as GS
 from verity_vllm.definitions.registry.dead_free import CHUNK
-from verity.commitments.windows import links as LK, rows as CS
+from verity.commitments.periods import links as LK, rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, ProgramIndex
 from verity_vllm.check.replay.request_replay import Replay
 from verity_vllm.engine.sampler_capture import CAPTURE

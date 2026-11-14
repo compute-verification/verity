@@ -42,7 +42,7 @@ from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk_mask as M
 from verity_vllm.definitions.registry import dsa_topk_mask_cut as X
 from verity_vllm.definitions.registry import dsa_topk_reads as R
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 SERVED_TOPK, SERVED_V, SERVED_H = 2048, 1 << 17, 576
 #: the score of a key past a row's own in today's long row (vllm_dsa's PAD_SCORE)

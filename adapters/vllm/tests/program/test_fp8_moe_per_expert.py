@@ -38,7 +38,7 @@ from verity.commitments.gates import embedding as EMB
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain
 from verity.commitments.rowleaf import bit_row
-from verity.commitments.windows import interface as WI
+from verity.commitments.periods import interface as WI
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP

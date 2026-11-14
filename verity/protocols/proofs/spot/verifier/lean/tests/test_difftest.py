@@ -6725,7 +6725,7 @@ def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     its partition over these templates takes more memory than a suite has."""
     from verity.circuits.population import mixed_population_program
     from verity_vllm.definitions.registry.catalog import load
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
 
     load()
     total = sum(c for _t, c in REAL_TEMPLATES)

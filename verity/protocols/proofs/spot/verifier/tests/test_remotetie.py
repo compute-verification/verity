@@ -78,7 +78,7 @@ from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registered as G, docket as REG
 from verity.circuits.codec import canonical_json
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF, rows as CS
+from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))

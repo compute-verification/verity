@@ -21,8 +21,8 @@ from typing import Any
 import numpy as np
 import pytest
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import wiring as WI
 from verity_vllm.definitions.registry import io_shell as IO
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.pouw.verifier import audit as AU

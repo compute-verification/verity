@@ -29,9 +29,9 @@ from verity.commitments.gates import embedding as EMB
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity_vllm.definitions.registry import boolean_dsa_norm as BDN
 from verity_vllm.definitions.registry import dsa_norm as DN
-from verity.commitments.windows import history as HW
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import history as HW
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import history_rows as HR

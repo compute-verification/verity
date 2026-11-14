@@ -40,7 +40,7 @@ from pathlib import Path
 
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits
-from verity.commitments.windows.interface import proof_block_k_log
+from verity.commitments.periods.interface import proof_block_k_log
 from verity_vllm.definitions.registry.boolean_stop_rule import StopRule16V2
 from verity.protocols.accounting.certifier.prover import response_tie
 from verity.protocols.proofs.spot.prover.cost.inputs import MEASURED

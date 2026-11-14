@@ -27,7 +27,7 @@ from verity_vllm.definitions.registry import gumbel_boolean as GB
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import topp_stages as T
 from verity_vllm.definitions.registry import topp_word_gates as TG
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from test_topp_stages import ROWS, SERVED_V, f32, row, unit_args
 

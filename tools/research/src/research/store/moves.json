@@ -2862,6 +2862,11 @@
     },
     {
       "paths": {
+        "verity/commitments/windows/": "verity/commitments/periods/"
+      }
+    },
+    {
+      "paths": {
         "verity/definitions/registry/": "adapters/vllm/verity_vllm/definitions/registry/",
         "verity/definitions/numerics/": "adapters/vllm/verity_vllm/definitions/numerics/",
         "verity/definitions/tests/": "adapters/vllm/verity_vllm/definitions/tests/",

@@ -20,7 +20,7 @@ from verity_vllm.definitions.boolean import boolean_version
 from verity_vllm.definitions.registry import boolean_int8 as BX
 from verity_vllm.definitions.registry import int8_exact as X
 from verity_vllm.definitions.registry.prims import BF16
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 K = 2048
 

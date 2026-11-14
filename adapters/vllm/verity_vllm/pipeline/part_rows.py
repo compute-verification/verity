@@ -5,7 +5,7 @@ argument groups (``slices``, `serving_rows._slices`) and of packed words (``pack
 intermediate (``("mid", name)``: FlashInfer's q and s, a norm's scale) is a value serving never stores: the readers compute it
 with its twin (``MIDS``), held to the served outputs (the coordinates' reader holds the twin of the row's output on q and s; a
 norm's twin gives the row's outputs beside its scale), and the window wires each unit's row of it to the output row of the part
-unit that returned it (:func:`wire`, `verity.commitments.windows.wiring`), so a sampled coordinate's q and s are the committed outputs
+unit that returned it (:func:`wire`, `verity.commitments.periods.wiring`), so a sampled coordinate's q and s are the committed outputs
 of its row's quantisation, and an apply block's scale its row's sum of squares'."""
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import COORDS, PART_STATICS, PARTS, coord_width, part, template
 

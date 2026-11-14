@@ -57,7 +57,7 @@ from typing import Any, NamedTuple
 
 import numpy as np
 
-from verity.commitments.windows import rows as CS, wiring as WI
+from verity.commitments.periods import rows as CS, wiring as WI
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import CHAIN_OF, Template, template, values_widths
 

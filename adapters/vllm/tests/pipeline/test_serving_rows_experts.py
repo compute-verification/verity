@@ -38,8 +38,8 @@ from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity_vllm.definitions.registry import boolean_moe as BMOE
 from verity_vllm.definitions.registry import fp8_moe_experts as X
 from verity_vllm.definitions.registry import moe as MOE
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
 from verity_vllm.pipeline import serving_rows as SRW

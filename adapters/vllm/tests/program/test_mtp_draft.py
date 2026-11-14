@@ -15,7 +15,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity_vllm.definitions.boolean import boolean_version
 from verity_vllm.definitions.numerics import dsa_norm_rows as NR
 from verity_vllm.definitions.registry import boolean_mtp_draft as BM

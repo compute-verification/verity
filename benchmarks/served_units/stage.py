@@ -484,7 +484,7 @@ def stage_read(name: str, S: dict, tag: str, n: int, out: Path, t0: float, bind:
     from verity.commitments.gates import embedding as E
     from verity.commitments.indexed import RangeIndexedDomain
     from verity.commitments.merkle import CommitmentDomain
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.pipeline.chunk_rows import READ_LAYOUT
 
     V, H, L = S["V"], S["H"], S["L"]

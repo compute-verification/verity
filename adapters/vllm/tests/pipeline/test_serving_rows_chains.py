@@ -25,8 +25,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW

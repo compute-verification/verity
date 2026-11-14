@@ -88,7 +88,7 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # 
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P, produced, docket as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 from verity_vllm.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402

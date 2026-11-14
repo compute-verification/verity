@@ -29,7 +29,7 @@ from math import ceil, log
 from pathlib import Path
 
 from verity import protocol
-from verity.commitments.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+from verity.commitments.periods.interface import K_MAX, MAX_ROWS, proof_block_k_log
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`verity.protocol`)
 DELTAS = tuple(map(float, protocol.DELTAS))
