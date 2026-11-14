@@ -2,7 +2,7 @@ module
 
 public import Properties.Pous.EndToEnd
 public import Properties.Assumptions.Pous
-public import Definitions.Accounting.PerRun
+public import Definitions.Pouw.PerRun
 public import Definitions.Pous.P2.Clip
 
 /-!

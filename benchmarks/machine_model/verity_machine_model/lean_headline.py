@@ -1,5 +1,5 @@
 """`lean_headline`: the families' headline instances as exact Lean data, the files their headline guarantees read
-(security/Definitions/Accounting/Headline/Sm*.lean). `machine-model lean-headline` writes them, and with `--check`
+(security/Definitions/Pouw/Headline/Sm*.lean). `machine-model lean-headline` writes them, and with `--check`
 exits 1 when a committed file is not what it would write (`write`).
 
 A family's data-sheet instance (`Accounting.TS.Headline.SmNN`, read by `Accounting.Guarantees.TS.SmNNSheetHeadline`):
@@ -516,7 +516,7 @@ def render(i: Instance) -> str:
     width_lines = "\n".join(f"  | .{p} => {w}" for p, w in f.pipes.values())
     return f'''module
 
-public import Definitions.Accounting.Headline.Encoding
+public import Definitions.Pouw.Headline.Encoding
 
 /-!
 # {f.key}'s headline instance: {f.device} and {f.title} (trusted; generated)
@@ -616,7 +616,7 @@ def render_measured(i: Instance, m: Measured) -> str:
     vf = VECTOR.replace("-", "").lower()
     return f'''module
 
-public import Definitions.Accounting.Headline.Sm120
+public import Definitions.Pouw.Headline.Sm120
 
 /-!
 # sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)

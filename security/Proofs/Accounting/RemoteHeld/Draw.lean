@@ -1,12 +1,12 @@
 module
 
 public import Definitions.Accounting.Guarantees.RemoteDraw
-public import Proofs.Accounting.RateAudit.Pooled
+public import Proofs.Poub.RateAudit.Pooled
 public import Proofs.Accounting.Actual.Sampler
 public import Proofs.Accounting.Prob
 public import Proofs.Hash.RowBinding
-public import Definitions.Accounting.RateAuditRemote
-public import Proofs.Accounting.RateAudit.Chain
+public import Definitions.Poub.RateAuditRemote
+public import Proofs.Poub.RateAudit.Chain
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Algebra.Order.Ring.Star
@@ -44,8 +44,8 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.RateAudit.Windows
+import Proofs.Poub.Bandwidth.AuditRO
+import Proofs.Poub.RateAudit.Windows
 import Proofs.Accounting.RemoteHeld
 import Proofs.Accounting.RemoteHeld.OverTime
 import Std.Tactic.BVDecide.Normalize.Prop

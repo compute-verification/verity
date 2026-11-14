@@ -2,7 +2,7 @@ module
 
 public import Proofs.Accounting.Compose.ServiceCovers
 public import Definitions.Accounting.Guarantees.Compose
-public import Proofs.Accounting.TS
+public import Proofs.Pouw.TS
 public import Proofs.Accounting.Compose.ServiceBudget
 public import Proofs.Accounting.Compose.SplitRateMerged
 public import Proofs.Accounting.Compose.BindingOfECR

@@ -3,24 +3,24 @@ module
 public import Definitions.Accounting.Actual
 public import Definitions.Accounting.Additive
 public import Definitions.Accounting.Actual.Sampler
-public import Definitions.Accounting.Bandwidth
-public import Definitions.Accounting.BandwidthAudit
-public import Definitions.Accounting.BoundReceipt
-public import Definitions.Accounting.BoundSketch
+public import Definitions.Poub.Bandwidth
+public import Definitions.Poub.BandwidthAudit
+public import Definitions.Pouw.BoundReceipt
+public import Definitions.Pouw.BoundSketch
 public import Definitions.Accounting.Bridge
 public import Definitions.Accounting.Capacity
-public import Definitions.Accounting.CoinFlow
+public import Definitions.Pouw.CoinFlow
 public import Definitions.Accounting.Carrier
 public import Definitions.Accounting.Compose
 public import Definitions.Accounting.ComposeMonitoringPeriod
-public import Definitions.Accounting.Confidence
-public import Definitions.Accounting.CostModel
+public import Definitions.Pouw.Confidence
+public import Definitions.Pouw.CostModel
 public import Definitions.Accounting.Device
-public import Definitions.Accounting.Filler
-public import Definitions.Accounting.HMu
+public import Definitions.Pouw.Filler
+public import Definitions.Pouw.HMu
 public import Definitions.Accounting.Gates
-public import Definitions.Accounting.Headline
-public import Definitions.Accounting.HeadlineDc
+public import Definitions.Pouw.Headline
+public import Definitions.Pouw.HeadlineDc
 public import Definitions.Accounting.Joint
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.JointBridge.CreditedWords
@@ -30,27 +30,27 @@ public import Definitions.Accounting.JointBridge.CommOfMonitoringPeriodLeakAccep
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
 public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Accounting.JointLive
-public import Definitions.Accounting.Memory
-public import Definitions.Accounting.PerRun
+public import Definitions.Pous.Memory
+public import Definitions.Pouw.PerRun
 public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
-public import Definitions.Accounting.Slowdown
-public import Definitions.Accounting.Pouw
-public import Definitions.Accounting.PouwWitness
+public import Definitions.Slowdown.Tasks
+public import Definitions.Pouw.Pouw
+public import Definitions.Pouw.PouwWitness
 public import Definitions.Accounting.NetWitness
-public import Definitions.Accounting.PouwWork
-public import Definitions.Accounting.RateAudit
-public import Definitions.Accounting.RateAuditDeployed
-public import Definitions.Accounting.RateAuditInteractive
-public import Definitions.Accounting.RateAuditJoint
-public import Definitions.Accounting.RateAuditPartial
-public import Definitions.Accounting.RateAuditPooled
-public import Definitions.Accounting.RateAuditRemote
-public import Definitions.Accounting.RateAuditSketch
-public import Definitions.Accounting.RateAuditSketchDeployed
-public import Definitions.Accounting.RateAuditSketchInteractive
-public import Definitions.Accounting.RateAuditSketchLayout
-public import Definitions.Accounting.ReadUnit
+public import Definitions.Pouw.PouwWork
+public import Definitions.Poub.RateAudit
+public import Definitions.Poub.RateAuditDeployed
+public import Definitions.Poub.RateAuditInteractive
+public import Definitions.Poub.RateAuditJoint
+public import Definitions.Poub.RateAuditPartial
+public import Definitions.Poub.RateAuditPooled
+public import Definitions.Poub.RateAuditRemote
+public import Definitions.Poub.RateAuditSketch
+public import Definitions.Poub.RateAuditSketchDeployed
+public import Definitions.Poub.RateAuditSketchInteractive
+public import Definitions.Poub.RateAuditSketchLayout
+public import Definitions.Poub.ReadUnit
 public import Definitions.Accounting.Records
 public import Definitions.Accounting.RecordsToy
 public import Definitions.Accounting.Remote
@@ -58,16 +58,16 @@ public import Definitions.Accounting.Remote.Deployed
 public import Definitions.Accounting.Remote.DrawInstances
 public import Definitions.Accounting.Requirement
 public import Definitions.Accounting.Requirement.Placed
-public import Definitions.Accounting.Responder
+public import Definitions.Pous.Responder
 public import Definitions.Accounting.Schedule
 public import Definitions.Accounting.Served
-public import Definitions.Accounting.ServingBlocks
-public import Definitions.Accounting.ServingBlocks.Instances
-public import Definitions.Accounting.Tag
-public import Definitions.Accounting.TS
-public import Definitions.Accounting.TS.Fixed
+public import Definitions.Slowdown.ServingBlocks
+public import Definitions.Slowdown.ServingBlocks.Instances
+public import Definitions.Pous.Tag
+public import Definitions.Pouw.TS
+public import Definitions.Pouw.TS.Fixed
 public import Definitions.Accounting.Window
-public import Definitions.Accounting.Wipe
+public import Definitions.Pous.Wipe
 
 /-!
 # Resource accounting's definitions (trusted)
@@ -79,7 +79,7 @@ account on one device model.
 
 The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's, each with the module that states it:
 
-* `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
+* `Accounting.Guarantees.RemoteRunConservationDeployed` (`Definitions.Poub.Guarantees.RateAuditDeployed`):
   PoUB at its deployed parameters.
 * `Accounting.Guarantees.RemoteRunConservationSketchDeployed` (the same module): PoUB's sketch session at the
   deployed receipt parameters, under the per-pass hash budget.

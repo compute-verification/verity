@@ -1,12 +1,12 @@
 module
 
-public import Definitions.Accounting.Guarantees.RateAudit
-public import Definitions.Accounting.Guarantees.RateAuditPartial
+public import Definitions.Poub.Guarantees.RateAudit
+public import Definitions.Poub.Guarantees.RateAuditPartial
 
 /-!
 # The rate audit's honest devices: lemmas
 
-The honest devices of `Definitions.Accounting.Guarantees.RateAudit` and `RateAuditPartial`: for every store, stream and
+The honest devices of `Definitions.Poub.Guarantees.RateAudit` and `RateAuditPartial`: for every store, stream and
 tag size, a device accepted on every coin, which shows the guarantee's event is not vacuous. Neither is a guarantee, nor
 a witness of one: a witness constructs its instance, and each quantifies over every `N`, `b`, `h` and `ρ`. Each is a
 `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same name, and audited

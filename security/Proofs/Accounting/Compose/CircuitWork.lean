@@ -2,7 +2,7 @@ module
 
 public import Proofs.Accounting.Compose.ServiceBudget
 public import Proofs.Accounting.Compose.ServiceCovers
-public import Proofs.Accounting.Headline.Luck
+public import Proofs.Pouw.Headline.Luck
 public import Proofs.Accounting.Lemmas.TS.Receipt
 public import Proofs.Accounting.Lemmas.Compose
 public import Proofs.Accounting.Lemmas.TS

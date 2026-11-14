@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Accounting.Tag.Signs
-public import Proofs.Accounting.Tag.LittlewoodOfford
-public import Proofs.Accounting.Tag.SketchExact
+public import Proofs.Pous.Tag.Signs
+public import Proofs.Pous.Tag.LittlewoodOfford
+public import Proofs.Pous.Tag.SketchExact
 
 /-!
 # The exact ±1 sketch's guarantees

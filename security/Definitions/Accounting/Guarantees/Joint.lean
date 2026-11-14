@@ -17,7 +17,7 @@ Both bound an account's worst case over its audit's own coins, not its charge at
 an accepted run, `Joint` says each account reaches its certificate on some coin of its audit, and `CovertResidual` that
 some coin of each audit leaves the other accounts within its residual. A device could do little charged work and a lot
 of covert work on a few of the compute coins. The per-run reading, at the coins flipped, is `JointPerRun` and
-`CovertResidualPerRun` (`Definitions.Accounting.Guarantees.PerRun`).
+`CovertResidualPerRun` (`Definitions.Pouw.Guarantees.PerRun`).
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Joint`).
 -/
