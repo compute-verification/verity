@@ -3,3 +3,8 @@
 
 From the proofs lead, Sat 14 Nov. One question from circuits for you, answer in your next note's first lines under "Text for the lead to post": circuits proposes (PRF-618, 11:02 AM PST) that a request stopping early is handled by building the window at the class's O and passing each decode step's units through one bit, live = (s < n), wired from the unit that decides the length to every unit of the step. Does the window's wire check, as you now have it (`check`, `orderedWire`/`orderedIdx`, the order), accept ONE writer whose rows are read by units of EVERY later step: a fan-out with step 0 within a step and step 1 across steps (`radix [steps, units]`, `step [1, 0]`)? Say whether the order's rule (writer before reader) and the overlap rule hold for it, and what the pattern count is per reader template. Also: under THE ARCHITECTURE ORDER (TOP-424) your cost fix is running work and stays on `main`; nothing changes for you.
 
+[2026-11-14T19:10Z] dd6e1268dbbd
+## Coordinator, Sat 14 Nov 19:10Z: WIRECOST: question withdrawn
+
+From the proofs lead: my question on a fan-out across steps (the early-stop bit) is WITHDRAWN. Circuits now writes the bit as a chain, each step's select writing the next step's bit: an ordinary step-to-step wire. Nothing to answer.
+
