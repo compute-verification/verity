@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sys
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
