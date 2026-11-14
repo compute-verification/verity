@@ -75,7 +75,8 @@ a registration in both registries alike. While a session runs the driver doesn't
 the Lean: an event both take goes out on the books' result and the Lean's answer is held to it as it comes, and
 openings frames and window checks go to the Lean the same way, so a slow Lean answer or check delays the session's
 verdict, never a coin, a root's intake, a boundary or a sample. A session is accepted only once every one of its
-Lean answers has come and agreed.
+Lean answers has come and agreed, and only where the Lean's `outcome` is `accepted`: every window accepted is a veto
+beside it, and where the two differ the session is refused as `disagreement` (its `event` `outcome`).
 
 `--transcript DIR` writes each session's difftest case to DIR as the session runs (`lean_verifier.DifftestCase`): every
 event as the Lean took it, with the clock it read, the session's coins, and each window's openings where its verdict
@@ -717,6 +718,16 @@ def hold_store(lean: lv.Lean, bound: dict | None, b: rstore.Binding, node: bytes
     return regions
 
 
+def accepts(failure: dict | None, verdicts: dict, windows: int, outcome: dict | None) -> tuple[bool, bool]:
+    """A session's acceptance at its end, as `(the Lean's, the windows')`: the Lean's `outcome` (its answer to the
+    `outcome` request) is `accepted`, and every one of its `windows` window verdicts accepted; each only where no
+    `failure` stands. The first decides; the second is its veto, and the two differing is `disagreement`."""
+    if failure is not None:
+        return False, False
+    return ((outcome or {}).get("outcome") == "accepted",
+            len(verdicts) == windows and all(v["accepted"] for v in verdicts.values()))
+
+
 class Pair:
     """Session k through the verifiers, with `audit.AuditRun`'s interface: each event goes to `s`, the driver's books,
     and to the Lean process's session k, at one reading of the verifier's clock. The result is the one
@@ -1350,7 +1361,12 @@ class Verifier:
                 session.settle(check_id)
         if failure is None and session.disagreement is not None:
             failure = {"t": session.disagreement["t"], "failure": "disagreement", "at": None}
-        accepted = failure is None and len(verdicts) == W and all(v["accepted"] for v in verdicts.values())
+        lean_accepted, windows_accepted = accepts(failure, verdicts, W, session.outcome_json)
+        if windows_accepted != lean_accepted:
+            session._disagree(max(0, len(session.windows) - 1), "outcome", session.outcome_json,
+                              {"windows_accepted": windows_accepted})
+            failure = {"t": session.disagreement["t"], "failure": "disagreement", "at": None}
+        accepted = failure is None and lean_accepted
         self.conn.send({"type": "end", "k": k, "accepted": accepted, "failure": failure})
         while True:
             head, _, _ = self.expect("ended")
@@ -1797,7 +1813,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
 
 
 __all__ = ["AVERAGE", "GPU_HBM_BYTES", "HBM_BYTES", "Pair", "TIME_HELD", "UNRECORDED_SLACK_LOG2", "Verifier",
-           "WORST_PASS", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
+           "WORST_PASS", "accepts", "ingress_bursts", "lean_record", "load_registry", "main", "memory", "memory_error",
            "node_line", "pace_of", "paced_groups", "paced_line", "recorded_inputs", "recorded_line", "recorded_memory",
            "recorded_paced", "recorded_rates", "recorded_windows", "regions_of", "save_registry", "sketch_at",
            "timing_parts"]
