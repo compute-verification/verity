@@ -104,7 +104,7 @@ def test_a_pool_runs_timeout_counts_from_taking_its_slot_not_from_its_wait(monke
     seen = []
     monkeypatch.setattr(remote, "launch", lambda **kw: seen.append(kw) or {"phase": "launched", "pod_id": "p1", "remote_run_dir": "/r",
                                                                             "launch": {"runner_pid": 1}})
-    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--project", "p", "--no-custody-r2", "--source", ".",
+    argv = ["run", "--runs-dir", str(tmp_path / "runs"), "--on", "m", "--stay", "--project", "p", "--no-custody-r2", "--source", ".",
             "--pool", "research", "--as", "infra"]
     assert main([*argv, "--timeout", "40m", "--", "true"]) == 0 and main([*argv, "--", "true"]) == 0
     timed, untimed = seen
@@ -436,7 +436,7 @@ def test_deploy_makes_the_challenger_and_verifier_hosts_auditor_hosts_that_take_
     hosts = ["vy-challenger-1", "vy-auditor-1", "vy-auditor-2"]
     nebius = Path(S.__file__).resolve().parent
     assert (nebius / "auditor").read_text().startswith("#") and S.auditor_commands(nebius / "auditor") == []
-    rows = tomllib.loads((nebius / "deploy.toml").read_text())["file"]
+    rows = [{"src": e.get("template", ""), **e} for e in tomllib.loads((nebius / "deploy.toml").read_text())["file"]]
     on = {e["path"]: e["nodes"] for e in rows if e.get("src", "").endswith(("/auditor", "/vy-auditor-only.service",
                                                                             "/vy-auditor-only.timer", "/11-vy-admin.conf"))}
     locked_cpu = [n for e in rows if e["path"] == "/usr/local/sbin/vy-lockout" for n in e["nodes"] if n.startswith("vy-nebius-cpu-")]

@@ -125,12 +125,13 @@ def mint_api(account_id: str, api_token: str, bucket: str, parent_access_key_id:
         body["prefixes"] = list(prefixes)
     if objects:
         body["objects"] = list(objects)
-    req = urllib.request.Request(f"{CF_API}/accounts/{account_id}/r2/temp-access-credentials", data=json.dumps(body).encode("utf-8"), method="POST",
+    req = urllib.request.Request(f"{CF_API}/accounts/{account_id}/r2/temp-access-credentials",  # noqa: S310 (CF_API, a literal https URL)
+                                 data=json.dumps(body).encode("utf-8"), method="POST",
                                  headers={"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"})
     opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler(urllib.request.getproxies_environment()))
     t0 = int(time.time())
     try:
-        with opener.open(req, timeout=60) as r:  # noqa: S310
+        with opener.open(req, timeout=60) as r:
             doc = json.loads(r.read())
     except urllib.error.HTTPError as e:
         try:
@@ -149,7 +150,7 @@ def mint_api(account_id: str, api_token: str, bucket: str, parent_access_key_id:
 
 def remote_config(config_path: str | os.PathLike[str] | None = None) -> dict:
     """The `[remote]` table of store.toml when it is an s3 one, else {} (the CLI falls back to R2_ENDPOINT / R2_BUCKET / AWS_* env)."""
-    from .remote import config_path as _cp  # noqa: PLC0415
+    from .remote import config_path as _cp
 
     p = _cp(config_path)
     if not p.is_file():

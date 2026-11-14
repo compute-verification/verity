@@ -92,6 +92,14 @@ lowrisk_excludes = ["*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain",
                     "tools/verity/lean/", "tests/", "tools/verity/check/", "tools/verity/graph/", ".gitattributes",
                     "queue.py",
                     "infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"]
+# what the land verdicts gate (the loop's `--gate verdict`) keeps on the whole check before landing beyond
+# `lowrisk_excludes`, written as its entries are: a candidate is plain, and lands on its members' land verdicts and the
+# quick tier, only when no member's change, against its merge base with `main`, touches an entry of `lowrisk_excludes` or of
+# this list (`DriveFlags.plain_excludes`, `Loop._plain`); with either list empty, none is plain. `lowrisk_excludes` already
+# keeps off Lean, its locks and Lake files, the verifiers, the soundness-path Python, the Lean check, the check and this
+# file, the landing code (tools/research/) and the merge drivers; this adds the auditor's devices it doesn't name. A move's
+# PR is never plain, whatever it touches, nor a change to a Lean input of the tree (`vqueue_slim.lean_inputs`)
+verdict_excludes = ["verity/protocols/compose/device/", "verity/protocols/accounting/poub/device/"]
 # count a ready mark or land verdict only when its `label_auth` label authenticates it as its author's, a Cursor identity token
 # minted by the agent holding that handle in the registry or by a worker it delegated to (`research queue delegate`); ejections
 # and holds count unsigned (`research.labelauth`). A PR reader's name (`review-36`) counts only under a delegation by the

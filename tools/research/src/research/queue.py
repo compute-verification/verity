@@ -2,8 +2,10 @@
 PRs ready to land (marked ready at their heads, with a reviewer's land verdict or under the low-risk rule, drive.toml's
 `lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate with no new failure (`research.vqueue`): each
 gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or fails on its base too, so
-`main`'s reds only shrink.  A failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the
-candidate and those above it are built again without them in the same tick.
+`main`'s reds only shrink; under the loop's `--gate verdict` a plain candidate lands on its members' land verdicts and the
+quick tier, and a red of `main`'s whole check after it reverts the one culprit (`vqueue_loop.Loop._plain`, `_main_red`).  A
+failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the candidate and those above it
+are built again without them in the same tick.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
@@ -263,9 +265,10 @@ across a move, and a land verdict carries to the restacked head when its own cha
 
 Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
 candidate from `main` and the PRs ready to land, commits the lock records the candidate's records run regenerates
-(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure; it tells each owner what it
-refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
-changed (`spec_alert`, after each move of `main`: `Landing._on_main`).
+(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure (of the quick tier alone, for a
+plain candidate under `--gate verdict`, whose whole check follows on `main`); it tells each owner what it refuses.  What
+reaches `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`, after each move of
+`main`: `Landing._on_main`).
 
 Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, the loop counts a
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
@@ -765,8 +768,8 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, one file's path from the
-#: root (a `/` before its end, no glob), or a file name glob (no `/`)
+#: an entry of `DriveFlags.lowrisk_excludes` or `DriveFlags.verdict_excludes`: a directory from the repository's root ending
+#: in `/`, one file's path from the root (a `/` before its end, no glob), or a file name glob (no `/`)
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
@@ -847,6 +850,9 @@ class DriveFlags:
     #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
     #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
+    #: what the land verdicts gate (`research queue vqueue --gate verdict`, `vqueue_loop.Loop._plain`) keeps on the whole
+    #: check beyond `lowrisk_excludes`, written as it is: the gate reads both (`plain_excludes`); none, no candidate is plain
+    verdict_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
     #: of `drive.SLIM_STEPS` alone beside it
@@ -871,6 +877,15 @@ class DriveFlags:
     signed_verdicts: str = "off"
     #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
     restack_jobs: int = 3
+
+    @property
+    def plain_excludes(self) -> tuple[str, ...]:
+        """What keeps a candidate on the whole check where the land verdicts gate: `lowrisk_excludes`, then `verdict_excludes`,
+        each entry once, so a change the low-risk lane keeps off is never plain.  With either list empty, none: as `lowrisk`
+        reads no excludes, nothing is plain."""
+        if not (self.lowrisk_excludes and self.verdict_excludes):
+            return ()
+        return tuple(dict.fromkeys(self.lowrisk_excludes + self.verdict_excludes))
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -934,14 +949,14 @@ class DriveFlags:
             if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
                 raise bad("restack_jobs", "a whole number, 1 or more")
             got["restack_jobs"] = doc["restack_jobs"]
-        if "lowrisk_excludes" in doc:
-            v = doc["lowrisk_excludes"]
-            if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
-                                                         and ".." not in x.split("/") for x in v)):
-                raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
-                                              "files' paths from it and file name globs, as [\"*.lean\", \"verity/core/\", "
-                                              "\"verity/__init__.py\"]")
-            got["lowrisk_excludes"] = tuple(v)
+        for k in ("lowrisk_excludes", "verdict_excludes"):
+            if k in doc:
+                v = doc[k]
+                if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
+                                                             and ".." not in x.split("/") for x in v)):
+                    raise bad(k, "a non-empty list of directories from the repository's root, each ending in `/`, files' paths "
+                                 "from it and file name globs, as [\"*.lean\", \"verity/core/\", \"verity/__init__.py\"]")
+                got[k] = tuple(v)
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
@@ -3936,6 +3951,27 @@ def _launch(argv: list[str], cwd: Path) -> subprocess.CompletedProcess:
     return subprocess.run(argv, cwd=cwd, capture_output=True, text=True)
 
 
+def quick_run(rid: str, on: str, wt: Path, at: str, base: str, *, merged: str | None = None, audit: list[str] | None = None,
+              by: str = "", project: str = "verity", wait_s: float = REMOTE_WAIT_S, timeout_s: float = REMOTE_TIMEOUT_S,
+              pool: str = "", priority: bool = False) -> list[str]:
+    """The `research run` of the quick tier at ``at`` (``wt``, a checkout of it, its `--source`) since ``base`` as run ``rid`` on
+    machine ``on`` (`RemoteQuickTier`): in a check slot of the machine (of its ``pool``'s), a `--priority` one with
+    ``priority``, waiting `wait_s` for it and running `timeout_s` in it; ``merged``, the PR head when ``at`` is its merge onto
+    ``base``; ``audit``, `LEAN_AUDIT` when it audits (`lean_audit`)."""
+    slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
+    job = Path(quick_tier.__file__)
+    args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
+            *(["--merged", merged] if merged else []), *(["--lean-audit", shlex.join(audit)] if audit else []),
+            "--", *QUICK_TIER]
+    opts = [*(["--priority"] if priority else []), *(["--by", by] if by else []), "--wait-max", f"{wait_s:g}",
+            "--run-max", f"{timeout_s:g}"]
+    return [sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", project,
+            "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
+            "--timeout", f"{wait_s + timeout_s:g}", "--custody-ttl", str(math.ceil(wait_s + timeout_s + REMOTE_GRACE_S)),
+            "--declared-output", "out/*", "--", *slot, *opts,
+            "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}']
+
+
 class RemoteQuickTier(QuickTier):
     """The quick tier as a `research run` on machine ``on`` (`auto` or `M1,M2`: the one `place` picks when the tier starts): a
     worktree of its own (`WORKTREE_SUFFIX`), checked out and cleaned as `QuickTier` does, is the run's `--source`, and the worktree's
@@ -3972,21 +4008,12 @@ class RemoteQuickTier(QuickTier):
                 return NotStarted(f"--on {on}: {why}")
             print(f"research queue: --on {on}: {got}: {why}", flush=True)
             on, _, pool = got.partition(":")
-        slot = (["env", f"CHECK_SLOTS={POOL_SLOTS.format(pool=pool)}"] if pool else []) + list(SLOT)
-        job = Path(quick_tier.__file__)
         rid = R.new_run_id()
         try:
             with self._checkout(pr) as (wt, at, base):
-                audit = lean_audit(self.repo, base, at)
-                args = [*(x for d in LEAN_BUILDS for x in ("--lean", d)), "--head", at, "--base", base,
-                        *([] if at == pr.head else ["--merged", pr.head]), *(["--lean-audit", shlex.join(audit)] if audit else []),
-                        "--", *QUICK_TIER]
-                opts = [*(["--by", self.by] if self.by else []), "--wait-max", f"{self.wait_s:g}", "--run-max", f"{self.timeout_s:g}"]
-                r = self.launch([sys.executable, "-m", "research", "run", "--id", rid, "--on", on, "--project", self.project,
-                                 "--source", str(wt), "--cwd", "source", "--send", str(job), "--require-result",
-                                 "--timeout", f"{self.wait_s + self.timeout_s:g}", "--custody-ttl", str(math.ceil(self.wait_s + self.timeout_s + REMOTE_GRACE_S)),
-                                 "--declared-output", "out/*", "--", *slot, *opts,
-                                 "--", "sh", "-c", f'exec python3 "$RESEARCH_RUN_DIR/inputs/{job.name}" {shlex.join(args)}'], wt)
+                r = self.launch(quick_run(rid, on, wt, at, base, merged=None if at == pr.head else pr.head,
+                                          audit=lean_audit(self.repo, base, at), by=self.by, project=self.project,
+                                          wait_s=self.wait_s, timeout_s=self.timeout_s, pool=pool), wt)
         except TierRefused as e:
             return str(e)
         if r.returncode:
@@ -5342,11 +5369,12 @@ class LakeBuild:
     def _remote(self, node: str, wt: Path, files: list[str], left: float, wait: bool = True) -> tuple[int | None, str, str]:
         """`LEAN_BUILDER --build` as a `research run` of ``wt``'s HEAD on ``node``, waited for within ``left`` (without ``wait``,
         `--no-wait`: no free `build` slot there builds nothing); its exit status (None: it didn't end), its stdout, and where it
-        ran."""
+        ran. It stays on ``node`` (`--stay`): it builds that node's warm tree, and its output is read there by its run id."""
         from . import runs as R
 
         secs = f"{max(left - 10, 1):.0f}"
-        argv = [sys.executable, "-m", "research", "run", "--on", node, *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
+        argv = [sys.executable, "-m", "research", "run", "--on", node, "--stay",
+                *(["--pool", self.pool, "--pool-wait", secs] if self.pool else []),
                 *(["--as", self.by] if self.by else []), "--project", "verity", "--source", str(wt), "--cwd", "clone",
                 "--timeout", f"{secs}s", "--wait", "--wait-every", "5", "--wait-max", secs, "--",
                 "python3", LEAN_BUILDER, *([] if wait else ["--no-wait"]), "--build", *files]

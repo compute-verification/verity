@@ -5,6 +5,7 @@ class by class (`boundary_rows.commit`, `write`), under the serve's stop rule wh
 from __future__ import annotations
 
 import atexit
+import importlib
 import queue
 import secrets
 import struct
@@ -123,12 +124,15 @@ class BoundaryWindows:
     @classmethod
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None,
            release: Callable[[str], tuple[str, int] | None] | None = None, public: Sequence[Path] = ()) -> BoundaryWindows:
-        """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
+        """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`; the long row's
+        check, which no registry module registers, is registered here), and
         ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``, ``verdicts`` and ``ids``; ``tables``, rank 0's
         history tables (`boundary_tables.Channel.of`: its private directory, never under ``out`` or ``public``); and
         ``stop`` (`Stop.of`: the registered model's stop ids and length and T, the most ids a response has). A stop rule
         the serve can't register (a T the word can't hold, or one beside history tables) is refused here, as the serve
         starts, and so is a configuration that says both ``verdicts`` and ``ids``."""
+        importlib.import_module("verity_vllm.pipeline.long_row")  # registers DsaTopKReadRowsCut_v1, the long row's check
+
         t, tc, stop = str(cfg["check"]), cfg.get("tables"), Stop.of(cfg.get("stop"))
         if stop is not None and tc:
             raise ValueError(TABLES_UNDER_A_RULE)
