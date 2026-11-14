@@ -79,7 +79,9 @@ meanwhile stays. Its `remote.json` is deleted last (`_delete`), so a deletion cu
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
 a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
---max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. A path qualifies only with a valid record (explicit or
+--max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. Launches refused before they ran go first, oldest
+expiry first, with --max-paths of their own: each is a few files, so however many wait they never take the place of what frees
+the disk, and the n-th of them is gone by the ceil(n / --max-paths)-th pass that acts. A path qualifies only with a valid record (explicit or
 implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
 --unpreserved-runs, or a launcher's copy's under --launcher-copies, where nothing else qualifies; and no file in the job-script
 directories may name it (`JobScripts`). A preserved run's implicit record also
@@ -1247,16 +1249,18 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             skips.append(Action(row, "skip", why))
         else:
             candidates.append(row)
-    candidates.sort(key=lambda r: (PRIORITIES.index(r.record["priority"]), parse_utc(r.record["expires"]), r.path))
-    acts, deletions = [], 0
+    refused = {r.path for r in candidates if r.source == UNPRESERVED and not os.path.lexists(root / r.path / "job.json")}
+    candidates.sort(key=lambda r: (r.path not in refused, PRIORITIES.index(r.record["priority"]), parse_utc(r.record["expires"]), r.path))
+    acts, deletions = [], {True: 0, False: 0}
     for row in candidates:
         p = root / row.path
         if pct < low_pct:
             acts.append(Action(row, "skip", f"not needed: the filesystem is at {pct:.1f}%, under {low_pct:g}%"))
             continue
-        if max_paths is not None and deletions >= max_paths:
+        if max_paths is not None and deletions[row.path in refused] >= max_paths:
             plan["capped"] += 1
-            acts.append(Action(row, "skip", f"left for the next pass: this one has its {max_paths} path(s) (--max-paths)"))
+            share = "refused launch(es)" if row.path in refused else "path(s)"
+            acts.append(Action(row, "skip", f"left for the next pass: this one has its {max_paths} {share} (--max-paths)"))
             continue
         fresh = record_at(p, row.path, launcher)
         why = found = None
@@ -1285,7 +1289,7 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
         if why:
             acts.append(Action(row, "skip", why, stored=found and found.state))
             continue
-        deletions += 1
+        deletions[row.path in refused] += 1
         if not apply:
             used -= row.bytes
             iused -= row.files + row.dirs

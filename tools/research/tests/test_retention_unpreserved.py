@@ -761,6 +761,51 @@ def test_a_directory_is_a_refused_launch_only_by_its_own_refused_json(tmp_path):
     assert R._refused_launch(d) is None, "nothing says the launch was refused: its runner may have died as it started"
 
 
+def waiting(root: Path, n: int, start: int = 0) -> list[Path]:
+    """`n` refused launches, each an hour older than the next, all of them older than `ended`'s runs."""
+    return [refused(root, f"r20260919-{i // 3600:02d}{i // 60 % 60:02d}{i % 60:02d}-{i:04x}", when=WRITTEN - timedelta(days=1, hours=n + start - i))
+            for i in range(start, start + n)]
+
+
+def test_a_pass_frees_the_ended_runs_however_many_refused_launches_wait(tmp_path):
+    """Refused launches have --max-paths of their own: more of them than a pass takes leave its paths to the runs that free the disk."""
+    root = tmp_path / "ws"
+    many = waiting(root, R.MAX_PATHS + 5)
+    runs_ = [ended(root, f"r20260920-10000{i}-ab1{i}") for i in range(3)]
+    plan = collect(root, [*many, *runs_], apply=True, unpreserved=True, max_paths=R.MAX_PATHS)
+    assert not any(d.exists() for d in runs_), "the ended runs go in the first pass, though older refused launches outnumber its paths"
+    assert sum(not d.exists() for d in many) == R.MAX_PATHS and all(d.exists() for d in many[R.MAX_PATHS:]), "the oldest 200 go"
+    left = by_path(plan)[R.relative(many[-1], root)]["reason"]
+    assert plan["capped"] == 5 and left.startswith(f"left for the next pass: this one has its {R.MAX_PATHS} refused launch(es)")
+
+
+def test_every_refused_launch_is_taken_within_ceil_n_over_max_paths_passes_that_act(tmp_path):
+    """However many older runs every pass finds, the n-th refused launch by expiry is gone by pass ceil(n / --max-paths)."""
+    root, cap = tmp_path / "ws", 5
+    many, later, older = waiting(root, 2 * cap + 1), [], []
+    for n in (1, 2, 3):
+        older += [ended(root, f"r20260918-{n}0000{i}-ab{n}{i}", when=WRITTEN - timedelta(days=5)) for i in range(cap + 1)]
+        collect(root, [*many, *older], apply=True, unpreserved=True, max_paths=cap)
+        assert sum(not d.exists() for d in many) == min(n * cap, len(many)), f"pass {n} takes the next {cap}, oldest first"
+        assert sum(not d.exists() for d in older) == n * cap, "and its paths still go to the runs"
+        if n == 1:
+            later = [refused(root, f"r20260926-10000{i}-ef3{i}") for i in range(2)]
+        assert n != 2 or all(d.exists() for d in later), "one that expires later waits behind those already waiting"
+    assert not any(d.exists() for d in [*many, *later]), "ceil(11 / 5) = 3 passes take the 11, and the 2 behind them in the 3rd"
+
+
+def test_a_pass_takes_refused_launches_first_then_the_rest_in_one_order_whatever_the_scan_order(tmp_path, monkeypatch):
+    root = tmp_path / "ws"
+    runs_ = [ended(root, f"r20260920-10000{i}-ab1{i}", when=WRITTEN - timedelta(days=2, hours=i)) for i in range(3)]
+    newer = [refused(root, f"r20260925-10000{i}-cd2{i}", when=WRITTEN - timedelta(hours=i)) for i in range(3)]
+    want = [R.relative(d, root) for d in [*sorted(newer, key=lambda d: d.stat().st_mtime), *sorted(runs_, key=lambda d: d.stat().st_mtime)]]
+    order = [a["path"] for a in collect(root, [*runs_, *newer], unpreserved=True)["actions"] if a["action"] == "delete"]
+    assert order == want, "refused launches first, though newer; then the oldest expiry first"
+    scan = R.scan
+    monkeypatch.setattr(R, "scan", lambda *a, **k: (sc := scan(*a, **k), sc.rows.reverse(), sc)[2])
+    assert [a["path"] for a in collect(root, [*runs_, *newer], unpreserved=True)["actions"] if a["action"] == "delete"] == want
+
+
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads every file")
 def test_a_refused_launch_whose_records_cannot_be_read_is_listed_with_what_could_not_be_read_and_is_never_deleted(tmp_path):
     root = tmp_path / "ws"
