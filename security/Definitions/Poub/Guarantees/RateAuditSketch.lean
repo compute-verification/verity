@@ -24,7 +24,7 @@ a deployment premise carries the class to a deployed device (`rate-sketch-verbat
 * `RateAuditTensorSketchRank`: the same priced by the signs' rank, `q/2^(8·r) + Pr_σ[∃ u, rank < r]`.
 
 The honest device (`RateSketchHonest`) and the table outside the verbatim class (`RateSketchTable`,
-`RateTensorSketchTable`) are lemmas: `Security/Proofs/Accounting/Lemmas/RateAuditSketch.lean`.
+`RateTensorSketchTable`) are lemmas: `Security/Proofs/Poub/Lemmas/RateAuditSketch.lean`.
 -/
 
 @[expose] public section
@@ -136,8 +136,8 @@ footprint reaches the floor except with probability
   `((k − 1)/N)^s + s/2^h + Pr_σ[¬ SectorsBind σ] + q/2^256`.
 
 **The reading.** At `k_s = 64` the signs bind but for the chance that some sector's `64 × 32` block of uniform signs
-has a column dependency, a number of the signs' distribution that is evaluated outside Lean. At `k_s = 16` no block binds, and
-the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
+has a column dependency, a number of the signs' distribution that is evaluated outside Lean. At `k_s = 16` no block
+binds, and the bound to read is `RateAuditSketch`'s at the sketch's largest fiber `g`. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketch`, from the two.
 
 Frozen (no-function, hash): like `RateAuditSketch`, a bound in the random-oracle model over abstract chip programs. -/
@@ -158,8 +158,8 @@ with probability
 
 **The reading.** It is the per-pass reading, `q·2^-8r + Pr_σ[∃ u, rank < r]`, as a theorem for the verbatim class.
 At `k_s = 16` no block binds (its rank is at most 16), and `r` trades the guess, `2^-8r` per query, against the chance
-that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' distribution evaluated outside
-Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
+that some sector's `16 × 32` block of uniform signs has rank below `r`, a number of the signs' distribution evaluated
+outside Lean (`r* = 12`). Outside the verbatim class no bound of this form holds (`RateTensorSketchTable`). A
 session's passes and the grinding of their keys are not modeled here. Proof:
 `Accounting.SecurityProofs.RateAuditTensorSketchRank`, from `RateAuditSketch` and `SketchRankFiber`.
 

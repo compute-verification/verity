@@ -829,7 +829,7 @@ IoTieBucket = CompositeDefinition(
     doc="1 iff every cell of the bucket row (the warden's registered row, read by the proof system: bit 8k + i is bit i "
         "of byte k) is its map record's, with a DATA cell's id the entry the record names of the S port rows (the "
         "Commit's registered rows at the bucket's steps, read by the proof system) (`IoTieContent`): the I/O tie of "
-        "one egress bucket row, every cell opened; a link-window's tie is its T rows'")
+        "one egress bucket row, every cell opened; an execution phase's tie is its T rows'")
 
 
 # --- arguments -------------------------------------------------------------------------------------------------------

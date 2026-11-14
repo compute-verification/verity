@@ -73,7 +73,7 @@ bits = { value = 6.4e12, unit = "bit", source = "ruled: the weights at FP4 (0.8 
 [exfil.rl-rollouts]
 bits = { value = 1.68e8, unit = "bit", source = "ruled: 100M tokens of R1-style rollouts (21 MB at 17 bits a token, about 10x compressed)", status = "ruled" }
 
-# The incorrect-outputs channel (operating.incorrect): steps the sampled proofs let go unchecked return outputs the
+# The incorrect-outputs channel (operating.incorrect): steps SPOT lets go unchecked return outputs the
 # adversary chose; the regime's identities each end at their first drawn incorrect step.
 # The incorrect-outputs row (operating.incorrect): delta is the confidence it reports at; step_bits and floor_steps are
 # an unsampled regime's, where every unit is proved (q = 1); a sampled regime gives its own. step_bits is not set here:
@@ -204,7 +204,7 @@ horizon = "year"
 run = "v4-pretrain"
 families = ["full"]
 
-# The reference remote audit with today's sampled proofs (tiers T5): the incorrect-outputs channel at their sample rate.
+# The reference remote audit with today's SPOT (tiers T5): the incorrect-outputs channel at their sample rate.
 [scenario.reference-remote-h200-sampled]
 fleet = "world-h200"
 regime = "remote-sampled"

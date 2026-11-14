@@ -67,7 +67,7 @@ def test_compact_layout_is_the_library_layout(seed, split, tmp_path, monkeypatch
     assert [lay.rows_a[i] for i in range(lay.useful)] == lib.rows_a and lay.rows_b[-3:] == lib.rows_b[-3:]
     assert (lay.const, lay.in_groups, lay.out_groups, lay.counts) == (lib.const, lib.in_groups, lib.out_groups, lib.counts)
     assert lay.counts["ands"] < n
-    assert b"".join(lay.pieces("unit/x", workers=3)) == IL.netlist(lib, "unit/x").encode()
+    assert b"".join(lay.pieces("unit/x", workers=3)) == IL.circuit_description(lib, "unit/x").encode()
     rng = np.random.default_rng(seed)
     for T, flip in ((1, None), (9, None), (9, (lay.first + 3, 4))):
         for ports in (_ports(rng, T), [np.zeros(T, np.uint64) for _ in IN]):

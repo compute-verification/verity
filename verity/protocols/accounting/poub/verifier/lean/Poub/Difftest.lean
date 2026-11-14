@@ -275,7 +275,7 @@ def registryFn (j : Json) : V Json := do
     | .null => pure ({} : Registry)
     | v => Registry.ofJson v
   let ops ← (← J.arr j "ops" "input").mapM opOf
-  let mut drawn : Array Registration := #[]
+  let mut sampled : Array Registration := #[]
   let mut out : Array Json := #[]
   for op in ops do
     match op with
@@ -284,12 +284,12 @@ def registryFn (j : Json) : V Json := do
       r := r'
       match reg? with
       | some reg =>
-        drawn := drawn.push reg
+        sampled := sampled.push reg
         out := out.push (Json.mkObj [("codec_seed", hexJ reg.codecSeed), ("digest", hexJ reg.digest)])
       | none => out := out.push refusedJ
     | .session which params coins appendCoins notBeforeNs index f g =>
       let reg ← match which with
-        | .inl i => match drawn[i]? with
+        | .inl i => match sampled[i]? with
           | some reg => pure reg
           | none => throw s!"no registration drawn at {i}"
         | .inr reg => pure reg
@@ -483,10 +483,10 @@ private def seenOf (j : Json) : V Line.Seen := do
 /-- `line.record_run_json`: the line of an accepted session's record, `{"record", "registration", "samples", "seen",
 "per", "block_bytes", "chip_bytes", "node_bytes", "delta", "rates"}` (`record` as the verifier's `outcome` request gives
 it, `recordJ`'s; `registration` as `registrationOf` reads one), read off the record (`Line.lineOfRecordOn` at the
-record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its samples, `Line.ofSummaryAt`),
-or why it has none: none for a record sampled more than one window a coin at one window in flight, which no property
-covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered blocks another
-registration's (`Line.lineOfRegistered`). `clock`, if given, says
+record's `groups_per_coin` g, 1 when it doesn't name it: above 1 its pooled bound reads its samples,
+`Line.ofSummaryAt`), or why it has none: none for a record sampled more than one window a coin at one window in flight,
+which no property covers (`Line.SHARED`), and none for a record not of `registration`, its digest or its registered
+blocks another registration's (`Line.lineOfRegistered`). `clock`, if given, says
 whose clock the times seen are on: `record` (the default), the record's own, and held to it (`Line.timesOff`), or
 `challenger` (the challenger's release log's) or `replay` (a replay's at another round trip), which the record doesn't
 hold.
@@ -679,7 +679,7 @@ def p2SessionFn (j : Json) : V Json := do
   pure (Json.mkObj [("held", held.json), ("results", .arr results), ("answer", P2Session.answer held s)])
 
 /-- The session `j` gives (`sessionFn`'s input) run through its events by `Session.run`, and its window `t`. -/
-private def drawnRun (j : Json) : V (Session.State × Int) := do
+private def sampledRun (j : Json) : V (Session.State × Int) := do
   let reg ← registrationOf (← J.get j "registration" "input")
   let (params, coins, appendCoins, notBeforeNs) ← sessionOf j
   let events ← (← J.arr j "events" "input").mapM eventOf
@@ -694,33 +694,34 @@ private def layoutOf (j : Json) : V Span.Layout := do
   pure ⟨ps⟩
 
 private def instanceOf (j : Json) : V Span.Instance := do
-  pure { verdict := ← nat j "verdict", pubSalt := ← hex j "pub_salt", signsSalt := ← hex j "signs_salt",
-         verdictSalt := ← hex j "verdict_salt" }
+  pure { verdict := ← nat j "verdict", verdictSalt := ← hex j "verdict_salt" }
 
 private def instancesOf (j : Json) : V (Array Span.Instance) := do (← J.arr j "instances" "input").mapM instanceOf
 
 private def spanResultJ (x : Session.Result × Session.State) : Json :=
   Json.mkObj [("result", resultJ x.1), ("outcome", match x.2.outcome with | some o => .str o | none => .null)]
 
-/-- `{session…, "t"}`: window t's samples and, for each, the `pub` and `signs` rows the verifier derives
-(`Span.publicWords`, `Span.signWords`); refused for a window with no samples awaiting their check. -/
+/-- `{session…, "t"}`: window t's samples, for each the `pub` and `signs` rows the verifier derives
+(`Span.publicWords`, `Span.signWords`), and the supplied values it gives the audit (`Span.supplied`, null where there are
+none); refused for a window with no samples awaiting their check. -/
 def spanPublicFn (j : Json) : V Json := do
-  let (s, t) ← drawnRun j
-  let some (w, drawn) := s.awaiting t | throw "the window has no draws awaiting their check"
-  pure (Json.mkObj [("draws", .arr (drawn.map pairJ)), ("rows", .arr (drawn.map fun (i, p) =>
-    Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))]))])
+  let (s, t) ← sampledRun j
+  let some (w, sampled) := s.awaiting t | throw "the window has no draws awaiting their check"
+  pure (Json.mkObj [("draws", .arr (sampled.map pairJ)), ("rows", .arr (sampled.map fun (i, p) =>
+    Json.mkObj [("pub", toJson (Span.publicWords s.reg w i p)), ("signs", toJson (Span.signWords s.reg w i))])),
+    ("supplied", (Span.supplied s.reg w sampled).getD .null)])
 
 /-- `{session…, "t", "layout", "held": [{"public", "instances"}]}`: window t decided by `Span.spanHeld` on the public
 files given, taken as accepted (`Session.verifyHeld`). -/
 def spanHeldFn (j : Json) : V Json := do
-  let (s, t) ← drawnRun j
+  let (s, t) ← sampledRun j
   let held ← (← J.arr j "held" "input").mapM fun h => do pure (← hex h "public", ← instancesOf h)
   pure (spanResultJ (Session.verifyHeld s t (← layoutOf j) held))
 
 /-- `{session…, "t", "auditor": {"params", "layout"}, "span": {"statements": [{"pub", "record", "evidence",
 "instances"}], "blobs"}}`: window t decided from the span (`Session.verifySpan`). -/
 def spanFn (j : Json) : V Json := do
-  let (s, t) ← drawnRun j
+  let (s, t) ← sampledRun j
   let a ← J.get j "auditor" "input"
   let x ← J.get j "span" "input"
   let statements ← (← J.arr x "statements" "span").mapM fun st => do

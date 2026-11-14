@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.TS
-public import Definitions.Accounting.Assumptions.Stages
+public import Definitions.Compose.Assumptions.Stages
 
 /-!
 # SPOT under per-stage coins (trusted)

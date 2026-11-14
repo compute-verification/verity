@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.SampledTwo.CoinMap
 
 /-!
-# The two-stage leg's coin map: its distribution (`distributionAt`)
+# The two-stage subprotocol's coin map: its distribution (`distributionAt`)
 
 `SamplingDesignAt` at the coin map (`Proofs.Properties.Verity.SampledTwo.CoinMap`) is proved along `relK`, one coin node at a
 time. At a written node the node's value is a function of a chunk of the run's coins, and everything the map writes

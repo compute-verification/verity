@@ -163,7 +163,7 @@ def point(a, low, input_set, total: int, d: Path, net: Path, pin: str) -> dict:
     t1 = time.time()
     parts, rcs, rss = [], [], None
     for i, (lo, _hi) in enumerate(subs):
-        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(_net(a, net, lo)), *a.class_args]
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--circuit-description", str(_net(a, net, lo)), *a.class_args]
         srv, addr = None, a.verifier
         if addr:
             _probe(addr)
@@ -223,7 +223,7 @@ def loopback_probe(a, q: dict, out: Path, net: Path, pin: str) -> dict:
     per = []
     subs = q["subbatches"][: a.loopback_subs] if a.klass else q["subbatches"]
     for i, (lo, _hi) in enumerate(subs):
-        common = ["--instances", str(d / f"instances-s{i}.bin"), "--netlist", str(_net(a, net, lo)), *a.class_args]
+        common = ["--instances", str(d / f"instances-s{i}.bin"), "--circuit-description", str(_net(a, net, lo)), *a.class_args]
         log = d / f"loopback-serve-s{i}.log"
         srv = subprocess.Popen([a.bin, "serve", "--listen", "127.0.0.1:7391", "--out", str(d / f"loopback-sessions-s{i}"), "--pin", pin,
                                 *common, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{i}.bin")],
@@ -358,7 +358,7 @@ def serve_plan(a, low, input_set, plan: list[int], out: Path, net: Path, pin: st
     print(f"PLAN\t{json.dumps({'points': plan, 'servers': len(jobs)})}", flush=True)
     for d, j, lo in jobs:
         rc = subprocess.call([a.bin, "serve", "--listen", a.listen, "--out", str(d / f"sessions-s{j}"), "--pin", pin, *a.class_args,
-                              "--instances", str(d / f"instances-s{j}.bin"), "--netlist", str(_net(a, net, lo)), "--sessions", str(a.runs + 2),
+                              "--instances", str(d / f"instances-s{j}.bin"), "--circuit-description", str(_net(a, net, lo)), "--sessions", str(a.runs + 2),
                               "--operator", a.operator, *a.tables, *frame_module(a.template).serve_args(d / f"instances-s{j}.bin")],
                              stdout=open(d / f"serve-s{j}.log", "w"), stderr=subprocess.STDOUT)
         print(f"SERVED\t{d.name}/s{j} rc={rc}", flush=True)

@@ -257,7 +257,13 @@ def test_with_h1_receipts_each_window_registers_the_zy_receipts_a_lanes_combine_
     the other tests serve can't show it."""
     from verity.protocols.accounting.pouw.verifier import credit as CR
 
-    from tests.protocols import test_pouw_h1_receipts as TR
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "pouw" / "test_pouw_h1_receipts.py"
+    spec = importlib.util.spec_from_file_location("test_pouw_h1_receipts", path)
+    TR = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(TR)
 
     srv = _Server(monkeypatch)
     arm = SH.H1Windows(srv.model, srv.com, ROWS, STEPS, engine=object(), out=tmp_path / "serve", prover=tmp_path / "prover",
@@ -553,7 +559,7 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     from verity.protocols.accounting.pouw.verifier import verifier
 
     from verity_vllm.protocols.pouw import h1_hooks as PHK
-    from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+    from verity_torch.pouw.h1 import tables_device as TD
 
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
     calls, roots, warmed, built = [], [], [], []

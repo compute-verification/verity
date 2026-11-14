@@ -538,12 +538,12 @@ theorem pr_unpaid_sum_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks
       ≤ εrank + (P : ℝ≥0∞) * ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ h) + (qtot : ℝ≥0∞) / 2 ^ (8 * r)) := by
   classical
   let Passes := Fin P → SketchPassCoins N ρ h ks G
-  let Draw := Fin d → Fin P × Fin N
-  let eDraw : SketchStore N m × (SketchSigns ks m × Passes × Draw) ≃
-      (SketchStore N m × (SketchSigns ks m × Passes)) × Draw :=
+  let Sample := Fin d → Fin P × Fin N
+  let eSample : SketchStore N m × (SketchSigns ks m × Passes × Sample) ≃
+      (SketchStore N m × (SketchSigns ks m × Passes)) × Sample :=
     ((Equiv.refl _).prodCongr (Equiv.prodAssoc _ _ _).symm).trans
       (Equiv.prodAssoc _ _ _).symm
-  rw [Rate.pr_equiv eDraw]
+  rw [Rate.pr_equiv eSample]
   refine Rate.pr_le_of_fiber _ _ (fun _draw => ?_)
   let badRank : SketchSigns ks m → Prop := fun σ =>
     ∃ u, ((Accounting.Tag.signMatrix (σ.block u)).map (Int.cast : ℤ → ℚ)).rank < r

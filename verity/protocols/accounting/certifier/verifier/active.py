@@ -668,7 +668,7 @@ class Pair:
 
 def served_window(registration: WindowCommitmentRecord) -> int | None:
     """The window a registration's provenance names when it is exactly `{"kind": "served", "window": w}` (the network
-    certifier's own, `service.LinkWindows.provenance`), else None."""
+    certifier's own, `service.TransferBlocks.provenance`), else None."""
     window = registration.record.get("window") if isinstance(registration.record, Mapping) else None
     if isinstance(window, Mapping) and set(window) == {"kind", "window"} and window["kind"] == "served" and \
             type(window["window"]) is int:

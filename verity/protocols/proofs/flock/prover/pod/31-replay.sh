@@ -40,9 +40,9 @@ B=/workspace/flock-gpu-link/flock/target/release/$BIN; sha256sum $B | tee $O/bin
 lscpu | grep -E 'Model name|^CPU\(s\)' | tee $O/host.txt; echo threads $TH | tee -a $O/host.txt
 S=$W/rec-$TAG; rm -rf $S; mkdir -p $S; tar xzf $RD/inputs/$TAG.tgz -C $S
 PIN=$(python3 -c "from verity_flock import lowering; print(lowering.PINS['$REL'])")
-NET=$W/net-$REL.txt; python3 -c "from verity_flock import lowering; open('$NET','w').write(lowering.netlist('$REL'))"
+NET=$W/net-$REL.txt; python3 -c "from verity_flock import lowering; open('$NET','w').write(lowering.circuit_description('$REL'))"
 echo "$PIN  $NET" | sha256sum -c | tee $O/netlist.check || exit 1
-cmp $NET $S/net-$REL.txt && echo "netlist equals the verifier pod's" | tee -a $O/netlist.check
+cmp $NET $S/net-$REL.txt && echo "circuit description equals the verifier pod's" | tee -a $O/netlist.check
 SETDIR=; if [ -n "${SET:-}" ]; then SETDIR=$W/set-${SET%.tgz}; rm -rf $SETDIR; mkdir -p $SETDIR; tar xzf $RD/inputs/$SET -C $SETDIR || exit 5; fi
 python3 - "$REL" "$PER" "$S" "$W/inst-$TAG" "$TH" "$LEAF" "$SETDIR" "${YMODEL:-}" "${K:-0}" <<'PY' | tee $O/instances.txt
 import sys, json
@@ -64,7 +64,7 @@ for sd in $S/p*/sessions-s*; do
   pt=$(basename $(dirname $sd)); sb=${sd##*sessions-s}; inst=$W/inst-$TAG/$pt/instances-s$sb.bin
   for ses in $sd/l*; do
     [ -f $ses/$TB.rep0.bin ] || continue
-    line=$($B replay --instances $inst --netlist $NET --pin $PIN --session $ses/session.json --proofs $ses/$TB.rep0.bin,$ses/$TB.rep1.bin 2>/dev/null | grep '^REPLAY')
+    line=$($B replay --instances $inst --circuit-description $NET --pin $PIN --session $ses/session.json --proofs $ses/$TB.rep0.bin,$ses/$TB.rep1.bin 2>/dev/null | grep '^REPLAY')
     rc=$?; n=$((n+1))
     echo "{\"session\": \"$pt/s$sb/$(basename $ses)\", \"replay\": ${line#REPLAY	}}" >> $O/replay.jsonl
     echo "$line" | grep -q '"accepted":true' || bad=$((bad+1))
@@ -79,7 +79,7 @@ sd=$S/$NEG; ses=$(ls -d $sd/l* | sed -n 4p); oth=$(ls -d $sd/l* | sed -n 5p)
 inst=$W/inst-$TAG/${NEG%%/*}/instances-s${NEG##*sessions-s}.bin
 T=$W/neg-$TAG; mkdir -p $T
 neg() { local name=$1 sj=$2 p0=$3 p1=$4 i=${5:-$inst} want=${6:-rejected}
-  line=$($B replay --instances $i --netlist $NET --pin $PIN --session $sj --proofs $p0,$p1 2>/dev/null | grep '^REPLAY')
+  line=$($B replay --instances $i --circuit-description $NET --pin $PIN --session $sj --proofs $p0,$p1 2>/dev/null | grep '^REPLAY')
   r=$(echo "$line" | grep -q '"accepted":true' && echo accepted || echo rejected)
   echo "{\"neg\": \"$name\", \"want\": \"$want\", \"result\": \"$r\", \"replay\": ${line#REPLAY	}}" | tee -a $O/negatives.jsonl | cut -c1-300
   [ $want = info ] || [ $r = $want ] || bad=$((bad+1)); }

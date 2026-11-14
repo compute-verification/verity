@@ -4,7 +4,7 @@ with its ε and δ.  They are computed here, the memory line's charges and paced
 and nowhere else: the benchmark and every other consumer reads them from `declared`.
 
 The memory line's forms are the conclusions of `Accounting.Guarantees.Remote.Held` (the snapshot), `HeldOverTime`
-(time-held) and `HeldOverTimeLinks` (link-charged), `security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read at
+(time-held) and `HeldOverTimeLinks` (link-charged), `security/Definitions/Poub/Guarantees/RemoteHeld.lean`, read at
 the record.  In the statements' terms, with b a block's bytes and every rate in blocks a ns:
 
 - N, the registered blocks; P, the credited passes; `planned`, their registered receipts (each pass's `lengths` less
@@ -45,7 +45,7 @@ FORMS = (SNAPSHOT, *line.FORMS)
 """The memory line's forms, in order: `Held`'s, `HeldOverTime`'s and `HeldOverTimeLinks`'s."""
 REJECTION_LOG2 = 64
 """The sample's rejection a sample, in bits: a sample below U reads a word of `bitlen(U) + 64` bits or more (`Key._uniform`,
-`Accounting.Remote.Draw.width`), so a uniform first word is rejected with probability below 2^-64."""
+`Accounting.Remote.Sample.width`), so a uniform first word is rejected with probability below 2^-64."""
 DELTA_PARTS = ("profile", "slack", "hiding", "binding", "sketch", "rejection")
 """The memory line's δ parts (`delta_parts`), in the order `memory` adds them."""
 PRF_CLAIM = "prf/sha-512"
@@ -145,11 +145,11 @@ class Node:
         """The node of `figures`: R measured is the larger of its `read_bytes_per_s` and the prover's reported read, R
         at spec the larger of its `spec_bytes_per_s` and that, so a prover reporting a slower read can't shrink a term.
         Its rebuild burst is S_chip, what a batch in flight holds on the chips; its disk burst one second at the disks'
-        rate, which is a highest second; its link burst `figures.link_window_bytes` when the links are charged.  Its
+        rate, which is a highest second; its link burst `figures.phase_bytes` when the links are charged.  Its
         tiers are every GPU's HBM and the host's DRAM, which no reported read raises."""
         f = figures
         disk = disk_bytes_per_s if disk_burst_bytes is None else disk_burst_bytes
-        link = (f.link_window_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
+        link = (f.phase_bytes if link_bytes_per_s else 0.0) if link_burst_bytes is None else link_burst_bytes
         tiers = {"hbm": Tier(f.gpus, f.gpu_spec_bytes_per_s, f.gpu_read_bytes_per_s, f.gpu_chip_bytes),
                  "dram": Tier(1, f.host_spec_bytes_per_s, f.host_read_bytes_per_s, f.host_chip_bytes)}
         return cls(f.spec_bytes_per_s, f.read_bytes_per_s, f.chip_bytes, f.squarings_per_s,
@@ -217,8 +217,9 @@ def rejection(record: audit.Record) -> Fraction:
     that opens all its receipts): the statement's error is a constant, and a sample's U_t is the prover's.  Refused for a
     record that states no `samples`.  Exact: the samples are an integer."""
     if record.samples is None:
-        raise ValueError("the record states no samples, the receipts every sample requested, at which the memory line's "
-                         "δ charges the draw's rejection (Σ_t k_t/2^64): give the record its session's Params.samples")
+        raise ValueError("the record states no samples, the receipts every sample requested, at which the memory "
+                         "line's δ charges the sample's rejection (Σ_t k_t/2^64): give the record its session's "
+                         "Params.samples")
     return Fraction(coins.openings_coins(len(record.windows), record.groups_per_coin) * record.samples,
                     2 ** REJECTION_LOG2)
 
@@ -267,7 +268,7 @@ def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fract
 
 
 def binding(record: audit.Record) -> Fraction:
-    """The receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`): the probability that some opened
+    """The receipts' binding term (`Accounting.Remote.Sample.Receipts.binding`): the probability that some opened
     receipt was presented with an accepted row other than the one its root holds (`Receipts.held`, the plurality of
     the rows it shows over its window's continuations from the cut before its coin).  Window t's fork finder runs the
     prover twice from that cut on independent openings coins and checks both runs' openings, q_t = 2·Q +

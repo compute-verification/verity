@@ -4,7 +4,7 @@ answer as `Poub.Protocol.certify` publishes it and that session's error in its v
 `error`): `q_bytes`, the receipts not shown wrong in bytes, certified as read except with the session's whole error p.
 
 The whole error is the ledger's for the session's openings read pooled (its `horizon`): the openings' pooled bound's δ₀
-(2^-101) with AuditRO's slack a pass, the sample's terms (`draw`: the rejection ⌈W/g⌉·s/2^64, the session's openings
+(2^-101) with AuditRO's slack a pass, the sample's terms (`sample`: the rejection ⌈W/g⌉·s/2^64, the session's openings
 coins at its `samples` s each, and the receipts' binding term) and the sketch's term at the prover's budget (`sketch`:
 `timing.sketch_failure`; 0 for a receipt that is no sketch). The answer's own `eps` is δ₀ + ⌈W/g⌉·s/2^64, at least the
 sample term (`LineHeldAtSubprotocol`'s ⌈W/g⌉·s/2^256), the error of "U − W receipts are correct"; a correct receipt is
@@ -164,7 +164,7 @@ def ledger_error(doc: Mapping[str, Any]) -> Mapping[str, Any] | None:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.protocols.accounting.poub.verifier.monitoring",
                                  description=__doc__.split("\n\n")[0])
-    ap.add_argument("answer", type=Path, help="the session's core answer, or a leg's bandwidth.json carrying it")
+    ap.add_argument("answer", type=Path, help="the session's core answer, or a subprotocol's bandwidth.json carrying it")
     ap.add_argument("--ledger", type=Path, default=None,
                     help="the session's declared outputs in its verifier's ledger (ledger.declared's JSON, or a "
                          "verifier.json session's ledger), whose error the table carries; an accepted session's table "

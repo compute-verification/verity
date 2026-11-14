@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The compile slice (CompileSlice_v7) in zero knowledge, or plain (compile_slice_zk.py) on a CPU machine, on hidden_zk's
 # builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the
-# sampled-proofs verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
+# SPOT verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
 # most 180 minutes:
 #   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh
@@ -28,7 +28,7 @@ setup
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
   benchmarks/network_e2e/encodings/tests/fixtures verity/protocols/accounting/certifier/verifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 if [ -n "${CS_PLAIN:-}" ]; then
   mode=cszk-plain points=${CS_POINTS:-}
