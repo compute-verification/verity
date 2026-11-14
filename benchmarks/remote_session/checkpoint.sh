@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# The pinned checkpoint of ROLE (default QWEN25_32B_BF16) on this node, for a bound run (cwd = the source tree): the
+# The pinned checkpoint of ROLE (default QWEN25_32B_BF16) on this node, for a gate run (cwd = the source tree): the
 # files core's pin names (`verity/protocols/accounting/pouw/verifier/lean/check/models.json`) at its repo and revision in the HF cache
 # (HF_HOME, default /workspace/hf), any missing fetched from the Hub; then $HF_HOME/pinned/ROLE-REV8, a directory of hard
-# links to the cache's blobs (regular files, which `remote_bandwidth.store.check` takes and a snapshot's symlinks aren't:
-# `verifier.py --checkpoint`), every file of it held to the pin's SHA-512 (`store.check`, WORKERS processes); the
+# links to the cache's blobs (regular files, which `remote_bandwidth.store.check` takes and a snapshot's symlinks
+# aren't), every file of it held to the pin's SHA-512 (`store.check`, WORKERS processes); the
 # snapshot (`node.py --model-dir`) and the pinned directory each get a retention record (owner OWNER,
 # KEEP_EXPIRES). CHECK_ONLY=1 fetches and links nothing: it holds what is there to the pin. Writes $OUT/checkpoint.json.
 #

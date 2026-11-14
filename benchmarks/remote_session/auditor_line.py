@@ -64,13 +64,14 @@ the auditor's.
   `pinned`, and that commit is on main's first-parent line, a tree main's check ran on. With no
   log or no copy of main, no session is pinned or credited.
 
-**The store** (`bound_check`, the run's, so every session's, reported as `bound`). The registered store is bound to
-the model when the verifier bound it (`verifier.py --model`, verifier.json's `binding`), refusing any hello whose
+**The store** (`bound_check`, the run's, so every session's, reported as `bound`). The verifier holds no checkpoint, so
+a run's registered store is the developer's choice. A record made while the verifier could bind it carries
+verifier.json's `binding`: the registered store is bound to the model when that binding held, refusing any hello whose
 payload root isn't that of the store the pinned checkpoint lays out (`remote_bandwidth.store`, in the tree *credited*
 names, so the period's circuit commits to the code that decided it), the Lean verifier deciding it (`hold`, the
 binding's `lean`), the binding's root is the registration's, and its model, name and checkpoint_sha512, is the one the
-audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose verifier bound the store to
-no model, or with no model to bind it to, is unbound: its sessions are credited on the four checks, and the line is
+audit's period signs (its open's `model`), or with no period's, `--model-pin`'s. A run whose record carries no
+binding, or with no model to bind it to, is unbound: its sessions are credited on the four checks, and the line is
 conditional on `DeveloperStore` (`PREMISES`: the verifier held no checkpoint, so the store's bytes are the developer's
 choice). A binding the record carries is checked even with no model: one that doesn't hold, or holds the store to
 another model, is refused, and every session's credit is zero.
@@ -560,8 +561,8 @@ def union_error(rows: list[dict]) -> dict:
 
 def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     """Whether the run's registered store is `model`'s ({name, checkpoint_sha512}, from `source`): the verifier's
-    binding (verifier.json's `binding`, `remote_bandwidth.store.Binding.record`) held the hello's payload root to the root of the
-    store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
+    binding (verifier.json's `binding`, in a record made while the verifier could bind it) held the hello's payload root
+    to the root of the store the pinned checkpoint lays out under the verifier's payload key, the Lean verifier deciding it (`lean`, its
     `hold`'s answer: bound, at that root), that root is the registration's, and the binding's model is `model`.
     `bound` says whether it is. A run with no binding, or with no model to hold one to, is unbound: its store is the
     developer's choice (`store`), which the line is then conditional on (`premise`, `STORE_PREMISE`), and `ok`.
@@ -573,8 +574,8 @@ def bound_check(v: dict, model: dict | None, source: str | None) -> dict:
     why = refused(b, root, model)
     if why is None and (b is None or model is None):
         why = ("no model to bind the store to: the audit's period signs none and no --model-pin names one"
-               if model is None else "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint "
-               "DIR --pin FILE), so its payload root is the prover's choice")
+               if model is None else "the verifier holds no checkpoint, so the store's payload root is the developer's "
+               "choice")
         return {**out, "bound": False, "store": DEVELOPERS, "premise": STORE_PREMISE, "refused": None, "ok": True,
                 "reason": why}
     return {**out, "bound": why is None, "store": MODELS if why is None else DEVELOPERS, "premise": None,

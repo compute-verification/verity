@@ -77,11 +77,9 @@ trace's step before pass n is recorded as step n − 1, so pass n reads the stor
                                                         serving up to 4 steps past the passes, each slot reused 5 steps
                                                         after its free
     python prover.py ... --cpu 1024 --model-dir DIR --engines 2 --arena-blocks 512
-                                                        the store a model in DIR pins (`remote_bandwidth.store`),
-                                                        which `verifier.py --model` holds the hello to
+                                                        the store a model in DIR lays out (`remote_bandwidth.store`)
 
-The payload's salts are under the key the verifier sends first (`payload-key`), so it can recompute a pinned model's
-payload root (`remote_bandwidth.store`); `--seed-payload-key`, for tests only, keeps the backend's own key, from --seed.
+The payload's salts are under the key the verifier sends first (`payload-key`, `remote_bandwidth.store`).
 """
 from __future__ import annotations
 
@@ -464,7 +462,7 @@ class CpuBackend:
 
     With `store` (a `remote_bandwidth.store.Store`) the payloads are that store's, a pinned model's arenas and zero filler, and
     the hello carries its layout. The payload salts are the verifier's key's (`set_payload_key`), or random ones sampled
-    from `rng` when the prover takes no key (`ProverSide`'s `seed_payload_key`)."""
+    from `rng` until it is given one."""
 
     def __init__(self, blocks: int, rng: random.Random, read_bytes_per_s: float = 1e12,
                  store: rstore.Store | None = None) -> None:
@@ -583,14 +581,11 @@ class CpuBackend:
 class ProverSide:
     def __init__(self, conn: wire.Conn, backend, node: bytes, plan: list[tuple[str, float]], *, seed: int = 0,
                  defer_openings: bool = True, warmup_ns: int = 0, kv_every: int = 1, kv_pool: int = 64,
-                 kv_headroom: int = 0, ahead: int | None = None, fill: bool = False, seed_payload_key: bool = False,
+                 kv_headroom: int = 0, ahead: int | None = None, fill: bool = False,
                  log=print) -> None:
         """`ahead`: a kv session's serving runs on its own thread, at most that many steps past the passes (`Ahead`,
-        `fill` its test schedule); `kv_headroom`: its trace's steps between a slot's free and its reuse.
-        `seed_payload_key`, for tests only: a backend that takes the verifier's payload salt key (`set_payload_key`)
-        keeps its own, from `--seed`, so a verifier that binds the store to a model refuses its root."""
+        `fill` its test schedule); `kv_headroom`: its trace's steps between a slot's free and its reuse."""
         self.conn, self.backend, self.node, self.plan, self.log = conn, backend, node, plan, log
-        self.seed_payload_key = seed_payload_key
         self.defer_openings, self.warmup_ns = defer_openings, warmup_ns
         self.kv_every, self.kv_pool, self.kv_headroom = kv_every, kv_pool, kv_headroom
         self.ahead, self.fill = ahead, fill
@@ -695,7 +690,7 @@ class ProverSide:
     def register(self, codec: rcodec.Codec = rcodec.DEFAULT, receipt: str = rb.DEFAULT, rows: int | None = None) -> dict:
         """The hello, once a backend that takes the verifier's payload salt key has it (the verifier's first message,
         `payload-key`), then the registration, the encode and the calibration (`ready`)."""
-        if hasattr(self.backend, "set_payload_key") and not self.seed_payload_key:
+        if hasattr(self.backend, "set_payload_key"):
             head, _, _ = self.expect("payload-key")
             key = bytes.fromhex(head["key"])
             if len(key) != rstore.KEY_BYTES:
@@ -1067,14 +1062,10 @@ def main() -> int:
     ap.add_argument("--codec", default=rcodec.DEFAULT.name, help="the registration's codec, with --cpu")
     ap.add_argument("--model-dir", type=Path, metavar="DIR",
                     help="with --cpu: the store is the checkpoint in DIR's (`remote_bandwidth.store.Store`): --engines arenas of "
-                         "--arena-blocks, then the rest of the BLOCKS zero host filler, as `verifier.py --model` holds "
-                         "it")
+                         "--arena-blocks, then the rest of the BLOCKS zero host filler")
     ap.add_argument("--engines", type=int, default=1, help="with --model-dir: the store's arenas, an engine's each")
     ap.add_argument("--arena-blocks", type=int, help="with --model-dir: an arena's blocks (an engine's --arena-gib × "
                     "262144)")
-    ap.add_argument("--seed-payload-key", action="store_true",
-                    help="tests only: salt the payload under the backend's own key (from --seed) instead of the one the "
-                         "verifier sends, which a verifier that binds the store to a model refuses")
     ap.add_argument("--kv-every", type=int, default=1, help="a kv session's passes per memory-map step")
     ap.add_argument("--kv-pool", type=int, default=64, help="a kv session's registered slots the KV pool writes over")
     ap.add_argument("--ahead", type=int, default=None, metavar="K",
@@ -1103,7 +1094,7 @@ def main() -> int:
     conn = wire.connect(host, int(port))
     p = ProverSide(conn, backend, a.node.encode(), parse_plan(a.plan), seed=a.seed,
                    defer_openings=not a.overlap_openings, warmup_ns=round(a.warmup_ms * 1e6), kv_every=a.kv_every,
-                   kv_pool=a.kv_pool, kv_headroom=a.kv_headroom, ahead=a.ahead, seed_payload_key=a.seed_payload_key,
+                   kv_pool=a.kv_pool, kv_headroom=a.kv_headroom, ahead=a.ahead,
                    log=lambda m: print(m, flush=True))
     cal = p.register(codec=wire.codec_named(a.codec)) if a.cpu else p.register()
     print(f"prover: registered, calibration {json.dumps(cal)}", flush=True)

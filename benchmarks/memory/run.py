@@ -10,9 +10,8 @@ The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for t
 The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest session: the prover on the whole GPU
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
 engine's weights arena the store, the verifier on the auditor's verifier host, the coins from the challenger host.
-BIND (default 0) is whether the verifier binds the store to the role's pinned checkpoint: with 0 it holds no
-checkpoint and the store is the developer's choice, which the text and the JSON (`bound`) say; with 1 it binds it, as
-`gate_run.sh`'s BIND. PACED is the session (default seven credited stretches of a second, each pass
+The verifier holds no checkpoint, so the store is the developer's choice, which the text and the JSON (`bound`) say.
+PACED is the session (default seven credited stretches of a second, each pass
 under a live coin of its own); UNPACED asks for a session of one coin a window in its place, as
 WINDOWS:WINDOW_MS:SAMPLES (`7:60000:33273` is seven windows of a minute with 33,273 openings each). `gate_run.sh`'s
 own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEAF_CTAS, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the
@@ -70,7 +69,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RS = ROOT / "benchmarks" / "remote_session"
 
-#: this directory's registry: PACED, UNPACED, BIND, and the variables a research run sets
+#: this directory's registry: PACED, UNPACED, and the variables a research run sets
 SETTINGS = of(__file__)
 #: UNPACED's word: the windows, a window's milliseconds (to three places, as the verifier host takes them) and the
 #: openings a window
@@ -297,14 +296,6 @@ def loopback(run: Callable = subprocess.run) -> dict:
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
-def form() -> dict[str, str]:
-    """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
-    set, else PACED's paced one, and BIND, whether its verifier binds the store."""
-    if (bind := SETTINGS.BIND) not in ("0", "1"):
-        raise Unreadable(f"BIND is {bind!r}: 0 binds the node's store to no model, 1 to {ROLE}'s pinned checkpoint")
-    return {"BIND": bind, **session_form()}
-
-
 def session_form() -> dict[str, str]:
     """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
     set, else PACED's paced one."""
@@ -327,7 +318,7 @@ def node(store, period: str, dry: bool, k: int | None, run: Callable = subproces
          wait: Callable[[float], None] = time.sleep) -> dict | int:
     """The gate run of one honest session under `period`, then its printed document from the store; `gate_run.sh`'s
     exit status when it launched nothing or ran dry."""
-    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", **form()}
+    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", **session_form()}
     rc = run(["bash", str(RS / "gate_run.sh"), *(["--dry-run"] if dry else []), period], cwd=ROOT, env=env,
              stdout=sys.stderr).returncode
     if dry:
