@@ -214,3 +214,12 @@ My first word (sent 11:07 PM PST; its heading says 11:10) is in your inbox ahead
 
 TIMER: none
 
+[2026-11-14T07:24Z] 9d3adb1c3f73
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 11:25 PM PST. **One figure in my 11:17 PM PST line is wrong: under way B the statement reads about 55 fewer definitions, not about 70.**
+
+- The run prints 77 definitions as the statement's new reads [ran]: 24 of the registration, 13 entry checks, 32 others of the Site, 6 of the subtree's file, 2 of mine.
+- Way B drops the 24, the 13 and about 20 of the 32 that only the valid log reads; it keeps the link kinds, `far`, `kind?` and `loc?` [argued: counted by name, not run].
+- Nothing else in that line changes. I still would take A, and still build none of it until your word.
+
+TIMER: none
+
