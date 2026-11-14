@@ -12,7 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 pytest.importorskip("verity_flock.class_statement")
-from verity_flock import class_statement as CS  # noqa: E402
+from verity_flock import class_statement as CS
 
 
 def _digest(monkeypatch, locs):

@@ -4,7 +4,7 @@ the id `period.run` does in one process and challenges the same indices. The run
 the honest prover and refuses it against one that answers zeros. The warm-ups before round 0 are on a public index,
 and neither timed nor judged. The prover answers with the collector paused, as the challenger does. The deployment
 layer's runtime, running the same two parties on the same coins and clock readings, signs the session the stream
-does. `side_of` reads `period.json`'s challenger host, and `placement` says whether `trusted-host`'s premise holds."""
+does. `side_of` reads `period.json`'s challenger host, and `placement` says whether `trusted-device`'s premise holds."""
 
 from __future__ import annotations
 

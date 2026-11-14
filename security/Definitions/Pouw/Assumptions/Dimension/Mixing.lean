@@ -53,7 +53,7 @@ noncomputable def Lmul {N m n k : ℕ} (V : Submodule ℚ (Noise N m n k → ℚ
   sInf {r | ∃ p : Fin r → Noise N m n k → ℚ, (∀ i, ProdFree (p i)) ∧
     V ≤ Submodule.span ℚ (Set.range p) ⊔ V0 N m n k}
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The mixing lemma** (survey §2.4): under checkpoint independence, for every AlgM_4090 program on inputs in `V₀`
 that outputs the non-final checked words of the units in `U` (A = g(F₁)), with `T` their span,
@@ -100,7 +100,7 @@ def A1W1Witness : Prop := ∀ (k : ℕ) (R : Mat) (γ₁ : ℝ), 1 / 2 ≤ γ₁
 
 /-- **MinRank ≥ 2's witness, jointly with `Admissible` and checkpoint independence** (the shift by
 24): for every `k ≥ 1024` with `16 ∣ k`, some `R` passes `Admissible`, is checkpoint independent and has MinRank ≥ 2,
-so `A1_W1`'s premises on `R` hold together at every production `k`. -/
+so `A1_W1`'s premises on `R` hold together at every served `k`. -/
 def MinRank2Witness : Prop :=
   ∀ k, 1024 ≤ k → 16 ∣ k → ∃ R, Admissible k 16 R ∧ CheckpointIndependent k 16 R ∧ MinRank2 k R
 

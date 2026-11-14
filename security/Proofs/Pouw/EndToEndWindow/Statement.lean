@@ -87,7 +87,7 @@ open scoped ENNReal
 
 variable {Q R S : Type}
 
-/-- **The incorrect work** of a transcript `τ` at the oracle `H` and the salt `s`: the declared work of the units that
+/-- **The incorrect work** of a transcript `τ` at the oracle `H` and the salt `s`: the registered size of the units that
 are not correct in it, `∑_{u < N, u ∉ K(τ)} W_ref(u)`. -/
 noncomputable def incorrectWork (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Pouw.Transcript) : ℝ :=
   ∑ u ∈ range U.layout.N \ correctSet P U H s τ, (P.Wref U.layout u : ℝ)
@@ -123,7 +123,7 @@ def TileWork [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel
 /-- **The metered model at `g`**, `TileWork`'s instance: its programs are adaptive oracle programs (one for each
 workload, activation input, state and salt), a run outputs what its program returns, makes the program's queries, and
 costs `(1 − g)·W_ref(u)` for every unit `u < N` it commits. It is a device that pays each committed coordinate's
-declared work at the discount `g` and can't commit one for less. -/
+registered size at the discount `g` and can't commit one for less. -/
 noncomputable def meteredModel (P : Protocol Q R S) (g : ℝ) : CostModel Q R S where
   Prog := Workload → (ℕ → Pouw.Mat) → Pouw.State → S → QTree Q R Pouw.Transcript
   run p H U act st s := (p U act st s).eval H
@@ -168,7 +168,7 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
 salt (`play`: the registration, then the sessions on every sample), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
-release (`LiveRecord.log`; that the challenger keeps that order is `trusted-host`'s): the registration's
+release (`LiveRecord.log`; that the challenger keeps that order is `trusted-device`'s): the registration's
 receipt, and the release of the epoch's sampling coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
 oracle calls, the most over every sample and every coin of the sessions. The extraction reads none of the sessions'
@@ -305,7 +305,7 @@ program's calls, which `ProverModel.sessCalls` doesn't yet tie (see `ProverModel
 filler, which is no PoUW unit, adds nothing to it.
 
 Its discharges:
-* `WindowBoundOfService`, at the service's law;
+* `WindowBoundOfService`, at the service's sampling design;
 * gap (6)'s `Pouw.Guarantees.Window.WindowDelta` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
   sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through
   Flock's analysis in `Proofs.Pouw.Window.Flock` (`CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`;
@@ -371,7 +371,7 @@ theorem realizes_of_coordinates : RealizesOfCoordinates := by
   unfold incorrectWork
   exact_mod_cast hN
 
-/-- **`WindowBound` at the service's law** (statement, no proof yet; to be proved as `windowBound_of_service`). The
+/-- **`WindowBound` at the service's sampling design** (statement, no proof yet; to be proved as `windowBound_of_service`). The
 service (decision 102, `window.py`) samples one uniform `K′`-subset of the window's `N` units after the receipt
 (`subset:K′`), `N` the real units padded to the grid with fillers (`pad(N_real + 1)`), each proved alone (no closures).
 If every audit unit does at most `w_max` (fillers included), the window realizes PoUW's units, the window's one analysis
@@ -419,22 +419,22 @@ open scoped ENNReal
 
 /-- **PoUW's work bound at the window audit** (statement only, no proof yet), at the window's share `ε`
 (`0 < ε ≤ 1`). A prover that passes the window audit, its registration received before the epoch's sampling coin, spent at
-least a `(1 − γ_u)(1 − ε)` share of the window's declared work between the salt's release and the registration's
+least a `(1 − γ_u)(1 − ε)` share of the window's registered size between the salt's release and the registration's
 receipt, less the extractor's cost, except with probability `E[β] + ε_id(q, N) + η(q + q_ext, N)`.
 
 **What it bounds.** The prover `B` is a program of the prover model `PM` (`WindowWork.Prover`), and the audit runs
 against its play. Its work `T` bounds the cost of its online phase, from the salt's release to the registration's
 receipt, in the cost model's units, which the model fixes, not the prover; an accepted registration is received before
 the sampling coin's release, so that is work between the salt coin and the sampling coin. `q` counts its oracle calls, the
-sessions' among them. Its work is compared with the window's declared work `W = ∑_{u < N} W_ref(u)` in `CM`'s units,
+sessions' among them. Its work is compared with the window's registered size `W = ∑_{u < N} W_ref(u)` in `CM`'s units,
 `W_ref(u)` being the honest reference's cost of unit `u` without hash calls, on decision 107's coordinate units
 (`WindowWork.coordDomain`). Averaged over the oracle `H` and the salt `s`, the service accepts the play at the sampling
 coin's cutoff (`WindowWork.AcceptsBy`) while `T + T_ext < (1 − γ_u)(1 − ε)·W` with probability at most
-$$\mathbb{E}_{H,s}\Pr[\text{accept before the draw coin} \wedge T + T_{ext} < (1-\gamma_u)(1-\varepsilon)\,W] \le
+$$\mathbb{E}_{H,s}\Pr[\text{accept before the sample coin} \wedge T + T_{ext} < (1-\gamma_u)(1-\varepsilon)\,W] \le
   \mathbb{E}_{H,s}\,\beta(H, s) + \varepsilon_{id}(q, N) + \eta(q + q_{ext}, N).$$
 The challenger's wall-clock deadline (`Check.registration_deadline`) only refuses more, so the bound holds of what the
 service accepts at any deadline.
-The audit is `FlockSoundness.Audit.auditReg` at the service's law, one uniform `K`-subset of the `n` padded units
+The audit is `FlockSoundness.Audit.auditReg` at the service's sampling design, one uniform `K`-subset of the `n` padded units
 (`Law.subset n K`, `subset:K′` in `window.py`), with any sessions. `ε` is the window's, the `ε` its `K′` was sized at
 (`window.sampling`), so the statement covers each grid main serves, `(0.1%, 2^-40)` and `(1%, 2^-128)`.
 

@@ -218,7 +218,7 @@ def test_the_full_draw_passes(n: int, server) -> None:
     ({"law": "subset", "population": 2, "k": 2, "units": [1, 0]}, "the session's draw: U2"),
 ])
 def test_the_draw_policy_refuses_a_partial_draw(draw: dict | None, why: str, server) -> None:
-    """A session record with no sample, a sample that leaves a unit out, an empty population, another law, or a sample
+    """A session record with no sample, a sample that leaves a unit out, an empty population, another sampling design, or a sample
     flock-verify's format refuses, is refused by name."""
     kind, got = FULL.lean(server, {"record": _record(draw)})
     assert kind == "reject" and why in got

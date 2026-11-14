@@ -535,6 +535,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
     prompt_rows, decode_steps = request_shape(wrapper, LP, T)
+    lp: Any = LP   # as given: the launch's readers take `int` themselves, a step's T too (`in_launch`)
+    t: Any = T
     net = decoder(phi, M, pos0 + M if wrapper == "step" else prompt_rows + decode_steps)
     kind = (phi.sampling or {}).get("kind", "greedy")
     if (wrapper, kind) not in WRAPPERS:
@@ -579,10 +581,10 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched, model.table_reads = True, table_reads
-    batch = (launch_batch(phi, prompt_rows, decode_steps) if batch is None else batch) if wrapper == "request" else None
-    in_launch(model, batch, net.model_class, chunks, decode_steps, entries=tuple(entries))
+    batch = (launch_batch(phi, lp, t) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, t, entries=tuple(entries))
     if wrapper == "request" and isinstance(model, _Model):
-        model.ctx = launch_rows(phi, prompt_rows, decode_steps, C)
+        model.ctx = launch_rows(phi, lp, t, C)
     if C:
         model.open_with(inputs[history:n_user - resumed], C)
     rows = [Coll(I32, ids.refs.slice(i, i + 1)) for i in range(n)]

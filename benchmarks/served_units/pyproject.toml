@@ -9,7 +9,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (bash, taskset, ps, du): keyed on the suite's whole tree
-untraced = ["tests/test_names.py", "tests/test_stage_prove.py", "tests/test_tmpl_unit.py", "tests/test_window.py"]
+untraced = ["tests/test_job.py", "tests/test_names.py", "tests/test_stage_prove.py", "tests/test_tmpl_unit.py",
+  "tests/test_window.py"]
 # stage.py's imports (verity, verity_flock under it, circuit_check's targets), a census type's serving-row template
 # (verity_vllm), ks_form.py's mirror (verity.core's one-stage proofs), and the break-even planner's reader, whose
 # required fields prove_rows.py's rows are held to.

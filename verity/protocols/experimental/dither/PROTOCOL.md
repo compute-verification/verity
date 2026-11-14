@@ -339,7 +339,7 @@ Inside a selected block, its proof block p is sampled with probability W_p/W_b.
 
 It needs a sampling-design object beside `draw.parse_design`'s and the Lean verifier's `Flock.Draw`. Its miss probability bound
 is `WorkSound`'s sampling term, a moment bound at rate ηq/W_reg a unit of cost, rather than `work_escape_le`. The
-integrity profile has no field for a cost-weighted moment bound; that field is sampled proofs', which produce the
+integrity profile has no field for a cost-weighted moment bound; that field is SPOT's, which produces the
 profile.
 
 ### Registration
@@ -411,7 +411,7 @@ weight root is bound, and never shared between replicas. They are reused across 
 The network certifier watches the replica's boundary, signs its receipts and arrival times, and counts k_infil and
 k_exfil. Dither needs these of the challenger and the certifier:
 
-- **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-host`). No machine
+- **Coins stay confidential until they cross the boundary** (`CoinsConfidential`, under `trusted-device`). No machine
   outside the replica's boundary may hold a coin before the coin enters the boundary, and afterwards only through bits
   the certifier counts. Its statement is `Pouw.Assumptions.CoinsConfidential`'s docstring
   (`security/Definitions/Pouw/Assumptions/Dither.lean`). The placement premise `WitnessPathPrivate`
