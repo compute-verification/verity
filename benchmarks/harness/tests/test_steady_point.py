@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import signal
 import sys
@@ -17,7 +18,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, settings
+from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -31,11 +32,13 @@ PIN = hashlib.sha512(CIRCUIT.encode()).hexdigest()
 DRIVER, CUDA = "570.86.15", "12.8.93"
 SETUP = "benchmarks/specs/steady-setup.sh"
 RECORD = "prove-glm53-flock-steady"
+#: a made-up artifact of the store, and the directory in it that holds a staged statement
+ART, IN_ART = "art:" + "5" * 64, "out/row1"
 #: the made-up run of `test_steady.made`: two provers of `gemm64` on GPU 3, in the run `r-own`
 POINT, RUN = "gemm64-k2", "r-own"
 #: what a row of a run of the point holds beyond the script's own fields
 OWN = {"pin": PIN, "cores": {"count": 10, "list": "0-9", "numa_nodes": [0]},
-       SP.VERSIONS: {"driver": DRIVER, "cuda": CUDA}}
+       SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}}
 #: the made-up tree's files beside its spec: the prover's source, its tests and its document, a build script, the timing
 #: script and the spec's setup
 FILES = {
@@ -50,7 +53,7 @@ FILES = {
 }
 SPEC = {
     "schema": SP.SCHEMA, "id": "steady", "workload": "glm53", "card": "h200", "cores": 10, "sessions": 16, "ahead": 2,
-    "driver": DRIVER, "cuda": CUDA, "setup": SETUP,
+    "driver": DRIVER, "cuda_toolkit": CUDA, "setup": SETUP,
     "env": {"RUST_MIN_STACK": "1073741824"},
     "admission": {"max_minutes": 90, "mem_gb": 80},
     "row": [{"type": "gemm64", "n": 1, "pin": PIN, "provers": [1, 2], "warm": 2},
@@ -100,6 +103,38 @@ def git(root: Path) -> None:
                    shell=True, cwd=root, check=True)
 
 
+def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
+    """A spec that moved with its directory was added when the file was added under the former one: the runs recorded
+    under that path started after it, and the pull of the store's attempts reaches back to them."""
+
+    import subprocess
+
+    from verity_bench.vllm.presets import FORMER_SPECS
+
+    def commit(at: int, *argv: str) -> None:
+        when = f"@{at} +0000"
+        for step in (argv, ("add", "-A"), ("-c", "user.name=t", "-c", "user.email=t@example.com", "-c", "commit.gpgsign=false",
+                                           "commit", "-qm", "specs")):
+            if step:
+                subprocess.run(["git", *step], cwd=root, check=True,
+                               env={**os.environ, "GIT_AUTHOR_DATE": when, "GIT_COMMITTER_DATE": when})
+
+    monkeypatch.setattr(served_table, "SPECS", "elsewhere/specs")
+    root = tmp_path / "tree"
+    (root / FORMER_SPECS).mkdir(parents=True)
+    (root / FORMER_SPECS / "moved.toml").write_text("moved\n")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    commit(1700000000)
+    (root / "elsewhere" / "specs").mkdir(parents=True)
+    (root / "elsewhere" / "specs" / "new.toml").write_text("new\n")
+    commit(1700009000, "mv", f"{FORMER_SPECS}/moved.toml", "elsewhere/specs/moved.toml")
+    assert not (root / FORMER_SPECS / "moved.toml").exists()
+    assert served_table.spec_added(root, "moved") == 1700000000
+    assert served_table.spec_added(root, "new") == 1700009000
+    with pytest.raises(ValueError, match="git has no commit adding elsewhere/specs/neither.toml here"):
+        served_table.spec_added(root, "neither")
+
+
 def load(tmp_path: Path, **changes) -> SP.SteadySpec:
     root, spec = tree(tmp_path, **changes)
     return SP.load_spec(root / spec, root=root)
@@ -147,7 +182,7 @@ REFUSED_SPECS = [
     ({"spec": {"cores": 0}}, "`cores` is 0; it is a count of at least 1"),
     ({"spec": {"ahead": -1}}, "`ahead` is -1"),
     ({"spec": {"driver": "v570"}}, "`driver` 'v570' isn't a version"),
-    ({"spec": {"cuda": ""}}, "`cuda` '' isn't a version"),
+    ({"spec": {"cuda_toolkit": ""}}, "`cuda_toolkit` '' isn't a version"),
     ({"spec": {"setup": None}}, "setup"),
     ({"spec": {"setup": "benchmarks/specs/none.sh"}}, "`setup` 'benchmarks/specs/none.sh' is no script of the source tree"),
     ({"spec": {"setup": "../steady-setup.sh"}}, "is no script of the source tree"),
@@ -165,6 +200,10 @@ REFUSED_SPECS = [
     ({"spec": {"row0": {"provers": [0]}}}, r"`provers \(0\)` is 0"),
     ({"spec": {"row0": {"provers": [1, 4]}}}, "`sessions` is 16, under 8 a prover at 4 provers"),
     ({"spec": {"row0": {"staged": "z/gemm64"}}}, "`staged` 'z/gemm64' isn't an absolute path on the node"),
+    ({"spec": {"row0": {"staged": "art:" + "1" * 63 + "/row"}}}, "nor a directory of an artifact in the store"),
+    ({"spec": {"row0": {"staged": ART}}}, "nor a directory of an artifact in the store"),
+    ({"spec": {"row0": {"staged": f"{ART}/out/../row"}}}, "nor a directory of an artifact in the store"),
+    ({"spec": {"row0": {"staged": f"{ART}/out/*"}}}, "nor a directory of an artifact in the store"),
     ({"spec": {"row0": {"type": "head block"}}}, "two rows are named head_block in the rate file"),
 ]
 
@@ -184,7 +223,7 @@ BOUND = {
     "the timed sessions": {"spec": {"sessions": 32}},
     "the sessions ahead": {"spec": {"ahead": 3}},
     "the driver's version": {"spec": {"driver": "570.86.16"}},
-    "the CUDA version": {"spec": {"cuda": "12.9.41"}},
+    "the CUDA toolkit's version": {"spec": {"cuda_toolkit": "12.9.41"}},
     "the run's environment": {"spec": {"env": {"RUST_MIN_STACK": "2147483648"}}},
     "which script is the setup": {"spec": {"setup": "benchmarks/specs/other-setup.sh"},
                                   "files": {"benchmarks/specs/other-setup.sh": FILES[SETUP]}},
@@ -235,8 +274,9 @@ def test_the_identity_names_no_commit_and_each_point_has_its_own(tmp_path):
     root, spec = tree(tmp_path)
     plan = P.make_plan(root / spec, root=root, lookup=lambda spec, item, identity: (None, None))
     covered = SP.closure(root, plan.spec)
-    assert sorted(covered) == ["benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
-                               "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"]
+    assert set(covered) == {"benchmarks/one_stage/server_rate.py", SETUP, "verity/protocols/flock/pod/70-class-sweep.sh",
+                            "verity/protocols/flock/prover/cuda/ntt.cu", "verity/protocols/flock/prover/src/main.rs"}
+    assert len(covered) == 5
     assert plan.toolchain == P.Sources(plan.toolchain.files_sha256, 5)
     assert jobs.plan_json(plan)["points"][0] == {"point": plan.points[0].point.to_json(), "identity": found["gemm64-k1"],
                                                  "passing_run": None}
@@ -456,7 +496,7 @@ NOT_IT = [
     ({}, {"changes": {"cores": {"count": 10, "list": "0-4,24-28", "numa_nodes": [0, 1]}}},
      "fail: `one_numa_node` (fail): its CPUs (0-4,24-28) are on 2 NUMA nodes (0, 1)"),
     ({}, {"changes": {"pin": "cd" * 64}}, "fail: its `pin` is another circuit's (cdcdcdcdcdcdcdcd...)"),
-    ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda": CUDA}}}, "cannot tell: its row's `versions`"),
+    ({}, {"changes": {SP.VERSIONS: {"driver": "570.86.16", "cuda_toolkit": CUDA}}}, "cannot tell: its row's `versions`"),
     ({}, {"changes": {SP.VERSIONS: DROP}}, "cannot tell: its row's `versions` (None) aren't the spec's"),
     ({}, {"changes": {"sessions": 15}}, "fail: it timed 15 sessions after 2 warm ones a prover; the point's are 16 and 2"),
     ({}, {"changes": {"warm": 1}}, "fail: it timed 16 sessions after 1 warm ones a prover; the point's are 16 and 2"),
@@ -812,7 +852,7 @@ def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_t
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path, root).config))
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
-    with pytest.raises(ValueError, match="elsewhere.toml isn't a spec of benchmarks/specs.*--local-only"):
+    with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
     with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
         P.make_plan(root / path, root=root)
@@ -847,6 +887,22 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
             "bash", "benchmarks/harness/steady_point.sh", "--spec", path, "--point", item.point.id,
             "--identity", item.identity]
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
+
+
+def test_a_point_whose_statement_is_in_the_store_is_launched_with_a_read_only_key_to_it(tmp_path):
+    """Only that point's run reads the store: a row staged in the run, or from a directory on the node, gets no key."""
+
+    root, path = tree(tmp_path)
+    spec = root / path
+    spec.write_text(spec.read_text().replace('staged = "/dev/shm/head"', f'staged = "{ART}/{IN_ART}"'))
+    plan = P.make_plan(spec, root=root, lookup=lambda spec, item, identity: (None, None))
+    assert [point.point.row.stored for point in plan.points] == [None, None, (ART, IN_ART)]
+    commands = []
+    assert P.dispatch(plan, spec, root=root, direct="vy-dc-h200",
+                      execute=lambda command, cwd: commands.append(command) or 0) == 0
+    flags = [command[:command.index("--")] for command in commands]
+    assert ["--store-read" in f for f in flags] == [False, False, True]
+    assert STEADY_POINT.parse(commands[2])["point"] == plan.points[2].point.id
 
 
 def test_a_launch_that_fails_stops_the_launches_after_it(tmp_path):
@@ -886,10 +942,13 @@ def test_run_refuses_a_steady_spec_without_a_node_a_node_without_slots_and_a_spe
 
 NVCC = ("nvcc: NVIDIA (R) Cuda compiler driver\nCopyright (c) 2005-2025 NVIDIA Corporation\n"
         f"Built on a day\nCuda compilation tools, release 12.8, V{CUDA}\nBuild cuda_12.8.r12.8/compiler.0_0\n")
-#: what the node answers: the leased card, the toolkit, the leases (the run's own, and another run's on GPU 0) and the
-#: compute processes (one, on GPU 0)
+#: the kit's host stamp inside the lease: the leased card, with the driver's version and the newest CUDA it serves,
+#: which is another number than the toolkit's
+STAMP = {"card": "NVIDIA H200", "gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}], "driver": DRIVER,
+         "cuda": "12.9", "node": "the-node", "commit": "c" * 40}
+#: what the node answers: the toolkit, the leases (the run's own, and another run's on GPU 0) and the compute processes
+#: (one, on GPU 0)
 ANSWERS = {
-    "nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": f"{DRIVER}, NVIDIA H200, GPU-3\n",
     "nvcc --version": NVCC,
     "gpu-lease status": (f"3 held 1m pid=7 run={RUN} who=benchmarks cmd=python -m verity_bench.steady_node\n"
                          "0 held 5m pid=11 run=r-other who=other cmd=python train.py\n1 free\n"),
@@ -901,13 +960,14 @@ ANSWERS = {
 class Node:
     """A stand-in for the node under one run of the point: the stager, gpu-lease, the timing script and what the node
     answers. `row`: fields of the row the script writes; `texts`: the run's files as `test_steady.made` takes them;
-    `answers`: an answer replaced (None: the command fails); `circuit`, `said` (its pin.txt) and `units`: what the
-    stager stages."""
+    `answers`: an answer replaced (None: the command fails); `stamp`: fields of the host stamp replaced; `circuit`,
+    `said` (its pin.txt) and `units`: what the stager stages."""
 
     def __init__(self, tmp_path: Path, monkeypatch, *, row: dict | None = None, answers: dict | None = None,
                  circuit: str = CIRCUIT, said: str = PIN, units: int = 1, cpus: int = 10, lease_exit: int | None = None,
-                 spec: dict | None = None, **texts):
+                 spec: dict | None = None, stamp: dict | None = None, **texts):
         self.root, self.spec = tree(tmp_path, spec=spec)
+        self.host = STAMP | (stamp or {})
         self.run_dir = tmp_path / "run"
         self.run_dir.mkdir()
         (scratch := tmp_path / "scratch").mkdir()
@@ -922,10 +982,17 @@ class Node:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         monkeypatch.chdir(self.root)
         self.monkeypatch = monkeypatch
+        #: what the node lists of its NUMA nodes and its PCI devices (`numa`): nothing, unless a test says
+        self.sys = tmp_path / "sys"
+        monkeypatch.setattr(N, "NODES", self.sys / "node")
+        monkeypatch.setattr(N, "DEVICES", self.sys / "pci")
         self.row, self.files = made(OWN | {SP.VERSIONS: DROP} | (row or {}), **texts)
         self.answers = ANSWERS | (answers or {})
         self.circuit, self.said, self.units, self.cpus, self.lease_exit = circuit, said, units, cpus, lease_exit
         self.ran: list[list[str]] = []
+        #: the store's stand-in (`stored`): the files a fetch gives, what its listing answers, the fetch's exit code, the
+        #: listings asked, and what the timed step saw of the scratch
+        self.fetch, self.listed, self.fetch_exit, self.asked, self.seen = {}, None, 0, [], None
         spec = SP.load_spec(self.root / self.spec, root=self.root)
         self.identity = SP.point_identity(spec, SP.point(spec, POINT), sha256_of(SP.closure(self.root, spec)))
 
@@ -933,6 +1000,9 @@ class Node:
         return N.parse(["--spec", self.spec, "--point", POINT, "--identity", changes.get("identity", self.identity)])
 
     def ask(self, argv):
+        if list(argv[1:5]) == list(N.FETCH):
+            self.asked.append(list(argv))
+            return (0, self.listed) if self.listed else (1, "no remote configured")
         answer = self.answers.get(" ".join(argv))
         return (1, "") if answer is None else (0, answer)
 
@@ -947,13 +1017,23 @@ class Node:
             (stage / "pin.txt").write_text(self.said + "\n")
             (stage / "stage.json").write_text(json.dumps({"n": self.units, "definition": "Gemm_v1{K=64}", "k_log": 20}))
             return 0
+        if argv[1:5] == list(N.FETCH):
+            store, to = (Path(argv[argv.index(flag) + 1]) for flag in ("--store", "--to"))
+            (store / "objects").mkdir(parents=True)
+            (store / "objects" / "blob").write_text("the fetch's own copy\n")
+            (to / IN_ART).mkdir(parents=True)
+            for name, text in self.fetch.items():
+                if text is not None:
+                    (to / IN_ART / name).write_text(text)
+            return self.fetch_exit
         if argv[0] == "gpu-lease":
             if self.lease_exit is not None:
                 return self.lease_exit
             inside = argv[argv.index("--") + 1:]
             assert inside[:3] == [sys.executable, "-m", "verity_bench.steady_node"]
             self.monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3")
-            rc = N.point(N.parse(inside[3:]), run=self.run, ask=self.ask, now=lambda: 1_700_000_000.0)
+            rc = N.point(N.parse(inside[3:]), run=self.run, ask=self.ask, now=lambda: 1_700_000_000.0,
+                         stamp=lambda: dict(self.host))
             self.monkeypatch.delenv("CUDA_VISIBLE_DEVICES")
             if (usage := self.files(S.LEASES)) is not None:
                 (self.run_dir / S.LEASES).write_text(usage)
@@ -962,6 +1042,8 @@ class Node:
         out = Path(argv[argv.index("--out") + 1])
         (step := out / f"gemm64-k{argv[argv.index('--provers') + 1]}").mkdir(parents=True)
         self.timed = argv
+        [stage] = Path(argv[argv.index("--staged") + 1]).glob("*/c*/stage")
+        self.seen = {"store": (out.parent / "store").exists(), "files": sorted(path.name for path in stage.iterdir())}
         (out / "rate.json").write_text(json.dumps([self.row]))
         if (sessions := self.files(SESSIONS)) is not None:
             (step / "sessions.jsonl").write_text(sessions)
@@ -970,7 +1052,10 @@ class Node:
 
     def point(self, **changes) -> int:
         return N.point(self.args(**changes), run=self.run, ask=self.ask, now=lambda: 1_700_000_000.0,
-                       cpus=lambda: list(range(20, 20 + self.cpus)))
+                       cpus=lambda: list(range(20, 20 + self.cpus)), stamp=self.no_stamp)
+
+    def no_stamp(self):
+        raise AssertionError("the host is stamped inside the lease, where the stamp is the leased card's")
 
     def read(self, path: str):
         return json.loads((self.run_dir / path).read_text())
@@ -990,6 +1075,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     scratch = Path(lease_argv[-1])
     assert scratch.parent == node.scratch_root and not scratch.exists(), "the scratch is removed"
     assert stager == [sys.executable, SP.STAGER, "gemm64", "1", str(scratch / "z" / "gemm64" / "c1" / "stage")]
+    assert kit.lease(1, 90) == ["gpu-lease", "1", "--wait", "--max-min", "90", "--"], "the kit's lease, and beside it:"
     assert lease_argv == ["gpu-lease", "1", "--wait", "--max-min", "90", "--preemptible", "--mem-gb", "80", "--",
                           sys.executable, "-m", "verity_bench.steady_node", "--spec", node.spec, "--point", POINT,
                           "--identity", node.identity, "--inside", str(scratch)]
@@ -998,7 +1084,7 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
                      "--sessions", "16", "--warm", "2", "--ahead", "2"]
 
     [row] = node.read(S.RATES)
-    assert row[SP.VERSIONS] == {"driver": DRIVER, "cuda": CUDA}, "read on the node and written in the row"
+    assert row[SP.VERSIONS] == {"driver": DRIVER, "cuda_toolkit": CUDA}, "read on the node and written in the row"
     assert row == node.row | {SP.VERSIONS: row[SP.VERSIONS]}
     start = (node.run_dir / START).read_text()
     assert start == (node.run_dir / END).read_text() == (
@@ -1012,18 +1098,113 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
     assert point["prover"] == {"path": str(node.binary), "sha256": hashlib.sha256(b"#!/bin/sh\n").hexdigest()}
     assert point["cores"] == {"count": 10, "list": "20-29"}
     assert point["statement"]["pin"] == PIN and point["statement"]["from"] == SP.STAGER
-    assert point["timed"] == {"refused": None, "device": "3", "card": {"name": "NVIDIA H200", "uuid": "GPU-3"},
-                              SP.VERSIONS: {"driver": DRIVER, "cuda": CUDA}, "exit": 0, "rows": 1}
+    assert point["timed"] == {"refused": None, "device": "3", "host": STAMP,
+                              SP.VERSIONS: {"driver": DRIVER, "cuda_toolkit": CUDA}, "exit": 0, "rows": 1}
+    assert STAMP["cuda"] != CUDA, "the stamp's `cuda` is the driver's newest, never the toolkit's version"
     verdict = node.read(N.VERDICT_FILE)
     assert (verdict["identity"], verdict["point"], verdict["passed"], verdict["why"]) == (node.identity, POINT, True, None)
     assert list(verdict["verdict"]["checks"]) == list(S.CHECKS)
     result = node.read("result.json")
     assert result["kind"] == N.KIND and result["validation"]["status"] == "passed" and result["run_id"] == RUN
     assert result["workload_fingerprint"]["identity"] == node.identity
-    assert result["measurements"] == [{"name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s"}]
+    assert result["schema"] == kit.RESULT_SCHEMA
+    assert result["measurements"] == [{
+        "name": "statements_per_s", "value": row["statements_per_s"], "unit": "1/s", "commit": STAMP["commit"],
+        "run": RUN, "ci95": None, "target": None, "verdict": None, "inputs": [], "host": STAMP}], "the kit's writer's"
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
+
+
+#: a made-up node of two NUMA nodes, two cards on each: the run's CPUs (20 to 29) are on the second
+CARDS = "0, 00000000:17:00.0\n1, 00000000:65:00.0\n2, 00000000:B1:00.0\n3, 00000000:CA:00.0\n"
+NUMA = {"node/node0/cpulist": "0-15\n", "node/node1/cpulist": "16-31\n", "node/node1/meminfo": "",
+        "pci/0000:17:00.0/numa_node": "0\n", "pci/0000:65:00.0/numa_node": "0\n",
+        "pci/0000:b1:00.0/numa_node": "1\n", "pci/0000:ca:00.0/numa_node": "1\n"}
+
+
+def numa(node: Node, cards: str | None = CARDS, **changes: str | None) -> None:
+    """What the node says of its NUMA nodes and its cards: `NUMA`, with files replaced or left out (None), their
+    names' `/`, `:` and `.` written `_`."""
+
+    node.answers = node.answers | {" ".join(N.CARDS): cards}
+    by_key = {re.sub(r"[/:.]", "_", path): path for path in NUMA}
+    for path, text in (NUMA | {by_key[key]: text for key, text in changes.items()}).items():
+        if text is not None:
+            (node.sys / path).parent.mkdir(parents=True, exist_ok=True)
+            (node.sys / path).write_text(text)
+
+
+def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_path, monkeypatch):
+    """A slot gives the run its CPUs and no card: without this the lease takes the first free card of the node."""
+
+    node = Node(tmp_path, monkeypatch)
+    numa(node)
+    assert node.point() == 0
+    lease = node.ran[1]
+    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "2,3", "--preemptible",
+                                         "--mem-gb", "80"]
+    assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [2, 3]}
+
+
+def test_a_node_that_cannot_run_gpu_lease_is_refused_before_a_statement_is_staged_with_the_script_to_install(
+        tmp_path, monkeypatch):
+    """The kit's lease calls `gpu-lease` by its bare name. A node without it on its path would stage or fetch the
+    statement and then fail to take the lease; the point says so first, with what to put on the path."""
+    node = Node(tmp_path, monkeypatch)
+    answered = node.ask
+    node.ask = lambda argv: ((N.NOT_RUN, "FileNotFoundError: [Errno 2] No such file or directory: 'gpu-lease'")
+                             if list(argv) == ["gpu-lease", "status"] else answered(argv))
+
+    assert node.point() == N.REFUSED
+    assert node.ran == [], "nothing is staged, fetched or leased"
+    refused = node.read(N.POINT_FILE)["refused"]
+    assert refused == ("`gpu-lease` can't be run on this node (FileNotFoundError: [Errno 2] No such file or directory: "
+                       "'gpu-lease'), and the timed step runs under its lease of one card: put "
+                       "tools/research/src/research/pods/sh/gpu_lease.sh of this tree on the node's path as "
+                       "`gpu-lease`. A copy on the node's own disk goes when the node is reset")
+    assert node.read(kit.RESULT)["validation"] == {
+        "status": "failed", "checker": "verity_bench.steady_spec.point_why",
+        "detail": f"refused, nothing timed: {refused}", "evidence": [N.POINT_FILE]}
+    assert not list(node.scratch_root.iterdir()), "no scratch was made"
+
+
+def test_a_command_the_node_cannot_run_is_asked_with_the_exit_code_a_shell_gives(tmp_path):
+    rc, text = N._ask([str(tmp_path / "no-such-program")])
+    assert rc == N.NOT_RUN == 127 and text.startswith("FileNotFoundError: ")
+
+
+@pytest.mark.parametrize("answer", [(0, "0 free\n"), (1, ""), (2, "gpu-lease: no state directory")])
+def test_a_gpu_lease_that_runs_is_not_refused_at_the_start_whatever_its_status_says(answer):
+    """Only a tool that can't be run at all is refused there: what a lease that can't be taken says is the lease's own."""
+    N.lease_tool(lambda argv: answer)
+
+
+#: a node that doesn't say which cards are on the NUMA node of the run's CPUs: what it says instead, and why the lease
+#: is asked of any card
+ANY_CARD = [
+    ({"node_node0_cpulist": "0-24\n", "node_node1_cpulist": "25-31\n"}, [0, 1], "the node lists 2 NUMA nodes for the run's CPUs"),
+    ({"node_node0_cpulist": None, "node_node1_cpulist": None}, [], "the node lists 0 NUMA nodes for the run's CPUs"),
+    ({"cards": None}, [1], "`nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader` exited 1"),
+    ({"pci_0000_b1_00_0_numa_node": "-1\n", "pci_0000_ca_00_0_numa_node": None}, [1],
+     "none of the node's 3 cards says it is on NUMA node 1"),
+]
+
+
+@pytest.mark.parametrize("says, nodes, why", ANY_CARD, ids=[why for *_, why in ANY_CARD])
+def test_a_node_that_does_not_say_which_cards_are_near_the_runs_cpus_leases_any_card_and_the_point_says_why(
+        tmp_path, monkeypatch, says, nodes, why):
+    node = Node(tmp_path, monkeypatch)
+    numa(node, **({"cards": CARDS} | says))
+    assert node.point() == 0
+    assert "--on" not in node.ran[1]
+    assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": nodes, "cards": None, "why": why}
+
+
+def test_a_node_that_lists_nothing_of_its_numa_nodes_leases_any_card(tmp_path, monkeypatch):
+    node = Node(tmp_path, monkeypatch)
+    assert node.point() == 0 and "--on" not in node.ran[1]
+    assert node.read(N.POINT_FILE)["lease_on"]["cards"] is None
 
 
 def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatch):
@@ -1078,6 +1259,77 @@ def test_a_statement_already_on_the_node_is_proved_from_a_copy_checked_against_t
     node.ran.clear()
     assert node.point() == N.REFUSED and node.ran == []
     assert "another circuit takes no GPU time" in node.read("result.json")["validation"]["detail"]
+
+
+def stored(node: Node, listed: str | None = None, **files) -> None:
+    """The first row's `staged` names the store, and the node's stand-in fetches `files` for it (the staged statement's,
+    unless replaced or left out with None); `listed`: what the store's listing answers instead."""
+
+    path = node.root / node.spec
+    path.write_text(path.read_text().replace("warm = 2\n", f'warm = 2\nstaged = "{ART}/{IN_ART}"\n', 1))
+    node.fetch = {"circuit.txt": CIRCUIT, "pin.txt": PIN, "stage.json": json.dumps({"n": 1}), "inst.bin": "inst"} | files
+    size = sum(len(text) for text in node.fetch.values() if text is not None)
+    node.listed = json.dumps([{"path": f"{IN_ART}/x", "bytes": size}]) if listed is None else listed
+    # wherever the suite keeps its temporary files, the stand-in's scratch counts as disk
+    node.monkeypatch.setattr(N, "MEMORY", node.root / "memory")
+
+
+def test_a_statement_in_the_store_is_fetched_into_the_scratch_and_leaves_no_copy_on_the_node(tmp_path, monkeypatch):
+    """The fetch reads the artifact's one directory through a store of its own under the scratch, which is removed
+    before the statement is hashed; the statement is then held to the pin like any other, and goes with the scratch."""
+
+    node = Node(tmp_path, monkeypatch)
+    stored(node)
+    assert node.point() == 0, "`staged` is no part of the identity"
+    fetch, lease_argv, timer = node.ran
+    scratch = Path(lease_argv[-1])
+    assert fetch == [sys.executable, "-m", "research", "data", "fetch", ART, "--store", str(scratch / "store"),
+                     "--path", IN_ART, "--to", str(scratch / "fetched")]
+    assert node.asked[0] == [*fetch[:-2], "--list", "--json"], "the listing is asked of the same store, before the fetch"
+    assert node.seen == {"store": False, "files": ["circuit.txt", "inst.bin", "pin.txt", "stage.json"]}, (
+        "at the timed step the fetch's store is gone and the statement is where the timing script looks for it")
+    assert not scratch.exists() and list(node.scratch_root.iterdir()) == []
+    statement = node.read(N.POINT_FILE)["statement"]
+    assert (statement["from"], statement["pin"], statement["n"]) == (f"{ART}/{IN_ART}", PIN, 1)
+    assert "out/fetch.log" in node.read("result.json")["artifacts"]
+
+
+#: a statement in the store that is refused: how the stand-in differs, and what the refusal says
+NOT_FETCHED = [
+    ({"listed": ""}, "the store lists no file of the `staged` of row 'gemm64'.*`research run --store-read`"),
+    ({"listed": "[]"}, "the store lists no file of the `staged` of row 'gemm64'"),
+    ({"listed": "not a listing"}, r"the store's listing of the `staged` of row 'gemm64'.*bytes \(JSONDecodeError"),
+    ({"listed": json.dumps([{"path": "out/row1/x"}])}, r"isn't each file with its bytes \(KeyError"),
+    ({"listed": json.dumps([{"path": "out/row1/x", "bytes": 1 << 62}])}, "held twice while it is fetched, and the disk"),
+    ({"fetch_exit": 1}, r"fetching the `staged` of row 'gemm64', art:5+/out/row1, failed \(exit 1\): out/fetch.log"),
+    ({"pin.txt": None}, "holds no staged statement in the store"),
+    ({"circuit.txt": "another circuit\n"}, "another circuit takes no GPU time"),
+    ({"stage.json": json.dumps({"n": 2})}, "the statement holds 2 units"),
+]
+
+
+@pytest.mark.parametrize("change, says", NOT_FETCHED, ids=[says[:40] for _, says in NOT_FETCHED])
+def test_a_statement_the_store_does_not_give_whole_is_refused_before_any_card(tmp_path, monkeypatch, change, says):
+    node = Node(tmp_path, monkeypatch)
+    node.fetch_exit = change.get("fetch_exit", 0)
+    stored(node, **{key: value for key, value in change.items() if key != "fetch_exit"})
+    assert node.point() == N.REFUSED and not any(argv[0] == "gpu-lease" for argv in node.ran)
+    assert re.search(says, node.read("result.json")["validation"]["detail"])
+    assert list(node.scratch_root.iterdir()) == [], "what was fetched goes with the scratch"
+
+
+def test_a_statement_from_the_store_is_never_fetched_into_the_nodes_memory(tmp_path, monkeypatch):
+    """The scratch's default is the node's memory, where a statement staged in the run may be: one from the store is
+    refused there before the store is asked anything."""
+
+    assert settings.REGISTRY.setting("VERITY_BENCH_STEADY_SCRATCH").default == str(N.MEMORY)
+    node = Node(tmp_path, monkeypatch)
+    stored(node)
+    monkeypatch.setattr(N, "MEMORY", node.scratch_root.resolve())
+    assert node.point() == N.REFUSED and node.ran == [] and node.asked == []
+    assert re.search("is fetched from the store onto the node's disk, and the scratch .* is in its memory: the spec's "
+                     "setup exports VERITY_BENCH_STEADY_SCRATCH", node.read("result.json")["validation"]["detail"])
+    assert list(node.scratch_root.iterdir()) == []
 
 
 #: the node side refusing before any card is asked for: the stand-in's change and what the refusal says
@@ -1144,21 +1396,29 @@ def test_the_node_side_refuses_a_run_without_the_prover_its_setup_builds(tmp_pat
 
 #: the timed step refusing inside the lease: what the node answers otherwise, and what the refusal says
 INSIDE_THE_LEASE = [
-    ({"nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": "570.86.16, NVIDIA H200, GPU-3\n"},
-     "the node's driver and CUDA toolkit are {'driver': '570.86.16', 'cuda': '12.8.93'}, and spec 'steady' says"),
-    ({"nvcc --version": NVCC.replace(CUDA, "12.9.41")}, "Set the spec's `driver` and `cuda` to the node's"),
-    ({"nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": f"{DRIVER}, NVIDIA B200, GPU-3\n"},
+    ({"stamp": {"driver": "570.86.16"}},
+     "the node's driver and CUDA toolkit are {'driver': '570.86.16', 'cuda_toolkit': '12.8.93'}, and spec 'steady' says"),
+    ({"answers": {"nvcc --version": NVCC.replace(CUDA, "12.9.41")}},
+     "Set the spec's `driver` and `cuda_toolkit` to the node's"),
+    # the stamp's `cuda`, the newest the driver serves, is never taken for the toolkit's version
+    ({"stamp": {"cuda": CUDA}, "answers": {"nvcc --version": NVCC.replace(CUDA, "12.9.41")}},
+     "the node's driver and CUDA toolkit are {'driver': '570.86.15', 'cuda_toolkit': '12.9.41'}, and spec 'steady' says"),
+    ({"stamp": {"card": "NVIDIA B200"}},
      "the lease's card is a NVIDIA B200, not the `card` of spec 'steady' (h200: NVIDIA H200)"),
-    ({"nvidia-smi -i 3 --query-gpu=driver_version,name,uuid --format=csv,noheader": None},
-     "nvidia-smi doesn't say what GPU 3 is (exit 1: '')"),
-    ({"nvcc --version": None}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
-    ({"nvcc --version": "nvcc: no version here\n"}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
+    ({"stamp": {"card": "none", "gpus": [], "driver": None, "cuda": None, "why": "no nvidia-smi on PATH"}},
+     "the host stamp doesn't say what the lease's card is (no nvidia-smi on PATH)"),
+    ({"stamp": {"gpus": [{"uuid": "GPU-3", "sm_mhz": 1980, "mem_mhz": 3201}, {"uuid": "GPU-4", "sm_mhz": 0, "mem_mhz": 0}]}},
+     "the host stamp doesn't say what the lease's card is (it names 2 GPUs and the driver '570.86.15'): inside a "
+     "gpu-lease of one card it is that card's, which gpu-lease names in GPU_LEASE_UUID"),
+    ({"answers": {"nvcc --version": None}}, "the nvcc on the path the spec's setup leaves doesn't say its version"),
+    ({"answers": {"nvcc --version": "nvcc: no version here\n"}},
+     "the nvcc on the path the spec's setup leaves doesn't say its version"),
 ]
 
 
-@pytest.mark.parametrize("answers, says", INSIDE_THE_LEASE, ids=[says[:36] for _, says in INSIDE_THE_LEASE])
-def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_path, monkeypatch, answers, says):
-    node = Node(tmp_path, monkeypatch, answers=answers)
+@pytest.mark.parametrize("change, says", INSIDE_THE_LEASE, ids=[says[:40] for _, says in INSIDE_THE_LEASE])
+def test_the_timed_step_refuses_a_card_or_versions_that_are_not_the_specs(tmp_path, monkeypatch, change, says):
+    node = Node(tmp_path, monkeypatch, **change)
     assert node.point() == N.REFUSED
     assert [argv[0] for argv in node.ran] == [sys.executable, "gpu-lease"] and node.ran[0][1] == SP.STAGER, "nothing timed"
     assert says in node.read(N.POINT_FILE)["refused"] and says in node.read("result.json")["validation"]["detail"]
@@ -1320,6 +1580,7 @@ def test_the_readme_states_a_steady_state_spec_as_the_code_keeps_it():
     assert (f"exits 0 for a passed point, {SP.NOT_PASSED} for a point that was timed and didn't pass, {N.REFUSED} where "
             f"nothing was timed, and {N.STOPPED} where\nTERM or INT ended it") in section
     assert "`steady_plan.completed_rows`, `completed`" in section and "runs and arts" in section
-    spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda", "setup", "[env]", "[admission]",
+    assert all(f"`{name}`" in section for name in ("kit.lease", "kit.host_stamp", "kit.Writer", "jobs.dispatch"))
+    spec_keys = {"workload", "card", "cores", "sessions", "ahead", "driver", "cuda_toolkit", "setup", "[env]", "[admission]",
                  "max_minutes", "mem_gb", "[[row]]", "type", "n", "pin", "provers", "warm", "period", "staged"}
     assert all(f"`{key}`" in section for key in spec_keys), [key for key in spec_keys if f"`{key}`" not in section]

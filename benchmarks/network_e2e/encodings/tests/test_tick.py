@@ -17,6 +17,7 @@ import json
 import random
 import sys
 from collections import deque
+from collections.abc import Sequence
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -103,6 +104,7 @@ class Scheduler:
         return self.s.finished_ids
 
     def add_request(self, request) -> None:
+        assert request.i is not None, f"{request.request_id} is a lost release's request, which the gate never adds"
         self.admitted[request.i] = len(self.steps)
         self.s.add(request.i)
 
@@ -126,30 +128,34 @@ class Served:
     gate: dict
 
 
-def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
+def serve(e, ios, times, seed: int, *, gated: bool = True, lost: Sequence[int] = (), arrive: Sequence[int] = ()) -> Served:
     """Serve the plan in simulated physical time through the replay's engine loop (`replay.drive`). Release i is
     certified at times[i], its record reaches the gate up to 20 ms later and the request the engine up to 250 ms later,
     watermark line t comes up to 60 ms after bucket t closes, and each step takes 15 to 45 ms, all sampled from `seed`.
     With `gated`, the gate stands in front of the scheduler and the loop waits while it isn't ready; without, each
-    request is added when it reaches the engine."""
+    request is added when it reaches the engine. Each bucket's line names its releases in `lost`, as the network
+    certifier's does; of those, only the ones in `arrive` send their release record and their request. The scheduler
+    holds the releases not in `lost`, numbered in release order, and what the run returns is theirs."""
     rng = random.Random(seed)
     a = buckets(times)
+    kept = {x: k for k, x in enumerate(i for i in range(len(ios)) if i not in lost)}
     now = [0.0]
-    s = R.Scheduler(e, ios)
+    s = R.Scheduler(e, [ios[i] for i in kept])
     sched = Scheduler(s)
     gate = sa.TickGate(sa.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
     if gated:
         sa.install(sched, gate, key=lambda rid: rid)
     events: list = []
     for i, t in enumerate(times):
-        events.append((t + rng.uniform(0, 0.02), len(events), "release", i))
-        events.append((t + rng.uniform(0.02, 0.25), len(events), "request", i))
+        sent = [(t + rng.uniform(0, 0.02), "release"), (t + rng.uniform(0.02, 0.25), "request")]
+        if i not in lost or i in arrive:
+            events += [(at, len(events) + k, kind, i) for k, (at, kind) in enumerate(sent)]
     last = a[-1] + 2
     for t in range(last + 1):
         events.append(((t + 1) * TICK[0] / 1e6 + rng.uniform(0, 0.06), len(events), "line", t))
     events.append(((last + 2) * TICK[0] / 1e6, len(events), "end", None))
     heapq.heapify(events)
-    out = Served([], [], [], [[] for _ in ios], [], {})
+    out = Served([], [], [], [[] for _ in kept], [], {})
     queue: deque = deque()
 
     def deliver() -> None:
@@ -158,9 +164,10 @@ def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
             if kind == "release":
                 gate.take({"key": f"r{x}", "run": RUN, "n": x, "bucket": a[x]})
             elif kind == "request":
-                sched.add_request(SimpleNamespace(request_id=f"r{x}", i=x))
+                sched.add_request(SimpleNamespace(request_id=f"r{x}", i=kept.get(x)))
             elif kind == "line":
-                gate.take({"run": RUN, "t": x, "n": sum(b <= x for b in a)})
+                gone = [i for i in sorted(lost) if a[i] == x]
+                gate.take({"run": RUN, "t": x, "n": sum(b <= x for b in a), **({"lost": gone} if gone else {})})
             else:
                 gate.take({"run": RUN, "end": True})
 
@@ -190,7 +197,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
                 out.output_t[i] += [now[0]] * (s.reqs[i].n_out - m)
 
     R.drive(s, queue, top=top, schedule=schedule, executed=executed)
-    out.steps, out.admitted, out.gate = sched.steps, [sched.admitted[i] for i in range(len(ios))], gate.summary()
+    out.steps, out.admitted, out.gate = sched.steps, [sched.admitted[i] for i in range(len(kept))], gate.summary()
     return out
 
 
@@ -221,6 +228,40 @@ def test_the_gate_schedules_the_tick_replay(asy):
     assert any(st.preempted for st in ref.steps)
     plain = [serve(e, ios, times, seed, gated=False).steps for seed in (1, 2)]
     assert plain[0] != plain[1] and ref.steps not in plain
+
+
+#: releases the watermark names lost: the first, some inside a burst, and the last
+LOST = (0, 4, 5, 13, 21, 22, 23, 35)
+
+
+@pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
+def test_the_gate_skips_the_lost_releases_and_schedules_the_tick_replay_of_the_rest(tmp_path, asy):
+    """The watermark names the releases of `LOST` lost. Whether none, all or some of their requests reach the engine,
+    before their line or after it, the gate never adds one, and its batches are the replay's of the other releases, each
+    at its own bucket. The run's trace-corpus directory is read to a trace of the requests its steps scheduled, so
+    without the lost ones, whose requests.jsonl lines it never reads; that trace's record gets from v1 what a run that
+    lost nothing gets: no decision, no order entry and no hit, the string its length terms alone, decoding back to
+    the advice."""
+    e, (ios, times) = engine(asy), plan()
+    kept, a = [i for i in range(N) if i not in LOST], buckets(times)
+    ref = R.replay(e, [ios[i] for i in kept], tick=R.Tick(*TICK), released=[a[i] for i in kept])
+    reg = V.Registered(e, (EOS,), T=10, tick=R.Tick(*TICK))
+    for seed, arrive in ((1, ()), (2, LOST), (3, LOST[::2])):
+        run = serve(e, ios, times, seed, lost=LOST, arrive=arrive)
+        assert run.steps == ref.steps and run.admitted == ref.admitted
+        g = run.gate
+        assert (g["admitted"], g["lost"], g["dropped"], g["opened"], g["ended"]) == (len(kept), len(LOST), len(arrive), None, True)
+        assert not any(g[k] for k in ("unordered", "stale", "late", "skipped", "aborted", "past_end", "bucket_mismatch",
+                                      "watermark_errors"))
+        d = write_corpus(tmp_path / f"lost{seed}", e, ios, times, run, tick=True, lost=LOST, arrive=arrive)
+        assert len((d / "requests.jsonl").read_text().splitlines()) == len(kept) + len(arrive)
+        tr, rec, adv = V._trace(str(d), (EOS,))
+        assert tr.releases == R.Releases(R.Tick(*TICK), T0, tuple(kept), tuple(a[i] for i in kept))
+        assert [q.id for q in rec.requests] == [f"r{i}" for i in kept]
+        assert V.residual(adv, rec, reg) == [CV.Window()] * V.windows(rec, reg.T)
+        data = V.encode(adv, rec, reg)
+        assert V.bits_by_window(data, rec, reg) == dict(enumerate(sum(n for _v, n in t) for t in V.length_tails(rec, reg)))
+        assert V.decode_full(data, rec, reg).advice == adv
 
 
 def tick_case(asy: bool):
@@ -335,11 +376,14 @@ def test_a_count_capped_at_0_costs_nothing():
     assert 0 < own < more
 
 
-def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool) -> Path:
+def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool, lost: Sequence[int] = (), arrive: Sequence[int] = ()) -> Path:
     """The served run as a trace-corpus directory (`replay.read_corpus_trace`'s), each step's rows in the runner's batch
-    order (a stable sort by length), and with `tick` its releases and meta.json's ``tick``."""
+    order (a stable sort by length), and with `tick` its releases and meta.json's ``tick``. A release in `lost` has no
+    row in any step; one of them in `arrive`, whose request reached the server, has its requests.jsonl line all the
+    same, with no output."""
     d.mkdir()
     a = buckets(times)
+    ids = [i for i in range(len(ios)) if i not in lost]
     argv = ["--max-num-seqs", str(e.max_num_seqs), "--max-num-batched-tokens", str(e.max_num_batched_tokens),
             "--max-model-len", str(e.max_model_len), "--enable-prefix-caching",
             *(() if e.async_scheduling else ("--no-async-scheduling",))]
@@ -350,20 +394,24 @@ def write_corpus(d: Path, e, ios, times, run: Served, *, tick: bool) -> Path:
     (d / "server.log").write_text(f"GPU KV cache size: {e.num_gpu_blocks * e.block_size:,} tokens\n")
 
     def row(i: int, start: int, n: int, **kw) -> dict:
-        return {"id": f"r{i}", "num_computed_tokens": start, "num_scheduled_tokens": n, **kw}
+        return {"id": f"r{ids[i]}", "num_computed_tokens": start, "num_scheduled_tokens": n, **kw}
 
     lines = [{"total_num_scheduled_tokens": sum(n for *_, n in st.rows),
               "new": [row(*r) for r in st.rows if r[0] in st.new],
               "cached": [row(*r, resumed=r[0] in st.resumed) for r in st.rows if r[0] not in st.new],
-              "batch": [f"r{i}" for i, _, _ in sorted(st.rows, key=lambda r: r[2])],
-              "preempted": [f"r{i}" for i in st.preempted], "sampled": [emit], "t_output": T0 + t}
+              "batch": [f"r{ids[i]}" for i, _, _ in sorted(st.rows, key=lambda r: r[2])],
+              "preempted": [f"r{ids[i]}" for i in st.preempted], "sampled": [emit], "t_output": T0 + t}
              for st, t, emit in zip(run.steps, run.release_t, run.emits)]
     (d / "steps.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
     reqs = []
     for i, io in enumerate(ios):
+        if i in lost and i not in arrive:
+            continue
         r = {"id": f"r{i}", "prompt_len": io.prompt_len, "max_tokens": io.max_tokens, "output_len": io.output_len,
              "eos": io.eos, "finish_reason": "stop" if io.eos else "length", "prompt_ids": list(io.tokens[:io.prompt_len]),
              "output_ids": list(io.tokens[io.prompt_len:]), "send_unix": T0 + times[i]}
+        if i in lost:
+            r.update(output_len=0, eos=False, finish_reason="abort", output_ids=[])
         reqs.append({**r, "release": i, "bucket": a[i]} if tick else r)
     (d / "requests.jsonl").write_text("".join(json.dumps(x) + "\n" for x in reqs))
     return d
@@ -419,6 +467,16 @@ def test_the_table_reads_a_tick_trace_on_its_own_buckets(tmp_path):
     assert [q.end for q in rec.requests] == [b - a[0] for b in a]
     with pytest.raises(V.AdviceCodeError, match="250000 µs"):
         V.record_of(tr, (EOS,))
+    # and its row says what was served beside what was charged: the window in seconds on that tick, the rows the cache
+    # served, which no charge shows, and each window's length terms, which every book's charge holds
+    row = V.measure("tick", str(d), (EOS,), T=8)
+    hits = [x.cache_hit for st in V.advice_of(tr, rec).steps for x in st.rows if x.cache_hit]
+    assert (row["window_s"], row["prefix_caching"]) == (2.0, True)
+    assert (row["cache_hit_rows"], row["cache_hit_tokens"]) == (len(hits), sum(hits)) and hits
+    by = row["length_by_window"]
+    assert list(by) == list(range(row["windows"])) == sorted(row["uniform"]["by_window"])
+    assert sum(by.values()) == sum(q.max_tokens.bit_length() + 1 for q in rec.requests)
+    assert all(row[book]["by_window"][w] >= n for book in ("held_out", "uniform") for w, n in by.items())
 
 
 def test_what_the_tick_refuses():
