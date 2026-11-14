@@ -305,9 +305,10 @@ def served_record(files: R.Files, clock: Callable[[], float], exe: Path | None) 
            "check": {x: {"rule": rule, "public_form": fn, **said[x]} for x, (rule, fn) in R.PUBLIC.items()},
            "seconds": said["seconds"], "cost": said["cost"], "pouw": pouw, "tied": None, "tied_why": None}
     of_record = "c, n, the work, the check's accept, PoUW's accept and s are the record's"
-    if not all(said[x].get("complies") is True for x in R.PUBLIC):
-        one = {"value": 1, "mark": "measured", "reading": "the check refused the record, so nothing shows its blocks "
-               "within c, k and n", "inputs": "the check's verdicts, the record's", "short": "the check refused"}
+    if refused := [rule for x, (rule, _) in R.PUBLIC.items() if said[x].get("complies") is not True]:
+        which = "both rules" if len(refused) == 2 else refused[0]
+        one = {"value": 1, "mark": "measured", "reading": f"the check refused the record ({which}), so nothing shows its "
+               "blocks within c, k and n", "inputs": "the check's verdicts, the record's", "short": f"{which} refused"}
     elif pouw["share"] == 1:
         one = {"value": 1, "mark": "measured", "reading": "no PoUW accept of record, so s = 1, and every limit at s = 1 "
                "is 1 (min_cut.capped)", "inputs": f"{R.VERDICT}, the record's", "short": "no PoUW accept, s = 1"}

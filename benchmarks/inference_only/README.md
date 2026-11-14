@@ -111,8 +111,8 @@ and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it wo
 
 `--served OUT` reads a served run's record (`record.py`): its `out/` (the compose's `record/verdicts.json`, its
 `inference-only-policy.json`, `inference-only-limits.json` and one `block-counts-*.json`), and the Program, circuit
-record and registration log it registered (`--program`, `--circuit`, `--log`, its own registration last). It prints,
-under the run's name:
+record and registration log it registered (`--program`, `--circuit`, `--log`, its own registration last). None has a
+default: a file that isn't there is named as one the run did not write. It prints, under the run's name:
 
 - **The check's verdicts, public form only.** The policy's record check runs on the run's files: its script writes the
   case (`served_record_case.py --case-only`) and its compiled command (`inference-only-record-check`) judges it. The
@@ -131,7 +131,8 @@ under the run's name:
   (`quantity.tie.record`) must be the `previous` of the run's registration, the log's last record, whose chain the
   check holds. Both are printed; a difference is refused; a verdict with no window record prints that nothing ties
   them.
-- **The value**, with its reading and mark. The check refusing, or no PoUW accept of record, gives 1, `measured`.
+- **The value**, with its reading and mark. The check refusing (either rule; the reading names the rate rule, the count
+  or both), or no PoUW accept of record, gives 1, `measured`.
   Otherwise one block's value is the smaller of its two limits at `s` under the tie (`tied.priced` on the record's
   class: its `c`, `n` and work, and `k` its policy's own `k_by_kind` but the linears' outputs, with `tied.toml`'s
   `[fresh]`), `partial`, its inputs saying which are the record's and which are premises; and each fleet and period's

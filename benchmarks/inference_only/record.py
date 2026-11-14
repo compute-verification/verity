@@ -87,13 +87,18 @@ def _json(path: Path) -> Any:
 
 def read(files: Files) -> dict[str, Any]:
     """The record's files (`OUT_FILES`): its verdicts, its policy, and the limits each rule is judged against, the count's
-    `(c, k, n)` the policy's own."""
+    `(c, k, n)` the policy's own. A file that isn't there is named as one the run did not write."""
     counts = sorted(files.out.glob(OUT_FILES["count"]))
-    if len(counts) != 1:
+    if len(counts) > 1:
         raise Refused(f"{files.out}: a record holds one {OUT_FILES['count']}, the count's limits; it holds {len(counts)}")
-    for path in (files.program, files.circuit, *files.logs):
+    named = {"Program": files.program, "circuit record": files.circuit,
+             **{f"record {k} of a registration log": p for k, p in enumerate(files.logs)},
+             "compose verdicts": files.out / OUT_FILES["verdicts"], "policy": files.out / OUT_FILES["policy"],
+             "rate rule's limits": files.out / OUT_FILES["limits"],
+             "count's limits": counts[0] if counts else files.out / OUT_FILES["count"]}
+    for what, path in named.items():
         if not path.is_file():
-            raise Refused(f"{path}: no such file")
+            raise Refused(f"the run wrote no {what} ({path})")
     verdicts, policy = (_json(files.out / OUT_FILES[x]) for x in ("verdicts", "policy"))
     count, limits = _json(counts[0]), files.out / OUT_FILES["limits"]
     if policy.get("format") != POLICY_FORMAT:
@@ -112,8 +117,6 @@ def read(files: Files) -> dict[str, Any]:
         raise Refused(f"{OUT_FILES['policy']}: theta_macs is not linears + 2 × (attention + lm_head)")
     if [count.get(x) for x in "ckn"] != [policy[x] for x in "ckn"]:
         raise Refused(f"{counts[0].name}: the count's limits {[count.get(x) for x in 'ckn']} are not the policy's c, k, n")
-    if not limits.is_file():
-        raise Refused(f"{limits}: no such file")
     return {"run": verdicts.get("run"), "verdicts": verdicts, "policy": policy, "limits": limits, "count": counts[0]}
 
 

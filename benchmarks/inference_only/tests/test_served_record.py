@@ -197,7 +197,10 @@ def test_a_record_whose_count_refuses_is_one_and_measured_and_says_only_that(cas
     out = capsys.readouterr().out
     rec = doc["record"]
     assert rec["check"]["count"] == {"rule": "the count", "public_form": "NciCheck.RecordCount.check", "complies": False}
+    assert rec["check"]["check"]["complies"] is True
     assert (rec["block"]["value"], rec["block"]["mark"], rec["tied"]) == (1, "measured", None)
+    assert rec["block"]["reading"].startswith("the check refused the record (the count), ")
+    assert {r["reading"] for r in rec["periods"]} == {"the count refused"}
     assert "              the count (NciCheck.RecordCount.check): complies: false" in out.splitlines()
     for word in ("failure", "fresh", "gates", "unregistered"):
         assert word not in json.dumps(rec["check"])
@@ -216,6 +219,20 @@ def test_a_record_that_misstates_is_refused_before_the_check_runs(case, tmp_path
         _main(made(case, tmp_path, **how), tmp_path / "no-such-check")
     err = capsys.readouterr().err
     assert e.value.code == 2 and "the record is refused" in err and why in err
+
+
+@pytest.mark.parametrize(("gone", "what"), [
+    ("run/program.json", "Program"), ("run/circuit.json", "circuit record"), ("run/log2.json", "record 2 of a registration log"),
+    ("out/record/verdicts.json", "compose verdicts"), ("out/inference-only-policy.json", "policy"),
+    ("out/inference-only-limits.json", "rate rule's limits"), ("out/block-counts-0.json", "count's limits"),
+])
+def test_a_file_the_run_did_not_write_is_named(case, tmp_path, capsys, gone, what) -> None:
+    """Each file is named as one the run did not write, with its path: none has a default."""
+    args = made(case, tmp_path)
+    (tmp_path / gone).unlink()
+    with pytest.raises(SystemExit):
+        _main(args, tmp_path / "no-such-check")
+    assert f"the run wrote no {what} ({tmp_path / gone.replace('block-counts-0', 'block-counts-*')})" in capsys.readouterr().err
 
 
 def test_served_takes_the_files_it_names_and_they_take_it(case, stand_in, tmp_path, capsys) -> None:
