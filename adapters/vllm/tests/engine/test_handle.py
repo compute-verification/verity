@@ -113,7 +113,7 @@ def test_a_core_with_no_client_around_it_still_gives_its_parts():
 
 
 def _by_hand_in_remote(llm):
-    """`CommitSession.check`'s own read (protocols/remote_bandwidth/remote.py): true where it refuses."""
+    """`CommitSession.check`'s own read (PoUB's session, `remote.py`): true where it refuses."""
     return getattr(getattr(llm.llm_engine, "engine_core", None), "engine_core", None) is None
 
 
