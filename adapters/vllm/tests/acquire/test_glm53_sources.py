@@ -16,6 +16,7 @@ import pytest
 import torch
 
 from tests import fake_vllm as stand_in
+from tests.acquire.test_vocab_range_source import exactness_in_tree
 from verity_vllm.acquire.sources import moe_source as MS
 from verity_vllm.commit import capture_map as CM
 
@@ -266,6 +267,7 @@ def test_the_moe_source_commits_exactly_the_maps_moe_taps_on_a_served_step(monke
     assert src.stats["router"] == {"sigmoid:block": len(MOE_LAYERS)} and src.router_steps == {"block": [0]}
     decl = src.declaration_classes()[0]
     assert decl["tensors_per_layer"] == 10 and decl["planes"] == list(MOE_FP8_PLANES) and decl["router_kernel_steps"] == {"block": [0]}
+    assert exactness_in_tree(src)
 
 
 def test_the_act_plane_is_the_input_of_the_quant_that_wrote_the_w2_input(monkeypatch):

@@ -16,6 +16,8 @@ from typing import Any
 
 from verity.circuits.codec import canonical_json
 
+__all__ = ["PropertyRecord", "REGISTRY", "citations", "digest_of", "seal"]
+
 DIR = "properties"
 
 

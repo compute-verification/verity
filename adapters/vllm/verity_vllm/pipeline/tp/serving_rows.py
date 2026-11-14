@@ -209,7 +209,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
 
 def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     """The TP Commit's record (its ``--out``): the world, TP run root and every rank's root of its pair-0 instrumented run, the one
-    whose windows `commit` wrote (``runs.jsonl``, which each Commit into the same ``--out`` appends to: the last such row, the run
+    whose windows `commit` wrote (``runs.jsonl``, which a Commit starts anew with its ``versions.json``: the last such row, the run
     ``versions.json`` is of), refused unless the TP run root combines exactly those roots; the root tag, each rank's Programs of
     record and the workload (``versions.json``).  The roots combine under the form the record's root tag names (`tp.run_root.combine`:
     v2, or an old record's v1, which `source` refuses as served), and any other tag is refused.  ``bundles``: the manifest sha256 of

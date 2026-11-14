@@ -77,7 +77,9 @@ def test_setdefault_keeps_what_the_environment_holds_and_environ_is_a_copy(monke
     assert S.setdefault("MAX_JOBS", "8") == "" and S.MAX_JOBS is None
     env = S.environ()
     env["MAX_JOBS"] = "4"
-    assert S.raw("MAX_JOBS") == "" and env == {**os.environ, "MAX_JOBS": "4"}
+    want = {**os.environ, "MAX_JOBS": "4"}
+    differ = sorted(k for k in env.keys() | want.keys() if env.get(k) != want.get(k))
+    assert S.raw("MAX_JOBS") == "" and differ == []
     with pytest.raises(AttributeError):
         S.setdefault("VERITY_NOT_A_SETTING", "1")
 

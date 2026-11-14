@@ -117,12 +117,18 @@ def test_rows_that_cannot_be_rewritten_for_a_negative_not_applied_are_said_and_t
 
 
 def test_a_blank_line_among_the_rows_is_no_row_and_is_left_out_of_the_rewrite(pair):
-    pair.out.mkdir(parents=True)
-    (pair.out / "runs.jsonl").write_text("\n  \n")
+    blanks = list[int]()
+
+    def blank(answer: dict[str, Any]) -> None:
+        """The Commit starts its rows anew, so the blank lines are written among them while it runs: before a run's row."""
+        with (pair.out / "runs.jsonl").open("a") as rows:
+            blanks.append(rows.write("\n  \n"))
+
+    pair.alter("tp2_commit_finalize", 0, blank)
     assert pair.run(*SWAP) == 3
     text = (pair.out / "runs.jsonl").read_text()
     lines = text.splitlines()
-    assert [json.loads(line)["arm"] for line in lines] == ["control", "instrumented"] and text == "".join(line + "\n" for line in lines)
+    assert blanks and [json.loads(line)["arm"] for line in lines] == ["control", "instrumented"] and text == "".join(line + "\n" for line in lines)
     assert json.loads(lines[1])["commit"]["commit_fail_reason"] == WHY_NOT
 
 
