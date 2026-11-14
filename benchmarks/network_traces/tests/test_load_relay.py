@@ -49,6 +49,7 @@ SMALL = (256, 189, 64)
 
 def _load():
     sys.path.insert(0, str(HERE))
+    sys.path.append(str(ROOT))  # for benchmarks.network_traces
     spec = importlib.util.spec_from_file_location("network_traces_load_relay",
                                                   ROOT / "benchmarks/network_traces/load_relay.py")
     mod = sys.modules[spec.name] = importlib.util.module_from_spec(spec)
@@ -231,7 +232,7 @@ def test_the_command_signs_a_load_head_a_value(tmp_path):
                     "--sink", str(tmp_path / "sink.bin"), "--height", "5", "--workers", "2"]) == 0
     doc = json.loads((out / "load.json").read_text())
     assert (tmp_path / "sink.bin").read_bytes() == src.read_bytes() and len(doc["values"]) == len(TINY)
-    import certifier_serve as CS
+    from benchmarks.network_traces import certifier_serve as CS
     key = CS.read_public(doc["key"])
     for v, reg in zip(TINY, doc["values"]):
         head, dom = TR.check_registration(reg, key, bytes.fromhex(doc["session"]), link=LR.LINK,
@@ -362,7 +363,7 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
                                leaves(v, data[v.offset:v.offset + v.nbytes]), mine, v.word_bits, v.schema)
         assert c.root == h.root and h.domain == LR.verifier_domain(PROGRAM)(v).domain_id, v.name
         at += TR.SALT_BYTES * v.leaves
-    import certifier_serve as CS
+    from benchmarks.network_traces import certifier_serve as CS
     own, session = CS.signer(tmp_path / "key", 5), os.urandom(32)
     regs = LR.sign_heads(Issuer(own, session), heads)
     doc = LR.load_doc(shape, heads, regs, CS.public_json(own.public_key()), session)

@@ -57,6 +57,7 @@ from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.append(str(ROOT))  # for benchmarks.network_traces
 
 #: the secret-bit stub's lead before its slot's boundary, sampled per bucket from [0, LEAD_MS) ms: the stub's write
 #: reaches the proxy through the shim's process, a hop whose latency the stub doesn't know, so the leads span it
@@ -382,7 +383,7 @@ def warden_lags(run: Path) -> list[float | None]:
     """Per bucket of a network certifier rehearsal `run`, when its first cell reached a client after its boundary, in ms
     (None: no connection's): each cell's bucket is the egress record's (`warden_serve.egress_cells`), its arrival the
     client's."""
-    import warden_serve as ws
+    from benchmarks.network_traces import warden_serve as ws
 
     dep = json.loads((run / "deployment.json").read_text())
     params = ws.WardenParams(**dep["params"])

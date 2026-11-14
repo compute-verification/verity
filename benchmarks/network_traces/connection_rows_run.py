@@ -20,7 +20,11 @@ process, which alone holds the key, lays the tables (`connection_rows.tables`), 
 head: a line of `rows.jsonl` (the registration, or the execution phase under `refused`, and the cost: the tables,
 their rows and bytes, and the build's, the commit's and the signature's ms) and the rows' salts in `rows.salts`
 (witness, table by table). It keeps no row: the prover, who holds the records, lays the tables again from them
-(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. A hand the tables refuse
+(`connection_rows.of_records`). The head takes one more leaf of the key an execution phase. In a schedule with
+content rows the process also writes a line of `filed.jsonl` an execution phase, after its line of `rows.jsonl`:
+the releases the hand filed in each class, under the digest of the head it signed, or the record with no list for
+an execution phase whose head it did not sign (`connection_rows`' "The filed releases"). It is witness, for the
+prover's serve: which class a release is in turns on how the network certifier ended it. A hand the tables refuse
 has no line and no salts: under form 2 one that files more than R = `WardenParams.phase_releases` releases in a
 class is no execution phase's of the schedule, the keep raises naming the release, the class and R, and `serve`'s
 publisher process ends on it, which fails the run at its next record's close.
@@ -92,14 +96,17 @@ import hashlib
 import json
 import pickle
 import statistics
+import sys
 import tempfile
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import replace
 from pathlib import Path
 
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
+
 import active_replay as ar
-import certifier_serve as cs
+from benchmarks.network_traces import certifier_serve as cs
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
@@ -111,6 +118,8 @@ from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS,
 #: the publisher queue's name for a hand's items, where a record's rows have their link's
 HAND = "connection-rows"
 ROWS, SALTS = "rows.jsonl", "rows.salts"
+#: in a schedule with content rows, the releases each execution phase's hand filed in each class, a line each
+FILED = "filed.jsonl"
 #: a line's key for the word that its execution phase has no head, where a head's line has `registration`
 NO_HEAD = "no_head"
 #: the ``format`` of the registrations' file's first line, the line that says what the file was checked under
@@ -207,6 +216,7 @@ class Keeper:
             ar.write_blobs(self.out / SALTS, b"")
             with open(self.out / ROWS, "a") as fh:
                 fh.write(json.dumps(line | {"cost": {"sign_ms": round((time.perf_counter() - t0) * 1000, 3)}}) + "\n")
+            self._filed(CR.not_filed(self.link, window))
             return
         t0 = time.perf_counter()
         tables = CR.tables(self.params, strides)
@@ -225,6 +235,14 @@ class Keeper:
         ar.write_blobs(self.out / SALTS, rows.witness)
         with open(self.out / ROWS, "a") as fh:
             fh.write(json.dumps(line | {"cost": cost}) + "\n")
+        self._filed(CR.not_filed(self.link, window) if cert is None else CR.filed_record(head, self.params, strides))
+
+    def _filed(self, record: Mapping) -> None:
+        """An execution phase's line of `filed.jsonl`, in a schedule with content rows: written once its head is
+        signed, or its word that it has none, so the list is final where it is written."""
+        if self.params.content is not None:
+            with open(self.out / FILED, "a") as fh:
+                fh.write(json.dumps(record) + "\n")
 
 
 # The offline check.
@@ -372,6 +390,17 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
     except ValueError as e:
         held = {}
         problems.append(f"connection rows: the records don't read as releases: {e}")
+    listed: dict[int, dict] = {}
+    if (run / FILED).exists():
+        try:
+            listed = {doc["window"]: doc for doc in map(json.loads, (run / FILED).read_text().splitlines())}
+        except (ValueError, KeyError, TypeError) as e:
+            problems.append(f"connection rows: {FILED} doesn't read: {e}")
+
+    def filing(w: int, record: Mapping) -> None:
+        """A problem where the run kept a line of `filed.jsonl` for execution phase `w` that is not `record`."""
+        if w in listed and listed[w] != record:
+            problems.append(f"execution phase {w}'s line of {FILED} is not its records' filing under its head")
     costs, registered, worded, passed = [], 0, 0, []
     for w in sorted(set(want) | set(kept) | set(without)):
         doc, salts = kept.get(w, (None, None))
@@ -390,6 +419,7 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
                 try:
                     CR.check_no_head(doc[NO_HEAD], key, session, params, link, w)
                     worded += 1
+                    filing(w, CR.not_filed(link, w))
                 except ValueError as e:
                     problems.append(f"execution phase {w}'s word that it has no head: {e}")
             continue
@@ -403,6 +433,8 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Block
                     CR.Rows.commit(link, w, mine, params, session, salts).head == head
                 if not ok:
                     problems.append(f"execution phase {w}'s connection rows aren't its records' releases")
+                else:
+                    filing(w, CR.filed_record(head, params, held[w]))
             except ValueError as e:
                 problems.append(f"execution phase {w}'s connection rows: {e}")
         registered += ok
@@ -493,7 +525,7 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
 
 def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     """The module docstring's cost of a close of `params` under `load`, over `phases` execution phases."""
-    import warden_serve as ws  # at its use: it imports this module
+    from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
     hands, pickles, longest = [], [], []
@@ -501,7 +533,7 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
         cs.load_key(key, height)
-        publish = ws.PublisherProcess(out, key, bytes(32), params)
+        publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0)  # a scratch key's first session
         try:
             for phase in range(phases):
                 handed: list = []

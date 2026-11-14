@@ -54,8 +54,9 @@
   run (the gate's ``warden-rehearse``, or `warden_serve.py`'s directory; `warden_chain`) and no certifier rehearsal's,
   whose input is refused by name (`warden_chain.PROXY`). ``certs --warden-run`` reruns the network certifier's own
   offline check on its witness and holds the public ``certificates.jsonl`` to the certified lines
-  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). ``endpoint`` binds the
-  endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
+  (`warden_chain.certificates`; no clock certificate: the network certifier signs none). That check requires the
+  session's certified start, so a gate run made by a device that certifies no start is refused here. ``endpoint`` binds
+  the endpoint's own advice to the certified I/O read off the network certifier's cells (`warden_endpoint`); where the
   endpoint's records stay on the served node, that node runs it (`served_endpoint`, `served_session.py endpoint`) and
   the chain reads its report. N2 is `n2_zk.py prove --warden-run`'s, on the network certifier link; the I/O tie is
   `n2_tie_zk.py prove --class warden`'s, proved (``--tie``, `tie_step`); the scan is `scan_zk.py prove
@@ -81,6 +82,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
 SCHEMA = "verity-network-chain/record-report/v1"
 DELTAS = (0.5, 2.0 ** -20)
@@ -219,7 +221,7 @@ def custody(gates: Path) -> dict:
 # --- certificates -----------------------------------------------------------------------------------------------------
 
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
-    import certifier_serve as cs
+    from benchmarks.network_traces import certifier_serve as cs
     from verity.commitments.crypto import lms
     from verity.protocols.accounting.certifier.verifier import lean_audit
 
@@ -292,7 +294,7 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
     `check_certificates` on the answer they make up, each refusal the Lean's (`lean_audit.certificate_refusals`:
     `NetworkCheck.TransferBlocks.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
     window where the two differ refused whole)."""
-    import certifier_serve as cs
+    from benchmarks.network_traces import certifier_serve as cs
     from verity.protocols.accounting.certifier.verifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
@@ -360,7 +362,7 @@ ADVICE_CLI = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
 def warden_endpoint(run: Path, ep: Path, eos: list[int]) -> dict:
     """The endpoint's own advice for a network certifier run (`served_endpoint`), on the certified I/O read off its
     cells (`warden_chain.io`)."""
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
 
     return served_endpoint(WC.deployment(run)[0], WC.io(run), ep, eos)
 
@@ -439,7 +441,7 @@ def on_warden(step: dict, doc: dict | None, run_id: str | None, what: str) -> di
     """A network-certifier-path step held to the network certifier run the certificates step read (``run_id``): refused
     by name (`warden_chain.PROXY`) when its input is a certifier rehearsal's (it names no active network certifier run),
     and when it is another network certifier run's."""
-    from warden_chain import PROXY
+    from benchmarks.network_traces.warden_chain import PROXY
 
     if doc is None or step.get("verdict") in ("not run", "not given"):
         return step
@@ -953,7 +955,7 @@ def decide_period(case: dict) -> dict:
     """``network-period check`` on ``case``: certifier/v0's answer by its verifier (`NetworkCheck.Period`, the
     executable ``VERITY_NETWORK_PERIOD_EXE`` names, which chain_record.sh builds), as `block_certifier.check` decides a
     period."""
-    from block_certifier import check
+    from benchmarks.network_traces.block_certifier import check
 
     exe = os.environ.get("VERITY_NETWORK_PERIOD_EXE")
     if not exe:
@@ -968,8 +970,10 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     (``cert``'s rows) and N2 registered, under N2's own registration (``n2``: the honest member's digest by execution
     phase), and its
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
-    that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
-    rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
+    that digest: its link must be ``cert``'s and its listed entries ``cert``'s key and session alone, their stretch
+    starting at execution phase 0, so the period's numbers are that session's own, and
+    `block_entry` re-decides the case. The rows form's execution phases are the scan's registrations, which no step here
+    holds, so that form is refused."""
     from verity.protocols.proofs.spot.verifier.one_stage import registration as R
     from verity.commitments.identity import tagged_sha512
 
@@ -982,7 +986,8 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
         return "the case isn't the answer's: its commitment's digest is another"
     if "sync_set" not in params:
         return "a rows-form answer: its link-windows are the scan's registrations, which this chain doesn't hold"
-    mine = {"link": cert.get("link"), "session": cert.get("session"), "key": (cert.get("key") or {}).get("public")}
+    mine = {"link": cert.get("link"), "keys": [{"key": (cert.get("key") or {}).get("public"),
+                                                 "session": cert.get("session"), "start": 0}]}
     other = [k for k, v in mine.items() if params.get(k) != v]
     if other:
         return f"the case's {', '.join(other)}: not the chain's, so another certifier session's period"
@@ -1011,7 +1016,7 @@ def block_entry(answer: dict | None, case: dict | None, verdict: str, *, server:
     its certificates, N2's registrations and the ``--audit`` registrations) and ``network-period check`` gives exactly
     that answer on its ``case`` (`decide_period`), so neither a refused chain nor another period's answer carries a K;
     else why not, `block_leg`'s refusal included."""
-    from block_certifier import block_leg
+    from benchmarks.network_traces.block_certifier import block_leg
 
     why = (NO_PERIOD_ANSWER if answer is None else
            f"the chain is {verdict}: only an accepted chain carries a K" if verdict != "accepted" else
@@ -1208,7 +1213,7 @@ def main(argv=None) -> int:
     if a.command == "custody":
         doc = custody(a.gates)
     elif a.command == "certs" and a.network_certifier_run:
-        import warden_chain as WC
+        from benchmarks.network_traces import warden_chain as WC
         doc = WC.certificates(a.network_certifier_run, a.deployed) | {"in_the_clear": CLEAR["warden_certificates"]}
     elif a.command == "certs":
         doc = certs(a.run, a.client or a.run, a.deployed)

@@ -15,7 +15,7 @@ import socket
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active, io_tie as IT
+from verity.protocols.accounting.certifier.verifier import active, io_tie as IT, pacer, warden as device_module
 from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.pacer import Report
@@ -411,10 +411,121 @@ def test_a_late_tick_faults_both_grids_window_and_the_audit_refuses_it():
     assert [w["accepted"] for w in audit(PARAMS, *records(warden))["windows"]] == [False, True]
 
 
+class EarlyClock(VirtualClock):
+    """A clock on which a tick's first wait ends at once, before its time, and the wait after it runs its length."""
+
+    def __init__(self, now: float) -> None:
+        super().__init__(now)
+        self.waits: list[float] = []
+        self.early = False
+
+    async def sleep(self, delay: float) -> None:
+        if delay > 0:
+            self.waits.append(delay)
+            self.early = not self.early
+        await super().sleep(0 if delay > 0 and self.early else delay)
+
+
+def test_a_tick_whose_wait_ends_early_waits_again_and_never_runs_before_its_boundary():
+    """A wait may end before its time (a timer against another clock, a signal). A tick runs once the clock reads
+    its boundary and never before: here every tick's first wait ends at once, and the tick still runs only after the
+    clock is moved to its boundary, on time, with every record complete."""
+
+    async def go():
+        clock = EarlyClock(-TAU / 2)
+        device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep)
+        running = asyncio.create_task(device.run())
+        before, after = [], []
+
+        async def settle(seen: list[int]) -> None:
+            for _ in range(4):  # the loop runs whatever is ready: a tick that the clock's reading lets run runs here
+                await clock.sleep(0)
+            seen.append(device.ticks)
+
+        for t in range(PARAMS.window):
+            await settle(before)
+            clock.advance(t * TAU)
+            await settle(after)
+        clock.advance(PARAMS.window * TAU)
+        await running
+        return device, before, after, clock
+
+    device, before, after, clock = asyncio.run(go())
+    assert before == list(range(PARAMS.window)) and after == list(range(1, PARAMS.window + 1))
+    assert device.lateness == [0.0] * PARAMS.window and len(clock.waits) == 2 * PARAMS.window
+    assert [(r.link, r.status.reason) for r in device.records] == [("requests", None), ("responses", None),
+                                                                   ("fails", None)]
+
+
+def test_the_network_certifiers_clock_is_the_hosts_raw_one_and_its_wait_is_against_it(monkeypatch):
+    """Unless a caller injects them, the clock is the host's raw clock and each wait is against that clock. Here the
+    raw clock is a count the test moves and each wait ends half its length early, then on its time: every clock
+    read is of `CLOCK_MONOTONIC_RAW`, every wait is handed the network certifier's own clock, and every tick runs at
+    its boundary or after it, inside the slack. On that clock it is paced, and its pacer, here a stand-in with no
+    process, is started on the raw clock too."""
+    now, asked, waits, started = [-0.35], [], [], []
+
+    class Paced:
+        @classmethod
+        async def start(cls, links=None, *, backlog=0, clock="monotonic"):
+            started.append(clock)
+            return cls()
+
+        async def reports(self):
+            return
+            yield
+
+        async def close(self):
+            return 0
+
+        async def kill(self):
+            pass
+
+    def read(clock_id):
+        asked.append(clock_id)
+        return now[0]
+
+    async def short(delay, clock):
+        waits.append(clock)
+        now[0] += delay / 2 if len(waits) % 2 else delay
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", read)
+    monkeypatch.setattr(device_module, "precise_sleep", short)
+    monkeypatch.setattr(device_module, "Pacer", Paced)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=0.05)
+    assert device.clock is pacer.raw_clock
+    asyncio.run(device.run())
+    assert started == ["raw"]
+    assert set(asked) == {pacer.time.CLOCK_MONOTONIC_RAW} and all(clock is device.clock for clock in waits)
+    assert device.ticks == PARAMS.window and len(waits) >= 2 * PARAMS.window
+    assert 0 <= min(device.lateness) and max(device.lateness) < device.slack
+    assert [(r.link, r.status.reason) for r in device.records] == [("requests", None), ("responses", None),
+                                                                   ("fails", None)]
+
+
+def test_a_host_without_a_raw_clock_starts_no_network_certifier(monkeypatch):
+    """Where the host's raw clock can't be read, the run refuses by name before a wait, a tick or its pacer: it has
+    no other clock to run on."""
+
+    def refuse(clock_id):
+        raise OSError(22, "Invalid argument")
+
+    waits = []
+
+    async def sleep(delay):
+        waits.append(delay)
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", refuse)
+    device = Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, sleep=sleep, paced=0.05)
+    with pytest.raises(pacer.ClockRefused, match="no raw monotonic clock"):
+        asyncio.run(device.run())
+    assert (device.ticks, device.lateness, waits, device._pacer, device.records) == (0, [], [], None, [])
+
+
 def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_late_faults_every_grid():
     """With `paced`, each connection's cells reach its socket from the pacer, the bytes the loop writes unpaced. On the
-    injected clock a bucket's time (origin 0, on the host's monotonic clock) has long passed when its tick hands it, so
-    each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
+    injected clock a bucket's time (origin 0, on the host's raw clock, the pacer's) has long passed when its tick hands
+    it, so each reaches the pacer late, and the report of a window's first bucket handed faults the three grids' window
     (`monitor-unavailable`) from the next bucket on: each grid is the unpaced run's up to that bucket, then padding. Each
     window's records are published as its buckets' releases are in. Each connection's last part closes the pacer's
     copy of its socket, so each client reads to its end."""
@@ -438,6 +549,18 @@ def test_a_paced_wardens_pacer_writes_each_client_its_cells_and_a_bucket_it_got_
     assert [r.t for r in paced.releases] == live and all(r.written for r in paced.releases)
     with pytest.raises(ValueError, match="past the slack"):
         Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, paced=TAU)
+
+
+def test_an_unpaced_network_certifier_on_a_clock_of_the_hosts_is_refused():
+    """The network certifier's own clock is the host's raw one, so the rule that a device on the host's clock is paced
+    holds on it: with no `paced`, the default clock, the raw clock and the steered clock are each refused, and only an
+    injected clock runs unpaced."""
+    for host in ({}, *({"clock": clock} for clock in pacer.CLOCKS.values())):
+        with pytest.raises(ValueError, match="host's clock is paced"):
+            Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, **host)
+    assert pacer.raw_clock in pacer.CLOCKS.values() and len(pacer.CLOCKS) == 2
+    clock = VirtualClock(0.0)
+    assert Warden(PARAMS, Server([]).connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep).paced is None
 
 
 def test_a_warden_on_the_hosts_clock_is_paced_and_a_release_unwritten_faults_every_grid():
@@ -637,6 +760,18 @@ def test_a_request_past_the_cap_is_refused_at_ingress_with_its_own_reason_never_
     refused(id_req((1 << 32) - 1))
 
 
+def test_a_request_of_max_tokens_0_is_refused_at_ingress_under_a_response_limit_and_released_without_one():
+    """Under a response limit a request that asks for no token is refused as one past the limit is, by the same
+    reason: none of its bytes is cut into a cell or reaches the server. The least a released request asks for is
+    1. A schedule without one reads no request's `max_tokens`, and releases the same request."""
+    assert active.id_request_max_tokens(id_req(0)[:GP]) == 0
+    refused(id_req(0))
+    _, _, server, e = capped(id_req(1), id_answer([7]))
+    assert (e["failed"], e["max_tokens"], e["release"]) == (None, 1, 0) and server.conns[0].received
+    _, _, server, e = capped(id_req(0), id_answer([7]), params=GATED)
+    assert (e["failed"], e["max_tokens"], e["release"]) == (None, None, 0) and server.conns[0].received
+
+
 def malformed_requests() -> dict[str, bytes]:
     """Requests whose `max_tokens` the network certifier can't read as `active.id_request` writes one."""
     good, at = id_req(4), active.MAX_TOKENS_AT
@@ -660,10 +795,10 @@ def test_a_request_whose_max_tokens_field_does_not_parse_is_refused(name):
 
 def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
     """Under the cap a server is held to its request's `max_tokens`: a third id on a request of two fails the
-    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of zero gets its END alone or
-    fails at cell 0. Without a cap the same response is released whole."""
-    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (0, [], (None, None)),
-                                     (0, [7], ("limit", 0))):
+    connection (limit) at egress cell 2, none of that id's bytes leaving, and a request of one gets its END alone
+    where its server sends no id, or fails at cell 1 on a second. Without a cap the same response is released whole."""
+    for max_tokens, ids, outcome in ((2, [1, 2, 3], ("limit", 2)), (2, [1, 2], (None, None)), (1, [], (None, None)),
+                                     (1, [7, 8], ("limit", 1))):
         warden, client, _, e = capped(id_req(max_tokens), id_answer(ids))
         assert (e["failed"], e["failed_at"]) == outcome
         sent = ids[:max_tokens]
@@ -679,12 +814,13 @@ def test_a_response_past_its_requests_max_tokens_fails_limit_at_that_cell():
 
 def test_the_audit_holds_released_requests_and_responses_to_the_cap():
     """The audit under a cap reads each request's `max_tokens` from its cells: records an uncapped run made, with a
-    request past the cap released or a response past its request's `max_tokens`, are refused; a `cap` reason under a
-    schedule without a cap is not the schedule's."""
-    warden, _, _, _ = capped(id_req(5), id_answer([1]), params=GATED)
-    verdict = audit(CAPPED, *records(warden))
-    assert verdict["windows"][0]["problems"] == ["connection 1: its request's max_tokens (5) is past the cap, and was "
-                                                 "released"]
+    request past the cap or of 0 released or a response past its request's `max_tokens`, are refused; a `cap` reason
+    under a schedule without a cap is not the schedule's."""
+    for max_tokens in (5, 0):
+        warden, _, _, _ = capped(id_req(max_tokens), id_answer([]), params=GATED)
+        verdict = audit(CAPPED, *records(warden))
+        assert verdict["windows"][0]["problems"] == [f"connection 1: its request's max_tokens ({max_tokens}) is "
+                                                     "not from 1 to the cap, and was released"]
     warden, _, _, _ = capped(id_req(2), id_answer([1, 2, 3]), params=GATED)
     verdict = audit(CAPPED, *records(warden))
     assert verdict["windows"][0]["problems"] == ["connection 1: its response has 3 DATA cells, past its max_tokens (2)"]

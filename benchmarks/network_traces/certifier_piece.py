@@ -170,6 +170,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 TREE = HERE.parents[1]
 sys.path[:0] = [str(HERE)]
+sys.path.append(str(TREE))  # for benchmarks.network_traces
 import served_session as SS  # noqa: E402
 
 #: where the front keeps the gate's fetch and the piece its private files, under the serve dir
@@ -757,7 +758,7 @@ def lean_exe(name: str, given: str | None) -> str:
 
 
 def period_check(exe: str, case: dict, d: Path) -> dict:
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
     try:
         return SP.lean_check(exe, case, d, run=captured)
     except (SystemExit, OSError, ValueError) as e:
@@ -768,8 +769,8 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
     """Step 1's rows audit of the network certifier run ``run`` (module docstring) by ``network-rows`` ``exe``, under
     ``record``, the record of its deployment (`warden_chain.RECORD`): `Rejected` on its reject, `NotRun` where the case
     can't be read or the check gives no `ROWS` accept or reject."""
-    import scan_period as SP
-    import warden_chain as WC
+    from benchmarks.network_traces import scan_period as SP
+    from benchmarks.network_traces import warden_chain as WC
     try:
         case = WC.rows_audit_case(run, record)
     except (SystemExit, OSError, KeyError, ValueError) as e:
@@ -791,7 +792,7 @@ def rows_check(exe: str, run: Path, record: dict) -> None:
 def own_rows(exe: str) -> Callable[[Path], None]:
     """`decide`'s ``rows``: `rows_check` by ``network-rows`` ``exe`` under the kept run's own deployment
     (`warden_chain.own_record`), the one the piece's other checks read."""
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
 
     def rows(run: Path) -> None:
         try:
@@ -803,7 +804,7 @@ def own_rows(exe: str) -> Callable[[Path], None]:
 
 
 def case_of(warden: Path, scan: Path, v3c: Path | None = None, circuit: str | None = None) -> dict:
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
     try:
         return SP.rows_case(warden, scan, v3c=v3c, circuit=circuit)
     except (SystemExit, OSError, KeyError, ValueError) as e:
@@ -814,7 +815,7 @@ def class_circuit(v3c: Path) -> str:
     """The class circuit V3c's audit is held to: the Program of the verifier's own window-circuit record beside V3C
     (`served_verdicts.sh`'s ``window-circuit-w<K>-<class>.json`` beside ``v3c-w<K>-<class>``,
     `scan_period.circuit_of_record`); `NotRun` without one."""
-    import scan_period as SP
+    from benchmarks.network_traces import scan_period as SP
     try:
         return SP.circuit_of_record(v3c.parent / f"window-circuit-{v3c.name.removeprefix('v3c-')}.json")
     except (SystemExit, OSError, ValueError) as e:
@@ -867,7 +868,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's chain
     step). `NotRun` when a step can't run."""
     import chain_record as CR
-    import warden_chain as WC
+    from benchmarks.network_traces import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
     reqs = window_requests(serve_dir, window)
@@ -934,7 +935,7 @@ def certificates(evidence: bytes) -> dict:
     records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
     with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""
-    from scan_period import CERTIFICATE_KEYS
+    from benchmarks.network_traces.scan_period import CERTIFICATE_KEYS
     windows = json.loads(evidence)["windows"]
     rows = [{"link": r["link"], "direction": r["direction"], "window": r["window"], "key_id": r["certificate"]["key"],
              "digest": r["certificate"]["digest"], "signature": r["certificate"]["signature"]}

@@ -307,7 +307,7 @@ def cappedSchedule : Schedule := ⟨0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 2, some 4⟩
 /-- The rows-form period of no link-window and no audit under `cappedSchedule`, at the deployed LMS parameters: the
 period `RowsCapPublished`'s witnesses are stated at. -/
 def cappedPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows cappedSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, none⟩
 
 /-- The `roots` entry `e` is the ok bits' constant of the scan's member `m` (its name, template and proof blocks'
 count, `ScanOk.members`): its port is `<name>/o0`, its leaves are the member's proof blocks' count, and its domain and
@@ -357,12 +357,12 @@ def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
 def pairParams (n : ℕ) : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n, none⟩
 
 /-- The rows-form period of no execution phase and no audit under `pairSchedule` whose parameters name the class
 circuit `c`, at the deployed LMS parameters: the period `RowsCircuitHeld`'s honest witness is stated at. -/
 def heldMonitoringPeriod : Params :=
-  ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
+  ⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, 0, some "c"⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
 def unnamedCommitment : Commitment := ⟨#[], #[Lean.Json.mkObj []], .empty⟩

@@ -43,19 +43,30 @@ read; and each scan's ok bits must be at the roots the check computes from the s
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
     {"audits": [{"free": f, "program": descriptor, "steps": k}, …], "cells": [cap, …], "first": w₀, "jitter": Dj,
-     "key": hex(I ‖ T[1]), "link": name, "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex,
-     "session": hex(session), "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
+     "keys": [{"key": hex(I ‖ T[1]), "session": hex(session), "start": a}, …], "link": name,
+     "lms": {"H": h, "N": n, "W": w, "toy": bool}, "program": hex,
+     "sync_set": {"deltas": [δ, …], "rhos": [[num, den], …]}, "windows": m}
 
 each compute audit's layout terms (`free`, the free inputs it doesn't register, `#(freeInputs \ reg)`; `steps`, its
 monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
 which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
 instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
 can be wider than a proof block's 16-bit public output; each network certifier connection's cell cap over the period
-(`cap_c`), the session's window
-the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
-periods),
-the observations' jitter bound `Dj ≥ 1`, the network certifier's LMS public key and parameters and the certifier session
-(32 bytes) every certificate binds, the link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
+(`cap_c`), the execution phase the period starts at (`w₀`, in the listed entries' numbers: its execution phases are
+`w₀ … w₀ + m − 1`, so one list spans many periods),
+the observations' jitter bound `Dj ≥ 1`, the keys of the link's network certifier as its registered record lists them
+(`"keys"`, an entry for each certifier session: its LMS public key; its session, 32 bytes, which every certificate of
+the entry binds; and the start `a` of its stretch of execution phases, in the numbers `w₀` is in. Entry `i`'s stretch
+runs from its start up to the next entry's start, and the last entry's from its start on, so execution phase `w` of the
+period picks the one entry whose stretch holds it (`entryAt`), and that session's own number for it is `w − a`: a
+session numbers its execution phases from 0. Refused by name: no entry; an entry whose start is below the one before it,
+out of order; two entries with one start, whose stretches would overlap; two entries with one key identifier `I`, a
+key's first 16 bytes, and one session, whose execution phase `n` would be two of the period's; in the clock form, which
+reads no session's signed start, two entries with one key identifier, so a key's restart is a new entry under a new key
+there, and in the rows form, where a key is listed once a session, two keys with one key identifier; a `w₀` before the
+first entry's start; and parameters that still name `"key"`, `"session"` or `"sessions"`, naming the entry to write),
+their LMS parameters, the
+link (at most 65,535 UTF-8 bytes), the SHA-512 of N2's registered Program for
 the link (the partition object's `program`, `LinkWindows.partition`), Σ_sync, and the period's `m ≥ 1` link-windows.
 The rows form has, in place of `sync_set`,
 
@@ -118,7 +129,15 @@ in the clock form, and in the rows form each link-window
 
 the requests', responses' and fails' records' certificates (`certified.jsonl`'s), and the ingress and the egress rows'
 registrations (`warden_rows.registration`, `cells.jsonl`'s); an execution phase of the other form than the parameters'
-is refused.
+is refused. The rows form's evidence has one key more, the listed entries' sessions' signed starts, one an entry, in
+the entries' order:
+
+    "starts": [{"base_ms": b, "certificate": certificate, "schedule": hex}, …]
+
+each as the network certifier's run publishes it (`certificate.CertifiedStart`, `deployment.json`'s `"start"`):
+where the session starts on its key's life, in milliseconds on the network
+certifier's clock, the parameters digest of the schedule it runs under, and the certificate the key signed for both
+once, before the session's first tick. The clock form's certifier signs no start, and its evidence has no `"starts"`.
 
 In the clock form: each audit's and each link-window's one-stage answer (`Core.Answer.ofJson`), and per link-window
 the two certificates (`certificate.Certificate`, egress first) and the clock certificate the certifier, the auditor's
@@ -133,24 +152,44 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 **The check**, in order; any rejection rejects, then any undecided answer leaves the period undecided:
 
 * the commitment registers the parameters' audits and `m` link-windows, and the evidence answers each;
+* in the rows form, listed entry `i` (`startChecks`): the evidence shows a start for each listed entry, and entry
+  `i`'s is its session's certified start (`startRefusal`, `certificate.CertifiedStart.refusal`'s checks in its
+  order): an egress certificate of window 0 under the link `<link>-origin`, which no record's certificate names; the
+  entry's key's; under the period's schedule, by its parameters digest; signing
+  `tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)` (`startDigest`); and verifying under
+  the entry's key in the entry's session. An entry whose start is not the one its session signed is then refused by
+  name (`heldTo`): tick t of a session is millisecond `base_ms + t · bucket_ms` of its key's life, so with `L` =
+  `window · bucket_ms`, an execution phase's milliseconds, two listed entries of one key, starting at `a` and `a'` with
+  bases `b` and `b'`, have `a · L + b' = a' · L + b`. Each key's life starts at 0, so two keys' bases share no origin:
+  a key's first listed entry's start is the auditor's pin, and every later entry of that key is read off it by the
+  certifier's signatures, which is why a key may be listed in more than one session. In the clock form the evidence
+  shows no start;
 * link-window `w` (the `i`-th, `w = w₀ + i`): its registration names the link's Program and the provenance
-  `{"kind": "served", "window": w}`;
-  both certificates are the key's, name the link, their end and `w`, and verify under LMS over `certificate_message` in
-  the session; the clock certificate is the key's egress certificate of the link at `w` and verifies so, and the
-  digest it signs has the salted form: no sync of Σ_sync's `clock_digest` itself (the unsalted form, which shows the
+  `{"kind": "served", "window": w}`, the developer's record, in the period's numbers;
+  both certificates are the key's of the entry `w` picks (`entryAt`; a certificate whose signer is another listed key,
+  outside its stretch, or is not listed is refused by name, `unlisted`), name the link, their end and that session's
+  number for the execution phase, `w − a`, and verify under LMS over `certificate_message` in
+  the entry's session; the clock certificate is that key's egress certificate of the link at `w − a` and verifies so,
+  and the digest it signs has the salted form: no sync of Σ_sync's `clock_digest` itself (the unsalted form, which shows the
   sync), and no earlier link-window's clock digest in the period (a reused salt, under which two windows of one sync
   sign one digest); and the answer is one-stage's for that registration's digest,
   accepted with the profile of one unit sampled `subset:1`: the link-window was proved (N2's verifier,
   `LinkWindows.verify`, is the answer's verifier);
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
-  (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
-  certificate is refused, and the network certifier certifies no record of a link-window in which it refused a
+  (`<link>-fails`, egress) at `w − a`, each the key's of the entry `w` picks and verifying in its session, so an
+  execution phase missing any record's certificate is refused, and the network certifier certifies no record of an
+  execution phase in which it refused a
   connection (traffic past the window's Program slots, `warden`'s "Admission"), so such a link-window is refused; its two registrations, ingress then egress, are what `warden_rows.check_registration` reads:
-  the link-window's value, link, end and window, the schedule's digest (a registration under another schedule is
-  refused), the schedule's rows, words, word bits, row format and layout, the execution phase's domain in the session
-  (`warden_rows.domain`), and a certificate that is the key's, signs the head (`CellsHead.digest`) and verifies in the
-  session (a registration not under the deployment key is refused); the scan's registration holds both, an entry of its
+  the execution phase's value, link, end and window, in its session's numbers (`w − a`, as the certifier wrote them),
+  the schedule's digest (a registration under another schedule is
+  refused), the schedule's rows, words, word bits, row format and layout (its first bucket `(w − a) · T`), the
+  execution phase's domain in the entry's
+  session (`warden_rows.domain`), and a certificate that is the key's of the entry `w` picks, signs the head
+  (`CellsHead.digest`) and
+  verifies in the entry's session (a registration under another key is refused, by name when its signer is a listed
+  key outside its stretch or is not listed); the scan's
+  registration holds both, an entry of its
   `roots` or `registered` naming each one's root and domain, which bind the session, link, end and window (an answer
   for another window's rows is refused); its Programs' rows are a compute audit's output (`progTied`): a lane's
   `scan/prog<j>` entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1`
@@ -294,7 +333,12 @@ reads the names the answer's public outputs hold, and takes one with no `rests_o
 tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
 and that the audits' answers are the sampled-proofs component's own,
-which the composition's theorem is to bind.
+which the composition's theorem is to bind. Of a session's signed start: where the session before it stopped, which
+no start says (a session that ends early still moves its key's life on by its whole span, so the numbers up to the
+next session's start hold no certificate, and no period runs across them); the period's number of a key's first
+listed entry, which is the auditor's pin, the signed message naming the key's life and not the period's numbers; a
+session of the key the list leaves out; and a device state restored from an earlier copy, which rests on the
+network certifier's host (`trusted-host`). In the clock form nothing holds an entry's start but the auditor's pin.
 
 **The clock openings** are apart from the period's check, in `NetworkCheck.Clocks` and this namespace: `clocksFn`,
 `network-records verdicts`' `clocks`, with the decoders and the clock digest the period's check reads from there
@@ -322,6 +366,9 @@ def unitLevel : String := "unit"
 def scheduleTag : String := "verity-network-warden/parameters/v3"
 def domainTag : String := "verity-network-warden/cells-domain/v2"
 def cellsTag : String := "verity-network-warden/cells/v2"
+/-- The tag of the digest a session's start's certificate signs (`certificate.START_TAG`): its base is in milliseconds
+of the key's life on the host's raw clock. -/
+def startTag : String := "verity-network-certifier/start/v1"
 def rowsFormat : String := "verity-network-warden/registration/v2"
 def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
@@ -381,6 +428,9 @@ def Schedule.programSlots (s : Schedule) : Nat := s.lanes
 /-- A window's Program slots: T / `every` slot strides of `programSlots` (`WardenParams.window_programs`). -/
 def Schedule.executionPhasePrograms (s : Schedule) : Nat := s.window / s.every * s.programSlots
 
+/-- An execution phase in milliseconds on the network certifier's clock: its T buckets of `bucket_ms` each. -/
+def Schedule.windowMs (s : Schedule) : Nat := s.window * s.bucketMs
+
 /-- The rows form's cells over `windows` of a link's execution phases (`WardenParams.rows_cells`): `egressCells` for
 each of the `lanes · windows · window` connections the network certifier can carry, as at most `lanes` are live in a
 bucket and each is live in its admission bucket. -/
@@ -423,6 +473,14 @@ def Form.maxTokensCap : Form → Option Nat
   | .clock _ => none
   | .rows s .. => s.maxTokensCap
 
+/-- One entry of the link's network certifier's listed keys (`"keys"`), a certifier session's: its LMS public key, its
+session, and the start of its stretch of execution phases, in the numbers the period's `first` is in. -/
+structure Entry where
+  key : ByteArray
+  session : ByteArray
+  start : Nat
+  deriving BEq
+
 structure Params where
   audits : Array Audit
   cells : Array Nat
@@ -430,8 +488,7 @@ structure Params where
   jitter : Nat
   link : String
   lms : Lms.Params
-  key : ByteArray
-  session : ByteArray
+  entries : Array Entry
   program : String
   form : Form
   windows : Nat
@@ -489,9 +546,21 @@ def ExecutionPhase.clockDigest? (x : ExecutionPhase) : Option ByteArray :=
   | .clock c => some c.digest
   | .rows _ => none
 
+/-- A certifier session's signed start as the evidence shows it (`certificate.CertifiedStart`, as the run's
+`deployment.json` holds it): where the session starts on its key's life, in milliseconds on the network
+certifier's clock; the parameters digest of the schedule it runs under; and the certificate, which signs their start
+digest (`startDigest`). -/
+structure Start where
+  baseMs : Nat
+  schedule : ByteArray
+  certificate : Certificate
+
 structure Evidence where
   audits : Array Core.Answer
   windows : Array ExecutionPhase
+  /-- The listed entries' sessions' signed starts, in the entries' order: one an entry in the rows form, none in the
+  clock form, whose certifier signs none. -/
+  starts : Array Start
 
 /-- What an accepted audit establishes: its proof blocks, its sample, its δ, and its bound on incorrect proof blocks. -/
 structure Facts where
@@ -513,11 +582,10 @@ def syncSetOf (j : Json) : V NetworkCertifier.SyncSet := do
   else throw "sync_set: non-empty, each delta and each rho listed once"
 
 def paramsKeys : List String :=
-  ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "session", "sync_set", "windows"]
+  ["audits", "cells", "first", "jitter", "keys", "link", "lms", "program", "sync_set", "windows"]
 
 def rowsParamsKeys : List String :=
-  ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session",
-    "windows"]
+  ["audits", "cells", "circuit", "first", "jitter", "keys", "link", "lms", "program", "scan", "schedule", "windows"]
 
 /-- A schedule's keys without a response cap. -/
 def scheduleKeys : List String :=
@@ -886,9 +954,56 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
   pure { steps := T, free := 0, ingress := bitsOf df.ret, egress := bitsOf de.ret,
          entries := s.lanes * nb * bitsOf ety }
 
+/-- The link's network certifier's keys, as the parameters list them (`"keys"`): an entry for each certifier session,
+its LMS public key under `lms`, its session and the start of its stretch of execution phases. At least one entry, and
+the starts strictly increasing, so the stretches are in order and no two hold one execution phase: entry `i`'s runs from
+its start up to the next entry's start, and the last entry's from its start on (`entryAt`). No two entries with one key
+identifier (`I`, a key's first 16 bytes) and one session, whose execution phase `n` would be two of the period's. A
+key's restart: where the period reads each session's signed start (`restarts`, the rows form, `startChecks`) a key may
+be listed in several sessions, each held to the key's first listed one, and an identifier still names one key; where it
+reads none (the clock form) no two entries have one key identifier, so a restart is a new entry under a new key. -/
+def certifierEntriesOf (j : Json) (lms : Lms.Params) (restarts : Bool) : V (Array Entry) := do
+  let entries ← (← Flock.J.arr j "keys" "the object").mapM fun e => do
+    match e with
+    | .obj _ => exactly e ["key", "session", "start"] "keys"
+    | _ => throw "keys: an entry is not an object: write each as {\"key\": hex(I ‖ T[1]), \"session\": hex, \"start\": a}"
+    let key ← hexAt e "key" "keys"
+    unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
+    let session ← hexAt e "session" "keys"
+    unless session.size = attachmentBytes do throw s!"a certifier session id is {attachmentBytes} bytes, not {session.size}"
+    pure ({ key, session, start := ← Flock.J.nat e "start" "keys" } : Entry)
+  unless 1 ≤ entries.size do throw "keys: no key: list the certifier's entries, at least one"
+  for (x, y) in entries.zip (entries.extract 1) do
+    if y.start < x.start then
+      throw s!"keys: out of order: an entry starts at {y.start}, before the entry listed before it, at {x.start}: list \
+        the entries by their stretches' starts"
+    if y.start = x.start then
+      throw s!"keys: two entries start at {x.start}: their stretches overlap, both holding that execution phase"
+  let sessions := entries.toList.map fun e => (e.key.extract 0 16, e.session)
+  unless sessions.eraseDups.length = sessions.length do
+    throw "keys: one session listed twice: two entries hold one key identifier (a key's first 16 bytes) and one \
+      session, so that session's execution phase n would be two of the period's"
+  let ids := entries.toList.map (·.key.extract 0 16)
+  if restarts then
+    unless (entries.toList.map (·.key)).eraseDups.length = ids.eraseDups.length do
+      throw "keys: two keys with one key identifier (a key's first 16 bytes)"
+  else unless ids.eraseDups.length = ids.length do
+    throw "keys: two entries with one key identifier (a key's first 16 bytes): the clock form reads no session's \
+      signed start, so a key's restart is a new entry under a new key"
+  pure entries
+
 def paramsOf (j : Json) : V Params := do
   match j with
   | .obj _ =>
+    if (keysOf j).contains "key" then
+      throw "key: write \"keys\", the list of the certifier's entries, [{\"key\": hex(I ‖ T[1]), \"session\": hex, \
+        \"start\": a}, …]"
+    if (keysOf j).contains "session" then
+      throw "session: write each key's session in its entry of \"keys\", {\"key\": hex(I ‖ T[1]), \"session\": hex, \
+        \"start\": a}"
+    if (keysOf j).contains "sessions" then
+      throw "sessions: write each key's session in its entry of \"keys\", {\"key\": hex(I ‖ T[1]), \"session\": hex, \
+        \"start\": a}"
     unless keysOf j == paramsKeys || keysOf j == rowsParamsKeys do
       throw s!"the object: the keys must be {paramsKeys} or {rowsParamsKeys}, not {keysOf j}"
   | _ => throw "the object: not an object"
@@ -903,10 +1018,10 @@ def paramsOf (j : Json) : V Params := do
   exactly l ["H", "N", "W", "toy"] "lms"
   let lms ← Lms.Params.make (← Flock.J.nat l "N" "lms") (← Flock.J.nat l "W" "lms") (← Flock.J.nat l "H" "lms")
     (← Flock.J.bool l "toy" "lms")
-  let key ← Flock.unhex (← Flock.J.str j "key" "the object")
-  unless key.size = 16 + lms.N do throw s!"an LMS public key is {16 + lms.N} bytes, not {key.size}"
-  let session ← Flock.unhex (← Flock.J.str j "session" "the object")
-  unless session.size = attachmentBytes do throw s!"a certifier session id is {attachmentBytes} bytes, not {session.size}"
+  let entries ← certifierEntriesOf j lms (keysOf j != paramsKeys)
+  if let some e := entries[0]? then
+    unless e.start ≤ first do
+      throw s!"first: execution phase {first} is before the first listed entry's stretch, which starts at {e.start}"
   let program ← Flock.J.str j "program" "the object"
   unless isDigest program do throw "program: not a SHA-512 digest (128 lowercase hex digits)"
   let form ← if keysOf j == paramsKeys then do pure (Form.clock (← syncSetOf (← Flock.J.get j "sync_set" "the object")))
@@ -925,7 +1040,98 @@ def paramsOf (j : Json) : V Params := do
     let d ← Flock.J.str j "circuit" "the object"
     unless isDigest d do throw "circuit: not a SHA-512 digest (128 lowercase hex digits)"
     pure (some d)
-  pure { audits, cells, first, jitter, link, lms, key, session, program, form, windows, circuit }
+  pure { audits, cells, first, jitter, link, lms, entries, program, form, windows, circuit }
+
+/-- The certifier's entries the parameters list (`"keys"`), each a key, its session and the start of its stretch, read
+through the period's own decoder (`paramsOf`): what a composition that pins its certifier's keys (an `AuditorPin`
+each, the pinned list `AuditorPins`) reads off the period's parameters, as `Core.Onsite.store` reads PoUS's root off its
+commitment through PoUS's decoder. -/
+def certifierEntries (j : Json) : V (Array Entry) := (·.entries) <$> paramsOf j
+
+-- the parameters list the certifier's entries: two decode, in order, each with its key, its session and its start,
+-- and a period that starts in the second's stretch decodes. Refused, each by name: no entry; an entry below the one
+-- before it; two entries with one start; one key identifier and one session twice; in the clock form, whose
+-- parameters these are, one key identifier twice (the same key in another session, or another key under the first's
+-- identifier); a period that starts before the first entry; an entry that is the key alone, or lacks its start; and
+-- the earlier forms `"key"`, `"session"` and `"sessions"`
+#guard
+  let hex := fun (b : UInt8) (n : Nat) => String.join (List.replicate n s!"0{b}")
+  let params := fun (first : Nat) (more : List (String × Json)) => Json.mkObj (more ++ [
+    ("audits", .arr #[]), ("cells", .arr #[]), ("first", toJson first), ("jitter", toJson (1 : Nat)),
+    ("link", .str "a"), ("lms", Json.mkObj [("H", toJson (1 : Nat)), ("N", toJson (64 : Nat)),
+      ("W", toJson (4 : Nat)), ("toy", .bool false)]),
+    ("program", .str (hex 0 64)),
+    ("sync_set", Json.mkObj [("deltas", .arr #[toJson (0 : Nat)]),
+      ("rhos", .arr #[.arr #[toJson (1 : Nat), toJson (1 : Nat)]])]),
+    ("windows", toJson (1 : Nat))])
+  let (k, ses) := (fun (b : UInt8) => hex b 80, fun (b : UInt8) => hex b attachmentBytes)
+  let entry := fun (key session : String) (start : Nat) =>
+    Json.mkObj [("key", .str key), ("session", .str session), ("start", toJson start)]
+  let listed := fun (first : Nat) (es : Array Json) => params first [("keys", .arr es)]
+  let reason := fun (j : Json) => match paramsOf j with | .ok _ => "" | .error e => e
+  let write := "{\"key\": hex(I ‖ T[1]), \"session\": hex, \"start\": a}"
+  let oneId := "keys: two entries with one key identifier (a key's first 16 bytes): the clock form reads no \
+    session's signed start, so a key's restart is a new entry under a new key"
+  let (key, session) := (fun (b : UInt8) => (⟨Array.replicate 80 b⟩ : ByteArray),
+    fun (b : UInt8) => (⟨Array.replicate attachmentBytes b⟩ : ByteArray))
+  (certifierEntries (listed 5 #[entry (k 1) (ses 7) 0, entry (k 2) (ses 8) 3])).toOption ==
+      some #[⟨key 1, session 7, 0⟩, ⟨key 2, session 8, 3⟩] &&
+    reason (listed 0 #[]) == "keys: no key: list the certifier's entries, at least one" &&
+    reason (listed 5 #[entry (k 1) (ses 7) 3, entry (k 2) (ses 8) 2]) ==
+      "keys: out of order: an entry starts at 2, before the entry listed before it, at 3: list the entries by their \
+        stretches' starts" &&
+    reason (listed 5 #[entry (k 1) (ses 7) 3, entry (k 2) (ses 8) 3]) ==
+      "keys: two entries start at 3: their stretches overlap, both holding that execution phase" &&
+    reason (listed 5 #[entry (k 1) (ses 7) 0, entry (k 1) (ses 7) 3]) ==
+      "keys: one session listed twice: two entries hold one key identifier (a key's first 16 bytes) and one \
+        session, so that session's execution phase n would be two of the period's" &&
+    reason (listed 5 #[entry (k 1) (ses 7) 0, entry (k 1) (ses 8) 3]) == oneId &&
+    reason (listed 5 #[entry (k 1) (ses 7) 0, entry (hex 1 16 ++ hex 2 64) (ses 8) 3]) == oneId &&
+    reason (listed 2 #[entry (k 1) (ses 7) 3]) ==
+      "first: execution phase 2 is before the first listed entry's stretch, which starts at 3" &&
+    reason (listed 0 #[.str (k 1)]) == s!"keys: an entry is not an object: write each as {write}" &&
+    reason (listed 0 #[Json.mkObj [("key", .str (k 1)), ("session", .str (ses 7))]]) ==
+      "keys: the keys must be [key, session, start], not [key, session]" &&
+    reason (params 0 [("key", .str (k 1))]) ==
+      s!"key: write \"keys\", the list of the certifier's entries, [{write}, …]" &&
+    reason (params 0 [("keys", .arr #[entry (k 1) (ses 7) 0]), ("session", .str (ses 7))]) ==
+      s!"session: write each key's session in its entry of \"keys\", {write}" &&
+    reason (params 0 [("keys", .arr #[entry (k 1) (ses 7) 0]), ("sessions", .arr #[.str (ses 7)])]) ==
+      s!"sessions: write each key's session in its entry of \"keys\", {write}"
+
+-- where the period reads each session's signed start (the rows form), a key is listed in two sessions; one session
+-- twice and another key under a listed key's identifier are refused there too
+#guard
+  let hex := fun (b : UInt8) (n : Nat) => String.join (List.replicate n s!"0{b}")
+  let entry := fun (key : String) (session : UInt8) (start : Nat) =>
+    Json.mkObj [("key", .str key), ("session", .str (hex session attachmentBytes)), ("start", toJson start)]
+  let listed := fun (es : Array Json) => certifierEntriesOf (Json.mkObj [("keys", .arr es)]) Lms.deployed true
+  let reason := fun (es : Array Json) => match listed es with | .ok _ => "" | .error e => e
+  (listed #[entry (hex 1 80) 7 0, entry (hex 2 80) 8 2, entry (hex 1 80) 9 3]).toOption.map (·.map (·.start)) ==
+      some #[0, 2, 3] &&
+    (reason #[entry (hex 1 80) 7 0, entry (hex 1 80) 7 3]).startsWith "keys: one session listed twice: " &&
+    reason #[entry (hex 1 80) 7 0, entry (hex 1 16 ++ hex 2 64) 8 3] ==
+      "keys: two keys with one key identifier (a key's first 16 bytes)"
+
+/-- The link the parameters name, the one whose records the period checks, read through the period's own decoder
+(`paramsOf`): with `certifierEntries`, what a composition reads off the period's parameters. -/
+def certifierLink (j : Json) : V String := (·.link) <$> paramsOf j
+
+-- the link is read off the parameters as the period reads them, and parameters the period refuses give none
+#guard
+  let hex := fun (b : UInt8) (n : Nat) => String.join (List.replicate n s!"0{b}")
+  let params := fun (link : Json) => Json.mkObj [("link", link),
+    ("audits", .arr #[]), ("cells", .arr #[]), ("first", toJson (0 : Nat)), ("jitter", toJson (1 : Nat)),
+    ("keys", .arr #[Json.mkObj [("key", .str (hex 1 80)), ("session", .str (hex 7 attachmentBytes)),
+      ("start", toJson (0 : Nat))]]),
+    ("lms", Json.mkObj [("H", toJson (1 : Nat)), ("N", toJson (64 : Nat)),
+      ("W", toJson (4 : Nat)), ("toy", .bool false)]),
+    ("program", .str (hex 0 64)),
+    ("sync_set", Json.mkObj [("deltas", .arr #[toJson (0 : Nat)]),
+      ("rhos", .arr #[.arr #[toJson (1 : Nat), toJson (1 : Nat)]])]),
+    ("windows", toJson (1 : Nat))]
+  (certifierLink (params (.str "eth0"))).toOption == some "eth0" &&
+    (certifierLink (params (toJson (0 : Nat)))).toOption == none
 
 /-- A window record of one of `Flock.WindowRecord.FORMATS`. -/
 def registrationOf (j : Json) (ctx : String) : V Json := do
@@ -969,12 +1175,23 @@ def executionPhaseOf (j : Json) (ctx : String) : V ExecutionPhase := do
     else do pure (Shown.rows (← (← Flock.J.arr j "registrations" ctx).mapM (rowsOf · s!"{ctx}.registrations")))
   pure { answer, certificates, shown }
 
+/-- A session's signed start, as the run's `deployment.json` holds it (`"start"`). -/
+def startOf (j : Json) (ctx : String) : V Start := do
+  exactly j ["base_ms", "certificate", "schedule"] ctx
+  pure { baseMs := ← Flock.J.nat j "base_ms" ctx, schedule := ← hexAt j "schedule" ctx,
+         certificate := ← certificateOf (← Flock.J.get j "certificate" ctx) s!"{ctx}.certificate" }
+
+/-- The evidence: the audits' answers and the execution phases', and the listed entries' sessions' signed starts where
+it shows any (`"starts"`, the rows form's). Evidence that shows none has no `"starts"`, so it has one encoding. -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
-  exactly j ["audits", "windows"] "the object"
+  let shown := keysOf j == ["audits", "starts", "windows"]
+  unless shown do exactly j ["audits", "windows"] "the object"
   let audits ← (← Flock.J.arr j "audits" "the object").mapM (Core.Answer.ofJson · "an audit's answer")
   let windows ← (← Flock.J.arr j "windows" "the object").mapM (executionPhaseOf · "a link-window")
-  pure { audits, windows }
+  let starts ← if shown then (← Flock.J.arr j "starts" "the object").mapM (startOf · "a start") else pure #[]
+  if shown && starts.isEmpty then throw "starts: none: evidence that shows no session's start has no \"starts\""
+  pure { audits, windows, starts }
 
 /-! ## The check -/
 
@@ -983,13 +1200,55 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 def clearClocks (ss : NetworkCertifier.SyncSet) : List ByteArray :=
   ss.deltas.flatMap fun d => ss.rhos.attach.filterMap fun ρ => clockDigest ⟨d, ρ.1, ss.rhos_pos ρ.1 ρ.2⟩
 
-/-- A certificate of `link`'s end `d` at window `w`, the key's and verifying in the parameters' session
-(`Certificate.signs`). -/
-def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
-  c.direction == d && c.link == link && c.window == w && c.signs p.lms p.key p.session
+/-- The entry execution phase `w` picks: the last listed entry whose start is at most `w`, the one whose stretch holds
+`w` (the starts strictly increase, `certifierEntriesOf`); none before the first entry's start. The execution phase alone
+picks it: nothing a certificate or a rows registration names does. -/
+def entryAt (p : Params) (w : Nat) : Option Entry := (p.entries.filter (·.start ≤ w)).back?
 
-/-- A certificate of the link's end `d` at window `w`, the key's and verifying. -/
+/-- What a refusal at execution phase `w` of certificates or of a rows registration adds about the signers `ids`, so
+each is refused by name: no listed entry's stretch holds `w`; a signer no entry lists; a listed key outside its stretch,
+`w` being in another entry's. -/
+def unlisted (p : Params) (w : Nat) (ids : Array ByteArray) : String :=
+  match entryAt p w with
+  | none => s!": no listed entry's stretch holds execution phase {w}"
+  | some e =>
+    if ids.all (· == e.key.extract 0 16) then ""
+    else if ids.all fun id => p.entries.any (·.key.extract 0 16 == id) then
+      s!": a listed key outside its stretch: execution phase {w} is in the stretch of the entry that starts at \
+        {e.start}"
+    else ": a signer that is not one of the listed keys"
+
+/-- A certificate of `link`'s end `d` for execution phase `w` of the period: the key's of the entry `w` picks
+(`entryAt`), naming that session's own number for the execution phase, `w` less the entry's start, and verifying under
+the entry's key in the entry's session (`Certificate.signs`). -/
+def certifiesOn (p : Params) (link : String) (d : Direction) (w : Nat) (c : Certificate) : Bool :=
+  (entryAt p w).any fun e =>
+    c.direction == d && c.link == link && c.window == w - e.start && c.signs p.lms e.key e.session
+
+/-- A certificate of the link's end `d` for execution phase `w` of the period, the picked entry's and verifying. -/
 def certifies (p : Params) (d : Direction) (w : Nat) (c : Certificate) : Bool := certifiesOn p p.link d w c
+
+-- an execution phase picks the one entry whose stretch holds it: the first entry's up to the second's start, the
+-- second's from its start on, and none before the first's start. A refusal names its signers: the picked entry's key
+-- none; the other entry's key, listed and outside its stretch; a third key, not listed; and an execution phase no entry
+-- holds
+#guard
+  let key := fun (b : UInt8) => (⟨Array.replicate 80 b⟩ : ByteArray)
+  let id := fun (b : UInt8) => (key b).extract 0 16
+  let session := fun (b : UInt8) => (⟨Array.replicate attachmentBytes b⟩ : ByteArray)
+  let p : Params := {
+    audits := #[], cells := #[], first := 2, jitter := 1, link := "", lms := Lms.deployed,
+    entries := #[⟨key 1, session 7, 2⟩, ⟨key 2, session 8, 5⟩], program := "",
+    form := .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none⟩ .empty ⟨0, 0, 0, 0, 0⟩, windows := 1 }
+  entryAt p 1 == none && entryAt p 2 == some ⟨key 1, session 7, 2⟩ && entryAt p 4 == some ⟨key 1, session 7, 2⟩ &&
+    entryAt p 5 == some ⟨key 2, session 8, 5⟩ && entryAt p 9 == some ⟨key 2, session 8, 5⟩ &&
+    unlisted p 4 #[id 1, id 1] == "" && unlisted p 5 #[id 2] == "" &&
+    unlisted p 5 #[id 2, id 1] ==
+      ": a listed key outside its stretch: execution phase 5 is in the stretch of the entry that starts at 5" &&
+    unlisted p 4 #[id 2] ==
+      ": a listed key outside its stretch: execution phase 4 is in the stretch of the entry that starts at 2" &&
+    unlisted p 4 #[id 1, id 3] == ": a signer that is not one of the listed keys" &&
+    unlisted p 1 #[id 1] == ": no listed entry's stretch holds execution phase 1"
 
 /-- A finding against the period: a rejection, or what leaves it undecided. -/
 abbrev Found := Except (Core.Verdict × String)
@@ -1017,7 +1276,9 @@ def served (w : Nat) : Json := Json.mkObj [("kind", "served"), ("window", toJson
 def canonText (j : Json) : Option String := (Flock.canon j).toOption
 
 /-- Link-window `w`'s findings, in the order the module docstring gives, `clear` being `clearClocks` of Σ_sync and
-`earlier` the period's earlier link-windows' clock digests. -/
+`earlier` the period's earlier execution phases' clock digests. The developer's record, the registration's served
+window, is in the period's numbers, `w`, and the certifier's, its certificates, in its session's: the check picks the
+entry by `w` (`entryAt`) and holds each signed thing to `w` less that entry's start. -/
 def executionPhaseCheck (p : Params) (clear : List ByteArray) (earlier : Array ByteArray) (w : Nat) (reg : Json)
     (x : ExecutionPhase) : Found Unit := do
   let what := s!"window {w}"
@@ -1027,8 +1288,8 @@ def executionPhaseCheck (p : Params) (clear : List ByteArray) (earlier : Array B
     refuse s!"{what}: registration: not the link's Program at window {w}"
   unless x.certificates.size == 2 && (x.certificates.zip #[Direction.egress, .ingress]).all
       (fun (c, d) => certifies p d w c) do
-    refuse s!"{what}: certificates"
-  unless certifies p .egress w clock do refuse s!"{what}: clock"
+    refuse s!"{what}: certificates{unlisted p w (x.certificates.map (·.keyId))}"
+  unless certifies p .egress w clock do refuse s!"{what}: clock{unlisted p w #[clock.keyId]}"
   if clear.contains clock.digest then refuse s!"{what}: clock: a sync's clock digest unsalted"
   if earlier.contains clock.digest then refuse s!"{what}: clock: an earlier link-window's digest, its salt reused"
   let (prof, _) ← answered what reg x.answer
@@ -1066,24 +1327,32 @@ def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : S
   Identity.taggedSha512 cellsTag ((← text link "link") ++ (← uBE 1 d.code "direction") ++ (← uBE 8 w "window") ++ sd ++
     (← uBE 4 s.cellBytes "B") ++ (← uBE 4 s.allocation "S") ++ (← uBE 4 s.window "T") ++ wiring ++ dom ++ root)
 
-/-- `warden_rows.check_registration` of the link's rows in direction `d` at window `w`. -/
+/-- `warden_rows.check_registration` of the link's rows in direction `d` for execution phase `w` of the period, under
+the entry `w` picks (`entryAt`): its signer is the entry's key, refused by name first when it is another listed key,
+outside its stretch, or no listed one; and the registration is the certifier's, so its value, its window, its layout's
+first bucket, its domain and the head its certificate signs are in that session's numbers, `w` less the entry's start,
+and its domain binds the entry's session. -/
 def rowsCheck (p : Params) (s : Schedule) (sd : ByteArray) (w : Nat) (d : Direction) (r : Rows) : Found Unit := do
   let what := s!"window {w}: the {d.value} rows"
   let (B, S, T) := (s.cellBytes, s.allocation, s.window)
-  unless r.format == rowsFormat && r.value == s!"{p.link}/{d.value}/{w}" && r.link == p.link &&
-      r.direction == d.value && r.window == w do
-    refuse s!"{what}: not the link's {d.value} rows at window {w}"
+  let some e := entryAt p w | refuse s!"{what}{unlisted p w #[]}"
+  unless r.key == e.key.extract 0 16 do
+    refuse s!"{what}: not under a listed key in its session{unlisted p w #[r.key]}"
+  let n := w - e.start
+  unless r.format == rowsFormat && r.value == s!"{p.link}/{d.value}/{n}" && r.link == p.link &&
+      r.direction == d.value && r.window == n do
+    refuse s!"{what}: not the link's {d.value} rows at window {w}, its session's {n}"
   unless r.parameters == Flock.hexOf sd do refuse s!"{what}: another schedule's digest than the bound one"
   unless r.cellBytes == B && r.rows == T && r.words == S * B / 2 && r.wordBits == outBits && r.rowSchema == rowSchema &&
-      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := w * T } : BucketSchedule) do
+      r.layout == ({ buckets := T, slots := S, connectionSlots := s.slots, firstBucket := n * T } : BucketSchedule) do
     refuse s!"{what}: not the schedule's rows"
-  let .ok dom := rowsDomain s sd p.session p.link d w | refuse s!"{what}: no domain"
+  let .ok dom := rowsDomain s sd e.session p.link d n | refuse s!"{what}: no domain"
   unless r.domain == Flock.hexOf dom do refuse s!"{what}: not the link-window's domain"
-  let .ok head := headDigest p.link d w sd s r.wiring dom r.root | refuse s!"{what}: the head doesn't encode"
+  let .ok head := headDigest p.link d n sd s r.wiring dom r.root | refuse s!"{what}: the head doesn't encode"
   unless r.digest == head do refuse s!"{what}: the certificate doesn't sign the head"
   unless certifiesOn p p.link d w
-      { keyId := r.key, link := p.link, direction := d, window := w, digest := r.digest, signature := r.signature } do
-    refuse s!"{what}: not under the deployment key in the session"
+      { keyId := r.key, link := p.link, direction := d, window := n, digest := r.digest, signature := r.signature } do
+    refuse s!"{what}: not under a listed key in its session"
 
 /-- The scan's registration holds the rows: an entry of its `roots` or `registered` names their root and domain. -/
 def holds (reg : Json) (r : Rows) : Bool :=
@@ -1293,7 +1562,8 @@ def factsOf (what : String) (prof : Core.Integrity) (pub : Json) : Found Facts :
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
 facts and its tied audits' free inputs (`tiedAudits`: the parameters' `free` of each audit whose output the scan's
-`prog` is, each once). -/
+`prog` is, each once). `w` is the period's number: the records' certificates and the rows' registrations, the
+certifier's, are held to the session's number of the entry `w` picks (`certifiesOn`, `rowsCheck`). -/
 def rowsExecutionPhaseCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array Json) (w : Nat)
     (reg : Json) (x : ExecutionPhase) : Found (Facts × Nat) := do
   let what := s!"window {w}"
@@ -1301,8 +1571,9 @@ def rowsExecutionPhaseCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits
   unless ScanOk.named "program" p.program reg do refuse s!"{what}: registration: not the scan's Program"
   unless x.certificates.size == 3 && (x.certificates.zip (records p.link)).all
       (fun (c, l, d) => certifiesOn p l d w c) do
-    refuse s!"{what}: certificates: the requests', responses' and fails' records', each the key's (the network \
-      certifier certifies none of a window in which it refused a connection: traffic past the Program slots)"
+    refuse s!"{what}: certificates: the requests', responses' and fails' records', each a listed key's (the network \
+      certifier certifies none of a window in which it refused a connection: traffic past the Program slots)\
+      {unlisted p w (x.certificates.map (·.keyId))}"
   unless rs.size == 2 do refuse s!"{what}: registrations: the ingress rows, then the egress rows"
   for (r, d) in rs.zip #[Direction.ingress, .egress] do rowsCheck p s sd w d r
   unless rs.all (holds reg) do refuse s!"{what}: the scan's registration doesn't hold the rows: another window's answer"
@@ -1374,6 +1645,115 @@ def stateCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg 
 def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
+
+/-- The link a session's start is certified under (`certificate.start_link`): the link's name with `-origin`, which no
+record's or clock's certificate names. -/
+def startLink (link : String) : String := link ++ "-origin"
+
+/-- `certificate.start_digest`: `tagged_sha512("verity-network-certifier/start/v1", u64be base_ms ‖ schedule)` of a
+session's base on its key's life and its schedule's parameters digest; none for a base past a u64 or a digest that is
+not 64 bytes. -/
+def startDigest (baseMs : Nat) (schedule : ByteArray) : Option ByteArray :=
+  if schedule.size = digestBytes then
+    (do Identity.taggedSha512 startTag ((← uBE 8 baseMs "base_ms") ++ schedule)).toOption
+  else none
+
+/-- Why the start `x` shown for the listed entry `e` is not its session's certified start, by the codes and in the
+order of `certificate.CertifiedStart.refusal`, or none: it is an egress certificate of window 0 under the link's start
+link (`start`); the entry's key's (`key`); names the period's schedule, whose parameters digest is `sd` (`schedule`);
+signs the start digest of its base and that schedule (`opening`); and verifies under the entry's key in the entry's
+session (`signature`). -/
+def startRefusal (p : Params) (sd : ByteArray) (e : Entry) (x : Start) : Option String :=
+  let c := x.certificate
+  if !(c.direction == .egress && c.window == 0 && c.link == startLink p.link) then some "start"
+  else if c.keyId != e.key.extract 0 16 then some "key"
+  else if x.schedule != sd then some "schedule"
+  else if startDigest x.baseMs x.schedule != some c.digest then some "opening"
+  else if !c.signs p.lms e.key e.session then some "signature"
+  else none
+
+/-- Whether the listed entry `e`, whose session's signed start is `x`, starts where its key's entry `a`, whose
+session's is `xa`, puts it. Tick t of a session is millisecond `base_ms + t · bucket_ms` of its key's life, so `e`'s
+execution phase 0 is `(x.baseMs − xa.baseMs) / L` execution phases of `L` milliseconds after `a`'s, and its start is
+that many after `a`'s: `a.start · L + x.baseMs = e.start · L + xa.baseMs`, which no base short of a whole execution
+phase from `a`'s satisfies. -/
+def heldTo (L : Nat) (a : Entry) (xa : Start) (e : Entry) (x : Start) : Bool :=
+  a.start * L + x.baseMs == e.start * L + xa.baseMs
+
+/-- Listed entry `i`'s start's finding in the rows form: a refusal unless the start shown for it is its session's
+certified start (`startRefusal`) and the entry starts where its key's first listed entry puts it (`heldTo`, by key
+identifier, which names one key, `certifierEntriesOf`). A key's first listed entry is held to itself: its start is
+the auditor's pin, and each later entry of the key is read off it by the certifier's signatures. -/
+def startCheck (p : Params) (s : Schedule) (sd : ByteArray) (starts : Array Start) (i : Nat) (e : Entry) (x : Start) :
+    Option (Core.Verdict × String) :=
+  match startRefusal p sd e x with
+  | some why =>
+    some (.reject, s!"entry {i}: a start its session did not certify ({why}): show the certificate its key signed \
+      in its session for {startLink p.link}, egress, window 0, over its base and the period's schedule's digest")
+  | none =>
+    match (p.entries.zip starts).find? (·.1.key.extract 0 16 == e.key.extract 0 16) with
+    | some (a, xa) =>
+      if heldTo s.windowMs a xa e x then none else
+        some (.reject, s!"entry {i}: a start that is not the one its session signed: it starts at execution phase \
+          {e.start} and its session at {x.baseMs} ms of its key's life, and its key's entry that starts at \
+          {a.start} at {xa.baseMs} ms, an execution phase being {s.windowMs} ms")
+    | none => none
+
+/-- The listed entries' starts' findings. In the rows form one an entry, in order (`startCheck`), or the one finding
+that the evidence does not show a start for each listed entry; in the clock form, whose certifier signs no start,
+none, or the one finding that the evidence shows one. -/
+def startChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows s sd _ =>
+    if e.starts.size ≠ p.entries.size then
+      #[some (.reject, s!"starts: {e.starts.size} shown for {p.entries.size} listed entries: show each listed \
+        entry's session's signed start, in the entries' order")]
+    else (p.entries.zip e.starts).zipIdx.map fun ((en, x), i) => startCheck p s sd e.starts i en x
+  | .clock _ =>
+    if e.starts.isEmpty then #[] else
+      #[some (.reject, "starts: the clock form reads no session's signed start: its certifier signs none")]
+
+-- the Python's `start_digest` under the default schedule's parameters digest, at base 0 and at 36,000,000 ms; none
+-- past a u64, or for a digest that is not 64 bytes
+#guard ((defaultSchedule.digest.toOption.bind (startDigest 0 ·)).map Flock.hexOf) == some
+  "601a25606f257809574fc5bbd78155a21953467341fc3bee7bc2801a0c7caaa9\
+    ab73aa83183a2e889c341777342a71877d6d3501c4ad35e5e042ca75799a3872"
+#guard ((defaultSchedule.digest.toOption.bind (startDigest 36000000 ·)).map Flock.hexOf) == some
+  "dd7ebcee76b7b2db1c8595c6e67b955fd9c4dfbe1efe6035096ad005dd98ecb1\
+    c8886483c32026f6b368655e0cc6507e5f1c797b948fe0fec8f8ed3c955b8ae2"
+#guard (startDigest (2 ^ 64 - 1) ⟨Array.replicate 64 0⟩).isSome &&
+  (startDigest (2 ^ 64) ⟨Array.replicate 64 0⟩).isNone && (startDigest 0 ⟨Array.replicate 63 0⟩).isNone
+-- a start is refused by `CertifiedStart.refusal`'s codes, in its order: no egress certificate of window 0 under the
+-- link's start link; another key's; another schedule's; a digest that is not its base's and its schedule's; and,
+-- with those four held, a signature that does not verify. A key's entries are held to its first listed one by their
+-- sessions' bases: at 60,000 ms an execution phase, the entry 3 execution phases on is the session whose base is
+-- 180,000 ms on, and neither a millisecond less nor an execution phase more. Evidence that shows no start for an entry
+-- is one finding
+#guard
+  let key := fun (b : UInt8) => (⟨Array.replicate 80 b⟩ : ByteArray)
+  let session := fun (b : UInt8) => (⟨Array.replicate attachmentBytes b⟩ : ByteArray)
+  let sd : ByteArray := ⟨Array.replicate 64 5⟩
+  let (e, later) : Entry × Entry := (⟨key 1, session 7, 2⟩, ⟨key 1, session 9, 5⟩)
+  let p : Params := {
+    audits := #[], cells := #[], first := 2, jitter := 1, link := "a", lms := Lms.deployed,
+    entries := #[e, ⟨key 2, session 8, 4⟩, later], program := "",
+    form := .rows defaultSchedule sd ⟨0, 0, 0, 0, 0⟩, windows := 1 }
+  let cert := fun (link : String) (d : Direction) (w : Nat) (id : UInt8) (base : Nat) =>
+    ({ keyId := (key id).extract 0 16, link, direction := d, window := w, digest := (startDigest base sd).getD .empty,
+       signature := .empty } : Certificate)
+  let start := fun (base : Nat) (id : UInt8) => (⟨base, sd, cert "a-origin" .egress 0 id base⟩ : Start)
+  startRefusal p sd e ⟨0, sd, cert "a" .egress 0 1 0⟩ == some "start" &&
+    startRefusal p sd e ⟨0, sd, cert "a-origin" .ingress 0 1 0⟩ == some "start" &&
+    startRefusal p sd e ⟨0, sd, cert "a-origin" .egress 1 1 0⟩ == some "start" &&
+    startRefusal p sd e (start 0 2) == some "key" &&
+    startRefusal p sd e ⟨0, ⟨Array.replicate 64 6⟩, cert "a-origin" .egress 0 1 0⟩ == some "schedule" &&
+    startRefusal p sd e ⟨1, sd, cert "a-origin" .egress 0 1 0⟩ == some "opening" &&
+    startRefusal p sd e (start 0 1) == some "signature" &&
+    defaultSchedule.windowMs == 60000 &&
+    heldTo 60000 e (start 7 1) later (start 180007 1) && heldTo 60000 e (start 7 1) e (start 7 1) &&
+    !heldTo 60000 e (start 7 1) later (start 180006 1) &&
+    !heldTo 60000 e (start 7 1) { later with start := 6 } (start 180007 1) &&
+    (startChecks p ⟨#[], #[], #[start 0 1]⟩).map (·.map (·.2)) == #[some "starts: 1 shown for 3 listed entries: show \
+      each listed entry's session's signed start, in the entries' order"]
 
 /-- The key of one-stage's public outputs that holds its registration check's tied Inputs: the run Inputs it let
 several proof blocks read because a later check ties their rows to the registrations that computed them. -/
@@ -1627,9 +2007,10 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
       (scans.find? (·.1.delta != f0.delta)).map fun (f, _) =>
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
-    match firstFinding (ws.toList.map findingOf ++ [oneDelta, rowsWfCheck p] ++ as.toList.map findingOf ++
-        (wiredChecks p c).toList ++ ((stateChecks p c).toList ++ (tiedInputChecks p e).toList) ++
-        (okChecks p c).toList ++ (heldChecks p c).toList) with
+    match firstFinding ((startChecks p e).toList ++ ws.toList.map findingOf ++ [oneDelta, rowsWfCheck p] ++
+        as.toList.map findingOf ++ (wiredChecks p c).toList ++
+        ((stateChecks p c).toList ++ (tiedInputChecks p e).toList) ++ (okChecks p c).toList ++
+        (heldChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1724,7 +2105,7 @@ def protocol : Core.Protocol where
 -- link-window's β_w every one of the scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0
 #guard
   let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
-  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "",
+  let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[]⟩], #[], 0, 1, "", Lms.deployed, #[], "",
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32, none⟩ .empty scan, 1, none⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
     Json.mkObj [("port", .str q), ("root", .str "r"), ("domain", .str "d")]])]
@@ -1823,7 +2204,7 @@ def protocol : Core.Protocol where
 #guard
   let s : Schedule := ⟨100, 512, 27, 65, 16, 12, 47, 4, 4, 4, 32, none⟩
   let p := fun (w : Nat) =>
-    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, w, none⟩ : Params)
+    (⟨#[], #[], 0, 1, "", Lms.deployed, #[], "", .rows s .empty ⟨0, 0, 0, 0, 0⟩, w, none⟩ : Params)
   rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
     (rowsWfCheck (p (2 ^ 25))).isSome
 
