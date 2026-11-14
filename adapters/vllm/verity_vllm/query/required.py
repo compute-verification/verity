@@ -362,11 +362,6 @@ class Population:
         self.plane_fed = frozenset(v for v in inside if (m := corr.module_of(v.call)) in planes
                                    and fmt.moe_plane_kind(P.call(v.call).family, m) is not None)
         self.interior = frozenset(inside) - self.plane_fed
-        # (required_values() would recompute the boundary; the policy is validated the same way here)
-        known_inputs = frozenset(P.inputs)
-        for v in self.policy.prescribed_inputs:
-            if v not in known_inputs:
-                raise ValueError(f"policy prescribes {v}, which is not an input")
         self._ports_of: dict[int, list[str]] | None = None
 
     def _rank_partials(self) -> None:

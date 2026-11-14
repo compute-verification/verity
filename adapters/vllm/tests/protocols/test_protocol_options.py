@@ -704,13 +704,13 @@ def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_s
     assert PO.refusals(_cut_window()) == (uncut,)
     other = PO.refusals(_cut_window("pouw:ncp-v2"))
     assert other[0] == uncut and "not 'pouw:ncp-v2'" in other[1] and "an adapter's cuts" in other[2]
-    assert PO.refusals(_cut_window(PEARL, x=1)) == ("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
-                                                    "of its (cut)",)
+    assert PO.refusals(_cut_window(PEARL, x=1)) == (("sampled-proofs:rows-sha512: the sampled-proofs settings ['x'] are none "
+                                                     "of its (cut)"),)
     ncp = PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"),
                      settings={"sampled-proofs": {PO.CUT: "pouw:ncp-v2"}})
-    assert PO.refusals(ncp) == ("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
-                                "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
-                                "the cut reads (an adapter's cuts)",)
+    assert PO.refusals(ncp) == (("the sampled-proofs setting 'cut' names 'pouw:ncp-v2', and a window's circuit is cut only at "
+                                 "the sites of an enabled executor with no circuit of its own whose calls commit the tables "
+                                 "the cut reads (an adapter's cuts)"),)
     assert PO.refusals(PO.Context(stage="commit", enabled=config.parse_protocols("pouw:ncp-v2,sampled-proofs:rows-sha512"))) == ()
     assert PO.refusals(_serve(PEARL, settings={"pouw": PEARL_SETTINGS})) == ()
     row = f"{PEARL},sampled-proofs:rows-sha512"

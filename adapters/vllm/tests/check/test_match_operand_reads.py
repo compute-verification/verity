@@ -5,8 +5,9 @@ sources have to be a function of the record's: each source as a progression of o
 
 Held here by kind of read: a parameter of the body, the prompt, the seed, a supplied field, a window of the fold's weights map, a
 warm request's prefix input, a witness and peers (one read of peers is not such a function yet, and is held as it is); a top-p
-select's split count; a read through a mux that the comparison unfolds; and, in one request's projection of a fold, the other
-request's parameters and nodes.
+select's split count; a read through a mux that the comparison unfolds (a stride that reaches a mux after another instance is
+not such a function either, and is held as it is), with what a comparison that unfolds its first side makes of a padded
+Program's reads (`compare_steps`); and, in one request's projection of a fold, the other request's parameters and nodes.
 
 The views are built by hand as a loader leaves them, the way `test_compare_tp_peer_split.py` builds its own: no Program is decoded."""
 from __future__ import annotations
@@ -245,16 +246,109 @@ MUX_READS = [   # (what the operand reads, its runs, the sources as the comparis
 ]
 
 
+def _mux_reader(runs: list[tuple], *, compact: bool) -> RootView:
+    """The step of `MUX_INST`, then an instance whose one operand is `runs`; a select closes the step."""
+    return _view(MUX_INPUTS, [*MUX_INST, (READ, READER, [runs]), (READ + 1, SELECT, [[("n", READ, 0, 8)]])], compact=compact,
+                 weight_fields={1: "model.a.weight"})
+
+
 @pytest.mark.parametrize(("runs", "unfolded", "folded"), [pytest.param(*case[1:], id=case[0]) for case in MUX_READS])
 def test_a_read_through_a_mux_is_a_read_of_its_live_operand_when_the_comparison_unfolds(runs, unfolded, folded):
     """A padded Program holds a mux where a flat one holds the live value, `SelectI32_v1` or a batch of `SelectBf16_v1` whose second
     operand is the live one.  Unfolding, a read of the mux is the read of the same leaves of that operand, through a mux of a mux
     too; a mux whose live operand is not one run is named by its instance.  Otherwise a read of a mux is a read of an instance like
     any other.  In the record's form, the one `program-compare` unfolds."""
-    P = _view(MUX_INPUTS, [*MUX_INST, (READ, READER, [runs]), (READ + 1, SELECT, [[("n", READ, 0, 8)]])], compact=False,
-              weight_fields={1: "model.a.weight"})
+    P = _mux_reader(runs, compact=False)
     assert P.canon(READ - 2, True) == [unfolded]
     assert P.canon(READ - 2, False) == P.canon(READ - 2) == [folded]
+
+
+MUX_STRIDES = [   # (what the operand reads, its runs): reads whose first run is of a mux
+    *[case[:2] for case in MUX_READS if case[0] != "the live value, then the mux"],
+    ("a mux, then a mux of a mux", [("n", M, 0, 1), ("n", M_OF_M, 0, 1)]),
+    ("a mux, then a mux whose live operand is two runs", [("n", M, 0, 1), ("n", M_ROWS, 0, 1)]),
+    ("windows of a mux whose live operand is two runs", [("n", M_ROWS, 0, 1), ("n", M_ROWS, 2, 3)]),
+]
+
+
+@pytest.mark.parametrize("runs", [pytest.param(case[1], id=case[0]) for case in MUX_STRIDES])
+def test_the_compact_form_unfolds_a_read_that_begins_at_a_mux_to_the_records_sources(runs):
+    """The compact form's sources of a read whose first run is of a mux are the record's, as progressions: a stride over one mux is a
+    stride over its live operand, a stride from one mux to another is unfolded run by run, and a mux whose live operand is not one
+    run is named by its instance once per run.  No command asks for this: `program-compare` refuses to unfold a side whose
+    operands are progressions, and a request is compared with its component without unfolding."""
+    record, compact = _mux_reader(runs, compact=False), _mux_reader(runs, compact=True)
+    assert compact.canon(READ - 2, True) == [_as_compact(record.canon(READ - 2, True)[0])]
+    assert compact.canon(READ - 2, False) == [_as_compact(record.canon(READ - 2, False)[0])]
+
+
+@pytest.mark.parametrize(("runs", "record"), [
+    pytest.param([("n", E, 0, 2), ("n", M, 0, 2)], [("N", 0, 0, 0, 2), ("N", 0, 0, 2, 4)], id="the live value, then the mux"),
+    pytest.param([("n", E, 0, 1), ("n", Z, 0, 1), ("n", M, 0, 1)], [("N", 0, 0, 0, 1), ("N", 0, 1, 0, 1), ("N", 0, 0, 2, 3)],
+                 id="two instances, then the mux"),
+    pytest.param([("n", E, 0, 1), ("n", M, 0, 1), ("n", M_OF_M, 0, 1)], [("N", 0, 0, 0, 1), ("N", 0, 0, 2, 3), ("N", 0, 0, 3, 4)],
+                 id="an instance, then two muxes"),
+])
+def test_the_compact_form_leaves_a_stride_folded_that_reaches_a_mux_after_another_instance(runs, record):
+    """Held as it is, and not a function of the record's sources: the compact form asks only a progression's first producer whether
+    it is a mux, so a stride of equal windows that begins at another instance and steps onto a mux keeps the mux as its producer,
+    where the record's form reads the mux's live operand.  The sources are then the ones of a comparison that does not unfold."""
+    P = _mux_reader(runs, compact=True)
+    assert _mux_reader(runs, compact=False).canon(READ - 2, True) == [record]
+    assert P.canon(READ - 2, True) == P.canon(READ - 2, False) != [_as_compact(record)]
+    assert K.expand_mixed(P.canon(READ - 2, True)[0]) == [("N", 0, run[1] - 2, run[2], run[3]) for run in runs]
+
+
+def _flat_reader(runs: list[tuple], *, compact: bool) -> RootView:
+    """The flat Program of `_mux_reader`'s step: the embedding, then an instance whose one operand is `runs`; no zero and no mux."""
+    return _view(MUX_INPUTS, [MUX_INST[0], (E + 1, READER, [runs]), (E + 2, SELECT, [[("n", E + 1, 0, 8)]])], compact=compact,
+                 weight_fields={1: "model.a.weight"})
+
+
+@FORMS
+def test_unfolding_compares_a_padded_program_with_a_flat_one_in_the_records_form(compact):
+    """`compare_steps` unfolding its first side: the padded Program's zero and muxes leave its sequence, a read of a mux is the flat
+    Program's read of the live value, and what is left is addressed by its place in what is left.  The unfolded side's operands are
+    the record's runs, from a compact view too, so the other side has to be in the record's form: against a flat Program in the
+    compact form every operand counts different under equal hashes, which is why `program-compare` refuses to unfold a side whose
+    operands are progressions.  Without unfolding the two sequences differ and nothing is wired."""
+    padded, runs = _mux_reader([("n", M, 0, 2)], compact=compact), [("n", E, 2, 4)]
+    res = compare_steps(padded, _flat_reader(runs, compact=False), unfold_a=True)
+    assert res["totals"] == {"steps_spec_equal": 1, "steps_spec_equal_T_normalised": 1, "operands_equal": 4, "operands_different": 0}
+    assert res["canonical_sha256"]["equal"] and (res["a"]["instances"], res["a"]["steps"], res["steps"][0]["n_a"]) == (7, 1, 3)
+    counted = compare_steps(padded, _flat_reader(runs, compact=True), unfold_a=True)
+    assert (counted["totals"]["operands_equal"], counted["totals"]["operands_different"]) == (0, 4) and counted["canonical_sha256"]["equal"]
+    folded = compare_steps(padded, _flat_reader(runs, compact=compact))
+    assert not folded["canonical_sha256"]["equal"] and "wiring" not in folded["steps"][0]
+    assert folded["steps"][0]["only_in_a"] == {ZERO: 1, MUX: 2, MUX_ROWS: 1} and folded["steps"][0]["only_in_b"] == {}
+
+
+@FORMS
+def test_a_read_of_an_instance_the_unfolding_dropped_is_named_and_counts_different(compact):
+    """A read of a pad-kind instance that is no mux, from an instance the unfolding keeps, has no place in what is left: it is
+    `N-PAD` under the padded Program's own step and index, which no source of a flat Program equals."""
+    padded = _mux_reader([("n", M, 0, 2), ("n", Z, 0, 1)], compact=compact)
+    res = compare_steps(padded, _flat_reader([("n", E, 2, 4), ("n", E, 0, 1)], compact=False), unfold_a=True)
+    assert (res["totals"]["operands_equal"], res["totals"]["operands_different"]) == (3, 1) and not res["canonical_sha256"]["equal"]
+    assert res["steps"][0]["wiring"]["different_by_spec_arg"] == {f"{READER}#arg0": 1}
+    [example] = res["steps"][0]["wiring"]["examples"]
+    assert (example["j"], example["spec"], example["arg"]) == (1, READER, 0)
+    assert [tuple(t) for t in example["a"]] == [("N", 0, 0, 2, 4), ("N-PAD", 0, Z - 2, 0, 1)]
+    assert [tuple(t) for t in example["b"]] == [("N", 0, 0, 2, 4), ("N", 0, 0, 0, 1)]
+
+
+@FORMS
+def test_two_aligned_instances_of_unlike_operand_counts_differ_by_the_count(compact):
+    """Two instances of one spec at one place, one with two operands the other has not: the operands both have are compared, and
+    the difference of the two counts is added to the different ones under the spec's `#arity`, once an instance, whichever side
+    has more."""
+    three = _reader(MUX_INPUTS, [[("n", TOK, 0, 2)], [("n", TOK, 2, 4)], [("n", TOK, 0, 4)]], compact=compact)
+    one = _reader(MUX_INPUTS, [[("n", TOK, 0, 2)]], compact=compact)
+    for a, b in ((three, one), (one, three)):
+        res = compare_steps(a, b)
+        assert res["steps"][0]["wiring"] == {"operands_equal": 2, "operands_different": 2, "different_by_spec_arg": {f"{READER}#arity": 1},
+                                             "cross_step_operands_in_a": 0, "examples": []}
+        assert not res["canonical_sha256"]["equal"]
 
 
 # ------------------------------------------------------------------------------------------------ a request's projection of a fold

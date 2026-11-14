@@ -279,7 +279,8 @@ class _Footprint:
     def __init__(self, path: str) -> None:
         self.path = path
         self.t0 = time.perf_counter()
-        self._f = open(path, "a")   # noqa: SIM115
+        with open(path, "a"):   # the file is made here, or the path refused here, before any step; each event opens it again
+            pass
         self._lock = threading.Lock()
 
     @staticmethod
@@ -293,9 +294,8 @@ class _Footprint:
     def event(self, kind: str, **kw: Any) -> None:
         rec = {"t": round(time.perf_counter() - self.t0, 6), "event": kind, "thread": threading.current_thread().name, **kw, "cuda": self.cuda()}
         line = json.dumps(rec, default=str) + "\n"
-        with self._lock:
-            self._f.write(line)
-            self._f.flush()
+        with self._lock, open(self.path, "a") as f:
+            f.write(line)
 
     @staticmethod
     def families(metas: list[TensorMeta]) -> dict[str, dict[str, int]]:

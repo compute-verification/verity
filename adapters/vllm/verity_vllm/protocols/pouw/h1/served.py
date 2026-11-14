@@ -398,8 +398,9 @@ class Served:
     def _tree(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
               session: str | None = None, row_salts: bytes | NR.PublicSalts | None = None, later: bool = False,
               rows: Sequence | None = None, also: tuple[bytes, int] | None = None) -> G.Registered | NR.Later:
-        return NR.commit(_now(self.program_digest, "Program digest"), value, words, run._key, first, row_salts is not None,
-                         row_salts, later=later, rows=rows, also=also, window=window, session=session)
+        # the digest as the window holds it, None until `declare`: `registered.commit` names it in the tree's domain
+        return NR.commit(self.program_digest, value, words, run._key, first, row_salts is not None, row_salts,
+                         later=later, rows=rows, also=also, window=window, session=session)
 
     def _register(self, run: Any, value: str, words: np.ndarray, first: int, window: str | None,
                   row_salts: bytes | None = None) -> str:
