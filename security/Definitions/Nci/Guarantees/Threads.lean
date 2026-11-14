@@ -2,7 +2,7 @@ module
 
 public import Definitions.Nci.Assumptions
 public import Definitions.Nci.Assumptions.Threads
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Definitions.Nci.Dark
 
 /-!
