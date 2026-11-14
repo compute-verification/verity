@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# `verity demo vllm [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM demo's runs, started by `research run` on the
-# node placement.toml places it on, with that node's paths and the run's own variables as its environment, and the model the
-# demo's workload names (placement.toml's `row`, the integration's file adapters/vllm/workloads/<row>.json, fetched by
+# `bash adapters/vllm/tools/served_run/run.sh [window|commit|serve] [--dry-run] [FLAG...]`: one of the vLLM served run's runs,
+# started by `research run` on the node placement.toml places it on, with that node's paths and the run's own variables as
+# its environment, and the model the served run's workload names (placement.toml's `row`, the integration's file adapters/vllm/workloads/<row>.json, fetched by
 # its art id and checked against that directory's SHA256SUMS: `model`, `case` and `engine.revision`):
 #   window   the default: one sampling block of the served execution blocks through every subprotocol,
 #            benchmarks/one_stage/served_verdicts.sh: the endpoint committing under the workload's Build of record
@@ -46,7 +46,7 @@ for key, value in list(placed.items()):
     if unset and key in flags:
         del placed[key]  # the FLAG's value is the run's
     elif unset:
-        sys.exit(f"run.sh: {unset[0]} is unset: placement.toml's {key} names it, so set it where the demo is launched, "
+        sys.exit(f"run.sh: {unset[0]} is unset: placement.toml's {key} names it, so set it where the run is launched, "
                  f"or give --env {key}=VALUE")
     else:
         placed[key] = re.sub(r"\$\{(\w+)\}", lambda m: os.environ[m[1]], str(value))

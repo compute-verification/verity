@@ -1,13 +1,13 @@
 """`numerics.fp8_twins.np_online_weight_quant`, the CPU re-quantisation of a bf16 checkpoint's weights under vLLM's
-`Fp8PerTensorOnlineLinearMethod`, gives the words an H100 production run committed for layer 0's qkv_proj of the FP8 B1
+`Fp8PerTensorOnlineLinearMethod`, gives the words an H100 serving run committed for layer 0's qkv_proj of the FP8 B1
 program (`registry.fp8`).
 
 `fixtures/fp8_online_weight_quant_l0_qkv.npz`:
 * `w`, `rows`: rows of the checkpoint's fused [2048, 1536] bf16 qkv_proj weight (`CHECKPOINT`: layer 0's q_proj, k_proj and
   v_proj weights stacked along dim 0): the committed rows and the row that holds the tensor's largest |w|, so the scale
   over these rows is the whole tensor's;
-* `cols`, `w_q`, `s_w`: the production run's committed e4m3 rows at `cols` and its committed f32 weight scale, from the vLLM
-  integration's `PRODUCTION`.
+* `cols`, `w_q`, `s_w`: the serving run's committed e4m3 rows at `cols` and its committed f32 weight scale, from the vLLM
+  integration's `SERVED_ROW`.
 
 `python adapters/vllm/verity_vllm/definitions/tests/test_fp8_twins.py --write` rewrites the fixture from those two sources.
 """
@@ -25,7 +25,7 @@ from verity_vllm.definitions.numerics import fp8_twins as T
 
 FIXTURE = Path(__file__).parent / "fixtures" / "fp8_online_weight_quant_l0_qkv.npz"
 CHECKPOINT = "https://huggingface.co/Qwen/Qwen2.5-1.5B/resolve/8faed761d45a263340a0528343f099c05c9a4323/model.safetensors"
-PRODUCTION = Path(__file__).resolve().parents[5] / "adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz"
+SERVED_ROW = Path(__file__).resolve().parents[5] / "adapters/vllm/tests/program/data/fp8_production_row_l0_qkv.npz"
 
 
 def test_online_weight_quant_is_the_committed_words():
@@ -64,7 +64,7 @@ def _qkv_weight() -> np.ndarray:
 
 def write() -> None:
     w = _qkv_weight()
-    prod = np.load(PRODUCTION)
+    prod = np.load(SERVED_ROW)
     top = int(np.abs((w.astype(np.uint32) << 16).view(np.float32)).max(axis=1).argmax())
     rows = np.array(sorted({*prod["cols"].tolist(), top}), dtype=np.int64)
     np.savez_compressed(FIXTURE, rows=rows, w=w[rows], cols=prod["cols"], w_q=prod["w_rows"], s_w=prod["sw"])

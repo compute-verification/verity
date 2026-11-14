@@ -3165,6 +3165,25 @@
     },
     {
       "paths": {
+        "tests/configurations.toml": "tools/verity/cli/verity_cli/configurations.toml"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py": "verity/protocols/accounting/poub/prover/node_store/interface.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/plan.py": "verity/protocols/accounting/poub/prover/node_store/plan.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py": "verity/protocols/accounting/poub/prover/node_store/memory_map.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/registry.py": "verity/protocols/accounting/poub/prover/node_store/registry.py",
+        "adapters/vllm/verity_vllm/protocols/remote_bandwidth/verify.py": "verity/protocols/accounting/poub/prover/node_store/verify.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/vllm_encoded/paged.cu": "verity/protocols/accounting/poub/prover/word_codec/paged.cu"
+      }
+    },
+    {
+      "paths": {
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm_depthr_check.py": "benchmarks/pouw/theory/egemm_depthr_check.py",
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_egemm_depthr.py": "benchmarks/pouw/tests/test_theory_egemm_depthr.py",
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/eps_profile.py": "benchmarks/pouw/edited_gemm_profile/eps_profile.py",

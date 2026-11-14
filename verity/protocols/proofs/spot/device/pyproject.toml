@@ -58,6 +58,7 @@ inputs = [
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py",
     "verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml",
     "adapters/vllm/verity_vllm",
+    "adapters/torch/verity_torch",
     "benchmarks/pous/p2_v1",
     "benchmarks/pous/onsite_pieces.sh",
     "benchmarks/torch_gpu/p2_stage/layout.py",
