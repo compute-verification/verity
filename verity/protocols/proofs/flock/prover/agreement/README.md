@@ -91,12 +91,12 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ## Running it
 
 ~~~text
-cd verity/protocols/proofs/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
-flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
+cd verity/protocols/proofs/flock/verifier && lake build    # .lake/build/bin/verity-verify-proof and the other executables
+verity-verify-proof verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
     [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] --session DIR...
-flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
-flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
-flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
+verity-verify-proof agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
+verity-verify-proof statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
+verity-verify-proof rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
 ~~~
 
 - `--archive DIR` reads every object (circuit, public file, partition, program, tables) by its SHA-512 from the
@@ -197,7 +197,7 @@ computation and make intermediate values public, so the Lean verifier sets none 
 one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.legacyWhy`). `Flock.Test.Legacy` pins
 that, and that every statement before hm96-sha512 rows is refused once every check has passed.
 
-The other `flock-verify` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
+The other `verity-verify-proof` subcommands run one part on its own: `field-test`, `hash-test`, `merkle-test`, `hm96-test` (on
 `verity/commitments/hm96/vectors.json`) and `comp-check` (`Flock.Comp`'s checks); `draw` and `draw-test` (the unit
 sample); `unit-cut`, `cut-check`, `qword-program`, `qcall-program`, `input-ids`, `sigma-check` and `template-query` (the
 partition and program checks); `net-check`, `region-words`, `typed-expand`, `typed-rows`, `circuit-type` and `layout`
@@ -213,15 +213,15 @@ partition and program checks); `net-check`, `region-words`, `typed-expand`, `typ
 `ci-bundle.sh`'s bundle, run by `ci-pod.sh`), it fetches the set's inputs from the store, regenerates its proof mutants
 (`redigest.py`), retained-bytes sessions and seeded fuzz cases (`fuzz.py`), adds its forgeries, and runs `agree.py`, which
 compares the Lean verifier with upstream (`Server::from_record`, then `finish`) on every session. Upstream's builds write
-upstream's plain files, which `verify` refuses, so there the Lean side is `flock-verify agree`, after upstream: it runs
+upstream's plain files, which `verify` refuses, so there the Lean side is `verity-verify-proof agree`, after upstream: it runs
 `verify`'s checks and refusals and prints one `AGREEMENT {"session", "agree", "upstream", "check", "refusal", …}` line a
 session, whether the checks pass exactly when upstream accepted, and never an acceptance. `--zk` and live sessions are
 the deployed form, and `verify`'s verdicts:
 
 ~~~text
-research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean flock-verify \
+research run --tool flock-agreement --campaign flock-verifier -- python ci.py --lean verity-verify-proof \
     --upstream fd02e847=flock-circuit --upstream 9294e161=flock-netlist --work DIR --seed S --fuzz N
-python agree.py --lean flock-verify --upstream flock-circuit [--statement ID] --circuit F --public pub.bin \
+python agree.py --lean verity-verify-proof --upstream flock-circuit [--statement ID] --circuit F --public pub.bin \
     [--expect mutants.json]... [--jobs J] --out DIR --sessions DIR...
 ~~~
 

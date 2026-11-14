@@ -23,7 +23,7 @@ def _part(d: Path, name: str, rc: int | None, *accepted: bool, why: str = "") ->
              for i, a in enumerate(accepted)]
     (d / f"{name}.log").write_text("".join(f"VERDICT {line}\n" for line in lines))
     if rc is not None:
-        (d / f"time-{name}.txt").write_text(f'\tCommand being timed: "flock-verify verify"\n\tExit status: {rc}\n')
+        (d / f"time-{name}.txt").write_text(f'\tCommand being timed: "verity-verify-proof verify"\n\tExit status: {rc}\n')
 
 
 def _run(d: Path, *parts: str, capsys) -> tuple[int, list[str]]:
@@ -170,7 +170,7 @@ def _statement(d: Path, rc: int, line: str) -> None:
 
 
 def test_the_inner_statement_passes_only_with_its_units_derived_from_the_program(tmp_path, capsys):
-    """`flock-verify statement`'s line is the part's verdict: units derived from the verifier's program pass; units taken as
+    """`verity-verify-proof statement`'s line is the part's verdict: units derived from the verifier's program pass; units taken as
     stated (no program) and a setup refusal (f05d's, a unit-class template) fail."""
     def stmt(units: str, note: str) -> str:
         return json.dumps({"statement_digest": "5b6f", "partition_check": {"rule": "verity/partition/v1", "units": units, "note": note}})
@@ -225,7 +225,7 @@ def test_cover_says_whether_a_part_run_reads_the_forged_coin(capsys, kind, parts
     assert ("not covered by the parts run" in out) == bool(rc)
 
 
-# `flock-verify rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
+# `verity-verify-proof rec-compose`'s rule (`RecCompose.check`, whose #guards are `Flock/Test/RecCompose.lean`), for the wiring:
 # its mirror, `verity_flock.rec_compose`, which `test_lean_rec_compose.py` holds to the binary.
 COMPOSER = r'''
 import json, sys
@@ -250,7 +250,7 @@ def _composer(d: Path, n: int, rows: bytes = b'{"ports":{}}') -> tuple[str, str]
     import hashlib
 
     (d / "compose.py").write_text(COMPOSER)
-    binary = d / "flock-verify"
+    binary = d / "verity-verify-proof"
     binary.write_text(f'#!/bin/sh\nexec "{sys.executable}" "{d / "compose.py"}" "$@"\n')
     binary.chmod(0o755)
     (d / "rec-inner.json").write_text(json.dumps({"n": n}))

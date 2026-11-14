@@ -4466,7 +4466,7 @@
     "lean_refuses_drawless": "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
    },
    {
-    "tags": "verity/flock-circuit (registered reads: header registered, flock-verify --registered)",
+    "tags": "verity/flock-circuit (registered reads: header registered, verity-verify-proof --registered)",
     "pr83": "967b8d06",
     "generator": "stage_registered.py and e2e.sh in the artifact (run r20261002-013624-153f: RegisteredRoPE's cs_table committed once with verity_spot' Registered.commit, its statements written by verity_flock.circuit.write with share_rows and registered, served and proved by flock-live at 967b8d06 with circuit-vectors-967b8d06.patch, --features sha512,seed-injection, CPU)",
     "statement": {
@@ -4649,9 +4649,9 @@
     "lean_refuses": "refused: verity/flock-circuit/types@f5df3bbc+seed-injection, a typed statement: a statement form the soundness proof does not cover"
    },
    {
-    "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, flock-verify --registered without --zk, on the challenger's coin tree, Flock.ProvedScope)",
+    "tags": "verity/flock-circuit (hidden outputs, registered reads: header registered and shared_rows, verity-verify-proof --registered without --zk, on the challenger's coin tree, Flock.ProvedScope)",
     "pr83": "61e5c2617",
-    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-12 (r20261103-221125-871b, source 6e06084290: --features sha512, CPU, FC_COINS=tree; DRAW_COINS 4096 bytes of the pod's OS, a test's stand-in for the challenger's): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, with x and the outputs registered beside it under registered-domain/v1: registered_file, every port of the circuit a registered port), one plain session under the verifier's stratified draw of 16 (flock-verify draw --stratified 16 --stream-file, stage/draw.json), served from its file on the challenger's coin tree (serve --tree-from; its record and release log in challenger/)",
+    "generator": "pod/89-served-registered.sh ZK=0 on vy-nebius-cpu-12 (r20261103-221125-871b, source 6e06084290: --features sha512, CPU, FC_COINS=tree; DRAW_COINS 4096 bytes of the pod's OS, a test's stand-in for the challenger's): served_registered.py's RoPE d64 stage (32 units, each reading its cs row from the served tree cs_table, with x and the outputs registered beside it under registered-domain/v1: registered_file, every port of the circuit a registered port), one plain session under the verifier's stratified draw of 16 (verity-verify-proof draw --stratified 16 --stream-file, stage/draw.json), served from its file on the challenger's coin tree (serve --tree-from; its record and release log in challenger/)",
     "statement": {
      "circuit": "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b/stage/circuit.txt",
      "public": "art:e43917db0ffa59b34e6beae04917b27a70489a4d7ab778d734ddb10c85c5af7b/stage/pub-32.bin",

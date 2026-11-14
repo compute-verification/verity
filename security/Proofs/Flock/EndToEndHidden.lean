@@ -34,7 +34,7 @@ unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `
 `EndToEndHiddenDrawnFlat` are the two at the flat descriptor `Desc.single c` (`Flock.Desc.parse_single`).
 
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
-is no extra condition: every sample flock-verify accepts gives one, at any number of tables.
+is no extra condition: every sample verity-verify-proof accepts gives one, at any number of tables.
 -/
 
 @[expose] public section
@@ -79,10 +79,10 @@ theorem EndToEndHiddenPerTestFlat_of (h : Flock.Guarantees.EndToEndHiddenPerTest
 
 open FlockSoundness.Discharge FlockSoundness.Discharge.Exec FlockSoundness.Discharge.ZkExec FlockSoundness.Discharge.ZkLink
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden in
-/-- **The hidden-output statements' reference setup exists at every sample flock-verify accepts, at any number of
+/-- **The hidden-output statements' reference setup exists at every sample verity-verify-proof accepts, at any number of
 tables.** `EndToEnd_refSetup` under hidden outputs: on untyped inputs under `TagsOkZHJ`, whose circuit file
 `HmOut.parse` accepts as `c` (`hU`, `hscope`: its unit returns the outputs), at the record's sample file
-(`DrawFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript flock-verify `--zk` accepts whose
+(`DrawFileZK dj (subset kd) pop`), the session's tables dividing `kd`, at a transcript verity-verify-proof `--zk` accepts whose
 record's sample is `dj S`, table 0 has a `DrawSetupZHJ` at `mPtsOf c.g (kd / nTab I)` link points, at its part of `S` and
 its sample: the `y₀` of `EndToEndHidden`, `EndToEndHiddenDrawn`, `EndToEndRegistered` and `EndToEndRegisteredDrawn`, at
 `S₀ = partS I (dj S) S 0` and `d₀ = drawJ I (dj S) 0`. -/

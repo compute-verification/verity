@@ -35,12 +35,12 @@ STATEMENTS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/
 @pytest.fixture
 def statements(tmp_path, monkeypatch):
     """credit's statements kit (`test_pouw_credit_statements`): its periods of proof files and its stand-in
-    flock-verify, which accepts a session only when it proves the files credit hands it; credit's Python asks, which
+    verity-verify-proof, which accepts a session only when it proves the files credit hands it; credit's Python asks, which
     the difftests hold to the Lean's."""
     spec = importlib.util.spec_from_file_location("pouw_credit_statements", STATEMENTS)
     kit = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(kit)
-    exe = tmp_path / "flock-verify"
+    exe = tmp_path / "verity-verify-proof"
     exe.write_text(kit.FAKE)
     exe.chmod(0o755)
     monkeypatch.setattr(PF, "executable", lambda: exe)

@@ -54,8 +54,8 @@ STATEMENTS = {
     "vstar": "V*'s statements over the inner's last proxied run: each Ligerito level's RecOpen and RecCap, the algebra's "
              "InnerRepCheck parts (rec_vstage)",
     "outer": "each V* statement with --zk on loopback, every unit drawn, one at a time, in each of MODES",
-    "verify": "flock-verify verify --zk --rec-inner-session --rec-inner-transcript on each V* release (the last mode's), "
-              "and flock-verify statement on the inner statement",
+    "verify": "verity-verify-proof verify --zk --rec-inner-session --rec-inner-transcript on each V* release (the last mode's), "
+              "and verity-verify-proof statement on the inner statement",
     "negative": "each V* release verified again over a copy of the inner run with rep 0's coin flipped "
                 "(rec_inner.py forge), which some statement must refuse",
     "forged": "85's FORGE statements (rec_vstage --forge: a prover row that does not open the verifier's registration), "
@@ -71,7 +71,7 @@ PHASES = ("t.witness", "t.encoding_commitment", "t.link", "t.zerocheck", "t.linc
 
 
 def lean_split(p: Path) -> dict[str, float]:
-    """flock-verify's stderr: ``inputs: N ms`` (from its start), ``setup: N ms`` (from the verification's start), then the verification's
+    """verity-verify-proof's stderr: ``inputs: N ms`` (from its start), ``setup: N ms`` (from the verification's start), then the verification's
     whole time (``/path: N ms``, setup included), as 85's summary reads them."""
     ms = [int(x) for x in re.findall(r"^(?:inputs|setup(?: \(drawn\))?|/\S+): (\d+) ms$", text(p), re.M)]
     return {"inputs_s": ms[0] / 1e3, "setup_s": ms[1] / 1e3, "session_s": (ms[2] - ms[1]) / 1e3} if len(ms) == 3 else {}
@@ -184,7 +184,7 @@ def read(root: Path) -> dict[str, Any]:
     if b:
         o = b[0]
         t = timev(o.parent / "time-step.txt")
-        r = Row("build", "build", "85 STEP=build: the CUDA prover, flock-verify and both stagings, as the job found its caches",
+        r = Row("build", "build", "85 STEP=build: the CUDA prover, verity-verify-proof and both stagings, as the job found its caches",
                 "setup", wall_s=Stat.of([t["wall_s"]]) if t else None, peak_rss_gb=t["peak_rss_gb"] if t else None,
                 ok=text(o.parent / "rc").strip() == "0")
         r.extra = {"binary": text(o / "binary.sha256").split()[:1], "lean": text(o / "lean.sha").split()[:1],
@@ -246,9 +246,9 @@ def read(root: Path) -> dict[str, Any]:
     ln = repeats(root, "lean")
     if ln:
         names = [n for n in _names(ln, "lean", r"time-(.+)\.txt")]
-        rel = {f"lean {n}": (f"lean/time-{n}.txt", ("flock-verify statement on the inner statement" if n == "inner-statement"
-                                                    else "flock-verify verify on the inner run" if n == "inner"
-                                                    else f"flock-verify verify --zk on V*'s {n} release")) for n in names}
+        rel = {f"lean {n}": (f"lean/time-{n}.txt", ("verity-verify-proof statement on the inner statement" if n == "inner-statement"
+                                                    else "verity-verify-proof verify on the inner run" if n == "inner"
+                                                    else f"verity-verify-proof verify --zk on V*'s {n} release")) for n in names}
 
         def lv(o: Path, n: str) -> bool | None:
             name = n[len("lean "):]
@@ -272,7 +272,7 @@ def read(root: Path) -> dict[str, Any]:
                 if stat:
                     r.extra[k] = asdict(stat)
                     parts[k] = stat.median
-            # flock-verify's own split: its inputs read, the verification's setup, and its checks after it
+            # verity-verify-proof's own split: its inputs read, the verification's setup, and its checks after it
             if parts and r.wall_s:
                 parts = {"lean.inputs": parts.get("inputs_s", 0.0), "lean.setup": parts.get("setup_s", 0.0),
                          "lean.checks": max(0.0, parts.get("session_s", 0.0))}
@@ -378,7 +378,7 @@ _FORGED = re.compile(r"forged-inner-([a-z]+)-(.+)")
 
 def negative_rows(d: Path) -> list[Row]:
     """One row per flipped coin (85's ``forged-inner-COIN-STATEMENT`` parts, read as ``lean_verdicts.py`` reads them): a
-    statement refuses it when flock-verify exited 1 with a VERDICT and none accepting; the coin is refused when one statement
+    statement refuses it when verity-verify-proof exited 1 with a VERDICT and none accepting; the coin is refused when one statement
     refuses it and every honest statement has a verdict over it (a statement that reads no flipped coin rightly accepts)."""
     honest = sorted(m.group(1) for f in d.glob("time-*.txt") if (m := re.fullmatch(r"time-(.+)\.txt", f.name))
                     and not m.group(1).startswith(("forged-", "inner")))

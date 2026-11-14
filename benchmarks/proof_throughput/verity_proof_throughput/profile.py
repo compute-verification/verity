@@ -1,4 +1,4 @@
-"""The Lean verifier's profile: one session of ``flock-verify verify`` under ``perf record`` (``verify.sh PROFILE=1``), its
+"""The Lean verifier's profile: one session of ``verity-verify-proof verify`` under ``perf record`` (``verify.sh PROFILE=1``), its
 samples attributed three ways.
 
 * **Stage**: the outermost frame of a sample that names one of ``verifyCmd``'s stages: the proved-scope check
@@ -176,7 +176,7 @@ def result(summary: dict[str, Any], time_line: str, stderr: str, *, bundle: str 
             "workload_fingerprint": {"kind": "proof-throughput/verifier-profile/v1", "bundle": bundle, "prove_run": prove_run,
                                      "profiler": "perf record --call-graph dwarf", "verdicts": verdicts},
             "validation": {"status": "passed" if ran else "failed",
-                           "checker": "perf samples of one flock-verify verify session, and its VERDICT line",
+                           "checker": "perf samples of one verity-verify-proof verify session, and its VERDICT line",
                            "detail": f"{summary['samples']} samples; verdict {verdicts[0] if verdicts else 'none'}",
                            "evidence": ["out/profile.json", "out/perf-self.txt", "out/perf-children.txt"]},
             "measurements": ms, "measurement_files": ["out/profile.json"], "artifacts": []}

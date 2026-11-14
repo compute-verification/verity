@@ -1,7 +1,7 @@
 /-
 Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
 (`Spot.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
-verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
+verifier the auditor runs (`verity-verify-proof verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 
 * **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
   the inner statement's circuit file, its sample (`--rec-inner-draw`), its public file and the circuit registration
@@ -23,9 +23,9 @@ verifier the auditor runs (`flock-verify verify --zk` once per V* part with that
   record's `coin_tree`, and opened every round of it the challenger's live-coin part's transcript lists, as it lists it, after the bytes
   the challenger's live-coin part opens it after, and no other (`Challenger.innerTreesReason`); else the check refuses, before any part
   is verified;
-* **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `flock-verify
+* **check**: the verifier's inner shape from the inner statement's files (`RecVStar.innerOf`, as `verity-verify-proof
   rec-inner --program` writes it), and Flock's plain verifier's own checks on the inner statement at its sample
-  (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `flock-verify verify --zk --statement verity/flock-circuit`
+  (`innerOk`, `RecDeploy.innerOk`); then, for each part `j`, `verity-verify-proof verify --zk --statement verity/flock-circuit`
   with the part's `--circuit`, `--public`, `--partition`, `--program`, `--registered`, `--rec-inner`, `--rec-part j`,
   `--rec-bindings` and `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
   `--rec-inner-partition`, `--rec-inner-program`, `--rec-inner-statement verity/flock-circuit+plain-leaves
@@ -207,7 +207,7 @@ def lineEnd (b : ByteArray) (i : Nat) : Nat :=
   if h : i < b.size then (if b[i] == 10 then i else lineEnd b (i + 1)) else i
 termination_by b.size - i
 
-/-- `flock-verify`'s `innerMeta` on the inner circuit's bytes: its `META` line among its first nine, as JSON. -/
+/-- `verity-verify-proof`'s `innerMeta` on the inner circuit's bytes: its `META` line among its first nine, as JSON. -/
 def metaOf (b : ByteArray) : V Json := do
   let mut at_ := 0
   for _ in [0:9] do
@@ -221,7 +221,7 @@ def metaOf (b : ByteArray) : V Json := do
       at_ := e + 1
   throw "rec inner circuit: no META line"
 
-/-- **The verifier's inner shape**, dense: `flock-verify rec-inner --circuit --public --partition --program` without
+/-- **The verifier's inner shape**, dense: `verity-verify-proof rec-inner --circuit --public --partition --program` without
 `--hide` or `--sparse`, which refuses an inner circuit whose META names R's shape. -/
 def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray) : V Flock.RecVStar.Inner := do
   let stacked ← (do Flock.RecVStar.stackedShapeOf (← metaOf circuitB)).mapError (s!"rec-inner: " ++ ·)
@@ -231,7 +231,7 @@ def shapeOf (circuitB pubB : ByteArray) (partition : Json) (program : ByteArray)
   let i ← (Flock.RecVStar.innerOf circuitB pubB (some partition) (some program) false).mapError (s!"rec-inner: " ++ ·)
   pure { i with holo := false, sparse := none, stacked := none }
 
-/-- `flock-verify`'s `registeredFile` on a canonical object: the ports, `true` (`flock-verify` runs `checkComplete` on
+/-- `verity-verify-proof`'s `registeredFile` on a canonical object: the ports, `true` (`verity-verify-proof` runs `checkComplete` on
 every registered file), the known rows and the template parameters the ports read. -/
 def registeredOf (j : Json) :
     V (Array Flock.Registered.Port × Bool × Array (String × Array (Array Nat × ByteArray)) × Array String) := do
@@ -625,7 +625,7 @@ def protocol : Core.BlobProtocol where
 /-- `protocol.main`'s commands, and `verdicts OWN PROOFS [BLOB ...]`: the recursive session's part verdicts alone
 (`partVerdicts`), from the verifier's own inputs (`ownOfJson`) and the evidence's `recursive` (`proofsOf`), each file
 canonical JSON; one line, `{"parts": [{"statement", "accepted", "why"}, ...]}` in V*'s order or `{"refused": why}`, exit 0
-when every part accepted, else 1. The difftest holds each part's to `flock-verify verify --zk` at that part's flags. -/
+when every part accepted, else 1. The difftest holds each part's to `verity-verify-proof verify --zk` at that part's flags. -/
 def main (args : List String) : IO UInt32 := do
   match args with
   | "verdicts" :: own :: proofs :: blobs =>

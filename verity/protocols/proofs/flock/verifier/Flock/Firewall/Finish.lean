@@ -31,7 +31,7 @@ ZK server runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, 
   release it themselves, and its coins are held to the ones the stream answered (`serve`'s `inner` and `own`). Only the
   `Asks` is live: the code that computes each round is `repFw`'s.
 
-* `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
+* `serve`: the requests, on the statement of `verity-verify-proof verify --zk`: each table's level 0, each rep's salts for levels
   ≥ 1, which this code samples itself from the operating system and hands the prover (`salts`), in the session loop only
   once the rep's frame took its algebraic phase's last coins (`Own.algebraEnded`), and
   each rep's proof file on them and on the rep's samples, which never come from the prover: its frame's in the session
@@ -1067,7 +1067,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
   return 0
 
 /-- **`flock-firewall finish --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F]
-[--program F] [--draw F]`**: the ZK server's proof files, `serve`d on stdin and stdout, on the statement `flock-verify verify
+[--program F] [--draw F]`**: the ZK server's proof files, `serve`d on stdin and stdout, on the statement `verity-verify-proof verify
 --zk` sets up (`Witness.setupOf`, at the `unit_draw` of the JSON object in `--draw`), every salt and every rep's samples
 sampled from the operating system. With no session loop beside it, it holds no level 0 of its own: a table comes as
 `table I LEN`. -/

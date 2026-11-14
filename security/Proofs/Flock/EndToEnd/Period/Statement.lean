@@ -9,13 +9,13 @@ public import Proofs.Flock.EndToEnd.Period.Run
 A period's integrity audit is a sequence of sampling blocks, each one `--zk` session under hidden outputs with a fresh
 live subset sample, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
 prover strategy plays the whole period (`Period.game`), adaptively: the strategy each sampling block is played with may
-depend on everything before it. `Period.run` records, for each sampling block, whether flock-verify accepted it, its
+depend on everything before it. `Period.run` records, for each sampling block, whether verity-verify-proof accepted it, its
 incorrect proof blocks in the committed transcript fixed at its registration (`wrongRegZ` at `XplurZC`, as in `EndToEndHidden`),
 and whether a sampled proof block is one of them.
 
 * `IntegrityPeriod`: the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
   `Σ_w (miss_w + ε_ks,w + δ_link,w)`, each sampling block's `EndToEndHidden` bound. So outside that probability, if
-  flock-verify accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
+  verity-verify-proof accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
 * `IntegrityPeriodLog`: `IntegrityPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its sample covers a
   fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
 * `IntegrityHorizon`: over `T` sampling blocks whose samples each cover at least a fraction `q` of their units, the
@@ -153,7 +153,7 @@ noncomputable def link : ℝ≥0∞ :=
 
 end SamplingBlock
 
-/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, how many of its units are
+/-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, how many of its units are
 wrong (`SamplingBlock.wrongSet`), and whether a sampled proof block is one of them. -/
 structure WindowRec where
   idx : ℕ
@@ -191,7 +191,7 @@ end Period
 
 /-- **The integrity audit over a period.** In a period of `T` sampling blocks `W t`, each a `--zk` session under hidden
 outputs with a fresh live uniform `kd`-subset sample, played by one adaptive prover `s`, the probability that some
-sampling block is accepted by flock-verify with at least its `K₀` units wrong is at most the sum of the sampling blocks'
+sampling block is accepted by verity-verify-proof with at least its `K₀` units wrong is at most the sum of the sampling blocks'
 `EndToEndHidden` bounds,
 $$\Pr[\exists t,\ \text{sampling block } t \text{ accepted} \wedge K_{0,t} \le \text{wrong}_t] \le
   \sum_t \left(\frac{\binom{n_t-K_{0,t}}{kd_t}}{\binom{n_t}{kd_t}} + \varepsilon_{ks,t} + \delta_{link,t}\right).$$

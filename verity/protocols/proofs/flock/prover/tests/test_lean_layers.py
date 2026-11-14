@@ -38,7 +38,7 @@ UP: dict[tuple[str, str], str] = {
     ("Flock.HmRow", "Flock.RecOpening"):
         "until the `rec-*` pins' checks that `HmRow.parse` runs are a module of the recursion",
     ("FlockVerify", "Flock"):
-        "until `flock-verify`'s recursive commands are an executable of the recursion: `verifyCmd` names the `Rec*` "
+        "until `verity-verify-proof`'s recursive commands are an executable of the recursion: `verifyCmd` names the `Rec*` "
         "modules and `VStar` through the umbrella",
 }
 

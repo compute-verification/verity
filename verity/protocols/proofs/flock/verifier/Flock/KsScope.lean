@@ -19,7 +19,7 @@ Under `--zk` every session of a statement outside them is refused, beside `Prove
 and `check_ok` says what passing `check` establishes: `SampledKSLiveRoots`' file preconditions, or V5's at a shared-row
 file. Their sixth, that the unit is a built net, follows from the parse of an untyped statement. A V* session
 (`--rec-inner`) is the recursion's, whose guarantee is its own, so `verify` doesn't run the check on it.
-`flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
+`verity-verify-proof ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
 (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
 
 `verify --zk` hands `checkOf` the circuit `ProvedScope.circuitOf` reads: at a templated statement (`Tags.isTmpl`) the

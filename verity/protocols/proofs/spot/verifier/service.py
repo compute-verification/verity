@@ -1539,7 +1539,7 @@ class Stream:
     (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's under the key the stream
     holds, and a stream made without a key rejects every sample that read coins (failing `run`). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
-    their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
+    their own. `sampler`, when given, samples instead of the coins (`verity-verify-proof draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
     other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover

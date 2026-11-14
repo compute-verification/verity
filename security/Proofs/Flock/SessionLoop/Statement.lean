@@ -464,7 +464,7 @@ is the one the loop's `Commit` carries (`Loop.linkOf src`) and whose files and s
 with no premise on the tables but `SwCausalOn` at `Loop.SwOk`: `Tables`, `Complete`, `DummyReg`, `Causal` and `TapeOK`
 hold at `Masked.dataE` (`Loop.tables_dataE`, `complete_dataE`, `dummyReg_dataE`, `causal_dataE`, `tapeOK_dataE`).
 In place of `LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
-`flock-verify verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
+`verity-verify-proof verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
 tape's (`Loop.Src`). It takes no `FinishIs`: at these premises, with `LiveRoundEq` and `SwCausalOn`, the loop's `Finish`
 is the switched session's (`Loop.finishIsOn`). The scope
 is a premise because the loop does not run that check, and cannot run all of it: the check reads the verifier's own

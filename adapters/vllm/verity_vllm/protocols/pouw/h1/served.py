@@ -1,6 +1,6 @@
 """H1's served tables, committed as registered values of compute accounting's window Program
 (`h1window.program`, one tile template per K) as the window serves them, so the Lean verifier opens every row a proof block reads
-(`flock-verify --zk --registered`, `h1window.table_reads_file`).
+(`verity-verify-proof --zk --registered`, `h1window.table_reads_file`).
 
 * **The Program** is declared before the window serves (`declared`): every step calls every linear ``(module, K, n)`` in
   order, call (s, w) reading A block ``s·B_K + i`` of its K (`layout`: ``i`` the place of ``blocks[w]``, each linear's

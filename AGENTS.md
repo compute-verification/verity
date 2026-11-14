@@ -122,7 +122,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   are private and their properties public: a proof block's outputs fit its Definition's public size class, a power of two
   from 16 to 262,144 bits, and its output bits count in leakage (provisional; `UNIT_CLASS_MAX` = 16 restores the
   16-bit limit). A plain path, Flock without `--zk`, stays for a deployment whose values needn't be hidden: it
-  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `flock-verify`
+  works end to end beside the zero-knowledge paths, tests cover both, its guarantee is soundness alone, and `verity-verify-proof`
   refuses a plain session past what the plain theorem covers (one table today).
 - **One proof system** for PoUW, PoUS and network certification: the workers behind the ZK server, the challenger and the
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it

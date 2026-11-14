@@ -72,14 +72,14 @@ SLOT_ONLY = ("vy-nebius-1", "vy-nebius-2", "vy-nebius-3", "vy-nebius-cpu-1")
 CPU_WORK = "/workspace/cache/rec-bench"
 
 STAGES = {
-    "build": "the CUDA prover (60-circuit.sh), flock-verify (lake build), the inner statement staged with plain and hm96 leaves",
+    "build": "the CUDA prover (60-circuit.sh), verity-verify-proof (lake build), the inner statement staged with plain and hm96 leaves",
     "inner": "M0 (ZK off) against the rec_live proxy, WARM + RUNS runs; the non-recursive M0 and --zk on loopback beside it",
     "icheck": "upstream's replay of the inner run and V*'s hashing reference (rec_vstar)",
     "vstage": "V*'s fold points, InnerFold.lean, and each statement staged (RecOpen per level, InnerRepCheck parts)",
     "vcap": "RecCap over each level's committed tops",
     "oprove": "each V* statement proved with --zk on loopback serve, one at a time, per mode (firewall: the Lean session loop)",
     "oreplay": "upstream's replay --zk of each V* release",
-    "lean": "flock-verify verify --zk on each V* release with V*'s own inputs, the inner run, the inner statement",
+    "lean": "verity-verify-proof verify --zk on each V* release with V*'s own inputs, the inner run, the inner statement",
     "forge-after": "coef, dirs and message forged on the honest L0 and alg-p0 releases' statements after proving "
                    "(forge_after.py), each refused by Lean beside its accepted honest control",
     "negative": "the lean step again over each copy of the inner run with one coin of rep 0 flipped, which Lean must refuse",

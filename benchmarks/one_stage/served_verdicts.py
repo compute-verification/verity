@@ -1099,7 +1099,7 @@ Check = Callable[[Path, Path, Path, Path, "Path | None", str, Path, Mapping[str,
 PREMISES = ("AcceptedLive", "SaltIsLiveCoin")
 #: why a window meets ``AcceptedLive`` (`Accounting.TS.Session`'s, ``accounting-ts-accepted-live``)
 LIVE_MET = ("credit accepted the window, and it credits a drawn unit or a live round only where the verifier of record "
-            "accepted its session (flock-verify verify --zk with the --registered file credit builds)")
+            "accepted its session (verity-verify-proof verify --zk with the --registered file credit builds)")
 #: why a window meets ``SaltIsLiveCoin`` (`Properties.Pouw.Period`'s)
 SALT_MET = ("core_check.salt accepted the window's salt as its live salt coin, opened after the window's open root and read "
             "through the session the auditor's ledger opened for it, under the host's pins log and main, and the record's "

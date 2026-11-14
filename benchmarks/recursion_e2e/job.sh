@@ -55,7 +55,7 @@ PYTHONPATH=$REPO/tools/research/src python3 -m research keep "$FLOCK_WORK" --own
   --regenerate "bash benchmarks/recursion_e2e/job.sh K=$K N=$N" \
   --why "the recursion bench's builds (and a KEEP_DATA=1 run's data/TAG): a cache, rebuilt by the next run" > "$O/keep.json" 2>&1 \
   || echo "no retention record on $FLOCK_WORK: $(tail -1 "$O/keep.json")" >&2
-# 85 moves HOME where it can't write; its Lean builds (flock-verify, flock-firewall) must find the same elan
+# 85 moves HOME where it can't write; its Lean builds (verity-verify-proof, flock-firewall) must find the same elan
 [ -w "$HOME" ] || { export HOME=$FLOCK_WORK/home; mkdir -p "$HOME"; }
 RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
@@ -115,7 +115,7 @@ for s in ${STEPS//,/ }; do
         step build 2 GPU=0 TAG=$TAG-g0 STAGE_FROM=$FLOCK_WORK/data/$TAG || { rc=1; continue; }
         rm -rf "$FLOCK_WORK/data/$TAG-g0"
       fi
-      # 85 builds flock-firewall (its build step, else oprove's) beside flock-verify, from this tree's Lean sources
+      # 85 builds flock-firewall (its build step, else oprove's) beside verity-verify-proof, from this tree's Lean sources
       step oprove 1 MODES=$M REPLAY=0 WARM=${OPROVE_WARM:-0} RUNS=${OPROVE_RUNS:-1} GPU=$OPROVE_GPU || rc=1
       fw=$L/lean-$LSHA/flock-firewall; [[ ,$M, != *,firewall,* ]] || [ ! -x $fw ] || sha256sum $fw >> "$O/params.txt" ;;
     icheck|vcap|oreplay) for i in $(reps $s); do step $s $i || { rc=1; break; }; done ;;
@@ -126,7 +126,7 @@ for s in ${STEPS//,/ }; do
     # the forgeries the ZK server stops before release, made on the honest releases after proving and put to Lean with the
     # lean step's own flags (forge_after.py; out/forge-after.json)
     forge-after)
-      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/flock-verify
+      lo=$O/steps/lean/r1/out; fv=$L/lean-$LSHA/verity-verify-proof
       timed forge-after 1 env OUT=$O/steps/forge-after/r1/out python3 benchmarks/recursion_e2e/forge_after.py \
         --work "$FLOCK_WORK" --tag "$TAG" --run-out "$lo" --kinds "${FORGE_AFTER:-coef,dirs,message}" --jobs "${LEAN_JOBS:-4}" \
         --bin "$([ -f $lo/lean/own-L0.txt ] || [ -f $lo/lean/own-alg-p0.txt ] && echo run || echo lean)=$fv" || rc=1 ;;

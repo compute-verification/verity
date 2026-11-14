@@ -129,7 +129,7 @@ def test_the_session_premises_state_their_scope() -> None:
     """No served path verifies with --registered, and the window's sampling design also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
     assert live.standing == "standard"
-    assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
+    assert all(s in live.name for s in ("plain verity-verify-proof --zk", "only one_stage/a0.py passes --registered",
                                         "no served path meets it"))
     law = get("accounting-ts-window-law").name
     assert all(s in law for s in ("five facts", "coin tree", "trusted-host", "Under full checking",

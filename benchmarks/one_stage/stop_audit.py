@@ -234,7 +234,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
     return {"sessions": [a0.sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))],
             "served": [int(u) for u in sampled.get("units", [])], "proved_units": a0.proved_units(st["header"], live or {}),
             "instances": (live or {}).get("instances", 0),
-            "verdicts": {LEAN: {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"},
+            "verdicts": {LEAN: {**lv, "tool": "verity-verify-proof verify --zk --archive --partition --program --registered"},
                          M0: m0},
             "statement": {MEMBER: {"session_s": seconds, "lean_verify_s": lv.get("verify_s"),
                                    **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
