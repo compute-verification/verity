@@ -2452,6 +2452,12 @@
       "paths": {
         "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/Registration.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean",
+        "verity/protocols/interface/CoreProtocol/RegistrationMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/Main.lean"
+      }
     }
   ]
 }

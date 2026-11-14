@@ -3726,7 +3726,7 @@
     {"file": "verity/protocols/interface/CoreProtocol/Example.lean", "count": 42},
     {"file": "verity/protocols/interface/CoreProtocol/Profile.lean", "count": 26},
     {"file": "verity/protocols/interface/CoreProtocol/Protocol.lean", "count": 2},
-    {"file": "verity/protocols/interface/CoreProtocol/Registration.lean", "count": 9},
+    {"file": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog.lean", "count": 9},
     {"file": "verity/protocols/interface/CoreProtocol/Site.lean", "count": 4},
     {"file": "verity/protocols/interface/README.md", "count": 7},
     {"file": "verity/protocols/accounting/certifier/verifier/lean/NetworkCheck.lean", "count": 7},
