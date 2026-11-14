@@ -1,7 +1,11 @@
-"""The agent guard's settings registry: each environment variable the inbox and its hooks share is read here, once.
+"""The agent guard's settings registry: each environment variable the inbox, its hooks and the OOM recorder read is
+declared once, in `DECLARED`, and read here.
 
-Standard library only, and read at import: every hook run and every `inbox.py` command is a fresh process. The hooks run
-this directory's files side by side (`boot.sh` and `hook.sh` copy it whole), so a sibling `import settings` finds it.
+Standard library only. The values below are read at import: every hook run and every `inbox.py` command is a fresh
+process. A file reads the others through `get`, `need` and `has`, which are ``os.environ.get``, ``os.environ[...]`` and
+``in os.environ`` of a declared name, at the call: a default, an empty string and an unset variable behave as they do
+there, and a name `DECLARED` lacks raises `Undeclared`. The hooks run this directory's files side by side (`boot.sh` and
+`hook.sh` copy it whole), so a sibling `import settings` finds it.
 """
 from __future__ import annotations
 
@@ -10,6 +14,56 @@ import os
 import re
 import sys
 import time
+from typing import TypeVar
+
+T = TypeVar("T")
+
+DECLARED: dict[str, str] = {
+    "AGENT_INBOX": "where queued messages wait (`INBOX`)",
+    "AGENT_INBOX_POLL_S": "seconds between the hook's background inbox pulls (`INBOX_POLL_S`)",
+    "AGENT_GUARD_EVENT_LOG": "the hook runs' log (`EVENT_LOG`)",
+    "AGENT_GUARD_PUSH_REMOTES": "a regex for the push URLs the push rules judge (`PUSH_REMOTES`)",
+    "AGENT_GUARD_REGISTRY": "the Slack registry `task_hook.py` reads holders from (default the checkout's)",
+    "AGENT_GUARD_TASK_LOG": "the log of the Task calls `task_hook.py` saw",
+    "AGENT_GUARD_STATE": "the directory of each checkout's owner (`worktree_guard.py`)",
+    "AGENT_GUARD_MEMINFO": "the meminfo file the shell hook reads memory from (default /proc/meminfo)",
+    "AGENT_GUARD_CGROUP": "the cgroup the shell hook reads a memory limit from (default the process's own)",
+    "AGENT_GUARD_MIN_AVAIL": "the share of memory the shell hook keeps free before it refuses heavy local work",
+    "CURSOR_CONVERSATION_ID": "this agent's conversation id, where Cursor's shell sets it (`CONVERSATION_ID`)",
+    "CLOUD_AGENT_INJECTED_SECRET_NAMES": "the secrets Cursor injects into this VM, by name (`INJECTED`)",
+    "CLOUD_AGENT_ALL_SECRET_NAMES": "every secret Cursor knows for this VM, by name: never printed",
+    "OOM_WATCH_LOG": "where the OOM recorder appends its records",
+    "OOM_WATCH_LOCK": "the OOM recorder's lock, one recorder a VM",
+    "OOM_WATCH_MIN_MB": "the smallest kill, in MB, the OOM recorder announces",
+    "OOM_WATCH_RESEARCH": "the `research` command the OOM recorder announces a kill with",
+    "RESEARCH_AGENT_URL": "this agent's URL, which an OOM record names",
+}
+
+
+class Undeclared(Exception):
+    """A read of a variable `DECLARED` lacks."""
+
+
+def _declared(name: str) -> str:
+    if name not in DECLARED:
+        raise Undeclared(f"{name} is not declared in tools/agent-guard/settings.py (DECLARED): declare it there with what it is")
+    return name
+
+
+def get(name: str, default: T = None) -> str | T:
+    """``os.environ.get(name, default)`` of a declared variable: an empty string is returned as it is."""
+    return os.environ.get(_declared(name), default)
+
+
+def need(name: str) -> str:
+    """``os.environ[name]`` of a declared variable: KeyError when it is unset."""
+    return os.environ[_declared(name)]
+
+
+def has(name: str) -> bool:
+    """``name in os.environ`` of a declared variable: set, even to an empty string."""
+    return _declared(name) in os.environ
+
 
 #: where queued messages wait, as `<conversation_id>.md`
 INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")

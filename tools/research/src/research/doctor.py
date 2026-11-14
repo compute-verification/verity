@@ -54,7 +54,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
 
-from . import notes_sync, remote, runs, secret_hint, slack
+from . import notes_sync, remote, runs, secret_hint, settings, slack
 from .pods import registry, runpod
 from .store import local as store_local
 from .store import remote as store_remote
@@ -132,11 +132,11 @@ def needs(role: str) -> list[tuple[str, ...]]:
 
 def check_secrets(role: str) -> Check:
     # the notes go through the GitHub broker: a VM that still injects the notes token needn't have it in its shell
-    injected = [n for n in os.environ.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
+    injected = [n for n in settings.get("CLOUD_AGENT_INJECTED_SECRET_NAMES", "").split(",") if n and n != notes_sync.TOKEN_ENV]
     want = needs(role)
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
-    missing = ["|".join(alts) for alts in want if not any(os.environ.get(n) for n in alts)]
+    missing = ["|".join(alts) for alts in want if not any(settings.named(n) for n in alts)]
     held, kept = secret_hint.server() or (injected, True)       # nothing asked of a tmux server: nothing to say of one
     lost = [m for m in missing if any(n in injected for n in m.split("|"))]
     unset = [m for m in missing if m not in lost]
@@ -153,7 +153,7 @@ def check_secrets(role: str) -> Check:
         if unset:
             fixes.append(f"{', '.join(unset)}: add {'it' if len(unset) == 1 else 'them'} in {DASHBOARD}; a new agent VM gets them")
         return Check("secrets", FINDING, f"not set here: {', '.join(missing)}", "; ".join(fixes))
-    took = [n for n in secret_hint.RECOVERED if os.environ.get(n)]
+    took = [n for n in secret_hint.RECOVERED if settings.named(n)]
     detail = f"the {len(needs(role))} names the {role} role needs" + (f" and the {len(injected)} this VM injects" if injected else "") + " are set"
     once = f"run `{secret_hint.START_KEPT}` once, from a shell that has the secrets, to start the session this VM keeps"
     if held is None:
@@ -295,7 +295,7 @@ def check_store() -> Check:
 
 def check_slack() -> Check:
     try:
-        api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), transport=lambda url, data, headers: slack.post(url, data, headers, timeout=PROBE_TIMEOUT_S))
+        api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), transport=lambda url, data, headers: slack.post(url, data, headers, timeout=PROBE_TIMEOUT_S))
         api.call("auth.test")
     except slack.SlackError as e:
         return Check("slack", FINDING, str(e), "the using-slack skill: a Cursor agent goes through the broker with no token; @infra holds the bot's")
@@ -314,7 +314,7 @@ SSH_FAILURES = (
 def registry_unread() -> bool:
     """Whether reading the registry would clone the notes repo first (`registry.merged`): synchronously, for up to 15 minutes,
     before any deadline. The doctor reads machines.toml alone then; notes-push names the missing clone."""
-    return registry.REGISTRY_ENV not in os.environ and not registry.notes_root().exists()
+    return not settings.has(registry.REGISTRY_ENV) and not registry.notes_root().exists()
 
 
 def ssh_machines() -> dict[str, dict]:
