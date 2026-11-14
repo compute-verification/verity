@@ -89,6 +89,30 @@ def test_the_slot_sumcheck_at_fixed_coefficients():
     assert PR.hours(a)["share_mean"] == pytest.approx(a["sumcheck_h_mean"] / a["prover_h_mean"])
 
 
+def test_the_slot_table_prints_the_hours_and_shares_of_the_audit_at_the_node_limit():
+    """One row a workload. Its prover hours and the sumcheck's share of them are `hours` of the audit at the node limit,
+    mean and public, and an audit with no prover hours reads 0%."""
+    heaviest = {"Z": 2 ** 20, "template": 2 ** 10, "prove_s": 1.0, "sumcheck_s": 2.0, "total_s": 3.0, "rss_gib": 4.0,
+                "sumcheck_gib": 5.0, "peak_gib": 9.0}
+
+    def workload(name, prover_h, sumcheck_h):
+        at_cap = {"prover_h_mean": prover_h[0], "prover_h_public": prover_h[1],
+                  "sumcheck_h_mean": sumcheck_h[0], "sumcheck_h_public": sumcheck_h[1]}
+        return {"workload": name, "gpu": {"cap": 2 ** 30, "cap_flock": 2 ** 31},
+                "cpu": {"cap": 2 ** 32, "cap_flock": 2 ** 33, "at_cap": at_cap, "heaviest": heaviest,
+                        "band": [PR.hours(at_cap, 1.0), PR.hours(at_cap, 2.0)]}}
+
+    pr = {"slot_sumcheck": {"band": (1.0, 2.0), "k1_ns": 1.5, "source": "a source"},
+          "workloads": [workload("wa/b1/i256", (8.0, 10.0), (2.0, 5.0)), workload("wb/b8/i64", (0.0, 0.0), (0.0, 0.0))]}
+    lines = PR._slot_table(pr)
+    cells = [line.strip("| ").split(" | ") for line in lines[-2:]]
+    head = lines[-4].strip("| ").split(" | ")
+    assert len(lines) == 9 and [len(c) for c in cells] == [len(head)] * 2 == [15, 15]
+    assert head[11:13] == ["prover h mean / public", "sumcheck share mean / public"]
+    assert [c[11:] for c in cells] == [["8 / 10", "25% / 50%", "8 / 10 (25%)", "8 / 10 (25%)"],
+                                       ["0 / 0", "0% / 0%", "0 / 0 (0%)", "0 / 0 (0%)"]]
+
+
 def test_dp4t_keys_buckets_by_template():
     """N = 1000, K = 160. Two registered types share a template (r1, r2: one tc-step-like unit) and differ in Z; a bulk
     generic type g has its own; a rare generic type x (0.16 samples per audit) pads dp2's top bucket to its template (at most Z), so
