@@ -69,7 +69,9 @@ The model of `Security/Definitions/Accounting/Actual.lean`:
   from `linkCapacity_union_le`, `linkCapacity_biUnion_le`). `LeakPartsRegistered`: `LeakParts` at a subtree of a valid
   registration's Site, the sinks' sealing concluded from the registration (`Site.leak_le_registered`).
 * `Actual/RegisteredWitness.lean`: `LeakPartsRegistered_honest`: the example onsite log is valid, and at its Site a
-  one-gate strategy has each trusted device's record within one bit.
+  one-gate strategy at the certifier's place is placed at the places a link may end at and has each trusted device's
+  record within one bit. `LeakPartsRegistered_nontrivial`: at the same Site a strategy whose one gate is at the
+  outside, wider than the links' whole capacity a tick, does more there than the limit.
 * `Actual/Transducer.lean`: a location is a transducer over what reaches it: under causality from every tick, what `X`
   does during `[t, t + n)` is a function of its content at `t` and of its links' signals at each tick (`transducer`,
   `crossing_of_signals`), with an `(M + 1)`-bit state (`transducer_bits`), so it takes at most `2^{M + 1 + β_X n}` values

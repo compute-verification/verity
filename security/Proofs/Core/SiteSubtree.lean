@@ -13,6 +13,8 @@ public import Mathlib.Data.Finset.Union
   places.
 * `Site.under_eq_of_closed`: a set of places that holds `i`, holds each location registered under one of its own and
   is reached from `i` is the subtree at `i`, which reads a subtree off a Site given in full.
+* `Site.outside_notMem_under`, `Site.outside_mem_compl`: the outside is in no subtree but its own, and is outside a
+  subtree's location and its auditor's devices.
 * `Site.crossing`, `Site.uncovered`: the registered links with exactly one end in a set of ids, and those of them with
   neither end in a covering set, as lists of links.
 * `Site.mem_far_iff`: where no link joins a place to itself, as on a valid log's Site, a far end of a place's links is
@@ -40,6 +42,11 @@ theorem mem_placesIn {X : Finset String} {p : S.Place} : p ∈ S.placesIn X ↔ 
 theorem mem_places {i : String} : i ∈ S.places ↔ S.Known i := by
   unfold places Known
   rw [Finset.mem_insert, List.mem_toFinset]
+
+/-- The place the outside's id names is the outside. -/
+theorem place_outside : (S.place outside).1 = outside := by
+  have h : outside ∈ S.places := Finset.mem_insert_self outside _
+  rw [place, dif_pos h]
 
 /-- A location registered under another is a place. -/
 theorem mem_places_of_child {i c : String} (h : S.Child i c) : c ∈ S.places := by
@@ -78,6 +85,36 @@ theorem under_eq_of_closed {i : String} {T : Finset String} (hT : ∀ j ∈ T, j
       obtain ⟨x, hx, rfl, hp⟩ := hbc
       exact hc x hx _ ih hp
   · exact fun hj => ⟨hT j hj, hr j hj⟩
+
+/-- **The outside is in no subtree but its own**: where no location has the outside's id, the outside is not in the
+subtree at any other place. -/
+theorem outside_notMem_under (hno : ∀ x ∈ S.locs, x.id ≠ outside) {i : String} (hi : i ≠ outside) :
+    outside ∉ S.under i := by
+  intro h
+  unfold under at h
+  rcases Relation.ReflTransGen.cases_tail (Finset.mem_filter.1 h).2 with h | ⟨c, -, x, hx, hxo, -⟩
+  · exact hi h.symm
+  · exact hno x hx hxo
+
+/-- **The outside is outside a subtree's location and its auditor's devices**, with no challenger pinned: where no
+location has the outside's id and the outside is no certifier, at a subtree at any other place the outside is none of
+the subtree's prover places, its memory challengers or its certifiers. -/
+theorem outside_mem_compl (hno : ∀ x ∈ S.locs, x.id ≠ outside) (hk : S.kind? outside ≠ some .certifier)
+    {i : String} (hi : i ≠ outside) :
+    S.place outside ∈
+      (S.placesIn (S.proverUnder i ∪ (S.challengersOf ∅ i \ ∅)) ∪ S.placesIn (S.certifiersOf i ∪ ∅))ᶜ := by
+  classical
+  rw [Finset.mem_compl, Finset.mem_union, S.mem_placesIn, S.mem_placesIn, S.place_outside]
+  rintro (h | h)
+  · rcases Finset.mem_union.1 h with h | h
+    · unfold proverUnder at h
+      exact S.outside_notMem_under hno hi (Finset.mem_filter.1 h).1
+    · unfold challengersOf at h
+      exact Finset.notMem_empty _ (Finset.mem_filter.1 (Finset.mem_sdiff.1 h).1).2.2.1
+  · rcases Finset.mem_union.1 h with h | h
+    · unfold certifiersOf at h
+      exact hk (Finset.mem_filter.1 h).2.1
+    · exact Finset.notMem_empty _ h
 
 /-- The registered links with exactly one end in `X`. -/
 def crossing (X : Finset String) : List Link :=
