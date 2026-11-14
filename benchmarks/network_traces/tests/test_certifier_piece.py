@@ -59,7 +59,7 @@ import chain_record as CR  # noqa: E402
 from verity.protocols.accounting.certifier.prover import scan_period as SP  # noqa: E402
 import served_verdicts as S  # noqa: E402
 from verity.protocols.accounting.certifier.device import warden_serve as WS  # noqa: E402
-from test_scan_zk import published, sz  # noqa: E402
+from verity.protocols.accounting.certifier.prover.tests.test_scan_zk import published, sz  # noqa: E402
 from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB  # noqa: E402
 from test_warden_chain import WC, gate_run  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
@@ -349,7 +349,7 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
     return a
 
 
-def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_period_are_rejects(tmp_path, warden):
+def test_a_refused_chain_a_request_off_the_scans_phase_and_a_rejected_period_are_rejects(tmp_path, warden):
     d = _serve_dir(tmp_path / "serve", warden)
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, _chain_out(tmp_path / "chain", "refused", warden["w"]), {}))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
@@ -362,7 +362,7 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert a["verdict"] == "reject" and f"not the period's {warden['w'] + 1} alone" in a["reason"]
     if warden["others"]:
         a = _decide(tmp_path / "mixed", warden, records=[*warden["records"][:1], warden["others"][0]])
-        assert a["verdict"] == "reject" and "spans link-windows" in a["reason"]
+        assert a["verdict"] == "reject" and "spans execution phases" in a["reason"]
     rejected = CP.answer("reject", "window 0: certificates")
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
 
@@ -1014,7 +1014,7 @@ def test_each_steps_time_limit_names_its_own():
             CP.ended(limit)(signal.SIGTERM, None)
 
 
-def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
+def test_n2_and_the_tie_take_every_phase_of_a_short_run_unless_named():
     assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
     assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
@@ -1051,7 +1051,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
-    assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert "past one execution phase" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
     assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
@@ -1464,7 +1464,8 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
         RUN, 0, "ended", True, 20, f"research@{GATE_HOST}")
     assert doc["request"] == _asked(tmp_path)[0] and doc["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
-    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER, "verifier": PEER}
+    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER,
+                                                   "verifier": CP.ran_on()["period"]}
     assert CP.open_sessions(serve / CP.PRIVATE) == []
     # with the session closed there is none to close, and the gate isn't asked
     asked = len(_asked(tmp_path))
@@ -1618,7 +1619,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     """`served_table.SCAN_CLASS` is `V3C_SCAN_CLASS`'s setup (`scan_zk.W63K4`) as served_verdicts.sh's
     SLOTS,PROMPT,OUTPUTS,LANES,EVERY: a slot stride's Program slots over an execution phase's strides, KI, KO, the
     lanes and EVERY."""
-    import scan_zk as SZ
+    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
 
     spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
     table = importlib.util.module_from_spec(spec)

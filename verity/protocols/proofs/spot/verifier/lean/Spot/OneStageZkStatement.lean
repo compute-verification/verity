@@ -1124,13 +1124,28 @@ def Member.slice (m : Member) (rec : Json) (roots : Std.HashMap String (Array Js
   Json.mkObj [("population", Lean.toJson m.count), ("roots", .arr (roots.getD m.name #[])),
     ("scheme", getD rec "scheme")]
 
+/-- The refusal of a member's public file naming its port `p` at a root, where the member's slice holds no root of
+`p`: no tree under the member and no writer's the wiring names (`unwired`). -/
+def UNWIRED_WHY (p : String) : String :=
+  s!"public file: port {p} has no tree under the member, and the wiring names no writer of it in one member: a " ++
+    "wired port is its writer's output root"
+
+/-- The first port, in key order, of a public file's `frame_v3` roots `roots` that the slice `rec` names no root of
+(`Record.byPort`), or none. -/
+def unwired (rec roots : Json) : Option String :=
+  (entries roots).findSome? fun (p, _) => if (Record.byPort rec).any (·.1 == p) then none else some p
+
 /-- A public file's header `h` held to the record `rec`, as `publicHeld` holds the one statement's
 (`Record.matchesPublic`): its scheme, its `frame_v3` roots and their `domain_ids`, and its `instances` against the
-record's scheme, roots, domains and population, a refusal naming the codes that fail. -/
+record's scheme, roots, domains and population, a refusal naming the codes that fail. A port of its roots `rec` holds
+no root of is refused first, by name (`unwired`, `UNWIRED_WHY`): at a member's slice, a port with no tree under the
+member whose writer the wiring does not name (`wiredRoots`). -/
 def headerHeld (rec h : Json) : V Unit :=
   let fv := getD h "frame_v3"
   let c := Record.matchesPublic rec (getD h "scheme") (getD fv "roots") (getD fv "domain_ids") (getD h "instances")
-  if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
+  match unwired rec (getD fv "roots") with
+  | some p => throw (UNWIRED_WHY p)
+  | none => if c.codes.isEmpty then pure () else throw s!"public file: not the registration's: {", ".intercalate c.codes.toList}"
 
 /-- **A member's population check**, in the place of the one statement's `FilePart.check` and `publicHeld`
 (`Member.heldAt` at the strata of the member's query over its program, as `FilePart.check` reads them, then

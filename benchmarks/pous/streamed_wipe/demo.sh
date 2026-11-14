@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One streamed wipe of one GPU's memory, as one Attempt. wipe_run's leg on this node: the prover keeps the
+# One streamed wipe of one GPU's memory, as one Attempt. wipe_run's subprotocol on this node: the prover keeps the
 # fill in device memory (wipe_store.Cuda, the CUDA driver through ctypes: no toolkit, no build), the memory challenger
 # streams it natively (wipe_stream.c, built and gated on the challenger's host) and times its spot reads (--reads), and
 # the Lean (wipe-protocol, verity/wipe/v0) and the Python judge the signed session and must agree. cwd = a clone (the
@@ -17,7 +17,7 @@
 #   --reads K            the timed spot reads, which the certificate is computed at (default 2152; 2906 is the H200's
 #                        StreamedWipeMeetsH200, r = 33, at the whole device filled; a fill that leaves memory out
 #                        counts it in R and needs more): a challenger here is started with it; one on its own host
-#                        chooses its own (its --challenger-command's wipe_party --reads K), and the leg refuses a
+#                        chooses its own (its --challenger-command's wipe_party --reads K), and the subprotocol refuses a
 #                        session at another count
 #   --challenger HOST --challenger-address H:P --challenger-command 'ARGV'
 #                        the memory challenger on a host of its own (all three; infra's wiring of wipe_party's side

@@ -183,8 +183,6 @@ class DeviceLibrary:
         return self.perm
 
 
-def side_stream(device: Any = None) -> Any:
-    """The side stream steps on ``device`` (default: the current CUDA device) hash on."""
-    import torch
-
+def side_stream(torch: Any, device: Any = None) -> Any:
+    """The side stream steps on ``device`` (default: the current CUDA device) hash on, ``torch`` the workload's library."""
     return DeviceLibrary.of(torch, torch.cuda.current_device() if device is None else torch.device(device).index).stream

@@ -165,7 +165,7 @@ def test_a_tiny_int8_model_is_held_as_p2_and_served_bit_exact(toy):
         c = opt.commitment()
         w = lay.pack({"q": toy.plain["q"].numpy().tobytes(), "k": toy.plain["k"].numpy().tobytes()})
         assert c["commitment"] == setup.commit(q, w).hex()
-        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
+        assert bytes.fromhex(c["salt"]) == setup.sample_salt(bytes.fromhex(SOURCE), bytes.fromhex(c["commitment"]))
         held = s.held()                                                                     # the verifier's setup check of C*
         period.tie(held.point, held.published, period.setup_inputs(held.setup_case))
         assert held.published.root.hex() == c["storage_root"]
@@ -266,7 +266,7 @@ def _judges(monkeypatch) -> list:
 
 
 def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_it_certifies(toy, tmp_path, monkeypatch):
-    """`PousOption.leg`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
+    """`PousOption.subprotocol`: the memory challenger at period.json's challenger host, the prover answering from C*, the verifier's tie of
     the setup case and its check; an accepted period says plainly that this point certifies 0 bits, and that its setup
     was checked by the developer, not the auditor. The Lean's tools are stand-ins that answer as the Python
     (`_judges`)."""
@@ -282,7 +282,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
         opt = comp.get("pous")
         for n in (0, 1):
             out = tmp_path / f"out{n}"
-            got = opt.leg(_period_dir(tmp_path, n, JUDGES), NODE, out, side_of=side_of, schemes=ts.SCHEMES,
+            got = opt.subprotocol(_period_dir(tmp_path, n, JUDGES), NODE, out, side_of=side_of, schemes=ts.SCHEMES,
                           protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
@@ -299,13 +299,13 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
 
 
 def test_a_period_whose_tools_name_no_lean_is_undecided_where_the_python_accepts(toy, tmp_path, monkeypatch):
-    """`PousOption.leg` with no ``pous-run-protocol`` among the period's tools: the Python's accept of an honest period
+    """`PousOption.subprotocol` with no ``pous-run-protocol`` among the period's tools: the Python's accept of an honest period
     decides nothing alone, so the answer is undecided with `period.NO_JUDGE`, no public outputs and no profile."""
     session, _ = _in_process_party(ts.TestSigner(b"pous-vllm", directory=tmp_path), ts.session_log(tmp_path))
     monkeypatch.setattr(CR, "session", session)
     runs = _judges(monkeypatch)
     with PO.install(toy, _ctx(ENTRY)) as comp:
-        got = comp.get("pous").leg(_period_dir(tmp_path, 0), NODE, tmp_path / "out", side_of=Side.of,
+        got = comp.get("pous").subprotocol(_period_dir(tmp_path, 0), NODE, tmp_path / "out", side_of=Side.of,
                                    schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     assert runs[0].answer["verdict"] == "accept", runs[0].answer["reason"]
     assert got["verdict"] == "undecided" and got["reason"] == period.NO_JUDGE
@@ -369,7 +369,7 @@ def test_pous_wraps_around_pouw_so_pouws_gemm_reads_the_decoded_weight(toy, monk
         assert (tag, x) == ("pouw", "x") and torch.equal(w, toy.plain["k"])
         c = comp.get("pous").commitment()
         assert comp.info()[ENTRY]["salt_source"] == "command"
-        assert bytes.fromhex(c["salt"]) == setup.draw_salt(bytes.fromhex(c["commitment"][:64]), bytes.fromhex(c["commitment"]))
+        assert bytes.fromhex(c["salt"]) == setup.sample_salt(bytes.fromhex(c["commitment"][:64]), bytes.fromhex(c["commitment"]))
     assert hooks.live() == before and torch.equal(toy.layers["k"].weight, toy.plain["k"])
 
 

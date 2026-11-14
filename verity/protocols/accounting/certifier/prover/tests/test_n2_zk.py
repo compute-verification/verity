@@ -7,33 +7,19 @@ witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is r
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
+import json
 from types import SimpleNamespace
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-
-
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_n2_zk", HERE / "n2_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-n2 = _load()
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces" / "tests")))
-from test_warden_chain import gate_run  # noqa: E402
+from verity.protocols.accounting.certifier.prover import n2_zk as n2
+from benchmarks.network_traces.tests.test_warden_chain import gate_run
 
 
 @pytest.fixture(scope="module")
 def runs(tmp_path_factory):
     run = gate_run(tmp_path_factory.mktemp("n2zk"))
-    return {"honest": n2.link_windows(run), "tampered": n2.link_windows(run, edit=n2.one_count)}
+    return {"honest": n2.phases(run), "tampered": n2.phases(run, edit=n2.one_count)}
 
 
 def test_each_round_refuses_what_its_references_say(runs):
@@ -86,9 +72,24 @@ def test_the_scan_leaves_out_only_the_pieces_the_public_circuit_holds(runs):
     assert held_kept == {k for k in kept if k.rsplit(" @", 1)[0] in held} - tails and held_kept
 
 
+def test_the_summary_says_only_whether_the_signer_refused_and_the_phases_go_to_the_witness(tmp_path):
+    """A member's summary says whether its signer refused any execution phase and never which: those follow what the
+    node sent, so they are written to ``--witness`` alone, and without it nowhere."""
+    run = gate_run(tmp_path / "g")
+    summary, witness = tmp_path / "out" / "summary.json", tmp_path / "witness" / "n2" / "issuer-refused.json"
+    assert n2.main(["prove", "--warden-run", str(run), "--out", str(summary.parent), "--dry", "--witness",
+                    str(witness)]) == 0
+    doc = json.loads(summary.read_text())
+    assert {m["certifier_refused"] for m in doc["members"].values()} == {False} and "issuer_refused" not in str(doc)
+    assert json.loads(witness.read_text()) == {name: {"issuer_refused": []} for name in doc["members"]}
+    witness.unlink()
+    assert n2.main(["prove", "--warden-run", str(run), "--out", str(tmp_path / "again"), "--dry"]) == 0
+    assert not witness.exists() and "issuer_refused" not in (tmp_path / "again" / "summary.json").read_text()
+
+
 def test_jobs_is_one_zk_server_session_at_a_time(monkeypatch):
     monkeypatch.setattr(n2, "prove", lambda a: a.jobs)
     argv = ["prove", "--warden-run", "r", "--out", "o", "--dry"]
     assert n2.main(argv) == 1 and n2.main([*argv, "--jobs", "1"]) == 1
-    with pytest.raises(SystemExit, match="outer proofs go through the firewall one at a time"):
+    with pytest.raises(SystemExit, match="outer proofs go through the ZK server one at a time"):
         n2.main([*argv, "--jobs", "2"])

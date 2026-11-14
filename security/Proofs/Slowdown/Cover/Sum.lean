@@ -21,7 +21,7 @@ the inference-only policy bounds each `k_u` by `α σ_u`, where `σ_u ≤ Γ` is
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
 /-- **One block's area bound at its own rate**: `c f ≤ k² + c k` with `0 ≤ k ≤ α σ` and `0 ≤ σ ≤ Γ` gives
 `c f ≤ (α² Γ + c α) σ`. -/
@@ -44,4 +44,4 @@ theorem sum_area_le {ι : Type*} (t : Finset ι) {c α Γ : ℝ} {f k σ : ι �
   exact Finset.sum_le_sum fun u hu =>
     area_le_rate hc hα (hk0 u hu) (hσ0 u hu) (hf u hu) (hk u hu) (hσ u hu)
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

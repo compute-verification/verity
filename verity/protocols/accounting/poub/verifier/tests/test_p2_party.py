@@ -207,7 +207,7 @@ def verifier(store, held: bool = False) -> tuple[p2_parties.Verifier, list]:
     return v, v.start({}, Identity(p2_parties.VERIFIER, capabilities=capabilities))
 
 
-def test_the_verifier_claims_its_session_id_before_it_draws_its_coins(store) -> None:
+def test_the_verifier_claims_its_session_id_before_it_flips_its_coins(store) -> None:
     _, first = verifier(store)
     assert first == [Send("coins", Message("CoinsDraw", {"n": p2_parties.COIN_BYTES}))]
     _, refused = verifier(store, held=True)
@@ -243,6 +243,7 @@ def test_the_verifiers_start_refuses_a_closer_key_the_configuration_does_not_pin
     with pytest.raises(Refused, match="state"):
         start(pinned(b"key"), bound, None)
     (tmp_path / "seed").write_bytes(b"seed")
+    (tmp_path / onsite.KEY_STATE).write_text(json.dumps({"public": b"key".hex()}))
     monkeypatch.setattr(onsite, "device_key", lambda directory: SimpleNamespace(public_key=b"key"))
     with pytest.raises(Refused, match="pin"):
         start(pinned(b"another key"), bound, None)

@@ -17,7 +17,7 @@ Load every registered Definition, bind one, and find its Boolean version:
 ```python
 from verity.circuits import Program, bind
 from verity.circuits.boolean import is_boolean
-from verity_vllm.definitions.boolean import boolean_version
+from verity.circuits.ops.boolean.versions import boolean_version
 from verity_vllm.definitions.registry import catalog
 
 REGISTRY, errors = catalog.load()       # errors == []: every registry module imported

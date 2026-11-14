@@ -89,7 +89,7 @@ DEPENDENCIES = {"numpy"}
 #: the hardware's cards, the Site's types, SPOT's planning beside its verifier, and a protocol's manifest with the
 #: monitoring periods.  Within them, what may use numpy.
 STDLIB_ONLY = ("verity/circuits", "verity/circuits/silicon", "verity/commitments/randomness",
-               "verity/claims", "verity/device.py", "verity/protocols/proofs/spot",
+               "verity/commitments/claim_ids.py", "verity/device.py", "verity/protocols/proofs/spot",
                "verity/protocol.py")
 NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 #: and the parts of the Definitions that use it, which are no scalar reference in `verity/circuits` either
@@ -154,10 +154,6 @@ BENCHMARKS_IMPORTERS = {
     # tests and vector scripts that check against a benchmark's reference
     "verity/protocols/accounting/pouw/verifier/lean/window/tests/test_known_rows.py": "proofs: H1's known rows "
                                                                        "(`benchmarks/pouw/h1_lanes/leaf.py`)",
-    "verity/protocols/accounting/pous/verifier/check/tests/test_timed_audit.py": "memory-accounting: the harness's control "
-                                                                      "responder (`benchmarks/pous/band_gpu/harness.py`)",
-    "verity/protocols/accounting/pous/verifier/check/scripts/difftest_vectors.py": "memory-accounting: P2's reference and wire "
-                                                                        "(`benchmarks/pous/p2_v1`)",
     "verity/circuits/ops/tests/test_tc_probe_families.py": "circuits: the tensor-core probe's families "
                                                               "(`benchmarks/tc_probe`)",
     **dict.fromkeys(("adapters/vllm/tests/protocols/pouw_h1_circuits.py", "adapters/vllm/tests/protocols/pouw_h1_gpu.py"),

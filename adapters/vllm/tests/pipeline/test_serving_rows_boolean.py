@@ -20,14 +20,14 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
 from verity.commitments.periods import rows as CS
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from tests.pipeline import served_rope as SR
-from tests.pipeline.served_rope import HEADS, LAW, ROPE, D
+from tests.pipeline.served_rope import HEADS, DESIGN, ROPE, D
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
@@ -63,7 +63,7 @@ def test_a_template_is_matched_through_its_word_link_under_either_ir(served):
     c, r = served
     programs = {"word": r.programs, "boolean": {k: _on_bits(v) for k, v in r.programs.items()}}
     templates = {"word": [ROPE, GEMM], "boolean": [ROPE_BITS, GEMM_BITS]}
-    got = {(ir, kind): SRW.population(ps, {"templates": ts, "law": LAW}, c["run_root"], r.program_dirs)
+    got = {(ir, kind): SRW.population(ps, {"templates": ts, "law": DESIGN}, c["run_root"], r.program_dirs)
            for ir, ps in programs.items() for kind, ts in templates.items()}
     shapes = {k: _shape(*v) for k, v in got.items()}
     assert len({json.dumps(s) for s in shapes.values()}) == 1
@@ -93,7 +93,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     c = SR.commit(tmp_path)
     word = DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(c["partition"]), tmp_path / "word", workers=1)
     _boolean_row_dir(c["row_dir"])
-    (pf := tmp_path / "bits.json").write_text(json.dumps({"templates": [ROPE_BITS], "law": LAW}))
+    (pf := tmp_path / "bits.json").write_text(json.dumps({"templates": [ROPE_BITS], "law": DESIGN}))
     wdir = tmp_path / "bits"
     win = DRW.from_bundle(RB.path(c["out"], 1), str(c["row_dir"]), str(pf), wdir, workers=1)
     rec = json.loads((wdir / "registration.json").read_text())
@@ -106,7 +106,7 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
     ports = {f"{ROPE_BITS}/{p}": {"leaves": HEADS, "domain": R.window_domain(P.program_digest(program), part, f"{ROPE_BITS}/{p}",
                                                                              CS.ROW_SCHEMA, HEADS, c["run_root"])}
              for p in ("x", "cs", "out")}
-    v = R.check(rec, program, query, DR.parse_design(LAW), CS.SCHEME, ports,
+    v = R.check(rec, program, query, DR.parse_design(DESIGN), CS.SCHEME, ports,
                 leaf_layer=CS.leaf_layer({ROPE_BITS: (wdir / "m0-public.bin").read_bytes()}))
     assert v.ok, v.detail
     assert (win["partition_digest"], word["partition_digest"] != part) == (part, True)
@@ -125,9 +125,9 @@ def test_templates_that_compute_one_word_definition_have_no_rows_or_are_not_u16_
     c, r = served
     programs = {k: _on_bits(v) for k, v in r.programs.items()}
     with pytest.raises(ValueError, match=r"RoPEHead_v1\{D=64\} and RoPEHead_v2\{D=64\} both compute RoPEHead_v1\{D=64\}"):
-        SRW.population(programs, {"templates": [ROPE, ROPE_BITS], "law": LAW}, c["run_root"], r.program_dirs)
+        SRW.population(programs, {"templates": [ROPE, ROPE_BITS], "law": DESIGN}, c["run_root"], r.program_dirs)
     with pytest.raises(LookupError, match=r"no rows of RoPEHead_v2\{D=128\}"):
-        SRW.population(programs, {"templates": ["RoPEHead_v2{D=128}"], "law": LAW}, c["run_root"], r.program_dirs)
+        SRW.population(programs, {"templates": ["RoPEHead_v2{D=128}"], "law": DESIGN}, c["run_root"], r.program_dirs)
     for t in ("Embedding_v1{V=8,H=16}", "Embedding_v2{V=8,H=16}"):
         assert (SRW.template(t).layout, SRW.template(t).packed) == ("row", (32, 16, 16))
     with pytest.raises(ValueError, match=r"commit u16 words, and its ports' words are \[8, 16, 32\] bits \(a row template's port"):

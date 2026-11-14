@@ -15,6 +15,7 @@ if not torch.cuda.is_available():
     pytest.skip("the lead kernels need a GPU", allow_module_level=True)
 
 from verity.protocols.accounting.pouw.prover.serving.lead import rows as L  # noqa: E402
+from verity_torch.pouw.lead import rows_device as LD  # noqa: E402
 from verity_vllm.commit import step_rows as R  # noqa: E402
 from verity_vllm.commit.committer import native_collect as NC  # noqa: E402
 from verity_vllm.errors import Refused  # noqa: E402
@@ -142,7 +143,7 @@ def test_device_words_top_keys_the_cpus_words_root(ext, hasher, shapes, lanes):
     streams = [L.stream(ex, *s) for ex, s in zip(exports, shapes)]
     count = sum(L.chunk_count(m, n, S) for m, n, S, _ in shapes)
     w = _window()
-    dw = L.DeviceWords(ext, hasher, w.words_domain(0, count), _stream(), lanes=lanes)
+    dw = LD.DeviceWords(ext, hasher, w.words_domain(0, count), _stream(), lanes=lanes)
     for ex, s in zip(exports, shapes):
         dw.add(torch.from_numpy(ex).cuda(), *s)
     top = dw.top()
@@ -161,7 +162,7 @@ def test_device_words_lanes_wait_for_the_export_the_stream_writes(ext, hasher):
     staged = [torch.from_numpy(ex).cuda() for ex in exports]
     torch.cuda.synchronize()
     w = _window()
-    dw = L.DeviceWords(ext, hasher, w.words_domain(0, count), _stream(), lanes=4)
+    dw = LD.DeviceWords(ext, hasher, w.words_domain(0, count), _stream(), lanes=4)
     for src, s in zip(staged, shapes):
         ex = torch.zeros_like(src)
         torch.cuda._sleep(1 << 26)
@@ -173,14 +174,14 @@ def test_device_words_lanes_wait_for_the_export_the_stream_writes(ext, hasher):
 def test_device_words_needs_a_lane(ext, hasher):
     for lanes in (0, -1, 2.0, True):
         with pytest.raises(ValueError):
-            L.DeviceWords(ext, hasher, _window().words_domain(0, 4), _stream(), lanes=lanes)
+            LD.DeviceWords(ext, hasher, _window().words_domain(0, 4), _stream(), lanes=lanes)
 
 
 def test_device_words_refuses_leaves_past_or_short_of_its_count(ext, hasher):
     shape = (17, 256, 9, 128)
     ex = torch.from_numpy(_export(np.random.default_rng(9), *shape)).cuda()
     k = L.chunk_count(*shape[:3])
-    dw = L.DeviceWords(ext, hasher, _window().words_domain(0, k + 1), _stream())
+    dw = LD.DeviceWords(ext, hasher, _window().words_domain(0, k + 1), _stream())
     dw.add(ex, *shape)
     with pytest.raises(Refused):
         dw.top()
@@ -195,7 +196,7 @@ def test_device_a_top_keys_the_cpus_a_root(ext, hasher, m, K):
     a = np.random.default_rng(m * K).integers(-128, 128, size=(m, K), dtype=np.int8)
     count = -(-m * K // L.A_SEGMENT)
     w = _window()
-    top = L.device_a_top(ext, hasher, w.a_domain(2, 9, count), torch.from_numpy(a).cuda(), _stream())
+    top = LD.device_a_top(ext, hasher, w.a_domain(2, 9, count), torch.from_numpy(a).cuda(), _stream())
     assert len(top) == (m * K if count == 1 else 128)
     assert w.a_top(2, 9, count, top, check=a.tobytes()) == _window().a_root(2, 9, a.tobytes())
 
@@ -206,7 +207,7 @@ def test_device_a_top_reads_a_row_major_whatever_its_strides_or_byte_type(ext, h
     dom = w.a_domain(0, 3, count)
     strided = torch.from_numpy(np.ascontiguousarray(a.T)).cuda().T
     fp8 = torch.from_numpy(a).cuda().view(torch.float8_e4m3fn)
-    tops = {L.device_a_top(ext, hasher, dom, t, _stream()) for t in (strided, fp8, torch.from_numpy(a).cuda())}
+    tops = {LD.device_a_top(ext, hasher, dom, t, _stream()) for t in (strided, fp8, torch.from_numpy(a).cuda())}
     assert len(tops) == 1 and w.a_top(0, 3, count, tops.pop(), check=a.tobytes()) == _window().a_root(0, 3, a.tobytes())
 
 
@@ -216,4 +217,4 @@ def test_device_a_top_refuses_another_count_byte_type_or_ragged_words(ext, hashe
               torch.zeros(1028, dtype=torch.uint8, device="cuda"), torch.zeros(516, dtype=torch.int16, device="cuda"),
               torch.zeros(1032, dtype=torch.uint8)):
         with pytest.raises(Refused):
-            L.device_a_top(ext, hasher, dom, a, _stream())
+            LD.device_a_top(ext, hasher, dom, a, _stream())

@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Assumptions.TS
-public import Definitions.Accounting.TS.Steer
+public import Definitions.Pouw.Assumptions.TS
+public import Definitions.Pouw.TS.Steer
 
 /-!
 # Steering under one σ: lemmas
@@ -9,7 +9,7 @@ public import Definitions.Accounting.TS.Steer
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
 STEER-PROOF's route B, each `def G : Prop` proved as
-`Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.TS.Steer`:
+`Accounting.SecurityProofs.TS.G` in `Proofs.Pouw.TS.Steer`:
 
 * `LinSteerSegments`: LIN-STEER holds for a segmented consumer exactly when its noise-active segments all carry the
   same number of noise-active coordinates. A consumer row whose noise-active coordinates fall unevenly across its

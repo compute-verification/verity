@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # `RunsZC` at the hidden-output `--zk` tables (statement)
 
-ZkExec's `RunsZCLive` (`ZkExec/LiveStatements.lean`) for the sessions production `--zk` writes, whose tables
+ZkExec's `RunsZCLive` (`ZkExec/LiveStatements.lean`) for the sessions the prover's `--zk` writes, whose tables
 `Stmt.setupTables` sets up with `Stmt.setupHidden` (hidden outputs, the default `--statement`). Its `opnAtZ` reads the
 statement `Stmt.setupH` sets up, so the hidden case is a different `RunsZC` instance:
 

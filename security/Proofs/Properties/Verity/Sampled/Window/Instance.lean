@@ -8,7 +8,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.SetsUp
 /-!
 # SPOT's vocabulary as deployed over windows of several members
 
-The vocabulary the window's leg reads (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`) built from the other subprotocols' names over
+The vocabulary the window's subprotocol reads (`ExecutionPhaseDeployed`, `ExecutionPhaseCovers`) built from the other subprotocols' names over
 the deployed device (`ExecutionPhaseInstance.base`), as `Sampled/Instance.lean` builds the one statement's, so
 `executionPhaseSpotSound_sessions` applies to it with every field of `ExecutionPhaseDeployed` and `ExecutionPhaseCovers` either proved or one
 of the named `Prop`s below.
@@ -20,26 +20,26 @@ of the named `Prop`s below.
 * **The window the verifier sets up** (`ExecutionPhaseInstance.SetsUp`, `MemberForm.MembersSetUp`): the parameters' members
   on the registered files, read on the committed files, laid out in order, each member's files passing the files
   check. There the window reads `MAX_COINS` frames' bytes (`lb`) and its members each have the window's one table with
-  hm96-sha512 rows (`members`, `Window.table`).
-* **The windows** (`ExecutionPhaseInstance.windows`): the deployment's window wherever the verifier sets it up on the
+  hm96-sha512 rows (`members`, `ExecutionPhase.table`).
+* **The windows** (`ExecutionPhaseInstance.executionPhases`): the deployment's window wherever the verifier sets it up on the
   committed files.
 * **The sampled names** (`ExecutionPhaseInstance.vocab`, at constructions `K` over the base, whose game and declared calls
   are the vocabulary's): v2's log, the window's read finder (`executionPhaseReadFinder`: the members' files sent, then the
   binding's read finder) and the binding's forger at `2t` calls, the further finders (at a window `K`'s
   two-continuation finders under `cr/sha-512` and each member's roots finder under `ecr/sha-512`, `rootsSpecs`), the
   window's premises at the projected strategy (`JointFinderCR`), the extractor at the deployment's windows (`extractOf`:
-  the seats' traces side by side, `tracesWith`), no loss, and the window's δ (`Window.delta`) at the deployment's
+  the seats' traces side by side, `tracesWith`), no loss, and the window's δ (`ExecutionPhase.delta`) at the deployment's
   window, `⊤` where it runs none.
 * **The claim's transfer** (`ClaimTransfers`, `claimTransfers`): the units the extracted transcript doesn't bind are
-  at most as many as the window's incorrect proof blocks (`Window.unboundIncorrect`,
+  at most as many as the window's incorrect proof blocks (`ExecutionPhase.unboundIncorrect`,
   `JointAuditV5.UnboundIncorrect.card_le`), wherever the claim reads the window (`ClaimReads`): the window's members are
-  laid out in order (`Window.Laid`, which holds at every cost and widening, `Window.Laid.joint`,
-  `Window.Laid.extend`), the published share and the committed files' units are the window's, and, where every
-  member's roots fix their domains (`Window.RootsFix`, which the window's δ pays for at each member's roots term,
-  `Window.rootsErr`), the committed files are read at the claim, each member at its own gates
+  laid out in order (`ExecutionPhase.Laid`, which holds at every cost and widening, `ExecutionPhase.Laid.joint`,
+  `ExecutionPhase.Laid.extend`), the published share and the committed files' units are the window's, and, where every
+  member's roots fix their domains (`ExecutionPhase.RootsFix`, which the window's δ pays for at each member's roots term,
+  `ExecutionPhase.rootsErr`), the committed files are read at the claim, each member at its own gates
   (`JointAuditV5.ReadsAt`).
 * **`ExecutionPhaseDeployed`** (`deployed`): the finder, the forger, the loss, the per-finder premises and the published δ by
-  construction (`Window.delta_extend`: the window's δ doesn't read the widening), and the claim's transfer from
+  construction (`ExecutionPhase.delta_extend`: the window's δ doesn't read the widening), and the claim's transfer from
   `ClaimReads`.
 * **`ExecutionPhaseCovers`** (`covers`): where the deployment runs no window the published δ is `⊤`; where it runs one the
   verifier doesn't set up on the committed files, an accepted play's blobs sent hold v2's tables and the members'
@@ -48,7 +48,7 @@ of the named `Prop`s below.
 * **The verifier's window at an accepted play** (`executionPhaseAt_members`): `ExecutionPhaseAt` from the deployment's window on the
   registered files (`ExecutionPhaseRegistered`), which the vocabulary reads on every committed files alike (`read`,
   `MemberForm.ExecutionPhaseOn.of_read`), laid out with its members' files passing at an accepted play (`ExecutionPhasePasses`).
-* **The leg and remote's soundness** (`spotSound`, `remote_soundness_executionPhase`): `executionPhaseSpotSound_sessions` at the
+* **The subprotocol and remote's soundness** (`spotSound`, `remote_soundness_executionPhase`): `executionPhaseSpotSound_sessions` at the
   constructions `constructionsAt` assembles at the deployed device's history, the sessions' readings and decoders at
   the window's table, the family the parameters name (`labelAt`) and the window's bytes as `MAX_COINS` frames' coins.
 * **What stays open**: what the claim reads of the window (`ClaimReads`), the verifier's window at an accepted play
@@ -65,15 +65,15 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
-/-- **The window's δ doesn't read the widening** (`Window.sessionDelta_extend`). -/
-theorem Window.delta_extend (W : Window) (S : Widening) (t : ℕ) (cr : ℝ) : (W.extend S).delta t cr = W.delta t cr := by
-  unfold Window.delta
+/-- **The window's δ doesn't read the widening** (`ExecutionPhase.sessionDelta_extend`). -/
+theorem ExecutionPhase.delta_extend (W : ExecutionPhase) (S : Widening) (t : ℕ) (cr : ℝ) : (W.extend S).delta t cr = W.delta t cr := by
+  unfold ExecutionPhase.delta
   rw [W.sessionDelta_extend S t]
   rfl
 
 /-- **The window's δ is at least its read finder's term.** -/
-theorem Window.ofReal_le_delta (W : Window) (t : ℕ) (cr : ℝ) : ENNReal.ofReal cr ≤ W.delta t cr := by
-  unfold Window.delta
+theorem ExecutionPhase.ofReal_le_delta (W : ExecutionPhase) (t : ℕ) (cr : ℝ) : ENNReal.ofReal cr ≤ W.delta t cr := by
+  unfold ExecutionPhase.delta
   exact le_add_left le_rfl
 
 /-- **A list's mapped entries, by place**: what holds of `f` at each entry of `l` with its place holds of each entry
@@ -100,13 +100,13 @@ theorem get_of_map {α β : Type*} (f : α → β) (P : ℕ → β → Prop) :
     get_of_map f (fun j => P (j + 1)) l (fun k => h ⟨k.1 + 1, Nat.succ_lt_succ k.2⟩) ⟨j, Nat.lt_of_succ_lt_succ hj⟩
 
 /-- Flock's window's counts are the members', at any budget. -/
-theorem Window.counts_joint (W : Window) (t : ℕ) : (W.joint t).counts = W.ms.map fun m => m.n :=
+theorem ExecutionPhase.counts_joint (W : ExecutionPhase) (t : ℕ) : (W.joint t).counts = W.ms.map fun m => m.n :=
   Member.map_n_toV5 t W.ms
 
-/-- **A window laid out in order (`Window.Laid`) is Flock's window laid out in order at every budget**
+/-- **A window laid out in order (`ExecutionPhase.Laid`) is Flock's window laid out in order at every budget**
 (`JointAuditV5.Laid`): the layout reads the members' counts and places alone, which the registration fixes, and no
 budget, coin or sample. -/
-theorem Window.Laid.joint {W : Window} (h : W.Laid) (t : ℕ) : (W.joint t).Laid where
+theorem ExecutionPhase.Laid.joint {W : ExecutionPhase} (h : W.Laid) (t : ℕ) : (W.joint t).Laid where
   total := by
     rw [W.counts_joint t, ← W.counts_joint 0]
     exact h.total
@@ -125,7 +125,7 @@ theorem Window.Laid.joint {W : Window} (h : W.Laid) (t : ℕ) : (W.joint t).Laid
       W.ms h0 k v
 
 /-- **A window laid out in order stays so with the sample's coins widened**: the members are the window's. -/
-theorem Window.Laid.extend {W : Window} (h : W.Laid) (S : Widening) : (W.extend S).Laid :=
+theorem ExecutionPhase.Laid.extend {W : ExecutionPhase} (h : W.Laid) (S : Widening) : (W.extend S).Laid :=
   ⟨h.total, h.emb⟩
 
 /-- **The deployment over windows, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
@@ -142,7 +142,7 @@ structure ExecutionPhaseInstance (d : Accounting.Device ι) (α : Type) [Fintype
   read : ∀ θ F, base.read θ F = MemberForm.membersRead (base.registered θ) θ
   place : ∀ θ F c g, base.place θ F c g = placeOfFiles (base.read θ F) g
   costs : CostsRead base (Device.dev (deployment.setupOf base.families))
-  window : ByteArray → Option Window
+  window : ByteArray → Option ExecutionPhase
 
 namespace ExecutionPhaseInstance
 
@@ -150,15 +150,15 @@ variable (I : ExecutionPhaseInstance d α)
 
 /-- **The committed files the verifier sets the window `W` up on**, at the per-member form
 (`MemberForm.MembersSetUp`). -/
-def SetsUp (θ : ByteArray) (F : Array ByteArray) (W : Window) : Prop := MemberForm.MembersSetUp I.base θ F W
+def SetsUp (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) : Prop := MemberForm.MembersSetUp I.base θ F W
 
 /-- A window the verifier sets up reads `MAX_COINS` frames' bytes. -/
-theorem lb (θ : ByteArray) (F : Array ByteArray) (W : Window) (h : I.SetsUp θ F W) :
+theorem lb (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) (h : I.SetsUp θ F W) :
     W.Lb 0 = _root_.Spot.Challenger.MAX_COINS * 64 :=
   (show MemberForm.MembersSetUp I.base θ F W from h).lb
 
 /-- A window the verifier sets up has members of its one table with hm96-sha512 rows. -/
-theorem members (θ : ByteArray) (F : Array ByteArray) (W : Window) (h : I.SetsUp θ F W) : MembersAt W W.table :=
+theorem members (θ : ByteArray) (F : Array ByteArray) (W : ExecutionPhase) (h : I.SetsUp θ F W) : MembersAt W W.table :=
   (show MemberForm.MembersSetUp I.base θ F W from h).toExecutionPhaseOn.membersAt
 
 /-- **The deployed device's history at each play** (`Device.dev`), at the base's layouts. -/
@@ -190,12 +190,12 @@ def callsAddOf (θ : ByteArray) : Subprotocol → ℕ
 open Classical in
 /-- **The deployment's windows**: at the parameters `θ` and the committed files `F`, the deployment's window where
 the verifier sets it up on them (`SetsUp`). -/
-noncomputable def windows (θ : ByteArray) (F : Array ByteArray) : Option Window :=
+noncomputable def executionPhases (θ : ByteArray) (F : Array ByteArray) : Option ExecutionPhase :=
   (I.window θ).bind fun W => if I.SetsUp θ F W then some W else none
 
-theorem executionPhases_some {θ : ByteArray} {F : Array ByteArray} {W : Window} (h : I.windows θ F = some W) :
+theorem executionPhases_some {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (h : I.executionPhases θ F = some W) :
     I.window θ = some W ∧ I.SetsUp θ F W := by
-  unfold windows at h
+  unfold executionPhases at h
   cases hW : I.window θ with
   | none => rw [hW] at h; cases h
   | some B =>
@@ -205,9 +205,9 @@ theorem executionPhases_some {θ : ByteArray} {F : Array ByteArray} {W : Window}
     cases h
     exact ⟨rfl, hs⟩
 
-theorem executionPhases_of {θ : ByteArray} {F : Array ByteArray} {W : Window} (hW : I.window θ = some W)
-    (hs : I.SetsUp θ F W) : I.windows θ F = some W := by
-  unfold windows
+theorem executionPhases_of {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (hW : I.window θ = some W)
+    (hs : I.SetsUp θ F W) : I.executionPhases θ F = some W := by
+  unfold executionPhases
   rw [hW]
   dsimp only [Option.bind]
   rw [if_pos hs]
@@ -215,38 +215,38 @@ theorem executionPhases_of {θ : ByteArray} {F : Array ByteArray} {W : Window} (
 variable (K : ExecutionPhaseConstructions I.base)
 
 /-- **A two-continuation finder as a further finder**: `K`'s at round `j` of the window `W`, asked under `cr/sha-512`
-at its `2t + 2h` calls (`ExecutionPhaseConstructions.msg_calls`, `Window.qM`). -/
-noncomputable def msgSpec (W : Window) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (j : Fin W.rounds) :
+at its `2t + 2h` calls (`ExecutionPhaseConstructions.msg_calls`, `ExecutionPhase.qM`). -/
+noncomputable def msgSpec (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (j : Fin W.rounds) :
     FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
   finder σ := K.msgFinder W θ F c σ j
   budget t := 2 * t + 2 * W.h
   calls σ x := by
     have h := K.msg_calls W θ F c σ j x
-    unfold Window.qM at h
+    unfold ExecutionPhase.qM at h
     exact_mod_cast h
   claim := .cr
 
 /-- **The record's two-continuation finder as a further finder**: `K`'s at the window `W`, asked under `cr/sha-512`
 at its `2t + 2h` calls (`ExecutionPhaseConstructions.record_calls`). -/
-noncomputable def recordSpec (W : Window) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+noncomputable def recordSpec (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
   finder σ := K.recordFinder W θ F c σ
   budget t := 2 * t + 2 * W.h
   calls σ x := by
     have h := K.record_calls W θ F c σ x
-    unfold Window.qM at h
+    unfold ExecutionPhase.qM at h
     exact_mod_cast h
   claim := .cr
 
 /-- **The bound digests' two-continuation finder as a further finder**: `K`'s at the window `W`, asked under
 `cr/sha-512` at its `2t + 2h` calls (`ExecutionPhaseConstructions.bind_calls`). -/
-noncomputable def bindSpec (W : Window) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+noncomputable def bindSpec (W : ExecutionPhase) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     FinderSpec (I.base.game θ F c) (I.base.cost θ F c) where
   finder σ := K.bindFinder W θ F c σ
   budget t := 2 * t + 2 * W.h
   calls σ x := by
     have h := K.bind_calls W θ F c σ x
-    unfold Window.qM at h
+    unfold ExecutionPhase.qM at h
     exact_mod_cast h
   claim := .cr
 
@@ -254,7 +254,7 @@ noncomputable def bindSpec (W : Window) (θ : ByteArray) (F : Array ByteArray) (
 (`msgSpec`), the record's (`recordSpec`) and the bound digests' (`bindSpec`); none elsewhere. -/
 noncomputable def strictSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
-  match I.windows θ F with
+  match I.executionPhases θ F with
   | some W => (List.finRange W.rounds).map (I.msgSpec K W θ F c) ++ [I.recordSpec K W θ F c, I.bindSpec K W θ F c]
   | none => []
 
@@ -271,7 +271,7 @@ noncomputable def rootsSpec {nJ : ℕ} (m : Member nJ) (θ : ByteArray) (F : Arr
 the members with a proof block in the sample and of those with none; none elsewhere. -/
 noncomputable def rootsSpecs (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
     List (FinderSpec (I.base.game θ F c) (I.base.cost θ F c)) :=
-  match I.windows θ F with
+  match I.executionPhases θ F with
   | some W => W.ms.map fun m => I.rootsSpec m θ F c
   | none => []
 
@@ -285,7 +285,7 @@ strategy projected there (`JointFinderCR`), asked of this strategy alone; `True`
 def premisesOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Verity.Game.Strategy (I.base.game θ F c) → Prop
   | .sampled => fun θ F c σ =>
-    ∀ W, I.windows θ F = some W → ∀ _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ,
+    ∀ W, I.executionPhases θ F = some W → ∀ _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ,
       JointFinderCR ((K.live W θ F c σ).joint (I.base.cost θ F c σ)) (K.project W θ F c σ)
   | a => I.base.premises a
 
@@ -293,13 +293,13 @@ def premisesOf : Subprotocol → (θ : ByteArray) → (F : Array ByteArray) → 
 noncomputable def sampledBound (θ : ByteArray) (t : ℕ) : ℝ :=
   ((I.callsMulOf θ .sampled * t + I.callsAddOf θ .sampled : ℕ) : ℝ) / 2 ^ (256 : ℝ)
 
-/-- **SPOT's δ at the parameters `θ`**: the deployment's window's (`Window.delta`) at the read finder's published
+/-- **SPOT's δ at the parameters `θ`**: the deployment's window's (`ExecutionPhase.delta`) at the read finder's published
 bound; `⊤` where the deployment runs no window, which bounds nothing there. -/
 noncomputable def deltaOf (θ : ByteArray) : Subprotocol → ℕ → ℝ≥0∞
   | .sampled, t => ((I.window θ).map fun W => W.delta t (I.sampledBound θ t)).getD ⊤
   | a, t => I.base.delta θ a t
 
-theorem deltaOf_some {θ : ByteArray} {W : Window} (h : I.window θ = some W) (t : ℕ) :
+theorem deltaOf_some {θ : ByteArray} {W : ExecutionPhase} (h : I.window θ = some W) (t : ℕ) :
     I.deltaOf θ .sampled t = W.delta t (I.sampledBound θ t) := by
   simp [deltaOf, h]
 
@@ -361,7 +361,7 @@ whose proof reads the extractor by `extractOf_some`). -/
 noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (I.base.game θ F c)) : (I.base.read θ F).circuit.Trace :=
   open Classical in
-  match I.windows θ F with
+  match I.executionPhases θ F with
   | some W =>
     if _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ then
       Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
@@ -369,7 +369,7 @@ noncomputable def extractOf (θ : ByteArray) (F : Array ByteArray) (c : ByteArra
     else fun _ => 0
   | none => I.base.extract θ F c σ
 
-theorem extractOf_some {θ : ByteArray} {F : Array ByteArray} {W : Window} (hW : I.windows θ F = some W)
+theorem extractOf_some {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase} (hW : I.executionPhases θ F = some W)
     (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c))
     [he : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ] :
     I.extractOf K θ F c σ = Flock.Guarantees.tracesWith (I.base.read θ F).first (I.base.read θ F).rest
@@ -414,8 +414,8 @@ noncomputable def liftOf (K' : ExecutionPhaseConstructions I.base) : ExecutionPh
 
 /-- **The two-continuation finders' premises**: at the deployment's window, where the further finders meet theirs,
 each two-continuation finder `K` builds from the strategy meets the strict birthday bound (`strictSpecs`). -/
-theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Window}
-    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (hW : I.windows θ F = some W)
+theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : ExecutionPhase}
+    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (hW : I.executionPhases θ F = some W)
     (h : (I.vocab K).finderCR .sampled θ F c σ) :
     (∀ j, Claims.StrictBirthday Verity.sha512Msg (K.msgFinder W θ F c σ j)) ∧
       Claims.StrictBirthday Verity.sha512Msg (K.recordFinder W θ F c σ) ∧
@@ -438,9 +438,9 @@ theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Win
 
 /-- **The members' roots finders' premises**: at the deployment's window, where the further finders meet theirs,
 each member's roots finder outputs a SHA-512 collision with probability at most its calls over `2^256`
-(`rootsSpecs`, `Window.RootsCR`). -/
-theorem rootsCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Window}
-    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (hW : I.windows θ F = some W)
+(`rootsSpecs`, `ExecutionPhase.RootsCR`). -/
+theorem rootsCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : ExecutionPhase}
+    {σ : Verity.Game.Strategy ((I.vocab K).game θ F c)} (hW : I.executionPhases θ F = some W)
     (h : (I.vocab K).finderCR .sampled θ F c σ) : W.RootsCR := by
   have hall := List.forall_iff_forall_mem.1
     (show finderCROf (I.strictSpecs K θ F c ++ I.rootsSpecs θ F c) σ from h)
@@ -451,20 +451,20 @@ theorem rootsCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Wind
   exact hall (I.rootsSpec m θ F c) (List.mem_append_right _ (by rw [hs]; exact List.mem_map.2 ⟨m, hm, rfl⟩))
 
 /-- **The claim's transfer at the deployment's windows** (`ExecutionPhaseDeployed.claim`, at the constructions `K`): where
-every member's roots fix their domains (`Window.RootsFix`), at a strategy whose extracted transcript fails the claim
+every member's roots fix their domains (`ExecutionPhase.RootsFix`), at a strategy whose extracted transcript fails the claim
 on the committed files at the published share, more than the window's `ε` share of its population's proof blocks is
 incorrect at the projected strategy (`JointAuditV5.incorrectSet`). -/
 def ClaimTransfers : Prop :=
-  ∀ θ F W, I.windows θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
+  ∀ θ F W, I.executionPhases θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
     ¬ Accounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.extractOf K θ F c σ)
         (I.base.certOf θ).ε → ∀ _ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ,
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (I.base.cost θ F c σ)).incorrectSet (K.project W θ F c σ)).card : ℝ)
 
 /-- **What the claim reads at the deployment's windows**, at the constructions `K`. At each window the verifier
-sets up on the committed files: the window's members are laid out in order (`laid`, `Window.Laid`); the published
+sets up on the committed files: the window's members are laid out in order (`laid`, `ExecutionPhase.Laid`); the published
 share is the window's (`share`) and the committed files' units are the window's population (`units`); and, where
-every member's roots fix their domains (`Window.RootsFix`: the files check's one clause that isn't a decision of
+every member's roots fix their domains (`ExecutionPhase.RootsFix`: the files check's one clause that isn't a decision of
 the public files alone, which the window's δ pays for), at every strategy the committed files are read at the claim
 at the projected strategy (`reads`, `JointAuditV5.ReadsAt`): the vocabulary's read is the members' files in order,
 each member's files pass the verifier's files check (`MemberV5.Checked`), the commitment's openings hold wherever a
@@ -473,10 +473,10 @@ traces side by side, `Flock.Guarantees.tracesWith`) is, at each member's gates, 
 its session fixes at the joint registration (`JointAuditV5.memberX`). It is asked of every member, with a proof
 block in the sample or not. -/
 structure ClaimReads : Prop where
-  laid : ∀ θ F W, I.windows θ F = some W → W.Laid
-  share : ∀ θ F W, I.windows θ F = some W → (I.base.certOf θ).ε = W.ε
-  units : ∀ θ F W, I.windows θ F = some W → I.base.units θ F = W.nJ
-  reads : ∀ θ F W, I.windows θ F = some W → W.RootsFix →
+  laid : ∀ θ F W, I.executionPhases θ F = some W → W.Laid
+  share : ∀ θ F W, I.executionPhases θ F = some W → (I.base.certOf θ).ε = W.ε
+  units : ∀ θ F W, I.executionPhases θ F = some W → I.base.units θ F = W.nJ
+  reads : ∀ θ F W, I.executionPhases θ F = some W → W.RootsFix →
     ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c))
       (_ : Nonempty ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).EndΩ),
     ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).ReadsAt (I.base.read θ F) (I.base.Opens θ F c)
@@ -486,8 +486,8 @@ structure ClaimReads : Prop where
 
 /-- **The claim's transfer holds wherever the claim reads the window** (`ClaimTransfers`, from `ClaimReads`): the
 units the extracted transcript doesn't bind are at most as many as the window's incorrect proof blocks at the
-projected strategy (`Window.unboundIncorrect`, `JointAuditV5.UnboundIncorrect.card_le`, at the window widened by the
-projection's coins, laid out as the window is, `Window.Laid.extend`, `Window.Laid.joint`), and a claim that fails at
+projected strategy (`ExecutionPhase.unboundIncorrect`, `JointAuditV5.UnboundIncorrect.card_le`, at the window widened by the
+projection's coins, laid out as the window is, `ExecutionPhase.Laid.extend`, `ExecutionPhase.Laid.joint`), and a claim that fails at
 the published share has more than that share of the committed files' units unbound, which are the window's share and
 population. -/
 theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
@@ -498,7 +498,7 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
           (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).seats (K.project W θ F c σ)))).card ≤
       (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).incorrectSet (K.project W θ F c σ)).card :=
     Flock.Guarantees.JointAuditV5.UnboundIncorrect.card_le
-      (Window.unboundIncorrect (K.live W θ F c σ) (I.base.cost θ F c σ))
+      (ExecutionPhase.unboundIncorrect (K.live W θ F c σ) (I.base.cost θ F c σ))
       (((h.laid θ F W hW).extend (K.coins W θ F c σ)).joint (I.base.cost θ F c σ))
       (I.base.read θ F) (I.base.Opens θ F c) _ (K.project W θ F c σ) (h.reads θ F W hW hR c σ he)
   have hlt : (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) <
@@ -513,12 +513,12 @@ theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
 
 /-- **`ExecutionPhaseDeployed` at the deployed vocabulary**, from what the claim reads of the window (`ClaimReads`,
 `claimTransfers`), at constructions whose read finder is the window's and whose forger is the binding's
-(`ExecutionPhaseConstructions.withBinding`): the leg's per-finder premises are `error`'s condition at this strategy
+(`ExecutionPhaseConstructions.withBinding`): the subprotocol's per-finder premises are `error`'s condition at this strategy
 (`strictSpecs`, `rootsSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
-(`Window.delta_extend`). -/
+(`ExecutionPhase.delta_extend`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = executionPhaseReadFinder I.base I.dev θ F c σ)
     (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hC : I.ClaimReads K) :
-    ExecutionPhaseDeployed (I.vocab K) (I.liftOf K K) I.windows where
+    ExecutionPhaseDeployed (I.vocab K) (I.liftOf K K) I.executionPhases where
   finder θ F c σ := (hKr θ F c σ).symm
   forger θ F c σ := (hKf θ F c σ).symm
   loss _ _ := rfl
@@ -527,7 +527,7 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = executionPhaseRe
     obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
     exact ⟨hpr W h, hm, hr, hb, I.rootsCR K h hcr⟩
   delta θ F W h c σ :=
-    le_of_eq ((Window.delta_extend W _ _ _).trans (I.deltaOf_some (I.executionPhases_some h).1 _).symm)
+    le_of_eq ((ExecutionPhase.delta_extend W _ _ _).trans (I.deltaOf_some (I.executionPhases_some h).1 _).symm)
 
 /-! ## `ExecutionPhaseCovers` -/
 
@@ -545,8 +545,8 @@ collision of the window's read finder**: an accepted play whose blobs sent hold 
 would be one the verifier sets the window up on (`ExecutionPhaseAt`), and every other is one the window's read finder outputs
 a collision at (`verdict_le_files`). -/
 theorem uncovered_le (k : Verity.Registration.Composite) (hWa : I.ExecutionPhaseAt k) {θ : ByteArray}
-    {F : Array ByteArray} {W : Window} (hA : I.window θ = some W) (hP : ∃ p, ParamsAt θ p)
-    (hS : I.windows θ F = none) (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)) :
+    {F : Array ByteArray} {W : ExecutionPhase} (hA : I.window θ = some W) (hP : ∃ p, ParamsAt θ p)
+    (hS : I.executionPhases θ F = none) (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)) :
     Verity.Game.prob (fun o => I.base.Verdict k .sampled o) (I.base.game θ F c) σ ≤
       ENNReal.ofReal ((executionPhaseReadFinder I.base I.dev θ F c σ).Pr Verity.sha512Msg) :=
   verdict_le_files I.base k I.dev θ F c σ fun t hv ht hf => by
@@ -571,7 +571,7 @@ theorem vocab_finder_le {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
   exact h'
 
 /-- Where the deployment runs a window, the deployed vocabulary's sampled δ is at least `sampledBound`. -/
-theorem vocab_delta_ge {θ : ByteArray} {W : Window} (hA : I.window θ = some W) (t : ℕ) :
+theorem vocab_delta_ge {θ : ByteArray} {W : ExecutionPhase} (hA : I.window θ = some W) (t : ℕ) :
     ENNReal.ofReal (I.sampledBound θ t) ≤ (I.vocab K).delta θ .sampled t := by
   rw [show (I.vocab K).delta θ .sampled t = I.deltaOf θ .sampled t from rfl, I.deltaOf_some hA]
   exact W.ofReal_le_delta t _
@@ -583,7 +583,7 @@ the verifier sets the window up wherever they hold them (`ExecutionPhaseAt`), so
 collision there (`verdict_le_files`), with probability at most its bound under its premise (`Vocab.FinderCR`), the
 published δ's last term. -/
 theorem covers (k : Verity.Registration.Composite) (hWa : I.ExecutionPhaseAt k) :
-    ExecutionPhaseCovers (I.vocab K) k I.windows := by
+    ExecutionPhaseCovers (I.vocab K) k I.executionPhases := by
   intro θ F hS hP c σ _ hFC
   rcases hA : I.window θ with _ | W
   · exact le_top.trans_eq (I.deltaOf_none hA _).symm
@@ -616,21 +616,21 @@ theorem executionPhaseAt_members (k : Verity.Registration.Composite) (hW : I.Exe
   obtain ⟨hlaid, hpassed⟩ := hpass θ F W hw hon hplay
   exact (⟨hon, hlaid, hpassed⟩ : MemberForm.MembersSetUp I.base θ F W)
 
-/-! ## The leg at the deployment -/
+/-! ## The subprotocol at the deployment -/
 
 /-- **The constructions at the deployment**: `K₀`'s with the binding's finders at the deployed device's history
 (`dev`) and composite `k`, the window's projection at the sessions' readings and decoders at the window's table
-(`sessionReadings`, `sessionDecoders`, `Window.table`), and the sample-coupled coin maps at the family the
+(`sessionReadings`, `sessionDecoders`, `ExecutionPhase.table`), and the sample-coupled coin maps at the family the
 parameters name (`labelAt`), the digest `afterAt` and the window's bytes as `MAX_COINS` fresh frames, as
 `executionPhaseSpotSound_sessions` reads them. -/
 noncomputable def constructionsAt (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Registration.Composite)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : ExecutionPhaseConstructions I.base :=
-  (K₀.withBinding I.dev k).withProject I.base (sessionReadings Window.table ev record₀ recordDigest)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : ExecutionPhaseConstructions I.base :=
+  (K₀.withBinding I.dev k).withProject I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
     (fun W _ _ _ _ _ => sessionDecoders reg W.table filesDec)
-    (executionPhaseSampleMaps fieldEnc I.base (sessionReadings Window.table ev record₀ recordDigest)
+    (executionPhaseSampleMaps fieldEnc I.base (sessionReadings ExecutionPhase.table ev record₀ recordDigest)
       (fun θ _ _ _ => labelAt θ) (afterAt I.base k) fun W => W.srcCoinsAt _root_.Spot.Challenger.MAX_COINS)
 
 /-- **What the verifier's acceptance gives of each play, at the deployment's windows** (`ExecutionPhaseRead`), at composite
@@ -640,7 +640,7 @@ registered file and whose sample answers the strategy's `afterAt`, every release
 precedes every opening, and the play has the sessions of the window's sample at the coins that family releases. -/
 def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) : Prop :=
-  ∀ θ F W, I.windows θ F = some W →
+  ∀ θ F W, I.executionPhases θ F = some W →
   ∀ (c : ByteArray) (σ : Strategy (I.base.game θ F c)) (z : CoinTape (I.base.game θ F c) σ),
     I.base.Verdict k .sampled (CoinTape.run (I.base.game θ F c) σ z) →
     Binding.Logged Binding.readsV2 (CoinTape.run (I.base.game θ F c) σ z) →
@@ -650,7 +650,7 @@ def ExecutionPhaseReads (k : Verity.Registration.Composite) (ev : ℕ → Exchan
     ExecutionPhaseRead W W.table ev filesDec (labelAt θ) (afterAt I.base k θ F c σ) _root_.Spot.Challenger.MAX_COINS
       (CoinTape.run (I.base.game θ F c) σ z)
 
-/-- **SPOT's leg at the deployment's windows** (`executionPhaseSpotSound_sessions`, at the deployed vocabulary and the
+/-- **SPOT's subprotocol at the deployment's windows** (`executionPhaseSpotSound_sessions`, at the deployed vocabulary and the
 constructions `constructionsAt` assembles): `ExecutionPhaseDeployed` and `ExecutionPhaseCovers` are `deployed`'s and `covers`'s, the
 deployed device printed each play's log and signed what its signatures are on (`Device.printsLog_dev`,
 `Device.signsPlay_dev`, at the base's signer, `ExecutionPhaseInstance.signer`), and each window the verifier sets up reads
@@ -660,13 +660,13 @@ gives of each play (`ExecutionPhaseReads`). -/
 theorem spotSound (K₀ : ExecutionPhaseConstructions I.base) (k : Verity.Registration.Composite)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt k) (hWR : I.ExecutionPhaseReads k ev filesDec) :
     (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)).SpotSound k :=
   executionPhaseSpotSound_sessions (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k
-    (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.dev reg Window.table ev filesDec
+    (I.liftOf (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) K₀) I.dev reg ExecutionPhase.table ev filesDec
     record₀ recordDigest (fun θ _ _ _ => labelAt θ) _root_.Spot.Challenger.MAX_COINS
     (I.deployed (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest) (fun _ _ _ _ => rfl)
       (fun _ _ _ _ => rfl) hC)
@@ -686,16 +686,16 @@ most their errors summed, at the vocabulary `ExecutionPhaseInstance.vocab` build
 `ExecutionPhaseInstance.constructionsAt` assembles, wherever what the claim reads of the window (`ClaimReads`), the
 verifier's window at an accepted play (`ExecutionPhaseAt`), what the verifier's acceptance gives of each play
 (`ExecutionPhaseReads`), and the base's PoUW and inference-only targets hold.
-The sampled leg's error at a window is `Window.delta`: the sample's own miss and the members' knowledge and binding
-terms summed (`JointShareV5`), each member's registration's roots term (`Window.rootsErr`), a two-continuation term
+The sampled subprotocol's error at a window is `ExecutionPhase.delta`: the sample's own miss and the members' knowledge and binding
+terms summed (`JointShareV5`), each member's registration's roots term (`ExecutionPhase.rootsErr`), a two-continuation term
 per round opened after a digest in every member's session, its closing round among them, one for the record and one
 for the bound digests, the coin trees' hiding term, and the read finder's bound. The premises at the finders the
 constructions build from a strategy are `error`'s condition at that strategy. -/
 theorem remote_soundness_executionPhase (I : ExecutionPhaseInstance d α) (K₀ : ExecutionPhaseConstructions I.base)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hWa : I.ExecutionPhaseAt .remote) (hWR : I.ExecutionPhaseReads .remote ev filesDec)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :

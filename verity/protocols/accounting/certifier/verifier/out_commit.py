@@ -76,7 +76,7 @@ REFUSALS = {
     "out-rows": "the record's row count isn't the registration's",
     "out-domain": "the record's program or value isn't the verifier's, or its domain isn't the one its fields name",
     "out-digest": "the certificate doesn't sign the record's head",
-    "out-signature": "the signature doesn't verify under the key in the session for the link-window",
+    "out-signature": "the signature doesn't verify under the key in the session for the execution phase",
 }
 _HEX64 = re.compile("[0-9a-f]{128}")
 _HEX = re.compile("(?:[0-9a-f]{2})+")

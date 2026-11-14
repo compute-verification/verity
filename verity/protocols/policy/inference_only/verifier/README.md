@@ -67,7 +67,7 @@ proof yet.
 ## Why it separates inference from training
 
 An inference episode (a chat session) reads little fresh input, say 100 KB of prompt tokens, so honest serving
-divides into inference blocks with a small fresh-input budget (`InferenceOnly.Guarantees.Inference`). A training episode (an RL
+divides into inference blocks with a small fresh-input budget (`Slowdown.Guarantees.Inference`). A training episode (an RL
 rollout) reads an enormous amount, say 1 TB of new parameters, so training that runs through inference blocks gets
 only their yields q(c, k): a pricing argument says how much of a block's fresh-input budget each counted object of a
 necessary subcomputation needs. The slowdown lower bound sums those yields with free compute, at the hardware's rate,
@@ -81,7 +81,7 @@ scenarios register a policy as if it were a subprotocol.
   (`Verity.Partition.IsCK`): every block at most c gates and at most k fresh input bits (`InferenceOnly.freshInput`).
   `InferenceOnly.CompliesRate c α` is the form the check reads: blocks of at most c gates, each reading at most α fresh input bits
   per gate, so at most αc a block. Where the policy's guarantees assume the policy, they assume `InferenceOnly.CompliesRate`, what
-  the check checks; `InferenceOnly.Guarantees.Inference` concludes `InferenceOnly.Complies`. A (c, k)-partition whose blocks have exactly c
+  the check checks; `Slowdown.Guarantees.Inference` concludes `InferenceOnly.Complies`. A (c, k)-partition whose blocks have exactly c
   gates complies at rate α = k/c (`InferenceOnly.SecurityProofs.compliesRate_of_complies`, which takes that tiling as a
   hypothesis). The way back is proved too: on a Boolean declaration a partition complying at rate α is
   a (c, ⌊αc⌋)-partition (`InferenceOnly.Guarantees.CompliesCK`), and `InferenceOnly.Guarantees.ExpandComplies` carries the rate through the
@@ -92,11 +92,11 @@ scenarios register a policy as if it were a subprotocol.
 - **The guarantees**, `security/Definitions/InferenceOnly/Guarantees/`, each proved in `security/Proofs/InferenceOnly/` as
   `InferenceOnly.SecurityProofs.G`. `ReadBound` turns a lower bound on fresh input into a lower bound on size, `Inference` shows
   honest inference complies, and the covering, training and threading statements are pricing arguments.
-  `InferenceOnly.Guarantees.SlowdownRemote` and its relatives state the remote composition's overhead at (c, k).
+  `Slowdown.Guarantees.SlowdownRemote` and its relatives state the remote composition's overhead at (c, k).
 - **The count of (c, k)-inference blocks**, `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`): D's
   computed gates divide into at most n proof blocks of a (c, k)-partition (`Verity.Partition.IsCK`,
   `security/Definitions/Core/Formalism.lean`). It is the day's bound's only premise on the circuit
-  (`InferenceOnly.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `SlowdownRemote` and `SlowdownRemoteMonitoringPeriod` take
+  (`Slowdown.Cut.Guarantees.CountHE`, with (H) and (E) on the work), and `SlowdownRemote` and `SlowdownRemoteMonitoringPeriod` take
   it for each declared day.
 - **The registered information's provenance**, `InferenceOnly.Assumptions.ThetaRegistered`: every θ entry is registered
   public data, never an earlier run's output.

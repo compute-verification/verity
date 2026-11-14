@@ -250,11 +250,11 @@ noncomputable def incorrectSet (t : ℕ) (τ : Strategy (S.W t).game) : Finset (
 
 /-- Session `t`'s record, its incorrect proof blocks those of `incorrectSet`. -/
 noncomputable def record (t : ℕ) (τ : Strategy (S.W t).game) (o : (S.W t).Reg × Finset (Fin (S.W t).n) × Discharge.Exec.Transcript) :
-    WindowRec :=
+    SamplingBlockRec :=
   ⟨t, LiveAcceptsZK (S.W t).I o, (S.incorrectSet s t τ).card, ∃ u ∈ o.2.1, u ∈ S.incorrectSet s t τ⟩
 
 /-- The monitoring period's run at `s`, with these records. -/
-noncomputable def run : Game (List WindowRec) := monitoringPeriodRun (fun t => (S.W t).game) (fun t => S.record s t) 0 S.T s
+noncomputable def run : Game (List SamplingBlockRec) := monitoringPeriodRun (fun t => (S.W t).game) (fun t => S.record s t) 0 S.T s
 
 /-- **Block `b`'s carried term**: each carried leaf's, at block `b`'s sessions. -/
 noncomputable def carry (b : ℕ) : ℝ≥0∞ := ∑ x, (S.leaf x).carryOn (S.sessions b)
@@ -312,7 +312,7 @@ def IntegrityPooledCarried : Prop :=
     (∀ x, Assumptions.SHA512CRExpected H512 (finderG (S.mix s x) (S.leaf x).M)
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M) (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s) ≤
+    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map SamplingBlockRec.incorrect).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry
 
 /-- **Sessions that prove every unit and share registered values, with no proof block incorrect.** In a monitoring period
@@ -350,7 +350,7 @@ def IntegrityAllProvedCarried : Prop :=
       (finderStrat (S.mix s x) (S.mixS s x) (S.leaf x).M) (outOf (rdSig fun _ => (S.leaf x).rd) (S.leaf x).op (S.leaf x).col)
       (finderCost (rdSig fun _ => (S.leaf x).rd) (S.leaf x).costMix)) →
     value (fun l => (∀ r ∈ l, r.idx ∈ I → r.accepted) ∧
-        1 ≤ ((l.filter fun r => r.idx ∈ I).map WindowRec.incorrect).sum) (S.run s) ≤
+        1 ≤ ((l.filter fun r => r.idx ∈ I).map SamplingBlockRec.incorrect).sum) (S.run s) ≤
       ∑ t ∈ I, ((S.W t).ks + (S.W t).link) + ∑ x, (S.leaf x).carryOn I
 
 end Flock.Guarantees

@@ -82,10 +82,10 @@ NOT_PATHS = {
 WAITING = {
     ("security/Definitions/Certifier/Schedule.lean", "verity/protocols/accounting/communication/certifier/schedule.py"):
         "the `remote` demo branch rewrites this docstring",
-    ("security/Definitions/Accounting/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
-    ("security/Definitions/Accounting/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
-    ("security/Definitions/Accounting/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
-    ("security/Definitions/Accounting/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/Guarantees/Headline.lean", "fixtures/fold_bulk_loops.json"): "both demo branches edit the file",
+    ("security/Definitions/Pouw/Guarantees/Headline.lean", "fold_bulk.cu"): "both demo branches edit the file",
+    ("security/Definitions/Registration/Sheets/B200.lean", "census/DS-100.csv"): "both demo branches edit the file",
+    ("security/Definitions/Registration/Sheets/H200.lean", "census/DS-90.csv"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Pipeline.lean", "relation.py"): "both demo branches edit the file",
     ("security/Definitions/Core/TC/Relation.lean", "relation.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/DitherInstance.lean", "benchmarks/pouw/theory/d5_v2.py"): "both demo branches edit the file",
@@ -93,7 +93,7 @@ WAITING = {
     ("security/Definitions/Pouw/PearlC/Tile4Circuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/TileCircuit.lean", "tests/test_circuit_tile_lean.py"): "both demo branches edit the file",
     ("security/Definitions/Pouw/PearlC/WholeCircuit.lean", "tests/test_circuit_whole_lean.py"): "both demo branches edit the file",
-    ("security/Proofs/Pouw/Period/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
+    ("security/Proofs/Pouw/MonitoringPeriod/Accept.lean", "benchmarks/all_protocols/legs/pouw.py"): "both demo branches edit the file",
 }
 
 _TOKEN = re.compile(r"`([^`\s]+)`|\]\(([^)\s]+)\)")

@@ -15,7 +15,7 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
-from verity_vllm.definitions import boolean as SW
+from verity.circuits.ops.boolean import versions as SW
 from verity_vllm.definitions.registry import boolean_dsa_topk_mask as BM
 from verity_vllm.definitions.registry import dsa_topk as T
 from verity_vllm.definitions.registry import dsa_topk_mask as M

@@ -260,7 +260,7 @@ def accumulator(k: float, h_eff: float, b_ps: float, step_tokens: float) -> floa
     return k * k / (b_ps * h_eff) / rest if rest > 0 else math.inf
 
 
-def output_cap(map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
+def output_threshold(map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
     """Proposition 6b's threshold `k* = 4 d β_w (h_tok + F_in) / β_v^R`, with `h_tok + F_in = β_x d` (the replay-consistent
     rate) and `β_w = b`, at the narrowest map `d = d_in`."""
     return 4 * map_width_min ** 2 * b * beta_x / beta_v
@@ -268,8 +268,8 @@ def output_cap(map_width_min: float, b: float, beta_x: float, beta_v: float) -> 
 
 def output_premise(k: float, map_width: float, map_width_min: float, b: float, beta_x: float, beta_v: float) -> float:
     """E1's Proposition 6b: each output value a block produces costs `β_v^R` and carries `d` products, so a block
-    finishes at most `d k / β_v^R` while `k ≤ k*` (`output_cap`), no bound beyond."""
-    return map_width * k / beta_v if k <= output_cap(map_width_min, b, beta_x, beta_v) else math.inf
+    finishes at most `d k / β_v^R` while `k ≤ k*` (`output_threshold`), no bound beyond."""
+    return map_width * k / beta_v if k <= output_threshold(map_width_min, b, beta_x, beta_v) else math.inf
 
 
 def cut(k: float, b_w: float, b_a: float, outputs: float) -> float:
@@ -287,20 +287,20 @@ def cut(k: float, b_w: float, b_a: float, outputs: float) -> float:
 DEPTH = ("layers", "layer_weights")
 
 CLASSES: Mapping[str, Argument] = {a.name: a for a in (
-    Formula("cover", ("InferenceOnly.Cover.Guarantees.CoverTraining", "InferenceOnly.Cover.Assumptions.UpdateHardness",
-                      "InferenceOnly.Cover.Assumptions.BlockFits", "InferenceOnly.Cover.Assumptions.CapBelowDepth",
-                      "InferenceOnly.Cover.MulBlocks.Upstream", "InferenceOnly.Assumptions.ThetaRegistered"),
+    Formula("cover", ("Slowdown.Cover.Guarantees.CoverTraining", "Slowdown.Cover.Assumptions.UpdateHardness",
+                      "Slowdown.Cover.Assumptions.BlockFits", "Slowdown.Cover.Assumptions.CapBelowDepth",
+                      "Slowdown.Cover.MulBlocks.Upstream", "InferenceOnly.Assumptions.ThetaRegistered"),
             ("b",), cover, share=upstream_share, share_reads=("b", *DEPTH)),
-    Formula("covering", ("InferenceOnly.Guarantees.CoveringBound", "InferenceOnly.Assumptions.ParameterHard",
-                         "InferenceOnly.Assumptions.ActivationChained"),
+    Formula("covering", ("Slowdown.Guarantees.CoveringBound", "Slowdown.Assumptions.ParameterHard",
+                         "Slowdown.Assumptions.ActivationChained"),
             ("c_w", "c_a"), covering, counts="kappa_forward", share=chained_share_one,
             share_reads=("c_w", "c_a", *DEPTH)),
-    Formula("covering-two-costs", ("InferenceOnly.Guarantees.CoveringBoundTwoCosts", "InferenceOnly.Assumptions.ParameterHardAt",
-                                   "InferenceOnly.Assumptions.ActivationChainedAt"),
+    Formula("covering-two-costs", ("Slowdown.Guarantees.CoveringBoundTwoCosts", "Slowdown.Assumptions.ParameterHardAt",
+                                   "Slowdown.Assumptions.ActivationChainedAt"),
             ("c_w", "c_a"), chained, counts="kappa_forward", share=chained_share, share_reads=("c_w", *DEPTH)),
-    Formula("threaded", ("InferenceOnly.Guarantees.ThreadedThrottled", "InferenceOnly.Assumptions.WeightsIncompressible",
-                         "InferenceOnly.Assumptions.ThetaRegistered", "InferenceOnly.Guarantees.ReferenceThreaded",
-                         "InferenceOnly.Assumptions.ReferenceLayered"),
+    Formula("threaded", ("Slowdown.Guarantees.ThreadedThrottled", "Slowdown.Assumptions.WeightsIncompressible",
+                         "InferenceOnly.Assumptions.ThetaRegistered", "Slowdown.Guarantees.ReferenceThreaded",
+                         "Slowdown.Assumptions.ReferenceLayered"),
             ("b_a", "b_w", "thread_d", "thread_e", "thread_c", "thread_k"), threaded_checked),
     Formula("fanout-priced", ("draft:E1-Prop3", "draft:E1-activation-rate"),
             ("fanout", "beta_x"), fanout_priced, counts="kappa_forward", share=expensive_share,

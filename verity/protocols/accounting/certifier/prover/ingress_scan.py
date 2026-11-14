@@ -616,10 +616,10 @@ def window_state(cls: Class, rows: Sequence[Sequence[int]], t0: int, buckets: in
     of `rows` (S_0, S_1, … as the proof blocks register them), row −1 the empty state's. ValueError, naming the fix,
     unless the execution phase is whole slot strides and `rows` reach its last."""
     if t0 < 0 or buckets < 1 or t0 % cls.EVERY or buckets % cls.EVERY:
-        raise ValueError(f"a link-window starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
+        raise ValueError(f"an execution phase starts at a boundary and is whole timesteps: t0 >= 0 and buckets >= 1, each "
                          f"a multiple of EVERY = {cls.EVERY}, not t0 = {t0}, buckets = {buckets}")
     if t0 + buckets - 1 > len(rows):
-        raise ValueError(f"the link-window from {t0} reads state rows up to {t0 + buckets - 2}: register "
+        raise ValueError(f"the execution phase from {t0} reads state rows up to {t0 + buckets - 2}: register "
                          f"{t0 + buckets - 1} rows, not {len(rows)}")
     if any(len(rows[t]) != state_bits(cls) for t in range(max(t0 - 1, 0), t0 + buckets - 1)):
         raise ValueError(f"a state row is {state_bits(cls)} bits")

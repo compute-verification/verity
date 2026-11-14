@@ -5,9 +5,9 @@ public import Proofs.Properties.Verity.Sampled.Window.Assembled
 public import Proofs.Properties.Verity.Sampled.RecordDraw
 
 /-!
-# SPOT's leg over a window: the sessions of the window's one sample
+# SPOT's subprotocol over a window: the sessions of the window's one sample
 
-`Window/Steps.lean` takes the window's sessions at the sample the coin map's coins give (`ExecutionPhaseSessions`, of every
+`ExecutionPhase/Steps.lean` takes the window's sessions at the sample the coin map's coins give (`ExecutionPhaseSessions`, of every
 play on a tape through the coin map's first stop). Here that is what the verifier's acceptance gives of a play, read
 at the play alone, at the sample-coupled coin map.
 
@@ -18,7 +18,7 @@ at the play alone, at the sample-coupled coin map.
   stop on the widened coins `ω` that `ExecutionPhaseRead` holds of has the sessions of the sample at `ω`. The walk from the
   sample's fill stops at a log of the fill's releases, then nothing or an opening (`walkFill_req`); the order leaves
   the play's coins of the family those releases' (`freshCoins_of_stopTail`), which agree with the sample's coins.
-* **The members' steps at the sample-coupled coin map** (`memberSteps_sampleMap`) and **the leg**
+* **The members' steps at the sample-coupled coin map** (`memberSteps_sampleMap`) and **the subprotocol**
   (`executionPhaseSpotSound_sessions`): `executionPhaseSpotSound_assembled` at the sessions' readings and decoders, with the members'
   steps from `ExecutionPhaseRead` at each accepted play.
 -/
@@ -35,7 +35,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 answering `after` precedes every opening (`fresh`), and wherever the play's coins of that family agree with `nc`
 frames' coins `κ` whose bytes are the window's at `ω`, the window's sample at `ω` ended
 (`Flock.Guarantees.sampleEnded`) and the play has its sessions (`sessions`, `ExecutionPhaseSessions`). -/
-structure ExecutionPhaseRead (W : Window) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
+structure ExecutionPhaseRead (W : ExecutionPhase) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (label : String) (after : ByteArray) (nc : ℕ) (x : Exchange) :
     Prop where
   fresh : ∀ pre r post, x.log = pre ++ r :: post → ∀ i s n, r.frame = .opening i s n →
@@ -46,7 +46,7 @@ structure ExecutionPhaseRead (W : Window) (tb : String) (ev : ℕ → Exchange �
     Flock.Guarantees.sampleEnded W.src W.samplingDesign W.nJ ω = true ∧ ExecutionPhaseSessions W tb ev filesDec (W.L.draw ω) x
 
 /-- The window's sessions at an equal sample. -/
-theorem ExecutionPhaseSessions.of_eq {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
+theorem ExecutionPhaseSessions.of_eq {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S S' : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (e : S = S') : ExecutionPhaseSessions W tb ev filesDec S' x :=
   e ▸ h
@@ -60,11 +60,11 @@ theorem playReaches_through {g : Game Exchange} {σ : Strategy g} {R : ℕ} {Ks�
 
 /-- The window's bytes at `ω` are the bytes of the window's coins at `nc` frames, where the window reads `nc` frames'
 bytes (`bytesOf_byteCoins`). -/
-theorem Window.bytesOf_srcCoinsAt {nc : ℕ} {W : Window} (hL : W.Lb 0 = nc * 64) (ω : W.Ω) :
+theorem ExecutionPhase.bytesOf_srcCoinsAt {nc : ℕ} {W : ExecutionPhase} (hL : W.Lb 0 = nc * 64) (ω : W.Ω) :
     _root_.Properties.Spot.bytesOf (W.src ω 0) =
       _root_.Properties.Spot.bytesOf (coinBytes nc 64 (W.srcCoinsAt nc ω) 0) := by
   have h : W.srcCoinsAt nc = byteCoins W.src hL := by
-    unfold Window.srcCoinsAt
+    unfold ExecutionPhase.srcCoinsAt
     exact dif_pos hL
   rw [h]
   exact bytesOf_byteCoins W.src hL ω
@@ -74,7 +74,7 @@ variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 /-- **The sessions of the sample, from the sample-coupled first stop**: at the sample-coupled coin map at the window's
 bytes as `nc` frames' coins, a play from the first stop on the widened coins `ω` that `ExecutionPhaseRead` holds of has the
 sessions of the window's sample at `ω`. -/
-theorem executionPhaseSessions_of_reach (W : Window) (rd : Reading W.rounds) (hrd : PicksOpenings rd)
+theorem executionPhaseSessions_of_reach (W : ExecutionPhase) (rd : Reading W.rounds) (hrd : PicksOpenings rd)
     (σ : Strategy (V.game θ F c)) (label : String) (after : ByteArray) {nc : ℕ} (hL : W.Lb 0 = nc * 64)
     {tb : String} {ev : ℕ → Exchange → Option Claims.Msg} {filesDec : Claims.Msg → Array ByteArray}
     (ω : (W.extend (executionPhaseSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.Ω)
@@ -96,12 +96,12 @@ theorem executionPhaseSessions_of_reach (W : Window) (rd : Reading W.rounds) (hr
     rw [hlog] at hP ⊢
     rw [freshCoins_of_stopTail hP htail]
     exact hc
-  obtain ⟨hE, hS⟩ := hR.sessions (W.srcCoinsAt nc ω.1) ω.1 (Window.bytesOf_srcCoinsAt hL ω.1) hc'
+  obtain ⟨hE, hS⟩ := hR.sessions (W.srcCoinsAt nc ω.1) ω.1 (ExecutionPhase.bytesOf_srcCoinsAt hL ω.1) hc'
   exact ⟨hE, hS.of_eq (W.sample_extend _ ω).symm⟩
 
 /-- **The sessions of the sample, on a tape through the sample-coupled first stop** (`executionPhaseSessions_of_reach`, at
 the play on the tape, `playReaches_through`). -/
-theorem executionPhaseSessions_firstStop (W : Window) (rd : Reading W.rounds) (hrd : PicksOpenings rd)
+theorem executionPhaseSessions_firstStop (W : ExecutionPhase) (rd : Reading W.rounds) (hrd : PicksOpenings rd)
     (σ : Strategy (V.game θ F c)) (label : String) (after : ByteArray) {nc : ℕ} (hL : W.Lb 0 = nc * 64)
     {tb : String} {ev : ℕ → Exchange → Option Claims.Msg} {filesDec : Claims.Msg → Array ByteArray}
     (ω : (W.extend (executionPhaseSampleMap fieldEnc V θ F c W rd σ label after (W.srcCoinsAt nc)).widening).L.Ω)
@@ -131,7 +131,7 @@ sample-coupled coin map at the family `label` answering `after` and the window's
 `ExecutionPhaseRead` holds of every play the sampled verdict accepts and `P` holds of. The coin map writes the link points'
 and each round's coins' bits into a stop's opening by definition (`executionPhaseOpenMap`), and the plays on tapes through
 its first stop have the sessions of its sample (`executionPhaseSessions_firstStop`). -/
-theorem memberSteps_sampleMap (P : Exchange → Prop) (W : Window) (t : ℕ) (reg : Option Claims.Msg → ByteArray)
+theorem memberSteps_sampleMap (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ) (reg : Option Claims.Msg → ByteArray)
     (tb : String) (ev : ℕ → Exchange → Option Claims.Msg) (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg) (σ : Strategy (V.game θ F c))
     (label : String) (after : ByteArray) {nc : ℕ} (hL : W.Lb 0 = nc * 64) (hMA : MembersAt W tb)
@@ -158,13 +158,13 @@ theorem memberSteps_sampleMap (P : Exchange → Prop) (W : Window) (t : ℕ) (re
 omit θ F c in
 /-- **The readings of every window's sessions** (`sessionReading`), at each window's table `tb W`, record and record
 digest. -/
-abbrev sessionReadings (tb : Window → String) (ev : ℕ → Exchange → Option Claims.Msg)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : ExecutionPhaseReadings :=
+abbrev sessionReadings (tb : ExecutionPhase → String) (ev : ℕ → Exchange → Option Claims.Msg)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg) : ExecutionPhaseReadings :=
   fun W θ F c => sessionReading W.rounds (tb W) ev (record₀ W θ F c) (recordDigest W θ F c)
 
 omit θ F c in
-/-- **SPOT's leg over a window of several members, from what the verifier's acceptance gives of a play**:
+/-- **SPOT's subprotocol over a window of several members, from what the verifier's acceptance gives of a play**:
 `executionPhaseSpotSound_assembled` at the sessions' readings (`sessionReadings`) and decoders (`sessionDecoders`), under
 `fieldEnc`. Soundness's vocabulary at `.sampled` reading, at the deployment's windows `S` and the constructions with
 the binding's finders at the device's history `dev`, the window's projection at those readings and decoders and the
@@ -177,12 +177,12 @@ the device's, whose blobs sent hold each pinned table and each member's files at
 sample answers the strategy's `afterAt` (`hWR`). The members' steps are `memberSteps_sampleMap`'s at the invariant
 `StepInv`, and each round's reading picks only openings (`executionPhaseReadingAt_picks`). -/
 theorem executionPhaseSpotSound_sessions (K : ExecutionPhaseConstructions V) (dev : Exchange → Properties.Challenger.History)
-    (reg : Option Claims.Msg → ByteArray) (tb : Window → String) (ev : ℕ → Exchange → Option Claims.Msg)
+    (reg : Option Claims.Msg → ByteArray) (tb : ExecutionPhase → String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
-    (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
-    (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
+    (record₀ : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
+    (recordDigest : ExecutionPhase → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (nc : ℕ)
-    {S : ByteArray → Array ByteArray → Option Window}
+    {S : ByteArray → Array ByteArray → Option ExecutionPhase}
     (hD : ExecutionPhaseDeployed V ((K.withBinding dev k).withProject V (sessionReadings tb ev record₀ recordDigest)
       (fun W _ _ _ _ _ => sessionDecoders reg (tb W) filesDec)
       (executionPhaseSampleMaps fieldEnc V (sessionReadings tb ev record₀ recordDigest) label (afterAt V k)

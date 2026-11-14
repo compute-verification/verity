@@ -7,7 +7,7 @@ public import Definitions.Slowdown.Assumptions.Covering
 
 `ParameterHard` and `ActivationChained` (`Definitions.Slowdown.Assumptions.Covering`) charge an updated weight and an activation the
 one cost `c = r · b`. Here each has its own: parameter-hardness at a weight cost `c_w` (`ParameterHardAt`) and
-activation-chaining at an activation cost `c_a` (`ActivationChainedAt`), over the same vocabulary (`InferenceOnly.Covering`). At
+activation-chaining at an activation cost `c_a` (`ActivationChainedAt`), over the same vocabulary (`Slowdown.Covering`). At
 `c_w = c_a = r · b` they are `ParameterHard` and `ActivationChained`.
 
 **Why two costs.** One shared `c` is at most both what an
@@ -24,9 +24,9 @@ weight at bf16, 0.2-0.3 at FP8, 0.03-0.05 at FP4.
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
-open Verity InferenceOnly.Covering
+open Verity Slowdown.Covering
 
 /-- **Parameter-hardness at weight cost `c_w`** `(s, c_w)`: every subcircuit `S` of `d` with `|S| ≤ s` reads at least
 `c_w` bits outside the registered parameters for each updated weight whose multiplications it completes,
@@ -64,4 +64,4 @@ noncomputable def chainedBlocksAt (d : RegisteredCircuit) (B : MulBlocks d) (D :
     Finset (Fin B.nw × Fin B.nt) :=
   B.P.filter (ActivationChainedAt d B D ca)
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

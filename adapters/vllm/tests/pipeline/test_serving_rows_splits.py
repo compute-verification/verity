@@ -44,7 +44,7 @@ from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline.serving_templates import values_widths
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.numerics import sparse_mla_split_twins as TW
 from verity_vllm.definitions.registry import boolean_sparse_mla as BM
 from verity_vllm.definitions.registry import boolean_sparse_mla_split as BX

@@ -36,7 +36,7 @@ What code outside this directory may use. Everything else here is internal.
 | `audit` (`audit.py`) | The lifecycle the parties drive. The verifier's side is `register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT, receipt: str = receipts.DEFAULT, *, bind: bool = False, layout: str = receipts.LAYOUT, rows: int \| None = None, nonce: bytes \| None = None) -> Registration`, `Registry` (one live registration a node) and `AuditRun` (one session, at its `Params`). The prover's side is `payload_tree` and `append_tree` (its commitments); its encoded store and the honest prover are `verity/protocols/accounting/poub/prover/audit_prover.py`'s `Store` and `Prover`. An accepted session leaves a `Record`. |
 | `codec` (`codec.py`) and `receipts` (`receipts.py`) | The bytes a prover's device must reproduce. `codec` is the store's encoding, kv/v0: `key(seed: bytes, codec: Codec = DEFAULT) -> Key`, `encode(payload: bytes, j: int, k: Key, *, bound: bool = False, coin: bytes \| None = None) -> bytes`, `decode`, `digest(payload: bytes) -> bytes` and `BLOCK_BYTES`. `receipts` is a pass's seed (`seed(challenge: bytes, i: int, previous: bytes) -> bytes`), its plan (`Plan`), its receipts (`receipter(kind: str, seed: bytes, rows: int \| None = None) -> Receipter \| SketchReceipter`) and their tree (`tree`, `verify_leaf`, `hidden`). |
 | `memory_map` (`memory_map.py`) | memory-map/v1, serving's record of the KV pages it wrote and freed: `parse(lines: Iterable[str]) -> tuple[Header, Iterator[Step]]`, `dumps(head: Header, steps: Iterable[Step]) -> str`, `Replay` (the map as the audit's appends, releases and plan changes) and `schedule` (the schedule the prover publishes). |
-| `ledger.declared(record: audit.Record, node: Node, *, wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Declared` (`ledger.py`), with `timing.py` | An accepted session's declared outputs on the verifier's node (`ledger.Node`): γ at both R, for each window and over the session, and the memory line's three forms. `timing.py` holds the device constants a node is built from (a GPU's and a host's on-chip storage and their read, write, SHA-512 and squaring rates, and one burst of the node's boundary link) and the least allowance an honest prover meets (`timing.deadline`). `monitoring.table` scales one accepted session up to a deployment's monitoring period. |
+| `ledger.declared(record: audit.Record, node: Node, *, wrong: Callable[[IntegrityProfile], float] = IntegrityProfile.bound) -> Declared` (`ledger.py`), with `timing.py` | An accepted session's declared outputs on the verifier's node (`ledger.Node`): γ at both R, for each window and over the session, and the memory line's three forms. `timing.py` holds the device constants a node is built from (a GPU's and a host's on-chip storage and their read, write, SHA-512 and squaring rates) and the least allowance an honest prover meets (`timing.deadline`). `monitoring.table` scales one accepted session up to a deployment's monitoring period at the ledger's error over the session (`Declared.gamma`'s `error_horizon`, sketch term included), and prints no bound where a period's sessions sum to 1 or more. |
 | `coins` (`coins.py`) | A session's coins, one epoch of the proof system's one challenger, under `SCHEME`. `SessionCoins` is a session's coins through a challenger, and `local` the same from a challenger in the verifier's process. `families` is the session's coin layout over the labels `CHALLENGE`, `OPENINGS` and `APPEND` (`LABELS`; `APPENDS` append coins), and `window` is its window as the auditor's ledger names it. A prover reads `Released` (a coin as it is sent one), `coin` (the audit's coin of an opened or released one) and why a commitment or the coins it was sent are not the session's (`layout_reason`, `received_reason`). |
 | `store` (`store.py`) | The store a pinned BF16 checkpoint lays out, which the prover registers from its own checkpoint. `read_pin` is a pin from its file and `check` holds a checkpoint's files to it. `arena` and `arena_of` lay out an engine's arena of a checkpoint's weights (`Arena`), and `Store` is the store of arenas and host filler, in blocks of `BLOCK` bytes. `store_salt` is a payload salt under a key of `KEY_BYTES` bytes and a label (`PAYLOAD_LABEL`, `SALT_DOMAIN`), and `checkpoint_sha512` and `file_sha512` are the registry's digests, `pool` the worker processes `check` hashes in. `Refused` is a pin, a checkpoint or a store it refuses, with why. |
 | `line` (`line.py`) and `pooled.number` (`pooled.py`) | The memory line a paced session shows held over time, in exact rationals, beside its Lean. `line` is the line in both forms (`FORMS`: `TIME_HELD` and `LINK_CHARGED`) from a session's groups, each with the fields of `GROUP` (in the record form, what the auditor saw of each window: `SEEN`). `of_json`, `run_json` and `record_run_json` read the JSON form's and the record form's inputs and answer in the JSON form, or `{"refused": why}`. `number` and `text` read and write an exact rational, and `Refused` is inputs that have no line, with the Lean's reason. `pooled.number` reads the pooled bound's exact rational. |
@@ -56,7 +56,7 @@ The verifier's definition is the Lean package `lean/` (`Poub`), the verifier; th
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
 each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec
 seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
-the Lean's verdicts are `security/Properties/Accounting/Remote.lean`.
+the Lean's verdicts are `security/Properties/Poub/Remote.lean`.
 
 `verity/protocols/accounting/poub/verifier/session/verifier.py` runs both. The Lean's process `poub-verifier` (`Poub.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
@@ -106,7 +106,7 @@ group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
+`security/Properties/Poub/Remote/Line.lean`'s `LineHeld`.
 
 ## Replay
 
@@ -178,10 +178,16 @@ A transcript that doesn't name its session's pace replays only with the pace its
   of arenas and host filler (`arena`, `Store`), and salts the payload leaves under the verifier's key (`store_salt`).
   `benchmarks/remote_session/store_layout.py` writes pins and synthetic checkpoints.
 - `timing.py`: the honest schedule, the stated claim read through the ledger, and the sketch's rank bound.
-- `monitoring.py`: one accepted session's `q_bytes` and `eps` over a week, a month and a year of a deployment's
-  sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
-  δ/T beside it. The deployment's machines and window are parameters. Its `eps` and δ leave out each session's
-  Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), which the table says (`EXCEPT`).
+- `monitoring.py`: one accepted session's `q_bytes` over a week, a month and a year of a deployment's sessions, at
+  the session's whole error: the ledger's over the session (`ledger.declared`'s γ, its `error_horizon`), which adds
+  the sketch's term at the prover's budget, Q = 2^`audit.QUERIES_LOG2`, and the sample's rejection and binding terms
+  to what the answer's
+  `eps` holds (`whole_error`, which refuses an error that isn't the ledger's or is below the `eps`). A row's error is
+  its T sessions' summed, T times that (`verity/protocol.py`'s rule): at 1 or more the row prints "no bound
+  at this period" with the sum and no bytes; under 1 it prints the bytes certified except with it and, at δ = 1% and
+  10⁻⁶, the count bound's figures (all but M − 1 sessions certify), with each session's own windows at δ/T beside
+  them. The deployment's machines and window are parameters. Every error and δ leave out each session's Σ_t adv_t
+  (SHA-512 stream as PRF: not priced, not assumed), which the table says (`EXCEPT`).
 - `period.py`: one session a period on one node (`run`, `session`), its core case and its answer.
 - `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the developer doesn't control,
   one line of JSON a message and each window's openings in the openings frame (`main`, `period_with`).

@@ -5,7 +5,7 @@
 
 ``log`` and ``exp`` run a correctly rounded evaluator (`f32_log_rn_bits`, `f32_exp_rn_bits`) against MPFR's correctly rounded
 result at 24 bits (gmpy2, emin -148, emax 128, subnormalized, nearest even), NaN canonical 0x7FC00000. ``boolean WORD`` runs the
-Boolean version of `ref_prims.WORD` (`verity_vllm.definitions.boolean.boolean_version`), bit-sliced
+Boolean version of `ref_prims.WORD` (`verity.circuits.ops.boolean.versions.boolean_version`), bit-sliced
 (`verity.circuits.evaluation.bits.evaluate_words`), against the word primitive's own evaluator; WORD takes one 32-bit word
 and gives one.
 
@@ -53,7 +53,7 @@ def _evaluator(fn: str):
 @cache
 def _boolean(name: str):
     """(`ref_prims`' word primitive ``name``, its Boolean version), refused unless it maps one 32-bit word to one."""
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
     from verity_vllm.definitions.registry import ref_prims as RP
 
     word = getattr(RP, name)

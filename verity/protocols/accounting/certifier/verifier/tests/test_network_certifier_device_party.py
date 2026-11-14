@@ -38,7 +38,7 @@ class Answering(D.NetworkCertifier):
     """The party with its unwritten parts answering from the fixtures above."""
 
     def open_session(self, identity: Identity) -> D.Opened:
-        return D.Opened(b'{"deployment":1}', b'{"load":1}')
+        return D.Opened(b'{"deployment":1}')
 
     def certify(self, window: int) -> tuple[D.Kept, ...]:
         return _kept(window)
@@ -83,7 +83,7 @@ def _encoded(actions) -> list[tuple[str, str]]:
 
 def test_what_it_hands_out_encodes_on_the_manifests_channels():
     p = D.NetworkCertifier()
-    sent = _encoded(p.hand_out(_phase(_kept(1)))) + _encoded(p.hand_out_run(D.Opened(b"{}", b"{}")))
+    sent = _encoded(p.hand_out(_phase(_kept(1)))) + _encoded(p.hand_out_run(D.Opened(b"{}")))
     sent += _encoded(p.close(b"{}"))
     assert {t for _, t in sent} == {t for types in D.SENDS.values() for t in types}
     assert all(t in D.SENDS[ch] for ch, t in sent)
@@ -95,7 +95,7 @@ def test_its_turns_run_a_session_to_its_end():
     first = p.start(PARAMS, IDENTITY)
     span = SCHEDULE.window * SCHEDULE.bucket_ms * 1_000_000
     assert [a.at for a in first if isinstance(a, Timer)] == [1_000 + span, 1_000 + 2 * span]
-    assert _encoded(first) == [(NC.VERIFIER, NC.DEPLOYMENT), (NC.VERIFIER, NC.LOAD)]
+    assert _encoded(first) == [(NC.VERIFIER, NC.DEPLOYMENT)]
     timer = Received("clock", Message("ClockTimer", {"at": 0, "ns": 0}))
     one, two = p.on(timer), p.on(timer)
     assert not any(isinstance(a, Finish) for a in one)

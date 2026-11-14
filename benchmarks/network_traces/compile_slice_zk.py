@@ -97,7 +97,8 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
-import leak_scan as LS  # noqa: E402
+import zk_drivers  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, warden_zk as WZ  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import charge_chain as CC  # noqa: E402
 from verity_vllm.compiler import compile_slice as CS  # noqa: E402
 from verity_vllm.compiler import served_rows as SR  # noqa: E402
@@ -711,8 +712,7 @@ def prove(a) -> int:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         return 0 if all(expected(x, u.kind, u.case.flags) for u in units) else 1
-    import warden_zk as WZ
-
+    zk_drivers.install()
     M = WZ._one_stage()
     out = Path(a.out)
     probe = stager(M, x, len(a.kinds), out / "probe")
@@ -772,7 +772,7 @@ def prove(a) -> int:
     av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, delta=a.delta, points=a.points, arms=["fw"], cold=1,
                          plain=a.plain, timing=WZ.TIMING)
     res = audit(M, av, sg, m, units, binds, out / "slice", a.port,
-                env={"FC_COINS": "tree"} if a.plain else WZ.firewall(M, m))
+                env={"FC_COINS": "tree"} if a.plain else WZ.zk_server(M, m))
     pieces, held, public = scan_pieces(M.a8, units, m["salts"], ch, srv, (m["dir"] / "circuit.txt").read_bytes())
     short = sum(len(x) < M.a8.PIECE for x in pieces.values())
     vdir, inst, carry = out / "slice" / "verifier", m["dir"] / f"inst-{n}.bin", carry_rows(units, ch)
@@ -814,8 +814,7 @@ def rescan(a) -> int:
     each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
-    import warden_zk as WZ
-
+    zk_drivers.install()
     vdir, M = src / "slice" / "verifier", WZ._one_stage()
     x = load(summary["slice"]["name"], summary["statics"].get("G"))
     part = json.loads((vdir / "partition.json").read_text())

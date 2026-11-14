@@ -9,9 +9,9 @@ public import Mathlib.Data.Nat.Log
 public import Mathlib.Data.Rat.Init
 
 /-!
-# The circuit model: a declared circuit's gates, their classes, its window and its census (trusted)
+# The circuit model: a registered circuit's gates, their classes, its window and its census (trusted)
 
-One model of what a declared circuit `W` computes, for the lower bounds every resource audit proves over it: the
+One model of what a registered circuit `W` computes, for the lower bounds every resource audit proves over it: the
 stacking property's carry and encode bounds, the requirement `A1` reads, and compute accounting's work statement and
 fan-in floor. It follows the IR (`verity/ml/circuits/PROTOCOL.md`) gate for gate, so that census/v1 and property/v1
 (`verity/ml/circuits/census.py`, `stacking.py`) can be held to it by difftest.
@@ -669,9 +669,9 @@ structure Audit where
   win : ℕ → ℕ
   reads : ℕ → ℕ
 
-/-- **The stacking property `P(c, R_in, L)`** of a declared circuit `W`, on its census and the audit's certified reads:
-every gate is in a window; in each window each budgeted class's units are within its cap per certified byte read, no
-unit is neutral (the registry classes every primitive), the run inputs are within that window's `R_in` bytes and the
+/-- **The stacking property `P(c, R_in, L)`** of a registered circuit `W`, on its census and the audit's certified
+reads: every gate is in a window; in each window each budgeted class's units are within its cap per certified byte read,
+no unit is neutral (the registry classes every primitive), the run inputs are within that window's `R_in` bytes and the
 data products (`productsAt`) within their cap per certified byte read; and no gate reads a value produced more than
 `L` engine steps before it. -/
 def Property (k : Caps) (A : Audit) (W : IntDag ι) : Prop :=

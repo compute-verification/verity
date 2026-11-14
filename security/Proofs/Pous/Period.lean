@@ -4,8 +4,8 @@ public import Properties.Pous.Period
 public import Proofs.Pous.EndToEnd
 public import Proofs.Properties.Pous.Run
 public import Proofs.Accounting.Prob
-public import Proofs.Accounting.Capacity
-public import Proofs.Accounting.PerRunJoint
+public import Proofs.Pous.Accounting.Capacity
+public import Proofs.Pouw.PerRunJoint
 
 /-!
 # Proof of PoUS's per-period guarantee, and that it is the joint's capacity guarantee

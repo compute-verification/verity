@@ -421,7 +421,7 @@ def lean(s: Sheet, data: Path) -> str:
     peak = {ty: f"peak{_camel(ty)}" for ty in types}
     width = {q: f"width{_camel(q)}" for q in pipes}
     clock = {c: f"{c}MHz" for c in s.clocks}
-    out = ["module", "", "public import Definitions.Accounting.TS.Sheet", *SHEET_IMPORTS, "", "/-!",
+    out = ["module", "", "public import Definitions.Pouw.TS.Sheet", *SHEET_IMPORTS, "", "/-!",
            f"# The {s.name}'s data sheet (generated)", ""]
     out += _wrap(f"The data-sheet machine (`Accounting.TS.Sheet.machine`) at the {s.gpu}'s vendor values: each constant "
                  "with the axiom that reads it, its value, its grade and its source, and the census of the machine "

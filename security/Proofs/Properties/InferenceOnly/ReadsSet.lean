@@ -24,7 +24,7 @@ import Mathlib.Tactic.ReduceModChar
 import Proofs.Core.QSort
 import Proofs.Properties.InferenceOnly.Lemmas
 import Proofs.Properties.InferenceOnly.OperandsResolve
-import Proofs.Properties.Accounting.Remote.Sort
+import Proofs.Properties.Poub.Remote.Sort
 import Std.Data.HashSet.Lemmas
 
 /-!

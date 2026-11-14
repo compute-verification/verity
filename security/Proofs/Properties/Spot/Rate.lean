@@ -3,7 +3,7 @@ module
 public import Properties.Spot.Rate
 public import Proofs.Properties.Spot.DesignText
 public import Proofs.Flock.SpotFlock.Jeq
-public import Proofs.Pouw.Period.Sort
+public import Proofs.Pouw.MonitoringPeriod.Sort
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic
@@ -209,7 +209,7 @@ theorem tableOver_cases {t : String} {p : Program} {query : Json} {table out : O
 
 theorem keys_ruleOfText (t : String) : keys? (ruleOfText t) = some #["law", "rule"] := by
   have hs : sortStrings #["law", "rule"] = #["law", "rule"] :=
-    Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_of_sorted (as := #["law", "rule"]) (by decide))
+    Array.toList_inj.1 (Properties.Pouw.MonitoringPeriod.SecurityProofs.Sort.qsort_of_sorted (as := #["law", "rule"]) (by decide))
   rw [← hs]
   unfold keys? ruleOfText
   with_unfolding_all rfl

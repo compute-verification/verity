@@ -3,7 +3,7 @@ port registered against the network certifier's signed egress root (`warden_rows
 the Lean ZK server and held by the Lean verifier's registered reads (`verity-verify-proof verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
-    python verity/protocols/accounting/certifier/prover/warden_zk.py prove --run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
+    python benchmarks/network_traces/zk_drivers.py warden_zk prove --run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
@@ -42,7 +42,7 @@ the one-stage audit as `n2_zk.py` proves N2's head checks.
   - ``swapped``: made for proof blocks 0 and 1 reading each other's cells, in one row when r > 1, so its rows are the
     Program's: the header names the swapped proof blocks' wiring.
   Each is registered, every proof block sampled by the verifier's Lean (`verity-verify-proof draw --stratified n`), proved
-  `--zk` behind the ZK server (``FC_FIREWALL=1``, ``FC_FIREWALL_LEAN``) and held by Lean `verify --zk --partition
+  `--zk` behind the ZK server (``FC_ZK_SERVER=1``, ``FC_ZK_SERVER_LEAN``) and held by Lean `verify --zk --partition
   --program --registered`. ``sender`` and ``receiver`` are to be accepted, the others refused by Lean's registered
   reads.
 * **What the verifier receives**, scanned for every 16-byte piece of every opened row and every salt of the
@@ -56,26 +56,20 @@ import argparse
 import hashlib
 import json
 import os
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-ONE_STAGE = HERE.parent / "one_stage"
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-import leak_scan as LS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.circuits import boolean as BL  # noqa: E402
-from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.circuits.types import Array  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate
+from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell
+from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
 
 #: the unit's ports: its input row and its output row
 PORTS = ("row", "o0")
@@ -127,7 +121,7 @@ def attestation(run: Path, n: int) -> SimpleNamespace:
             if w in cells and (w == 0 or first > 0) and k >= pads + n and (best is None or k > best[2]):
                 best = (w, q, k)
     if best is None:
-        raise SystemExit(f"no egress link-window of {run} has a registration and a connection admitted in it with "
+        raise SystemExit(f"no egress execution phase of {run} has a registration and a connection admitted in it with "
                          f"D·r + n = {pads} + {n} cells")
     w, q, k = best
     doc, salts, wiring_salt = cells[w]
@@ -207,9 +201,9 @@ def refused(at: SimpleNamespace, mr: SimpleNamespace, reads_from: int = 0) -> st
 
 def committed_value(program: str, head: WR.CellsHead, port: str, rows: list[list[int]]) -> G.Registered:
     """A member's own rows of a port no network certifier row registration holds (one a unit, its u16 words), committed
-    before staging as a value registered on `head`'s link-window: each row under a salt of the prover's own, in a tree
+    before staging as a value registered on `head`'s execution phase: each row under a salt of the prover's own, in a tree
     whose domain binds the statement's Program (its SHA-512, `program`) and the network certifier's root, so the root,
-    which the registration names before any coin, opens under no other link-window's. The statement commits the port's
+    which the registration names before any coin, opens under no other execution phase's. The statement commits the port's
     rows under the same salts, so they open it."""
     return G.Registered.commit(program, f"{head.value}/committed/{port}", rows, None, G.WORD_BITS, WR.SCHEMA,
                                window=head.root.hex())
@@ -230,19 +224,16 @@ def _statement():
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits.codec import canonical_json, encode_program
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_flock import class_statement as CS
 
-    return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2, CS=CS)
+    return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2,
+                           CS=proof_drivers.drivers().class_statement)
 
 
 def _one_stage():
-    sys.path.insert(0, str(ONE_STAGE))
-    from verity.protocols.proofs.spot.prover.audit import template_audit as a0
-    import a7
-    import a8
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R, verifier as V
 
-    return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
+    d = proof_drivers.drivers()
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_subprotocol=d.prove_subprotocol, D=D, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:
@@ -319,11 +310,11 @@ TIMING = ("e2e_s", "wait_s", "witness_s", "prove_total_s", "proof_bytes", "wire_
           "dense_m", "units", "ands_per_vu", "prover", "gpu")
 
 
-def firewall(M, m: dict) -> dict:
-    """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``)."""
-    if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (verity-verify-proof's flock-firewall)")
-    return {"FC_FIREWALL": "1", **M.a0.firewall_env(m)}
+def zk_server(M, m: dict) -> dict:
+    """A zk_served prover's environment (`FC_ZK_SERVER=1`, its Lean frame named by ``FC_ZK_SERVER_LEAN``)."""
+    if not os.environ.get("FC_ZK_SERVER_LEAN"):
+        raise SystemExit("FC_ZK_SERVER_LEAN names no Lean ZK server frame (verity-verify-proof's flock-zk-server)")
+    return {"FC_ZK_SERVER": "1", **M.a0.zk_server_env(m)}
 
 
 def committed_roots(m: dict) -> tuple[dict, list]:
@@ -362,7 +353,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
     law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the bucket rows of {n} cells of connection {at.connection} in the warden's "
-                                      f"egress link-window {at.window} (warden_zk.py)",
+                                      f"egress execution phase {at.window} (warden_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "units": {"cells": [list(c) for c in at.units.cells], "digest": at.units.digest().hex()},
            "link": f"registered: port {m['port']} reads {at.units.value(at.head)} at the warden's signed root; "
@@ -380,7 +371,7 @@ def audit_member(M, a, sg, m: dict, at: SimpleNamespace, out: Path, port: int) -
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=zk_server(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True

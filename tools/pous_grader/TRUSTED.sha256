@@ -22,6 +22,7 @@ ea945ed04bc1067c961cfe293c95c61363c7ef3c049fe3f0c8f224e362e3fedc  ../../security
 b65bad4acf45f4e377abaf2d7d345a299e956c4b4641898d21fb8b0a4f193d74  ../../security/Proofs/lakefile.toml
 d70f31b8a7e28937f6f46b50bc4a43521a8ac9c3b5425ce65f3f8690c12bccac  ../../security/Proofs/lakefile.toml
 de436344965af5eedd0863facab8e8c192b8761fea2a7931a59eb6e87d5d82ca  ../../security/Proofs/lakefile.toml
+16090c25a6f12cec928a4d58be902f2555bc7cbe25db03993ff9972850c112f0  ../../security/Proofs/lakefile.toml
 8021bbef4f4f86e9ab1a08fb173113c49a5547999b3a875ad5e5e5d57fdc2592  ../../security/Proofs/lake-manifest.json
 5f2571a309665dbfd06a618f15009cc8a90c15ed8cea46a1e23934ff4d272027  ../../security/Proofs/lake-manifest.json
 7da1a650e183252b7b361dcc355b023cab8a858e021b73f5cdd341c99d1b7873  ../../security/Definitions/Pous.lean
@@ -47,7 +48,7 @@ efc099a2484e91d667c799bfdac96a13800048c215001f4dbbacd4da2b158bae  ../../security
 74558f13b386100653f6556357b095cefaa42b96d2805120d597aa290762b1b6  ../../security/Definitions/Pous/Guarantees.lean
 778673ba736da65843c8010d2b992d68dd8fbdbc9a6ce891a6353c3f3a3405f9  ../../security/Definitions/Pous/Guarantees/Obligation.lean
 86714bf3e727006b4c33f750ccdcfd99bbfe7339a0ff09228c09b60bf24024a5  ../../security/Definitions/Pous/Guarantees/P2.lean
-966af228c6519591b00e7a0c0faf999ec4940b9cd4eebbacac3244ad7125d58c  ../../security/Definitions/Pous/Guarantees/StreamedWipe.lean
+49042967fd594043aaf00d521bcf19b76dfe1712f2bbd1e5eef5fa72f0f69b7b  ../../security/Definitions/Pous/Guarantees/StreamedWipe.lean
 bd63ca9b0b419cd7a54d8d145643b960b6486cb2f5dcc9b7edc5d8cb61a83958  ../../security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean
 6a78d725575707542e39bca6736f1428f82674a912d1ccf2b9f266a6937cebe1  ../../security/Definitions/Pous/Guarantees/StreamedWipeFamily.lean
 3067123eddd12ce1ab5060783b8c30a157326625642bdccec59be2196dd04bc8  ../../security/Definitions/Pous/Guarantees/StreamedWipeReads.lean
@@ -77,7 +78,7 @@ c80445785ddaf99e2d8e3efc55a6b1f9bf0fd70c17edf4ace9bd3d48512f343d  ../../security
 7f80956556d803e71b6b3c773a187c0996e433aa4386bc9fd139af7002b01b6a  ../../security/Definitions/Pous/Model/StreamedWipeServer.lean
 77168d04cd2bae90f9ad2e664978dfa36438a3807a279a2c91f7460590128552  ../../security/Definitions/Pous/Model/StreamedWipe.lean
 886e6ccc674f28364dec30d96c034b16d48723635e6df43174958610fe628889  ../../security/Definitions/Pous/Model/StreamedWipeDisk.lean
-a5c341a830600fd71df1d481fafefbb614bbfe51940bb215320bf5dd2d0b322f  ../../security/Definitions/Pous/Model/StreamedWipeServer.lean
+99d5f96e0511daa3d8ffe8e14f2bb3cfc04ff6a68b7d6ac99c5d7435a0307904  ../../security/Definitions/Pous/Model/StreamedWipeServer.lean
 c8a3345dc554e1fa0862dcab5549f4c332299997edd42c7dc9c3e3aed2fbe351  ../../security/Definitions/Pous/P2/Clip.lean
 30cfbb5dd3fd5754b5dd660f011ff064dd1afb3047f4ca233859b339ba2f689c  ../../security/Definitions/Pous/P2/Cost.lean
 0de314331759e8fb4bc9b2af925fbb7e560e2f91a648a443daf27b314377ea98  ../../security/Definitions/Pous/P2/Mutable.lean

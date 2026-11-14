@@ -34,7 +34,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   committed) is registered and proved on its own (``subset:2``), and the Lean verifier must refuse its session: its
   proof, or, where the prover's self-check stopped it and no proof left, the session for want of one, which the
   negative names (``lean_read_no_proof``; `benchmarks/one_stage/forged_proofs.py` hands Lean the forged proof).
-* **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
+* **Statement form.** Each template is a flat statement (its unit's whole circuit description in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
   which `verify --zk` takes (`ProvedScope.served`): its scope and the sampled audit's knowledge-soundness form are
@@ -552,7 +552,7 @@ def pick(res, kind: str, unit_fam: str, steps: list[int], layers: set[int], unit
     or with ``boolean`` its Boolean version) and its unit: the deepest Definition of that one's chain in the probed unit's
     family. Calls of the probed specialization come first (the unit the table sized; prefill's attention, say, has one per
     prefix length), then by step preference."""
-    from verity_vllm.definitions.boolean import boolean_version
+    from verity.circuits.ops.boolean.versions import boolean_version
     import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
     cands = []
     for m in res.instances:

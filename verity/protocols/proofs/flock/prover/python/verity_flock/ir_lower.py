@@ -7,7 +7,7 @@ Definition that the walk holds whole is lowered by the Definition's builder inst
 
 :func:`units` splits a template instance into identical units read off its IR graph: the connected components of the gate
 graph (with the input leaves) must all compute the same function of their inputs; the unit is one component, and the
-arrangement lists which input and output leaves of the instance each unit takes. :func:`netlist` lays a unit circuit out as
+arrangement lists which input and output leaves of the instance each unit takes. :func:`circuit_description` lays a unit circuit out as
 ``flock-ir-unit/v2`` (see its docstring), the format the block statement ``verity/flock-ir-block/v1`` reads.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ FORMAT = "flock-ir-unit/v2"
 WORD = 128
 #: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
 #: 100 KB), and the characters a digest encodes at a time
-NETLIST_ROWS = 1 << 10
+CIRCUIT_DESCRIPTION_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
 NAN_F2FP = 0x7FFF
@@ -130,7 +130,7 @@ def _boolean_build(key):
     """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
-    `verity_vllm.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `verity.circuits.ops.boolean.versions` leaves it out: it lowers only the activations that bind it. None when none is left;
     `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
     module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
     `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has
@@ -1114,13 +1114,13 @@ class _Read:
         assert at[0] == self.at + self.rows
 
 
-def netlist(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
-    """The layout as ``flock-ir-unit/v2`` text (:func:`netlist_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
-    return "".join(netlist_pieces(lay, name, cut, leaves))
+def circuit_description(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> str:
+    """The layout as ``flock-ir-unit/v2`` text (:func:`circuit_description_pieces`), joined once: a GLM-5.3 norm unit's is 8.6 GB."""
+    return "".join(circuit_description_pieces(lay, name, cut, leaves))
 
 
-def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
-    """:func:`netlist`'s text a piece at a time (its header line, its rows :data:`NETLIST_ROWS` lines at a time, its pins),
+def circuit_description_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves: dict | None = None) -> Iterator[str]:
+    """:func:`circuit_description`'s text a piece at a time (its header line, its rows :data:`CIRCUIT_DESCRIPTION_ROWS` lines at a time, its pins),
     for a caller that writes or hashes it as it is rendered (`circuit.compose_to`): one piece is alive at a time.
 
     The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
@@ -1133,15 +1133,15 @@ def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves:
         for c, words, bits in groups:
             head += [c, words, len(bits), *bits]
     yield " ".join(map(str, head)) + "\n"
-    for k in range(0, lay.useful, NETLIST_ROWS):
+    for k in range(0, lay.useful, CIRCUIT_DESCRIPTION_ROWS):
         yield "\n".join([" ".join(map(str, [len(a), *_cols_of(a), len(b), *_cols_of(b)]))
-                         for a, b in zip(lay.rows_a[k:k + NETLIST_ROWS], lay.rows_b[k:k + NETLIST_ROWS])]) + "\n"
-    yield netlist_pins(cut, leaves)
+                         for a, b in zip(lay.rows_a[k:k + CIRCUIT_DESCRIPTION_ROWS], lay.rows_b[k:k + CIRCUIT_DESCRIPTION_ROWS])]) + "\n"
+    yield circuit_description_pins(cut, leaves)
 
 
-def netlist_pins(cut: dict | None, leaves: dict | None) -> str:
-    """The ``LEAVES`` and ``CUT`` lines :func:`netlist` ends with: ``netlist(lay, name, cut, leaves)`` is
-    ``netlist(lay, name) + netlist_pins(cut, leaves)``."""
+def circuit_description_pins(cut: dict | None, leaves: dict | None) -> str:
+    """The ``LEAVES`` and ``CUT`` lines :func:`circuit_description` ends with: ``circuit_description(lay, name, cut, leaves)`` is
+    ``circuit_description(lay, name) + circuit_description_pins(cut, leaves)``."""
     pins = "" if leaves is None else "LEAVES " + json.dumps(leaves, sort_keys=True, separators=(",", ":")) + "\n"
     return pins + ("" if cut is None else "CUT " + json.dumps(cut, sort_keys=True, separators=(",", ":")) + "\n")
 
@@ -1278,24 +1278,24 @@ class Lowering:
 
     @property
     def text(self) -> str:
-        return netlist(self.layout, self.name, self.cut, self.leaves)
+        return circuit_description(self.layout, self.name, self.cut, self.leaves)
 
     @cached_property
     def sha256(self) -> str:
         """:func:`digest` of :attr:`text`, rendered on first read only: nothing changes a lowering once it is built."""
-        return self.sha256_of(netlist(self.layout, self.name))
+        return self.sha256_of(circuit_description(self.layout, self.name))
 
     def sha256_of(self, expanded: str) -> str:
-        """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
+        """:attr:`sha256` from ``expanded``, the unit's ``circuit_description(layout, name)`` (:attr:`text` without its LEAVES and CUT
         lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the circuit description is rendered
         once."""
         return self.sha256_after(_sha256(expanded))
 
     def sha256_after(self, h: hashlib._Hash) -> str:
-        """:attr:`sha256` from ``h``, SHA-256 so far of the unit's ``netlist(layout, name)``, for a caller that hashes it as it
+        """:attr:`sha256` from ``h``, SHA-256 so far of the unit's ``circuit_description(layout, name)``, for a caller that hashes it as it
         writes it (`circuit.compose_to`); ``h`` is left as it was."""
         h = h.copy()
-        h.update(netlist_pins(self.cut, self.leaves).encode())
+        h.update(circuit_description_pins(self.cut, self.leaves).encode())
         return h.hexdigest()
 
     def _index(self, src: list[list[tuple]], n_leaf: int) -> np.ndarray:
@@ -1484,7 +1484,7 @@ def check_staged(low: Lowering, input_set, path) -> list[str]:
 
 
 def stage(low: Lowering, input_set, lo: int, hi: int, out_dir):
-    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/inst-<n>.bin`` and the unit netlist as ``<out_dir>/net.txt``."""
+    """Write ids [lo, hi) of ``input_set`` as ``<out_dir>/inst-<n>.bin`` and the unit circuit description as ``<out_dir>/net.txt``."""
     from pathlib import Path
 
     sub = input_set.subcircuit

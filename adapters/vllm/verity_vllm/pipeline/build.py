@@ -23,7 +23,7 @@ import traceback
 from dataclasses import dataclass
 from typing import Any
 
-from verity_vllm.definitions.boolean import write_word
+from verity.circuits.ops.boolean.versions import write_word
 
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
@@ -93,7 +93,7 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "verity_vllm/program/frontend/rules/vllm_moe_router.py",
                          "verity_vllm/program/frontend/rules/vllm_dsa.py", "verity_vllm/program/frontend/rules/vllm_dsa_dense.py",
                          # `TargetProfile.ir == "boolean"`: the derived Program on bits (the Boolean Definitions are digests in the descriptor)
-                         "verity_vllm/definitions/boolean.py",
+                         "verity/circuits/ops/boolean/versions.py",
                          # the vLLM switches the meta instantiation pins (engine.env.EXPORT)
                          "verity_vllm/engine/env.py",
                          # the derive's report and its relabel per TP rank (`--emit-ranks`), and the tp_links.json writer
@@ -304,13 +304,28 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         profile_mismatches,
     )
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
-        from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
-        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
         import torch
-        from verity_torch.frontend.derive import derive_report
-        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
-                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
+
+        from verity_vllm.program.frontend import loader_parity
+        from verity_vllm.program.frontend import vllm_meta as vm
+        from verity_vllm.program.frontend.export_compat import (
+            apply_target_profile,
+            host_facts,
+            read_back_applied,
+        )
+        from verity_vllm.program.frontend.rules.vllm_bindings import (
+            VLLM_BINDING_RULES,
+            clear_observations,
+            declared_derived_accounting,
+            observe_attention_impls,
+            observe_batched_form,
+            observe_export_facts,
+            observe_launch_context,
+            observe_target_profile,
+            vllm_ruleset,
+        )
+        from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
+        from verity_vllm.program.frontend.vllm_derive import derive_report
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
@@ -326,28 +341,15 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             res["model_pin"] = {"model": model_id or vm.PIN["model"], "revision": revision or vm.PIN["revision"], "dtype": engine_dtype(cfg.model_config), "tp": tp,
                                 "rank": rank, "max_model_len": max_model_len}
             vm.ensure_distributed(cfg, backend)
-            bus = None
-            if tp > 1:
-                # rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
-                from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
-                from verity_vllm.definitions.registry.tp_allreduce import settings_of
-                env_now = engine_env.snapshot()
-                allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
-                observe_allreduce_settings(allreduce_settings)
-                bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
-                tp_stack.enter_context(tp_group_override(rank, tp, bus))
-                car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
-                res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
-                # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
-                res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
-                res["tp"]["allreduce_settings"] = allreduce_settings
-                res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
-                                                   "vLLM's custom all-reduce where it admits the tensor, else pynccl")
+            bus = _tp_bus(cfg, rank, tp, res, tp_stack) if tp > 1 else None
             from verity_vllm.engine import sparse_mla
             sparse_mla.arm()   # FA3's sparse-MLA split pin, armed as a serving process arms it before vLLM builds the model
             model = vm.instantiate_meta(cfg)
             res.update(loader_parity.as_the_loader_does(model, cfg))   # the Parameters the served model has once its weights are loaded
             if tp > 1:
+                from verity_vllm.program.frontend.export_ops import (
+                    bind_vocab_parallel_embeddings,
+                )
                 res["tp"]["embedding_shards"] = bind_vocab_parallel_embeddings(model, tp_stack.enter_context(hooks.Hooks()))
                 res["tp"]["sharded_params"] = _sharded_param_summary(model)
             res["model_class"] = f"{type(model).__module__}.{type(model).__qualname__}"
@@ -364,14 +366,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied.update(applied_kernels(target, model))
             # derived (observed) selection fields: the instantiated layers' attention impl; the fused-norm dispatch (after export)
             res["attention_impls_observed"] = vm.attention_impls(model)
-            # READ BACK the FA version the selector gave the layers (one value over all layers, else None = mismatch): the
-            # declared `flash_attn_version` (or the selector's default for the declared capability) must be what was instantiated
-            favs = {v.get("vllm_flash_attn_version") for v in res["attention_impls_observed"].values() if v.get("kind") != "mla"}
-            fav_ints = {int(x) for x in favs if isinstance(x, int) and not isinstance(x, bool)}
-            if fav_ints or len(favs) > 1:        # FlashAttention layers (or a mixed tree): judged here.  A backend that carries no FA
-                applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None
-            # else: no layer is a FlashAttention impl (e.g. TritonAttentionImpl) -> not an FA-version question; the attention rule refuses
-            # the unregistered impl verbatim (numerics_unregistered) instead of a mismatch on a fact the backend does not have
+            _read_back_flash_attn_version(res["attention_impls_observed"], applied)
             res["target"]["applied"] = applied
             bad = profile_mismatches(target, applied)
             if bad:
@@ -446,6 +441,42 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
                                 post=derived if target.ir == "boolean" else None, write=write_program)
+
+
+def _tp_bus(cfg, rank: int, tp: int, res: dict, stack: contextlib.ExitStack):
+    """Rank ``rank`` of ``tp``: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation,
+    export and derive, entered on ``stack``; the group's settings and what serving must match into ``res["tp"]``. The bus."""
+    from verity_vllm.definitions.registry.tp_allreduce import settings_of
+
+    from verity_vllm.program.frontend.export_ops import CollectiveBus, tp_group_override
+    from verity_vllm.program.frontend.rules.vllm_bindings import (
+        observe_allreduce_settings,
+    )
+    env_now = engine_env.snapshot()
+    allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
+    observe_allreduce_settings(allreduce_settings)
+    bus = CollectiveBus(rank=rank, world=tp, settings=allreduce_settings)
+    stack.enter_context(tp_group_override(rank, tp, bus))
+    car_off = bool(cfg.parallel_config.disable_custom_all_reduce)
+    res["tp"]["engine_args_required"] = {"tensor_parallel_size": tp, "disable_custom_all_reduce": car_off}
+    # the workload's transport as the row set it (`row_tp.TpRow.p2p_env`) -- recorded, not consulted here
+    res["tp"]["env_required"] = {k: v for k, v in env_now.items() if k == "NCCL_P2P_DISABLE"}
+    res["tp"]["allreduce_settings"] = allreduce_settings
+    res["tp"]["collective_backend"] = ("pynccl (custom all-reduce disabled; BI pins NCCL tree/Simple/1 channel)" if car_off else
+                                       "vLLM's custom all-reduce where it admits the tensor, else pynccl")
+    return bus
+
+
+def _read_back_flash_attn_version(impls: dict, applied: dict) -> None:
+    """READ BACK the FA version the selector gave the layers ``impls`` into ``applied`` (one value over all layers, else None =
+    mismatch): the declared `flash_attn_version` (or the selector's default for the declared capability) must be what was
+    instantiated. Where no layer is a FlashAttention impl (e.g. TritonAttentionImpl) it is not an FA-version question and
+    ``applied`` gets none: the attention rule refuses the unregistered impl verbatim (numerics_unregistered) instead of a
+    mismatch on a fact the backend does not have."""
+    favs = {v.get("vllm_flash_attn_version") for v in impls.values() if v.get("kind") != "mla"}
+    fav_ints = {int(x) for x in favs if isinstance(x, int) and not isinstance(x, bool)}
+    if fav_ints or len(favs) > 1:        # FlashAttention layers (or a mixed tree): judged here
+        applied["flash_attn_version"] = fav_ints.pop() if (len(fav_ints) == 1 and len(favs) == 1) else None
 
 
 def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling: dict, launch: dict | None, tp: int, rank: int,

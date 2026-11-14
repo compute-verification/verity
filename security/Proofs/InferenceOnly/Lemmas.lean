@@ -18,6 +18,8 @@ Each is a `def G : Prop` over `Protocol`'s definitions and the assumptions, prov
 
 @[expose] public section
 
+open Slowdown
+
 namespace InferenceOnly.Guarantees
 
 open Verity
@@ -31,12 +33,5 @@ def ReadBound : Prop :=
   ∀ (Γ : ℕ) (α : ℝ) (r d : RegisteredCircuit) (M : Containment r.D d.D), CompliesRate Γ α d →
     Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) →
     (Reads Γ r : ℝ) ≤ α * d.D.size d.D.computed
-
-/-- **Inference complies as declared**: a Boolean declaration divided into sessions of exactly `c` gates, padding
-included, each reading from outside itself only registered information and its own prompt `prompt u` of at most `k`
-bits, complies at `(c, k)`, and its slowdown factor is at most 1. -/
-def Inference : Prop :=
-  ∀ (c k : ℕ) (d : RegisteredCircuit) (B : ℕ) (P : Partition d.D B) (prompt : Fin B → Finset (Fin d.D.N)),
-    d.D.Boolean → Assumptions.Sessions d P prompt c k → Complies c k d ∧ slowdown (Complies c k) d ≤ 1
 
 end InferenceOnly.Guarantees

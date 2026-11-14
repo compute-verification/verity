@@ -28,7 +28,7 @@ from verity.protocols.accounting.certifier.verifier.certificate import record_he
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.warden import END, Shim, Warden, cells, read_cell
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.device.tests.relay_runs import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
 REQUESTS = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
@@ -200,7 +200,7 @@ def _closed_heads(closed) -> dict:
 
 def _unsalted(out: Path) -> list[dict]:
     """`certified.jsonl` line by line without what the certifier's fresh `salt_c` decides (the salt, the salted digest
-    and the signature over it), with the signature's LMS leaf q kept, and a link-window the issuer refused as it is."""
+    and the signature over it), with the signature's LMS leaf q kept, and an execution phase the issuer refused as it is."""
     out_ = []
     for line in (out / "certified.jsonl").read_text().splitlines():
         doc = json.loads(line)

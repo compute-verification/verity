@@ -16,15 +16,16 @@ from verity.protocols.accounting.pous.verifier import setup_proof as V
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 
 
-def test_law_samples_8828_at_any_size():
-    assert V.law(1) is None and V.law(V.SAMPLE) is None
-    assert V.law(V.SAMPLE + 1) == f"rate:8828/{V.SAMPLE + 1}" and V.law(1 << 19) == "rate:8828/524288"
+def test_sampling_design_samples_8828_at_any_size():
+    assert V.sampling_design(1) is None and V.sampling_design(V.SAMPLE) is None
+    assert V.sampling_design(V.SAMPLE + 1) == f"rate:8828/{V.SAMPLE + 1}"
+    assert V.sampling_design(1 << 19) == "rate:8828/524288"
     with pytest.raises(ValueError):
-        V.law(0)
+        V.sampling_design(0)
 
 
 def test_claim_round_trips():
-    c = V.Claim({"w": 64}, bytes(88), bytes(range(64)), "ab" * 64, V.law(1 << 19), b"\x01\x02")
+    c = V.Claim({"w": 64}, bytes(88), bytes(range(64)), "ab" * 64, V.sampling_design(1 << 19), b"\x01\x02")
     assert V.Claim.from_json(c.to_json()) == c
 
 
@@ -121,7 +122,7 @@ def test_supplied_rows_read_the_verifiers_bytes_as_the_words_the_units_ports_hol
     """SPOT reads a supplied row's bytes as the parameter's leaves of big-endian 32-bit halves (a 16-bit half for two
     bytes), least significant first (`one_stage.registered.supplied_rows`), at the unit's ports' leaf width, one bit;
     the unit's base port holds the base's bits in byte order, the little-endian 16-bit words its run recorded, and its
-    slot port the slot's bits. Over the verifier's hex, `supplied_rows` gives each sampled unit's base and slot as the
+    slot port the slot's bits. Over the verifier's hex, `supplied_rows` gives each sampled block's base and slot as the
     unit reads them, and packed into 16-bit words (`bit_words`) the words its port records."""
     from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 

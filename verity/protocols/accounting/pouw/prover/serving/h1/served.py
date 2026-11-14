@@ -110,8 +110,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import live as LV
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
-from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+from verity.protocols.accounting.pouw.prover.serving.h1 import tables as TB
 from verity.protocols.accounting.pouw.prover.serving.h1.model_key import ModelKey, model_key
 from verity.protocols.accounting.pouw.prover.serving.h1.names import (
     B_NONCE,
@@ -148,6 +147,7 @@ from verity.protocols.accounting.pouw.prover.serving.h1.words import (
     row_words,
     zy_words,
 )
+from verity.protocols.accounting.pouw.prover.serving.tensors import h1_device, tensors
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
@@ -602,7 +602,7 @@ class Served:
         whole = self._a_rows(call, value, mine, codes, scales)
         if whole is not None:
             out[value] = self._register(run, value, whole, nonce(mine[0], "a"), self.root)
-        also = TD.take_z(run, call, zy_rows)
+        also = TB.take_z(run, call, zy_rows)
         self._register_later(run, HW.table(self.program, "zy", call.index), zy_rows, nonce(call.index, "zy"), out,
                              also=also, into=run._roots[call.index] if also is not None else None)
         if self.tap is not None:
@@ -632,12 +632,9 @@ class Served:
         shape = ((self.m // self.tile[0]) * (n // self.tile[1]), 3 * self.tile[0] * self.tile[1])
         if NR.path() != "gpu":
             return np.zeros(shape, np.uint16)
-        import torch
-
-        from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
-
-        with D.hashing() as device:
-            return torch.zeros((shape[0], 2 * shape[1]), dtype=torch.uint8, device=device).view(torch.uint16)
+        ts = tensors()
+        with h1_device().hashing() as device:
+            return ts.view(ts.zeros((shape[0], 2 * shape[1]), "uint8", device), "uint16")
 
     def _take_b(self, run: Any, call: Any, b: str, out: dict[str, str | None]) -> bool:
         """Put ``b/<K>`` in ``out`` once K's linears' weights are all held, the period's or the window's own; False when
@@ -669,7 +666,7 @@ class Served:
         ctx = _now(self.root, "open root").encode()
         head = CC.PUBLIC_ROW_SALT_DOMAIN + len(ctx).to_bytes(8, "big") + ctx
         roots = (self.registered[a].root, self.registered[b].root)
-        with D.hashing() if NR.path() == "gpu" else contextlib.nullcontext() as device:
+        with h1_device().hashing() if NR.path() == "gpu" else contextlib.nullcontext() as device:
             for c in calls:
                 (u0, n), (k, cols) = units[c], ks[self.calls[c][0]]
                 rows = PublicRows(run._salt, roots, u0, n, (self.m, k, self.tile, cols // self.tile[1]) if j10r else None)

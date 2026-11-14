@@ -34,7 +34,7 @@ commit phase's check (elsewhere no play is accepted) and SPOT's claim fails on t
   - at the units (`ex_off_le_units`), `p_u` is the probability of sampling `u`, and the majority at any bit of `u`'s
     wires weighs at least `p_u / 2` (`sampled_le_weight`), so `∑ a p ≤ 2K` and `(∑ a)² ≤ n ∑ a² ≤ 2nK`.
 
-The averaging is `Verity.Majority`'s, which the two-stage leg reads too: the session's plays are a `Majority.Plays`
+The averaging is `Verity.Majority`'s, which the two-stage subprotocol reads too: the session's plays are a `Majority.Plays`
 (`Dep.plays`), `Dep.weight` and `Dep.extract` are its weight and plurality, and each lemma above is the shared one at
 them.
 -/
@@ -102,26 +102,16 @@ theorem verdict_run (q : Dep) (hG : AccOfAccepts q) (V : Vocab d α) (k : Verity
       (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) ω r).seen)
     (ξ : S.Ξ) (s : S.Ω × (Fin (q.D.V.k (S.x ξ)) → Coin)) (h : RecVerdict V k (S.out ξ s)) :
     RecDeploy.DenseAt (S.x ξ) ∧ (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2).out = .acc := by
-  obtain ⟨-, -, a, cb, eb, hcase, hda, j, p, hj, hp⟩ := h
-  obtain ⟨p', c', ev, hp', -, he, pub, prof, hch⟩ := id hda
-  rw [hj] at hp'
-  change VStar.Recursive.Sampled.paramsOfJson j = .ok p' at hp'
-  rw [hp] at hp'
-  cases hp'
-  cases ev with
-  | inl e₀ =>
-      change VStar.Recursive.Sampled.checkBlobs (.inr (.inl p)) c' (.inl e₀)
-        (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof at hch
-      simp [VStar.Recursive.Sampled.checkBlobs] at hch
-  | inr e =>
-    rcases e with e | e₂
-    · have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof :=
-        hch
-      obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp he
-      exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
-    · change VStar.Recursive.Sampled.checkBlobs (.inr (.inl p)) c' (.inr (.inr e₂))
-        (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof at hch
-      simp [VStar.Recursive.Sampled.checkBlobs] at hch
+  obtain ⟨-, -, a, cb, eb, hcase, hda⟩ := h
+  obtain ⟨p, c', e, hp, -, he, pub, prof, hch⟩ := id hda
+  cases hj : Core.canonicalJson a with
+  | error err => rw [hj] at hp; cases hp
+  | ok j =>
+    rw [hj] at hp
+    have hp' : VStar.Recursive.paramsOfJson j = .ok p := hp
+    have hch' : VStar.Recursive.checkBlobs p c' e (Core.Blobs.ofArray (S.out ξ s).sent.blobs) = .accept pub prof := hch
+    obtain ⟨hN, hS, hR⟩ := S.names_shows ξ s a cb eb j p e hcase hda hj hp' he
+    exact hG p c' e _ pub prof hch' (S.x ξ) hN S.Ω (S.P ξ) s.1 s.2 hS hR (hlive ξ s.1 s.2)
 
 /-- **The recursive session's plays** (`Majority.Plays` at the session `S` and the reading `readX`): the samples `ξ`,
 a run with the extractor's seed at each (`Dep.Sample`), the run's accept, the units `ξ` samples, the extractor's

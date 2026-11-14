@@ -1,10 +1,9 @@
-# SPOT[Flock] composed with recursion: the recursive audit (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`) over
-# `spot_flock/`'s package and recursion's, which nothing below requires. `vstar-recursive` is its command (`id | check |
-# serve | verdicts`, and sampled proofs' as `vstar-recursive sampled id | check | serve`, `VStar.Recursive.Sampled.main`).
-# The check itself (`VStarRecursive/Protocol.lean`) is still in `spot_flock/`'s package while SPOT's dispatch names the
-# recursive form. Code, not analysis.
+# SPOT[Flock] composed with recursion: the recursive audit (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`,
+# `VStarRecursion.Protocol`) over `spot_flock/`'s package and recursion's, which nothing below requires. `vstar-recursive`
+# is its command (`id | check | serve | verdicts`, and sampled proofs' as `vstar-recursive sampled id | check | serve`,
+# `VStar.Recursive.Sampled.protocol`). Code, not analysis.
 name = "spot_flock_recursion"
-defaultTargets = ["vstar-recursive"]
+defaultTargets = ["VStarRecursion", "vstar-recursive"]
 
 [leanOptions]
 autoImplicit = false
@@ -18,6 +17,10 @@ path = "../../../spot_flock/verifier/lean"
 [[require]]
 name = "core_vstar"
 path = "../../../recursion/verifier/vstar_cli"
+
+[[lean_lib]]
+name = "VStarRecursion"
+roots = ["VStarRecursion.Protocol"]
 
 [[lean_exe]]
 name = "vstar-recursive"

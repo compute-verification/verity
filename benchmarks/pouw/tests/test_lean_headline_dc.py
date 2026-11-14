@@ -26,7 +26,7 @@ def test_the_exporter_reads_its_own_trees_machine_model():
 
 
 def test_the_committed_instances_are_the_exporters():
-    """security/Definitions/Accounting/HeadlineDc/Sm90.lean, Sm90Measured.lean, Sm90MeasuredI3.lean, Sm100.lean and
+    """security/Definitions/Pouw/HeadlineDc/Sm90.lean, Sm90Measured.lean, Sm90MeasuredI3.lean, Sm100.lean and
     Sm100Measured.lean are what lean_headline_dc.py writes from the data, π* included, and every reading's bound is at
     most its target."""
     assert H.main(["--check"]) == 0

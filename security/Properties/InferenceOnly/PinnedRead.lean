@@ -1,5 +1,6 @@
 module
 
+public import InferenceOnlyCheck.Theta
 public import Properties.InferenceOnly.Opening
 public import Properties.InferenceOnly.RecordForm
 public import Properties.Flock.Circuit.UnitInst
@@ -17,6 +18,9 @@ the verdict bit 1; `ReturnsRow`, that the unit returns its table's row, the fill
 read does not; `PinnedReadHonest`, that the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`) has a pinned
 read; and `OpenedRowReturned`, that an opening's declared row is the row its reader returns. The proofs are
 `Proofs.Properties.InferenceOnly.Lemmas.Opening`'s.
+
+A pinned read is a read by a pinned reader: the pin is the closure digest of the reader's Definition
+(`InferenceOnlyCheck.Record.pinOf`), and pins no table and no root.
 -/
 
 @[expose] public section
@@ -25,7 +29,7 @@ namespace InferenceOnlyCheck.Properties.Record
 
 open Lean (Json)
 open Flock.Program (Prog Defn)
-open InferenceOnlyCheck.RecordText (Row Held)
+open Spot.RecordText (Row Held)
 open Accounting
 
 /-- **A pinned read at the verdict bit `ok`, as a check holds it and its circuit file lays it out**: the hypotheses of
@@ -102,7 +106,13 @@ the verdict bit be 1; and let `table` be committed under the root and the domain
 (`PinnedRead`). Then the row `u` returns in its local evaluation is `table`'s row at the key its key gates hold
 there, or the fill row where the key is at or past the table's count (`Hash.EmbeddingRead.h`), or SHA-512 collides on
 what the unit's check and `table`'s opening at the key hashed (`ReturnsRow`). A read inside a fused block is outside it:
-its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it. -/
+its row goes straight into the block's GEMM and never leaves the unit, so `portsOf` gives no gates for it.
+
+By itself it fixes no table: `table` is whatever is committed under the root and domain id the unit's gates hold in
+`Yc`, and no hypothesis ties those to a registered root, since every hypothesis on `Yc` is at the unit `u` alone. What
+would tie them is that `Yc` is a transcript the proof system accepted, whose input rows open against the window's
+registered roots, with this unit's root and domain id rows among them; no statement here says so, and its form waits
+on the sampled proofs' predicate for a proof block's input rows. -/
 def PinnedReadBinds : Prop :=
   ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
@@ -114,9 +124,12 @@ def PinnedReadBinds : Prop :=
       ReturnsRow ct hB n u q Yc table
 
 /-- **The verdict bit does the work**: some form, record, circuit file and transcript meet every hypothesis of
-`PinnedRead` but the verdict bit, which is 0 (`PinnedReadAt` at `false`), and the unit returns neither its table's row
-nor the fill row, with no collision (`¬ ReturnsRow`). Not proved: it needs a circuit file that parses and a template
-the read's check accepts, runs of code on a file, which the kernel does not evaluate. -/
+`PinnedRead` but the verdict bit, which is 0 (`PinnedReadAt` at `false`); the opening the unit's gates hold is
+`table`'s own at the index, and the row the unit returns is neither that opening's row nor the fill row. It shows the
+first disjunct of `ReturnsRow` failing at an opening equal to the table's, and says nothing of the collision
+disjuncts, which no kernel proof can exclude: at that opening each is a collision among one opening's own hashed
+inputs. Not proved: it needs a circuit file that parses and a template the read's check accepts, runs of code on a
+file, which the kernel does not evaluate. -/
 def PinnedReadNontrivial : Prop :=
   ∃ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)
@@ -125,7 +138,11 @@ def PinnedReadNontrivial : Prop :=
     (q : ReadUnit.Ports (Flock.Bridge.circuitOf (.tmpl ct) hB n))
     (Yc : (Flock.Bridge.circuitOf (.tmpl ct) hB n).Trace) (table : ℕ → Hash.RowLeaf.Opening),
     PinnedReadAt F c j tr P r name p pin k dfn ro out tags bytes tables ct tu hB n consts u q Yc table false ∧
-      ¬ ReturnsRow ct hB n u q Yc table
+      q.opening ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) =
+        table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)) ∧
+      q.hOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u) ≠
+        Hash.EmbeddingRead.h q.count q.words (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u))
+          (table (q.tokOf ((Flock.Bridge.partsOf (.tmpl ct) hB n).localEval Yc u)))
 
 /-- **An honest pinned read**: of the check's own form (`InferenceOnlyCheck.Record.SecurityProofs.form`), some instance, record,
 circuit file and transcript meet `PinnedRead`, so `PinnedReadBinds` is not vacuous of it. So that it does not hold

@@ -11,12 +11,12 @@ attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
   ``libp2v1.so`` on the weights' GPU, which checks its own decode of the whole segment; `CpuEncoder` on the CPU), two
   blocks of each segment held to ``W`` by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8
   tensor on the weights' device; the memory challenger's table of it and the root over that table
-  (`VerifierKey.from_row_digests`). The salt is ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin
+  (`VerifierKey.from_row_digests`). The salt is ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin
   flipped after the commitment (`salt_from`).
 * **Decode** (`decoder`): a tensor's bytes from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the
   CPU (`Store.decode_cpu`).
-* **The period** (`answer`, `audit`, `leg`): `period_prover.audit` of what setup published, the prover answering each index
+* **The period** (`answer`, `audit`, `subprotocol`): `period_prover.audit` of what setup published, the prover answering each index
   from ``C*`` where it is held, the memory challenger at ``period.json``'s ``challenger_host``, and the Lean answering
   where the period's tools name it.
 
@@ -293,10 +293,10 @@ def audit(store: Store, node: str, coins: bytes, **kw: Any) -> Any:
     return period_prover.audit(node, store.held(), coins, **kw)
 
 
-def leg(store: Store | None, period_dir: str | Path, node: str, out: str | Path, *, audit: Callable[..., Any],
+def subprotocol(store: Store | None, period_dir: str | Path, node: str, out: str | Path, *, audit: Callable[..., Any],
         side_of: Callable[..., Any], fresh: bool, answered: Callable[[], int],
         schemes: Mapping[str, Any] | None = None, protocol: str | None = None) -> dict[str, Any]:
-    """One period's PoUS of ``store``, as `period_prover.leg` runs it for a node's records: the memory challenger at
+    """One period's PoUS of ``store``, as `period_prover.subprotocol` runs it for a node's records: the memory challenger at
     ``period.json``'s ``challenger_host`` (``side_of``, the runtime's ``Side.of``, its side's key and session log in
     ``pous-challenger`` beside the periods when it is this node), fresh coins handed to ``audit`` (the holder's
     `audit`), and the Lean's answer where the period's tools name ``pous-run-protocol`` (and, at the first period,

@@ -5,7 +5,7 @@ public import Definitions.Slowdown.Layered
 /-!
 # The inference-only policy over threads: the reference circuit is keyed
 
-`InferenceOnly.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
+`Slowdown.Guarantees.ThreadedOfLayered` derives the thread draft's threading premise from a keyed form of the reference
 circuit (`Layered`). That the reference training circuit is keyed, and at which parameters, is checked on paper against
 a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit of a transformer exists to build a
 `Layered` on. Until one does, it is a named conjecture, stated over a reference circuit `c` and its threading `T` as
@@ -14,7 +14,7 @@ a transformer block at Kimi K2's shapes, not in Lean: no Lean reference circuit 
 
 @[expose] public section
 
-namespace InferenceOnly.Assumptions
+namespace Slowdown.Assumptions
 
 open Verity
 
@@ -23,7 +23,7 @@ in the declarations' primitives, which contain it gate for gate, so each matrix-
 steps, each reading the previous step's accumulator, 16 activations and 16 weights. `T` counts the `Dot16` steps of the
 forward and activation-gradient products of updated weights, each with one weight and one activation designated
 round-robin (the backward's offset by 8, so a designated weight is used once per thread). The threading `T` has a keyed
-form (`Layered`) whose roots each have at least `d₀ = 17` legs (every step of a chain after its first, its legs the
+form (`Layered`) whose roots each have fan-in at least `d₀ = 17` (every step of a chain after its first, its fan-in the
 previous accumulator and its 16 activations; no step of a weight's product reads more values of its thread), whose
 values each reach at most `e = 2328` counted steps (an MoE input value's: the router's 384 products and gate and up of
 8 routed experts and the shared one, `9 · 2 · 2048`, 37248 products in 16-wide steps), whose lookups reach none
@@ -39,7 +39,7 @@ a reference circuit written otherwise (a residual keyed to its skip path makes a
 fan-out), at a larger capacity factor (`e = 280 + 256 · ⌈8 · cf⌉`), with FP8 embeddings, whose columns are
 `163840 · 8` bits, and wherever a gather reads a computed embedding table, as every training step after a run's first
 does when it trains the table: that gather is no lookup, so its thread's first chains key back to the token, where the
-legs of each chain's first root meet (`d₀ = 1`). -/
+fan-in reads of each chain's first root meet (`d₀ = 1`). -/
 def ReferenceLayered (c : RegisteredCircuit) (T : Threading c) : Prop :=
   Nonempty (Layered T 17 2328 0 (163840 * 16))
 
@@ -48,4 +48,4 @@ inference block reading at most `S` bits holds at most `E` of a thread's lookups
 def CapBelowColumns (S : ℝ) (E b : ℕ) : Prop :=
   S < ((E + 1) * b : ℕ)
 
-end InferenceOnly.Assumptions
+end Slowdown.Assumptions

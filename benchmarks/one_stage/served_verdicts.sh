@@ -53,15 +53,15 @@
 #     aggregate's, which `served_overhead.py table` reads there) or Pearl+'s exclusion tiles' count or its replayed tiles'
 #     ids (its verdict's profile and replay by tile, the reference's and the Lean's), its exact credit where the work is
 #     in the grid form, or its prover's give-up before the coin (the piece's give-up document and the counts in its
-#     log's volunteer and retain lines), its public form in its place. The advice docket's published copies
+#     log's volunteer and retain lines), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
-#     dockets, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
+#     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
 #  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
-#     closed window's advice under the prove path's registered compiler and the weights docket (`--weights-of-record`),
+#     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
 #     then this window's request Programs (`tools/advice_compile.py`); V3b's window circuit (`prove_path.py window-circuit
 #     --pins` the docket, and PIN's NAME=ROOT if set), its registered and free input bits at those
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs
@@ -349,8 +349,8 @@
 # reads the period's circuit against the window-circuit record V3c held R's circuit to (`window_tie` keeps it beside R).
 # Pearl+'s piece then serves
 # nothing of its own (served_pearlplus.sh's PEARLPLUS_TIE): it takes the window's epoch pearl/w<k>/, writes W
-# (`retain --window-record`) chained after the serve's first docket (`--previous-record`: the serve dir's
-# deployment-registration.json, the weights docket as a `verity/registration/v2` record, which weights() writes
+# (`retain --window-record`) chained after the serve's first registration record (`--previous-record`: the serve dir's
+# deployment-registration.json, the weights registration as a `verity/registration/v2` record, which weights() writes
 # before the first request and the WEIGHTS and DEPLOYMENT-REGISTRATION lines name: the developer's own record, whose
 # digest no auditor holds), so the log before R is that record and W, and runs `served_verdicts.sh pearl-tie`
 # (PEARLPLUS_TIE_CMD) before its coin: the window's
@@ -546,10 +546,10 @@ case $PRODUCT in
 esac
 case $COMPOSE_OFF_NODE in 0 | 1) ;; *) say "PREFLIGHT: COMPOSE_OFF_NODE is 1 (the default) or 0, not $COMPOSE_OFF_NODE"; exit 3 ;; esac
 CKPT=${CKPT:-$HF_HOME/hub/models--${REPO//\//--}/snapshots/$REV} WREG=$D/weights_registration.json
-# the serve's first docket: the weights docket as a record of the log, which Pearl+'s W is chained after
+# the serve's first registration record: the weights registration as a record of the log, which Pearl+'s W is chained after
 DREG=$D/deployment-registration.json
 NO_WEIGHTS="NO WEIGHTS REGISTRATION: no window registers a weight's root, so every weight read counts free"
-weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's docket
+weights() {  # under the lease (its commit hashes on the leased GPU), before the first request: the committer's registration
   (cd "$TREE" && "$PY" verity/protocols/proofs/spot/prover/audit/prove_path.py weights-registration --serve-run "$D" --checkpoint-dir "$CKPT" \
     --key "$D/private/weights.key" --out "$WREG" --deployment-record "$DREG") > "$OUT/weights_registration.txt" 2>&1
   local rc=$? log=$OUT/weights_registration.txt

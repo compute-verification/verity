@@ -1,4 +1,4 @@
-"""warden_zk's host side on a network certifier run driven tick by tick (`test_warden_serve._run`): the driver reads the
+"""warden_zk's host side on a network certifier run driven tick by tick (`relay_runs._run`): the driver reads the
 egress registration under the deployment's key and session and holds the network certifier's opening to its head; the
 Program's proof blocks read the egress cells of the connection admitted in the execution phase with the most cells, from
 cell D·r on, chosen from the wiring and the schedule alone, each at its bucket's row and the slot the network
@@ -13,11 +13,9 @@ port. Nothing here proves (`warden_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -28,23 +26,12 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, HEADER, PAD
 from verity.protocols.accounting.certifier.verifier.warden import END
+from verity.protocols.accounting.certifier.device.tests import relay_runs as tws
+from verity.protocols.accounting.certifier.prover import warden_zk as wz
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE / "tests"))
-import test_warden_serve as tws  # noqa: E402
-
-
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_warden_zk", HERE / "warden_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-wz = _load()
+ROOT = Path(__file__).resolve().parents[6]
 UNITS = 8
-LEAN = HERE.parents[1] / "verity" / "protocols" / "proofs" / "flock" / "verifier"
+LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
 #: the Lean verifier, which check builds before this suite (`AFTER_LEAN`)
 needs_lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
@@ -95,7 +82,7 @@ def test_the_programs_units_read_the_egress_cells_after_the_delay(at):
     assert at.reads == list(at.units.cells)
     q, first, k = next(c for c in at.opening.wiring.connections if c[0] == at.connection)
     assert k == max(c[2] for c in at.opening.wiring.connections) and k >= pads + UNITS
-    assert at.window == 0 or first > 0, "admitted in the link-window, so its first D·r cells are its delay's pads"
+    assert at.window == 0 or first > 0, "admitted in the execution phase, so its first D·r cells are its delay's pads"
     cells = [wz.cell_of(at, at.opening.rows[t], i) for i, t in enumerate(at.positions)]
     assert all(HEADER.unpack_from(c)[1] == at.connection for c in cells)
     assert at.data_rows == sum(c[0] in (DATA, END) for c in cells) == UNITS

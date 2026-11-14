@@ -20,10 +20,8 @@ reads its rounds as w63's. Nothing here lowers or proves (`scan_zk.prove` does, 
 from __future__ import annotations
 
 import hashlib
-import importlib.util
 import json
 import re
-import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -35,23 +33,15 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-PERIOD_CASE = HERE.parents[1] / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
-    spec = importlib.util.spec_from_file_location("network_traces_scan_zk", HERE / "scan_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-sz = _load()
+from verity.protocols.accounting.certifier.prover import scan_zk as sz
 from verity.protocols.accounting.certifier.device import warden_serve as WS
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA
+
+ROOT = Path(__file__).resolve().parents[6]
+PERIOD_CASE = ROOT / "verity" / "protocols" / "accounting" / "certifier" / "verifier" / "network" / "tests" / "period_case.py"
 
 
 def test_each_rounds_host_read_is_the_rounds(tmp_path):
@@ -292,7 +282,7 @@ def test_each_execution_phase_is_a_registration_its_start_the_record_befores_las
     assert stale_round.at.claimed == ch.states[T] != sz._bits(stale_round.at.start, 0)
     assert not sz.REG.verify_read(sz.tree_domain(stale_round.at.start), stale_round.at.start.root, 0,
                                   stale.bcs["sin"][0], b"", v2)
-    with pytest.raises(SystemExit, match="a group is 1 or more link-windows"):
+    with pytest.raises(SystemExit, match="a group is 1 or more execution phases"):
         sz.link(tmp_path / "none", setup=sz.TEST, group=0)
 
 
@@ -607,10 +597,10 @@ def test_the_scans_answer_names_its_lanes_tied_or_nothing_and_the_period_check_h
     cls = SimpleNamespace(NR=2, EVERY=every, KO=1, IDB=1)
     G, T, NE = 1, 8, sz.IS.entry_bits(cls)
     nb = G * T // every
-    defs = {"first": _lanes("ScanZkTestScanFirst", ("row",), cls.NR, NE),
+    defs = {"start": _lanes("ScanZkTestScanStart", ("sin",), 0, NE),
             "ingress": _lanes("ScanZkTestScanBucket", ("row", "sin"), cls.NR, NE),
             "egress": _lanes("ScanZkTestScanEgress", ("state",), 0, NE)}
-    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
+    counts = sz.counts_of(sz.members_of(sz.TEMPLATES, T))
     root = sz.scan_root([(defs[t], counts[t], sz.FIXED[t]) for t in sz.TEMPLATES], nb, every)
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
     N, design = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
@@ -853,7 +843,7 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog0", "prog1"]}
     (level,) = CC.integrity(a["profile"])["levels"]
     assert level["draw"]["law"] == "stratified" and sum(s["k"] for s in level["draw"]["strata"]) == N == level["size"]
-    why = "the scan's audit of link-window 1 refused: egress-0: registered reads: table row 3 does not open"
+    why = "the scan's audit of execution phase 1 refused: egress-0: registered reads: table row 3 does not open"
     r = SA.window_answer(reg, None, sz.Fraction(1, 100), why)
     assert CC.answer_of(r)["verdict"] == "reject" and r["reason"] == why and r["commitment"] == a["commitment"]
     with pytest.raises(SystemExit, match="another registration"):
@@ -876,7 +866,7 @@ def test_an_audit_refused_with_every_member_held_answers_its_execution_phase_nam
                                   "failed": {"registered": ["registered"]}}
     ats = [h.rounds[f"honest-{w}"].at for w in range(G)]
     got = sz.answers(ats, out, results, sz.Fraction(1, 100))
-    why = "the scan's audit of link-window {} refused: check registered: registered"
+    why = "the scan's audit of execution phase {} refused: check registered: registered"
     assert got == {w: {"verdict": "reject", "bound": None, "reason": why.format(w), "commitment": R.digest(regs[w])}
                    for w in range(G)}
     doc = json.loads((out / "answers.json").read_text())
@@ -907,13 +897,13 @@ def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail
     assert list(refused) == sz.targets(r.at, r.name) == ["egress-0"]
     assert refused["egress-0"] == f"registered reads: table row {b} does not open the registered root at position {b}"
     assert sz.wired(r.members) == []
-    with pytest.raises(SystemExit, match=re.escape("the warden failed a connection in link-windows [0], which the "
+    with pytest.raises(SystemExit, match=re.escape("the warden failed a connection in execution phases [0], which the "
                                                    "scan refuses")):
         sz.host(tmp_path / "two", run, setup=sz.TEST, group=2)
 
 
 @pytest.mark.slow
-def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
+def test_the_rows_forms_case_is_the_phases_rows_certificates_and_the_scans_answer(tmp_path, monkeypatch):
     """`scan_period.rows_case` of one execution phase in the rows form's formats (`NetworkCheck.Period`; its Lean checks
     the case on a node: scan_period.sh): the deployment's key and session, the one entry listed, from execution phase
     0, and its schedule (its integer fields, the id egress form's), the registered Program and its
@@ -1331,7 +1321,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     grid[t][j] = bytes(frame)
     _rewrite(run / "responses.records", [RF.pack_record(replace(rec, grid=tuple(tuple(r) for r in grid))),
                                          *blobs[1:]])
-    with pytest.raises(SystemExit, match="egress link-window 0's record under cells.salts isn't the rows whose root "
+    with pytest.raises(SystemExit, match="egress execution phase 0's record under cells.salts isn't the rows whose root "
                                          "the warden signed"):
         sz.host(tmp_path / "h1", run)
 
@@ -1340,7 +1330,7 @@ def test_a_forged_cell_row_another_key_or_another_schedule_is_refused_by_name(tm
     dep = json.loads((run / "deployment.json").read_text())
     dep["key"] = json.loads((other / "deployment.json").read_text())["key"]
     (run / "deployment.json").write_text(json.dumps(dep))
-    with pytest.raises(SystemExit, match="ingress link-window 0's registration doesn't verify under the deployment's "
+    with pytest.raises(SystemExit, match="ingress execution phase 0's registration doesn't verify under the deployment's "
                                          "key and session"):
         sz.host(tmp_path / "h2", run)
 
@@ -1380,7 +1370,7 @@ def test_a_fails_reason_outside_its_fails_bucket_is_refused_by_name_and_one_outs
     (["--challenger", "gate:research@h", "--draw", "16", "--main", "m.txt", "--peer", "p"],
      "needs --peer and --challenger-key"),
     (["--challenger", "local", "--draw", "16"], "needs --main"),
-    (["--group", "0"], "--group is 1 or more link-windows"),
+    (["--group", "0"], "--group is 1 or more execution phases"),
 ])
 def test_a_challenger_draw_that_cant_draw_is_refused_by_name_before_anything_runs(tmp_path, capsys, flags, why):
     with pytest.raises(SystemExit):

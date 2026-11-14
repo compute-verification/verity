@@ -29,7 +29,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "network_traces" / "tests"))
 import a5_warden as AW  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-import test_warden_serve as tws  # noqa: E402
+from verity.protocols.accounting.certifier.device.tests import relay_runs as tws  # noqa: E402
 
 N, REST = 8, 4
 
@@ -195,17 +195,19 @@ def test_salts_of_names_one_salt_for_each_row_of_a_port_of_the_window(run):
         AW.CS.commit(mine, data, salts_of={"no-such/row": bytes(AW.CS.SALT_BYTES * N)})
 
 
-def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_module(tmp_path, monkeypatch):
-    """A process that holds `network_traces`' `replay` under that name holds a module with none of what a5 writes an
-    audit's case with. a5 reads the `replay.py` beside it by its path, so the case is written and no error stands in
-    its place."""
+def test_the_audits_case_is_written_where_replay_names_another_module(tmp_path, tmp_path_factory, monkeypatch):
+    """A process that holds another module under the name `replay` (here a stand-in) holds one with none of what a5
+    writes an audit's case with. a5 reads the `replay.py` beside it by its path, so the case is written and no error
+    stands in its place."""
     from verity.protocols.proofs.spot.prover.audit import window_audit as a5
-    monkeypatch.syspath_prepend(str(HERE.parent / "network_traces"))
-    spec = importlib.util.spec_from_file_location("replay", HERE.parent / "network_traces" / "replay.py")
+    other = tmp_path_factory.mktemp("other")
+    (other / "replay.py").write_text('"""A module named replay that is not the audit\'s."""\n')
+    monkeypatch.syspath_prepend(str(other))
+    spec = importlib.util.spec_from_file_location("replay", other / "replay.py")
     theirs = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(theirs)
     monkeypatch.setitem(sys.modules, "replay", theirs)
-    assert Path(theirs.__file__).parent.name == "network_traces" and not hasattr(theirs, "params")
+    assert Path(theirs.__file__).parent == other and not hasattr(theirs, "params")
     RP = a5.own_replay()
     assert Path(RP.__file__) == HERE / "replay.py"
     monkeypatch.setattr(RP, "descriptor", lambda program: {"program": "p"})

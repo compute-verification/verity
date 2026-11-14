@@ -9,7 +9,7 @@ public import Properties.InferenceOnly.Desc.Verdict
 /-!
 # A verdict of compliance of the check of record carries the cover theorem's factor
 
-`CoverTrained` is `InferenceOnly.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, multiplied out by the gate budget
+`CoverTrained` is `Slowdown.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, multiplied out by the gate budget
 `c = gamma`, at the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.InferenceOnly.Threads`'s
 statements: its premises on the reference training circuit's bit view (`UpdateHardness`, the upstream certificate
 `MulBlocks.Upstream`) and on the registered information (`ThetaRegistered`) are named assumptions, which the check
@@ -20,7 +20,7 @@ provenance, its verdict `Desc.evaluate`'s. `CheckedCoverTraining` states the cov
 the check of record, on every expansion of the instance gate by gate (`OnExpansions`), of which there is one.
 
 `SecurityProofs.CheckedCoverTraining` (`Proofs.InferenceOnly.Cover.Checked`, package `security_proofs`, whose proof needs
-`InferenceOnly.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees` (`SecurityProofs.DescAgrees`,
+`Slowdown.Cover.SecurityProofs.CoverTraining`) proves it from `DescAgrees` (`SecurityProofs.DescAgrees`,
 `Proofs.Properties.InferenceOnly.Agrees`).
 -/
 
@@ -34,7 +34,7 @@ open Flock.Program (Prog)
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
 information `theta` names, containing a reference training circuit `r` with none of its fresh input registered
 (`ThetaRegistered`), pays the cover theorem's factor at `c = gamma`, `α = num / den` and `k = α c`,
-`α₀ b c size(r) ≤ (k² + b k) size(d)` (`c` times `InferenceOnly.Cover.Guarantees.CoverTraining`'s conclusion
+`α₀ b c size(r) ≤ (k² + b k) size(d)` (`c` times `Slowdown.Cover.Guarantees.CoverTraining`'s conclusion
 `α₀ b size(r) ≤ (α² c + b α) size(d)`, under its premises on `r`'s bit view). -/
 def CoverTrained (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
@@ -45,10 +45,10 @@ def CoverTrained (j out : Json) : Prop :=
     let k : ℝ := α * c
     ∀ (b α₀ : ℝ) (r : Verity.RegisteredCircuit) (M : Verity.Containment r.D d.D)
       {J L : Type} [DecidableEq J] [DecidableEq L]
-      (Mb : InferenceOnly.Cover.MulBlocks (InferenceOnly.Cover.Circuit.ofDecl r) J L)
-      (A : J → Finset (Fin (InferenceOnly.Cover.Circuit.ofDecl r).N)) (s D w₀ : ℕ),
-      0 < b → InferenceOnly.Assumptions.ThetaRegistered r d (InferenceOnly.PartialContainment.ofContainment M) →
-      InferenceOnly.Cover.Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → k < b * D →
+      (Mb : Slowdown.Cover.MulBlocks (Slowdown.Cover.Circuit.ofDecl r) J L)
+      (A : J → Finset (Fin (Slowdown.Cover.Circuit.ofDecl r).N)) (s D w₀ : ℕ),
+      0 < b → InferenceOnly.Assumptions.ThetaRegistered r d (Slowdown.PartialContainment.ofContainment M) →
+      Slowdown.Cover.Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → k < b * D →
       (∀ g, r.D.w g ≤ w₀) → w₀ * c + k + r.D.width r.θ ≤ s →
       α₀ * r.D.size r.D.computed ≤ Mb.P.card →
         α₀ * b * c * r.D.size r.D.computed ≤ (k * k + b * k) * d.D.size d.D.computed

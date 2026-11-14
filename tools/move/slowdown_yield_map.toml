@@ -7,8 +7,10 @@
 # The calculator's other names that carry a retired word, each read only inside it:
 # - its regime and scenario of unregistered hardware alone, "unmonitored" (`Unmonitored`, `kind = "unmonitored"`,
 #   `unmonitored-h200-kimi`), are "unregistered" (`nci_unregistered_map.toml` left them for this map);
-# - the network certifier's line rate `warden_rate` is `line_rate`;
 # - an incorrect ingress block's bits, `faulty_unit_bits` (a property and the record's key), are `incorrect_block_bits`.
+# - the ceilings on the rates an algorithm of `benchmarks/nci`'s library pays, `nci.state_bits_cap`, `nci.rate_cap` and
+#   `nci.boundary_bits_cap` (registry ids, `Nci`'s fields), are `*_ceiling`, and Proposition 6b's threshold
+#   `output_cap` is `output_threshold`.
 # What stays: a test's guard that the record holds no retired key ("unmonitored"), and the Lean's names
 # (`UnmonitoredAtMost`, `faultyIngressBits`), which no word here matches whole.
 
@@ -25,8 +27,11 @@ files = ["benchmarks/slowdown/**"]
 [words_in.words]
 "unmonitored" = "unregistered"
 "Unmonitored" = "Unregistered"
-"warden_rate" = "line_rate"
 "faulty_unit_bits" = "incorrect_block_bits"
+"state_bits_cap" = "state_bits_ceiling"
+"rate_cap" = "rate_ceiling"
+"boundary_bits_cap" = "boundary_bits_ceiling"
+"output_cap" = "output_threshold"
 
 [keep]
 patterns = []

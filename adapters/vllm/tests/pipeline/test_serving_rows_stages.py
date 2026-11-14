@@ -28,7 +28,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.commitments.periods import wiring as WI
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.registry import boolean_topp_stages as BT
 from verity_vllm.definitions.registry import sampling as SA
 from verity_vllm.definitions.registry import sampling_rows as SR

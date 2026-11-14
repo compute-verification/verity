@@ -31,6 +31,7 @@ from verity.protocols.accounting.pouw.prover.circuit import ncp2
 
 from verity.protocols.accounting.pouw.prover.serving import circuit as PC
 from verity.protocols.accounting.pouw.prover.serving import native as PN
+from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
 
 HERE = Path(prover.__file__).resolve().parent / "kernels" / "pouw_cuda"
 #: the GPU's one SHA-512 (`verity.commitments.cuda.SHA512`), which ncp2.cuh includes: a source of every build, by its absolute path
@@ -265,7 +266,8 @@ def commit_call(index: int, scheme: str, call: PC.Call, on: str = "host", flags:
 
 
 class FusedCommitter:
-    """Linear calls of ``scheme`` committed on the device by `ncp2_fused` from torch tensors on the current stream: A (m × k
+    """Linear calls of ``scheme`` committed on the device by `ncp2_fused` from the workload's buffers (`tensors`) on the current
+    stream: A (m × k
     int8, m a multiple of 16), the row scales' FP32 encodings (int32), the weight's int7 rows and scale encodings, the bias's
     BF16 encodings (int16), the row and column ids (int32); the served y comes back as BF16 encodings (int16, m × n).
     ``flags`` are `HASH`, `TIME_TILES` and `CACHE_Y`."""
@@ -275,22 +277,21 @@ class FusedCommitter:
         self.salt, self.flags = np.frombuffer(salt, np.uint8).copy(), flags
         self._perms: dict[int, tuple] = {}
 
-    def perm(self, k: int):
-        import torch
+    def perm(self, k: int, like: Any):
         if k not in self._perms:
             pi = np.asarray(ncp2.perm(self.kind, k), np.int64)
-            self._perms[k] = tuple(torch.tensor(v.astype(np.int32), device="cuda") for v in (pi, np.argsort(pi)))
+            self._perms[k] = tuple(tensors().put(v.astype(np.int32), like) for v in (pi, np.argsort(pi)))
         return self._perms[k]
 
     def __call__(self, a, s, b, t, bias, forward: int, position: int, weight: int, rowids, colids, root: np.ndarray | None = None,
                  yleaves: np.ndarray | None = None):
-        import torch
+        ts = tensors()
         (m, k), n = a.shape, b.shape[0]
-        y = torch.empty((m, n), dtype=torch.int16, device=a.device)
-        pi, inv = self.perm(k)
-        rc = self.lib.ncp2_fused(m, k, n, a.data_ptr(), s.data_ptr(), b.data_ptr(), t.data_ptr(), bias.data_ptr(), self.salt, forward,
-                                 position, weight, rowids.data_ptr(), colids.data_ptr(), pi.data_ptr(), inv.data_ptr(), self.flags,
-                                 torch.cuda.current_stream().cuda_stream, y.data_ptr(),
+        y = ts.zeros((m, n), "int16", a)
+        pi, inv = self.perm(k, a)
+        p = ts.pointer
+        rc = self.lib.ncp2_fused(m, k, n, p(a), p(s), p(b), p(t), p(bias), self.salt, forward, position, weight, p(rowids), p(colids),
+                                 p(pi), p(inv), self.flags, ts.stream(a), p(y),
                                  None if root is None else root.ctypes.data, None,
                                  None if yleaves is None else yleaves.ctypes.data)
         if rc:

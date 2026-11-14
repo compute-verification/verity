@@ -96,7 +96,9 @@ from verity.protocols.accounting.pouw.prover.serving import (
     SCHEDULES,
     Shape,
     traced_as as _traced_as,
+    use_h1_device,
     use_int8_arm,
+    use_tensors,
     verifier_coins,
     weight_binding,
     weights_root,
@@ -107,6 +109,23 @@ from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
+
+
+def _tensors() -> Any:
+    from verity_torch.pouw.tensors_device import TENSORS
+
+    return TENSORS
+
+
+def _h1_device() -> Any:
+    from verity_torch.pouw.h1.h1_device import H1
+
+    return H1
+
+
+#: PoUW's serving code reads and allocates the served buffers, and runs H1's device half, through the PyTorch adapter's
+use_tensors(_tensors)
+use_h1_device(_h1_device)
 
 __all__ = ["challenged", "h1_run"]
 
@@ -157,7 +176,7 @@ class Settings:
     coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the execution phase's work-law budget K, each call sampling its share (`plan.window_laws`); None is
+    #: ``ncp-v2``'s replay: the execution phase's work sampling design's budget K, each call sampling its share (`plan.window_sampling_designs`); None is
     #: `RECORD_K`
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first

@@ -36,7 +36,7 @@
 # comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
 # execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
-#      --draw K: N2's period sampled, K of the link-windows sampled on the verifier's coins; every one by default)
+#      --draw K: N2's period sampled, K of the execution phases sampled on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
@@ -55,8 +55,9 @@
 # nor a file that holds a row registration whole, its wiring's digest with it: the registrations a verifier takes
 # (warden-registration*.json) and the scan's answers, which carry them (answers.json), nor what the certificates step
 # found of the traffic (which execution phases were certified or refused, and how many problems: warden_chain's
-# WITNESS_KEYS). Those are witness, kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and
-# the hold), where the period's case reads the answers (certifier_piece.py), and never released.
+# WITNESS_KEYS), nor which execution phases n2's members' signer refused (n2_zk.py --witness). Those are witness,
+# kept on the chain's private side, $Q/witness/STEP (0700, outside the run dir and the hold), where the period's case
+# reads the answers (certifier_piece.py), and never released.
 # Custody publishes the whole run dir once this exits (out/, the runner's logs, and undeclared files, inputs/ among
 # them), so none of it may hold the gates' witness. Every step writes to the hold, $Q/held (0700, outside the run dir),
 # and so does the job's own stdout and stderr (released as out/stdout.log), so nothing it writes reaches the record
@@ -98,7 +99,7 @@ leak_guard() {   # on every exit: the guard on the run dir and the hold, then jo
   if [ -n "$SIGNALED" ]; then withhold "$SIGNALED ended the run before the leak guard read it"
   elif [ "$OUT" = "$PUB" ]; then withhold "no hold at $Q/held"; rc=3
   else
-    "${PY:-python3}" "$SRC/verity/protocols/accounting/certifier/device/leak_guard.py" "$RUN" "$Q" --gates "$G" --hold "$OUT" \
+    "${PY:-python3}" -m verity.protocols.accounting.certifier.device.leak_guard "$RUN" "$Q" --gates "$G" --hold "$OUT" \
       --release-to "$PUB" --keys --report "$PUB/leak-guard.json" > "$W/leak-guard.out" 2> "$W/leak-guard.err"
     g=$?
     if [ "$g" = 0 ] || [ "$g" = 3 ]; then OUT=$PUB; log "chain: $(cat "$W/leak-guard.out")"
@@ -177,10 +178,10 @@ if [ -n "${CR_ENDPOINT:-}" ]; then
 fi
 (cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "chain: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "chain: no ZK server frame"; exit 7; }
 
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
 WHOLE=(-name 'warden-registration*.json' -o -name answers.json)   # a step's files that hold a row registration whole
@@ -194,8 +195,9 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 }
 n2() {
   export WARDEN BIN LEAN N2OUT=$W/n2
-  local cmd=${CR_N2_CMD:-"$PY verity/protocols/accounting/certifier/prover/n2_zk.py prove --warden-run $WARDEN \
-    --bin $BIN --lean $LEAN --out $N2OUT ${CR_N2_GPU:+--gpu} ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"}
+  local cmd=${CR_N2_CMD:-"$PY benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run $WARDEN \
+    --bin $BIN --lean $LEAN --out $N2OUT --witness $Q/witness/n2/issuer-refused.json ${CR_N2_GPU:+--gpu} \
+    ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"}
   log "chain: n2: $cmd"
   bash -c "$cmd" > "$OUT/n2.log" 2>&1
   echo $? > "$W/n2.rc"; keep "$N2OUT" "$OUT/n2"; log "chain: n2 done, rc $(cat "$W/n2.rc")"
@@ -204,11 +206,11 @@ n2() {
 scan() {
   export WARDEN BIN LEAN SCANOUT=$W/scan
   local wr=
-  if "$PY" verity/protocols/accounting/certifier/prover/scan_zk.py prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
+  if "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
   else log "chain: scan_zk takes no --warden-run in this tree, so the scan proves its own run"; fi
   log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
-  else "$PY" verity/protocols/accounting/certifier/prover/scan_zk.py prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
+  else "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
@@ -217,7 +219,7 @@ scan() {
 tie() {
   local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
     "$(find "$WARDEN" -name deployment.json -print -quit)")}
-  local cmd="$PY verity/protocols/accounting/certifier/prover/n2_tie_zk.py prove --class warden --warden-run $WARDEN --windows $k \
+  local cmd="$PY benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --class warden --warden-run $WARDEN --windows $k \
     --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1

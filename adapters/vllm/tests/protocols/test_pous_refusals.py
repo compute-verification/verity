@@ -210,7 +210,7 @@ def _subprotocol(opt, tmp_path, n):
         assert (key, what) == ("pous", None), "PoUS's side is period.json's challenger.pous"
         return Side.of(doc, node, key, local, what)
 
-    got = opt.leg(directory, NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    got = opt.subprotocol(directory, NODE, out, side_of=side_of, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
     return got, json.loads((out / "pous.json").read_text())
 
 

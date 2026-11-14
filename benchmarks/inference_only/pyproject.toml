@@ -19,7 +19,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test builds with `lake` where it is (`check` runs the suite after its Lean steps). The script reads the difftest
 # harness (`tools/difftest`: `verity_difftest`). The class's card and the calculator's H200 servers are read from the
 # card files (`verity.device`). The integration's window circuit loads the PyTorch adapter (`adapters/torch`:
-# `verity_torch`). `adapter.py` is held to the vLLM adapter's public list (`tests/test_vllm_public_api.py`) by the
+# `verity_torch`). Every file here is held to the vLLM adapter's public list (`tests/test_vllm_public_api.py`) by the
 # harness's scan (`benchmarks/harness/tests/test_adapter.py`).
 inputs = ["benchmarks/slowdown",
           "benchmarks/one_stage/served_shares.py", "benchmarks/one_stage/served_verdicts.py",
