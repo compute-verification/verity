@@ -55,6 +55,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
@@ -643,7 +644,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
-#: what an unwritten registration raises with: the goal that brings it
+#: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
+#: that brings it
 REGISTRATION_GOAL = "memory-accounting/architecture-on-branch"
 
 
@@ -652,15 +654,17 @@ def registration(cfg: Mapping[str, Any], state: Path) -> str:
     registers the configuration's hash (the item ``{"kind": "configuration", "digest": K.digest(cfg)}``), before any
     party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
     one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
-    another hash, or none, is refused (``registration``). The log's items are θ and the builder alone
-    (`verity.protocols.accounting.registration.verifier.registration.item_of`, `Core.Registration`): no item names a
-    configuration yet, so it raises `NotImplementedError` (`REGISTRATION_GOAL`), and the line's ``registration`` is
-    ``None``."""
+    another hash, or none, is refused (``registration``). The item is the registration log's own
+    (`verity.protocols.accounting.registration.verifier.registration.configuration`), whose writer raises
+    `NotImplementedError` (``proofs/architecture-on-branch``) while the log has no coin to order it before; once it
+    returns, the run's log holding it beside θ and the builder isn't written either (`REGISTRATION_GOAL`). Until then
+    the line's ``registration`` is ``None``."""
     f, digest = state / "run.json", K.digest(cfg)
     run = json.loads(f.read_text()) if f.is_file() else {}
     if run.get("configuration") != digest:
         raise Refused("registration", f"{f} names configuration {str(run.get('configuration'))[:16]}…, not this "
                                       f"configuration's {digest[:16]}…: the registration names the run's own hash")
+    RL.configuration(digest)
     raise NotImplementedError(REGISTRATION_GOAL)
 
 
