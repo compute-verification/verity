@@ -91,8 +91,8 @@ its own function, `wipe_monitoring.counted` (`verity/protocols/accounting/pous/v
 `plan` checks the request with this tree's gate and prints each run's command and the endpoint's flags. The gate is
 `site.json`'s `gate`, whose host is the name of the environment variable that holds the challenger host's address
 (`VY_CHALLENGER_1_HOST`): the session, the front (`certifier_piece.py front`), a chain on the gate's coins and
-`wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it. `session` runs
-the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
+`wipe_gate.sh` read it there, and without it and with no gate given (`--gate`, `CHALLENGER`) each ends naming it.
+`session` runs the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpoint on the peer's loopback, by default
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
