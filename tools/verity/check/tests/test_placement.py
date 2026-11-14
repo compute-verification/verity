@@ -133,7 +133,7 @@ def test_a_shard_of_lean_alone_asks_a_train_slot_and_neither_takes_nor_twins_on_
 
 def test_a_machine_whose_slots_can_t_be_read_is_skipped_by_name():
     free = machine([slot("d")])
-    docs = {N1: "exit 255: ssh: connect to host 81.85.2.165 port 22: Connection timed out", N2: free}
+    docs = {N1: "exit 255: ssh: connect to host 192.0.2.11 port 22: Connection timed out", N2: free}
     assert CHECK.choose([N1, N2], docs) == (N2, CHECK.choose([N2], docs)[1], [f"{N1}: {docs[N1]}"])
     for bad, why in ((machine([slot("a")]) | {"lean": {"error": "Refused: 'audit two' is not `POOL N`"}},
                       "its Lean audit slots can't be read: Refused"),
@@ -342,10 +342,10 @@ def test_a_machine_is_reached_as_research_run_reaches_it(tmp_path, monkeypatch):
     monkeypatch.setattr(runpod, "SSH_KEY", tmp_path / "key")
     monkeypatch.setattr(runpod, "KNOWN_HOSTS", tmp_path / "known_hosts")
     monkeypatch.delenv("RUNPOD_SSH_KEY_B64", raising=False)
-    machines = {N1: {"provider": "ssh", "host": "81.85.2.165", "user": "research", "project": "verity"},
+    machines = {N1: {"provider": "ssh", "host": "192.0.2.11", "user": "research", "project": "verity"},
                 "other": {"provider": "ssh", "host": "10.0.0.2", "project": "veritor"}}
     argv = CHECK.reach(N1, machines)
-    assert argv[0] == "ssh" and argv[-2:] == ["research@81.85.2.165", "python3 -"]
+    assert argv[0] == "ssh" and argv[-2:] == ["research@192.0.2.11", "python3 -"]
     assert argv[argv.index("-i") + 1] == str(tmp_path / "key") and argv[argv.index("-p") + 1] == "22"
     assert {"BatchMode=yes", "ConnectTimeout=15", f"UserKnownHostsFile={tmp_path / 'known_hosts'}"} <= set(argv)
     with pytest.raises(Refused, match="belongs to project"):
