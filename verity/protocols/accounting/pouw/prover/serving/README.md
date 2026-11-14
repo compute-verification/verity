@@ -30,14 +30,14 @@ implementations in when it is imported.
   look up their targets at each call (`in_process_coins`, `verifier_coins`, `lead_in_process_certifier`,
   `ready_verifier`). Every other exported name is read from its module at each lookup, never cached, and a function
   that imports a name sees its module's current attribute.
-- **Loaded by:** the vLLM adapter (`verity_vllm.protocols.pouw` and its `pipeline`, `acquire`, `program` and `commit`
-  packages) and the device adapter; PoUW's prover tests
+- **Loaded by:** the serving engine's adapter (its PoUW protocol package and its `pipeline`, `acquire`, `program` and
+  `commit` packages) and the device adapter; PoUW's prover tests
   (`verity/protocols/accounting/pouw/prover/tests/`), SPOT's prove path, and PoUW's `kernels/served_zk/`; and the
   benchmarks under `benchmarks/pouw/`, `benchmarks/one_stage/`, `benchmarks/harness/`, `benchmarks/hash/`,
   `benchmarks/commitments/` and `benchmarks/serve_tax/`, which import its modules directly.
 - **Loads:** `verity.circuits`, `verity.commitments`, `verity.errors`, the rest of `verity.protocols.accounting.pouw`
   and SPOT (`verity.protocols.proofs.spot`); numpy; and `verity_flock`, inside the functions that use it. It loads no
-  tensor library, nothing under `adapters/` and no vLLM. Where it needs the workload, it asks: `int8_arm.arm()` raises
+  tensor library, nothing under `adapters/` and no serving engine. Where it needs the workload, it asks: `int8_arm.arm()` raises
   `NotImplementedError("compute-accounting/pouw-serving-out-of-adapter")` until the workload hands in its arm, and
   `tensors.tensors()` and `tensors.h1_device()` raise `NotImplementedError("compute-accounting/architecture-on-branch")`
   until it hands in its tensors and H1's device (the device adapter does, at import). Without them the host paths run:
