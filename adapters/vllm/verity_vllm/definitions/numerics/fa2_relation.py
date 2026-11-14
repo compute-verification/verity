@@ -13,7 +13,7 @@ bit-exact -- sm_89, head_dim 128, (12, 2) heads, block_size 16, FA2, num_splits 
 / alibi, BF16 KV, 1 <= t+1 <= 4096, finite operands -- and raises ``RelationError('unresolved: ...')``
 everywhere else.  A row whose arithmetic meets a non-finite intermediate (FP32 overflow, inf, NaN) is
 also ``unresolved``: the shared MMA model saturates instead of following the hardware's inf/NaN
-rules, which were not measured (production writes 0x7FFF for the whole head in the two cases run).
+rules, which were not measured (the served kernel writes 0x7FFF for the whole head in the two cases run).
 
 A prefill row is checked exactly like a decode row (one query, keys ``0..t``): the kernel's extra
 fully-masked blocks for rows inside a 64-row M-block are arithmetic no-ops (P = 0, l = 0, O = 0, the

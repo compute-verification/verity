@@ -315,8 +315,8 @@ VALIDATED_BI_FAMILIES: dict[tuple[int, int], dict[str, Any]] = {
 }
 BI_KERNEL_MARKERS = ("matmul_kernel_persistent", "matmul_persistent", "batch_invariant", "verity.bi_mm")
 BI_RUNTIME_OPS = ("verity.bi_mm", "aten.mm", "aten.addmm", "aten.linear", "aten.matmul")
-VALIDATED_ARCHS = ("sm_80",)  # where the production GEMM itself was measured
-ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.circuits.silicon.models.ADA_BF16_M16N8K16); production GEMM not measured there
+VALIDATED_ARCHS = ("sm_80",)  # where the served GEMM itself was measured
+ASSUMED_ARCHS = ("sm_86", "sm_89")  # parameter-identical BF16 mma.sync (verity.circuits.silicon.models.ADA_BF16_M16N8K16); served GEMM not measured there
 
 
 def _runtime_impl_of(node: Any) -> str:

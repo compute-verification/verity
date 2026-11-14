@@ -4,7 +4,7 @@ serving semantics that the commit store does not materialise.
 "Any gate output can be a proof-block boundary": proof-block placement is defined over the circuit (core rule 4), so a plan
 may select values that live *inside* the kernel-aligned leaves the adapter commits.  Replay can only serve
 such a plan if the interior value can be produced fast and bit-exactly from committed neighbours.  This
-module provides that production path for four derived classes, as numpy twins of the registered gate
+module provides that proving path for four derived classes, as numpy twins of the registered gate
 semantics (`verity_vllm.definitions.registry.b1` / `prims`) in the `rmsnorm_fused` pattern:
 
   * ``rmsnorm_triton_rows``   — the batch-invariant Triton `_rms_norm_kernel` reduction tree; emits the
@@ -471,7 +471,7 @@ def tc_dot16(acc: np.ndarray, a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray,
 # 0 mismatching words of 27,240,000;
 # the Ampere chain differs on every case.  Under torch DEFAULTS (split-K allowed) the same GPU splits K=8960 three ways at
 # M<=64 (tile-64 split-K, f32 (p0+p1)+p2) -- so the relation below is the relation of a VLLM_BATCH_INVARIANT=1 record only,
-# which is what every row of record declares (sweep/record.py engine_args), the same premise Gemm_v1 already rests on.
+# which is what every workload of record declares (sweep/record.py engine_args), the same premise Gemm_v1 already rests on.
 # `dot_bf16_hopper` is therefore `dot_bf16` with the step swapped.
 # ---------------------------------------------------------------------------------------------------------
 
