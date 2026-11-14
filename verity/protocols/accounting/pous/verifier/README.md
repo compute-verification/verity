@@ -36,7 +36,7 @@ What code outside this directory may use. Everything else here is internal.
 | `challenger_session.session(side: Side, request: Mapping[str, Any], respond: Callable[[int], bytes]) -> dict[str, Any]`, with `request_of`, `session_id` and `placement` (`challenger_session.py`) | The timed rounds from the node's side: one session with the memory challenger's side `side`, which what starts the run hands in (the runtime's `Side.of` says where `period.json` puts it): it sends the request, answers each index with `respond(index)` and returns the side's report. The module also holds the messages both sides speak (`MANIFEST`, `Frames`), which the memory challenger's party imports. |
 | `streamed_wipe` (`streamed_wipe.py`) and `wipe_period.run(node: str, params: sw.WipeParams \| None = None, *, ...) -> Wipe` (`wipe_period.py`) | The streamed-label wipe. `streamed_wipe` is its Python, the reference its Lean verdict is held to: the memory challenger's side (`WipeMemoryChallenger`, which holds a start mark before the fill when given a `mark_source`), the honest server (`Prover`), the records (`WipeParams`, `WipeCommitment`, `SignedWipe`), the two marks' messages (`start_message(commitment: WipeCommitment) -> bytes`, `end_message(signed: SignedWipe) -> bytes`) and `verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] \| set[bytes], schemes: Mapping[str, Verify] = SCHEMES) -> Verdict`. `wipe_period.run` is one wipe of one node with the verifier's answer as `verity/wipe/v0` (`wipe_period.PROTOCOL`) and the case the Lean replays to it. |
 | `wipe_period.main(argv: Sequence[str] \| None = None, *, side_of: Callable[..., Side]) -> int`, as `python benchmarks/pous/streamed_wipe/wipe_on_node.py --period DIR --out DIR [--node NAME] [--expect VERDICT]` runs it with the runtime's `Side.of` | One wipe of this node as `period.json`'s `wipe` says, the challenger's side where `side_of` puts it. It writes `wipe.json` and `wipe.case.json` under `--out`, prints a summary, and exits 0 when the verdict is the expected one. |
-| `python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It takes no egress count and signs none. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`). |
+| `python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K] [--streamer build\|PATH [--threads T]]` | The wipe's memory challenger as a process of its own, for the challenger host. It takes no egress count and signs none. It reads the request `{"labels", "limit_ns", "node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover and prints its report. `wipe_parties.MANIFEST` declares the same two parties to the deployment layer (`verity.runtime`), whose halves are `verity/protocols/accounting/pous/device/wipe_challenger.py` and `verity/protocols/accounting/pous/prover/wipe_prover.py`. |
 | `verity.protocols.accounting.pous.prover` (`verity/protocols/accounting/pous/prover/`) | PoUS's circuits, each a Definition with its parts in its module's `__all__`: `answer_circuit.PousAnswerOpens` (a round's answer and the store's hiding leaf open to the same label), `decode_circuit.PousP2Decode` (P2 v4's decode of one label), `verdict_circuit.PousVerdict` (the verdict over the timed rounds as one proof block) and `circuit.PousModSquare` (a square modulo P2's prime). |
 
 ## The lifecycle in code
@@ -163,9 +163,10 @@ publish once it ties `E` to the certifier's count between the session's marks. `
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
 meeting it except with T·`eps`, and what each certifies (`foreign_bits` of `memory_bits`, its tiers and devices).
-`wipe_parties` is the same memory challenger and prover as parties of the deployment layer (`verity.runtime`), the
-reads the challenger's machine gives it: on the same coins, clock readings, key and reads it signs the bytes
-`wipe_party.serve` signs.
+`wipe_parties` declares the same memory challenger and prover as parties of the deployment layer (`verity.runtime`),
+the challenger's party in `verity/protocols/accounting/pous/device/wipe_challenger.py` and the prover's in
+`verity/protocols/accounting/pous/prover/wipe_prover.py`; the challenger times the reads its machine gives it: on the
+same coins, clock readings, key and reads it signs the bytes `wipe_party.serve` signs.
 On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: the CUDA driver through ctypes, gated
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
@@ -231,7 +232,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
   `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
   fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
-  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `verity/protocols/accounting/pous/verifier/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
   `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
   are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
   (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
@@ -265,6 +266,6 @@ authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 suc
 `SHA-512("verity/pous/p2/transcript/v4\0" ‖ AUDIT_OPEN ‖ every challenge and response frame)`.
 
 The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
-beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
+beside `p2_v1/reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
 `NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
-`cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates them and rewrites their pins.
+`uv run python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors` regenerates them and rewrites their pins.

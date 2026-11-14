@@ -22,8 +22,8 @@ With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and ga
 report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `command(device, extra)` is the argv
 that starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts
 it, and `session(side, request, prover)` is the prover's: one session with the side, answered from `prover` (`answer`),
-with the connection's two addresses as it saw them. The wipe's two parties as the deployment layer runs them are
-`wipe_parties`.
+with the connection's two addresses as it saw them. The wipe's two parties as the deployment layer runs them speak
+`wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations

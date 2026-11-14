@@ -25,7 +25,7 @@ no encoding.
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
-`encode` draws the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin flipped after the
+`encode` samples the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin flipped after the
 commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` through `gpu.Kernels`, one process a GPU,
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
@@ -70,7 +70,7 @@ of block `t.first_block + ⌊b / 2054⌋`. Block `i`'s payload is `m = sq(σ_K(s
 its `K` and `t` from `reference.keys_after(prefix, …, s, v)` with `prefix = schemes.p2.expand_prefix(params, salt)`,
 128 bytes. `decode_range` refuses what a kernel flags: a block not below `p` or decoding to more than 16,432 bits (flag
 bit 2), and a nonzero byte past a tensor's end in its last block (bit 3). A kernel that takes `t`'s first candidate
-flags bit 0 when it is not below `p` (about `2^-16434` a block), where the reference draws the next.
+flags bit 0 when it is not below `p` (about `2^-16434` a block), where the reference samples the next.
 """
 from __future__ import annotations
 
@@ -97,9 +97,8 @@ from typing import Any
 
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-    from p2_v1 import reference
-else:
-    from . import reference
+
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference
 
 from verity.protocols.accounting.pous.verifier import setup, verifier
 from verity.protocols.accounting.pous.verifier.labels import salt_value, tag
@@ -693,7 +692,7 @@ class GpuEncoder:
     def __init__(self, params: P2Params, salt: bytes, lib: str, device: int) -> None:
         import torch
 
-        from p2_v1.gpu import Kernels
+        from p2_store.gpu import Kernels
 
         torch.cuda.set_device(device)
         self.torch, self.params = torch, params
@@ -931,7 +930,7 @@ def _decoder(params: P2Params, salt: bytes, lib: str | None) -> Any:
                                            [c[i * params.block_bytes:(i + 1) * params.block_bytes] for i in range(params.blocks_per_segment)])
     import torch
 
-    from p2_v1.gpu import Kernels
+    from p2_store.gpu import Kernels
 
     K = Kernels(lib, "", reference.Params.of(params), expand_prefix(params, salt))
     n, nb, pb, p = params.blocks_per_segment, params.block_bytes, params.payload_bytes, params.p
@@ -1014,7 +1013,7 @@ def spot_cmd(a: argparse.Namespace) -> int:
     if a.p2_lib:
         import torch
 
-        from p2_v1.gpu import Kernels
+        from p2_store.gpu import Kernels
 
         gpu = (torch, Kernels(a.p2_lib, "", reference.Params.of(params), prefix))
     rng = random.SystemRandom()
