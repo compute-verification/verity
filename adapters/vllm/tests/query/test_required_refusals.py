@@ -7,7 +7,8 @@ rank-local operand it cannot name.  A Value of no single width is spelt `mixed`,
 token ids.  Of what a `Population` reports: a literal is no boundary Value, a returned Value is one unless it is a check, and
 inside a MoE module with router rows only the Values of a plane's kind feed the planes.  Of a rank Program: which inputs are
 the peers' parts, which operands of a collective are its own, where a carried collective is, and the step of a Call after
-the last sampling event.
+the last sampling event.  Of how its required Values are spelt: which rows are narrowed, which Calls are interior or
+contested, and a carried collective's members.
 """
 from __future__ import annotations
 
@@ -30,6 +31,7 @@ from verity_vllm.query.program_view import (
 from verity_vllm.query.required import (
     Q_MODULE_BODY_ID,
     Q_WORD_ID,
+    CallMember,
     Population,
     cached_prefix_inputs,
     request_manifest,
@@ -204,6 +206,10 @@ def test_inside_a_moe_module_with_router_rows_only_a_planes_kind_feeds_the_plane
         word, body = Population(P, _corr(P), query=Q_WORD_ID), Population(P, _corr(P), query=Q_MODULE_BODY_ID)
         assert (word.plane_fed, word.interior) == (fed, interior)
         assert (body.plane_fed, body.interior) == (frozenset(), frozenset())
+    P = _moe(runner)
+    P = replace(P, calls=(*P.calls[:5], _call(5, "MoeExpertGemm_v1", f"{runner}/up[1]", [R(4, "out"), R(1, "w")], n=2), *P.calls[6:]))
+    word = Population(P, _corr(P), query=Q_WORD_ID)
+    assert (word.plane_fed, word.narrowed) == (router | {up, act, down}, {}), "a plane's rows of two widths have no member to narrow"
 
 
 @pytest.mark.parametrize(("read", "owners"), [((TIED_W,), 0), ((A_W, B_W), 2)])
@@ -262,6 +268,7 @@ def test_a_warm_programs_cached_rows_are_no_token_ids():
 
 WORLD = 2
 TP: dict[str, Any] = {"world": WORLD, "rank": 0}
+AR = "AllReduceMultimem_v1"
 
 
 def _rank_program(collectives: tuple[CallView, ...], peers: int) -> ProgramView:
@@ -309,6 +316,8 @@ def test_a_collective_that_reads_another_bodys_value_has_outputs_its_partial_can
     P = program(good)
     carried = Population(P, _corr(P), tp=TP)
     assert (carried.tp_faults, carried.carries, carried.operand) == ([], {1}, {1: R(0, "out")})
+    partial = CallMember(good[0].name, "part_rank0" if family == AR else "shard_rank0", N, "bf16", "tp_rank_partials")
+    assert carried.members_of(1) == [*(carried.member(R(1, p.name)) for p in good), partial], "its outputs, then its first port's partial"
 
     P = program(bad)
     pop = Population(P, _corr(P), tp=TP)
@@ -320,7 +329,6 @@ def test_a_collective_that_reads_another_bodys_value_has_outputs_its_partial_can
     assert _rows(m, "tp_rank_partials") == []
 
 
-AR = "AllReduceMultimem_v1"
 NORM, NORM_2 = f"{W}.norm", f"{W}.norm_2"
 
 
@@ -399,13 +407,36 @@ def test_a_carried_collective_is_at_the_site_its_correspondence_names_unless_one
     site = f"{W}.site.collective"
     pop = population(_carried())
     assert (pop.tp_faults, pop.carries, pop.site, pop.norm_site) == ([], {1}, {1: site}, {})
+    assert pop.program_path(1) == site
     pop = population(_carried(_norm(2, NORM, R(1, "out")), weights=(f"{NORM}.weight",)))
     assert (pop.tp_faults, pop.carries, pop.site, pop.norm_site) == ([], {1}, {}, {1: NORM})
+    assert pop.program_path(1) == NORM
     pop = population(_carried(_norm(2, NORM, R(1, "out")), _norm(3, NORM_2, R(1, "out"), R(2, "out")),
                               weights=(f"{NORM}.weight", f"{NORM_2}.weight")))
     fault = (f"{AR} at {IMPL}.site.collective: not one norm's collective (one `<norm>.weight` read, and no other collective of the "
              "step for that norm unless all are fused, expected)")
     assert (pop.tp_faults, pop.carries, pop.site, pop.norm_site) == ([fault], {1}, {1: site}, {})
+
+
+def test_a_carried_collective_is_no_producer_of_its_module(monkeypatch):
+    """A carried collective's identities are at its site or at its norm.  So another fx node of its module that produces a
+    member of the collective's name is not contested with it, and stays at the module."""
+    def population(P: ProgramView) -> Population:
+        corr = _corr(P)
+        monkeypatch.setattr(corr, "site_path", lambda cid: f"{corr.name(cid).module}.{corr.name(cid).node}")
+        return Population(P, corr, tp=TP)
+
+    def linear(member: str) -> CallView:
+        return _call(2, "Gemm_v1", f"{W}.site/linear/{member}", [R(1, "out")])
+
+    pop = population(_carried(linear("collective"), _call(3, "Gemm_v1", f"{W}.b/linear[0]", [R(2, "out")])))
+    assert (pop.tp_faults, pop.site, pop.norm_site) == ([], {1: f"{W}.site.collective"}, {})
+    assert [m.member for cid in (1, 2) for m in pop.members_of(cid)] == ["collective", "part_rank0", "collective"]
+    assert (pop.contested, pop.program_path(2)) == (frozenset(), f"{W}.site")
+    pop = population(_carried(linear("all_reduce"), _norm(3, NORM, R(1, "out"), R(2, "out")), weights=(f"{NORM}.weight",)))
+    assert (pop.tp_faults, pop.site, pop.norm_site) == ([], {}, {1: NORM})
+    assert [m.member for cid in (1, 2) for m in pop.members_of(cid)] == ["all_reduce", "part_rank0", "all_reduce"]
+    assert (pop.contested, pop.program_path(2)) == (frozenset(), f"{W}.site")
 
 
 def test_the_fused_routes_residual_and_norm_weight_are_none_of_its_parts():
@@ -434,3 +465,76 @@ def test_a_check_after_the_last_sampling_event_is_of_the_last_step_and_any_other
         pop = Population(P, _corr(P), query=q)
         assert pop.events == [3]
         assert [pop.step_of(c.id) for c in P.calls] == [0, 0, 0, 0, 0, 1]
+
+
+
+def _two_rows(first: str, second: str, family: str = "Gemm_v1") -> ProgramView:
+    """Two rows that read the embedding, of widths 4 and 2: a Gemm named `first` and a Call of `family` named `second`.  A third
+    module reads both."""
+    return _program(_weights(EMBED_W, A_W, B_W),
+                    (_call(1, "Gemm_v1", first, [R(0, "out"), R(-1, A_W)]), _call(2, family, second, [R(0, "out"), R(-1, A_W)], n=2),
+                     _call(3, "Gemm_v1", f"{W}.b/linear[0]", [R(1, "out"), R(2, "out"), R(-1, B_W)])))
+
+
+def test_rows_of_two_widths_are_narrowed_only_under_one_fx_node_of_one_module_and_definition_at_one_step():
+    """The rows of one fx node and Definition at a step that have two widths: the widest keep the member, and the narrower are a
+    member of their own that the manifest lists as narrowed of it.  Rows of two modules, of two fx nodes, of two Definitions
+    or of two steps are not narrowed."""
+    P = _two_rows(f"{W}.a/linear[0]", f"{W}.a/linear[1]")
+    assert Population(P, _corr(P)).narrowed == {R(2, "out"): "out@2"}
+    assert [(x["output_member"], x.get("narrowed_of"), x["rows"]) for x in _rows(_manifest(P), "instance_outputs") if x["op_path"] == f"{IMPL}.a"] == [
+        ("out", None, 1), ("out@2", "out", 1)]
+    for P in (_two_rows(f"{W}.a/linear[0]", f"{W}.c/linear[0]"), _two_rows(f"{W}.a/linear[0]", f"{W}.a/linear_1[0]"),
+              _two_rows(f"{W}.a/linear[0]", f"{W}.a/linear[1]", family="Mul_v1")):
+        assert Population(P, _corr(P)).narrowed == {}
+    P = _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W)]),))
+    P = replace(P, outputs=(*P.outputs, R(4, "out")),
+                calls=(*P.calls, _call(3, "Gemm_v1", f"{W}.a/linear[1]", [R(2, "out"), R(-1, A_W)], n=2), _call(4, "ArgmaxTokenSelect_v1", "argmax[1]", [R(3, "out")], n=1)))
+    pop = Population(P, _corr(P))
+    assert ([pop.step_of(c.id) for c in P.calls], pop.narrowed) == ([0, 0, 0, 1, 1], {})
+    assert pop.members_of(2) == pop.members_of(4) == [], "a sampling event's output is no member"
+
+
+def test_on_a_rank_neither_partials_nor_collective_outputs_of_two_widths_are_narrowed():
+    """Today's answer, held as that.  Two partials that one fx node produces at two widths are each `part_rank<r>`, and the
+    outputs of the two collectives that take them, under one fx node too, keep one member.  The manifest lists the narrower
+    partial and the narrower output each as a second producer of its member, and is incomplete."""
+    P = _rank_program((_call(1, "Gemm_v1", f"{W}.embed/linear[0]", [R(0, "out")]), _call(2, "Gemm_v1", f"{W}.embed/linear[1]", [R(0, "out")], n=2),
+                       _call(3, AR, f"{W}.embed/all_reduce[0]", [R(1, "out"), R(-3, "peers_0")]),
+                       _call(4, AR, f"{W}.embed/all_reduce[1]", [R(2, "out"), R(-4, "peers_1")], n=2)), 2)
+    pop = Population(P, _corr(P), tp=TP)
+    assert (pop.tp_faults, pop.partial_of, pop.narrowed) == ([], {R(1, "out"): 3, R(2, "out"): 4}, {})
+    assert [(m.member, m.width) for cid in (1, 2, 3, 4) for m in pop.members_of(cid)] == [("part_rank0", 4), ("part_rank0", 2), ("out", 4), ("out", 2)]
+    m = _rank_manifest(P)
+    assert (m["complete"], m["unmodelled"]) == (False, {f"Gemm_v1 under {IMPL}.embed (part_rank0: two producers Gemm_v1 4 / Gemm_v1 2)": 1,
+                                                        f"{AR} under {IMPL}.embed (out: two producers {AR} 4 / {AR} 2)": 1})
+    assert not [x for x in m["identities"] if x.get("narrowed_of")]
+
+
+def test_a_call_is_interior_only_when_every_required_value_of_it_is():
+    """Without the returned-tensor policy a Call can have one Value its body keeps and one that leaves it.  The first is a Call
+    boundary, the Call is not interior, and both are spelt at its module.  With the policy both are the module's outputs."""
+    split = CallView(1, f"MhcPostPreTf32_v1{{N={N}}}", "MhcPostPreTf32_v1", "call", f"{W}.a/post_pre[0]",
+                     (Port("0", 0, N, N, 16), Port("1", 0, N, N, 16)), (R(0, "out"), R(-1, A_W)))
+    P = _program(_weights(EMBED_W, A_W, B_W), (split, _call(2, "Gemm_v1", f"{W}.a/linear[0]", [R(1, "0"), R(-1, A_W)]),
+                                               _call(3, "Gemm_v1", f"{W}.b/linear[0]", [R(1, "1"), R(2, "out"), R(-1, B_W)])))
+    pop = Population(P, _corr(P), return_slots=False)
+    assert (pop.interior, pop.interior_calls, pop.program_path(1)) == ({R(1, "0")}, frozenset(), f"{W}.a")
+    assert [(m.member, m.family) for m in pop.members_of(1)] == [("0", "call_boundaries"), ("1", "instance_outputs")]
+    pop = Population(P, _corr(P))
+    assert (pop.interior, pop.interior_calls, pop.program_path(1)) == (frozenset(), frozenset(), f"{W}.a")
+    assert [(m.member, m.family) for m in pop.members_of(1)] == [("0", "instance_outputs"), ("1", "instance_outputs")]
+
+
+def test_an_unreturned_call_is_contested_only_with_a_producer_of_its_own_step():
+    """A Call that nothing reads and the Program does not return is unreturned, and counts among the producers of its module's
+    members at its step: with a producer of the step before it under another fx node, neither is contested."""
+    P = _program(_weights(EMBED_W, A_W), (_call(1, "Gemm_v1", f"{W}.a/linear[0]", [R(0, "out"), R(-1, A_W)]),))
+    after = (_call(3, "Gemm_v1", f"{W}.a/other[0]", [R(2, "out"), R(-1, A_W)]), _call(4, "Gemm_v1", f"{W}.c/linear[0]", [R(2, "out"), R(-1, A_W)]),
+             _call(5, "ArgmaxTokenSelect_v1", "argmax[1]", [R(4, "out")], n=1))
+    P = replace(P, calls=(*P.calls, *after), outputs=(*P.outputs, R(5, "out")))
+    pop = Population(P, _corr(P))
+    assert ([pop.step_of(cid) for cid in (1, 3)], pop.unreturned, pop.contested) == ([0, 1], {3}, frozenset())
+    same = replace(P, calls=(*P.calls[:3], _call(3, "Gemm_v1", f"{W}.c/other[0]", [R(2, "out"), R(-1, A_W)]), *P.calls[4:]))
+    pop = Population(same, _corr(same))
+    assert (pop.unreturned, pop.contested) == ({3}, {3, 4})
