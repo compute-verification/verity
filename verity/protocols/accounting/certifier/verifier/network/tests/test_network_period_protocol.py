@@ -189,6 +189,38 @@ def test_a_bad_response_cap_is_refused(server):
         assert verdict == REJECT and "schedule" in json.loads(out)["reason"], (params["schedule"], out)
 
 
+def test_a_schedule_with_connection_rows_is_refused_by_name(server):
+    """A schedule with lengths rows, of either form, with content rows or without, is one the network certifier
+    builds (`WardenParams`), and the period check reads it and refuses it by name at the parameters, Lean as the
+    mirror: the check reads no connection rows' registration, so it accepts no period under one. The check refuses
+    it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, accepted
+    under the honest one: no parameters `params` reads reach it."""
+    case = build("rows-honest", 0, small=True)
+    empty = dataclasses.replace(PC.params(case["params"]), audits=(), windows=0)
+    assert PC.check(empty, PC.Commitment([], [], b""), ([], []))[0] == ACCEPT
+    for params in PC.connection_rows_params(case["params"]):
+        schedule = PC._schedule(params["schedule"])
+        assert PC.connection_rows(schedule) and PC.schedule_json(schedule) == params["schedule"]
+        bad = case | {"params": params}
+        out = reference(bad)
+        assert out["verdict"] == REJECT and PC.CONNECTION_ROWS in out["reason"], (params["schedule"], out)
+        verdict, got = D.replay(PORT, bad, server)
+        assert verdict == REJECT and PC.CONNECTION_ROWS in json.loads(got)["reason"], (params["schedule"], got)
+        held = dataclasses.replace(empty, schedule=schedule)
+        assert PC.check(held, PC.Commitment([], [], b""), ([], [])) == (REJECT, PC.CONNECTION_ROWS), schedule
+
+
+def test_bad_lengths_rows_and_content_rows_are_refused_as_the_schedules(server):
+    """A schedule whose lengths rows or content rows `WardenParams` refuses (`PC.bad_lengths`) is refused at the
+    parameters as no schedule, by Lean as by the mirror, and not by the name a schedule with connection rows is."""
+    case = build("rows-honest", 0, small=True)
+    for params in PC.bad_lengths(case["params"]):
+        bad = case | {"params": params}
+        for reason in (reference(bad)["reason"], json.loads(D.replay(PORT, bad, server)[1])["reason"]):
+            assert "schedule" in reason and PC.CONNECTION_ROWS not in reason, (params["schedule"], reason)
+        assert reference(bad)["verdict"] == REJECT == D.replay(PORT, bad, server)[0], params["schedule"]
+
+
 def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypatch):
     """A slot's Program reads the requests from its audit's registered `SCAN_STATE`, and the scan's units read and
     register their states at the scan's state's root, each past the first its transition's output from the one before,

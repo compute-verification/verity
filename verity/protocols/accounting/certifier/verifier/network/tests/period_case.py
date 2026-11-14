@@ -84,13 +84,13 @@ from pathlib import Path
 
 import verity_difftest as D
 from verity_difftest import protocol as P
-from verity.protocols.accounting.certifier.verifier import scan_ok
+from verity.protocols.accounting.certifier.verifier import content_rows, io_request, scan_ok
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import (SALT_BYTES, Certificate, Direction, LmsKey,
                                                             certificate_digest, clock_digest)
-from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIGITS, MAX_TOKENS_AT
+from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIGITS, ID_FIELD_BYTES, MAX_TOKENS_AT
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
+from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, OPTIONAL_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
@@ -120,7 +120,11 @@ PARAMS_KEYS = ["audits", "cells", "first", "jitter", "key", "link", "lms", "prog
 ROWS_PARAMS_KEYS = ["audits", "cells", "circuit", "first", "jitter", "key", "link", "lms", "program", "scan",
                     "schedule", "session", "windows"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
-CAPPED_SCHEDULE_KEYS = sorted([*INTEGER_FIELDS, "max_tokens_cap"])
+#: the keys a schedule has only where it sets them (`optionalScheduleKeys`)
+OPTIONAL_SCHEDULE_KEYS = sorted(OPTIONAL_FIELDS)
+#: what the check says of a schedule with connection rows (`connectionRowsRefusal`)
+CONNECTION_ROWS = ("schedule: connection rows: the check reads no connection rows' registration, so it refuses a "
+                   "schedule with lengths rows or content rows (connectionRowsCheck)")
 CERTIFICATE_KEYS = ["digest", "direction", "key_id", "link", "signature", "window"]
 CLOCK_WINDOW_KEYS = ["answer", "certificates", "clock"]
 ROWS_WINDOW_KEYS = ["answer", "certificates", "registrations"]
@@ -292,12 +296,25 @@ def rows_wf_refusal(s: WardenParams, windows: int) -> str:
             "two frames could encode alike (rowsWf)")
 
 
+def connection_rows(s: WardenParams) -> bool:
+    """`Schedule.connectionRows`: whether the schedule registers connection rows, its lengths rows, which a schedule
+    with content rows has too."""
+    return s.lengths is not None or s.content is not None
+
+
+def _classes(j) -> tuple[tuple[int, ...], ...]:
+    """A schedule's content rows' classes as its JSON holds them: a list of lists of naturals."""
+    return tuple(tuple(_nat(x, "schedule.content") for x in _of(c, list, "schedule.content"))
+                 for c in _of(j, list, "schedule.content"))
+
+
 def _schedule(j) -> WardenParams:
     """`scheduleOf`: `WardenParams`' integer fields, each a positive integer, B past a cell's header, and B, S and T
-    u32s, in the id egress form, and its response cap when it has one (`WardenParams.max_tokens_cap`)."""
-    keys = CAPPED_SCHEDULE_KEYS if isinstance(j, dict) and sorted(j) == CAPPED_SCHEDULE_KEYS else SCHEDULE_KEYS
+    u32s, in the id egress form, and each optional field the schedule sets (`OPTIONAL_SCHEDULE_KEYS`), as
+    `WardenParams` holds it: its response cap, its lengths rows' form and its content rows' classes."""
+    keys = sorted(SCHEDULE_KEYS + [k for k in OPTIONAL_SCHEDULE_KEYS if isinstance(j, dict) and k in j])
     _exactly(j, keys, "schedule")
-    values = {k: _nat(j[k], "schedule") for k in keys}
+    values = {k: _classes(j[k]) if k == "content" else _nat(j[k], "schedule") for k in keys}
     try:
         s = WardenParams(**values)
     except ValueError as e:
@@ -704,6 +721,8 @@ def params(j) -> Params:
         sync_set, schedule, scan = _sync_set(j["sync_set"]), None, None
     else:
         schedule = _schedule(j["schedule"])
+        if connection_rows(schedule):
+            raise D.Reject(CONNECTION_ROWS)
         sync_set, scan = None, _scan(j["scan"], program, schedule)
     windows = _nat(j["windows"], "windows")
     if windows < 1:
@@ -1258,6 +1277,8 @@ def check(p: Params, c: Commitment, e) -> tuple:
         findings.append(Finding(REJECT, "a scan's δ is not the period's"))
     if p.schedule is not None and not rows_wf(p.schedule, p.windows):
         findings.append(Finding(REJECT, rows_wf_refusal(p.schedule, p.windows)))
+    if p.schedule is not None and connection_rows(p.schedule):
+        findings.append(Finding(REJECT, CONNECTION_ROWS))
     charged = {}
     for i, (audit, reg, a) in enumerate(zip(p.audits, c.audits, audits)):
         tied = p.schedule is not None and _tied_in(c.audits, c.windows, i)
@@ -1405,12 +1426,18 @@ SWAPS = ((0, 2, 1), (1, 0, 2), (1, 2, 0), (2, 0, 1), (2, 1, 0))
 
 
 def schedule_json(s: WardenParams) -> dict:
-    cap = {} if s.max_tokens_cap is None else {"max_tokens_cap": s.max_tokens_cap}
-    return {k: getattr(s, k) for k in SCHEDULE_KEYS} | cap
+    """The schedule as the parameters hold it: its integer fields, and each optional field it sets."""
+    optional = {k: getattr(s, k) for k in OPTIONAL_SCHEDULE_KEYS if getattr(s, k) is not None}
+    if s.content is not None:
+        optional["content"] = [list(c) for c in s.content]
+    return {k: getattr(s, k) for k in SCHEDULE_KEYS} | optional
 
 
 #: The least cell of a schedule with a response cap: its payload holds an id request's `max_tokens`.
 CAPPED_CELL = HEADER.size + MAX_TOKENS_AT + ID_DIGITS
+#: The least cell of a schedule with lengths rows: its payload holds an id request's head and first prompt id
+#: (`firstPromptEnd`).
+LENGTHS_CELL = HEADER.size + io_request.layout(1 << 12).start + ID_FIELD_BYTES
 
 
 def _small_schedule(r: random.Random, small: bool, capped: bool = False, T: int | None = None) -> WardenParams:
@@ -2422,7 +2449,7 @@ def _bad_params(p: dict, n: int) -> list:
                   p | {"schedule": s | {"window": U32}}, p | {"schedule": s | {"every": s["window"] + 1}},
                   p | {"schedule": s | {"every": 0}}, p | {"sync_set": {"deltas": [0], "rhos": [[1, 1]]}},
                   p | {"circuit": p["circuit"][:-2]}, p | {"circuit": p["circuit"].upper()}, p | {"circuit": 0},
-                  p | {"circuit": None}, *_bad_caps(s, p), *bad_scans(p)]
+                  p | {"circuit": None}, *_bad_caps(s, p), *bad_lengths(p), *connection_rows_params(p), *bad_scans(p)]
 
 
 def bad_cells(p: dict) -> list[dict]:
@@ -2440,6 +2467,46 @@ def _bad_caps(s: dict, p: dict) -> list[dict]:
     return [p | {"schedule": wide | {"max_tokens_cap": cap}}
             for cap in (0, -1, True, "1", wide["egress_cells"], wide["egress_cells"] + 1, U32)] + [
         p | {"schedule": wide | {"cell_bytes": CAPPED_CELL - 1, "max_tokens_cap": 1}}]
+
+
+def _lengths_schedule(s: dict) -> dict:
+    """An uncapped schedule `s` with the fields a schedule with lengths rows holds: a cell of at least `LENGTHS_CELL`,
+    ingress that ends by the delay, and a connection that ends within a window of its admission."""
+    return s | {"cell_bytes": max(s["cell_bytes"], LENGTHS_CELL), "delay": 1, "ingress_buckets": 1,
+                "egress_cells": min(s["egress_cells"], s["slots"] * s["window"])}
+
+
+def connection_rows_params(p: dict) -> list[dict]:
+    """Rows-form parameters whose schedule has connection rows, each one change to `p`'s uncapped schedule
+    (`_lengths_schedule`): lengths rows of each form, and content rows of the form's classes with them. Each is a
+    schedule `scheduleOf` reads, as `WardenParams` builds it, and one the check refuses by name (`CONNECTION_ROWS`)."""
+    s = _lengths_schedule(p["schedule"])
+    return [p | {"schedule": s | rows} for rows in (
+        {"lengths": 1}, {"lengths": 2}, {"lengths": 1, "content": [[2, 2, 1]]}, {"lengths": 2, "content": [[2, 2]]},
+        {"lengths": 2, "content": [[2, 4], [4, 2]]})]
+
+
+def bad_lengths(p: dict) -> list[dict]:
+    """Rows-form parameters whose schedule's lengths rows or content rows `scheduleOf` refuses, each one change to
+    `p`'s uncapped schedule with lengths rows (`_lengths_schedule`). Lengths rows: a form that is not 1 or 2,
+    ingress that ends after the delay, a connection that outlasts the window, egress cells past a u16's count, a
+    cell that doesn't hold an id request's first prompt id, and a slot stride of more releases than a lengths row
+    has slots. Content rows: without lengths rows, of no class, of the other form's numbers, of a size that is no
+    power of two, of more ids than a response row has, of more prompt ids than a request has bytes, of no row or of
+    more rows than the lengths table has slots, and classes that are no list of lists of naturals."""
+    s = _lengths_schedule(p["schedule"])
+    one, two = s | {"lengths": 1}, s | {"lengths": 2}
+    slots = s["window"] // s["every"] * WardenParams(**one).stride_releases
+    past = 1 << (s["ingress_cells"] * (s["cell_bytes"] - HEADER.size)).bit_length()
+    schedules = [s | {"lengths": form} for form in (0, 3, True, "1", [1])] + [
+        one | {"ingress_buckets": 2}, one | {"egress_cells": s["slots"] * s["window"] + 1},
+        two | {"egress_cells": (1 << 16) + 1}, one | {"cell_bytes": LENGTHS_CELL - 1}, two | {"lanes": 2731}] + [
+        with_rows | {"content": classes} for with_rows, classes in (
+            (s, [[2, 2]]), (two, []), (two, [[2, 2, 1]]), (one, [[2, 2]]), (two, [[3, 2]]), (two, [[2, 1]]),
+            (two, [[2, 2 * content_rows.most_ids()]]), (two, [[past, 2]]), (one, [[2, 2, 0]]),
+            (one, [[2, 2, slots + 1]]), (two, "x"), (two, [2, 2]), (two, [[True, 2]]), (two, [[2, -1]]),
+            (two, [[2]]), (one, [[2, 2, 1, 1]]))]
+    return [p | {"schedule": schedule} for schedule in schedules]
 
 
 def bad_audits(p: dict) -> list[dict]:
