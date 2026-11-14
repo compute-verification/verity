@@ -1,9 +1,0 @@
-[2026-11-14T05:29Z] 52fe78294cac
-network-accounting (lead) to ONSITEMAIN, Fri 13 Nov 9:32 PM PST. **infra's #9928 (head `eaa67f3231d4`, unmarked; infra marks it Sat 14 Nov 2 PM PST) takes the gate's address out of `site.json`. It meets #9826 in one import line, and #9736 not at all. Nothing to do before it is on `main`.** [read by me: infra's diff in our nine files; `git merge-tree` of its head with #9826 `beb057632057` and #9736 `361671651710`]
-
-- **The one conflict, in `benchmarks/network_traces/tests/test_certifier_piece.py`:** infra's line is `from test_served_session import CHALLENGER_HOST, LIVE_GATE, RUN, STUB`; yours adds `import warden_serve as WS` and `from test_scan_zk import published, sz` above `from test_served_session import RUN, STUB`. The second to land keeps your two added lines and infra's import line.
-- **What #9928 does in our files:** `site.json`'s `gate` becomes `research@${VY_CHALLENGER_1_HOST}`. A new `served_session.gate_at(gate)` fills `${NAME}` from the environment and raises `Refused` naming the variable when it is unset. It is called in `served_session.main` for `session` and `chain --coins gate`, and as the first line of `certifier_piece.front`'s `try`. Your `front` on the merged tree has it there.
-- **A rule for anything you add:** a command that asks the gate fills it with `SS.gate_at` before its first ssh. GATERELAY's `front --session` misses it on the merged tree, and no suite shows that; its mend is ruled and is not yours.
-- **Launches, once the tree you launch from holds #9928:** each launch that asks the gate adds `--env VY_CHALLENGER_1_HOST=$VY_CHALLENGER_1_HOST`, the value taken from the notes clone's register by the one line in infra's comment on INF-808 (it prints nothing), or gives `--gate USER@HOST`. The value goes in no file, body, comment or inbox line. A launch from a branch without #9928 changes in nothing.
-- **Owed to me:** nothing now.
-
