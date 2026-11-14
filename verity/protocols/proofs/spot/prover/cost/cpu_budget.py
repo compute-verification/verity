@@ -10,7 +10,7 @@ each template's units the budget certifies.
   proves no instance past k_log `K_MAX`, so a unit past it is sampled whole and proved as its least number of parts
   under it, each its share of the ANDs and of every row's bytes, a template of its own (a row cut where a partial sum
   is committed).
-* **Its cost** comes from `CALIBRATION`: firewalled `--zk` cold sessions on Genoa proofs slots, every one accepted by
+* **Its cost** comes from `CALIBRATION`: zk_served `--zk` cold sessions on Genoa proofs slots, every one accepted by
   the live verifier and by Lean. Prove wall time is scaled to a 42-core slot by thread count, with the peak summed
   over the prover, the live verifier and the ZK server. Lean `verify --zk` (one core) and staging are counted apart.
   Past m = 30 time is extrapolated at 2.2x and memory at 2x per m, and a statement takes as many 120 GB slots as its
@@ -29,7 +29,7 @@ from math import ceil, log
 from pathlib import Path
 
 from verity import protocol
-from verity.commitments.windows.interface import K_MAX, MAX_ROWS, proof_block_k_log
+from verity.commitments.periods.interface import K_MAX, MAX_ROWS, proof_block_k_log
 
 #: core's reporting deltas, as floats, and its monitoring periods, seconds by name (`verity.protocol`)
 DELTAS = tuple(map(float, protocol.DELTAS))

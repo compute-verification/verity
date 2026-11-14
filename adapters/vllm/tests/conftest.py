@@ -7,7 +7,7 @@ and a strict mark that passed there would fail `check`. Fix the test or the code
 Tests that take over about 5 s carry `@pytest.mark.slow` in their own module. The random Boolean-vs-word sweeps carry
 `boolean_sweep` and skip unless `VERITY_VLLM_BOOLEAN_SWEEPS=1`, which no job of `check` sets: each file's special-word and edge
 cases stay in the default run, and circuit-check's `word_view` checks each Boolean Definition against its word Definition off the
-merge gate (`off_gate` in `tools/verity/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
+merge gate (`off_gate` in `tools/check/policy.toml`: a candidate's check runs it, and its red holds nothing).
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import shutil
 import subprocess
 
 import pytest
-from verity.protocols.accounting.pouw.prover.serving import int8_arm
+from verity.protocols.accounting.pouw.prover.serving import use_int8_arm
 
 #: the opt-in random Boolean-vs-word sweeps: about 19 minutes of test time (5 minutes on 12 workers), on top of the suite's own
 SWEEPS = os.environ.get("VERITY_VLLM_BOOLEAN_SWEEPS") == "1"
@@ -34,7 +34,7 @@ KNOWN_FAILURES = {
 }
 
 #: PoUW's H1 checks the int8 arm's records with the arm's own GEMM and dequantization, as the option hands them in at install
-int8_arm.use(lambda: importlib.import_module("verity_vllm.engine.int8_exact"))
+use_int8_arm(lambda: importlib.import_module("verity_vllm.engine.int8_exact"))
 
 
 def pytest_configure(config) -> None:

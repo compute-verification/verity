@@ -80,7 +80,7 @@ from verity.protocols.accounting.certifier.verifier.active import HEADER, ID_DIG
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, SyncSet
 from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
 from verity.protocols.accounting.pouw.verifier import core_check as CC
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage.draw import stratum_k
 from verity.circuits import boolean as BL, codec, population
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -90,7 +90,7 @@ from verity.circuits.refs import array_of, coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.crypto import lms
-from verity.definitions.registry.sampling import bit_at
+from verity_vllm.definitions.registry.sampling import bit_at
 
 ID = "verity/certifier/v0"
 COMMITMENT_TAG = "verity-network-certifier/period/v0"

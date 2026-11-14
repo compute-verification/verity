@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Reach
 
 /-!
-# Sampled proofs' coupling over a window: each member's written coins in the play's log
+# SPOT's coupling over a window: each member's written coins in the play's log
 
 Where the projection writes a member's link points and its rounds' coins into its stops' openings, the play on the
 tape the window's walk ends on releases them there, whichever members' sessions follow.

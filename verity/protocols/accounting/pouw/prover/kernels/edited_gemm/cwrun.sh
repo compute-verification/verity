@@ -14,6 +14,8 @@ set -uo pipefail
 export O=${OUT:?}
 export PATH=/usr/local/cuda-13.0/bin:$PATH
 export D=verity/protocols/accounting/pouw/prover/kernels/edited_gemm
+# the references import their siblings as verity's modules, from the clone's root
+export PYTHONPATH=$PWD${PYTHONPATH:+:$PYTHONPATH}
 export BIN=$(mktemp -d /tmp/cwgemm.XXXXXX)
 trap 'rm -rf "$BIN"' EXIT
 PY=${CG_PYTHON:-python3}
@@ -116,6 +118,6 @@ for r in "$O"/ncu/*.ncu-rep; do
   ncu -i "$r" --page source --csv --print-source sass > "$b.sass.csv" 2> "$b.sass.err"
 done
 cat "$O/rc.txt"
-$PY $D/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
+$PY benchmarks/pouw/edited_gemm_profile/eps_profile.py "$O" --mm benchmarks/machine_model --json "$O/profile.json" --toml "$O/profile.toml" \
   --toml-arms "cw_l7qs,c_l7qs,plain" > "$O/profile.md" 2> "$O/profile.err"
 echo "profile rc $?" | tee -a "$O/rc.txt"

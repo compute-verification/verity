@@ -18,7 +18,7 @@ unless ``--serve`` states φ, and fixes (c, k, n) with every input to them and i
   description (`class_doc`), whose one block Definition is a slot's session over every position (`block_counts.session`);
 - c, that Definition's Boolean gates by the gate table (`table_of`), and k, its fresh-input bits (`block_counts.fresh`) with
   θ every weight parameter the circuit registers held (`weights_of_record.PARAM`), B's k (`inference_blocks.budgets`): what
-  the weights registration pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
+  the weights docket pins before the first request, so a run whose pins hold fewer weights reads more fresh bits
   than k and is refused. B's own c is the templates' gates, not the table's Boolean gates the count rule reads;
 - k by kind (``k_by_kind``, `KINDS`), from the same count: ``linears``, the bits of the outputs of the linears a PoUW cut
   leaves outside the circuit (Pearl+'s y), and ``scan_state``, the bits of the scan state row. A kind's bits are what
@@ -41,7 +41,7 @@ refuses (`gate-table`).
 
 **The verdict** (`verdict`, `VERDICT_FORMAT`) reads the run's declared circuit: the picked window's circuit record at the
 policy's class (``--circuit``, `served_verdicts.sh`'s step 3), whose session is the run's block Definition, its gates
-by the table, and its fresh bits at the verifier's pins (``--pins``, the weights registration) and the window's roots
+by the table, and its fresh bits at the verifier's pins (``--pins``, the weights docket) and the window's roots
 (``--registration``), as `block_counts` counts them; and the serve dir's sealed windows, each of which the class takes
 (`class_windows`) holding the class's m blocks, since a class's circuit is the same for every window it takes. Its rows
 are `NciCheck.Count`'s (``[definition, gates, fresh, blocks]``) at the exact counts, judged by its rule (`judge`): every
@@ -178,7 +178,7 @@ PRICES = ("BitAtx{W}_v1", price)
 def table_of(fns: Sequence[Any]) -> tuple[dict[str, int], dict[str, dict[str, Any]], list[str]]:
     """The gate table over the primitives ``fns`` reach: `definitions.boolean.gate_table`'s, each primitive it can't
     price priced by `price` where it can be, and the keys of the rest."""
-    from verity.definitions import boolean as BL
+    from verity_vllm.definitions import boolean as BL
 
     table, unpriced = BL.gate_table(fns)
     priced, left = {}, []
@@ -252,7 +252,7 @@ def kind_of(param: str) -> str | None:
     """The kind (`KINDS`) of the fresh bits a registered parameter's reads fill: ``linears`` for Pearl+'s y of a cut
     linear (`window.y_value`), ``scan_state`` for the scan state row (`scan_state.SCAN_STATE`), else none."""
     from verity_vllm.program.predict import scan_state
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     if param == scan_state.SCAN_STATE:
         return "scan_state"
@@ -263,7 +263,7 @@ def kinds_of(doc: Mapping[str, Any], m: int, pins: Mapping[str, str] | None, roo
              fresh: int) -> dict[str, int]:
     """A block's ``fresh`` bits at ``pins`` and ``roots`` by kind (`KINDS`): what `block_counts.fresh` drops by when the
     record's registered parameters of that kind are held too, each at a root of its own (`kind_of`)."""
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict import block_counts as BC
 
     reg = IF.declarations(doc)[2]
@@ -635,7 +635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     pol = json.loads(a.policy.read_text()) if a.policy.is_file() else None
     doc = json.loads(a.circuit.read_text()) if a.circuit.is_file() else None
-    from verity.commitments.windows import interface as IF
+    from verity.commitments.periods import interface as IF
     from verity_vllm.program.predict.window_weights import WeightsRegistration
 
     pins = (dict(WeightsRegistration.of(json.loads(a.pins.read_text()), str(a.pins)).roots)

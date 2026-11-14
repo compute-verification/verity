@@ -35,11 +35,10 @@ docstring lists every arm and flag, and `settings.py` every variable they read (
 
 - `h1u.cu` (with the kernels, below): the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` builds
   it, and `verity/protocols/accounting/pouw/prover/circuit/h1device.py` states the domain it serves on sm_90.
-- `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one table (`form_of`).
 - `sbench.sh`'s receipts-only build of `h1u.cu`, which `benchmarks/pouw/served_h1`'s producer loads; and the execution phase
-  modules (`dither_a.py`, `dither_fused.py`, `dither_one.py`), `h1c.py`, `h1r.py` and `settings.py`, which
+  modules (`dither_a.py`, `dither_fused.py`, `dither_one.py`), `h1c.py`, `h1r_torch.py` and `settings.py`, which
   the `benchmarks/pouw` suite imports on the CPU.
 
 ## The arms
@@ -59,11 +58,12 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
 
 ## Kernels
 
-The kernels are in `verity/protocols/experimental/dither/prover/kernels/`, beside Dither's circuit; their Python front
-ends and the scripts that build them stay here.
+The kernels are in `verity/protocols/experimental/dither/prover/kernels/`, beside Dither's circuit. Two front ends are in
+`prover/`: `h1r.py`, whose tensor runtime is `h1r_torch.py` here, and `j10r_ws.py`, a J10-R call's workspace sized from the
+loaded build's own flags (`workspace_bytes`). The other front ends and the scripts that build the kernels stay here.
 
 - `h1c.cu` (`h1c.py`): the execution phase's tables on the device, bit for bit `benchmarks/pouw/served_h1/commit.py`'s.
-- `h1r.cu` (`h1r.py`): a step's H1 + fx1 proof blocks in two launches.
+- `h1r.cu` (`prover/h1r.py`, on torch through `h1r_torch.py`): a step's H1 + fx1 proof blocks in two launches.
 - `h1o.cu`, `h1f.cu`: the one-stream and fused served linears.
 - `h1sha.cuh`: the SHA-512 of the noise chunks, which `h1u.cu` includes.
 
@@ -82,7 +82,7 @@ ends and the scripts that build them stay here.
 ## Tools
 
 - `pin.sh`, `pin_glm53.sh` (`pin_glm53.toml`): the int8 Llama-3.1-8B and GLM-5.3 pins in a node's HF cache.
-- `numabind.py`: runs a timed command on the leased GPU's NUMA node.
+- `benchmarks/kernels/numabind/numabind.py` runs each timed command here on the leased GPU's NUMA node.
 - `kernels.py`, `stepprof.py`: from an nsys capture's SQLite export, an arm's kernels and a decode step by part.
 - `picks.py`: each Inductor kernel's autotune choice in an engine's process, or a fixed one, so two processes compiling the
   same kernel run the same config.
@@ -91,6 +91,6 @@ ends and the scripts that build them stay here.
 
 ## Tests
 
-`tests/` is the directory's suite, on the CPU (`pyproject.toml`): `numabind.py`'s plan on a fake sysfs, `dbw.py`'s report,
+`tests/` is the directory's suite, on the CPU (`pyproject.toml`): `dbw.py`'s report,
 J10-R's workspace sizes, `j10r_so.py`'s references, `live_audit.py`, and the settings registry. The GPU gates run in each
 bench's own run, before it times anything.

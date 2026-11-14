@@ -4,9 +4,9 @@ public import Proofs.Properties.Verity.Sampled.Window.Walk
 public import Proofs.Properties.Verity.Sampled.Stops
 
 /-!
-# Sampled proofs' coupling over a window: each member's session's trace in the window's
+# SPOT's coupling over a window: each member's session's trace in the window's
 
-The joint law's support over a window (`WindowReaches`, `SeqReach`) nests each member's session's trace in what
+The joint distribution's support over a window (`WindowReaches`, `SeqReach`) nests each member's session's trace in what
 follows it. Here it is read a member at a time, each session's trace from the position it starts at to the position
 it ends at, which the next member's session starts from:
 
@@ -25,7 +25,7 @@ it ends at, which the next member's session starts from:
   `MemberReach.inv`, `MemberReach.past`, `MemberReach.keeps`).
 * **The members' traces in order** (`SeqChain`): each member's from where the one before it ended, with its
   transcript, and no trace at a member with no proof block in the sample, where the next member's starts from the
-  same position; the sessions' joint law's support is such a chain, beside the tape at its end (`SeqReach.chain`,
+  same position; the sessions' joint distribution's support is such a chain, beside the tape at its end (`SeqReach.chain`,
   `SeqChain.le`, `SeqChain.inv`, `SeqChain.past`).
 * **A property of every member's transcript, a member at a time** (`SeqChain.forall₂`): from an invariant `I` of the
   position each member's session starts at, kept by each member's trace and at each member with none.
@@ -282,15 +282,15 @@ inductive SeqChain : ℕ → List (Flock.Guarantees.MemberV5 Reg nJ) → Pos g �
   | nil (i : ℕ) (p : Pos g σ Claims.Msg (Fin R)) : SeqChain i [] p [] p
   | cons (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (l : List (Flock.Guarantees.MemberV5 Reg nJ))
       (p q r : Pos g σ Claims.Msg (Fin R)) (out : LiveOutJ (memberTabs S Rg m) (memberPts m)) (ts : List Transcript)
-      (hd : memberDrawn S m = true) (hm : MemberReach D M BL B S Rg i m p q out)
+      (hd : memberSampled S m = true) (hm : MemberReach D M BL B S Rg i m p q out)
       (hl : SeqChain (i + 1) l q.toStop.consume ts r) :
       SeqChain i (m :: l) p (m.wr (m.part S) Rg out :: ts) r
   | skip (i : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (l : List (Flock.Guarantees.MemberV5 Reg nJ))
       (p r : Pos g σ Claims.Msg (Fin R)) (pts : Fin 2 → Fin (memberPts m) → 𝔽) (ts : List Transcript)
-      (hd : memberDrawn S m = false) (hl : SeqChain (i + 1) l p ts r) :
+      (hd : memberSampled S m = false) (hl : SeqChain (i + 1) l p ts r) :
       SeqChain i (m :: l) p (m.wr (m.part S) Rg (idleOut (memberTabs S Rg m) pts) :: ts) r
 
-/-- **The sessions' joint law's support off the held-off events is the members' traces in order**, beside the tape
+/-- **The sessions' joint distribution's support off the held-off events is the members' traces in order**, beside the tape
 at the position the last ends at. -/
 theorem SeqReach.chain : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : ℕ) (p : Pos g σ Claims.Msg (Fin R))
     (o : List Transcript × CoinTape g σ), SeqReach D M BL B S Rg i l p o →
@@ -303,8 +303,8 @@ theorem SeqReach.chain : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (i : 
     have hs : MemberReachK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (B i) (m.wr (m.part S) Rg)
         (BL i (memberPts m))
         (fun q a o' => ∃ ts, SeqReach D M BL B S Rg (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts) m.N p o
-        (memberDrawn S m) := h
-    cases hd : memberDrawn S m with
+        (memberSampled S m) := h
+    cases hd : memberSampled S m with
     | true =>
       rw [hd] at hs
       obtain ⟨pts, hL, hr⟩ := hs
@@ -360,11 +360,11 @@ theorem SeqChain.forall₂ {Acc : Flock.Guarantees.MemberV5 Reg nJ → Transcrip
     {p r : Pos g σ Claims.Msg (Fin R)} {ts : List Transcript} (hc : SeqChain D M BL B S Rg i l p ts r) :
     I i p →
     (∀ (j k : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p' q : Pos g σ Claims.Msg (Fin R))
-      (out : LiveOutJ (memberTabs S Rg m) (memberPts m)), j = i + k → l[k]? = some m → memberDrawn S m = true →
+      (out : LiveOutJ (memberTabs S Rg m) (memberPts m)), j = i + k → l[k]? = some m → memberSampled S m = true →
       I j p' → MemberReach D M BL B S Rg j m p' q out → q.Past r →
       I (j + 1) q.toStop.consume ∧ Acc m (m.wr (m.part S) Rg out)) →
     (∀ (j k : ℕ) (m : Flock.Guarantees.MemberV5 Reg nJ) (p' : Pos g σ Claims.Msg (Fin R))
-      (pts : Fin 2 → Fin (memberPts m) → 𝔽), j = i + k → l[k]? = some m → memberDrawn S m = false → I j p' →
+      (pts : Fin 2 → Fin (memberPts m) → 𝔽), j = i + k → l[k]? = some m → memberSampled S m = false → I j p' →
       I (j + 1) p' ∧ Acc m (m.wr (m.part S) Rg (idleOut (memberTabs S Rg m) pts))) →
     List.Forall₂ Acc l ts := by
   induction hc with
@@ -391,7 +391,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 variable (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
 
 variable {V θ F c} in
-/-- **The joint law's support off the held-off events is the members' traces in order** from the play's start on the
+/-- **The joint distribution's support off the held-off events is the members' traces in order** from the play's start on the
 coin map's tape at some widened coins, at the decoded registration and those coins' sample, beside the tape at the
 position the last ends at. -/
 theorem WindowReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
@@ -447,7 +447,7 @@ structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Pr
 
 /-- **The decoders' premise at the window, a member at a time** (`WindowDecodes`): it holds wherever the decoders'
 premise holds at each member's session (`MemberDecodes`), at any invariant of the position a member's session starts
-at. The joint law's support is the members' traces in order, each from where the one before it ended, and the tape an
+at. The joint distribution's support is the members' traces in order, each from where the one before it ended, and the tape an
 accepted play is on is the one at the position the last ends at. -/
 theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : WindowDecoders V θ F c W σ)
@@ -467,13 +467,13 @@ theorem windowDecodes_of_members (k : Verity.Registration.Composite) (P : Exchan
       (fun j k m p q out hj hk hd hI hmr hqr => by
         have e : k = j := by omega
         subst e
-        obtain ⟨hI', ha⟩ := h.step ω _ m p q r out hk (memberDrawn_iff.1 hd) hI hmr hqr hri hacc
+        obtain ⟨hI', ha⟩ := h.step ω _ m p q r out hk (memberSampled_iff.1 hd) hI hmr hqr hri hacc
         exact ⟨hI', fun _ => ha⟩)
       fun j k m p _ hj hk hd hI => by
         have e : k = j := by omega
         subst e
-        exact ⟨h.skip ω _ m p r hk (not_nonempty_of_memberDrawn hd) hI,
-          fun hne => absurd hne (not_nonempty_of_memberDrawn hd)⟩
+        exact ⟨h.skip ω _ m p r hk (not_nonempty_of_memberSampled hd) hI,
+          fun hne => absurd hne (not_nonempty_of_memberSampled hd)⟩
   have ho1 : o.1 = ((windowReg V θ F c W rd σ D, ((W.extend M.widening).joint t).ended ω),
       (W.extend M.widening).L.draw ω, o.1.2.2) := Prod.ext hR (Prod.ext hS rfl)
   rw [ho1]

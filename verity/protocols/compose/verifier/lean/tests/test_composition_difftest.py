@@ -3,22 +3,21 @@ Python reference (`reference.py`: the trial's composition rule, in which any rej
 core interface and the subprotocols' own Python). Hypothesis samples each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
-never undecided, sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over `sessionless_draws`
+never undecided, SPOT's audits under the form ``one-stage``, `form_case`: one-stage v2's over `sessionless_draws`
 (an audit whose sample at its challenger's coins is one proof block, which names no session) with one of `V2_BREAKS` or the form's
 breaks, and one-stage v1's `changed_audits`, which the form refuses by name, the wipe's signed wipes,
 `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
 store, `periods.OTHER_STORE`), often recommits the subprotocols each composite ties to one record (`one_record`: the
-policy to sampled proofs' registration record, on that audit's own registered circuit, `policy_on`, and sometimes every
+policy to SPOT's registration record, on that audit's own registered circuit, `policy_on`, and sometimes every
 window of the period too, `windows_on`), hands every subprotocol the same blobs (`BLOBS`), then often
 breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or out of order, a case under other params,
 a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
-field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. Sampled
-proofs' cases all reject: v2 refuses evidence naming no session (`oneSession`), and a session on the challenger's coin
+field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. SPOT's cases all reject: v2 refuses evidence naming no session (`oneSession`), and a session on the challenger's coin
 trees is verified by `verity-verify-proof`, which the mirror doesn't run. So every product rejects here, onsite often with a
 subprotocol undecided beside the rejection. Remote's `windows` tie decides only where no subprotocol rejects, so this
 difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds stray. Remote's case on one record
-that reuses the window's registration of its tables (`reusing`) is one made case, which sampled proofs refuses at
+that reuses the window's registration of its tables (`reusing`) is one made case, which SPOT refuses at
 `oneSession` too, before R1-R7 read the record; `CoreRemote`'s `#guard`s check what v2 decides on that record with a
 session's proofs granted (R7's domains and outputs, R6's previous) and that remote credits the one window on it and
 finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
@@ -45,6 +44,7 @@ from hypothesis import strategies as st
 
 import periods
 import reference as R
+import test_sampled_two_difftest as TWO
 import verity_difftest as D
 from verity_difftest import canonical
 from verity_difftest import settings as opt
@@ -88,7 +88,7 @@ def _sha(b: bytes) -> str:
 @functools.cache
 def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin
     tree) is one proof block (a subset of one, the least a subset sampling design samples), its proved unit, and it names no session,
     and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
     to make."""
@@ -96,7 +96,7 @@ def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     part = {"program": s.sha512, "query": s.query}
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
@@ -129,7 +129,7 @@ def _v1(a: dict) -> dict:
             "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
 
 
-#: One change to v2's audit (`sessionless_draws`) that sampled proofs refuses at another step than its refusal of no
+#: One change to v2's audit (`sessionless_draws`) that SPOT refuses at another step than its refusal of no
 #: session: the audit as v1's (refused by name at the params), v1's evidence under v2's params (refused by name at the
 #: evidence), v2's evidence naming verdicts, params naming no challenger or no partition, params under a sampling design that is no
 #: subset one (refused by its kind, after a null partition), the public file named by the
@@ -154,32 +154,32 @@ V2_BREAKS = {
 }
 
 
-#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another form,
-#: the recursive form's params (refused by name), or its evidence with none of its files.
+#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or one no form's
+#: reading takes, the recursive form's params (refused by name), or its evidence with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
 def _with_form(x, br: str | None, side: str):
-    """Sampled proofs' form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks
+    """SPOT's form on the params or the evidence (`VStar.Recursive.Sampled`): ``one-stage``, unless `br` breaks
     it."""
     if not isinstance(x, dict) or br == f"{side}-no-form":
         return x
-    return {**x, "form": {f"{side}-form-other": "two-stage", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
+    return {**x, "form": {f"{side}-form-other": "other", f"{side}-recursive": "recursive"}.get(br, "one-stage")}
 
 
 def form_case(a: dict, br: str | None = None) -> dict:
-    """An audit (`{"params", "record", "evidence"}`) as sampled proofs' case under the form ``one-stage`` (one-stage v2's,
+    """An audit (`{"params", "record", "evidence"}`) as SPOT's case under the form ``one-stage`` (one-stage v2's,
     `Spot.OneStageZk`, or v1's, which the form refuses), with `br`, one of `FORM_BREAKS`, when given."""
     return OS._case({"params": _with_form(a["params"], br, "params"), "record": a["record"],
                      "evidence": _with_form(a["evidence"], br, "evidence")})
 
 
 def broken_case(a: dict, br: str) -> dict:
-    """v2's audit `a` with the change `V2_BREAKS[br]`, as sampled proofs' case."""
+    """v2's audit `a` with the change `V2_BREAKS[br]`, as SPOT's case."""
     return form_case(V2_BREAKS[br](a))
 
 
-#: Sampled proofs' cases, each refused: v2's audit naming no session (`sessionless_draws`), the same with one change or
+#: SPOT's cases, each refused: v2's audit naming no session (`sessionless_draws`), the same with one change or
 #: one break of the form, or v1's audit with up to two changes (refused by name).
 SAMPLED_CASES = st.one_of(sessionless_draws().map(form_case),
                           st.builds(broken_case, sessionless_draws(), st.sampled_from(list(V2_BREAKS))),
@@ -215,7 +215,7 @@ def kinds(C) -> list[str]:
 
 @st.composite
 def component_case(draw, C, kind: str | None) -> dict:
-    """`C`'s case aimed at `kind` (any of `kinds(C)` when it is None; sampled proofs' are all refused, whatever the
+    """`C`'s case aimed at `kind` (any of `kinds(C)` when it is None; SPOT's are all refused, whatever the
     aim), from its own difftest's generator or its recorded cases, with its digest as its Python reads it on `BLOBS` (the
     case's own commitment when it doesn't decode, which a rejection never binds)."""
     kind = kind or draw(st.sampled_from(kinds(C)))
@@ -264,7 +264,7 @@ def _declaration(program: str) -> tuple[dict, dict] | None:
 
 
 def policy_on(anchor: dict) -> dict | None:
-    """The policy's case, as `component_case` gives it, on the record and log of sampled proofs' case `anchor`, declaring the
+    """The policy's case, as `component_case` gives it, on the record and log of SPOT's case `anchor`, declaring the
     audit's own circuit (`_declaration`), which the policy accepts when the record chains; None when the audit's params
     name no program it knows."""
     p = anchor["params"]
@@ -292,7 +292,7 @@ def windows_on(evidence: bytes, commit: bytes) -> bytes:
 
 
 def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> list[dict]:
-    """The cases with every subprotocol of ``product.same`` committing to sampled proofs' registration record, each
+    """The cases with every subprotocol of ``product.same`` committing to SPOT's registration record, each
     with its digest as its Python reads it on `BLOBS`, and the policy's case on the audit's own registered circuit
     where it can be (`policy_on`): cases that pass `Core.Composition.strays` and leave the verdict to the subprotocols.
     With ``windows``, every window of the product's PoUW period names that record too (`windows_on`), so that its
@@ -318,7 +318,7 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
     return [on(c) for c in cases]
 
 
-#: The generic remote bandwidth audit's id: not a subprotocol of onsite, whose bandwidth is PoUB-P2 (`generic-bandwidth`
+#: PoUB's generic session's id: not a subprotocol of onsite, whose bandwidth is PoUB-P2 (`generic-bandwidth`
 #: names PoUB-P2's case by it, its params and its entry, under a commitment that binds it).
 GENERIC_BANDWIDTH = "verity/remote-bandwidth/v0"
 #: The binding breaks come five times: with `commitment-size` they are the breaks that leave every subprotocol's case standing,
@@ -437,7 +437,7 @@ def reference(product: R.Product, seen: collections.Counter):
 
 
 class RejectingPort(D.ProtocolPort):
-    """A product port whose cases reject: sampled proofs' do (`SAMPLED_CASES`), so the run's non-vacuity bar is a
+    """A product port whose cases reject: SPOT's do (`SAMPLED_CASES`), so the run's non-vacuity bar is a
     rejection, and its other bars are the ways its subprotocols' verdicts and records meet, counted in `seen`
     (`_agree`)."""
     accepted = R.REJECT
@@ -500,7 +500,7 @@ FEWER = 150
 
 def _agree(p: D.ProtocolPort, server, seen: collections.Counter, examples: int,
            kinds: tuple[str, ...] = (R.REJECT,)) -> None:
-    """Lean and Python agree on every case, and the cases reach each of `kinds` (by default a rejection: sampled proofs'
+    """Lean and Python agree on every case, and the cases reach each of `kinds` (by default a rejection: SPOT's
     cases are all refused, so no product accepts)."""
     seen.clear()
     stats = D.run(p, examples=examples, seed=0, server=server)
@@ -570,10 +570,10 @@ def product_case(product: R.Product, cases: list[dict]) -> dict:
 
 @pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
 def test_spot_refuses_one_stage_v1(name, request):
-    """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, for want of
+    """SPOT's one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, for want of
     the verifier, at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
     and v1's evidence under v2's params at the evidence. Remote and onsite, every other subprotocol aimed at acceptance
-    on the audit's record, reject with that refusal as sampled proofs' reason, in Lean as in Python. Onsite's case is
+    on the audit's record, reject with that refusal as SPOT's reason, in Lean as in Python. Onsite's case is
     slow for its space and bandwidth cases (`recorded`)."""
     product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
     if name == "onsite":
@@ -670,6 +670,72 @@ def test_spot_refuses_the_recursive_form(name, request):
     assert set(seen) == {"named", "unnamed"}, dict(seen)
 
 
+def _two_stage_evidence(a: dict) -> dict:
+    """Evidence under the two-stage form that its Lean reads in full (`SampledTwo.evidenceOf`): v2's evidence of `a` as
+    the interior audit's, in the per-member form (`OneStageZk.membersEvidenceOf`) with its sessions one member's
+    statement, and the form's other keys each of its type, the first stage's coins never null (`FIRST_COINS_NULL`)."""
+    interior = {**_without(a["evidence"], "proofs"),
+                "proofs": {"statements": [{"member": "m", "sessions": a["evidence"]["proofs"]["sessions"]}]}}
+    return {"form": TWO.T.TWO_STAGE, "coins": {}, "interior": interior, "received": "", "record": {}, "source": "00",
+            "statements": []}
+
+
+def _two_stage_cases(a: dict) -> dict[str, dict]:
+    """The two-stage form's cases on v2's audit `a`, its record and evidence: the form's params missing a key
+    (``params-keys``, `TWO.CHANGES`); v2's params with the evidence under the two-stage form missing its keys
+    (``evidence-keys``); and v2's params with evidence under the two-stage form that its Lean reads in full
+    (``evidence-other``, `_two_stage_evidence`)."""
+    v2 = {**a["params"], "form": "one-stage"}
+    return {"params-keys": OS._case({"params": TWO.CHANGES["a-key-missing"](TWO.base()), "record": a["record"],
+                                     "evidence": {**a["evidence"], "form": "one-stage"}}),
+            "evidence-keys": OS._case({"params": v2, "record": a["record"],
+                                       "evidence": {**a["evidence"], "form": TWO.T.TWO_STAGE}}),
+            "evidence-other": OS._case({"params": v2, "record": a["record"], "evidence": _two_stage_evidence(a)})}
+
+
+def test_spot_reads_the_two_stage_form(remote_server):
+    """SPOT reads the two-stage form with the form's own readings (`SampledTwo.paramsOfJson`, `SampledTwo.evidenceOf`)
+    and refuses evidence of another form than the params' by name (`VStar.Recursive.Sampled.MISMATCH`). Remote, every
+    other subprotocol aimed at acceptance on the audit's record, rejects with SPOT's reason: the form's params missing a
+    key and v2's params with evidence under the two-stage form missing its keys, each refused by the form's reading, in
+    Lean as in Python (`_two_stage_cases`); and v2's params with evidence under the two-stage form, which the Lean
+    reads in full and refuses as a mismatch of forms, with the Python's words (`R.mismatch`): the Python reads the
+    form's evidence only up to its keys, so it decides no case past them, and an audit that passes every check is the
+    form's own difftest's to build."""
+    product = R.REMOTE
+    want = {"params-keys": "params: the keys of the parameters are not ",
+            "evidence-keys": "evidence: the keys of the evidence are not ",
+            "evidence-other": R.mismatch("one-stage", TWO.T.TWO_STAGE)}
+    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=2, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(drawn, audit):
+        for br, sampled in _two_stage_cases(audit).items():
+            if br == "evidence-other":
+                with pytest.raises(ValueError, match="outside the mirror"):
+                    R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                why = want[br]
+                component = {**as_component(R.SAMPLED_PROOFS, form_case(audit)),
+                             "evidence": bytes.fromhex(sampled["evidence"])}
+            else:
+                got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                why = got["reason"]
+                assert got["verdict"] == R.REJECT and why.startswith(want[br]), got
+                component = as_component(R.SAMPLED_PROOFS, sampled)
+            by_id = {c["id"]: c for c in (*drawn, component)}
+            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
+            if br != "evidence-other":
+                assert product.answer(case)["verdict"] == R.REJECT
+            out = remote_server.exchange(case)
+            refused = f"{R.SAMPLED_PROOFS.id} reject: {why}"
+            assert out["verdict"] == R.REJECT and refused in out["reason"], f"{br}: {out['verdict']}: {out['reason']}"
+            seen[br] += 1
+    check()
+    assert set(seen) == set(want), dict(seen)
+
+
 #: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
 REUSING_LAW = {"k": 1, "law": "subset"}
 
@@ -703,12 +769,12 @@ def reusing(made: list[dict]):
 
 
 def reusing_audit(m: dict) -> dict:
-    """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
-    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) is R's one proof block, its
+    """SPOT's one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
+    challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin tree) is R's one proof block, its
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
     file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
@@ -732,7 +798,7 @@ NO_SESSION = "proofs: the evidence names 0 sessions: the drawn units are proved 
 def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server):
     """A period of one window whose Commit record is R, the run's registration chained after W, the window's
     registration of its tables, reusing W's entries as R's outputs (`reusing`): the policy on the log [W] and R and the
-    period accept, and the policy's record and the window's are R. Sampled proofs' one-stage v2 audit of R names no
+    period accept, and the policy's record and the window's are R. SPOT's one-stage v2 audit of R names no
     session, so v2 refuses it at `oneSession`, before R1-R7 read R, and remote rejects with that reason, in Lean as in
     Python. With a subprotocol rejecting, remote's `windows` tie decides nothing here: `CoreRemote`'s `#guard`s check v2
     on R with a session's proofs granted and the tie on a window on R or on W."""
@@ -819,7 +885,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
 @functools.cache
 def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin
     tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
     public files. Its log is empty, or with `after` (a record's canonical JSON) that one record, which its record is
     chained right after. Made once each: a challenger's signed session is slow to make."""
@@ -828,7 +894,7 @@ def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     log = [json.loads(after)] if after else []
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
     evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
                 "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
                 "session_roots": None, "sessions": [], "statement": {}}
@@ -860,7 +926,7 @@ def _paths(j) -> list[str]:
                                        "distinct pass files and replays 470 tiles: about an hour on a CPU node)")
 def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     """Remote v1 on a served Pearl+ run with live coins and the challenger's sample: Pearl+ accepts in Lean, both ties
-    hold, and the composite is undecided only because sampled proofs is (`_empty_audit`, as everywhere here), in Lean
+    hold, and the composite is undecided only because SPOT is (`_empty_audit`, as everywhere here), in Lean
     as in Python. The run is the dress rehearsal r20261105-082550-ed23's (development, never the record): its four
     retained passes, the epoch coins, the coin record and the window record W the passes are tied to, with the verdict
     ``served_passes.py verify`` recorded on them (``verify.json``), which is Pearl+'s Python answer here
@@ -869,7 +935,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     out/served`` lays them out under ``out/served`` (run r20261105-155828-663b's record): ``passes/pass-0000{0..3}/``,
     ``passes/coins.json``, ``coin.json``, ``verify.json`` and ``window-record.json``.
 
-    The registration record R the policy and sampled proofs commit to is constructed here, the empty audit's record
+    The registration record R the policy and SPOT commit to is constructed here, the empty audit's record
     chained right after W (``previous`` = digest(W), W the one record of its log), because the dress ran no follow-on
     and so registered no R. The run of record's own R, with its own run, replaces it.
 

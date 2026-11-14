@@ -17,7 +17,7 @@ S = B.S
 SCHEMA = Path(B.__file__).parent / "schemas" / "drawn-unit-bundle.v2.schema.json"
 #: the bundle of units 5, 200, 300 and 511 (slot 0 layer 0, slot 0 layer 1, slot 1 layer 0, slot 1 layer 1) of a W8A8 MLP's
 #: window (two requests, one step, width 128: 512 units in members of 8) on the RTX PRO 6000's dot, under the window's
-#: registered subset:4, and that registration; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
+#: registered subset:4, and that docket; `prove_bundle.py make` wrote them at bc24cf2713 from the retired torch loop,
 #: and the window itself is the registered fixture benchmarks/one_stage/tests/fixtures/bundle-window (prove_bundle.sh's BUNDLE_WINDOW)
 FIXTURES = Path(__file__).parent / "fixtures"
 DRAW = (5, 200, 300, 511)
@@ -186,7 +186,7 @@ def test_another_context_is_refused(bundle) -> None:
     assert {k for k, v in bad.items() if v == PATHS} == {f"unit:{u}/{p}" for u in DRAW for p in ("x", "sx", "o0")}
 
 
-def test_a_live_draw_carries_its_receipt(bundle, validator) -> None:
+def test_a_live_sample_carries_its_receipt(bundle, validator) -> None:
     doc, payload = bundle
     live = copy.deepcopy(doc)
     live["draw"]["source"] = "live"

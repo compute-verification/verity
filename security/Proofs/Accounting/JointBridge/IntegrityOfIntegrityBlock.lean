@@ -24,7 +24,7 @@ import Proofs.Pouw.Prob
 At each value of the other coins, a sample of the period's sampled coins on which its audit accepts while more than `ε` of
 its units are wrong is one on which every sampling block of the server-time block is accepted and their incorrect proof blocks
 total more than `ε·units ≥ ln(1/δ)/q`. Read on the monitoring period's records, that is the block escaping
-(`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `law`
+(`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `samplingDesign`
 carries the bound from the monitoring period's game to the uniform coins.
 -/
 
@@ -50,7 +50,7 @@ theorem IntegrityOfIntegrityBlock : Accounting.Guarantees.Bridge.IntegrityOfInte
     have hlt := not_le.mp hfail'
     rw [R.wrong_eq] at hlt
     exact hcert.trans hlt.le
-  have hlaw := R.law ξ fun l => (∀ w ∈ l, w.accepted) ∧
+  have hlaw := R.samplingDesign ξ fun l => (∀ w ∈ l, w.accepted) ∧
     Real.log (1 / δ) / q ≤ ((l.map Flock.Guarantees.WindowRec.wrong).sum : ℝ)
   have hev : FlockSoundness.Game.value (fun l => (∀ w ∈ l.filter (fun w => w.idx ∈ S.sessions b), w.accepted) ∧
         Real.log (1 / δ) / q ≤

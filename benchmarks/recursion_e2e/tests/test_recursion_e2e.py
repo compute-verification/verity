@@ -74,7 +74,6 @@ def job(tmp: Path) -> Path:
         (c / "icheck").mkdir()
         (c / "icheck" / "time-replay-proxy.txt").write_text(timev(f"0:0{n}.00"))
         (c / "icheck" / "replay-proxy.txt").write_text("UPSTREAM\t" + json.dumps({"verdict": {"accepted": True}}) + "\n")
-        (c / "icheck" / "time-vstar.txt").write_text(timev("0:03.00"))
         v = rep("vstage", n)
         (v / "vstage").mkdir()
         for name in ("points", "fold", "L0", "alg"):
@@ -167,6 +166,18 @@ def test_cpu_steps_over_their_repeats(tmp_path: Path) -> None:
     assert row(doc, "lean step")["wall_s"]["values"] == [70.0, 80.0]
 
 
+def test_v_stars_hashing_reference_is_a_row_only_of_a_run_that_timed_it(tmp_path: Path) -> None:
+    """V*'s verdict is Lean's, so icheck times no Python reference now; a run recorded while it did keeps that row."""
+    o = job(tmp_path / "now")
+    name, (path, _) = RP.RECORDED_VSTAR
+    assert not [r for r in RP.read(o)["rows"] if r["stage"] == name]
+    o = job(tmp_path / "recorded")
+    for n in (1, 2):
+        (o / "steps" / "icheck" / f"r{n}" / "out" / path).write_text(timev("0:03.00"))
+    r = row(RP.read(o), name)
+    assert r["step"] == "icheck" and r["wall_s"]["values"] == [3.0, 3.0] and r["ok"] is None
+
+
 def test_a_repeat_still_running_is_no_refusal(tmp_path: Path) -> None:
     o = job(tmp_path)
     r3 = o / "steps" / "lean" / "r3" / "out" / "lean"
@@ -187,11 +198,11 @@ def test_build_is_once_and_steps_report_exit_codes(tmp_path: Path) -> None:
 def test_a_step_that_never_ran_is_not_a_row_and_a_failed_prover_says_so(tmp_path: Path) -> None:
     o = job(tmp_path)
     (o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-dev").mkdir()
-    (o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-dev" / "prove.err").write_text("FIREWALL-REFUSED: the setup\n")
+    (o / "steps" / "oprove" / "r1" / "out" / "oprove" / "L1-dev" / "prove.err").write_text("ZK-SERVER-REFUSED: the setup\n")
     doc = RP.read(o)
     assert not [r for r in doc["rows"] if r["step"] == "vcap"]
     l1 = row(doc, "outer L1")
-    assert l1["ok"] is False and "FIREWALL-REFUSED" in l1["note"]
+    assert l1["ok"] is False and "ZK-SERVER-REFUSED" in l1["note"]
 
 
 def test_a_preempted_statement_says_how_often(tmp_path: Path) -> None:
@@ -209,8 +220,8 @@ def test_the_zk_servers_lean_loop_is_read_from_the_runs_process_samples(tmp_path
     o = job(tmp_path)
 
     def sample(t: str, cpu: float) -> str:
-        procs = [{"pid": 7, "comm": RP.LOOP_PROCESS, "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
-                 {"pid": 8, "comm": RP.LOOP_PROCESS, "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
+        procs = [{"pid": 7, "comm": RP.LOOP_PROCESSES[0], "cpu_s": cpu, "rss_hwm_bytes": 8 * 2**30, "threads": 203},
+                 {"pid": 8, "comm": RP.LOOP_PROCESSES[0], "cpu_s": 0.1, "rss_hwm_bytes": 0, "threads": 4},
                  {"pid": 9, "comm": "flock-circuit", "cpu_s": 16.0}]
         return json.dumps({"kind": "process", "t_utc": t, "processes": procs}, separators=(",", ":")) + "\n"
     (tmp_path / "resources.jsonl").write_text(sample("2026-10-24T07:17:46.6Z", 2.0) + sample("2026-10-24T07:26:27.6Z", 1177.0))
@@ -221,6 +232,26 @@ def test_the_zk_servers_lean_loop_is_read_from_the_runs_process_samples(tmp_path
     assert "1177 CPU s, peak RSS 8.0 GB, 203 threads, seen 07:17:46–07:26:27Z" in RT.markdown(doc)
     assert RP.loop_line({RP.RECORDED_LOOP: doc["summary"][RP.LOOP]}) == RP.loop_line(doc["summary"])
 
+
+def test_a_run_recorded_under_the_older_names_reads_under_todays(tmp_path: Path) -> None:
+    """A run recorded before the ZK server's names: its oprove directory ends in the older mode, its prover bucket and
+    its Lean loop's process carry the older names, and a result's rows the older mode; each reads under today's."""
+    o = job(tmp_path)
+    p = o / "steps" / "oprove" / "r1" / "out" / "oprove"
+    (p / f"L0-{ZK}").rename(p / f"L0-{RP.RECORDED_MODE}")
+    tsv = p / f"L0-{RP.RECORDED_MODE}" / "prove.tsv"
+    (older,) = RP.RECORDED_BUCKETS
+    tsv.write_text(tsv.read_text().replace("t.ligerito", older))
+    procs = [{"pid": 7, "comm": RP.LOOP_PROCESSES[1], "cpu_s": 30.0, "rss_hwm_bytes": 2**30, "threads": 8}]
+    (tmp_path / "resources.jsonl").write_text(
+        json.dumps({"kind": "process", "t_utc": "2026-10-24T07:17:46.6Z", "processes": procs}, separators=(",", ":")) + "\n")
+    doc = RP.read(o)
+    r = next(r for r in doc["rows"] if r["stage"] == "outer L0" and r["extra"]["mode"] == ZK)
+    assert r["wall_s"]["median"] == 6.0 and r["dominant"]["phase"] == RP.RECORDED_BUCKETS[older]
+    assert [e["pid"] for e in doc["summary"][RP.LOOP]] == [7]
+    rows = [{**r, "extra": {**r["extra"], "mode": RP.RECORDED_MODE}} if r["extra"].get("mode") == ZK else r
+            for r in doc["rows"]]
+    assert set(RP.merge([{**doc, "rows": rows}])["summary"]["outer"]) == {ZK, "dev"}
 
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
@@ -355,7 +386,7 @@ def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(t
     o = job(tmp_path)
     d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / f"forged-coef-L0-{ZK}"
     d.mkdir(parents=True)
-    stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
+    stop = "ZK-SERVER-REFUSED: circuit: the constraints lincheck fails"
     (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop})}\n")
     d = d.parent / f"forged-dirs-L0-{ZK}"
     d.mkdir()

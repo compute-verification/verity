@@ -12,8 +12,7 @@ diagonal block's mask), DG's [Y0 | Y1 | X_diag | Y2] and Sq for each warp row's 
 O (apv_l7qs_i), f = float32((float32(O + 64 S) s_q + z_q float32(X(0))) s_ch) (apv_l7qs) and the warp row's receipts
 (derive.py's tile_receipts over T_0 .. T_{b_l}, O). One JSON line a gate directory; exit 1 on any difference, on a device
 mismatch or on a control the device didn't reject.
-    uv run --no-project --with numpy --with python-sat --with-editable benchmarks/pouw/exact_kit \
-      python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv_ref.py GATE_DIR...
+    PYTHONPATH=. uv run --no-project --with numpy python3 verity/protocols/accounting/pouw/prover/kernels/edited_gemm/apv_ref.py GATE_DIR...
 """
 from __future__ import annotations
 
@@ -23,8 +22,17 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from cgemm_ref import DITHER_TAG, NCT, block, cs, tile_receipts
-from cpv_ref import patch_cols
+
+from verity.protocols.accounting.pouw.prover.kernels.edited_gemm.cgemm_ref import (
+    DITHER_TAG,
+    NCT,
+    block,
+    cs,
+    tile_receipts,
+)
+from verity.protocols.accounting.pouw.prover.kernels.edited_gemm.cpv_ref import (
+    patch_cols,
+)
 
 AU_TAG = 14
 

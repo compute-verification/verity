@@ -51,7 +51,7 @@ at the play's replay sample. A held copy `heldOf` builds has the other eight by 
 first stage samples a uniform `K`-subset of the replay blocks (`SpotFlock.firstK`) that size is `K` at every play, so
 `PartsSizedAt` at `K`, which reads the play's parameters alone, gives it (`partsHeldAt_of_sized`). Every accepted
 play's first stage is of a count `K` (`firstK_of_formAccepts`): the form's parser takes a two-stage rule only with a
-rate law (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so `PartsSizedAt` at each
+rate sampling design (`Select.Rule.ofJson`), which `Select.resolve` makes `subset:K` at `1 ≤ K ≤ n`, so `PartsSizedAt` at each
 such `K` gives `PartsHeldAt` with nothing else asked (`partsHeldAt_of_accepts`). The run refuses an interior whose
 strata are not the parts its replay block's cells give the check's templates (`interior-parts`), so an accepted
 play gives `PartsSizedAt` too (`partsSizedAt_of_formAccepts`): the templates' circuits the parser returns name
@@ -127,11 +127,11 @@ record's (`RunsAs.accepted_registered`), each at a registration with the run's o
 table. -/
 theorem checks_of_accepted {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Lean.Json}
     (ha : SpotFlock.RunsAs.AcceptedTwo i it j) :
-    (∃ v, Spot.Registration.check i.record v = #[] ∧
+    (∃ v, Spot.Docket.check i.record v = #[] ∧
         SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf i.params.verifier) ∧
-      ∃ v, Spot.Registration.check it.record v = #[] ∧
+      ∃ v, Spot.Docket.check it.record v = #[] ∧
         SpotFlock.HeldOf.namesOf v = SpotFlock.HeldOf.namesOf it.params.verifier := by
-  obtain ⟨n, rule, law, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
+  obtain ⟨n, rule, samplingDesign, workTable, resolved, draw, rest, read, ns, -, -, -, -, h₁, -, -, -, -, h₂⟩ :=
     SpotFlock.RunsAs.accepted_registered ha
   exact ⟨⟨_, Array.isEmpty_iff.1 h₁, rfl⟩, _, Array.isEmpty_iff.1 h₂, rfl⟩
 
@@ -148,7 +148,8 @@ def PortsDistinctAt (C : CaseOf) : Prop :=
 /-- **An accepted play's records name their registrations' names**: its run's registration checks have no code
 (`checks_of_accepted`), and each names its registration's names (`RecordNames.recordOk_of_check`), which
 are the held copies' (`HeldOf.namesHeld_of`). -/
-theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hports : PortsDistinctAt C) :
+theorem recordsHeldAt_of {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C)
+    (hports : PortsDistinctAt C) :
     RecordsHeldAt A C := by
   intro o i it x m₁ hA hi hit hx hm₁
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -203,7 +204,7 @@ theorem partsHeldAt_of_sized {A : Live₂} {C : CaseOf} {K : ℕ} (hK : SpotFloc
   rw [SpotFlock.select_subset_size hK hsel]
   exact hs o i it strata hA hi hit hst
 
-/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate law** for its first stage (`Select.replayLaw?`). -/
+/-- **A two-stage rule `Select.Rule.ofJson` reads has a rate sampling design** for its first stage (`Select.replaySamplingDesign?`). -/
 theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
     (h : Spot.Select.Rule.ofJson j = .ok (.twoStage g t k)) : (Spot.Select.parseRate t).isSome = true := by
   unfold Spot.Select.Rule.ofJson at h
@@ -214,7 +215,7 @@ theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
     | dsimp only at h
   all_goals first
     | (cases h; done)
-    | (cases h; simp_all [Spot.Select.replayLaw?, Option.isSome_iff_ne_none])
+    | (cases h; simp_all [Spot.Select.replaySamplingDesign?, Option.isSome_iff_ne_none])
 
 /-- **The form's parameters' rule is one `Select.Rule.ofJson` read.** -/
 theorem paramsOfJson_ruleOf {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
@@ -231,7 +232,7 @@ theorem paramsOfJson_ruleOf {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Para
     | split at h
     | dsimp only at h
 
-/-- **A rate law over `n` units is `subset:K` at `1 ≤ K ≤ n`** (`Select.textOver`). -/
+/-- **A rate sampling design over `n` units is `subset:K` at `1 ≤ K ≤ n`** (`Select.textOver`). -/
 theorem textOver_rate {t : String} {a b c n : ℕ} {sizes : List ℕ} {s : String}
     (hpr : Spot.Select.parseRate t = some (a, b, c)) (h : Spot.Select.textOver t n sizes = some s) :
     ∃ K, 1 ≤ K ∧ K ≤ n ∧ s = s!"subset:{K}" := by
@@ -247,7 +248,7 @@ theorem subset_text (K : ℕ) : s!"subset:{K}" = "subset" ++ ":" ++ Nat.repr K :
   simp only [String.append_assoc]
   rfl
 
-/-- **An accepted play's run has a two-stage rule with a rate law**: the run of record's rule is the parameters'
+/-- **An accepted play's run has a two-stage rule with a rate sampling design**: the run of record's rule is the parameters'
 (`inputOf_first`), which the form's parser reads with `Select.Rule.ofJson`. -/
 theorem rule_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Input} (hA : FormAccepts C o)
     (hi : inputOn C o = some i) :
@@ -276,7 +277,7 @@ theorem rule_of_formAccepts {C : CaseOf} {o : Verity.Exchange} {i : Spot.Run.Inp
 
 /-- **Each accepted play's held first stage is of a count `K`** (`SpotFlock.firstK`): the held copies are the ones
 `heldOf` builds (`HeldOfAt`), whose first-stage registration has the run's closure map, none at an accepted play
-(`closure_of_formAccepts`), and the rule `Select.resolve` makes of the run's, a rate law (`rule_of_formAccepts`)
+(`closure_of_formAccepts`), and the rule `Select.resolve` makes of the run's, a rate sampling design (`rule_of_formAccepts`)
 resolved to `subset:K` at `1 ≤ K ≤ n` (`textOver_rate`), which Flock reads as a uniform `K`-subset. -/
 theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange}
     {i : Spot.Run.Input} {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i)
@@ -292,7 +293,7 @@ theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o
   obtain ⟨⟨a, b, c⟩, hpr⟩ := Option.isSome_iff_exists.1 hrate
   unfold SpotFlock.HeldOf.firstOf at hf
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
-  obtain ⟨n, -, rule, -, law, -, workTable, -, resolved, hres, rfl⟩ := hf
+  obtain ⟨n, -, rule, -, samplingDesign, -, workTable, -, resolved, hres, rfl⟩ := hf
   have hres' := SpotFlock.HeldOf.ok_of_toOption hres
   unfold Spot.Select.resolve at hres'
   obtain ⟨n', hn', hr⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 hres'
@@ -310,8 +311,8 @@ theorem firstK_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o
       exact Verity.Sampled.Record.parseDesign_count "subset" (Or.inl rfl) K hK1
     refine ⟨K, ?_⟩
     unfold SpotFlock.firstK SpotFlock.firstKOf
-    simp only [hcl, SamplingDeploy.Reg.program, SamplingDeploy.Reg.query, hn', Spot.Select.Rule.lawOver, hpd,
-      Verity.Sampled.Record.flockLaw_subset_text K n' hK1 hKn]
+    simp only [hcl, SamplingDeploy.Reg.program, SamplingDeploy.Reg.query, hn', Spot.Select.Rule.samplingDesignOver, hpd,
+      Verity.Sampled.Record.flockSamplingDesign_subset_text K n' hK1 hKn]
   · cases hr
 
 /-- **`PartsHeldAt` from the parts at each count the first stage samples**: at each accepted play the held first
@@ -523,7 +524,7 @@ theorem names_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o 
 /-- **`PartsSizedAt` is a lemma of the accept**: an accepted play's interior passed `interior-parts` (`interiorSteps_parts`), whose parts are the held copies' (`partsAt_heldOf`,
 `names_of_formAccepts`), at its replay sample, which has `K` blocks where the held first stage samples a `K`-subset
 (`SpotFlock.select_subset_size`). -/
-theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) :
+theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) :
     ∀ K, SpotFlock.firstK A.h.reg.first = some K → PartsSizedAt A C K := by
   intro K hK o i it strata hA hi hit hst
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -534,7 +535,7 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A
   have hcl := closure_of_formAccepts hA hi
   obtain ⟨j, ha⟩ := acceptedTwo_of_formAccepts (ruleIsTwo C) hA hi hit
   obtain ⟨grain, replay, k, hr⟩ := ha.two
-  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, law, workTable, resolved, draw, rest,
+  rcases SpotFlock.RunsAs.run_path ha.run with ⟨step, codes, hj⟩ | ⟨n, rule, samplingDesign, workTable, resolved, draw, rest,
       read, -, -, -, ht, -, -, hres, hsel, -, inner, acc₂, staged, receipt, sym, pub, audit, hsec, -, -, -⟩
   · have hs := ha.accept
     rw [hj, SpotFlock.RunsAs.symbol_refused] at hs
@@ -550,7 +551,7 @@ theorem partsSizedAt_of_formAccepts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A
       SpotFlock.RunsAs.proved_select (SpotFlock.RunsAs.resolve_ne_all hr hres) hsel0
     unfold SpotFlock.HeldOf.firstOf at hf
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hf
-    obtain ⟨n', -, rule', -, law', -, workTable', hwt', resolved', hres', hfeq⟩ := hf
+    obtain ⟨n', -, rule', -, samplingDesign', -, workTable', hwt', resolved', hres', hfeq⟩ := hf
     have hwt : workTable' = workTable := Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hwt').symm.trans ht)
     have hrs : resolved' = resolved := Except.ok.inj ((SpotFlock.HeldOf.ok_of_toOption hres').symm.trans hres)
     subst hwt hrs
@@ -571,7 +572,8 @@ theorem heldAt_of_parts {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) (hparts 
 /-- **The design evaluates at the held copies** (`TwoHolds`), wherever a play is accepted: the play's run is an accepted
 two-stage run (`acceptedTwo_of_formAccepts`), which passed its population check (`RunsAs.population_of_accepted`), and
 the held copies are the ones `heldOf` builds from it (`HeldOf.twoHolds_of`). -/
-theorem twoHolds_at {A : Live₂} {C : CaseOf} (hof : HeldOfAt A C) {o : Verity.Exchange} {i : Spot.Run.Input}
+theorem twoHolds_at {A : Live₂} {C : CaseOf} [Fact (SampledNoneAt C)] (hof : HeldOfAt A C) {o : Verity.Exchange}
+    {i : Spot.Run.Input}
     {it : Spot.Run.Interior} (hA : FormAccepts C o) (hi : inputOn C o = some i) (hit : i.interior = some it) :
     TwoHolds A.h := by
   obtain ⟨u, hu⟩ := hof o i it hA hi hit
@@ -593,7 +595,7 @@ the rule two-stage by the form's parser (`ruleIsTwo`), the second stage's hand-o
 design evaluating at them at the accepted play (`twoHolds_at`), so the names distinct and the interior record
 registering no value (`Round2.namesDistinct_of_two`, `recordsAt_of_held`), and the records naming their registrations'
 names (`recordsHeldAt_of`). -/
-theorem playAccepts_form (A : Live₂) (C : CaseOf) (S : SessionReading)
+theorem playAccepts_form (A : Live₂) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (P' : Verity.Exchange → ℕ → Claims.Prover Unit) (hparts : PartsHeldAt A C)
     (hof : HeldOfAt A C) (hports : PortsDistinctAt C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hpin : PinHeldAt A C S)
@@ -607,7 +609,7 @@ theorem playAccepts_form (A : Live₂) (C : CaseOf) (S : SessionReading)
 
 /-- **The form's accept is the run's accept** (`AcceptsRun` at the form): where the form's check accepts a play, every
 run of `SpotFlock.V` on coins agreeing with what the check read, whose messages are what the check read, accepts. -/
-theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
     (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
@@ -619,7 +621,7 @@ theorem acceptsRun_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading
 /-- **The form's accept is the run's accept, with every message reached** (`ReachedAccepts` at the form): where the
 form's check accepts a play, every run of `SpotFlock.V` on coins agreeing with what the check read, whose messages
 are what the check read wherever the run has one, accepts and has all the verifier's `k` messages. -/
-theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem reachedAccepts_form (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt C)] (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A C S P') (hparts : PartsHeldAt A C) (hof : HeldOfAt A C)
     (hports : PortsDistinctAt C) (hst : StmtsRead A C S) (hrounds : RoundsHeldAt A C S)
@@ -647,7 +649,8 @@ theorem reachedAccepts_at {A : Live₂} {x : Msg} {C : CaseOf} {S : SessionReadi
 /-- **The form's accept is the run's accept, its premises asked at the plays at `x`**: `acceptsRun_form` at the cases
 at `x` (`atStmt C x`), whose accepted plays are `C`'s at the statement `x`, the only ones `AcceptsRun` at `x` looks at
 (`acceptsRun_at`). -/
-theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt (atStmt C x))]
+    (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
     (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))
@@ -660,7 +663,8 @@ theorem acceptsRun_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionRead
 
 /-- **The form's accept is the run's accept, with every message reached, its premises asked at the plays at `x`**:
 `reachedAccepts_form` at the cases at `x` (`reachedAccepts_at`). -/
-theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) (S : SessionReading)
+theorem reachedAccepts_form_at (A : Live₂) (x : Msg) (C : CaseOf) [Fact (SampledNoneAt (atStmt C x))]
+    (S : SessionReading)
     (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) (P' : Verity.Exchange → ℕ → Claims.Prover Unit)
     (hsm : SessionMsgs A (atStmt C x) S P') (hparts : PartsHeldAt A (atStmt C x))
     (hof : HeldOfAt A (atStmt C x)) (hports : PortsDistinctAt (atStmt C x))

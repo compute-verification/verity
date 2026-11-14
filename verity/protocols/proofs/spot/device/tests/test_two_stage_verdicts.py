@@ -14,9 +14,7 @@ from __future__ import annotations
 
 import functools
 import importlib
-import sys
 from dataclasses import replace
-from pathlib import Path
 
 import pytest
 from verity.circuits import boolean as BL
@@ -27,7 +25,7 @@ from verity.circuits.defs import bind
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.types import Array, Tuple
 from verity.commitments.gates import embedding as EMB
-from verity.definitions.registry import boolean_fp8_moe as BM
+from verity_vllm.definitions.registry import boolean_fp8_moe as BM
 from verity.protocols.proofs.spot.verifier import second_stage as SS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import interior_links as IL
@@ -35,8 +33,7 @@ from verity_vllm.pipeline import interior_rows as IR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")))
-TS = importlib.import_module("two_stage")
+TS = importlib.import_module("verity.protocols.proofs.spot.device.two_stage")
 
 #: experts a table, a block's K e4m3 bytes, a table row's u16 words; the tables a span reads and the blocks on each
 E, K, H, T, W = 4, 32, 16, 2, 2
@@ -166,12 +163,12 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
     """`second-inputs` at round 2: a fused block's row, salt and path pass where its root and domain are the tables the
     auditor's params pin, round 1's record registering none of them. They are refused, with `second_stage.INPUTS_WHY`
     and the row named, where the params pin no table or one of the two, where the pin's root or domain id is another
-    than the one the verifier filled from the tables' registration, or where it pins the table at another count of
+    than the one the verifier filled from the tables' docket, or where it pins the table at another count of
     rows; the same entries registered by round 1's record instead pass as before. The run is refused either way: no
     statement is given here, so ``second-statements`` or the design's own codes refuse it before the form's."""
     own = _pinned_round_two(PINS)
     assert SS.inputs_failure(own) is None
-    first = SS.check(SS.FORM, own, None)
+    first = SS.check_twin(SS.FORM, own, None)
     assert "second-inputs" not in first.codes and not first.ok
     for changed in (replace(own, tables=()),
                     replace(own, tables=tuple((p, {**e, "root": "ee" * 64}) for p, e in own.tables)),
@@ -180,7 +177,7 @@ def test_round_two_takes_a_fused_blocks_tables_from_the_auditors_pins():
                     replace(own, tables=own.tables[:1])):
         assert SS.inputs_failure(changed) == f"{KEY}/row"
         assert dict(SS._interior_failures(changed))["second-inputs"] == {"value": f"{KEY}/row", "why": SS.INPUTS_WHY}
-        assert "second-inputs" in SS.check(SS.FORM, changed, None).codes
+        assert "second-inputs" in SS.check_twin(SS.FORM, changed, None).codes
     recorded = {"roots": [{"port": f"t{k}", **{x: e[x] for x in ("root", "domain", "leaves")}}
                           for k, e in enumerate(PINS.values())]}
     assert SS.inputs_failure(replace(own, boundary=recorded, tables=())) is None

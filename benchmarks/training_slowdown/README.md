@@ -39,7 +39,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `model.py` | the starts' architecture, the lf dense decoder |
 | `program_reading.py` | a training step's work read off its Program (`circuit_properties.work.read`, its point's test among it): the lf model's step under AdamW, looped (`loop`), with the reading's seconds, its pass's memory and claims, the refusal or N and \|C\|; `python -m training_slowdown.program_reading`, s-t20's shape by default |
 
-The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step_lf.py`), which the suite checks.
+The reference shapes are the lf model's (`adapters/torch/tests/frontend/train_step_lf.py`), which the suite checks.
 
 ## The one entry point
 
@@ -458,12 +458,12 @@ of M named `tf32` is priced apart from its trace, and ρ is refused.
   forward).
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
-The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.
+The suite: `uv run tools/check/suites.py benchmarks/training_slowdown`.
 
 ## The grader
 
 `grader/grader.py` reads a run's training step off the Program the training-step frontend derives for it
-(`step_program`, in `adapters/vllm/verity_vllm/program/frontend/train_step.py`), beside this package's trace of the
+(`step_program`, in `adapters/torch/verity_torch/frontend/train_step.py`), beside this package's trace of the
 same step. From `grader/`:
 
 ~~~text
@@ -476,7 +476,7 @@ holds to the commit named. It writes `OUT.json`: the step's matrix products as r
 wires (a flash attention the step keeps at a cc as the products its head Definitions compute, `grader.ATTENTION`), the
 circuit's size |C| at the Boolean prices of the primitives it calls and, given `--trace`, the same rows of this package's
 capture beside them. It computes no ρ. Its tests are a suite of their own:
-`uv run tools/verity/check/suites.py benchmarks/training_slowdown/grader`.
+`uv run tools/check/suites.py benchmarks/training_slowdown/grader`.
 
 ## What it reads, what it writes and what loads it
 

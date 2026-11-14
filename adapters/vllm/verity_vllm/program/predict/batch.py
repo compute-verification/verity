@@ -61,6 +61,8 @@ from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
 from .phi import Phi
 
+__all__ = ["check_compiled", "separable", "workload_labels"]
+
 #: the request-local Input groups a request's own certified body fixes, with its seed rule's (`seed_rule.PARAMS`: its body's seed
 #: and id, and the window's public seed salt); any other request-local group is the batch's
 OWN_GROUPS = ("prompt", "seed", *SEED_PARAMS)
@@ -183,7 +185,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     out.append(Template(f"token select (greedy) {fn.id}", fn, (own("r"),), own("r"), bind_at=lambda _req, n: fn,
                         shapes=tuple(((), n) for n in range(1, max_seqs + 1))))
     # (logits, top_p, seed, pos, temperature, S)
-    from verity.definitions.registry.topp_geometry import registered_splits
+    from verity_vllm.definitions.registry.topp_geometry import registered_splits
     S_reg = registered_splits(tp.num_sms)
     fn = kind("token_select_stochastic_split", V=V, S=S_reg)
     out.append(Template(f"token select (top-p, registered S) {fn.id}", fn, (own("r"), SHARED, own("r"), SHARED, SHARED, SHARED),
@@ -199,7 +201,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     return out
 
 
-# --- the compile-unit rule -------------------------------------------------------------------------------------------------------
+# --- the compile slice's proof block rule ----------------------------------------------------------------------------------------
 
 
 def _prompt(body: Any) -> tuple[int, ...] | None:

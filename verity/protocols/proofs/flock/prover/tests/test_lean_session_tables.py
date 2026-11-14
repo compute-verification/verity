@@ -112,7 +112,7 @@ def verdicts(rope, tmp_path_factory):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", ["honest", "a missing root", "a short y", "swapped files", "swapped files and digests"])
-def test_a_drawn_session_of_two_tables_is_refused(verdicts, name):
+def test_a_sampled_session_of_two_tables_is_refused(verdicts, name):
     """Honest or tampered, the sampled session's statements set up and it meets the refusal of its sample's sampling design; its
     verdict names the two tables it set the session up as (``session_tables``)."""
     v = verdicts[name]
@@ -143,7 +143,7 @@ def test_another_table_count_is_refused(rope, tmp_path):
 
 @pytest.mark.slow
 @pytest.mark.parametrize("name", list(DRAWS))
-def test_the_parts_come_from_the_sessions_draw(verdicts, name):
+def test_the_parts_come_from_the_sessions_sample(verdicts, name):
     """A table's part as the session's sample sets up and meets its sampling design's refusal; a sample the tables cannot split is refused
     at setup."""
     v = verdicts[name]
@@ -221,7 +221,7 @@ def test_plain_tables_refuses_a_tampered_session_at_its_check(plain, name):
 
 
 @pytest.mark.slow
-def test_plain_tables_refuses_a_session_without_a_draw(plain):
+def test_plain_tables_refuses_a_session_without_a_sample(plain):
     assert plain["no draw"]["why"] == DRAWLESS, plain["no draw"]["why"]
 
 

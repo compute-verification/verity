@@ -24,7 +24,7 @@ its leaf, and each text is the canonical text of the value it prints.
 
 * `Play.Honest`: what makes a play honest under a key's identifier: the sizes, each text the canonical text of its
   value, and each signature one that verifies over the message its party signs.
-* `draws`: `Challenger.drawCoins` returns the challenge of an honest play, and `reads`: `Challenger.coinsReason` gives
+* `draws`: `Challenger.sampleCoins` returns the challenge of an honest play, and `reads`: `Challenger.coinsReason` gives
   no reason against it.
 * `exists_honest`: a key `Lms.key` derives at the deployed parameters has an honest play.
 * `familyOneCommitment_honest`, `familyOneCommitmentRead_honest`: the two at a key `Lms.keygen` derives.
@@ -375,7 +375,7 @@ def segment : Json :=
   Json.mkObj [("after", .str (Flock.hexOf p.after)), ("label", .str p.label), ("openings", .arr #[p.opening.toJson]),
     ("start", Lean.toJson (0 : Nat))]
 
-/-- The evidence `drawCoins` reads. -/
+/-- The evidence `sampleCoins` reads. -/
 def evidence : Json :=
   Json.mkObj [("ledger", .arr #[.str p.openText, .str p.endText]), ("main", .arr #[.str (Flock.hexOf p.pin)]),
     ("pins", .arr #[.str p.pinText]), ("segment", p.segment), ("session", p.session)]
@@ -640,9 +640,9 @@ theorem trusted (h : p.Honest I) :
       exact Logs.jsonStrIs_str _) rfl
   exact ⟨Steps.trustedChallengePhaseOf_ok_of_steps hps hsn, Steps.withheldOn_two heo hee rfl rfl r5 r4⟩
 
-/-- **`drawCoins` returns an honest play's challenge.** -/
+/-- **`sampleCoins` returns an honest play's challenge.** -/
 theorem draws (h : p.Honest I) :
-    drawCoins p.key (Flock.hexOf p.window) p.label p.after p.evidence = .ok p.coin := by
+    sampleCoins p.key (Flock.hexOf p.window) p.label p.after p.evidence = .ok p.coin := by
   obtain ⟨ht, hw⟩ := trusted h
   have c1 : getD p.evidence "ledger" = .arr #[.str p.openText, .str p.endText] := rfl
   have c2 : getD p.evidence "pins" = .arr #[.str p.pinText] := rfl
@@ -654,7 +654,7 @@ theorem draws (h : p.Honest I) :
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide)) rfl (Files.nat?_nat 0) rfl
     (Logs.jsonStrIs_str _) (Files.opening_ofJson _ _ _ _ _ _)
     (Files.liveReason_one p.after h.domain h.coinSize h.saltSize)
-  exact Steps.drawCoins_ok_of_steps (c := p.commitment) (roots := [(p.label, [p.after])])
+  exact Steps.sampleCoins_ok_of_steps (c := p.commitment) (roots := [(p.label, [p.after])])
     (keys?_mkObj (by simp only [List.map_cons, List.map_nil]; decide))
     (by
       rw [c1, c2, c3, c4]
@@ -764,14 +764,14 @@ namespace Properties.Challenger
 open Lean (Json)
 open _root_.Spot _root_.Spot.Challenger
 
-/-- **`FamilyOneCommitment`'s honest lemma**: `Challenger.drawCoins` accepts at the honest deployed instance. A key
+/-- **`FamilyOneCommitment`'s honest lemma**: `Challenger.sampleCoins` accepts at the honest deployed instance. A key
 `Lms.keygen` derives at the deployed LMS parameters signs an honest session withheld (`Withheld.Play.Honest`): the
 auditor's device commits to one family of one challenge, records the commitment, logs the root answered and the
-release and closes its log, and the auditor's ledger opens the session on the window and ends it closed. `drawCoins`
+release and closes its log, and the auditor's ledger opens the session on the window and ends it closed. `sampleCoins`
 under that key returns the session's challenge. -/
 theorem familyOneCommitment_honest :
     ∃ (seed : ByteArray) (k : Lms.PrivateKey) (w label : String) (after : ByteArray) (coins : Json) (ξ : ByteArray),
-      Lms.keygen Lms.deployed seed = .ok k ∧ drawCoins ⟨Lms.deployed, k.publicKey⟩ w label after coins = .ok ξ := by
+      Lms.keygen Lms.deployed seed = .ok k ∧ sampleCoins ⟨Lms.deployed, k.publicKey⟩ w label after coins = .ok ξ := by
   obtain ⟨k, hkg, I, hk⟩ := Withheld.keygen_ok (seed := ⟨Array.replicate 64 0⟩) (Withheld.zeros_size 64)
   obtain ⟨p, hpub, -, -, -, -, -, h⟩ := Withheld.exists_honest hk Withheld.label_name Withheld.label_plain
     Withheld.label_short 0 (Withheld.zeros_size 64) (Withheld.zeros_size 192) (Withheld.zeros_size 64)

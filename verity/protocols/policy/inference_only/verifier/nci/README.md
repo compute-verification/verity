@@ -27,7 +27,7 @@ deployment configuration's table declares the policy's party from, with its test
     The Lean check runs each one's main on the data `lean/lean-audit.json` pins (`runs`), which the tests named
     under "Not here" hold to its generator. No other code runs them.
 - **Scripts**: `lean/scripts/nci_reference.py`, the check's Python reference, loaded by path by the tests of
-  `adapters/vllm`, by `demos/lifecycle` and by `benchmarks/verifier_cost`; and the difftests' generators,
+  `adapters/vllm`, by `verity run`'s lifecycle workload (`tools/verity/cli/tests/lifecycle`) and by `benchmarks/verifier_cost`; and the difftests' generators,
   `python scripts/NAME.py CHECKOUT --out DIR`, as `lean/lean-audit.json` runs them (`runs`). The tests of
   `verity/protocols/proofs/flock/prover` load `desc_difftest_vectors.py` by path. `lean/scripts/served_record_case.py`
   writes a served run's files as a case for `inference-only-record-check`, with the record reference's verdicts on it
@@ -57,7 +57,7 @@ The inference-only policy is a subprotocol of both composites, onsite and remote
 `NciCheck.Protocol.protocol` (`verity/inference-only/v0`, the executable `inference-only`) is its check behind the core
 interface. Its params are the registered circuit, the budgets and the registration log before the run; its commitment is
 the run's own registration record, which must name the registered circuit and which each composite requires to be the
-record sampled proofs commits to (`Core.Composition.same`); its evidence is the division with θ and θ's
+record SPOT commits to (`Core.Composition.same`); its evidence is the division with θ and θ's
 provenance. That evidence reaches the verifier in the clear: the check doesn't run inside a zero-knowledge
 proof yet.
 

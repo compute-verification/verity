@@ -20,8 +20,8 @@ stated once, over any invariant, so that each slot's case is a step of its own:
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec)
 
 /-- **`EnvPre` by an invariant of the relay's requests**: where, at each request `e` at a slot `k` of the session `st`

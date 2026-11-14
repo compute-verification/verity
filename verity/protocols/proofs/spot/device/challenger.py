@@ -137,7 +137,7 @@ new one.  `ledger_line` writes an entry as the auditor does.
 **A lane's day** is a UTC day, numbered from 1970-01-01 (`day_of`), and its program is the one the lane's `declaration`
 entry names for it: its program's SHA-512 and its blocks' descriptor keys, declared at `declared_utc`, the challenger's
 own clock, for that day or a later one.  A lane declares a day once.  Once a lane has declared, each later `open` of its
-windows (the window's registration, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
+windows (the window's docket, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
 challenger's clock too, so the ledger orders a day's declaration before every coin of the day.  `_days` checks both in a
 second pass over the entries the first accepted; a lane that never declares opens as before.  `declared_day` is what a
 per-day check reads of the ledger: the day of the window's open and the lane's declarations before it.
@@ -1079,7 +1079,7 @@ def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
     the rest in pairs, a root's line and its coin's release: no coin of family `label` whose root's line names `after`
     is released after a line opening a coin tree's round (`open_line`), and the first such line opens the stream
     ``session`` (`link_line`), whose first round is the link points. A coin tree's own line may come anywhere. In v2's
-    one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
+    one-stage audit `label` is the parameters' challenger family and `after` the docket's digest, so the coins so
     released are the sample's, and v2 refuses a log out of this order (`SAMPLE_LINK_FIRST`)."""
     opened, pending = False, None
     for line in log:

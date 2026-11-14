@@ -1,6 +1,6 @@
 """R2's other partition (`r2_population`), which every arm's registration-partition-mismatch negative registers, on toy
 windows: a one-unit window, whose one-short population would be empty and crashed the arm after its verdict, a mixed window
-of single instances, and a window of several. Each builds, differs from the window's own partition, and the registration
+of single instances, and a window of several. Each builds, differs from the window's own partition, and the docket
 check refuses the window's record against it with an R2 code."""
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import pytest
 
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.types import Value as Bits
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))

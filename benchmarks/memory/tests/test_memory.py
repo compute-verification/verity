@@ -33,6 +33,8 @@ PACED = M.SETTINGS.setting("PACED").default
 WINDOWED = ("SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
 GIB = 1 << 30
 SESSION = HERE / "fixtures" / "session.json"
+UNDECIDED = ("undecided: the Lean's answer for the γ terms isn't written yet "
+             "(memory-accounting/lean-decides-memory-verdicts)")
 #: the bench's own run, and the host stamp the kit's writer stamps each measurement with
 BENCH = "r20000101-000005-ffff"
 STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test", "commit": "d" * 40}
@@ -49,6 +51,13 @@ def a_session(k: int = 0, *, accepted: bool = True, gamma=0.25, failure: str | N
     s["ledger"]["spec"]["gamma"] = gamma
     return {**s, "k": k, "accepted": accepted, "verdict": verdict,
             "failure": None if failure is None else {"t": 0, "failure": failure, "at": None}}
+
+
+def an_undecided_session() -> dict:
+    """An accepted session whose γ at the data sheet's rate is undecided: its Lean answer isn't written."""
+    s = a_session()
+    s["ledger"]["spec"]["undecided"] = UNDECIDED
+    return s
 
 
 def with_amounts(s: dict, *, span_ns: int = 4 * 10 ** 9, error: float = 2.0 ** -30) -> dict:
@@ -171,6 +180,10 @@ def test_the_number_is_the_session_harnesss_gamma_spec_of_the_same_records(tmp_p
     (a_record(), "the verifier recorded no session"),
     (a_record(a_session(gamma=None)), "session 0 was accepted and its ledger holds no γ"),
     (a_record(a_session(gamma=True)), "session 0 was accepted and its ledger holds no γ"),
+    (a_record(an_undecided_session()), f"session 0 was accepted and its γ at the specification's rate is {UNDECIDED}"),
+    (a_record(a_session(verdict=None)), "session 0 is recorded accepted, but its record names no Lean verdict (None)"),
+    (a_record(a_session(verdict="python")),
+     "session 0 is recorded accepted, but its record names no Lean verdict ('python')"),
     ({"sessions": "none"}, "the verifier's record doesn't read as one"),
     ("not json", "the verifier's record doesn't read as one"),
 ])
@@ -222,12 +235,12 @@ def test_a_gate_runs_number_is_read_from_the_host_run_its_fire_run_names(store, 
     assert text[2].endswith("bound to SOME_ROLE's pinned checkpoint")
 
 
-def test_a_binding_that_did_not_bind_and_a_record_with_no_lean_verdict_are_said(store, capsys):
-    record = a_record(a_session(verdict=None), binding={"name": "SOME_ROLE", "bound": False})
+def test_a_binding_that_did_not_bind_is_said(store, capsys):
+    record = a_record(a_session(), binding={"name": "SOME_ROLE", "bound": False})
     store.add(RUN, {"out/verifier.json": record}, dirty=True)
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted (its record names no Lean verdict)")
+    assert text[1].startswith(f"  session 0 of {RUN}, commit {COMMIT}-dirty: accepted by the Lean verifier")
     assert text[2].endswith(f"; {M.UNBOUND}") and doc["model"] is None and doc["bound"] is False
     assert doc["commit"] == f"{COMMIT}-dirty"
 

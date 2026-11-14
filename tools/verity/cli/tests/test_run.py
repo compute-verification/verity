@@ -21,7 +21,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.proofs.spot.verifier import parties as SP
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as RG
 from verity.channel import Refused
 from verity_cli import run as R
 
@@ -479,6 +479,16 @@ def test_remotes_development_composite_is_no_composite():
         K.composite(REMOTE_V0, REG.components)
     assert e.value.name == "composite" and "verity/remote/v1 (inference-only, pearl-plus, sampled-proofs)" in str(e.value)
     assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
+
+
+@pytest.mark.parametrize("cid", sorted(K.UNACCEPTED))
+def test_onsites_smaller_sets_are_read_and_hashed_and_verity_run_runs_neither(tmp_path, cid):
+    """Each of onsite's two smaller sets is a deployment with an id of its own, never onsite's: `check` reads it and
+    `verity run` stops before any party with the goal that brings it."""
+    cfg = config(K.UNACCEPTED[cid])
+    assert K.composite(cfg["protocols"], REG.components) == cid and K.digest(cfg) != K.digest(config())
+    with pytest.raises(NotImplementedError, match="demos/onsite-demo"):
+        run(tmp_path, registry(), cfg=cfg)
 
 
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):

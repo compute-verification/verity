@@ -17,7 +17,7 @@ from test_repository import ROOT
 
 NAME = "metrics.toml"
 #: where a benchmark's metrics.toml may sit: the trees a command's script is under (`_SCRIPT`)
-TREES = ("benchmarks", "demos", "infra", "tools")
+TREES = ("benchmarks", "infra", "tools")
 #: the one file every row once sat in, which no row may return to
 RETIRED = "benchmarks/metrics.toml"
 SKIP = {".git", ".lake", ".venv", "node_modules", "__pycache__", "target", "build", "dist"}
@@ -161,7 +161,7 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
         "'infra/serving-cost-glm53'"]
     assert _problems({**good, "owner": "nobody", "command": "echo"}, {"vllm"}, here) == [
         f"owner 'nobody' is no handle in {HANDLES}",
-        "its command names no script under benchmarks/, demos/, infra/ or tools/"]
+        "its command names no script under benchmarks/, infra/ or tools/"]
     assert _problems({**good, "id": "vllm/serving-cost-glm53"}, {"vllm"}, "benchmarks/landing") == [
         "its command's script benchmarks/serve_tax/run.sh is not under benchmarks/landing/: move the row to "
         "benchmarks/serve_tax/metrics.toml, beside its script"]
@@ -211,14 +211,14 @@ def test_an_axis_is_one_sentence() -> None:
             f"axis {axis!r} is not one sentence: write one line saying what the y axis is, ending with a period"], axis
 
 
-def test_a_row_whose_script_is_under_demos_sits_beside_it() -> None:
+def test_a_row_sits_beside_its_script() -> None:
     row = {"id": "vllm/remote-demo-minutes", "title": "Remote demo run time", "owner": "vllm", "unit": "minutes",
            "axis": "Minutes from the first command to the verdict.", "better": "lower",
-           "command": "research run --cwd source -- python3 demos/vllm/minutes.py FIRST_RUN VERDICT_RUN", "every": "7d"}
-    assert _problems(row, {"vllm"}, "demos/vllm") == []
+           "command": "research run --cwd source -- python3 benchmarks/demo_minutes/minutes.py FIRST_RUN VERDICT_RUN", "every": "7d"}
+    assert _problems(row, {"vllm"}, "benchmarks/demo_minutes") == []
     assert _problems(row, {"vllm"}, "benchmarks/serve_tax") == [
-        "its command's script demos/vllm/minutes.py is not under benchmarks/serve_tax/: move the row to "
-        "demos/vllm/metrics.toml, beside its script"]
+        "its command's script benchmarks/demo_minutes/minutes.py is not under benchmarks/serve_tax/: move the row to "
+        "benchmarks/demo_minutes/metrics.toml, beside its script"]
 
 
 def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> None:
@@ -237,7 +237,7 @@ def test_a_row_a_loop_sends_sits_beside_the_loop_and_may_be_due_in_minutes() -> 
 def test_a_row_in_a_file_another_handle_owns_is_refused() -> None:
     f = "benchmarks/serve_tax/metrics.toml"
     reg = {"handles": [{"handle": "proofs", "owns": ["benchmarks/serve_tax/"]},
-                       {"handle": "vllm", "owns": ["demos/vllm/"]}]}
+                       {"handle": "vllm", "owns": ["benchmarks/demo_minutes/"]}]}
     fix = f"add {f!r} to @vllm's `owns` there"
     assert _unowned(f, {"owner": "proofs"}, reg) == []
     assert _unowned(f, {"owner": "vllm"}, reg) == [

@@ -4,7 +4,7 @@ public import Proofs.Flock.Verifier
 public import Proofs.Flock.Level3
 public import Proofs.Flock.Soundness
 public import Proofs.Flock.EndToEnd
-public import Proofs.Flock.EndToEndDrawn
+public import Proofs.Flock.EndToEndSampled
 public import Proofs.Flock.EndToEndHidden
 public import Proofs.Flock.EndToEnd.Period
 public import Proofs.Flock.EndToEnd.Blocks
@@ -78,6 +78,15 @@ public import Proofs.Flock.SpotFlock.Frame
 public import Proofs.Flock.SpotFlock.FrameAt
 public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
+public import Proofs.Flock.SpotFlock.DrawnAt
+public import Proofs.Flock.SpotFlock.Instance
+public import Proofs.Flock.SpotFlock.InstanceAddresses
+public import Proofs.Flock.SpotFlock.InstanceBoundary
+public import Proofs.Flock.SpotFlock.InstanceCodes
+public import Proofs.Flock.SpotFlock.InstanceReads
+public import Proofs.Flock.SpotFlock.InstanceRecords
+public import Proofs.Flock.SpotFlock.InstanceRun
+public import Proofs.Flock.SpotFlock.OneTable
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
 public import Proofs.Flock.SpotFlock.FirstHitClassCaps
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
@@ -163,6 +172,7 @@ public import Proofs.Flock.ZkAny
 public import Proofs.Flock.Claims.Complete.Zk
 public import Proofs.Flock.EndToEnd.Joint.Bound
 public import Proofs.Flock.Soundness.Audit.StratifiedProj
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SiblingJP
 public import Proofs.Flock.Claims.Complete
 public import Proofs.Flock.EndToEnd.Joint
 

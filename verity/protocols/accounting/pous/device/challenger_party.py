@@ -11,7 +11,7 @@ The challenger flips its coins on its own host, designates the session id from t
 a round, goes on the wire: the coin tree's root, the session id and the openings leave only in its report, `{"host",
 "public_key", "session", "session_id", "warmups"}`, after the session's last answer and its signature.
 
-That id is a request's that names no audit (`period.audit`'s), whose salt is sampled where setup ran. An audit's two coins
+That id is a request's that names no audit (`period_prover.audit`'s), whose salt is sampled where setup ran. An audit's two coins
 are the challenger's, the setup's salt and the session's:
 
 - **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
@@ -29,12 +29,13 @@ are the challenger's, the setup's salt and the session's:
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
 
 The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`Challenger`) and the prover
-(`challenger_session.Prover`). Their messages and codec, the request, the ids and the prover's side are PoUS's
-(`challenger_session`), which this device imports and which never imports it. The challenger takes its coin tree's hiding
+(`verity.protocols.accounting.pous.prover.challenger_prover.Prover`), each declaring its own role in its `PROTOCOL`.
+Their messages and codec, the request and the ids are PoUS's (`challenger_session`), which this device imports and which
+never imports it. The challenger takes its coin tree's hiding
 key and each round's salt from its host's coins too. `serve` is its party, stepped over the session's stream by PoUS's
 loop (`challenger_session.run`) on the clock and coins it is given: it reads its clock once before each index it sends
 and once after each block it takes, those readings alone, so on the same coins and readings it signs the same bytes
-wherever it runs.
+wherever it runs. `start` is how a deployment starts it on the auditor's host (`challenger_session`'s docstring).
 
 `python -m verity.protocols.accounting.pous.device.challenger_party --device DIR [--listen HOST:PORT]` is the challenger's
 side (`main`): it reads one JSON line on stdin, a salt request or the session's `{"binding", "block_bytes", "blocks",
@@ -43,8 +44,8 @@ side (`main`): it reads one JSON line on stdin, a salt request or the session's 
 `{"listening": PORT}`, serves one prover (`serve`) and prints its report. Its key, session log (`sessions`) and salt log
 (`salts`) are in `DIR`. Each session it completes is kept on its own host, `DIR/setups/<session id>.json` (0700, the
 file 0600: `keep`), the request and the id it designated: the auditor's record of that window's setup, from which
-PoUB's verifier on the same host builds its registration (`verity.protocols.accounting.poub.verifier.p2_party --pous-record`),
-never from a file the prover sends.
+PoUB's verifier on the same host builds its registration
+(`verity.protocols.accounting.poub.verifier.p2_parties --pous-record`), never from a file the prover sends.
 """
 
 from __future__ import annotations
@@ -61,12 +62,14 @@ from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import Any, BinaryIO
 
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.party import Finish, Identity, Received, Send
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.device import onsite
 from verity.protocols.accounting.pous.device.challenger_session import (
     CHALLENGER,
+    COMPONENT,
     MANIFEST,
     MODULE,
     PROVER,
@@ -75,8 +78,8 @@ from verity.protocols.accounting.pous.device.challenger_session import (
     WARMUPS,
     Frames,
     Polled,
-    Prover,
     coin_session_id,
+    deployed_request,
     run,
     session_id,
     setup_of,
@@ -251,14 +254,25 @@ class Challenger:
             return [_read_clock()]
         self.session = R.ChallengePhaseRecord(self.c.close(), self.c.commitment, self.c.openings())
         return [Send(PROVER, Message("End")),
-                Finish({"session": self.session.to_json(), "session_id": self.sid.hex()}, kind="private")]
+                Finish({"public_key": self.signer.public_key.hex(), "session": self.session.to_json(),
+                        "session_id": self.sid.hex()}, kind="private")]
 
 
 def _challenger() -> Challenger:
     return Challenger(period.SESSION_DOMAIN)
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger, PROVER: Prover})
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The challenger's start on the auditor's host (`ProtocolDef.starts`): the session's request
+    (`challenger_session.deployed_request`), and in its state directory its key, refused unless the configuration pins it
+    for PoUS (`onsite.signer`), its session log and its salt log."""
+    params = deployed_request(configuration, bound)
+    signer = onsite.signer(state, onsite.pin(configuration, CHALLENGER, COMPONENT))
+    salts, sessions = _logs(state)
+    return Start(params, {"signer": signer, "log": sessions, "salts": salts})
+
+
+PROTOCOL = ProtocolDef(MANIFEST, {CHALLENGER: _challenger}, {CHALLENGER: start})
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog, coins: bytes,
@@ -301,7 +315,7 @@ def keep(device: Path, sid: bytes, request: Mapping[str, Any]) -> Path:
 
 
 def _logs(device: Path) -> tuple[mc.SaltLog, mc.SessionLog]:
-    """The salt log and session log in `device`, made there the first time under its lock (`period.challenger`'s)."""
+    """The salt log and session log in `device`, made there the first time under its lock (`onsite.device_key`'s)."""
     device.mkdir(parents=True, exist_ok=True)
     with open(device / "device.lock", "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
@@ -324,7 +338,7 @@ def _refused(why: str) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`period.challenger`)")
+    ap.add_argument("--device", required=True, help="the challenger's key, session log and salt log (`onsite.device_key`)")
     ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
     a = ap.parse_args(argv)
     request = json.loads(sys.stdin.readline())
@@ -344,7 +358,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _refused(str(e))
     except (KeyError, TypeError) as e:
         return _refused(f"the request is not a session's request ({type(e).__name__})")
-    signer = period.challenger(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
+    signer = onsite.device_key(device, workers=min(period.SETUP_WORKERS, len(os.sched_getaffinity(0))))
     host, _, port = a.listen.rpartition(":")
     with socket.create_server((host, int(port))) as srv:
         _reply(json.dumps({"listening": srv.getsockname()[1]}))
@@ -358,7 +372,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "give_salt", "keep", "report", "serve"]
+__all__ = ["PROTOCOL", "SOURCE_BYTES", "Refusal", "designate", "give_salt", "keep", "report", "serve", "start"]
 
 if __name__ == "__main__":
     sys.exit(main())

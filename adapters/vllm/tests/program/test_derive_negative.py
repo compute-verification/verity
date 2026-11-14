@@ -8,7 +8,7 @@ no `Program` is returned AND that the refusal names the right class of reason. A
 is reported distinctly (`REFUSED-WRONG-REASON`) from acceptance (`ACCEPTED-MUST-REFUSE`) and from a crash that is
 not a classified refusal (`CRASH-NOT-REFUSAL`).
 
-The importer (XFER may not edit importer code) is `verity_vllm.program.frontend.derive.derive`, called through its
+The importer (XFER may not edit importer code) is `verity_torch.frontend.derive.derive`, called through its
 `derive_report`; the transfer report records its name. Needs torch; runs on the pod (§37).
 """
 
@@ -30,19 +30,19 @@ from verity.circuits import Program, bind, program_digest
 from verity.circuits.evaluation import evaluate_region
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array
-from verity.definitions.registry import b1
-from verity.definitions.registry.prims import BF16, I32
+from verity_vllm.definitions.registry import b1
+from verity_vllm.definitions.registry.prims import BF16, I32
 
 from tests.program.capture_check import LazyTranscript, Segments, check_call
-from verity_vllm.program.frontend import derive as _D
-from verity_vllm.program.frontend.errors import FrontendError
-from verity_vllm.program.frontend.provenance import registry_version
+from verity_torch.frontend import derive as _D
+from verity_torch.frontend.errors import FrontendError
+from verity_torch.frontend.provenance import registry_version
 
 # ---------------------------------------------------------------------------------------------------------
 # importer adapter: derive_report(...); one normalised Outcome
 # ---------------------------------------------------------------------------------------------------------
 
-IMPORTER_NAME = "verity_vllm.program.frontend.derive.derive"
+IMPORTER_NAME = "verity_torch.frontend.derive.derive"
 
 
 @dataclass
@@ -270,6 +270,19 @@ def test_hidden_state_is_refused(cls):
 def test_shape_mismatch_input_vs_weight_is_refused():
     out = run_importer(ResMLP(), (meta(H + 1),))  # x has 9 features, fc wants 8
     assert_refused(out, "shape", "ResMLP with a 9-wide input into Linear(8, 16)")
+
+
+class InputNamedWeights(ResMLP):
+    def forward(self, weights):
+        return super().forward(weights)
+
+
+def test_an_input_named_as_the_weights_record_is_refused():
+    """The derived function's parameters are the inputs by name and then the module's record, `weights`: an input of that name
+    would make two parameters of one name, which every decoder of a Definition refuses."""
+    out = run_importer(InputNamedWeights(), (meta(H),))
+    assert_refused(out, "shape", "an input named `weights` beside the weights record")
+    assert "input 'weights' has the name of a parameter this function gets beside its inputs (weights)" in out.detail, out
 
 
 def test_rank_mismatch_is_refused_or_batched_exactly():
@@ -586,7 +599,7 @@ def _miswired_serve(kind: str):
     L+1), `future` (the row this position itself produces is replaced by the next step's row), `stale` (a
     position is dropped)."""
     from verity.circuits.defs import CompositeDefinition
-    from verity.definitions.registry.b1 import (
+    from verity_vllm.definitions.registry.b1 import (
         Embedding,
         Final,
         LayerPost,

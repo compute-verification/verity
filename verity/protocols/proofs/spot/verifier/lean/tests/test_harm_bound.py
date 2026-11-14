@@ -198,7 +198,7 @@ def test_certify_is_held_to_the_supremum_on_the_plan_of_record(server, delta):
 
 
 @pytest.mark.parametrize("seed", range(16))
-def test_certify_is_held_to_the_supremum_on_random_draws(server, seed):
+def test_certify_is_held_to_the_supremum_on_random_samples(server, seed):
     r = random.Random(seed)
     cands = [Candidate(f"t{i}", f"t{i}", r.choice([1, 2, 10, 1000, 10 ** 6, 10 ** 12]) * r.randint(1, 9),
                        r.randint(0, 10 ** 7), r.randint(0, 16)) for i in range(r.randint(1, 6))]

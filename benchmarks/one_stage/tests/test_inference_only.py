@@ -30,10 +30,10 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
-from verity.definitions import boolean as BL  # noqa: E402
-from verity.definitions.registry.catalog import load  # noqa: E402
-from verity.definitions.registry.sampling import bit_at  # noqa: E402
-from verity.commitments.windows import interface as IF  # noqa: E402
+from verity_vllm.definitions import boolean as BL  # noqa: E402
+from verity_vllm.definitions.registry.catalog import load  # noqa: E402
+from verity_vllm.definitions.registry.sampling import bit_at  # noqa: E402
+from verity.commitments.periods import interface as IF  # noqa: E402
 from verity_vllm.program.predict import block_counts as BC  # noqa: E402
 
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
@@ -69,7 +69,7 @@ def kinded() -> dict:
     registered read of a parameter no pin holds: a block's 18,432 fresh bits, 2,048 of the scan state and 16,384 of
     the linears' outputs."""
     from verity_vllm.program.predict.scan_state import SCAN_STATE
-    from verity_vllm.protocols.pouw.pearl_c.window import y_value
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import y_value
 
     fn = _fn(GEMM)
     gid, rows = IF.descriptor_id(fn), dict(IF.layout(fn).rows)

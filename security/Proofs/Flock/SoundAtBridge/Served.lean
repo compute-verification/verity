@@ -83,7 +83,7 @@ def ServedRegistered (u : Fin s.n) : Prop :=
       ∃ q : Fin s.c.ports.size, p = .inl (u, q) ∧ ∃ pt ∈ s.own, pt.name = s.c.ports[q].name) ∧
     ∀ q : Fin s.c.ports.size, (∃ pt ∈ s.own, pt.name = s.c.ports[q].name) →
       (s.rdU u).port (.inl (u, q)) = s.ownPort q ∧
-        ∀ d D dp idx, _root_.Flock.Draw.UnitDraw.ofJson (drawJ s.I d (partOf s.I d u.val)) = .ok D →
+        ∀ d D dp idx, _root_.Flock.Draw.UnitSample.ofJson (drawJ s.I d (partOf s.I d u.val)) = .ok D →
           HmOut.drawn s.c s.pub (drawJ s.I d (partOf s.I d u.val)) = .ok dp →
           _root_.Flock.Registered.unitIndices dp = .ok idx → u.val ∈ D.proved → ∀ pos,
             (s.ownPort q).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some pos) →

@@ -1,7 +1,7 @@
 """a5's output class (`a5.output_units`): a window's units whose outputs are served out would be proved whole beside a work
 sample only on a closure map, which the stream refuses (`closure`), so a5 refuses a window with an output class before the
 sample (`a5.output_refusal`). On a test's own challenger (`fake_challenger`) the stream refuses the class's closure map
-before reading a coin, and the same registration's work sample without one is accepted, the Lean's `Run.run` agreeing. A
+before reading a coin, and the same docket's work sample without one is accepted, the Lean's `Run.run` agreeing. A
 toy window of one template."""
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
@@ -109,7 +109,7 @@ def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
 
 
 @pytest.mark.parametrize("seed", range(3))
-def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
+def test_the_class_closure_map_is_refused_and_the_work_sample_without_it_accepted(seed):
     """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read, so its
     sample of record afterwards is the one a stream on the same challenger samples with no refusal before it: k units (the
     work sampling design over one template of work 1 is the uniform k-subset), proving exactly those, and accepted, the Lean's run

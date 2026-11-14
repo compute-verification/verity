@@ -47,7 +47,7 @@ theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
       (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
       (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
       (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-      (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+      (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
       (wr : (S : Finset (Fin n)) → (R : Reg) →
         LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
       (dg : ByteArray → ByteArray) (N : ℕ)
@@ -57,12 +57,12 @@ theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
       (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
       (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
       (_hρk : rateM1 k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-      (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+      (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
       (v : ℝ) (_hv : 0 ≤ v)
       (q : Claims.Sampling.Query)
       -- a bound on the commit strings a sample reads
       (W : ℕ),
-      let L := Law.execOS (n := n) src (.subset kd) n
+      let L := SamplingDesign.execOS (n := n) src (.subset kd) n
       let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
       let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
         (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -71,7 +71,7 @@ theorem _root_.Flock.Bridge.sampledKSLive_le_deltaPub_of_qs :
         (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
             hCust.1
-            fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+            fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
       let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
       let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
       let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
@@ -150,7 +150,7 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows :
       (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
       (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
       (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-      (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+      (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
       (wr : (S : Finset (Fin n)) → (R : Reg) →
         LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
       (dg : ByteArray → ByteArray) (N : ℕ)
@@ -163,10 +163,10 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows :
       (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
       (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
       (_hρk : rateM1 k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-      (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+      (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
       (v : ℝ) (_hv : 0 ≤ v)
       (q : Claims.Sampling.Query),
-      let L := Law.execOS (n := n) src (.subset kd) n
+      let L := SamplingDesign.execOS (n := n) src (.subset kd) n
       let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
       let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
         (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -175,7 +175,7 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows :
         (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
             hCust.1
-            fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+            fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
       let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw
       let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
       let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)
@@ -233,7 +233,7 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
       (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
       (kd : ℕ) (_hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
       (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
-      (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+      (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
       (wr : (S : Finset (Fin n)) → (R : Reg) →
         LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
       (dg : ByteArray → ByteArray) (N : ℕ)
@@ -246,10 +246,10 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
       (hTags : TagsOkZHJ I)
       (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
       (t' : ℝ) (_ht' : 0 ≤ t') (_ht80 : t' ≤ 2 ^ 80) (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
-      (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
+      (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
       (v : ℝ) (_hv : 0 ≤ v) (_hv80 : v ≤ 2 ^ 80)
       (q : Claims.Sampling.Query),
-      let L := Law.execOS (n := n) src (.subset kd) n
+      let L := SamplingDesign.execOS (n := n) src (.subset kd) n
       let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
       let vb := (rsZHJ dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt).bindingZ
         (rsZHJ_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub hpt)
@@ -258,7 +258,7 @@ theorem _root_.Flock.Bridge.sampledKSLivePub_rows_deployed :
         (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
           (runsZCJH_live I ht (Flock.Desc.parse_flat hD) (Discharge.Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags
             hCust.1
-            fun _ => drawOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
+            fun _ => sampleOkZKHJ_of_file I ht (Flock.Desc.parse_flat hD) kd n hdiv dj hCust.2 _)) τ
       let Xr := XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) Bridge.kDep (2 ^ 192)
       let δ : ℝ := ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)
       let Cc := (keyProg D.unroll hU n).circuit (Discharge.Layout.outsOf D.unroll hU n)

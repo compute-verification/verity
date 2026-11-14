@@ -2,7 +2,8 @@
  "format": 1,
  "roots": [],
  "exempt": {
-  "RegistrationLog.Main": "the core-registration executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol"
+  "RegistrationLog.Main": "the core-registration executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
+  "RegistrationLog.SiteDifftestMain": "the site-difftest executable's entry point, one line; it serves RegistrationLog.SiteDifftest.table, audited under RegistrationLog"
  },
  "escapes": {},
  "layers": {},

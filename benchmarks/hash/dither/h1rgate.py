@@ -37,7 +37,8 @@ sys.path.insert(0, str(ROOT))
 
 from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC  # noqa: E402
 
-from verity.protocols.experimental.dither.prover.h1r import H1R, Call, words  # noqa: E402
+from h1r_torch import H1R  # noqa: E402
+from verity.protocols.experimental.dither.prover.h1r import Call, words  # noqa: E402
 
 if TYPE_CHECKING:
     from verity.protocols.experimental.dither.prover.h1r import Plan

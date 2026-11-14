@@ -1,4 +1,4 @@
-"""One-stage audit, run A0: a template's captured served values through registration, the verifier's sample, M0's prover and
+"""One-stage audit, run A0: a template's captured served values through docket, the verifier's sample, M0's prover and
 verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
@@ -7,7 +7,7 @@ verifier, the Lean verifier's sample checks, and the audit record with its integ
 
 * **Stand-in commitment.** M0 commits the captured values afresh (`frame-v3-sha512`, `hm96-sha512/row/v1` leaves, fresh
   OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
-  link is provenance, not proof, and the registration says so.
+  link is provenance, not proof, and the docket says so.
 * **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
 * **Verifier of record.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
   file held by content; Lean also checks U1-U3 on the sample, and M0's own verifier (`flock-circuit serve`) checks it live.
@@ -34,7 +34,14 @@ from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
-from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    audit,
+    draw as D,
+    partition as P,
+    docket as R,
+    served as SV,
+    verifier as V,
+)
 from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
 from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
 
@@ -71,13 +78,13 @@ def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 360
 DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 
-def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
+def challenger_sample(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
     """Lean's sample, ``verity-verify-proof draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
     none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
     committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
-    registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
-    Lean's `Draw.drawOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
+    docket's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
+    Lean's `Draw.sampleOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
     the segment, from which `coins.challenger_stream` replays F. Its samples show the path, not an auditor's coins: those
     are `a5_coins`' (`a5.py --challenger`)."""
     reads: list[int] = []
@@ -121,9 +128,9 @@ def hold_bound(st: dict, program, query) -> None:
     st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
 
 
-def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedRegistration:
+def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedDocket:
     """The verifier's own `--registered` file beside a bound stage (`served.register_served`: each served tree a port, the
-    form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned registration's
+    form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned docket's
     `registered` entries go into the record (`R.record(..., registered=)`), and its `values` and `outputs` into R7."""
     sr = SV.register_served(program, query, served, log=log, ports=ports)
     st["registered_file"] = sr.write(st["dir"] / "registered.json")
@@ -144,7 +151,7 @@ def template_program_ok(meta: dict, defn) -> bool:
 
 
 def bindings(meta: dict, header: dict, rec: dict, cls: str) -> dict:
-    """What the staged statement binds, against the registration: the partition, the program, the global unit indices of
+    """What the staged statement binds, against the docket: the partition, the program, the global unit indices of
     `Q_template_instance` (instance i is unit i), and one class per instance."""
     n = rec["population"]
     got = {"partition": meta.get("partition"), "program": meta.get("program_sha512"),
@@ -208,18 +215,18 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
 SERVING_POLL, SERVING_WAIT = 0.02, 900.0
 
 
-def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
+def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, sample_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
             tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
-    """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
+    """One live session: `serve --draw` (the verifier's side: docket, the sample, coins, the verdict) and `prove`.
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
     and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
     caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
-    `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
+    `sample_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
+    both sides' environment (a zk_served prover's, `zk_server_env`). `prove_timeout`: the prover's limit in seconds.
     ``st["tmpl_unit"]``: a templated statement's unit rows at their positions, which both sides read (`--tmpl-unit`)."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
@@ -234,7 +241,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
-                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(["--draw-file", str(sample_file)] if sample_file else ["--draw", law]), "--sessions", "1",
                               *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
@@ -285,30 +292,30 @@ def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
     return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
 
 
-def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
+def lean_sample_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
     f = out / f"{name}.cases.json"
     f.write_text(json.dumps(cases))
     p = run([lean, "draw-test", str(f)], out / f"{name}.lean.log")
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
 
 
-def firewall_env(st: dict) -> dict:
-    """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
+def zk_server_env(st: dict) -> dict:
+    """What a zk_served prover (`FC_ZK_SERVER=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
     `lean_verify` verifies under, and the statement's partition and program."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
-    return {"FC_FIREWALL_STATEMENT": st.get("statement", STATEMENT_ID), "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+    return {"FC_ZK_SERVER_STATEMENT": st.get("statement", STATEMENT_ID), "FC_ZK_SERVER_HELLO_ARGS": " ".join(args)}
 
 
 #: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
 #: its witness built where the prover builds it (`zk_cost.py`'s `dev` arm, which Figure 1 prices)
-DIRECT = {"FC_FIREWALL": "0", "FC_HOST_WITNESS": None}
+DIRECT = {"FC_ZK_SERVER": "0", "FC_HOST_WITNESS": None}
 
 
-def prover_env(firewall: str | None, st: dict) -> dict:
-    """A `--zk` session's prover environment: behind the ZK server's send check when ``firewall`` names Lean's
-    `flock-firewall` (the core protocols' path), else `DIRECT`."""
-    if firewall:
-        return {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": firewall, **firewall_env(st)}
+def prover_env(zk_server: str | None, st: dict) -> dict:
+    """A `--zk` session's prover environment: behind the ZK server's send check when ``zk_server`` names Lean's
+    `flock-zk-server` (the core protocols' path), else `DIRECT`."""
+    if zk_server:
+        return {"FC_ZK_SERVER": "1", "FC_ZK_SERVER_LEAN": zk_server, **zk_server_env(st)}
     return dict(DIRECT)
 
 
@@ -564,7 +571,8 @@ def lean_read_no_proof(v: dict) -> bool:
 def lean_answered(verifiers: dict | None) -> bool:
     """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
     writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
-    fails its check either way."""
+    fails its check either way. History tables the Lean itself refuses are its answer
+    (`verifier.check`'s `R.HISTORY`)."""
     return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
 
 
@@ -576,17 +584,6 @@ def negative(v: Verdict) -> dict:
     answered = lean_answered(v.verifiers)
     return {"refused": not v.ok and answered, "codes": list(v.codes),
             **({} if answered else {"lean": (v.verifiers or {}).get("lean")})}
-
-
-def history_negative(v: Verdict) -> dict:
-    """`negative` for a history table's registered root that is not the table's. The Python refuses it with a reason
-    and no code (`R.HistoryRefused`) and the Lean's own answer is a refusal too, so the verifier's verdict is `R.HISTORY`
-    alone for whatever stands in the Lean's place, a Lean that could not run included (`verifier.check`). Only the
-    Lean's own check of the root gives the Python's reason: refused only where the two reasons are one; else the row
-    carries both (``reasons``)."""
-    why = v.detail.get(R.HISTORY) or {}
-    refused = v.codes == (R.HISTORY,) and isinstance(why.get("lean"), str) and why["lean"] == why.get("python")
-    return {"refused": refused, "codes": list(v.codes), **({"reasons": dict(why)} if why and not refused else {})}
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
@@ -605,7 +602,7 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
     """Every check on one session, then the audit record."""
     draw = (record or {}).get("unit_draw")
     verifier = (record or {}).get("verdict") or {}
-    lean_u = lean_draw_test(lean, [{"record": draw, "statement": (live or {}).get("unit_draw"),
+    lean_u = lean_sample_test(lean, [{"record": draw, "statement": (live or {}).get("unit_draw"),
                                     "instances": (live or {}).get("instances", 0)}], out, "u1-u3") if draw else []
     statement = {"circuit_sha512": (live or {}).get("circuit_sha512"), "statement_digest": (live or {}).get("statement_digest"),
                  "public_sha512": (live or {}).get("public_sha512"), "sigma": (live or {}).get("sigma"),
@@ -625,17 +622,17 @@ def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, r
                           statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
 
 
-def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None, *,
-                    own_reads: bool = False) -> dict[str, dict]:
+def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict,
+                    served: list | None = None) -> dict[str, dict]:
     """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
     not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
     reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
-    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`, with its
-    ``own_reads`` where the real record was decided with it) and refused only where the Lean answered (`lean_answered`);
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`) and refused only
+    where the Lean answered (`lean_answered`);
     `agree` is whether the Lean and the Python decided it alike."""
     base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
                 proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
-                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots, own_reads=own_reads)
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots)
 
     def decide(**change) -> dict:
         r = V.audit_record(**{**base, **change})
@@ -663,8 +660,8 @@ def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, 
 
 def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, rec: dict, check, zk: bool = False) -> dict:
     """A public file whose body is altered (its last output word's high byte flipped) and whose leaf-layer digest is updated
-    to match, so the registration passes R1-R6 and only the verifier, recomputing the roots from the file, can
-    refuse it. `check(record, leaf_layer)` is the verifier's registration check."""
+    to match, so the docket passes R1-R6 and only the verifier, recomputing the roots from the file, can
+    refuse it. `check(record, leaf_layer)` is the verifier's docket check."""
     stage = out / "stage"
     shutil.rmtree(out, ignore_errors=True)
     (stage / "tables").mkdir(parents=True)
@@ -735,7 +732,7 @@ def main() -> int:
                                    "verifier": {P.template_id(template): program_digest(Program(template))},
                                    "ok": template_program_ok(st["meta"], template)}
 
-    # 3. registration, before any sample; the verifier holds its own public file to it
+    # 3. docket, before any sample; the verifier holds its own public file to it
     fv = header["frame_v3"]
     want = stand_in_ports(s.name, s.content_digest, st["meta"], n)
     leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")
@@ -804,7 +801,7 @@ def main() -> int:
         v = V.check_draw(bad, rec, law)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     altered = {**draw, "units": sorted(set(draw["units"][:-1]) | {next(u for u in range(n) if u not in draw["units"])})}
-    lean_alt = lean_draw_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
+    lean_alt = lean_sample_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
                                        {"record": draw, "statement": draw, "instances": len(draw["units"]) + 1},
                                        {"record": None, "statement": draw, "instances": len(draw["units"])}], out, "negatives")
     neg["draw-altered-after-session (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 0, "U1"), "lean": lean_alt[:1],

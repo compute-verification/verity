@@ -1294,7 +1294,7 @@ def install(repo: Path) -> None:
                              (LEAN, ".lean: each side's imports", driver("--lean ", where)),
                              (LAKEFILE, "lakefile.toml: each side's requires and roots", driver("--lakefile ", where)),
                              (PYPROJECT, "pyproject.toml: each side's [tool.verity.tests] lists", driver("--pyproject ", where)),
-                             *((n, "tests/test_lean_packages.py: each side's change to the ratchet caps",
+                             *((n, "tests/test_lean_packages.py: each side's change to the ratchet limits",
                                 driver(LIMITS_FLAG, where)) for n in (LIMITS, OLD_LIMITS))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)

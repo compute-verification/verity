@@ -65,7 +65,6 @@ import argparse
 import contextlib
 import json
 import multiprocessing as mp
-import os
 import random
 import statistics
 import subprocess
@@ -267,7 +266,7 @@ def install(model, args, coins):
                               whole_tree_sm=getattr(args, "whole_tree_sm", False))
     if getattr(args, "statement", None):
         import importlib.util
-        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement.py")
+        spec = importlib.util.spec_from_file_location("served_zk_statement", HERE.parent / "served_zk" / "statement_torch.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         run.statement = mod.Statement(run, args.statement)
@@ -904,26 +903,10 @@ def split(results: dict) -> dict:
 
 
 def state_entropy(path: str):
-    """The challenger's entropy held in the file `path` (readable only by its owner; when absent, created from the Lean
-    verifier's coins, `pouw.verifier.coins`, before any engine starts): the same coins for the controller here
-    and for the challenger process that later samples the execution phase's units (`served_commit.py challenger --state`), so named
-    by the Lean's claim instance (`verifier.CLAIM`)."""
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import COIN_BYTES, HM96, LABELS
-    p = Path(path)
-    if not p.exists():
-        entropy = verifier.coins(len(LABELS) * (COIN_BYTES + HM96.salt_bytes))
-        p.parent.mkdir(parents=True, exist_ok=True)
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(fd, "wb") as f:
-            f.write(entropy)
-    data, at = p.read_bytes(), [0]
-
-    def take(n: int) -> bytes:
-        at[0] += n
-        return data[at[0] - n:at[0]]
-    take.claim = verifier.CLAIM
-    return take
+    """The challenger's entropy held in the file `path`: served_zk's `served_commit.state_entropy`, which the challenger
+    process reads it with too."""
+    from verity.protocols.accounting.pouw.prover.kernels.served_zk.served_commit import state_entropy as entropy_of
+    return entropy_of(path)
 
 
 def epoch_coins(args, epoch: int) -> Coins:

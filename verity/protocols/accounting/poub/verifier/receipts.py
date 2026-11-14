@@ -19,10 +19,12 @@ y_(i,p)       sketch-sha512, the default: SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ fra
               block-sha512, for comparison: SHA512(Z(RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be j ‖ e_(i,j)),
               RECEIPT_DOMAIN = "verity/remote-bandwidth/receipt/v0\0"                                    64 bytes
 k_s           sketch-sha512's rows, the registration's: 16 (the default) or 64 (`ROWS`); 0 under block-sha512
-S_i           sketch-sha512's k_s × 4096 signs of pass i: K = derive(seed_i, SIGN_DOMAIN, {"tag": "sketch-sha512",
-              "k": k_s, "n": 4096}), row c the first 512 bytes of K.stream(("row", c)), bit u (byte u // 8, LSB
-              first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"; over a P2 store,
-              k_s × 8224, n = 8224 and 1,028 bytes a row, a unit of four blocks a vector (`p2.py`)
+S_i           sketch-sha512's k_s × 4096 signs of pass i: at 16 rows K = derive(seed_i, SIGN_DOMAIN, ctx), 32 bytes,
+              and at 64 K = derive_wide(seed_i, SIGN_DOMAIN_WIDE, ctx), all 64 of SHA-512's, ctx = {"tag":
+              "sketch-sha512", "k": k_s, "n": 4096}; row c the first 512 bytes of K.stream(("row", c)), bit u (byte
+              u // 8, LSB first) 1 → −1, 0 → +1,  SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0",
+              SIGN_DOMAIN_WIDE = "…/sketch-signs/v1"; over a P2 store, k_s × 8224, n = 8224 and 1,028 bytes a row, a
+              unit of four blocks a vector (`p2.py`)
 σ_(i,j)       S_i · e_(i,j), its 4096 bytes as int8, over the integers (|σ[c]| ≤ 2^19): k_s int32 little-endian, 64
               bytes at 16 rows (y one compression after the seed's block) and 256 at 64 (three)
 leaf c        v_c = y_(16c) ‖ … ‖ y_(16c+15), positions in plan order, the last leaf short; committed as an
@@ -43,7 +45,8 @@ The registration names its receipt kind (`KINDS`): sketch-sha512 (`DEFAULT`, the
 for comparison.  A sketch-sha512 receipt hashes 72 bytes after the seed's block at 16 rows, not 4,104: one SHA-512
 compression where block-sha512 takes 33 (three at 64 rows), and the signs, derived from the pass's seed, exist only
 after the previous pass's root, as the seed does.  Under sketch-sha512 the registration also names k_s
-(`sketch_rows`), which the signs' key binds.  Leaves, salts and the tree are the same under either kind.  What each
+(`sketch_rows`), which the signs' key binds and which picks the key: 256 bits at 16 rows, 512 at 64, since two of a
+prover's candidate seeds whose keys collide share their signs (`sign_key`, `timing.sketch_failure`'s last term).  Leaves, salts and the tree are the same under either kind.  What each
 kind rests on is `PROTOCOL.md` §4.
 
 The registration also names its block layout (`LAYOUTS`): how a kernel's sketch vectors map to the registered blocks,
@@ -84,7 +87,7 @@ from verity.commitments import (
     hm96,
     verify_opening,
 )
-from verity.commitments.randomness import derive, frame
+from verity.commitments.randomness import Key, WideKey, derive, derive_wide, frame
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, sha512_row_v2_digest
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 
@@ -95,11 +98,13 @@ PLAN_DOMAIN = b"verity/remote-bandwidth/plan/v0\0"
 RECEIPT_DOMAIN = b"verity/remote-bandwidth/receipt/v0\0"
 SKETCH_RECEIPT_DOMAIN = b"verity/remote-bandwidth/sketch-receipt/v0\0"
 SIGN_DOMAIN = "verity/remote-bandwidth/sketch-signs/v0"
+SIGN_DOMAIN_WIDE = "verity/remote-bandwidth/sketch-signs/v1"
 TREE_DOMAIN = b"verity/remote-bandwidth/receipt-tree/v0\0"
 BLOCK_SHA512 = "block-sha512"
 SKETCH_SHA512 = "sketch-sha512"
 SKETCH_ROWS = 16
 ROWS = (16, 64)
+WIDE_ROWS = 64
 SCHEMA = SCHEMA_HM96_SHA512_ROW_V2
 CHALLENGE_BYTES = 32
 DIGEST_BYTES = _DIGEST_BYTES["sha512"]
@@ -385,13 +390,28 @@ def _width(width: object) -> int:
     return width
 
 
+def sign_key_bits(rows: int) -> int:
+    """The bits of `S_i`'s key at k_s = `rows`: 512 at `WIDE_ROWS` (`SIGN_DOMAIN_WIDE`, `derive_wide`), 256 at 16
+    (`SIGN_DOMAIN`, `derive`)."""
+    return 512 if sketch_rows(SKETCH_SHA512, rows) == WIDE_ROWS else 256
+
+
+def sign_key(seed: bytes, rows: int = SKETCH_ROWS, width: int = BLOCK_BYTES) -> Key | WideKey:
+    """`S_i`'s key at k_s = `rows` over `width`-byte vectors, of `sign_key_bits(rows)` bits: under `SIGN_DOMAIN_WIDE`,
+    all of SHA-512's, at `WIDE_ROWS`, and under `SIGN_DOMAIN`, its first half, at 16."""
+    rows = sketch_rows(SKETCH_SHA512, rows)
+    context = {"tag": SKETCH_SHA512, "k": rows, "n": _width(width)}
+    if rows == WIDE_ROWS:
+        return derive_wide(_digest(seed, "a pass seed"), SIGN_DOMAIN_WIDE, context)
+    return derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, context)
+
+
 def sign_bits(seed: bytes, rows: int = SKETCH_ROWS, width: int = BLOCK_BYTES) -> tuple[bytes, ...]:
     """`S_i`'s sign bits, `rows` = k_s rows of `width`/8 bytes (512 at a registered block's 4,096 bytes, 1,028 at a P2
     unit's 8,224, `p2.UNIT_BYTES`): bit u of row c (byte u // 8, LSB first) is 1 where `S_i[c][u] = −1`.  The key binds
     k_s and the width, so 64 rows are not 16 rows and 48 more, and a unit's signs are not a block's."""
-    rows = sketch_rows(SKETCH_SHA512, rows)
-    key = derive(_digest(seed, "a pass seed"), SIGN_DOMAIN, {"tag": SKETCH_SHA512, "k": rows, "n": _width(width)})
-    return tuple(key.stream(("row", c), width // 8) for c in range(rows))
+    key = sign_key(seed, rows, width)
+    return tuple(key.stream(("row", c), width // 8) for c in range(sketch_rows(SKETCH_SHA512, rows)))
 
 
 def sketch_prefix(seed: bytes) -> bytes:
@@ -585,7 +605,7 @@ def verify_leaf(seed: bytes, plan: Plan, root: bytes, p: int, leaf: bytes, salt:
 
 
 __all__ = ["CHALLENGE_BYTES", "DEFAULT", "DIGEST_BYTES", "HM96", "KEY", "KINDS", "LAYOUT", "LIMITS", "OWNER",
-           "PER_LEAF", "PLAN_DOMAIN", "Plan", "ROWS", "Receipter", "SALT_BYTES", "SCHEMA", "SIGN_DOMAIN", "SKETCH_ROWS",
-           "SKETCH_SHA512", "SketchReceipter", "TREE_DOMAIN", "domain", "hidden", "hidden_digest", "leaf_receipt",
-           "leaves", "prefix", "receipt_kind", "receipter", "seed", "sign_bits", "sketch_prefix", "sketch_rows",
-           "spread", "tree", "verify_leaf"]
+           "PER_LEAF", "PLAN_DOMAIN", "Plan", "ROWS", "Receipter", "SALT_BYTES", "SCHEMA", "SIGN_DOMAIN",
+           "SIGN_DOMAIN_WIDE", "SKETCH_ROWS", "SKETCH_SHA512", "SketchReceipter", "TREE_DOMAIN", "WIDE_ROWS", "domain",
+           "hidden", "hidden_digest", "leaf_receipt", "leaves", "prefix", "receipt_kind", "receipter", "seed",
+           "sign_bits", "sign_key", "sign_key_bits", "sketch_prefix", "sketch_rows", "spread", "tree", "verify_leaf"]

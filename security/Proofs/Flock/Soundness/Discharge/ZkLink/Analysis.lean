@@ -106,7 +106,7 @@ def JointZC (k : ℕ) (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sess
     accProbZC A Hs (planZ S R) τ * failProbAccZ A Hs (planZ S R) j k τ ≤
       a S R τ j + rateZ (planZ S R) j k * accProbZC A Hs (planZ S R) τ
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The compiled binding error**: `ε·Pr[the oracle extracted from k accepted reruns has the link event]/(1 − N₀/(ek))`
 at sampled proof block `u`. -/

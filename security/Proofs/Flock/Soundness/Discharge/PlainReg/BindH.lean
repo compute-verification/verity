@@ -35,7 +35,7 @@ open FlockSoundness.Discharge.Exec FlockSoundness.Discharge.HiddenExec
 
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupH I mPts S₀ (dj S₀)) (hU : Built c.unit)
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {Reg : Type}
 
 include hU hpub in
@@ -50,7 +50,7 @@ theorem sitesAtH_bcSiteS :
   intro S R u h M hM
   show BcSiteH ((tableAtH dj x₀ S).acc ht hc (rowsFit_of_scopeH ht hc hscope)) pub ((tableAtH dj x₀ S).o u h)
     ((tableAtH dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupH I mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupH I mPts S (dj S))
   · have e : tableAtH dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtH
       rw [dite_eq_left_of_eq_true (eq_true hS)]

@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Window.Record
 
 /-!
-# Sampled proofs' coupling over a window: a session's read with its closing opening dropped
+# SPOT's coupling over a window: a session's read with its closing opening dropped
 
 A session's closing round is one more opening of its tree's stream named the session's, after the link's. What the
 verifier's read holds the log to at a session, less that round (`SessionOpens`), reads the log's openings only

@@ -36,7 +36,7 @@ def UnitsAt (c : Commitment) (e : Evidence) (opened : Option (Array (String × J
   e.instances = (Draw.proved e.draw).size ∧ e.provedUnits.map (fun n : Nat => (n : Int)) = Draw.proved e.draw ∧
   Receipt c e ∧
   (∀ served, e.served = some served →
-    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (drawnInts e.draw).qsort (· < ·)) ∧
+    (served.map fun n : Nat => (n : Int)).qsort (· < ·) = (sampledInts e.draw).qsort (· < ·)) ∧
   (∀ roots, e.sessionRoots = some roots → entries roots ≠ #[] ∧
     ∀ pr ∈ entries roots, ∃ reg, (Record.byPort c.record).find? (·.1 == pr.1) = some reg ∧ jeq (getD reg.2 "root") pr.2) ∧
   ((field? c.record "registered").isSome ∨ opened.isSome →
@@ -71,20 +71,20 @@ private theorem accept_of_ite {α β : Type} {b : Bool} {r : String} {x : Core.O
   · exact ⟨rfl, by simpa using h⟩
 
 /-- **What the two-stage form's last step accepts** (`VStar.Recursive.SampledTwo.secondChecked`): the registration
-keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `law` the step is handed, over the registered
+keeps R1–R8 against the verifier `v`; the sample is a sample of the sampling design `samplingDesign` the step is handed, over the registered
 population; the units hold at the reads the step hands the record's checks, the verdicts' own for the registration's
 own values less the reads of its own ports at their own roots (`UnitsAt` at `Record.lessOwnReads` of `openedRoots`);
 and the verdicts accept. -/
-theorem secondChecked_units {v : Registration.Verifier} {delta : Core.Ratio} {c : Commitment} {m : Nat} {law : Json}
+theorem secondChecked_units {v : Docket.Verifier} {delta : Core.Ratio} {c : Commitment} {m : Nat} {samplingDesign : Json}
     {e : Evidence} {pub : Public} {prof : Core.Integrity}
-    (h : VStar.Recursive.SampledTwo.secondChecked v delta c m law e = .accept pub prof) :
-    (∃ law', Registered v c.record law') ∧ Drawn e.draw (getD c.record "population") law ∧
+    (h : VStar.Recursive.SampledTwo.secondChecked v delta c m samplingDesign e = .accept pub prof) :
+    (∃ samplingDesign', Registered v c.record samplingDesign') ∧ Drawn e.draw (getD c.record "population") samplingDesign ∧
       UnitsAt c e (Record.lessOwnReads c.record (openedRoots c.record e.verdicts)) ∧ VerdictsAccept e.verdicts := by
   unfold VStar.Recursive.SampledTwo.secondChecked at h
   obtain ⟨h1, h⟩ := accept_of_ite h
   obtain ⟨h2, h⟩ := accept_of_ite h
   obtain ⟨h3, h⟩ := accept_of_ite h
-  refine ⟨(registration_nil _ _).1 (Array.isEmpty_iff.1 h1), (checkDraw_nil _ _ _).1 (Array.isEmpty_iff.1 h2),
+  refine ⟨(docket_nil _ _).1 (Array.isEmpty_iff.1 h1), (checkSample_nil _ _ _).1 (Array.isEmpty_iff.1 h2),
     (checksAt_nil c e _).1 (Array.isEmpty_iff.1 h3), ?_⟩
   rcases hv : OneStage.verdictOf e.verdicts with ⟨⟨⟩, ⟨⟩⟩ | r | r
   · exact (verdictOf_accept _).1 hv

@@ -174,7 +174,7 @@ def _compose(d: Path, tmp_path: Path, n: int, inner: bytes, parts: list[tuple[st
     p = subprocess.run([str(BIN), "rec-compose", "--rec-inner", str(d / "inner.json"), "--rec-rows", str(d / "rows.json"),
                         "--rec-run", str(tmp_path / "run.json"), *flag, *logs], capture_output=True, text=True)
     [line] = [json.loads(ln[12:]) for ln in p.stdout.splitlines() if ln.startswith("REC-COMPOSE ")]
-    want = RC.check(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
+    want = RC.check_twin(n, RC.digest(ROWS), RC.digest(inner), run, [(lg, t) for lg, (_, t) in zip(logs, parts)], links)
     assert (line["accepted"], line["why"]) == want, line
     assert p.returncode == (0 if want[0] else 1)
     return want

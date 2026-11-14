@@ -3,7 +3,7 @@
 `window_circuit.class_circuit` lowers the class Program once a slot, exactly. At the class of record
 (`window_circuit.CLASS_OF_RECORD`: 8 slots, 1,024 prompt ids, 64 outputs, 1,087 positions a Program) a Program at
 Llama-3.2-1B is 46,028,317 units, and the class's 8 take a pod some 22 minutes and 42 GB to lower. So the size is also a
-projection (`project`) from an exact lowering of one Program of the same registration at a small probe class within one
+projection (`project`) from an exact lowering of one Program of the same docket at a small probe class within one
 key block, which the tests hold to the exact lowering at larger classes:
 
 * every template but the heads is a fixed number of units a position (`projected`), a slot's where it places them
@@ -35,8 +35,8 @@ from typing import Any
 
 from verity_vllm.program.predict import scan_state as SS
 
-from verity.definitions.registry.attention_vocab import fa2_masked_from
-from verity.commitments.windows.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
+from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
+from verity.commitments.periods.interface import K_MAX, LAST_BLOCK_BYTES, proof_block_k_log
 
 FIRST = "AttnBlockFirst_v1"
 #: a first block's families: `AttnBlockFirst_v2{..., VS}` is v1 over a key's value as slices of VS columns
@@ -146,9 +146,9 @@ def project(probe: Mapping[str, int], at: Any, cls: Any) -> dict[str, int]:
     return {lab: n for lab, n in sorted(out.items()) if n}
 
 
-#: the sources that cite a run, an artifact or a change, kept as data (``sources.json``): ``composed`` and ``rows_3``, a
+#: the sources that cite a run, an artifact or a change, kept as data (``benchmarks/prove_path/sources.json``): ``composed`` and ``rows_3``, a
 #: unit's by its label (``measured``) and a family's that `measured` prices past `MEASURED` (``families``)
-SOURCES: dict[str, Any] = json.loads(Path(__file__).resolve().with_name("sources.json").read_text())
+SOURCES: dict[str, Any] = json.loads((Path(__file__).resolve().parents[6] / "benchmarks" / "prove_path" / "sources.json").read_text())
 #: the compositions of the blocks this estimate scaled or interpolated, each staged by Flock's `UnitStager` at V3b's
 #: cuts
 COMPOSED: str = SOURCES["composed"]
