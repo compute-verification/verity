@@ -12,7 +12,7 @@ run's calls (``pc``: `PearlCDeviceRun.gemm`, each call's Python, launches and up
 `PearlCDeviceRun.end`, the transcript tree and its reads back) and a whole-step replay's slot upload and records (``wr``:
 `whole_replay`, ``wrd``: `whole_replayed`).  Each phase is also an NVTX range, and the timed reps sit between
 cudaProfilerStart and cudaProfilerStop, for ``nsys profile --capture-range=cudaProfilerApi``.  A protocol arm serving
-Pearl-C takes its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
+Pearl-C takes its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
 ``PEARLC_CHALLENGER_PEER`` are set (`_live`), else from a challenger in this process; ``coins.json`` says which, and how
 the session closed (`pearl_c.window.coins_of`).
 
@@ -124,7 +124,7 @@ def _patch_engine(llm) -> None:
 
 
 def _live(arm):
-    """`arm` with its salt coin from a live session on the auditor host when ``PEARLC_CHALLENGER_GATE`` and
+    """`arm` with its salt coin from a live session on the auditor device when ``PEARLC_CHALLENGER_GATE`` and
     ``PEARLC_CHALLENGER_PEER`` are set (`bench_arm.PearlCArm`'s) and the arm serves Pearl-C through the PoUW option
     (`bench_arm.live_coins`, which the option refuses when the reserve joined an H1 period). Returns the arm and the
     reserve answer, None when the arm's coins stay in-process."""

@@ -22,7 +22,7 @@ then runs this. The README says what the report establishes and what it doesn't.
   ``--upstream``, ``--vllm`` or ``--endpoint-peer`` the rehearsal is run first (`certifier_serve.py rehearse`, honest,
   late and extra, every option this file doesn't take passed on) into ``DIR/rehearsal``; ``--endpoint-peer NAME:PORT``
   reaches another node's endpoint on its loopback through an ssh forward (`forward`), so the certifier runs off the
-  developer's node, though not on the auditor host. The negatives' drop, when the rehearsal ran it, is a negative (refused
+  developer's node, though not on the auditor device. The negatives' drop, when the rehearsal ran it, is a negative (refused
   by N2's counts, and on the advice profile by the rehearsal's own check), and its token is refused only by the I/O tie
   (``PENDING``): on the advice profile, where the tie is required (`chain.tie`, `chain.tie_gate`), token is a negative
   it must refuse at the link-windows its changed ids fall in; on the others, where the tie doesn't run, a row pending
@@ -107,7 +107,7 @@ OWN_CODE = {"late": "audit.status:coverage-never-established", "extra": "io:long
 README = "verity/protocols/accounting/certifier/verifier/README.md"
 PEERS = Path("/etc/vy/peers")
 ADVICE = [sys.executable, "-m", "verity_vllm.pipeline.cli", "advice"]
-#: the auditor's host whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
+#: the auditor's device whose gate runs the certifier (``benchmarks/network_traces/site.json``'s ``challenger``)
 GATE_HOST = json.loads((ROOT / "benchmarks" / "network_traces" / "site.json").read_text())["challenger"]
 
 CLAIM = {

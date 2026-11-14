@@ -70,7 +70,7 @@ def test_varied_traffic_is_fixed_by_its_seed_and_varies():
 
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
-    """The auditor host's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
+    """The auditor device's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
     gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
     minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
@@ -94,7 +94,7 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
 
 
 def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_cover_the_link(tmp_path):
-    """The auditor host's `load-relay` runs `rehearse` as `warden-rehearse` does, with the load first: the store's
+    """The auditor device's `load-relay` runs `rehearse` as `warden-rehearse` does, with the load first: the store's
     stream of the request's shape relayed to the sink tunnels' local ends for its program, the endpoint given the
     gate's `LOAD_READY_S`; a request without a load passes none. The gate's shapes are `load_relay`'s, and its
     `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 46 at H200."""

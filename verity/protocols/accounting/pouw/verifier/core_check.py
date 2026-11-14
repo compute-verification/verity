@@ -44,7 +44,7 @@ certified execution phase, whose verifier holds the network certifier's reveal f
 before it sampled that salt (`salt.committed`).  `recorded_reason` is that last rule alone, which needs no reveal: the
 challenger runs it before it asks the certifier for one, since the certifier reveals an execution phase once.  A live Pearl-C
 pass (`pouw_pearl_c_host.epoch_of`), whose manifest's coins are a live session's, took its salt coin from a
-salt-only session of the auditor host's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
+salt-only session of the auditor device's challenger opened on its salt execution phase's root (`salt.epoch_open_root` of its
 weights' root and its ``pass_index``): its verifier holds the auditor's ledger and that session's files as `rounds`
 reads them (`LIVE`), and the pass passes `live_salt` under them.
 `draw` is the rule on the execution phase's sample (`Challenger.select`'s): the execution phase's sampling coin opens after the registration,

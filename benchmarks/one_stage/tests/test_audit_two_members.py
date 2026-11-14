@@ -10,7 +10,7 @@ stops included (`_kept_prover`).
   through the interface as serving writes one, under ``stratified:1``, the design the audit's rule (`RULE`, a stratified
   rate) names over its two proof blocks. A template is a stratum, so the sample always holds both proof blocks, one a
   member, and the audit runs two sessions.
-* **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor host's own
+* **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor device's own
   service on this machine (`a5_coins.Local`: `live_challenger`'s reserve, admit, run and `serve.py`), pinned on
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
   here its `serve.py` runs SPOT's Lean verifier itself. Its key is the session's own, so its coins show the path and

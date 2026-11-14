@@ -1030,7 +1030,7 @@ def _remote(**kw):
 
 
 def test_h1_takes_its_salt_and_round_coins_from_the_auditor_hosts_challenger(tmp_path, monkeypatch):
-    """With the setting ``challenger`` the window's one challenge phase on the auditor host, reserved on the gate, is
+    """With the setting ``challenger`` the window's one challenge phase on the auditor device, reserved on the gate, is
     opened on the window's open root once round 0 is admitted (over the weights' root, round 0's request table and the
     challenge phase), its salt coin after that root and round s's coin after round s's root, and closes once the window
     has finished; its sampling coin is its sample's challenge phase's (the setting ``draw_session``), which the gate opens

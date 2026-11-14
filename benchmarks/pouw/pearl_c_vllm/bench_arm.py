@@ -20,7 +20,7 @@ build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``defe
 ``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
 as an ssh command under the lane's gate key) and ``PEARLC_CHALLENGER_PEER`` (this node's name in the challenger host's
-peers) are set: then it is a live session's on the auditor host, reserved at install with its salt coin alone
+peers) are set: then it is a live session's on the auditor device, reserved at install with its salt coin alone
 (`window.SALT_FAMILIES`), opened on its salt epoch's root (`salt.epoch_open_root` of the weights' root and epoch 0, the
 arm's one install under a fresh hm96 key) and its salt coin opened after it (`_LiveSession`), which the device run checks
 (`pouw_pearl_c_host.epoch_of`); the gate's result names the session (``coins``), and the arm's close ends it complete.
@@ -65,7 +65,7 @@ class _Coins:
 
 
 class _LiveSession:
-    """The epoch's salt coin from a session of the auditor host's challenger, through infra's gate: ``gate`` its argv
+    """The epoch's salt coin from a session of the auditor device's challenger, through infra's gate: ``gate`` its argv
     prefix as one string (``ssh -i KEY -o IdentitiesOnly=yes research@HOST``, the lane's own gate key) and ``peer`` this
     node's name in the host's peers (``--peer``), whose 127.0.0.1 the challenger reaches through the node's certifier
     coin link. Reserved at
@@ -102,7 +102,7 @@ class _LiveSession:
 
 def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: int, lane: str,
                run: Any = None) -> tuple[dict[str, Any], dict[str, Any] | None]:
-    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor host when `gate` (infra's
+    """A protocols config's PoUW settings `pouw` with the salt coin a live session's on the auditor device when `gate` (infra's
     gate as an ssh command) and `peer` (this node in the challenger host's peers) are given: a salt-only session reserved
     now under lane `lane` (`_LiveSession`, `run` its gate's subprocess in tests), which the install opens on its salt
     epoch's root (`salt.epoch_open_root` of the weights' root and the epoch's number) and flips its salt coin from
@@ -123,7 +123,7 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
 
 
 class LiveDraw:
-    """`verify_run.verify_passes`' ``draw`` from a sample session of its own on the auditor host's challenger, through
+    """`verify_run.verify_passes`' ``draw`` from a sample session of its own on the auditor device's challenger, through
     infra's gate (``gate``, ``peer`` and ``lane`` as `_LiveSession`'s; `run` its gate's subprocess in tests): called on
     the run's commitment C, it reserves a session withheld with the sampling coin alone (``reserve --withhold``,
     `window.DRAW_FAMILIES`, `pouw_h1_window.reserve_draw` as H1's window samples), opens it on C and takes its
