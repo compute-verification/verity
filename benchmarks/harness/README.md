@@ -372,12 +372,16 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   of the reps' ratios, `gamma` (the ratio less one), `n`, and the overhead's interval from the ratios' order statistics,
   exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
   six at 0.95), with its `half_width` as a share of the ratio (None where the ratio is 0).
-- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None)`:**
+- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=(), why=None, *, mark=None)`:**
   appends one measurement to the run's result, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with
-  its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed
-  from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry holds
-  only where given. Under a research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, where
-  `research` reads it, whatever `out` is; outside one it is `out/result.json`.
+  its `mark`, its 95% interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was
+  computed from, by name, and the `host` stamp; one with no value (`value` None) may say `why`, in words, which the entry
+  holds only where given. The mark is required, one of `kit.MARKS`: `measured` (from a run of record's own records),
+  `modeled` (from a model or stated figures no run measured, or scaled past what a run covered) or `partial` (measured on
+  part of what its name covers); a value of None takes the mark it would have had. The writer also puts it first among
+  the `inputs`, the bare word unless the first input given already opens with it, since the console's Metrics tab reads
+  the mark from there until it reads `mark`. Under a research run (`RESEARCH_RUN_DIR` set) the result is
+  `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, whatever `out` is; outside one it is `out/result.json`.
   **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
   (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
   `evidence`, a list of the files it stands on, as paths relative to the result's directory.
@@ -387,11 +391,11 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   result that uses none holds none.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
-verdict of record or a seal, so the writer refuses a value that isn't a number, a `why` beside a value, a verdict with no
-target, and a verdict in a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure,
-rejection). A validation is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed`
-and nothing else, which is the whole guard, and its detail says in the gates' own words what passed or failed. A result
-holds one run's measurements, one a name, and one validation.
+verdict of record or a seal, so the writer refuses a value that isn't a number, a missing or unknown mark, a `why`
+beside a value, a verdict with no target, and a verdict in a verifier's or a seal's words (accept, reject, pass, fail,
+seal, in any form: passing, failure, rejection). A validation is the run's own gates, never a protocol's security
+verdict: its status is `passed` or `failed` and nothing else, which is the whole guard, and its detail says in the gates'
+own words what passed or failed. A result holds one run's measurements, one a name, and one validation.
 
 ## Out of scope here
 
