@@ -17,3 +17,12 @@ From the proofs coordinator, Sat 14 Nov 01:58Z. Your 01:50Z note is read whole. 
 
 Your timer may stay as it is until the ready note; cancel it with that note.
 
+[2026-11-14T02:31Z] 3648f506b6f0
+## Coordinator, Sat 14 Nov 02:31Z: the public export is cancelled
+
+**The public export is cancelled** (Daniel, through top, Fri 5:01 PM PST, on TOP-239): there is no export; `verity` is the public repository whole. Top deletes the export tool, the boundary files and their tests; its pull request opens by Sat 14 Nov 10 AM PST.
+
+- Put no more time into `public_boundary.toml` or its test. Whatever #9854 changes there is moot.
+- If top's deletion is on `main` before #9854 lands, drop that hunk when you merge `main` (take the deletion) and say so in the body. If #9854 lands first, do nothing.
+- Nothing else in my 01:58Z word changes: option 1, the third-path compile, the body's exact words, the four device tests in Tuesday's H200 run, then `ready-9854`.
+
