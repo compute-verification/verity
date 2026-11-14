@@ -188,3 +188,29 @@ def test_the_form_accepts_one_honest_play_with_its_switch_on() -> None:
     assert on.returncode == 0, (on.stdout + on.stderr)[-4000:] + "\n" + AFRESH
     off = subprocess.run([str(exes[1]), "check", *files], capture_output=True, text=True, check=False)
     assert off.returncode == 1 and any(x in off.stdout for x in BY_THE_SWITCH), (off.stdout + off.stderr)[-4000:]
+
+
+#: how the Lean's refusal of an interior audit on the boundary registration's window begins (`SampledTwo.ONE_WINDOW`)
+ONE_WINDOW = "the interior audit's window is the boundary registration's"
+
+
+@pytest.mark.slow
+def test_the_form_refuses_the_honest_play_on_one_window(tmp_path) -> None:
+    """The form reads a two-stage audit on two windows only: the kept honest play (`CASE`) with its interior audit's
+    window root set to the boundary registration's is refused by `sampled-two-on`, the check with its switch on, at
+    its parameters and by name (`ONE_WINDOW`). The parameters still parse to the end, where the refusal is, which no
+    refusal case above reaches: their interior names no members."""
+    d = Path(opt.get("VERITY_SAMPLED_TWO_CASE") or CASE)
+    assert (d / "params.json").is_file(), (
+        f"{d} is not fetched: `uv run research data fetch-fixtures "
+        "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case`")
+    params = json.loads((d / "params.json").read_text())
+    assert params["interior"]["params"]["window_root"] != params["boundary"]["window_root"]
+    params["interior"]["params"]["window_root"] = params["boundary"]["window_root"]
+    one = tmp_path / "params.json"
+    one.write_text(canonical(params))
+    files = [str(one)] + [str(d / f) for f in ("commitment.json", "evidence.json")]
+    files += [str(b) for b in sorted((d / "blobs").iterdir())]
+    on = subprocess.run([str(D.build(PORT.package, "sampled-two-on")), "check", *files],
+                        capture_output=True, text=True, check=False)
+    assert on.returncode == 1 and ONE_WINDOW in on.stdout, (on.stdout + on.stderr)[-4000:]

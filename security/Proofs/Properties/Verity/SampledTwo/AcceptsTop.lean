@@ -219,7 +219,8 @@ theorem ofJson_replay {j g : Lean.Json} {t : String} {k : Spot.Select.Counts}
 /-- **The form's parameters' rule is one `Select.Rule.ofJson` read.** -/
 theorem paramsOfJson_ruleOf {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) : ∃ j', Spot.Select.Rule.ofJson j' = .ok p.rule := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
   repeat'
     first
     | (cases h; done)
@@ -398,7 +399,8 @@ theorem templateCircuits_names {proofs query : Lean.Json} {cs : Array (String ×
 theorem paramsOfJson_circuits {j : Lean.Json} {p : VStar.Recursive.SampledTwo.Params}
     (h : VStar.Recursive.SampledTwo.paramsOfJson j = .ok p) :
     ∃ pj, Spot.Run.templateCircuits pj p.interior.verifier.query = .ok p.circuits := by
-  unfold VStar.Recursive.SampledTwo.paramsOfJson at h
+  replace h := (VStar.Recursive.SampledTwo.paramsOfJson_ok h).1
+  unfold VStar.Recursive.SampledTwo.paramsParsed at h
   repeat'
     first
     | (cases h; done)
