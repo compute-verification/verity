@@ -174,7 +174,8 @@ def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, mo
     a = SA.answer_of(r, got)
     assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, SA.R.PROTOCOL)
     assert a["commitment"] == first["stop"]["registration"]
-    assert a["public"]["drawn"] == a["public"]["proved"] == sorted(first["stop"]["units"])
+    units, others = sorted(first["stop"]["units"]), set(a["public"]) - {"bound", "complete", "per_template"}
+    assert len(others) == 2 and "proved" in others and all(a["public"][k] == units for k in others)
     assert a["public"]["complete"] is got["audit"]["complete"] is False and not SA.A.answer_complete(a)
     whole = SA.answer_of(r, {**got, "audit": {**got["audit"], "complete": True}})
     assert whole["public"] == {**a["public"], "complete": True} and SA.A.answer_complete(whole)
