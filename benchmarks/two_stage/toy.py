@@ -178,10 +178,11 @@ def boundary_ports(window: CS.Binding) -> dict[str, str]:
 def spec(n: int, q: int, k: int | Mapping[str, int], proof_deadline: float = 3600.0) -> S.Spec:
     """The challenger's two-stage design over ``n`` spans: the first stage samples ``q`` of them, the second ``k`` proof
     blocks in each (replay block, template) cell (an int, or one count a template id), each proof by ``proof_deadline``
-    seconds after its sample."""
+    seconds after its sample. Its values are every row port of every member, as the windows' layout names them
+    (`rows.expected_ports`): a wired port of the interior, which has no tree of its own, under its reader too."""
     names = {}
     for phase, w in (("serve", boundary_window(n, q)), ("interior", interior_window("00" * 64, range(q)))):
-        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p, _w in m.all_rows}
     public = (S.Public("population", "structure", "N, the sample's range"),
               S.Public("window", "structure", "provenance: the two-stage toy"),
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),

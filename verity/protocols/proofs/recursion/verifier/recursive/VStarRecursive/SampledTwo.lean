@@ -77,7 +77,12 @@ registration is sampled under two laws: its record's, a subset of all its `m` pr
 holds it to as the run of record does, and the second stage's, which its sample is sampled under. It reads the sample the
 coins `ξ₂` give under the second stage's law, every coin opened read (`OneStage.coinsReason`), then R1–R8 at the
 subset sampling design, the evidence's sample held to the second stage's law (`Draw.checkDraw`), the record's checks over its proved
-units (`OneStage.recordChecks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's law.
+units (`Record.checks`), the verdicts (`OneStage.verdictOf`), and the bound under the second stage's law. The record's
+checks are the function the run of record of step 4 calls for the interior's record (`Record.record`'s
+`Record.checks`), at the reads it hands it under a two-stage rule (`own_reads`): a session's read of one of the
+registration's own ports at that port's own root is no registered read of the record (`Record.lessOwnReads`), its
+rows being the second-stage statement check's to hold, and a read of one of its ports at any other root is opened and
+not registered, which refuses. A member of an interior that reads another member's port reads it so.
 That law is computed, never read from the evidence (`secondLawOf`): `Select.secondLaw` of the first stage's sample (the
 proved units of the sample the run of record decided) over the replay block's cells under the interior's query
 (`Select.replayCells`) at the rule's counts, the function and the arguments the run of record's second stage samples by.
@@ -399,7 +404,7 @@ def interiorShown (roots : Challenger.Roots) (label : String) (after : ByteArray
 
 /-- **On two windows, the first session releases none of the second stage's coins** (check, 4): where the interior
 audit's window is not the boundary registration's, the first session's log (the session `e.coins` names on the
-boundary's window under the interior audit's challenger key, `Challenger.trustedSessionOf`) shows no coin of the
+boundary's window under the interior audit's challenger key, `Challenger.trustedChallengePhaseOf`) shows no coin of the
 second stage's family, the one the interior audit's parameters name, released after the interior registration's
 digest (`INTERIOR_SHOWN`), so the coins of that family after that digest are the second session's alone. The
 interior audit's parameters always name a challenger (`OneStageZk.NO_CHALLENGER`); where the boundary names no window
@@ -409,7 +414,7 @@ def interiorUnshown (p : Params) (e : Evidence) : V Unit :=
   | some (k, label), some w =>
     if some w == p.audit.base.verifier.windowRoot then .ok () else do
       let after ← Registration.digest e.record
-      let (_, roots) ← Challenger.trustedSessionOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
+      let (_, roots) ← Challenger.trustedChallengePhaseOf (getD e.coins "ledger") (Json.mkObj [("root", Json.str w)]) k
         (getD e.coins "pins") (getD e.coins "main") (getD e.coins "session")
       if interiorShown roots label after then .error INTERIOR_SHOWN else .ok ()
   | _, _ => .ok ()
@@ -512,7 +517,11 @@ def secondLawOf (p : Params) (run : Json) : V Json := do
 def subsetLaw (m : Nat) : Json := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)]
 
 /-- `secondCheck` past the coins: R1–R8 at the verifier `v`, the sample held to the second stage's law `law`, the
-record's checks, the verdicts, and the bound under `law` at δ `delta`, as `OneStage.check` has them. -/
+record's checks, the verdicts, and the bound under `law` at δ `delta`, as `OneStage.check` has them but for the reads
+the record's checks are handed. Those checks are `Record.checks`, which the run of record calls for this record, the
+`draw` entry aside (the sample is held to `law` above), at the reads the run of record hands it under a two-stage rule:
+the verdicts' own for the registration's own values (`Record.ownRegistered`), less the reads of the registration's
+own ports at their own roots (`Record.lessOwnReads`). -/
 def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage.Commitment) (m : Nat) (law : Json)
     (e : OneStage.Evidence) : Core.Outcome OneStage.Public Core.Integrity :=
   let rec_ := c.record
@@ -520,7 +529,12 @@ def secondChecked (v : Registration.Verifier) (delta : Core.Ratio) (c : OneStage
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
   let drawCodes := Draw.checkDraw e.draw (getD rec_ "population") law
   if !drawCodes.isEmpty then .reject s!"draw: {", ".intercalate drawCodes.toList}" else
-  let failed := OneStage.recordChecks rec_ (Flock.hexOf c.digest) e
+  let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
+  let cs := Record.checks rec_ e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson)
+    (Lean.toJson e.instances) (Flock.hexOf c.digest) (e.served.map (·.map fun (n : Nat) => (n : Int)))
+    (e.sessionRoots.map entries)
+    (Record.lessOwnReads rec_ (Record.ownRegistered rec_ (Record.sessionRegistered e.verdicts)))
+  let failed := (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
   if !failed.isEmpty then .reject s!"the audit's checks failed: {", ".intercalate failed.toList}" else
   match OneStage.verdictOf e.verdicts with
   | .reject r => .reject r
@@ -726,6 +740,15 @@ private def orderT (opened : Array Challenger.TreeOpening) : Challenger.LoggedTr
 #guard match interiorDigestIs (Json.mkObj [("a", Json.null)]) (Json.mkObj [("a", Json.null)]) ByteArray.empty with
   | .error why => why == INTERIOR_DIGEST
   | .ok _ => false
+-- the record's checks at the reads the last step hands them: a read of one of the record's own ports at that port's
+-- own root is left out, and at another root it stays among the reads opened, where `registered` fails
+#guard
+  let rec_ := Json.mkObj [("roots", Json.arr #[Json.mkObj [("port", "t/p"), ("root", "aa")]])]
+  let failedAt := fun (root : String) =>
+    ((Record.checks rec_ Json.null Json.null Json.null #[] #[] Json.null "" none none
+      (Record.lessOwnReads rec_ (Record.ownRegistered rec_ (some #[("t/p", Json.str root)])))).filter
+        fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
+  !(failedAt "aa").contains "registered" && (failedAt "bb").contains "registered"
 #guard interiorShown [("boundary", [ByteArray.mk #[1]]), ("interior", [ByteArray.mk #[1], ByteArray.mk #[7]])]
   "interior" (ByteArray.mk #[7])
 #guard !interiorShown [("interior", [ByteArray.mk #[1]])] "interior" (ByteArray.mk #[7])

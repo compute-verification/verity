@@ -87,8 +87,8 @@ noncomputable def joinMiss (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteAr
 /-- **The projection's bound, joined over any acceptance**: at the join's frame and reading, the wiring, the coin map's
 law, the stages' bytes within their rounds' releases, the sessions' releases' agreement, the three groups' coins, the
 messages opening their digests, each digest fixed by the coins shown before it, the cut, the accept on the rounds a run
-reaches and the statement read give the projection's bound at the hiding term, the join's `miss` and the cut's
-`terms`. -/
+reaches at the plays `Acc` and `Good` hold of, and the statement read give the projection's bound at the hiding term,
+the join's `miss` and the cut's `terms`. -/
 theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (C : CaseOf)
     (S : SessionReading) (L : CoinMap.Locate) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
@@ -108,7 +108,7 @@ theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
     (hDigest : ∀ i < A.L.V.k x,
       Messages.DigestBefore (joinFrame V A x θ F c σ C S L Dg) (joinReading A C S L) Acc Good Dg i)
     (hCut : CutBound V k θ F c σ Good terms)
-    (hReach : ∀ o : Verity.Exchange, Acc o → (joinReading A C S L).stmt o = some x →
+    (hReach : ∀ o : Verity.Exchange, Acc o → Good o → (joinReading A C S L).stmt o = some x →
       ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Coins A x),
         (∀ i : Fin (A.L.V.k x), (joinReading A C S L).reads i.val →
           ∀ c', (joinReading A C S L).coin o i.val = some c' → (joinReading A C S L).agree o i.val c' (r i)) →
@@ -125,9 +125,9 @@ theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
     devAgrees_formReading A x C S (CoinMap.dev L) Acc Good (CoinMap.ElemAgrees L A x (readsAt A.h))
       (firstElems_of A x C L (readsAt A.h) Acc Good (readsAt_of_le A.h (Nat.zero_le _)) hFit₁)
       (secondElems_of A x C L (readsAt A.h) Acc Good (fun n _ hn => readsAt_of_le A.h hn) hFit₂) hSess
-  have hRun : AcceptsRun A x (joinReading A C S L) Acc := by
+  have hRun : AcceptsRun A x (joinReading A C S L) (fun o => Acc o ∧ Good o) := by
     intro o hA hs Ω P ω r hc hm
-    exact (hReach o hA hs Ω P ω r hc fun i hi =>
+    exact (hReach o hA.1 hA.2 hs Ω P ω r hc fun i hi =>
       hm i (lt_of_lt_of_le hi (Claims.Recursion.run_length_le FlockDeploy.sha512 P A.L.V x ω r))).1
   have hMiss : ∀ i < A.L.V.k x,
       ENNReal.ofReal (Claims.Pr
@@ -144,7 +144,7 @@ theorem joined (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
   have hMsg : MessagesFixedAgreed V A x θ F c σ (joinFrame V A x θ F c σ C S L Dg) (joinReading A C S L) Acc Good
       (joinMiss V A x θ F c σ C S L Dg q) :=
     messagesFixedAgreed_of_reached
-      (fun ω r hA _ hc hm => (hReach _ hA (hAt ω r hA) _ (joinFrame V A x θ F c σ C S L Dg).P ω r hc hm).2)
+      (fun ω r hA hG hc hm => (hReach _ hA hG (hAt ω r hA) _ (joinFrame V A x θ F c σ C S L Dg).P ω r hc hm).2)
       hReached
   exact projection_agreed V k A x θ F c σ (joinFrame V A x θ F c σ C S L Dg) (joinReading A C S L) Acc Good
     (CoinMap.ElemAgrees L A x (readsAt A.h)) (CoinMap.gapOf V θ F c σ L (A.L.V.k x))

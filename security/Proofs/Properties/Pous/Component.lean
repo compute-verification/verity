@@ -95,7 +95,7 @@ private theorem canonicalJson_ok {b : ByteArray} {j : Lean.Json} (h : Core.canon
     · simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at h
   | some s =>
     refine ⟨s, rfl, ?_⟩
-    cases hp : Lean.Json.parse s with
+    cases hp : Flock.JsonParse.parse s with
     | error e =>
       simp [hs, hp, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at h
       split at h <;> cases h
