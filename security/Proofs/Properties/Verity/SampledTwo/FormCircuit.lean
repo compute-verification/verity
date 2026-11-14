@@ -7,6 +7,7 @@ public import Proofs.Properties.Verity.SampledTwo.FormStmts
 public import Proofs.Properties.Verity.SampledTwo.FormLast
 public import Proofs.Properties.Verity.SampledTwo.FormLink
 public import Proofs.Properties.Verity.SampledTwo.FormPrint
+public import Proofs.Properties.Verity.SampledTwo.FormDraw
 
 /-!
 # The messages' piece at the form's reading, at the circuit statement's table
@@ -30,6 +31,9 @@ piece at that table, where the three are theorems, and with them the statements'
   one sent (`CaseIsSent`).
 * `StmtAtFixed` is `stmtAtFixed_of` (`FormStmts.lean`), from `StmtsRead`, `StmtsCount`, `CaseIsSent`, and
   `MemberAtFixed` and `DrawAtFixed`.
+* `DrawAtFixed` is `drawAtFixed_of_coins` (`FormDraw.lean`), from `StmtsRead`, `StmtsCount`,
+  `SessionCoins.StmtsFit` and `StageCoinsOne`: the model's check holds the two plays' samples to one canonical
+  text at one pair of stage coins, and a record's sample is fixed by its canonical text.
 * `LastFixed` is `lastFixed_of` (`FormLast.lean`), from `StmtAtFixed`, the sessions the verdict accepted
   (`SessionCoins.verdictsAt_of`) and each session's evidence on the case (`SessionCoins.logCloses_run`).
 * `LinkFixed` is `linkFixed_of` (`FormLink.lean`), from `StmtAtFixed`, the sessions the verdict accepted and the
@@ -38,8 +42,8 @@ piece at that table, where the three are theorems, and with them the statements'
 The reading's statements and messages are taken to be the case's (`hS`, `hM`), which holds by definition at
 `SessionMsgs.sessionReading`.
 
-**Not established here**: `StmtsRead`, `PartsHeldAt`, `SessionCoins.StmtsFit`, `MemberAtFixed` and `DrawAtFixed`,
-each a hypothesis, and `agreed_form`'s `hR`.
+**Not established here**: `StmtsRead`, `PartsHeldAt`, `SessionCoins.StmtsFit`, `MemberAtFixed` and
+`StageCoinsOne`, each a hypothesis, and `agreed_form`'s `hR`.
 -/
 
 @[expose] public section
@@ -58,7 +62,8 @@ and messages are the case's. Its hypotheses on the sessions' records are theorem
 record is its session's, accepted at its statement's setup (`SessionCoins.msgsOfRecords_form`), what each member's
 statement prints of the member reading back (`stmtsPrint_of`). The evidence holds one statement a template
 (`stmtsCount_of`), so the statements' message is fixed where each template's statement is (`stmtsFixed_of_each`),
-which it is where the member it names and the sample its record prints are (`stmtAtFixed_of`); and where its
+which it is where the member it names and the sample its record prints are (`stmtAtFixed_of`), the sample where
+the two plays' statements pass the model's check at one pair of stage coins (`drawAtFixed_of_coins`); and where its
 statement is fixed, a session's first message is fixed by the string shown at its first round (`linkFixed_of`) and
 its last by its evidence (`lastFixed_of`). -/
 theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -74,7 +79,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
     (hplay : PlayAccepts A C S P') (hsess : SessionMsgs A C S P') (hof : HeldOfAt A C) (hst : StmtsRead A C S)
     (hrounds : RoundsHeldAt A C S) (hscope : ScopeHeldAt A C S) (hparts : PartsHeldAt A C)
     (hfit : SessionCoins.StmtsFit C Good) (hsent : CaseIsSent C) (hmemb : MemberAtFixed A C Good L)
-    (hdraw : DrawAtFixed A C Good L) (hC : CaseCommits C) (hx : stmtOf c = some x)
+    (hone : StageCoinsOne A C S Good L) (hC : CaseCommits C) (hx : stmtOf c = some x)
     (hR : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x),
       FormAccepts C ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
       Good ((formFrame V A x θ F c σ C S dev Good L).out ω r) →
@@ -89,6 +94,7 @@ theorem agreed_circuit (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray)
   have hcount : StmtsCount A C Good := stmtsCount_of Good hof hparts
   have hsz : SessionCoins.HeldSize := fun _ _ _ hh => held_size hh
   have hprint : SessionCoins.StmtsPrint C Good := stmtsPrint_of C Good
+  have hdraw : DrawAtFixed A C Good L := drawAtFixed_of_coins hS hst hcount hfit hone
   have hfix : StmtAtFixed A C Good L := stmtAtFixed_of A C S Good L hS hsent hst hcount hmemb hdraw
   have hcov : SessionCoins.RecordsCover A C Good := SessionCoins.recordsCover_of hsz hS hst hcount
   have hclose : SessionCoins.LogCloses A C Good L := by
