@@ -2,7 +2,7 @@
 ``kappa.py`` and ``fit.py``, at the commit this runs on, grouped as the page is: the slide's questions, the symbols,
 section 4's terms, the ladder and the fit bound, years of growth, the regimes, section 6's thresholds and the known holes'
 cheating share. D is the overhead calculator's hardware multiple at MFU_0, ``rho.theorem.multiple_bound`` in Lean's
-form (``Nci.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
+form (``InferenceOnly.Dampener.remoteDampener``) on ``tiers.evaluate(p, TIERS[t], p["mfu"])``'s terms, the residual at MFU_0 under
 the reference-efficiency assumption; every scenario is a set of overrides on
 ``tiers.DEFAULTS``. D by the fit bound (``fit_dampener``) is the same with the fit bound in place of the
 closed-form memory cap, which the page's memory rungs cite.
