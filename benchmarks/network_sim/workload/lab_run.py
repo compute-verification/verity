@@ -83,6 +83,8 @@ from pathlib import Path
 import mockdc  # puts network_traces, datacenter and the repository root on sys.path, for the next three
 
 import active_replay as ar
+import runner_parts as rp
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 import graph
 import records
 from datacenter import Cadence
@@ -335,7 +337,7 @@ class Server:
             self.log["served"] += 1
 
     def write(self, out: Path) -> None:
-        (out / "server.json").write_text(json.dumps(self.log | ar._usage()))
+        (out / "server.json").write_text(json.dumps(self.log | rp._usage()))
         with gzip.open(out / "server.events.gz", "wt", compresslevel=1) as fh:
             for p, name, k, bucket, event in self.events:
                 fh.write(json.dumps([p, name, k, bucket, event.decode("latin-1")]) + "\n")
@@ -455,7 +457,7 @@ class Client:
 
     def write(self, out: Path) -> None:
         for b, log in self.logs.items():
-            (out / b / "peer.json").write_text(json.dumps(log | ar._usage()))
+            (out / b / "peer.json").write_text(json.dumps(log | rp._usage()))
         answers = self.answers()
         values = _commitment(OUTSIDE, self.lab.held[OUTSIDE], self.values, self.ctx.model.value_bits)
         (out / "outside.json").write_text(json.dumps({"unit": OUTSIDE, "values": values, "answers": answers,
@@ -475,7 +477,7 @@ ROLES = {"block": block_role, "client": client_role}
 
 
 def role(args) -> None:
-    ar._quiet_runtime()
+    rp._quiet_runtime()
     asyncio.run(ROLES[args.name](json.loads(Path(args.config).read_text())))
 
 
@@ -696,7 +698,7 @@ def run(args) -> int:
     for b in lab.blocks:
         a = ar.audit_configuration(plans[b], report, out / b, audit=Audit)
         (out / b / "audit.json").write_text(json.dumps(a))
-        published[b] = [ar.unpack_record(x, FRAME_BYTES) for f in (f"{L.EGRESS}.records", f"{L.INGRESS}.records")
+        published[b] = [RF.unpack_record(x, FRAME_BYTES) for f in (f"{L.EGRESS}.records", f"{L.INGRESS}.records")
                         for x in ar.read_blobs(out / b / f)]
         rows = [[r["link"], r["window"], r["raw"], r["committed"]] for r in a["rows"]]
         t, c = a["timing"], a["comparisons"]

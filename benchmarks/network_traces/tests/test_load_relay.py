@@ -36,6 +36,7 @@ from verity.protocols.accounting.certifier.verifier import transfer_rows as TR
 from verity.protocols.accounting.certifier.verifier.certificate import Direction, Issuer
 from verity.protocols.accounting.pous.verifier.schemes import p2 as P2
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.accounting.certifier.verifier import load_check as LK
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -57,7 +58,7 @@ def _load():
 
 
 LR = _load()
-TINY = LR.manifest(LR.TINY)
+TINY = LK.manifest(LK.TINY)
 
 
 #: interface 1's fixture reader is a program digest, so its domains are the verifier's own
@@ -87,7 +88,7 @@ def test_the_manifest_and_generator_are_interface_1s():
     assert [(v.name, v.leaves, v.reg_words, v.word_bits, interface_1_domain(v).domain_id.hex()) for v in TINY] == \
         [(e["value"], e["leaves"], e["words"], e.get("word_bits", 16), e["domain"]) for e in FIXTURE["tiny"]["values"]]
     assert (TINY[0].name, TINY[0].schema, TINY[0].rows, TINY[0].words) == ("tok", G.SCHEMA_V2, 32, 256)
-    h200, want = LR.manifest(LR.H200), FIXTURE["h200"]
+    h200, want = LK.manifest(LK.H200), FIXTURE["h200"]
     assert len(h200) == 733 and h200[-1].offset + h200[-1].nbytes == want["stream_bytes"] == 139_736_443_904
     assert (LR.generate(SEED, h200[0], 0, 1)[:64]).hex() == want["stream_head"]
     rows = [[v.name, hashlib.sha256(LR.generate(SEED, v, 0, 1)).hexdigest(),
@@ -120,7 +121,7 @@ def odd_values() -> tuple:
                                             ("c", 37, 2, "s8", G.SCHEMA_V2), ("d", 64, 1, "gain", G.SCHEMA_V2),
                                             ("e", 3, 8, "s8", G.SCHEMA_V2), ("f", 11, 2, "scale", G.SCHEMA_V2),
                                             ("g", 3, 600, "embed", G.SCHEMA_SEG)):
-        out.append(LR.Value(name, at, 2 * words * rows, words, kind, schema=schema))
+        out.append(LK.Value(name, at, 2 * words * rows, words, kind, schema=schema))
         at += 2 * words * rows
     return tuple(out)
 
@@ -136,7 +137,7 @@ def test_the_relayed_roots_are_registered_commits_under_the_certifiers_salts(tmp
     at = 0
     for v in values:
         mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
-        t = TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name,
+        t = TR.Transfer.commit(LK.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name,
                                leaves(v, data[v.offset:v.offset + v.nbytes]), mine, v.word_bits, v.schema)
         assert t.root == got.roots[v.name] and t.head.domain == LR.verifier_domain(PROGRAM)(v).domain_id, v.name
         at += TR.SALT_BYTES * v.leaves
@@ -147,7 +148,7 @@ def test_the_relayed_roots_are_registered_commits_under_the_certifiers_salts(tmp
         LR.relay(values, io.BytesIO(data + b"\0"), None, LR.verifier_domain(PROGRAM))
 
 
-def encode_store(params, salt: bytes, values=TINY, shape=LR.TINY) -> tuple[bytes, bytes]:
+def encode_store(params, salt: bytes, values=TINY, shape=LK.TINY) -> tuple[bytes, bytes]:
     """The store's C* of `shape`'s s8 tensors under `salt` (`p2.encode_segment`'s arithmetic), and the rest."""
     by, f, pb, nb = {v.name: v for v in values}, P2._field(params), params.payload_bytes, params.block_bytes
     w = bytearray(params.w_bytes)
@@ -166,14 +167,14 @@ def encode_store(params, salt: bytes, values=TINY, shape=LR.TINY) -> tuple[bytes
 
 @pytest.fixture(scope="module")
 def store():
-    params, salt = LR.store_params(LR.TINY, *SMALL), hashlib.sha512(b"the store's salt").digest()[:24]
+    params, salt = LR.store_params(LK.TINY, *SMALL), hashlib.sha512(b"the store's salt").digest()[:24]
     cstar, rest = encode_store(params, salt)
     return params, salt, cstar, rest
 
 
 def p2(link: bytes, store, **kw):
     params, salt, _c, _r = store
-    return LR.relay(TINY, io.BytesIO(link), kw.pop("sink", None), interface_1_domain, fmt="p2", shape=LR.TINY,
+    return LR.relay(TINY, io.BytesIO(link), kw.pop("sink", None), interface_1_domain, fmt="p2", shape=LK.TINY,
                     params=params, salt=salt, salts=LR.keyed_salts(SALT_KEY), chunk_bytes=256, **kw)
 
 
@@ -196,7 +197,7 @@ def test_a_p2_link_that_doesnt_decode_is_refused(store):
     high = cstar[:nb * 7] + params.p.to_bytes(nb, "big") + cstar[nb * 8:]
     with pytest.raises(LR.Refused, match="block 7 is not below p"):
         p2(high + rest, store)
-    qkv = LR.store_tensors(LR.TINY, params)[0]
+    qkv = LR.store_tensors(LK.TINY, params)[0]
     last = qkv.first_block + qkv.blocks - 1
     s, j = divmod(last, params.blocks_per_segment)
     f, (k, t) = P2._field(params), P2.segment_keys(params, salt, s)(j)
@@ -211,15 +212,15 @@ def test_a_p2_link_that_doesnt_decode_is_refused(store):
 
 
 def test_the_store_layout_is_interface_2s_at_h200():
-    params = LR.store_params(LR.H200)
-    t = LR.store_tensors(LR.H200, params)
+    params = LR.store_params(LK.H200)
+    t = LR.store_tensors(LK.H200, params)
     assert (params.segments, params.blocks, params.blocks * params.block_bytes) == (1038, 68_026_368, 139_862_212_608)
     assert params.w_bytes == 139_726_159_872 and params.prime_id == "p2-p16448-c21065"
     assert [x.blocks for x in t[:4]] == [131_711, 130_690, 522_757, 522_757]
     assert all(t[4 * i].first_block == 1_307_915 * i for i in range(52)) and t[-1].values == ("head",)
     stored = {n for x in t for n in x.values}
-    assert sum(v.nbytes for v in LR.manifest(LR.H200) if v.name not in stored) == 36_760_576
-    jobs, length = LR.plan(LR.manifest(LR.H200), "p2", LR.H200, params)
+    assert sum(v.nbytes for v in LK.manifest(LK.H200) if v.name not in stored) == 36_760_576
+    jobs, length = LR.plan(LK.manifest(LK.H200), "p2", LK.H200, params)
     assert length == 139_862_212_608 + 36_760_576 and len(jobs) == len({(j.value, j.chunk) for j in jobs})
 
 
@@ -231,10 +232,10 @@ def test_the_command_signs_a_load_head_a_value(tmp_path):
                     "--sink", str(tmp_path / "sink.bin"), "--height", "5", "--workers", "2"]) == 0
     doc = json.loads((out / "load.json").read_text())
     assert (tmp_path / "sink.bin").read_bytes() == src.read_bytes() and len(doc["values"]) == len(TINY)
-    import certifier_serve as CS
-    key = CS.read_public(doc["key"])
+    from verity.protocols.accounting.certifier.verifier import record_files as RF
+    key = RF.read_public(doc["key"])
     for v, reg in zip(TINY, doc["values"]):
-        head, dom = TR.check_registration(reg, key, bytes.fromhex(doc["session"]), link=LR.LINK,
+        head, dom = TR.check_registration(reg, key, bytes.fromhex(doc["session"]), link=LK.LINK,
                                           direction=Direction.INGRESS, window=0, kind="load", value=v.name,
                                           program=PROGRAM, words=v.reg_words, rows=v.leaves, word_bits=v.word_bits,
                                           schema=v.schema)
@@ -243,7 +244,7 @@ def test_the_command_signs_a_load_head_a_value(tmp_path):
     for i in (0, 3, 4):
         v, at = TINY[i], TR.SALT_BYTES * sum(x.leaves for x in TINY[:i])
         mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
-        t = TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name, leaves(v, LR.generate(SEED, v)),
+        t = TR.Transfer.commit(LK.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name, leaves(v, LR.generate(SEED, v)),
                                mine, v.word_bits, v.schema)
         assert t.root.hex() == doc["values"][i]["root"], v.name
     src.write_bytes(src.read_bytes()[:-1])
@@ -261,62 +262,62 @@ def demo_stream(values=TINY) -> bytes:
 
 
 def test_the_stores_pins_are_interface_1s_digests():
-    h200, rows = LR.manifest(LR.H200), H200_DIGESTS["tensors"]
+    h200, rows = LK.manifest(LK.H200), H200_DIGESTS["tensors"]
     assert [(v.name, v.offset, v.nbytes) for v in h200] == [tuple(r[:3]) for r in rows]
-    assert LR.digests_fold(h200, [r[3] for r in rows]) == LR.STORE_DIGESTS[LR.H200.name]
-    assert LR.model_id(LR.H200) == H200_DIGESTS["model"] and H200_DIGESTS["stream_bytes"] == 139_736_443_904
+    assert LR.digests_fold(h200, [r[3] for r in rows]) == LR.STORE_DIGESTS[LK.H200.name]
+    assert LR.model_id(LK.H200) == H200_DIGESTS["model"] and H200_DIGESTS["stream_bytes"] == 139_736_443_904
     by = {r[0]: r[3] for r in rows}
     small = ("pos", "l0.attn_norm", "l0.wk.scale", "l0.wv.scale", "l51.mlp_norm", "final_norm", "head.scale")
     assert {v.name: hashlib.sha256(LR.generate(LR.DEMO_SEED, v)).hexdigest() for v in h200 if v.name in small} == \
         {n: by[n] for n in small}
     assert LR.digests_fold(TINY, [hashlib.sha256(LR.generate(LR.DEMO_SEED, v)).hexdigest() for v in TINY]) == \
-        LR.STORE_DIGESTS[LR.TINY.name]
+        LR.STORE_DIGESTS[LK.TINY.name]
 
 
 def test_the_store_is_written_once_and_held_to_its_pin(tmp_path):
     store = tmp_path / "store"
     with pytest.raises(LR.Refused, match="no store directory"):
-        LR.write_store(store, LR.TINY)
+        LR.write_store(store, LK.TINY)
     store.mkdir()
     with pytest.raises(LR.Refused, match="no store record .*weights-write"):
-        LR.read_store(store, LR.TINY)
-    got = LR.write_store(store, LR.TINY, workers=2, chunk_bytes=1000)
-    data, rec = LR.store_paths(store, LR.TINY)
+        LR.read_store(store, LK.TINY)
+    got = LR.write_store(store, LK.TINY, workers=2, chunk_bytes=1000)
+    data, rec = LR.store_paths(store, LK.TINY)
     assert got["status"] == "written" and data.read_bytes() == demo_stream()
-    assert (got["fold"], got["model"]) == (LR.STORE_DIGESTS[LR.TINY.name], LR.model_id(LR.TINY))
+    assert (got["fold"], got["model"]) == (LR.STORE_DIGESTS[LK.TINY.name], LR.model_id(LK.TINY))
     assert sorted(p.name for p in store.iterdir()) == sorted([data.name, rec.name])
-    assert LR.read_store(store, LR.TINY) == (data, got["sha256"])
-    assert LR.write_store(store, LR.TINY)["status"] == "present"
+    assert LR.read_store(store, LK.TINY) == (data, got["sha256"])
+    assert LR.write_store(store, LK.TINY)["status"] == "present"
     raw = bytearray(data.read_bytes())
     raw[100] ^= 1
     data.write_bytes(raw)
     with pytest.raises(LR.Refused, match="isn't interface 1's tiny-h32-l1 weights stream .*left as it is"):
-        LR.write_store(store, LR.TINY)
+        LR.write_store(store, LK.TINY)
     assert data.exists() and not rec.exists()
     with pytest.raises(LR.Refused, match="no store record"):
-        LR.read_store(store, LR.TINY)
+        LR.read_store(store, LK.TINY)
     data.unlink()
-    assert LR.write_store(store, LR.TINY)["status"] == "written"
+    assert LR.write_store(store, LK.TINY)["status"] == "written"
     with open(data, "r+b") as fh:
         fh.truncate(len(raw) - 1)
     with pytest.raises(LR.Refused, match=f"isn't its {len(raw):,} bytes"):
-        LR.read_store(store, LR.TINY)
+        LR.read_store(store, LK.TINY)
     with pytest.raises(LR.Refused, match=f"{len(raw) - 1:,} bytes, not {len(raw):,}"):
-        LR.write_store(store, LR.TINY)
+        LR.write_store(store, LK.TINY)
     data.unlink()
-    LR.write_store(store, LR.TINY)
+    LR.write_store(store, LK.TINY)
     doc = json.loads(rec.read_text())
     doc["sha256"][0] = "00" * 32
     rec.write_text(json.dumps(doc))
     with pytest.raises(LR.Refused, match="record .* isn't interface 1's tiny-h32-l1 stream"):
-        LR.read_store(store, LR.TINY)
+        LR.read_store(store, LK.TINY)
     other = tmp_path / "other"
     other.mkdir()
     with pytest.raises(LR.Refused, match="generated tiny-h32-l1 stream isn't interface 1's .*nothing is kept"):
-        LR.write_store(other, LR.TINY, pinned={LR.TINY.name: "00" * 64})
+        LR.write_store(other, LK.TINY, pinned={LK.TINY.name: "00" * 64})
     assert not list(other.iterdir())
     with pytest.raises(LR.Refused, match="no pinned digests of tiny-h32-l1"):
-        LR.write_store(other, LR.TINY, pinned={})
+        LR.write_store(other, LK.TINY, pinned={})
 
 
 class Sink:
@@ -339,11 +340,11 @@ class Sink:
 def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     store = tmp_path / "store"
     store.mkdir()
-    LR.write_store(store, LR.TINY)
+    LR.write_store(store, LK.TINY)
     s = Sink(tmp_path)
     socket.create_connection(("127.0.0.1", s.port)).close()
     out = tmp_path / "out"
-    rep = LR.relay_load(store, LR.TINY, [("127.0.0.1", s.port)] * 4, PROGRAM, out, workers=2, frame_bytes=1000)
+    rep = LR.relay_load(store, LK.TINY, [("127.0.0.1", s.port)] * 4, PROGRAM, out, workers=2, frame_bytes=1000)
     got, data = s.join(), demo_stream()
     assert s.code == 0 and got["accepted"] and got["errors"] == []
     assert (tmp_path / "weights.bin").read_bytes() == data
@@ -351,49 +352,50 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert len(salts) == got["witness_bytes"] == rep["witness_bytes"] == TR.SALT_BYTES * rows
     assert stat.S_IMODE((tmp_path / "witness.bin").stat().st_mode) == 0o600
     assert (rep["link_bytes"], rep["rows"], rep["values"], rep["model"]) == (len(data), rows, len(TINY),
-                                                                             LR.model_id(LR.TINY))
+                                                                             LR.model_id(LK.TINY))
     assert len(rep["streams"]) == 4 and all(s["weights"] and s["witness"] for s in rep["streams"])
     assert sorted(p.name for p in out.iterdir()) == ["load-heads.json", "load-relay.json"]
     shape, heads = LR.heads_of(json.loads((out / "load-heads.json").read_text()))
     at = 0
     for v, h in zip(TINY, heads):
         mine = [salts[at + TR.SALT_BYTES * r:at + TR.SALT_BYTES * (r + 1)] for r in range(v.leaves)]
-        c = TR.Transfer.commit(LR.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name,
+        c = TR.Transfer.commit(LK.LINK, Direction.INGRESS, 0, "load", PROGRAM, v.name,
                                leaves(v, data[v.offset:v.offset + v.nbytes]), mine, v.word_bits, v.schema)
         assert c.root == h.root and h.domain == LR.verifier_domain(PROGRAM)(v).domain_id, v.name
         at += TR.SALT_BYTES * v.leaves
     import certifier_serve as CS
+    from verity.protocols.accounting.certifier.verifier import record_files as RF
     own, session = CS.signer(tmp_path / "key", 5), os.urandom(32)
     regs = LR.sign_heads(Issuer(own, session), heads)
-    doc = LR.load_doc(shape, heads, regs, CS.public_json(own.public_key()), session)
-    key = CS.read_public(doc["key"])
-    assert LR.check_load(doc, key, session) == ({"values": len(TINY), "registered": len(TINY)}, [])
-    assert LR.check_load(doc, key, os.urandom(32))[0]["registered"] == 0
-    assert len(LR.check_load(dict(doc, values=[regs[1], regs[0], *regs[2:]]), key, session)[1]) == 2
-    assert LR.check_load(dict(doc, values=regs[:-1]), key, session)[1] == \
+    doc = LR.load_doc(shape, heads, regs, RF.public_json(own.public_key()), session)
+    key = RF.read_public(doc["key"])
+    assert LK.check_load(doc, key, session) == ({"values": len(TINY), "registered": len(TINY)}, [])
+    assert LK.check_load(doc, key, os.urandom(32))[0]["registered"] == 0
+    assert len(LK.check_load(dict(doc, values=[regs[1], regs[0], *regs[2:]]), key, session)[1]) == 2
+    assert LK.check_load(dict(doc, values=regs[:-1]), key, session)[1] == \
         [f"load: not one registration of each of {len(TINY)} values"]
-    assert LR.check_load(dict(doc, format="x"), key, session)[1][0].startswith("load: not a load's registrations")
+    assert LK.check_load(dict(doc, format="x"), key, session)[1][0].startswith("load: not a load's registrations")
 
 
 def test_a_load_that_isnt_the_stores_or_has_no_sink_is_refused(tmp_path):
     store, out = tmp_path / "store", tmp_path / "out"
     store.mkdir()
     with pytest.raises(LR.Refused, match="no store record"):
-        LR.relay_load(store, LR.TINY, [("127.0.0.1", 1)], PROGRAM, out)
+        LR.relay_load(store, LK.TINY, [("127.0.0.1", 1)], PROGRAM, out)
     assert "no store record" in json.loads((out / "load-relay.json").read_text())["refused"]
-    LR.write_store(store, LR.TINY)
+    LR.write_store(store, LK.TINY)
     s = socket.create_server(("127.0.0.1", 0))
     port = s.getsockname()[1]
     s.close()
     with pytest.raises(LR.Refused, match=f"the sink at 127.0.0.1:{port} doesn't answer"):
-        LR.relay_load(store, LR.TINY, [("127.0.0.1", port)] * 4, PROGRAM, out)
-    data = LR.store_paths(store, LR.TINY)[0]
+        LR.relay_load(store, LK.TINY, [("127.0.0.1", port)] * 4, PROGRAM, out)
+    data = LR.store_paths(store, LK.TINY)[0]
     raw, v = bytearray(data.read_bytes()), TINY[5]
     raw[v.offset + 3] ^= 1
     data.write_bytes(raw)
     s = Sink(tmp_path)
     with pytest.raises(LR.Refused, match=f"{v.name}: its bytes' SHA-256 .* the store isn't interface 1's weights"):
-        LR.relay_load(store, LR.TINY, [("127.0.0.1", s.port)] * 4, PROGRAM, out, read_bytes=64)
+        LR.relay_load(store, LK.TINY, [("127.0.0.1", s.port)] * 4, PROGRAM, out, read_bytes=64)
     assert s.join()["accepted"] is False and s.res["errors"] and s.code == 1
     assert json.loads((out / "load-relay.json").read_text())["refused"].startswith(f"{v.name}: ")
     assert not (out / "load-heads.json").exists()
@@ -401,10 +403,10 @@ def test_a_load_that_isnt_the_stores_or_has_no_sink_is_refused(tmp_path):
 
 def test_a_heads_document_is_the_loads_or_refused():
     roots = {v.name: os.urandom(64) for v in TINY}
-    doc = LR.heads_doc(LR.TINY, PROGRAM, roots)
+    doc = LR.heads_doc(LK.TINY, PROGRAM, roots)
     shape, heads = LR.heads_of(json.loads(json.dumps(doc)))
-    assert shape == LR.TINY and [h.root for h in heads] == list(roots.values())
-    assert [(h.kind, h.window, h.direction, h.link) for h in heads] == [("load", 0, Direction.INGRESS, LR.LINK)] * len(TINY)
+    assert shape == LK.TINY and [h.root for h in heads] == list(roots.values())
+    assert [(h.kind, h.window, h.direction, h.link) for h in heads] == [("load", 0, Direction.INGRESS, LK.LINK)] * len(TINY)
     for bad in (dict(doc, format="x"), dict(doc, window=1), dict(doc, shape="nope"), dict(doc, program=PROGRAM.upper()),
                 dict(doc, roots=dict(reversed(list(doc["roots"].items())))), dict(doc, roots={**doc["roots"], "tok": "00"}),
                 dict(doc, link=None)):

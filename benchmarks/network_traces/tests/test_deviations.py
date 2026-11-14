@@ -24,6 +24,7 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer
 from verity.protocols.accounting.certifier.verifier.warden import END, FAIL, REFUSED, Shim, Warden, WardenParams, cells, read_cell
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
 HERE = Path(__file__).resolve().parents[1]
 ROOT = Path(__file__).resolve().parents[3]
@@ -275,7 +276,7 @@ def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str 
     assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(N))
     (run / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
     (run / dv.PLANTED).write_text("".join(json.dumps(x) + "\n" for x in lines))
-    (run / "check.json").write_text(json.dumps(ws.check(run)))
+    (run / "check.json").write_text(json.dumps(RC.check(run)))
     return 0.0
 
 
@@ -408,7 +409,7 @@ def test_what_a_try_keeps_holds_no_salt_or_address_and_the_table_is_made_from_it
     assert (conn["user"], conn["release"], conn["held"], conn["failed"]) == ("user-0", 0, True, None)
     assert [x >> 1 for x in conn["ids"]] == [x >> 1 for x in HONEST[0]]
     assert conn["planted"] == ("10" * 60)[:len(HONEST[0])] == "".join(str(x & 1) for x in conn["ids"])
-    record = ws.read_records(run, PARAMS)[ws.EGRESS][0]
+    record = RC.read_records(run, PARAMS)[RC.EGRESS][0]
     cells = {(t, i): frame for t, row in enumerate(record.grid) for i, frame in enumerate(row)
              if frame is not None and frame != IT.pad_cell(PARAMS.cell_bytes)}
     assert {(e[0], e[1]): dv.cell_of(e, PARAMS.cell_bytes) for e in kept["egress"][0]["cells"]} == cells

@@ -220,16 +220,17 @@ def custody(gates: Path) -> dict:
 
 def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     import certifier_serve as cs
+    from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
     from verity.commitments.crypto import lms
     from verity.protocols.accounting.certifier.verifier import lean_audit
 
     plan, report, dep = (json.loads((run / f).read_text()) for f in ("plan.json", "calibration.json",
                                                                     "deployment.json"))
-    setup, key = cs.ar.Setup(report), cs.read_public(dep["certifier_key"])
+    setup, key = cs.ar.Setup(report), RF.read_public(dep["certifier_key"])
     session, windows = bytes.fromhex(dep["session"]), plan["windows"]
     profile = plan.get("occupancy") or {}
     lw = cs.LinkWindows(dep["links"]["n2"], setup.egress_params, setup.sync_set, key, dep["run_id"], session,
-                        ingress=setup.ingress_params, proof_deadline=cs.PROOF_DEADLINE_S,
+                        ingress=setup.ingress_params, proof_deadline=RC.PROOF_DEADLINE_S,
                         occupancy=(profile.get("egress"), profile.get("ingress")), served=cs.served_profile(plan))
     kept, kept_clocks = client / "certificates.jsonl", client / "clocks.jsonl"
     records = next((d / "certified.jsonl" for d in (run, client) if (d / "certified.jsonl").is_file()), None)
@@ -251,7 +252,7 @@ def certs(run: Path, client: Path, deployed: bool = False) -> dict:
     held = client_certificates(dep, windows, kept, kept_clocks)
     certified, refused = cs.read_certified(records)
     clocks = cs.read_clocks(clocks_file)
-    public = lambda c: json.dumps(cs.certificate_json(c), sort_keys=True)
+    public = lambda c: json.dumps(RF.certificate_json(c), sort_keys=True)
     mine = {(d.value, w): public(r.certificate) for (d, w), r in certified.items()}
     out["client_check"] = {k: v for k, v in held.items() if k not in ("by_window", "clocks")} | {
         "records_are_the_clients": mine == held["by_window"],
@@ -293,6 +294,7 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
     `NetworkCheck.TransferBlocks.refusals`, ``by`` ``lean``, with `audit.certificate_refusals` beside it as the reference, a
     window where the two differ refused whole)."""
     import certifier_serve as cs
+    from verity.protocols.accounting.certifier.verifier import record_files as RF
     from verity.protocols.accounting.certifier.verifier import lean_audit
 
     lines = lambda p: [json.loads(x) for x in p.read_text().splitlines() if x.strip()]
@@ -308,8 +310,8 @@ def client_certificates(dep: dict, windows: int, kept: Path, kept_clocks: Path) 
         got, synced, unsigned, no = cs.check_certificates(dep, w, answer, seen, lean_audit.certificate_refusals)
         refused += no + [f"window {w}: the signer refused {u}" for u in unsigned]
         for c in got:
-            by_window[(c.direction.value, c.window)] = json.dumps(cs.certificate_json(c), sort_keys=True)
-        kept_clock += [json.dumps(cs.certificate_json(k), sort_keys=True) for k in synced]
+            by_window[(c.direction.value, c.window)] = json.dumps(RF.certificate_json(c), sort_keys=True)
+        kept_clock += [json.dumps(RF.certificate_json(k), sort_keys=True) for k in synced]
     if sessions - {dep["session"]}:
         refused.append(f"certificates of another session: {sorted(sessions - {dep['session']})}")
     return {"certificates": len(by_window), "clock_certificates": len(kept_clock), "refused": refused, "by": "lean",
@@ -814,6 +816,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     readings of the sampling block's free inputs (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its
     share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
+    from verity.protocols.accounting.certifier.verifier import scan_answer as SA
     import scan_zk as SZ
     from verity.protocols.accounting.certifier.prover import ingress_scan as IS
     from verity.protocols.accounting.certifier.verifier import warden as W
@@ -865,7 +868,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
                     "link_window_s": window_s, "accepted": v.get("accepted")},
             "terms": {"schedules_per_request": link.cell, "cells_per_request": link.cell,
                       "cap_per_request": link.cap, "free": free, "faulty": 0,
-                      "jitter_per_block": link.jitter, "jitter_bound": LB.JITTER_BOUND, "jitter_term": LB.JITTER,
+                      "jitter_per_block": link.jitter, "jitter_bound": SA.JITTER_BOUND, "jitter_term": LB.JITTER,
                       "b": link.b, "fmax": {f"{float(d):g}": LB.fmax(d) for d in LB.DELTAS},
                       "scan_delta": str(link.scan_delta)},
             "links": links, "weights": weights._asdict(), "rows": rows, "theorems": dict(LB.STATEMENTS),

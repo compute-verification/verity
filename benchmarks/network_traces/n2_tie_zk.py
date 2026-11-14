@@ -69,6 +69,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import certifier_serve as cs  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
 import leak_scan as LS  # noqa: E402
 import n2_zk as Z  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC  # noqa: E402
@@ -185,40 +186,41 @@ def warden_link(run: Path, windows: int) -> SimpleNamespace:
     its signed registration, the windows' release and their requests' prompt lengths, refused by name where any of it
     doesn't hold."""
     import warden_serve as WS
+    from verity.protocols.accounting.certifier.verifier import record_files as RF
 
     dep = json.loads(_found(run, "deployment.json").read_text())
     params = W.WardenParams(**dep["params"])
     if params.digest.hex() != dep["digest"]:
         raise SystemExit(f"--warden-run {run}: deployment.json's digest isn't its parameters'")
-    key, session = WS.ck.read_public(dep["key"]), bytes.fromhex(dep["session"])
-    records = {r.window: r for r in (WS.unpack_record(b, params.cell_bytes)
-                                     for b in WS.bf.read_blobs(_found(run, f"{WS.INGRESS}.records")))}
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    records = {r.window: r for r in (RF.unpack_record(b, params.cell_bytes)
+                                     for b in WS.bf.read_blobs(_found(run, f"{RC.INGRESS}.records")))}
     lines = [json.loads(x) for x in _found(run, "cells.jsonl").read_text().splitlines()]
     salts = WS.bf.read_blobs(_found(run, "cells.salts"))
     if len(salts) != len(lines):
         raise SystemExit(f"--warden-run {run}: cells.jsonl has {len(lines)} lines and cells.salts {len(salts)} blobs")
     regs = {doc["registration"]["window"]: (doc["registration"], blob) for doc, blob in zip(lines, salts)
             if "registration" in doc and (doc["registration"]["link"], doc["registration"]["direction"])
-            == (WS.LINK, Direction.INGRESS.value)}
+            == (RC.LINK, Direction.INGRESS.value)}
     cells = []
     for w in range(windows):
         if w not in regs or w not in records:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w} has no registration or no record")
         registration, blob = regs[w]
         try:
-            head, _dom = WR.check_registration(registration, key, session, params, WS.LINK, Direction.INGRESS, w)
+            head, _dom = WR.check_registration(registration, key, session, params, RC.LINK, Direction.INGRESS, w)
         except ValueError as e:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s registration doesn't verify under the "
                              f"deployment's key and session: {e}")
         row_salts, wiring_salt = WR.read_witness(blob)
-        c = WR.Cells.of(WS.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
+        c = WR.Cells.of(RC.LINK, Direction.INGRESS, records[w], params, session, row_salts, wiring_salt)
         if c.head != head:
             raise SystemExit(f"--warden-run {run}: ingress link-window {w}'s record under cells.salts isn't the rows "
                              "whose root the warden signed")
         cells.append(c)
     releases, lens = _released(params, cells)
     return SimpleNamespace(source=f"warden run {dep.get('run_id')} (warden_serve.py, its deployment's key)",
-                           run_id=dep.get("run_id"), params=params, session=session, link=WS.LINK, cells=cells,
+                           run_id=dep.get("run_id"), params=params, session=session, link=RC.LINK, cells=cells,
                            records=tuple(records[w] for w in range(windows)), releases=releases, prompt_lens=lens)
 
 
@@ -579,7 +581,7 @@ def prove(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t = time.time()
-    tie = TS.IngressTie(LINK, PARAMS, SESSION, proof_deadline=cs.PROOF_DEADLINE_S)
+    tie = TS.IngressTie(LINK, PARAMS, SESSION, proof_deadline=RC.PROOF_DEADLINE_S)
     plan = members()
     rounds = {name: link_windows(tie, link, adv, edit) for name, (link, adv, edit, _) in plan.items()}
     summary: dict = {"class": a.cls, "gpu": a.gpu,

@@ -37,7 +37,7 @@ import tarfile
 from fractions import Fraction
 from pathlib import Path
 
-import certifier_serve as cs
+from verity.protocols.accounting.certifier.verifier import record_files as RF
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
@@ -95,7 +95,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
         raise ValueError(f"the gate run has no {', '.join(missing)}: give its `fetch` bundle or the directory it unpacks to")
     end, dep = json.loads(files[END]), json.loads(files[DEPLOYMENT])
     params = WardenParams(**dep["params"])
-    key, session = cs.read_public(dep["key"]), bytes.fromhex(dep["session"])
+    key, session = RF.read_public(dep["key"]), bytes.fromhex(dep["session"])
     origin, width, n = origin_ns(dep["origin_unix"]), window_ns(params), dep["windows"]
     windows = covering(origin, width, t0, t1, pad)
     why = []
@@ -115,7 +115,7 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
     for line in files[CERTIFICATES].decode().splitlines():
         doc = json.loads(line)
         if "certificate" in doc:
-            c = cs.certificate_from_json(doc["certificate"])
+            c = RF.certificate_from_json(doc["certificate"])
             certificates[(c.link, c.direction, c.window)] = c
     links, verified = (dep["link"], f"{dep['link']}-fails"), 0
     for w in range(max(windows.start, 0), min(windows.stop, n)):

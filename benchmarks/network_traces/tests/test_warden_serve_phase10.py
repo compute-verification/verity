@@ -28,6 +28,7 @@ from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.warden import END, Shim, Warden, cells, read_cell
 
 from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
 
 REQUESTS = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
 RESPONSES = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
@@ -179,15 +180,15 @@ def _drive(out: Path, key: Path, *, process: bool, commit=fixed_commit, late: di
 
 
 def _heads(out: Path) -> dict:
-    certified, _ = ws.read_certified(out / "certified.jsonl")
+    certified, _ = RC.read_certified(out / "certified.jsonl")
     return {(c.link, c.direction.value, c.window): c.head for c in certified.values()}
 
 
 def _closed_heads(closed) -> dict:
     """The head of each complete record the warden closed, as the check recomputes it: the issuer certifies no other."""
     out = {}
-    for name, (link, direction) in ws.CERTIFIED.items():
-        grid = PARAMS.fails_grid if name == ws.FAILS else PARAMS.grid
+    for name, (link, direction) in RC.CERTIFIED.items():
+        grid = PARAMS.fails_grid if name == RC.FAILS else PARAMS.grid
         for r in closed:
             if r.link == name and r.status.complete:
                 out[(link, direction.value, r.window)] = record_head(link, direction, r.window, r.grid, r.status, grid,
@@ -234,15 +235,15 @@ def test_the_process_writes_byte_for_byte_what_the_thread_publisher_wrote(tmp_pa
     assert _cells_without_cost(tmp_path / "thread") == _cells_without_cost(tmp_path / "process")
     assert _unsalted(tmp_path / "thread") == _unsalted(tmp_path / "process")
     assert _heads(tmp_path / "process") == _closed_heads(process["closed"])
-    result = ws.check(tmp_path / "process")
+    result = RC.check(tmp_path / "process")
     if late is None:
         assert result["accepted"], result["problems"]
     else:
         assert not result["accepted"]
-        assert {f"{name} window 0 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
-        assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [0] * len(ws.CERTIFIED)
+        assert {f"{name} window 0 isn't certified" for name in RC.CERTIFIED} <= set(result["problems"])
+        assert sorted(w for *_, w in result["summary"]["signer_refused"]) == [0] * len(RC.CERTIFIED)
         assert {(x["record"], x["status"]) for x in result["windows"] if x["window"] == 0} == \
-            {(name, Reason.MONITOR_UNAVAILABLE.value) for name in ws.CERTIFIED}
+            {(name, Reason.MONITOR_UNAVAILABLE.value) for name in RC.CERTIFIED}
     assert result["summary"]["certified_windows"] == 3 * (WINDOWS - (late is not None))
 
 
@@ -262,9 +263,9 @@ def test_a_process_killed_mid_window_fails_the_run_and_the_check_refuses_the_win
     heads = _heads(tmp_path / "run")
     assert {w for *_, w in heads} <= {0}
     assert all(_closed_heads(run["closed"])[k] == h for k, h in heads.items())
-    result = ws.check(tmp_path / "run")
+    result = RC.check(tmp_path / "run")
     assert not result["accepted"]
-    assert {f"{name} window 1 isn't certified" for name in ws.CERTIFIED} <= set(result["problems"])
+    assert {f"{name} window 1 isn't certified" for name in RC.CERTIFIED} <= set(result["problems"])
 
 
 def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tmp_path, monkeypatch):
@@ -285,8 +286,8 @@ def test_a_process_a_window_behind_moves_no_tick_and_keeps_every_record_whole(tm
 
     run = _drive(tmp_path / "run", key, process=True, commit=blocking_commit, before_close=behind)
     assert run["failed"] is None and run["close_error"] is None
-    assert seen["lateness"] == 0 and seen["heads"] <= {(ws.LINK, "ingress", 0)}
-    result = ws.check(tmp_path / "run")
+    assert seen["lateness"] == 0 and seen["heads"] <= {(RC.LINK, "ingress", 0)}
+    result = RC.check(tmp_path / "run")
     assert result["accepted"], result["problems"]
     s = result["summary"]
     assert (s["certified_windows"], s["cell_rows"]["registered"]) == (3 * WINDOWS, 2 * WINDOWS)
@@ -299,12 +300,12 @@ def test_a_file_cut_short_as_a_killed_process_leaves_it_is_never_accepted(tmp_pa
     accepts."""
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True)
-    assert run["failed"] is None and ws.check(tmp_path / "run")["accepted"]
+    assert run["failed"] is None and RC.check(tmp_path / "run")["accepted"]
     path = tmp_path / "run" / cut
     data = path.read_bytes()
     path.write_bytes(data[:-7])
     try:
-        result = ws.check(tmp_path / "run")
+        result = RC.check(tmp_path / "run")
     except Exception as e:
         assert type(e).__name__ in ("JSONDecodeError", "ValueError", "error"), repr(e)
         return
@@ -318,7 +319,7 @@ def _egress_rows(edit):
         count = [0]
 
         def put_(item, *args, **kwargs):
-            if item is not None and item[0] == ws.EGRESS and item[1] is not None:
+            if item is not None and item[0] == RC.EGRESS and item[1] is not None:
                 count[0] += 1
                 for got in edit(count[0] - 1, item):
                     put(got, *args, **kwargs)
@@ -363,7 +364,7 @@ def test_the_close_marker_carries_the_records_grid_digest(tmp_path):
     markers = [(link, data[0], data[2]) for link, n, data in filter(None, sent) if n is None]
     assert markers == [(r.link, r.window, ws.grid_digest(r.grid)) for r in run["closed"]]
     assert len(markers) == 3 * WINDOWS and sent[-1] is None
-    assert ws.check(tmp_path / "run")["accepted"]
+    assert RC.check(tmp_path / "run")["accepted"]
 
 
 @pytest.mark.parametrize("edit", [_shifted, _altered], ids=["shifted", "altered"])
@@ -376,14 +377,14 @@ def test_a_row_lost_doubled_or_changed_between_the_processes_is_refused(tmp_path
     run = _drive(tmp_path / "run", key, process=True, transport=_egress_rows(edit()))
     first = run["failed"] or run["close_error"]
     assert type(first) is RuntimeError
-    assert f"{ws.EGRESS} window 0: the rows rebuilt aren't the grid the warden closed" in str(first)
+    assert f"{RC.EGRESS} window 0: the rows rebuilt aren't the grid the warden closed" in str(first)
     assert type(run["close_error"]) is RuntimeError
     heads = _heads(tmp_path / "run")
-    assert (ws.LINK, "egress", 0) not in heads and (ws.LINK, "ingress", 0) in heads
+    assert (RC.LINK, "egress", 0) not in heads and (RC.LINK, "ingress", 0) in heads
     assert all(_closed_heads(run["closed"])[k] == h for k, h in heads.items())
-    problems = ws.check(tmp_path / "run")["problems"]
-    assert f"{ws.EGRESS} window 0 isn't certified" in problems
-    assert f"{ws.INGRESS} window 0 isn't certified" not in problems
+    problems = RC.check(tmp_path / "run")["problems"]
+    assert f"{RC.EGRESS} window 0 isn't certified" in problems
+    assert f"{RC.INGRESS} window 0 isn't certified" not in problems
 
 
 def test_a_release_that_isnt_the_records_grid_is_refused_at_its_close(tmp_path):
@@ -394,7 +395,7 @@ def test_a_release_that_isnt_the_records_grid_is_refused_at_its_close(tmp_path):
         count = [0]
 
         def release_(link, row):
-            if link == ws.EGRESS:
+            if link == RC.EGRESS:
                 count[0] += 1
                 if count[0] == PARAMS.window:
                     return
@@ -406,7 +407,7 @@ def test_a_release_that_isnt_the_records_grid_is_refused_at_its_close(tmp_path):
     (key,) = _key(tmp_path, "process-key")
     run = _drive(tmp_path / "run", key, process=True, release_edit=release_edit)
     assert type(run["failed"]) is RuntimeError and run["close_error"] is None
-    assert str(run["failed"]) == f"{ws.EGRESS} window 0: the record's grid isn't the rows released"
+    assert str(run["failed"]) == f"{RC.EGRESS} window 0: the record's grid isn't the rows released"
     heads = _heads(tmp_path / "run")
-    assert (ws.LINK, "egress", 0) not in heads and (ws.LINK, "ingress", 0) in heads
-    assert f"{ws.EGRESS} window 0 isn't certified" in ws.check(tmp_path / "run")["problems"]
+    assert (RC.LINK, "egress", 0) not in heads and (RC.LINK, "ingress", 0) in heads
+    assert f"{RC.EGRESS} window 0 isn't certified" in RC.check(tmp_path / "run")["problems"]
