@@ -7,17 +7,12 @@
 """
 from __future__ import annotations
 
-import json
 from fractions import Fraction
-from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from verity.protocol import DELTAS
 
 PROTOCOL = "verity/certifier/v0"
-#: the block record's owner by default: the lane that runs the network's sessions (``site.json``'s ``lane``)
-OWNER: str = json.loads(
-    (Path(__file__).resolve().parents[5] / "benchmarks/network_traces/site.json").read_text())["lane"]
 #: the block record's δs (``verity/block-record/v2``'s ``at``): a leg's certificate holds at δ where its error is at
 #: most δ. A period's answer at δ has error δ when each of its terms was decided at its share of δ.
 BLOCK_DELTAS = DELTAS
@@ -26,7 +21,7 @@ BLOCK_ERROR_FROM = "quantity.eps"
 
 
 def block_leg(answer: Mapping[str, Any], *, server: str, runs: Sequence[str], source: str = "real",
-              owner: str | None = OWNER) -> dict[str, Any]:
+              owner: str | None = None) -> dict[str, Any]:
     """The block record's certifier leg (``legs.certifier`` of ``verity/block-record/v2``) of one period's
     ``network-period check`` answer: the answer's verdict, reason, commitment and
     public; the quantity K, the bits a covert sender in ``server`` can move over the link in the period's ``windows``

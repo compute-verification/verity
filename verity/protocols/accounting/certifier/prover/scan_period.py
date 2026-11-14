@@ -5,25 +5,26 @@ and its Lean.
     python verity/protocols/accounting/certifier/prover/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON --circuit CIRCUIT_RECORD] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of execution phase W: the parameters the warden run's ``deployment.json`` (its key and its
+* **The case** (`rows_case`) of execution phase W: the parameters the network certifier run's ``deployment.json`` (its key and its
   session, the one entry the parameters list, its stretch starting at execution phase 0, so the period's numbers are the
   run's own, and one schedule, its integer fields and its response cap when it has one: the period check reads the id
   egress form, and a run in another is refused; its cell limits over the one link's execution phase are the cells,
   `WardenParams.rows_cells`: `egress_cells` for each of the `lanes · window` connections it can carry),
   the link `relay_check.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
-  the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the
+  the jitter bound `scan_answer.JITTER_BOUND` (K's jitter term T bits an execution phase, `leak_bounds.JITTER`), and the
   scan that Program's descriptor (``joint/program.json``), off which the period check reads the scan's terms; the
   commitment the audits' registrations and the scan's; the evidence the audits' answers, then the scan's answer, the
   certificates of W's three records (``certified.jsonl``: requests, responses, fails) and W's two row registrations
-  (``cells.jsonl``, as ``answers.json`` carries them), and the listed entry's session's signed start
-  (``deployment.json``'s ``start``, which the period check reads for each listed entry: a run whose deployment holds
-  none is refused). The rows form reads a registration of one link-window's 2T
-  units, so a group of more is refused, the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
+  (``cells.jsonl``, as ``answers.json`` carries them, beside W's registration), and the listed entry's session's
+  signed start (``deployment.json``'s ``start``, which the period check reads for each listed entry: a run whose
+  deployment holds none is refused). The rows form reads the registration of one execution phase, the run's first,
+  its 2T + 1 units, so an answer of more is refused, the registration must start from the empty state (its
+  ``window``'s ``empty``), the scan's `prog` must be an audit's `SlotEntry_v1` template's entries
   and its ``scan/state`` that audit's, and that audit must run the class circuit, the parameters' ``circuit``
   (`heldChecks`): the stand-in block audit's own Program here.
 * **tampered** and **chain**: the same rows and certificates with that round's registration
-  (``<round>/registration.json``) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
+  (``<round>-<W>/registration.json``, `scan_zk.round_name`) and its refusal as the answer: tampered's an egress-only Program's, a prover's answer
   for another statement than the link's Program; chain's the link's Program's, refused.
 * **forged**: the honest case with the responses record's certificate's signature changed: a certificate the network
   certifier didn't sign.
@@ -62,16 +63,13 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
 
-from verity.protocols.accounting.certifier.verifier import scan_answer as SA  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import relay_check as RC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as RG  # noqa: E402
-from verity.circuits.codec import canonical_json  # noqa: E402
-from verity.commitments.windows.interface import CIRCUIT  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import scan_answer as SA
+from verity.protocols.accounting.certifier.verifier import relay_check as RC
+from verity.protocols.accounting.certifier.verifier.warden import INTEGER_FIELDS, WardenParams
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.circuits.codec import canonical_json
+from verity.commitments.windows.interface import CIRCUIT
 
 CERTIFICATE_KEYS = ("digest", "direction", "key_id", "link", "signature", "window")
 
@@ -93,7 +91,8 @@ def certificates(run: Path, w: int) -> list[dict]:
 
 def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = None,
               circuit: str | None = None, answers: Path | None = None) -> dict:
-    """The rows form's case (module docstring) of the warden run ``run``'s link-window, as scan_zk.py proved it into
+    """The rows form's case (module docstring) of the network certifier run ``run``'s execution phase, as scan_zk.py
+    proved it into
     ``scan``: honest, ``answers.json``'s; forged, the honest one with a certificate's signature changed; a refused round
     (tampered, chain), that round's registration and its refusal. With ``v3c`` (V3c's ``period.json``,
     ``records_audit.py period``'s, for a scan proved on its trees, ``scan_zk.py --v3c``) the one compute audit is V3c's,
@@ -117,14 +116,15 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     elif circuit is None and doc.get("audits"):
         circuit = doc["audits"][0]["registration"]["program"]
     if len(doc["windows"]) != 1:
-        raise SystemExit(f"{scan}: a group of {len(doc['windows'])} link-windows is one registration over all their "
-                         "units, and the rows form reads one link-window's 2T: prove each with scan_zk.py --group 1")
+        raise SystemExit(f"{scan}: the scan answered {len(doc['windows'])} execution phases, and the rows form reads "
+                         "one, the run's first: prove it with scan_zk.py --group 1")
     (x,) = doc["windows"]
     if round_ in ("honest", "forged"):
-        reg, answer = doc["registration"], x["answer"]
+        reg, answer = x["registration"], x["answer"]
     else:
-        reg = json.loads((scan / round_ / "registration.json").read_text())
-        why = json.loads((scan / "summary.json").read_text())["rounds"][round_]["audit"]["why"]
+        name = f"{round_}-{x['window']}"
+        reg = json.loads((scan / name / "registration.json").read_text())
+        why = json.loads((scan / "summary.json").read_text())["rounds"][name]["audit"]["why"]
         answer = SA.window_answer(reg, None, None, f"the scan's {round_} round refused: {why}")
     certs = certificates(run, x["window"])
     if round_ == "forged":
@@ -138,7 +138,7 @@ def rows_case(run: Path, scan: Path, round_: str = "honest", v3c: Path | None = 
     params = {"audits": [{k: a[k] for k in ("free", "program", "steps")} for a in audits], "cells": cells,
               "circuit": circuit, "first": x["window"], "jitter": SA.JITTER_BOUND,
               "keys": [{"key": dep["key"]["public"], "session": dep["session"], "start": 0}], "link": RC.LINK,
-              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": doc["registration"]["program"],
+              "lms": {"H": H, "N": N, "W": W, "toy": False}, "program": x["registration"]["program"],
               "scan": json.loads((scan / "joint" / "program.json").read_text()), "schedule": schedule,
               "windows": 1}
     commitment = canonical_json({"audits": [a["registration"] for a in audits], "windows": [reg]})

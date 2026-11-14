@@ -28,7 +28,7 @@ from pathlib import Path
 
 import pytest
 
-from test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
+from verity.protocols.accounting.certifier.device.tests.test_warden_serve import PARAMS, SESSION, _response, _Writer, ws
 from verity.protocols.accounting.certifier.verifier import relay_check as RC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock

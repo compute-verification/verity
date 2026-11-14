@@ -15,15 +15,15 @@ from pathlib import Path
 import jsonschema
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
 ROOT = Path(__file__).resolve().parents[6]
-sys.path.insert(0, str(HERE))
-sys.path.append(str(ROOT))  # for benchmarks.network_traces
+
 from verity.protocols.accounting.certifier.prover import block_certifier as BC  # noqa: E402
 
 ANSWERS = json.loads((Path(__file__).parent / "fixtures" / "certifier-period-answers.json").read_text())
 (ROWS_RUN,) = ANSWERS
 E2E = ROOT / "benchmarks/one_stage/interfaces"
+#: the owner a block record names for the certifier's leg, as its runner path passes it
+OWNER = "network-accounting"
 BLOCK_SCHEMA = E2E / "verity_e2e_demo" / "schemas" / "block-record.v2.schema.json"
 
 
@@ -39,7 +39,7 @@ def _module(name: str, path: Path):
 
 
 def _block_leg(run: str, delta: str) -> dict:
-    return BC.block_leg(ANSWERS[run]["answers"][delta], server=ANSWERS[run]["node"], runs=[run])
+    return BC.block_leg(ANSWERS[run]["answers"][delta], server=ANSWERS[run]["node"], runs=[run], owner=OWNER)
 
 
 def _held(value: int) -> dict:
@@ -83,15 +83,16 @@ def test_the_block_leg_fits_the_block_records_schema_its_fixture_and_its_runner_
                                                   "$ref": "#/$defs/leg"})
     for run, x in ANSWERS.items():
         for delta, a in x["answers"].items():
-            got = BC.block_leg(a, server=x["node"], runs=[run])
+            got = BC.block_leg(a, server=x["node"], runs=[run], owner=OWNER)
             leg_schema.validate(got)
-            row = {"answer": a, "quantity": a["public"], "owner": "network-accounting", "runs": [run]}
+            row = {"answer": a, "quantity": a["public"], "owner": OWNER, "runs": [run]}
             assert B.leg("certifier", row, server=x["node"], runs=[run]) == got
     rec = json.loads((E2E / "tests" / "fixtures" / "block-record-r2-period0.json").read_text())
     fx = rec["legs"]["certifier"]
-    assert BC.block_leg({**fx["answer"], "protocol": fx["protocol"]}, server=fx["server"], runs=fx["runs"]) == fx
+    assert BC.block_leg({**fx["answer"], "protocol": fx["protocol"]}, server=fx["server"], runs=fx["runs"],
+                        owner=fx["owner"]) == fx
     legs = rec["legs"] | {"certifier": BC.block_leg(ANSWERS[ROWS_RUN]["answers"]["1/1000000"], server=rec["server"],
-                                                    runs=[ROWS_RUN])}
+                                                    runs=[ROWS_RUN], owner=OWNER)}
     composed = B.composed(rec["server"], legs, rec["composed"]["answer"])
     mine = rec | {"legs": legs, "composed": composed, "monitoring_period": B.monitoring_period(
         rec["monitoring_period"]["deployment"], Fraction(composed["joint_horizon"]["error_sum"]))}
