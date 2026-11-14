@@ -41,7 +41,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--program-cache", "--artifacts"))]
 out.mkdir(parents=True, exist_ok=True)
 (out / "repo.txt").write_text(a[a.index("--repo") + 1] if "--repo" in a else "")
 (out / "argv.json").write_text(json.dumps(a))
@@ -129,12 +129,13 @@ def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh
         return json.loads((out / "argv.json").read_text())
     def named(a):
         return [Path(x) for i, x in enumerate(a) if not x.startswith("--") and a[i - 1] not in ("--out", "--repo",
-                                                                                                  "--replay-cache", "--artifacts")]
+                                                                                                  "--replay-cache", "--program-cache", "--artifacts")]
     LA.run(tmp_path / "kept", cache / "lean-audit", cache / "lean-deps", log=lambda s: None)
     a = argv(tmp_path / "kept")
     assert "--closure" in a and Path(a[a.index("--replay-cache") + 1]).resolve() == (cache / "lean-replay").resolve()
     # outside every audited package's .lake, which check.py's `build_roots_over` refuses (no build writes a replay entry)
     assert named(a) and AUDIT.build_roots_over(Path(a[a.index("--replay-cache") + 1]), named(a)) == []
+    assert Path(a[a.index("--program-cache") + 1]).resolve() == (cache / "lean-programs").resolve()
     LA.run(tmp_path / "fresh", cache / "lean-audit", cache / "lean-deps", fresh=True, log=lambda s: None)
     a = argv(tmp_path / "fresh")
     run_cache = Path(a[a.index("--replay-cache") + 1])
@@ -142,6 +143,7 @@ def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh
     assert "--closure" in a and "--artifacts" not in a and run_cache.name == "lean-replay"
     assert run_cache.parent.name.startswith(LA.SCRATCH) and not run_cache.parent.exists()
     assert named(a) and AUDIT.build_roots_over(run_cache, named(a)) == []
+    assert Path(a[a.index("--program-cache") + 1]).parent == run_cache.parent
 
 
 #: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with
@@ -152,7 +154,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--facts-cache"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--program-cache", "--artifacts", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -203,7 +205,7 @@ import json, sys
 from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
-named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping", "--facts-cache"))]
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--program-cache", "--artifacts", "--bookkeeping", "--facts-cache"))]
 out.mkdir(parents=True, exist_ok=True)
 reps, failed = [], []
 for pkg in named:
@@ -276,7 +278,7 @@ from pathlib import Path
 a = sys.argv[1:]
 root, out = Path.cwd(), Path(a[a.index("--out") + 1])
 named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in (
-    "--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping", "--facts-cache", "--facts-from"))]
+    "--out", "--repo", "--replay-cache", "--program-cache", "--artifacts", "--bookkeeping", "--facts-cache", "--facts-from"))]
 out.mkdir(parents=True, exist_ok=True)
 docs = Path(a[a.index("--facts-cache") + 1]) if "--facts-cache" in a else None
 judged = Path(a[a.index("--facts-from") + 1]) if "--facts-from" in a else None
