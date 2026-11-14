@@ -1233,8 +1233,9 @@ def plainSchedule : Schedule :=
   Schedule).digest.map Flock.hexOf).toOption == some
   "5c079664862cfe253a9794957b6af18c8d0cd41adf1e2608e624663cde1038f8\
     3f792222b44885914fde2364290676e742cf28c1f93c55f093953fc7f1be6d3e"
-#guard (({ plainSchedule with lengths := some 2, content := some #[#[2, 2], #[4, 8]], maxTokensCap := some 4,
-  requestWords := true } : Schedule).digest.map Flock.hexOf).toOption == some
+#guard (({ plainSchedule with
+    lengths := some 2, content := some #[#[2, 2], #[4, 8]], maxTokensCap := some 4, requestWords := true } :
+  Schedule).digest.map Flock.hexOf).toOption == some
   "213b8b63d87459e4b76591beab56ea7b2ac6b9c888566ca4cd43b0d511584459\
     b84624493f8e18377327c4402ab301982b8fda184864fb9f2879502707781b47"
 -- a slot stride's releases at `plainSchedule` and at its strides of 1, 4, 8 and 16 buckets, at a stride of 16 with
