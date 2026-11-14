@@ -373,11 +373,11 @@ def test_a_piece_takes_the_first_wrapper_of_its_one_launch_program() -> None:
     assert [w is wrappers[0] for w in C.assign_wrappers(wrappers, graph)] == [True]
 
 
-@pytest.mark.parametrize(("kernels", "found"), [((), "0 wrapper candidates with 0 launch programs"), (("k", "other"), "2 wrapper candidates with 2 launch programs")],
-                         ids=["none", "two"])
-def test_a_piece_without_one_launch_program_ends_the_process(kernels: tuple[str, ...], found: str) -> None:
+@pytest.mark.parametrize(("kernels", "found"), [((), "0 wrapper candidates with 0 launch programs"), (("k", "other"), "2 wrapper candidates with 2 launch programs"),
+                                                 (("k", "other", "k"), "3 wrapper candidates with 2 launch programs")], ids=["none", "two", "three"])
+def test_a_piece_without_one_launch_program_is_refused(kernels: tuple[str, ...], found: str) -> None:
     graph = {"wiring": [{"piece": 3, "submod": "submod_3", "args": ["name"], "arg_kinds": ["layer"], "n_ret": 1}]}
-    with pytest.raises(SystemExit) as e:
+    with pytest.raises(Unmodelled) as e:
         C.assign_wrappers([_wrapper(k) for k in kernels], graph)
     assert str(e.value) == f"compiled_manifest: piece 3 (submod_3, 1 args, 1 returns): {found} -- the wrapper set does not describe the split graph"
 
@@ -590,6 +590,25 @@ def test_two_wrappers_of_one_launch_signature_and_two_programs_are_refused(art: 
     (ind / "zz" / "twin.py").write_text(piece.read_text().replace(hook, "'verity|silu|buf4', buf4"))
     with pytest.raises(Unmodelled, match=re.escape(f"twin.py and {piece.name}: one launch signature, two programs")):
         _build(art, inductor=ind)
+
+
+@pytest.mark.parametrize(("twin", "found"), [(False, "0 wrapper candidates with 0 launch programs"), (True, "2 wrapper candidates with 2 launch programs")],
+                         ids=["none", "two"])
+def test_a_wrapper_set_that_does_not_describe_the_graph_is_refused(art: Path, tmp_path: Path, twin: bool, found: str) -> None:
+    """The Build of an artifact whose last piece has no wrapper, or two wrappers that launch two programs: the second is the first
+    less its last launch."""
+    ind = _copy(art, tmp_path)
+    last = next(p for p in sorted(ind.rglob("*.py")) if "return (buf7, )" in p.read_text())
+    if twin:
+        lines = last.read_text().splitlines(keepends=True)
+        launch = max(i for i, line in enumerate(lines) if C._RUN.match(line))
+        (ind / "zz").mkdir()
+        (ind / "zz" / "twin.py").write_text("".join(lines[:launch] + lines[launch + 1:]))
+    else:
+        last.unlink()
+    with pytest.raises(Unmodelled) as e:
+        _build(art, inductor=ind)
+    assert str(e.value) == f"compiled_manifest: piece 16 (submod_32, 8 args, 1 returns): {found} -- the wrapper set does not describe the split graph"
 
 
 @pytest.mark.parametrize(("old", "new", "why"), [
