@@ -29,6 +29,10 @@ paths = ["tools/research/", "tools/agent-guard/", "tools/move/"]
 [drop]
 paths = []
 
+[split]
+# references to a directory this move splits that stay right: "old file: old directory" = why
+"tools/agent-guard/tests/test_shell_hook.py: tools" = "sample commands the hook judges (`ls tools`, `rg pytest tools/`), which name no file"
+
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, the move tool itself, changelogs, research's
 # recorded moves), files whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
