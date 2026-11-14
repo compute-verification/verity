@@ -28,7 +28,7 @@ value or its SHA-512 inputs hold a collision (`Carried`), then the event `r.acce
 session the run opens (sessionOf) ∧ no collision in r.hashInputs` has probability at most `ε`. The guarantee that
 instantiates it builds `r.ports` from the counted extractor `IntegrityPeriod` reads and `r.hashInputs` from the run, sets
 `right` to each proof block's circuit, takes `Gives` from `IntegrityPeriod` at `K₀ = 1` over the session's statements
-(sampling term `0` under `All`, so `ε` is the statements' `ε_ks + δ_link` summed) and `Carried` from the carried form;
+(sampling term `0` under `All`, so `ε` is the statements' `ε_ks + ε_bind` summed) and `Carried` from the carried form;
 `cr/sha-512` then bounds the collision at a finder built from the prover, outside this lemma.
 -/
 

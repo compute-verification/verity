@@ -81,7 +81,8 @@ probability `1` and the bound fails at `ε = 0`. -/
 def SetupGivesNontrivial : Prop :=
   ∃ (salt W : ByteArray) (v : Fin PousCheck.P2.Params.deployed.blocks → ByteArray × ByteArray),
     ¬ prPMF (PMF.pure ()) (fun ω => (MemoryChallenger.Properties.InProofs.constRun v).accepts ω ∧
-        PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤ (wrong PousCheck.P2.Params.deployed salt W (MemoryChallenger.Properties.InProofs.constRun v) ω).card ∧
+        PousCheck.P2.Params.deployed.blocks / 100 + 1 ≤
+          (wrong PousCheck.P2.Params.deployed salt W (MemoryChallenger.Properties.InProofs.constRun v) ω).card ∧
         ¬ Hash.CollisionIn Verity.sha512 ((MemoryChallenger.Properties.InProofs.constRun v).hashInputs ω)) ≤ 0
 
 end PousCheck.Properties.InProofs

@@ -149,7 +149,8 @@ theorem sessionGives_honest : SessionGivesHonest := by
   · refine verdict_accepted_of _ _ _ _ _ _ Lms.deployed hlook (List.mem_singleton.2 rfl) m hm hlms rfl rfl rfl ?_
     intro j hj
     obtain rfl : j = 0 := by simp [sessionOf, constRun, V] at hj; omega
-    exact ⟨⟨honestOpening, by simp [honestOpening], rfl, rfl, hcoin⟩, by simp [sessionOf, constRun, V, honestRound, honestCommitment], rfl,
+    exact ⟨⟨honestOpening, by simp [honestOpening], rfl, rfl, hcoin⟩,
+      by simp [sessionOf, constRun, V, honestRound, honestCommitment], rfl,
       by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs],
       by simp [sessionOf, constRun, V, honestRound, Round.elapsedNs, honestCommitment]⟩
 
