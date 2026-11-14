@@ -2660,6 +2660,12 @@
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/h1r.py": "verity/protocols/experimental/dither/prover/h1r.py",
+        "benchmarks/hash/dither/j10r_ws.py": "verity/protocols/experimental/dither/prover/j10r_ws.py"
+      }
     }
   ]
 }
