@@ -49,6 +49,7 @@ def capture(args) -> int:
     from verity.protocols.accounting.pouw.verifier import verifier
     from verity.protocols.accounting.pouw.verifier.coins import Challenger
     from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 
     out, dev = Path(args.out), torch.device("cuda")
     gen = torch.Generator(device=dev).manual_seed(20261006)
@@ -58,14 +59,14 @@ def capture(args) -> int:
         raise SystemExit(f"{args.scheme} refuses the screen's weights: " + "; ".join(bad))
     kernel = PPD.Kernel.load(args.kernel, args.cubin)
     salt_key = PPD.new_salt_key(args.scheme)
-    roots = PPD.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
+    roots = PPDR.weight_roots(kernel, weights, args.scheme, salt_key=salt_key)
     challenger = Challenger(0, verifier.coins)
     opening = challenger.open("salt", weights_root(roots))
     xs = [torch.randn(m, weights[w].shape[1], device=dev, generator=gen).to(torch.bfloat16) for w, m in CALLS]
     s, log = PPD.scheme_of(args.scheme), {}
     dumps = ("seeds_a", "seed_a", "ea_codes", "rowdig_a")
     for name, (graphs, omit) in PASSES.items():
-        run = PPD.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
+        run = PPDR.PearlCDeviceRun(s, f"pouw:{args.scheme}", kernel, weights, roots, challenger.commitment, opening, graphs=graphs,
                                   salt_key=salt_key)
         d = out / name
         try:
@@ -78,7 +79,7 @@ def capture(args) -> int:
                     W = weights[w]
                     sh = run._shape(-(-m // PPD.ROW_ALIGN) * PPD.ROW_ALIGN, W.shape[0], W.shape[1])
                     for b in dumps:
-                        (d / f"call{index}.{b}").write_bytes(PPD._bytes(sh.b[b])[:sh.size[b]])
+                        (d / f"call{index}.{b}").write_bytes(PPDR._bytes(sh.b[b])[:sh.size[b]])
                 ref = x.float() @ weights[w].float().T
                 log.setdefault(name, []).append({"call": index, "rel_rms": float(((y.float() - ref).pow(2).sum() / ref.pow(2).sum()).sqrt())})
             log[name + ":end"] = {k: v for k, v in run.end().items() if k != "manifest"}

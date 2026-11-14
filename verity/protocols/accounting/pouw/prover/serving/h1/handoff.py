@@ -44,6 +44,7 @@ from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
 
 #: a suspended window's hand-off state's schema, which `suspend` writes and `resume` refuses any other than
 SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
@@ -150,7 +151,6 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
     """The run `suspend` saved in `directory`, its coins on the session whose stream is the descriptor `fd`, its sample
     session opened through `gate` (`pouw_h1_window.Gate`; None leaves it unopenable, and the sample is refused), and that
     session's client: refused (ValueError) when a rebuilt request or slot table isn't the one its round's root is over."""
-    import torch
 
     with open(Path(directory) / FILE, "rb") as f:
         doc = pickle.load(f)
@@ -170,7 +170,8 @@ def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tupl
     client = Resumed(socket.socket(fileno=fd), LiveCommitment.from_json(doc["commitment"]))
     run.listeners, run._opener, run._recorded = [], None, None
     run.rounds, run.draw = _live(rounds, client), _draw_of(draw, client, gate)
-    run._weights = {w: (torch.from_numpy(c), torch.from_numpy(s)) for w, (c, s) in weights.items()}
+    ts = tensors()
+    run._weights = {w: (ts.put(c), ts.put(s)) for w, (c, s) in weights.items()}
     if served is not None:
         kind, sstate, layers = served
         run.served = kind.__new__(kind)

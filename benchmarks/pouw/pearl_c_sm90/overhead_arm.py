@@ -22,7 +22,7 @@ Lean's) and `epsilon`.
   served call overlaps it on its retain stream, and widens y's rows by `widen_a`, where the served call uses torch's copy.
   The bytes are the served call's and the launches are not, so the arm's time for y bounds the served call's from above.
 - **The gate**: y's m rows and, with hashing, y's tree, A's root, the tile leaves and the screen's flags equal, byte for
-  byte, the served call's on the same operands at the same index (``all`` each; y's tree is `served_y.y_tree`'s over the
+  byte, the served call's on the same operands at the same index (``all`` each; y's tree is `served_y_device.y_tree`'s over the
   served call's y, every node).
 - **The transcript** (`dump`): the harness poisons what it reads (`transcript_buffers`: A's words and tree, A's root, the
   leaves, the flags, y's rows and y's tree) and launches the call, which is then recorded and its pass ended as a retained
@@ -319,26 +319,27 @@ class _Held:
         from verity.protocols.accounting.pouw.verifier.audit import weights_root
         from verity.protocols.accounting.pouw.verifier.coins import Challenger
         from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y import DeviceTrees
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y_device import DeviceTrees
 
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
         kernel = arm.kernel()
         salt_key = PPD.new_salt_key(SERVED)
-        roots = PPD.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
+        roots = PPDR.weight_roots(kernel, {0: self.w}, SERVED, salt_key=salt_key)
         ch = Challenger(EPOCH, PV.coins)
-        self.run = PPD.PearlCDeviceRun(PPD.scheme_of(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
+        self.run = PPDR.PearlCDeviceRun(PPD.scheme_of(SERVED), f"pouw:{SERVED}", kernel, {0: self.w}, roots, ch.commitment,
                                        ch.open("salt", weights_root(roots)), capacity=tiles_of(shape.m, shape.n),
                                        flag_rows=m16(shape.m), salt_key=salt_key)
         R, wt = kernel.run, self.run.weights[0]
         size = R.Pipeline.sizes(R.BM, wt.n, wt.k, R.BM)
         self.xb = torch.empty((wt.n, wt.k), dtype=torch.float32, device=self.run.device)
-        self.seg = PPD._zeros(size["segdig_b"], self.run.device)
-        self.wpipe = PPD._pipeline(kernel, R.BM, wt.n, wt.k,
+        self.seg = PPDR._zeros(size["segdig_b"], self.run.device)
+        self.wpipe = PPDR._pipeline(kernel, R.BM, wt.n, wt.k,
                                    {**{x: t.data_ptr() for x, t in wt.b.items()}, "line_a": 0, "segdig_b": self.seg.data_ptr()},
                                    self.xb.data_ptr(), {"line_b": wt.keys.data_ptr(), "dom_b": wt.keys.data_ptr() + 64,
                                                         **self.run.const_keys}, variant=self.run.variant, weight=0)
-        self.wsteps = PPD._steps(self.wpipe, PPD.EPOCH_STEPS + PPD.JOB_STEPS)
+        self.wsteps = PPDR._steps(self.wpipe, PPD.EPOCH_STEPS + PPD.JOB_STEPS)
         self.ytrees = DeviceTrees(self.run)
 
     def weight_side(self, stream: int) -> None:
@@ -367,14 +368,14 @@ class _Held:
 
 class _YTree:
     """A call's y commitment on the device, the served call's bytes made serially: the pipeline of `trees`
-    (`served_y.DeviceTrees`, its width's, held to `commit_y` at its first use) and `served_y.tree_launches`, over buffers
+    (`served_y_device.DeviceTrees`, its width's, held to `commit_y` at its first use) and `served_y.tree_launches`, over buffers
     made here, at prepare: y's tree in `commit_y`'s layout, the row digests, one chunk's FP32 words and segment scratch
     (`served_y.chunk_rows`), and y's domain id at the call's index in the pipeline's ``dom_b``.  `launch` widens y's m real
     rows into the words a chunk at a time (`widen_a`, exact: `served_y.f32_rows`) and digests them: device launches alone,
     no allocation and no torch."""
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
-        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
         from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 
         run = trees.run
@@ -384,10 +385,10 @@ class _YTree:
                                "take the wide row-digest kernels (hash_wide.cuh), which the loaded cubin lacks; build one that "
                                "has them")
         self.p, self.rows, self.launches = trees.pipe(n, index), SY.chunk_rows(m, n), SY.tree_launches
-        self.tree = PPD._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
-        self.bufs = [self.tree] + [PPD._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
+        self.tree = PPDR._zeros(self.R.NB * (2 * self.R.pow2(m) - 1), run.device)
+        self.bufs = [self.tree] + [PPDR._zeros(size, run.device) for size in (64 * m, 64 * (n // 256) * self.rows, 4 * n * self.rows)]
         self.at = tuple(t.data_ptr() for t in self.bufs)
-        PPD._put(trees.dom, SY.y_domain(run.salt, index, m).domain_id)
+        PPDR._put(trees.dom, SY.y_domain(run.salt, index, m).domain_id)
 
     def launch(self, y: int) -> None:
         """y's tree over the m rows of BF16 y at device address `y` (row-major, n words a row), on the device's stream."""
@@ -443,13 +444,13 @@ class _Call:
         _on(K, stream, self.steps)
         if self.hashing:
             import torch
-            from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+            from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 
             _on(K, stream, self.y_steps)
             size = self.pipe.size["tree_a"]
             K.dev.copy_async(run.roots_buf.data_ptr(), self.sh.b["tree_a"].data_ptr() + size - nb, nb, stream)
             with torch.cuda.stream(self.held.arm.on(stream)):
-                PPD.screen_into(self.views["flags"], self.x, self.sh.b["alpha_a"], self.sh.b["aux_a"], run.fused_screen)
+                PPDR.screen_into(self.views["flags"], self.x, self.sh.b["alpha_a"], self.sh.b["aux_a"], run.fused_screen)
 
     def weight_side(self, stream: int) -> None:
         self.held.weight_side(stream)
@@ -471,15 +472,15 @@ class _Call:
 
     def check(self) -> tuple[bool, dict[str, str], dict]:
         """The gate: the launch's outputs against the served call's, byte for byte; y's tree against the one the served
-        call retains over its y (`served_y.y_tree`)."""
+        call retains over its y (`served_y_device.y_tree`)."""
         import torch
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y_device as SYD
 
         mine = {name: t if name == "y" else t.clone() for name, t in self.views.items()}
         y = self.reference()
         ref = {"y": y} | {name: t for name, t in self.views.items() if name not in ("y", "tree_y")}
         if "tree_y" in mine:
-            ref["tree_y"] = SY.y_tree(self.held.run, y, INDEX)
+            ref["tree_y"] = SYD.y_tree(self.held.run, y, INDEX)
         same = {name: bool(torch.equal(mine[name], ref[name])) for name in mine}
         return all(same.values()), {name: "all" for name in mine}, {"equal_to_served_call": same, "index": INDEX}
 
@@ -489,7 +490,7 @@ class _Call:
         import torch
         from verity.protocols.accounting.pouw.verifier.protocol import Matmul
         from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
-        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
 
         if not self.hashing:
             raise RuntimeError(f"{SCHEME}: only a hashing call has a transcript")
@@ -499,7 +500,7 @@ class _Call:
         run.begin(at=INDEX)
         cur = run.cur
         cur.retain, cur.run = out, settings().RESEARCH_RUN_ID
-        mm = Matmul(PPD.call_index(run), Unit(self.m16, self.k, self.n), 0)
+        mm = Matmul(PPDR.call_index(run), Unit(self.m16, self.k, self.n), 0)
         cur.matmuls.append(mm)
         cur.flag_rows, cur.tiles = self.m, self.tiles
         run._retained(cur, mm, self.m, self.views["flags"], *run._kept(self.sh, self.pipe), y=self.views["y"],
