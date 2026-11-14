@@ -34,7 +34,7 @@ from verity_vllm.engine.profiles.admission_calibration import (
 )
 from verity_vllm.records.schema_ids import ADMISSION_PLAN_SCHEMA
 
-__all__ = ["CALIBRATION", "predict", "request_prompt_len", "row_config_from_workload"]
+__all__ = ["predict", "request_prompt_len", "row_config_from_workload"]
 
 MiB = 1 << 20
 SCHEMA = ADMISSION_PLAN_SCHEMA
@@ -201,8 +201,6 @@ def _terms_to_intervals(terms: list[Term], points: list[str]) -> list[tuple[str,
     idx = {p: i for i, p in enumerate(points)}
     out: list[tuple[str, float, float, int]] = []
     for t in terms:
-        if t.kind == "device":
-            continue
         a = idx[t.live_from]
         b = idx[t.live_until] + 1   # inclusive last point
         out.append((t.name, a, b, t.bytes))
