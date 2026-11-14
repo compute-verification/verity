@@ -341,7 +341,7 @@
   "NetTiming.MonitoringPeriodChannelReg": {
    "owner": "@network-accounting",
    "digest": "026bdd8b3470934387fe4985a28460616ca0d1b113da45232e01b3cff9636b5d",
-   "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as MonitoringPeriodChannel states it over the schedules."
+   "why": "The monitoring period's channel over registered parameters: each secret's schedule fits the record format and a registered parameter allows it, and its cells decode back to it, as MonitoringPeriodChannel states it over the schedules. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of no windows only, at the record format of no connection, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
   },
   "NetTiming.MonitoringPeriodEscapes": {
    "owner": "@proofs",
@@ -358,10 +358,30 @@
    "digest": "c1281698ce1c924f21d0edd85fdad78a317bc854459f880bb520aa7b08d90cf2",
    "why": "A scope: each statement's opening gates are inputs of its circuit, where a run reads the row it opens; the pool circuit's honest witness concludes it."
   },
+  "NetTiming.PhaseErrors": {
+   "owner": "@network-accounting",
+   "digest": "f66a286ff4efc9e9c17ff0f134a2514af3bc27b9561da15150560932a078908a",
+   "why": "What e is: e i is at least execution phase i's error at every secret and history, the committed form's at the trace read at the statement (Compiled.εregX) plus the registered openings' binding term (BopsX's probability); the bound's second term is the sum of the e i. (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
+  },
+  "NetTiming.PhaseRounds": {
+   "owner": "@network-accounting",
+   "digest": "cc4a0abfc56bf36647413cfb6209e90343fa9b75aff00cdf0b3c209060f450d1",
+   "why": "A scope: each execution phase's verifier has at most kV rounds at its statement, so the monitoring period's coins are one type; a phase's verifier reads the first of its kV coins, and the coins past them are uniform and read by nothing. (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
+  },
+  "NetTiming.PhasesAdaptive": {
+   "owner": "@network-accounting",
+   "digest": "8d6f13434f1f96e48ab9dc49361e19ebc5f88cb62312ba889ebe0b0cd4733fad",
+   "why": "The monitoring period's adaptivity: each execution phase's statement, its prover's strategy and its registered openings read only the earlier phases' coins, so the phase's incorrect set is fixed before its sample; a property of the period the bound is read at, which it proves of no check. (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
+  },
+  "NetTiming.RateAt": {
+   "owner": "@network-accounting",
+   "digest": "6e8552dbf24e31a9a27d781ec4598b965fe538952ff7788a7293f42c91be4cf1",
+   "why": "The sample's rate, which the bound's first term is stated at: the design misses every set of the partition's proof blocks with probability at most 1 - q to the set's size. A uniform sample of kd of n proof blocks meets it at q * n <= kd and a sample of every proof block at q = 1 (NetTiming.rateAt_subset, NetTiming.rateAt_all). (met by `NetTiming.Witness.PooledLeakRegistered_honest`)"
+  },
   "NetTiming.RecordFormat.ReadsBy": {
    "owner": "@network-accounting",
    "digest": "cb86a3cd20c63474b029430dd96a62bf8016a2174dc2ad1cd6a47faddf91d883",
-   "why": "A property of the record format and the registered parameters: the client's cells read back from the record under a parameter alone, on every schedule the parameter allows; the format's own read-back is this at each schedule as its own parameter."
+   "why": "A property of the record format and the registered parameters: the client's cells read back from the record under a parameter alone, on every schedule the parameter allows; the format's own read-back is this at each schedule as its own parameter. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of no windows only, at the record format of no connection, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
   },
   "NetTiming.ResetsIn": {
    "owner": "@proofs",
@@ -371,7 +391,7 @@
   "NetTiming.WindowsPlaced": {
    "owner": "@network-accounting",
    "digest": "49442b8de41bcaded25fc0d6c4dbd9c18fa33a57bf3a23d86b05e7e11cbcc9f8",
-   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline."
+   "why": "The monitoring period's registrations: each window's statement has its partition, and each of its possible incorrect sets commits at most the window's bit bound, as MonitoringPeriodLeakAccepted takes them inline. The honest lemma (`NetTiming.Witness.MonitoringPeriodLeakChecked_honest`) concludes it at a period of no windows only, where it asks nothing, and exhibits no period of one or more windows at which it holds together with `Compiled.KS`; the witness at one or more windows that an accepting run passes is NET-313's, due 30 Nov."
   },
   "Population.Dataflow.Checked": {
    "owner": "@proofs",
@@ -4800,6 +4820,10 @@
     "NetTiming.Witness.MonitoringPeriodLeakChecked_nontrivial",
     "NetTiming.Witness.MonitoringPeriodLeakChecked_readsBy_exclusion"
    ]
+  },
+  "NetTiming.SecurityProofs.PooledLeakRegistered": {
+   "honest": ["NetTiming.Witness.PooledLeakRegistered_honest"],
+   "nontrivial": "NetTiming.Witness.PooledLeakRegistered_nontrivial"
   },
   "NetTiming.SecurityProofs.MonitoringPeriodLeakFails": {
    "honest": ["NetTiming.Witness.MonitoringPeriodLeakChecked_honest"],
@@ -19460,6 +19484,31 @@
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
    "unfolded_hash": "451401fcb70ec123a53379d3fbe7f4d5b31c8c97e9f0cf5f83678b1f6777e5e1"
   },
+  "NetTiming.SecurityProofs.PooledLeakRegistered": {
+   "owner": "@network-accounting",
+   "signature": ["NetTiming.SecurityProofs.PooledLeakRegistered : NetTiming.Guarantees.PooledLeakRegistered"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.CommitmentScheme.Binds",
+     "NetTiming.PhaseErrors",
+     "NetTiming.PhaseRounds",
+     "NetTiming.PhasesAdaptive",
+     "NetTiming.RateAt"
+    ],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.Sessions",
+     "NetTiming.BoundaryGates.Fits",
+     "NetTiming.CertifierRegisters",
+     "NetTiming.RegOpens"
+    ],
+    "reads": []
+   },
+   "type_hash": "adddd18839b9ee85dbbab0e5d88b34757d881d14e945fad237c30c18f0d32d70",
+   "unfolded_hash": "016e51d35c8a8cd7e9124be52f181822e6d3d0181e1fc181e6feb1d865b19c86"
+  },
   "NetTiming.SecurityProofs.ResponseCapped": {
    "owner": "@network-accounting",
    "signature": ["NetTiming.SecurityProofs.ResponseCapped : NetTiming.Guarantees.ResponseCapped"],
@@ -20256,6 +20305,125 @@
     "reads": []
    },
    "type_hash": "7f5221097b5b6cee0835da33734e0771770052bb0e4ff4698e2b2da0b3f47f10"
+  },
+  "NetTiming.Witness.PooledLeakRegistered_honest": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakRegistered_honest :",
+    "  And (Claims.SamplingGeneric.Arg.KS FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoA Bool))",
+    "    (And (Claims.Sampling.CommitmentScheme.Binds FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool).commit)",
+    "      (And (Claims.SamplingGeneric.Compiled.Sessions FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool))",
+    "        (And (NetTiming.PhaseRounds (fun x => Claims.Witness.SamplingGeneric.twoL Bool) 2 fun x x_1 x_2 => List.nil)",
+    "          (And",
+    "            (NetTiming.PhasesAdaptive (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP)",
+    "              fun x x_1 x_2 x_3 => NetTiming.Witness.certOps)",
+    "            (And",
+    "              (∀ (s : Claims.Sampling.AuditStatement),",
+    "                Eq ((Claims.Witness.SamplingGeneric.twoL Bool).parse List.nil) (Option.some s) →",
+    "                  NetTiming.RegOpens FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool).commit s",
+    "                    (Finset.instSingleton.singleton 1) NetTiming.Witness.certOps)",
+    "              (And",
+    "                (∀ (s : Claims.Sampling.AuditStatement) (Pt : Claims.Sampling.Partition),",
+    "                  Eq ((Claims.Witness.SamplingGeneric.twoL Bool).parse List.nil) (Option.some s) →",
+    "                    Eq ((Claims.Witness.SamplingGeneric.twoL Bool).partition s) (Option.some Pt) →",
+    "                      NetTiming.RateAt s Pt 1)",
+    "                (And",
+    "                  (NetTiming.PhaseErrors FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                    (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP)",
+    "                    (fun x x_1 x_2 x_3 => NetTiming.Witness.certOps) fun x =>",
+    "                    instHAdd.hAdd",
+    "                      (Claims.SamplingGeneric.Compiled.εregX FlockDeploy.sha512",
+    "                        (Claims.Witness.SamplingGeneric.twoL Bool) List.nil Claims.Witness.silentP)",
+    "                      (Claims.Finder.Pr FlockDeploy.sha512",
+    "                        (NetTiming.BopsX FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                          (fun x => NetTiming.Witness.certOps) Unit Claims.Witness.silentP List.nil)))",
+    "                  (And",
+    "                    ({ egress := fun x ℓ x_1 => ℓ.elim0, ingress := fun x => List.cons 0 List.nil }.Fits",
+    "                      Claims.Witness.SamplingGeneric.twoStmt.prog 1)",
+    "                    (And",
+    "                      (∀ (s : Claims.Sampling.AuditStatement),",
+    "                        Eq ((Claims.Witness.SamplingGeneric.twoL Bool).parse List.nil) (Option.some s) →",
+    "                          NetTiming.CertifierRegisters FlockDeploy.sha512",
+    "                            (Claims.Witness.SamplingGeneric.twoL Bool).commit",
+    "                            { egress := fun x ℓ x_1 => ℓ.elim0, ingress := fun x => List.cons 0 List.nil } 1",
+    "                            (fun x x_1 => List.cons Bool.true List.nil) s NetTiming.Witness.certOps",
+    "                            (List.cons",
+    "                              { rows := fun ℓ => ℓ.elim0, jitter := 0, status := fun x => NetTiming.Status.complete }",
+    "                              List.nil))",
+    "                      (∀ (ω : Fin 1 → Prod Unit (Fin 2 → Bool)) (i : Fin 1),",
+    "                        And",
+    "                          (NetTiming.phaseAcc FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                            (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP) ⋯ Unit.unit i ω (ω i))",
+    "                          (And",
+    "                            (NetTiming.PhaseRegistered (fun x => Claims.Witness.SamplingGeneric.twoL Bool)",
+    "                              (fun x => { egress := fun x ℓ x_1 => ℓ.elim0, ingress := fun x => List.cons 0 List.nil })",
+    "                              (fun x => 1) (fun x => Finset.instSingleton.singleton 1)",
+    "                              (fun x => Claims.Witness.SamplingGeneric.twoStmt)",
+    "                              (fun x => Claims.Witness.SamplingGeneric.twoPart) (fun x x_1 => Bool.true)",
+    "                              (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 x_3 => NetTiming.Witness.certOps) Unit.unit ω",
+    "                              i)",
+    "                            (NetTiming.RecordComplete (fun x => 1) 1 (fun x => Claims.Witness.SamplingGeneric.twoStmt)",
+    "                              (fun x x_1 x_2 =>",
+    "                                List.cons",
+    "                                  { rows := fun ℓ => ℓ.elim0, jitter := 0,",
+    "                                    status := fun x => NetTiming.Status.complete }",
+    "                                  List.nil)",
+    "                              Unit.unit ω i))))))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ef60eb50f16d42b28e50c377dc42543bdbace44e631389465cf81b9d287451b3"
+  },
+  "NetTiming.Witness.PooledLeakRegistered_nontrivial": {
+   "owner": "@network-accounting",
+   "signature": [
+    "NetTiming.Witness.PooledLeakRegistered_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun ω =>",
+    "        And",
+    "          (∀ (i : Fin 1),",
+    "            And",
+    "              (NetTiming.phaseAcc FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.leakL Bool)",
+    "                (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP) ⋯ Unit.unit i ω (ω i))",
+    "              (And",
+    "                (NetTiming.PhaseRegistered (fun x => Claims.Witness.SamplingGeneric.leakL Bool)",
+    "                  (fun x => NetTiming.Witness.trivLay) (fun x => 1)",
+    "                  (fun x => Finset.instEmptyCollection.emptyCollection)",
+    "                  (fun x => Claims.Witness.SamplingGeneric.notStmt) (fun x => Claims.Witness.SamplingGeneric.notPart)",
+    "                  (fun x x_1 => Bool.false) (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 x_3 => List.nil) Unit.unit ω i)",
+    "                (NetTiming.RecordComplete (fun x => 1) 1 (fun x => Claims.Witness.SamplingGeneric.notStmt)",
+    "                  (fun x x_1 x_2 =>",
+    "                    List.cons",
+    "                      { rows := fun x x_3 => Option.none, jitter := 0, status := fun x => NetTiming.Status.complete }",
+    "                      List.nil)",
+    "                  Unit.unit ω i)))",
+    "          (Not",
+    "            (NetTiming.PooledGood (fun x => NetTiming.Witness.trivLay) (fun x => 1)",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) 1 (fun x => Claims.Witness.SamplingGeneric.notStmt)",
+    "              (fun x => Claims.Witness.SamplingGeneric.notPart) (fun x x_1 => Bool.false)",
+    "              (fun x x_1 x_2 x_3 => List.cons Bool.false List.nil) 1",
+    "              (NetTiming.WregR FlockDeploy.sha512 (fun x => Claims.Witness.SamplingGeneric.leakL Bool)",
+    "                (fun x x_1 x_2 => List.nil) (fun x x_1 x_2 => Claims.Witness.silentP) (fun x x_1 x_2 x_3 => List.nil)",
+    "                Unit.unit ω)",
+    "              fun x =>",
+    "              List.cons { rows := fun x x_1 => Option.none, jitter := 0, status := fun x => NetTiming.Status.complete }",
+    "                List.nil)))",
+    "      (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 1) 1) (Finset.univ.sum fun x => 0)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "53f5d7cd8d161a6ca8f9c979e27eb1c6bd16196489803739e47c90bdef2711f8"
   },
   "NetTiming.Witness.SampledAuditAccepted_honest": {
    "owner": "@proofs",
@@ -28406,6 +28574,7 @@
    "Flock.SecurityProofs.MaskedKSTable": "frozen (no-function): Claims.Flock.KSTable at the deployed masked record (deployZk at the deployed relation, SHA-512), at each table's own word length and error: a knowledge-soundness bound for every prover against the record's interaction, at the relation of one table of a session, with no acceptance of a Lean function to take; it takes no premise, since the claim's collision finder is in its bound.",
    "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved",
    "NetTiming.SecurityProofs.MonitoringPeriodLeakChecked": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakAccepted's composition with each window's checked inputs left out of the count: the sampled leak bound at the network certifier's rows with a valid run (NetTiming.TapProof.monitoringPeriodChecked_first: RLeakCertifierChecked, the two checks held to the run at the network certifier's rows, CheckedWitness at certifierRun, with Claims.SamplingGeneric.Compiled.KS and CommitmentScheme.Binds at each compiled verifier) and the read-back of the record under a registered parameter (RecordFormat.ReadsBy), over the network certifier's code (recordingCode, in any record format RecordFormat) run by an arbitrary device on arbitrary server behaviors with trusted-host (TrustedHost), across a monitoring period of windows whose registrations are placed (WindowsPlaced) and whose checks pin their checked inputs (CheckedUnique): it bounds AccSeqsChecked at each window's registration and the cells of the network certifier's code, not runs of the network check's code or of a compiled certifier program, and, where the network certifier registers its observations at every window at that window's operator, which reads the runs before it (CertifierRegisters at runsBefore, an antecedent), for the secrets whose every window meets its good event (ExecutionPhaseGoodChecked, an antecedent: RLeakCertifierChecked at the extracted witness, and the registration's values at the registered inputs as the named premise RegisteredInputsHeld, which no proof gives yet) it reads the client's cells from the windows' records under a registered parameter and counts those secrets by the registered parameters' number times the windows' count (windowsCount, the registered and the checked inputs pinned), with each window's failure bounded on its own (Btap the collisions with the network certifier's openings) and no union over the monitoring period's live coins yet.",
+   "NetTiming.SecurityProofs.PooledLeakRegistered": "frozen (no-function): It is PooledLeakAccepted's first conclusion with both of its inputs at each execution phase proved, at the incorrect sets of one trace (WregR: the trace read at the statement with the registered openings, regValR, which the phase's statement, its prover's strategy and its registered openings fix before the phase's sample). It is stated over an abstract monitoring period of execution phases on a product of live coins (Fin m → Tp × (Fin kV → Coin)), each statement judged by a compiled sampled verifier (D y, with Claims.SamplingGeneric.Arg.KS, and CommitmentScheme.Binds and Compiled.Sessions at every statement's verifier), each phase reading only the earlier phases' coins (PhasesAdaptive), and bounds Pr[every phase accepted, registered as the period's (PhaseRegistered) and with a complete record (RecordComplete), ∧ ¬PooledGood at WregR] by (1 − q)^Fmax + Σ e_i: q is the rate every phase's sample met (RateAt, a hypothesis), and e_i is at least Compiled.εregX plus the registered openings' binding term (PhaseErrors), where the registered openings pass and open every registered input (RegOpens), the layouts fit (BoundaryGates.Fits) and the network certifier registers each accepted phase's record among them (CertifierRegisters). It counts no secrets, and it is not a run of the sampled verifier, the challenger's sample or the network check's code: it is not the deployed system's bound over a monitoring period until a compiled instance of the deployed verifier meets its premises and the rate and the phases' order are derived from what that verifier accepts.",
    "NetTiming.SecurityProofs.MonitoringPeriodLeakFails": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakChecked with each failure charged as it happens, at exactly j failed connections: it takes MonitoringPeriodLeakChecked's premises and no other, keeps its first clause word for word, and lets each window's operator and registered values, bound before the secrets, read the run's fail pattern (failCell at every connection of the monitoring period) and nothing else of the run; where the network certifier registers its observations at every window at the pattern's operator (CertifierRegisters, an antecedent), the secrets whose run fails exactly j connections, each below its cap (failCount, FailsBelow), and whose every window meets its good event at the pattern's registered values (ExecutionPhaseGoodChecked, a condition on the secrets counted and no hypothesis of this statement) number at most the fail patterns of j connections (failPatterns) times MonitoringPeriodLeakChecked's count, the registered parameters' number times the windows' count; a failure is paid for in that factor alone, the count has no factor for a connection's cells, and like MonitoringPeriodLeakChecked it bounds the cells of the network certifier's code (recordingCode) under trusted-host (TrustedHost), not runs of the network check's code or of a compiled certifier program.",
    "NetTiming.SecurityProofs.MonitoringPeriodLeakFailsAtMost": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakChecked with each failure charged as it happens, at no more than j failed connections: MonitoringPeriodLeakFails's premises and first clause, and, where the network certifier registers at the pattern's operator (CertifierRegisters, an antecedent), for the secrets whose every window meets its good event at the pattern's registered values (ExecutionPhaseGoodChecked, an antecedent) it holds MonitoringPeriodLeakChecked's read-back on every run, with failed connections as with none (the client's cells read from the windows' records under a registered parameter, each record in AccSeqsChecked at the pattern's operator and registered values), and counts those whose run fails at most j connections, each below its cap, by the fail patterns of 0 to j connections (failPatterns, summed) times the registered parameters' number times the windows' count. The factor is one at j = 0 and is met at one connection of cap 1 (NetTiming.Witness.MonitoringPeriodLeakFailsAtMost_factor_met: both secrets counted against MonitoringPeriodLeakChecked's count of 1, the factor 2); and RecordFormat.ReadsBy holds at a format that writes each lane's length, released data and fail cell, under the link's parameters (NetTiming.LengthsRows.readsBy, at an abstract layout: no device's layout is modelled).",
    "NetTiming.SecurityProofs.MonitoringPeriodLeakCharged": "frozen (no-function,world-unlisted): It is MonitoringPeriodLeakFails's count as a charge that adds over monitoring periods: MonitoringPeriodLeakFails's premises, weights on the number of failed connections that sum to at most one (KraftWeights) and finitely many registered parameters, and that the network certifier registers at the pattern's operator (CertifierRegisters, here a premise of the whole statement, which has one clause), and for every T the secrets whose every window meets its good event at the pattern's registered values (ExecutionPhaseGoodChecked, a condition on the secrets counted and no hypothesis of this statement), whose fail cells are below their caps (FailsBelow) and whose run's charge (the fail patterns of its number of failures times the registered parameters' number times the windows' count, over that number's weight) is at most T number at most T. It states no bound on a window's audit: that is MonitoringPeriodLeakFails's first clause. Without the weights' sum the count fails (NetTiming.Witness.MonitoringPeriodLeakCharged_kraft_exclusion, at weights that sum to 2)."
@@ -38214,6 +38383,12 @@
     "NetTiming.Guarantees.PooledLeakAccepted": "ecc9283ccfc0633c2fca110ecf7d91a5f47414b6bdc95561508f21090609b4b3"
    }
   },
+  "Definitions.NetworkCertifier.Guarantees.PooledReg": {
+   "digest": "fa34f7b96d5db9d4e0dbe544e1b8961a309dec6ce4f46c9c19e1c56143e6f164",
+   "definitions": {
+    "NetTiming.Guarantees.PooledLeakRegistered": "3e2c041bbbe8d857887c296ec9712471b6c5da952a0260e962d1eb87be27802d"
+   }
+  },
   "Definitions.NetworkCertifier.Guarantees.ResponseCap": {
    "digest": "5d33d4732983b54a820ff35b0f5c1e0209feb8a59bf3e6a08b37427d816617d7",
    "definitions": {
@@ -38270,6 +38445,22 @@
    "definitions": {
     "NetTiming.LeakAt": "384ba8473c9dfde3a62acf6d4fe887c6b174f2581008ed953e7c49f597d19d55",
     "NetTiming.PooledGood": "82a11c0d8e1a2bf90a6a1ad8b96e18ac0539b75af43da83c2855569664285363"
+   }
+  },
+  "Definitions.NetworkCertifier.PooledReg": {
+   "digest": "f9d2943c12c5524ae1cdcc9f587a496d7a6fc5b01263f472aa42ca1117f36b8b",
+   "definitions": {
+    "NetTiming.BopsX": "d8881385c59f562fe4c1bb9f6943a510e33180a901746de3d170e27d44f11449",
+    "NetTiming.FregR": "5f16a4b60b9125ca63ae377c8dcda597bb1d40c70e6385d1b0017571a0acf67e",
+    "NetTiming.PhaseErrors": "f66a286ff4efc9e9c17ff0f134a2514af3bc27b9561da15150560932a078908a",
+    "NetTiming.PhaseRegistered": "76bd2fca2cb2a60ebb9f17a39d15ea508536d4a73cbe95fda885743f1aa460d0",
+    "NetTiming.PhaseRounds": "cc4a0abfc56bf36647413cfb6209e90343fa9b75aff00cdf0b3c209060f450d1",
+    "NetTiming.PhasesAdaptive": "8d6f13434f1f96e48ab9dc49361e19ebc5f88cb62312ba889ebe0b0cd4733fad",
+    "NetTiming.RateAt": "6e8552dbf24e31a9a27d781ec4598b965fe538952ff7788a7293f42c91be4cf1",
+    "NetTiming.RecordComplete": "1afaee1e32f77b473c6ffac20e215de2826ce784d9b9e7e44981e8066a3629db",
+    "NetTiming.WregR": "d8415cddd05eca8d2718ca8619141f76aaa216883eddabf7b638cba3bb9b1bf5",
+    "NetTiming.phaseAcc": "d59fb52fc39da542125a1d75b9f7742b143a9fc88861343e4603dad8dea40d24",
+    "NetTiming.regValR": "bec447ec1caa16849a4b1a35b8eae40df3bf3a80dd959c569a96a17c4cbab1b2"
    }
   },
   "Definitions.NetworkCertifier.ResponseCap": {
