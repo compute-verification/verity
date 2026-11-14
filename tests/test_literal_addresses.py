@@ -64,7 +64,7 @@ ALLOWED: dict[str, int] = {
     # the team's own tooling and machines
     ".agents/skills/team/SKILL.md": 1,
     ".agents/skills/using-slack/SKILL.md": 1,
-    ".agents/skills/using-slack/registry.json": 35,
+    ".agents/skills/using-slack/registry.json": 36,
     ".agents/skills/using-slack/slack-app.json": 2,
     "infra/cluster/src/cluster/status.py": 2,
     "infra/cluster/tests/test_policy.py": 1,

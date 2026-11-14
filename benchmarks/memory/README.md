@@ -23,9 +23,9 @@ verity bench memory --loopback                both processes on this machine, on
   coins come from the challenger host under period `PERIOD`, a name its ledger hasn't used. `BIND` (default `0`) is
   whether the verifier binds the store to the role's pinned checkpoint, and whether the period signs the role
   (`period-open --model`). With `0` the verifier holds no checkpoint, the period signs no model, and the store is the
-  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits nothing,
-  its `bound` check failing. The default is 0 because whether a memory figure may rest on a store bound to a
-  checkpoint is not yet decided, so no run of the bench binds one unless asked. `BIND=1` binds it.
+  developer's choice, which the text and the JSON's `bound` say; the auditor's line of record then credits the
+  session on its other checks, conditional on `DeveloperStore`, the developer's word that the store holds the
+  registered weights. No auditor's machine reads a checkpoint, so the default is 0. `BIND=1` binds it.
   `UNPACED=WINDOWS:WINDOW_MS:SAMPLES` asks for a session of one coin a window in place of `PACED`'s
   (`7:60000:33273` is seven windows of a minute with 33,273 openings each); the verifier's ledger holds its γ as it
   does a paced session's, and the auditor's line of record has no time-held line for it, which only a paced session

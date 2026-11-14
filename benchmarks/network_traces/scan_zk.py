@@ -1291,15 +1291,15 @@ def challenger(a, at: SimpleNamespace, out: Path):
     import a5_coins as AC
 
     root = window_root(at)
-    manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
+    manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                         peer=a.peer, key_record=a.challenger_key)
-    coins = SimpleNamespace(AC=AC, draws=draws, root=root, challenger=a.challenger, published=None)
+    coins = SimpleNamespace(AC=AC, turns=turns, root=root, challenger=a.challenger, published=None)
     try:
         yield coins
     finally:
-        draws.skip(0)
+        turns.skip(0)
         finisher.join()
-        coins.published = draws.evidence()
+        coins.published = turns.evidence()
         manager.shutdown()
 
 
@@ -1360,7 +1360,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
     the Lean's run refuses at its select (``stream_on``: the round's stream on given coins and what it holds, `stream_of`). -> (the audit
     record, None where the stream refused or holds the outcome; the negatives; the coins' record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
-    published = coins.draws.evidence()
+    published = coins.turns.evidence()
     ev = AC.evidence(published, segment) if segment is not None else None
 
     def outcome(s: S.Stream, d: S.Draw, evidence: dict | None) -> tuple[S.Outcome, dict | None]:
@@ -1368,7 +1368,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         return (late if late is not None else s.outcome(d, verdicts, statement, coins=evidence, **given)), \
             s.records[-1]["audit"]
 
-    family, ours = stream.family(draw), AC.held(coins.draws)
+    family, ours = stream.family(draw), AC.held(coins.turns)
 
     def reason(evidence: dict | None, window: str = root, held: dict = ours) -> str | None:
         return CC.coins_reason(held["key"], held["main"], evidence, window, family, after, read, AC.lms_verify)
@@ -1383,7 +1383,7 @@ def coins_outcome(a, coins: SimpleNamespace, stream_on, counts: dict, stream: S.
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
     neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, coins.draws.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
+    bad = {**AC.negatives(ev, coins.turns.pre(), **ours), "coins-for-another-window": (ev, ours)} if ev is not None else {}
     for name, (evidence, held) in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
         s = stream_on(AC.Replay(read, family), held)
@@ -1506,10 +1506,10 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
         lean_draw = json.loads(line.split(" ", 1)[1])
     else:
         spec, units, counts = spec_of(pg, members, want, schemas, k, coins.root)
-        rank = coins.AC.RankCoins(coins.draws, 0)
+        rank = coins.AC.RankCoins(coins.turns, 0)
         draw = refused = None
         try:
-            stream = stream_of(a, spec, units, pg, rank, coins.AC.held(coins.draws))
+            stream = stream_of(a, spec, units, pg, rank, coins.AC.held(coins.turns))
             rank.plan(coins.AC.need(rule, pg.program, pg.query, rec["population"]))
             reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=coins.root, counts=counts)
             rank.commit(bytes.fromhex(reg.digest))
@@ -1525,7 +1525,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                                       "segment": segment, "read": read.hex(), "need": rank.need},
                                                      sort_keys=True))
         if draw is None:
-            coins.draws.skip(0)
+            coins.turns.skip(0)
             log(f"{name}: the stream drew nothing on the challenger's coins: {refused}")
             for f in (out / "registration.json", out / "segment.json"):
                 os.link(f, vdir / f.name)

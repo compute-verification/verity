@@ -35,7 +35,7 @@ BOT = "B0VERITY"
 BOT_USER = "U0VERITYBOT"                                 # the bot's user, as auth.test names it
 COORD, ALERTS = "CCOORD", "CALERTS"
 HANDLES = ["infra", "proofs", "circuits", "compute-accounting", "compute-research", "memory-accounting", "network-accounting",
-           "console", "dashboard", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
+           "console", "dashboard-goals", "dashboard-metrics", "ci", "lean", "comms", "top", "vllm", "benchmarks", "kernels", "training", "soundness"]
 
 
 class FakeSlack:
@@ -268,9 +268,9 @@ def test_the_old_channel_name_still_selects_ask_daniel_and_an_alias_may_not_shad
 
 def test_every_handle_names_exactly_one_holder_and_a_predecessor_goes_in_its_lineage(registry):
     """Two holders in one handle split its doorbells and the watch's view (two coordinators would answer one chat).  A
-    handover's outgoing id goes in `lineage`."""
+    handover's outgoing id goes in `lineage`.  A handle no agent has taken yet has no `holder` key."""
     reg = json.loads(REAL_REGISTRY.read_text())
-    many = {h["handle"]: slack.AGENT_ID_RE.findall(h.get("holder") or "") for h in reg["handles"]}
+    many = {h["handle"]: slack.AGENT_ID_RE.findall(h["holder"] or "") for h in reg["handles"] if "holder" in h}
     assert {h: ids for h, ids in many.items() if len(ids) != 1} == {}, "one agent per handle: a second lane gets its own handle"
     with pytest.raises(slack.SlackError, match="lineage"):
         slack.check_registry({**reg, "handles": [{**reg["handles"][0], "lineage": ["gen-3"]}, *reg["handles"][1:]]}, "r")

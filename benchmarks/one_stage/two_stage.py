@@ -101,7 +101,7 @@ its challenger session's records (``challenger/``), both stages' coin evidence (
 it exits 0 when the second stage held (`held`).
 
 One challenger serves both commands, under one key, and the verifier holds that key itself: both stages' coin evidence
-is read under it (`Stream(key=)`), and neither ``stage1.json`` nor any evidence names one. Under ``gate:`` it is the
+is read under it (`Stream(key=)`), and neither the hand-off nor any evidence names one. Under ``gate:`` it is the
 deployment's key record (``--challenger-key``). Under ``local`` it is the development challenger's, which ``first``
 keeps in HOST (``OUT/challenger-host`` when it names none) and ``second`` reopens there: ``second --challenger local``
 without ``--challenger-host``, or with a directory that holds no challenger, is refused before it opens a session, since
@@ -1058,7 +1058,7 @@ def _second(a: argparse.Namespace) -> int:
     outcome on both sessions' evidence (`outcome_of`). Both sessions are one challenger's: the stream holds the
     challenger's key and the verifier's copy of main's history as this command's session had them at its start
     (`a5_coins.held`: the key of ``--challenger-key``, or of the ``local`` challenger the first stage kept,
-    `challenger_host`), and reads the first stage's evidence, ``stage1.json``'s, under them as it reads its own; no
+    `challenger_host`), and reads the first stage's evidence, the hand-off's, under them as it reads its own; no
     key is read from that file, and a hand-off whose coins are not that challenger's is refused before the session
     opens (`first_coins`). ``summary.json`` under ``--out`` says what happened; exit 0 when the second stage held
     (`held`)."""
@@ -1066,7 +1066,7 @@ def _second(a: argparse.Namespace) -> int:
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    stage1 = json.loads(Path(a.stage1).read_text())
+    handoff = json.loads(Path(a.stage1).read_text())
     summary: dict[str, Any] = {"stage1": str(a.stage1), "held": False, "unlinked": bool(a.unlinked)}
 
     def done(code: int, **more: Any) -> int:
@@ -1079,16 +1079,16 @@ def _second(a: argparse.Namespace) -> int:
                                    "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                      "refused")}}, default=str))
         return code
-    if "units" not in stage1:
-        return done(1, refused=f"the first stage sampled nothing: {stage1.get('error')}")
+    if "units" not in handoff:
+        return done(1, refused=f"the first stage sampled nothing: {handoff.get('error')}")
     try:
         host = challenger_host(a)
     except Ch.CoinError as e:
         return done(1, refused=f"{type(e).__name__}: {e}")
     try:
-        check, stop = template_fn(stage1["commit"]["check"]), _stop(a.stop)
+        check, stop = template_fn(handoff["commit"]["check"]), _stop(a.stop)
         c = BR.reopen(Path(a.boundary), check, stop=stop)
-        again = resume(stage1, check, delta=a.delta, window_root=first_root(stage1), stop=stop)
+        again = resume(handoff, check, delta=a.delta, window_root=first_root(handoff), stop=stop)
     except (S.Refused, ValueError, KeyError, OSError) as e:
         return done(1, refused=f"{type(e).__name__}: {e}")
     sample = [int(u) for u in again.sample.units]
@@ -1098,13 +1098,13 @@ def _second(a: argparse.Namespace) -> int:
     if not sample:
         return done(0, refused="the first stage sampled no span: there is no interior to register")
     root = IR.interior_run(again.registration.digest, sample)
-    manager, draws, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
+    manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
                                         peer=a.peer, key_record=a.challenger_key, host=host)
-    ours = AC.held(draws)
+    ours = AC.held(turns)
     again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
-    coins = AC.RankCoins(draws, 0)
+    coins = AC.RankCoins(turns, 0)
     try:
-        why = first_coins(again, stage1.get("evidence"), first_root(stage1), AC.lms_verify)
+        why = first_coins(again, handoff.get("evidence"), first_root(handoff), AC.lms_verify)
         if why is not None:
             return done(1, refused=f"{FIRST_COINS}: the first stage's coins: {why}")
         try:
@@ -1116,7 +1116,7 @@ def _second(a: argparse.Namespace) -> int:
             return done(1, refused=e.verdict.to_json() if isinstance(e, S.Refused) else f"{type(e).__name__}: {e}")
         finally:
             segment = coins.drawn()
-            draws.skip(0)
+            turns.skip(0)
         w = r.interior.committed.window
         summary.update(second_stage={"registration": r.registration.digest, "law": dict(r.draw.law), "draw": r.draw.units,
                                      "window_root": root},
@@ -1127,17 +1127,17 @@ def _second(a: argparse.Namespace) -> int:
                                  "returns": [[x.template, x.port, x.value] for x in r.design.returns]})
         s, got, stmts, proofs = prove(a, r, out, json.loads(Path(a.proofs).read_text()) if a.proofs else None)
         summary.update(got)
-        published = draws.evidence()
+        published = turns.evidence()
         summary["challenger"] = {x: published.get(x) for x in ("trusted", "error", "plan")}
-        evidence = [stage1.get("evidence"), AC.evidence(published, segment)]
-        (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [stage1["read"], coins.read.hex()]},
+        evidence = [handoff.get("evidence"), AC.evidence(published, segment)]
+        (out / "coins.json").write_text(json.dumps({"evidence": evidence, "read": [handoff["read"], coins.read.hex()]},
                                                    indent=1, sort_keys=True))
         if "handed" in s:
             summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
         return done(0 if ok else 1, held=ok)
     finally:
-        draws.skip(0)
+        turns.skip(0)
         finisher.join()
         manager.shutdown()
 

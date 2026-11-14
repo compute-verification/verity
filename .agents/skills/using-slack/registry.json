@@ -141,7 +141,7 @@
         "security/Definitions/Hash/",
         "security/Proofs/Hash/",
         "verity/protocols/interface/world/",
-        "verity/hardware/registration.py",
+        "verity/protocols/accounting/registration/verifier/registration.py",
         "benchmarks/flock_kernels/",
         "benchmarks/two_stage/",
         "benchmarks/definitions/numerics/cuda/",
@@ -495,16 +495,28 @@
       ]
     },
     {
-      "handle": "dashboard",
+      "handle": "dashboard-goals",
       "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
-      "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
-      "charter": "Daniel, 2026-11-02 11:24 AM PST",
+      "remit": "Daniel's Goals page on the console, and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-02 11:24 AM PST; named dashboard-goals by Daniel, 2026-11-13 7:05 PM PST",
       "linear": "CON",
       "examples": [
         "How do I put my goals on Daniel's Goals page?",
         "How do I publish a live plot of my runs to the console?"
       ],
       "usergroup": "S0CEC206YBW"
+    },
+    {
+      "handle": "dashboard-metrics",
+      "remit": "Daniel's Metrics dashboard on the console: which numbers it shows and how often. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-13 7:05 PM PST",
+      "linear": "CON",
+      "linear_label": "lane:dashboard-metrics",
+      "examples": [
+        "How do I get my benchmark's number onto the Metrics dashboard?",
+        "Why is a number on the Metrics dashboard stale?"
+      ],
+      "usergroup": "S0CH8FZD0KH"
     },
     {
       "handle": "ci",
@@ -552,7 +564,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",

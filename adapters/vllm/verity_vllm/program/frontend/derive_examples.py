@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import functools
 import math
 
 import torch
@@ -689,12 +690,21 @@ class NegStaleAlias(nn.Module):
         return qkv  # stale: the source reads the pre-mutation alias
 
 
+@functools.cache
+def _mystery_op() -> torch.library.Library:
+    """`someone_else::mystery`, defined at its first use and kept for the process: a custom op with a fake impl."""
+    lib = torch.library.Library("someone_else", "FRAGMENT")
+    lib.define("mystery(Tensor a) -> Tensor")
+    torch.library.register_fake("someone_else::mystery", lambda a: torch.empty_like(a))
+    return lib
+
+
 class NegCustomOp(nn.Module):
-    """A custom op with a fake impl but no Verity binding (`examples.py`'s `someone_else::mystery`)."""
+    """A custom op with a fake impl but no Verity binding (`someone_else::mystery`)."""
 
     def __init__(self) -> None:
         super().__init__()
-        from verity_vllm.program.frontend import examples  # noqa: F401  (defines someone_else::mystery)
+        _mystery_op()
         self.fc = nn.Linear(8, 8)
 
     def forward(self, x):
