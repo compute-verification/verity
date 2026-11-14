@@ -5,11 +5,11 @@ import random
 from pathlib import Path
 
 import pytest
-from _build import PRIO, T0, alloc, cluster, job, node
+from _build import PRIO, T0, cluster, job, node
 
 from cluster import invariants, ledger, model
 from cluster.model import Job, Share, Workstream
-from cluster.plan import Evict, Expire, Refuse, Start, Wait, apply, plan, whole_quiet
+from cluster.plan import Evict, Expire, Refuse, Start, apply, plan, whole_quiet
 from cluster.route import View, place
 
 NEBIUS = model.load(Path(__file__).parents[1] / "descriptions" / "nebius.toml")

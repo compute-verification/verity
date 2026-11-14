@@ -64,7 +64,7 @@ import stat
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 DIR = Path(os.environ.get("GPU_LEASE_DIR", "/run/gpu-lease"))
@@ -91,12 +91,12 @@ FENCE_CMD = "n1-lease-fence"
 
 
 def iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def epoch(s: str | None) -> float | None:
     try:
-        return datetime.strptime(s or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc).timestamp()
+        return datetime.strptime(s or "", "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC).timestamp()
     except ValueError:
         return None
 
