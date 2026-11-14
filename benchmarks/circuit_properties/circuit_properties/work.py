@@ -99,15 +99,17 @@ The three batches that break it, which `P_BATCH`'s comment states, make two posi
 under this rule and the trace's reading alike. The updates': a weight is `θ`'s rows, which
 differ, for generic weights, at every width a product or a rounding (`ROUNDINGS`) reads them, and a word no input
 reaches is nonzero; a carried word an input reaches is θ′; and rows one node computes one to one from distinct rows
-are distinct, even where the update can't change a weight or cancels it for a reason the constant test doesn't see
-(W plus z plus -1 times z is θ′), and a weight combined with its own words still counts as a weight with distinct
-rows, though the combination may make its rows equal whatever the weight: cancelled against itself (M plus -1 times
-M; W times v plus -1 times v, v `θ`'s or carried, keeps W's rows), or times its own rows in another order (M times
-swap(M), whose two rows are equal for every M), so the looked-up rows plus such an array are charged as weights
-though they repeat with the tokens; where one word that every member
-of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed from inputs,
-taken as nonzero), and where two nodes compute rows one to one from one array's words into two arrays (b added to
-each of two rows, carried apart, whose products by W are charged).
+are distinct, wherever the point (`points.check`) doesn't make two of them equal: where the update can't change a
+weight or cancels it for a reason the constant test doesn't see (W plus z plus -1 times z is θ′), where one word that
+every member of every enclosing batch reads multiplies it and is 0 (a learning rate, a decay, an input's or computed
+from inputs, taken as nonzero), where the inputs are fitted to the weights, where the circuit tests its own weights
+against a stated constant, where the rows are equal only where an input's word is negative, and where two nodes
+compute rows one to one from one array's words into two arrays (b added to each of two rows, carried apart, whose
+products by W are charged). The reading refuses a circuit
+(`RepeatedRows`) where a charged operand whose rows these rules show distinct holds two equal rows at the point:
+a weight combined with its own words, cancelled against itself (M plus -1 times M; W times v plus -1 times v) or
+times its own rows in another order (M times swap(M)), whose rows are equal whatever the weight, and a weight times a
+difference of an input's words; and where such an operand holds a NaN at the point, which leaves its rows uncompared.
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,
@@ -213,6 +215,33 @@ class Status(NamedTuple):
 
 THETA = Status(False, False, False, False, frozenset(), distinct=True)
 STATED = THETA._replace(stated=True, distinct=False)
+
+
+class RepeatedRows(ValueError):
+    """A charged operand whose rows the reading shows distinct holds two equal rows at the point (`points.check`),
+    reads values a scan the point doesn't run whole leaves unevaluated (``scan``), or holds a NaN in ``nan`` = (n,
+    rows) of its rows there, which leaves them uncompared."""
+
+    def __init__(self, definition: str, node: int, operand: str, rows: tuple[int, int] | None,
+                 member: int | None = None, scan=None, nan: tuple[int, int] | None = None) -> None:
+        self.definition, self.node, self.operand, self.rows, self.member, self.scan, self.nan = \
+            definition, node, operand, rows, member, scan, nan
+        if scan is not None:
+            what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which the point runs {scan.ran} of its "
+                    f"{scan.n} iterations; fix: carry the weight through the outer scan rather than out of a scan "
+                    "whose contexts repeat")
+        elif nan is not None:
+            what = (f"holds a NaN in {nan[0]} of its {nan[1]} rows at the point"
+                    + (f" in member {member}" if member is not None else "")
+                    + ", which leaves them uncompared; fix: keep its values finite at the point, whose weights and "
+                    "registered values take every sign and whose inputs are positive: square a weight or a registered "
+                    "value before a square root or a logarithm reads it, or carry it in as an input")
+        else:
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at the point"
+                    + (f" in member {member}" if member is not None else "")
+                    + "; fix: compute it from a weight one to one (a shift, a rounding, a multiply by a word no input "
+                    "reaches) or let it read the inputs, which leaves its product out as gathered")
+        super().__init__(f"{definition} node {node}: operand {operand!r}, whose rows the reading shows distinct, {what}")
 
 
 def unknown(st: Status) -> bool:
@@ -1666,7 +1695,6 @@ def _read(program, k: float, products, lookups, structure: bool = True, clock=No
     groups: dict = {}
     reasons: dict = {}
     for s, i, site, x, w in ops:
-        n = count[s.sid] * site.n
         if not (site.x.aff and site.w.aff):
             reason = "theta"
         elif may_repeat(site.x) or may_repeat(site.w):
@@ -1678,6 +1706,10 @@ def _read(program, k: float, products, lookups, structure: bool = True, clock=No
         else:
             reason = ""
         reasons[s.sid, i] = reason
+    from .points import check
+    check(program, R, root, reasons)
+    for s, i, site, x, w in ops:
+        n, reason = count[s.sid] * site.n, reasons[s.sid, i]
         weight = (not site.x.data, not site.w.data)
         beta = tuple(round(operand_beta(r, p, not wt, r_step, k, most), 9)
                      for r, p, wt in zip(site.rates, site.passed(), weight))
