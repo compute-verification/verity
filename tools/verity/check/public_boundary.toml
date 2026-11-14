@@ -143,7 +143,7 @@ standalone = [
 ]
 
 [private]
-# PoUW's tests and difftest vectors that run the clear audit (`verity/protocols/accounting/pouw/clear`, a reference tool), H1's lanes
+# PoUW's tests and difftest vectors that run the clear audit (`verity/protocols/accounting/pouw/prover/clear`, a reference tool), H1's lanes
 # (`benchmarks/pouw/h1_lanes`) or the network certifier
 pouw_tests = [
     "verity/protocols/accounting/pouw/verifier/tests/test_pouw_{audit,epoch_coins,pearl_c,pearl_c4,pearl_c_sm120,pearl_c_work,pearl_kw}.py",
@@ -312,7 +312,7 @@ nested = [
     "verity/protocols/policy/inference_only",
     "verity/protocols/accounting/poub/device/live_verifier",
     "verity/protocols/accounting/poub/verifier/remote_session/verifier_process.py",
-    "verity/protocols/accounting/pouw/clear",
+    "verity/protocols/accounting/pouw/prover/clear",
     "verity/protocols/accounting/pouw/verifier/receipts",
 ]
 
@@ -399,7 +399,7 @@ until = "the v3 ledger names a period's prover `prover`"
 
 [[residue]]
 what = "a Lean lock's reason names PoUW's clear audit by its directory, which the export leaves out"
-pattern = 'verity/protocols/accounting/pouw/clear\b'
+pattern = 'verity/protocols/accounting/pouw/prover/clear\b'
 paths = ["verity/protocols/accounting/pouw/verifier/lean/commit/lean-audit.json"]
 until = "the lock's `runs` reason for `PouwCommit.DifftestMain` names the clear audit without its directory"
 
