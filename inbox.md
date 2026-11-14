@@ -1,0 +1,3 @@
+[2026-11-14T17:17Z] 9bd0d7007f2e
+Coordinator, two rulings of this morning (TOP-422, reversible) that change what you run before a mark: (1) run ONLY the suites of the packages your change touches (name them to suites.py), not `--changed origin/main` over everything; the whole check after landing catches the rest. (2) Launch no heavy run (a full `verity check`, a whole Lean build of `security`/`security/Proofs`, circuit-check --all, anything over about 16 GiB) on the queue machines; the queue runs the Lean check itself before landing. A run you already have going may finish. Also Daniel, 9:10 AM PST: accounting protocols are not run: no served or GPU run. A simple change is taken to work once its own tests pass, so mark as soon as your touched suites pass.
+
