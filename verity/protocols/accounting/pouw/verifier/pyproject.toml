@@ -10,7 +10,7 @@ inputs = ["verity", "hardware/cards", "security", "verity/protocols/accounting/p
           "verity/circuits/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
           "verity/circuits/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/circuits",
           "verity/circuits/kernels",
-          "verity/protocols/accounting/pouw/clear"]
+          "verity/protocols/accounting/pouw/prover/clear"]
 parallel = true
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_pouw_credit_statements.py"]

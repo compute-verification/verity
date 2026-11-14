@@ -112,6 +112,17 @@ def test_a_missing_recorder_file_fails_by_name_before_any_part_is_checked(tmp_pa
     assert not {"structure", "provenance", "tokens", "pass"} & set(doc)
 
 
+@pytest.mark.parametrize("value, label", [(None, "r15"), ("", ""), (" ", " "), ("r16", "r16")], ids=["not set", "set to nothing", "a space", "a name"])
+def test_the_record_carries_the_campaign_label_as_the_environment_holds_it(tmp_path, monkeypatch, value, label):
+    """A label set to the empty string is the record's, not the default's: the default stands in for a name that is not set."""
+    if value is None:
+        monkeypatch.delenv("VERITY_CAMPAIGN", raising=False)
+    else:
+        monkeypatch.setenv("VERITY_CAMPAIGN", value)
+    _, doc = _check(_capture(tmp_path / "run", stored=False))
+    assert doc["campaign"] == label
+
+
 @pytest.mark.parametrize("edit, said", [({"rank": 1}, "rank 1 world 2 != rank 0 of world 2"), ({"world": 4}, "rank 0 world 4 != rank 0 of world 2")])
 def test_a_build_of_another_rank_or_world_is_refused(tmp_path, edit, said):
     run = _capture(tmp_path / "run", links=lambda r, doc: {**doc, **edit} if r == 0 else doc)

@@ -3,11 +3,19 @@
 `git push`, and the branch registry it keeps.
 
     python3 tools/agent-guard/worktree_guard.py hand BRANCH AGENT_ID   give a branch you created to another agent (its new owner)
-    python3 tools/agent-guard/worktree_guard.py list                   each worktree's owner and each registered branch's
+    python3 tools/agent-guard/worktree_guard.py reclaim DIR            as the VM's coordinator, take back the checkout DIR, and
+                                                                       the branches its owner holds, once that owner is gone
+    python3 tools/agent-guard/worktree_guard.py list                   each registered branch's owner
 
 A worktree belongs to the first agent (Cursor conversation) that runs a git command in it: the coordinator's `/workspace`, or
 the worktree a worker made with `git worktree add`. The owner is stamped in the worktree's git dir (`agent-owner`), and the
-branch it had then is registered to it. The hook then refuses, from any other agent:
+branch it had then is registered to it. The stamp outlives its agent, so the VM's coordinator takes a checkout back from an
+owner that is gone (`reclaim`): the coordinator is an agent that holds a handle in origin/main's Slack registry
+(`coordinators`), and gone is no hook run of the owner's in the last GONE_S, by the VM's
+record of every hook run (`settings.recorded_runs`), which must reach back that far and hold a shell-hook run of the caller's
+(`gone_reason`). The checkout and every branch registered to its owner are then the coordinator's. The hook refuses a
+`reclaim` typed by an agent that holds no handle, the command judges the rest when it runs, and a checkout goes to no agent
+but one that holds a handle. The hook then refuses, from any other agent:
   - switching that worktree's branch (`git checkout BRANCH|-b|-B`, `git switch`), since everything installed editable from it
     (the `research` CLI) follows the switch; checking out files (`git checkout -- PATH`, `git checkout REF -- PATH`) passes;
   - pushing a branch registered to another agent: one it created (`checkout -b`, `switch -c`, `worktree add -b`) or the one its
@@ -16,6 +24,15 @@ For every agent, whatever it owns, it also refuses a push that would update `mai
 them), and a `git config` that prints values, since the checkout's http.*.extraheader carries a GitHub token.
 A lander's hand repair of `next` under the queue lock names its reason on the push itself (`AGENT_GUARD_PUSH_NEXT_OK='REASON'
 git push ...`), and is logged to `$AGENT_GUARD_STATE/push-next-ok.jsonl`. Nothing lets a push to `main` through.
+In a checkout of those repositories a commit carries the machine's configured identity, so for every agent it refuses there a
+git command that names an author or committer of its own (`identity_reason`): `-c user.name=...` and the like, `commit
+--author`, `GIT_AUTHOR_NAME=... git` and the like, and a `git config` that writes the checkout's own `user.name` or
+`user.email`; and, wherever it is typed, a `git config --global` that writes the machine's. A scratch repository takes any
+identity. This rule alone follows a plain `cd`, so `cd CHECKOUT && git ...` is judged in CHECKOUT and `cd SCRATCH && git ...`
+in SCRATCH (`after_cd`); a command it still can't place passes. A variable the shell already holds reaches a git that names
+none, which the hook can't see, so the command that leaves one of the four in its shell is refused wherever it is typed
+(`kept_identity_reason`): an `export`, a `declare`, an assignment with no command after it. A variable the shell held before
+the guard arrived, and one a script exports, are not covered.
 It refuses, too, a push, branch switch or worktree add with `$` or a backquote in its words, whose branch the shell names only
 after the hook has read it. A push the agent doesn't type (a script's, a tool's) meets the same push rule, `PROTECTED_REASON`
 and `owner_reason`, in git's pre-push hook (pre_push.py), branch by branch.
@@ -26,8 +43,8 @@ expression, names others in their place): another repository's `main` is its own
 reads them (`read_push`: options anywhere, by any prefix, with their values), and one whose repository the guard can't tell
 is judged as one to them (`judged`): run outside a repository, a first word that is neither a remote, a URL nor a path, an
 option git doesn't know, or git configuration another command in the line may set.
-A git command runs, for every rule, in the event's cwd (else the workspace root) joined with its own `git -C DIR`, and
-nowhere else (`indexed_invocations`). A `cd`, `pushd` or `popd` anywhere in the command, run or not, makes its directory
+A git command runs, for every rule but that one, in the event's cwd (else the workspace root) joined with its own `git -C DIR`,
+and nowhere else (`indexed_invocations`). A `cd`, `pushd` or `popd` anywhere in the command, run or not, makes its directory
 unknown (`moves`) unless its own `-C` is absolute, the directory git runs in wherever the shell is; a `source` or `.`, which
 can change what git reads too, or a repository named by `GIT_DIR`, `GIT_WORK_TREE` or `--git-dir`, makes it unknown whatever
 its `-C`. A push is then judged as one to the queue's repositories with every branch its current one, refused for what the
@@ -43,14 +60,20 @@ import os
 import re
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
-from settings import PUSH_REMOTES
+from settings import CONVERSATION_ID, EVENT_LOG, PUSH_REMOTES, recorded_runs
+from task_hook import OWN_REGISTRY, REGISTRY, holders
 
 STATE = Path(os.environ.get("AGENT_GUARD_STATE", "/tmp/agent-guard"))
 OWNER_FILE = "agent-owner"
+#: an owner with no hook run for this long is gone: six times the longest the shell hook lets one command block, so an agent
+#: that is waiting on a command never reads as gone
+GONE_S = 2 * 3600
+RECLAIM = "python3 tools/agent-guard/worktree_guard.py reclaim"
 
 #: the repositories whose `main`, `checked` and `next` drive's App lands, and whose branches the registry names
 QUEUE_REPOS = ("compute-verification/verity", "compute-verification/infra")
@@ -104,16 +127,126 @@ def owner(gitdir: str, agent: str, directory: str) -> str:
     return agent
 
 
-def hand_reason(commands: list[list[str]], agent: str) -> str | None:
+def stamp(gitdir: str) -> str:
+    """The agent stamped as the owner of the worktree whose git dir is `gitdir`, "" when it has none; it claims nothing."""
+    f = Path(gitdir) / OWNER_FILE
+    return f.read_text().strip() if f.is_file() else ""
+
+
+def ago(t: float, now: float) -> str:
+    return f"{(now - t) / 60:.0f} min ago ({time.strftime('%H:%M', time.gmtime(t))} UTC)"
+
+
+def gone_reason(owner: str, caller: str, now: float | None = None) -> str:
+    """Why the VM's record of hook runs (`settings.recorded_runs`) can't show agent `owner` gone, or "" when it does: gone is
+    no hook run of its own in the last GONE_S. The record must hold a shell-hook run of `caller` in that time, since on a VM
+    whose shell hook runs for no one every agent would read as gone, and must reach back that far, since it rotates by size
+    and an owner it holds no run of may have run one just before its oldest line."""
+    now, window = time.time() if now is None else now, f"{GONE_S / 3600:g} h"
+    try:
+        runs = recorded_runs()
+    except OSError as e:
+        return f"the VM's record of hook runs is unreadable ({e}), so it shows no agent gone"
+    if not any(agent == caller and hook == "shell_hook.py" and t > now - GONE_S for t, hook, agent in runs):
+        return (f"{EVENT_LOG} holds no shell-hook run of yours in the last {window}, so it can't show that another agent ran "
+                f"none: no shell hook records your commands on this VM (`python3 tools/agent-guard/inbox.py guard` says why, "
+                f"and the fix)")
+    if (since := min(t for t, _, _ in runs)) > now - GONE_S:        # `runs` holds the caller's, so it is not empty
+        return (f"the VM's record of hook runs ({EVENT_LOG}) reaches back only {ago(since, now)}, and {owner} may have run a "
+                f"command before that: gone is no hook run in {window}. Try again after "
+                f"{time.strftime('%H:%M', time.gmtime(since + GONE_S))} UTC")
+    if (last := max((t for t, _, agent in runs if agent == owner), default=0)) > now - GONE_S:
+        return (f"agent {owner} ran a command on this VM {ago(last, now)}, so it is not gone (gone is no hook run in {window}): "
+                f"ask it for what you need, or work in a checkout of your own")
+    return ""
+
+
+def coordinators() -> tuple[dict[str, str], str]:
+    """(agent id -> the handle it holds, the registry that says so), by the registry the hooks read. `hook.sh` hands a hook
+    origin/main's copy (REGISTRY); a command an agent runs is handed none, and reads origin/main's from the checkout this file
+    is in, so that a checkout's own copy, older than its coordinator's handle or edited, decides only where origin/main can't
+    be read."""
+    name = OWN_REGISTRY.relative_to(root := OWN_REGISTRY.parents[3])
+    if REGISTRY == OWN_REGISTRY and (text := git(str(root), "show", f"origin/main:{name}")):
+        return holders(text), f"origin/main's {name}"
+    return holders(), str(REGISTRY)
+
+
+def reclaim_note(owner: str, agent: str, top: str) -> str:
+    """What a refusal that names `owner`, the agent stamped on the checkout `top`, adds for `agent`: the command that takes the
+    checkout back, when `agent` is the VM's coordinator and `owner` is gone; else ""."""
+    if (handle := coordinators()[0].get(agent)) is None or gone_reason(owner, agent):
+        return ""
+    return (f" Agent {owner} has run no command on this VM in the last {GONE_S / 3600:g} h, and you hold @{handle}: take back "
+            f"{top} and the branches {owner} holds with `{RECLAIM} {top}`.")
+
+
+def not_coordinator(agent: str, directory: str, registry: str) -> str:
+    """The refusal of a `reclaim` by an agent that holds no handle in `registry`."""
+    return (f"only the VM's coordinator takes a checkout back, and {agent or 'this shell (no CURSOR_CONVERSATION_ID)'} holds no "
+            f"handle in the Slack registry ({registry}): ask your coordinator to run `{RECLAIM} {directory}`, or work in a "
+            f"checkout of your own (`git worktree add ../wt-<name> -b <branch>`)")
+
+
+def reclaim(directory: str, agent: str, now: float | None = None) -> tuple[int, str]:
+    """Give the checkout holding `directory`, and every branch registered to its stamped owner, to `agent`: (0, what changed),
+    or (1, why not). Only an agent that holds a handle takes a checkout back, only one stamped to another agent, and only
+    once that owner is gone (`gone_reason`)."""
+    handles, registry_read = coordinators()
+    if (handle := handles.get(agent)) is None:
+        return 1, not_coordinator(agent, directory, registry_read)
+    gitdir, top = git(directory, "rev-parse", "--absolute-git-dir"), git(directory, "rev-parse", "--show-toplevel")
+    if gitdir is None:
+        return 1, f"{directory} is in no checkout: name a checkout's directory"
+    top = top or directory
+    if not (owner := stamp(gitdir)):
+        return 1, (f"{top} has no owner to take it back from: a checkout belongs to the first agent that runs git in it, so run "
+                   f"`git -C {top} status` and it is yours")
+    if owner == agent:
+        return 0, f"{top} is already {agent}'s"
+    if why := gone_reason(owner, agent, now):
+        return 1, f"{top} stays agent {owner}'s: {why}"
+    tmp = Path(gitdir) / f"{OWNER_FILE}.{os.getpid()}"
+    tmp.write_text(agent + "\n")
+    os.replace(tmp, Path(gitdir) / OWNER_FILE)
+    held = sorted(b for b, a in registry().items() if a == owner)
+    for b in held:
+        register(b, agent, replace=True)
+    return 0, (f"{top} is now {agent}'s (@{handle}); it was {owner}'s, gone by the VM's record of hook runs"
+               + (f". So are the branches {owner} held: {', '.join(held)}" if held else ""))
+
+
+def reclaim_reason(commands: list[list[str]], agent: str) -> str | None:
+    """A `worktree_guard.py reclaim DIR` typed by an agent that holds no handle: the command reads who runs it from its
+    environment, which the caller sets, and the hook from Cursor's event, which it doesn't."""
+    for words in commands:
+        for i, w in enumerate(words[:-1]):
+            if w.endswith("worktree_guard.py") and words[i + 1] == "reclaim":
+                handles, registry_read = coordinators()
+                return None if agent in handles else not_coordinator(agent, " ".join(words[i + 2:i + 3]) or "DIR", registry_read)
+    return None
+
+
+def hand_reason(commands: list[list[str]], agent: str, cwd: str = "") -> str | None:
     """A `worktree_guard.py hand BRANCH AGENT_ID` from an agent other than the one BRANCH is registered to: only its owner gives
-    a branch away, or any agent could take another's branch by handing it to itself."""
+    a branch away, or any agent could take another's branch by handing it to itself. Where the checkout the command runs in
+    (`cwd`) is that owner's and it is gone, the VM's coordinator is told how to take both back (`reclaim_note`)."""
     reg = registry()
     for words in commands:
         for i, w in enumerate(words[:-2]):
             if w.endswith("worktree_guard.py") and words[i + 1] == "hand" and reg.get(b := words[i + 2], agent) != agent:
                 return (f"branch {b} belongs to agent {reg[b]}, so only that agent can hand it on: ask it to run `python3 "
-                        f"tools/agent-guard/worktree_guard.py hand {b} <agent-id>`. If it is gone, push a branch of your own.")
+                        f"tools/agent-guard/worktree_guard.py hand {b} <agent-id>`."
+                        + (held_note(reg[b], agent, cwd) or " If it is gone, push a branch of your own."))
     return None
+
+
+def held_note(owner: str, agent: str, directory: str) -> str:
+    """`reclaim_note` for the checkout holding `directory`, when `owner` is the agent stamped on it; else ""."""
+    gitdir = git(directory, "rev-parse", "--absolute-git-dir") if directory else None
+    if gitdir is None or stamp(gitdir) != owner:
+        return ""
+    return reclaim_note(owner, agent, git(directory, "rev-parse", "--show-toplevel") or directory)
 
 
 #: git's own options that take the next word as their value (`git -h`; git takes none of its own options by a prefix)
@@ -377,15 +510,16 @@ def next_repaired(targets: set[str], ok: str, record: dict) -> bool:
     return True
 
 
-def owner_reason(branches: list[str], agent: str) -> str | None:
+def owner_reason(branches: list[str], agent: str, directory: str = "") -> str | None:
     """Why `agent` may not push `branches`: the first that is registered to another agent, until that agent hands it over.
-    An unregistered branch passes."""
+    An unregistered branch passes. Where the checkout the push runs in (`directory`) is that agent's and it is gone, the VM's
+    coordinator is told how to take both back (`held_note`)."""
     reg = registry()
     for b in (n for given in branches for n in (fnmatch.filter(reg, given) if "*" in given else [given])):
         if reg.get(b, agent) != agent:
             return (f"branch {b} belongs to agent {reg[b]} (it created it, or its checkout had it): push a branch of "
                     f"your own (`git push -u origin <your-branch>`), or have its owner hand it to you: `python3 "
-                    f"tools/agent-guard/worktree_guard.py hand {b} {agent}`.")
+                    f"tools/agent-guard/worktree_guard.py hand {b} {agent}`." + held_note(reg[b], agent, directory))
     return None
 
 
@@ -414,38 +548,126 @@ def main_or_config_reason(invocations_: list[Git], pushes: dict[int, Push], next
     return None
 
 
+#: the configuration keys and the variables that name a commit's author or committer in place of the machine's configured one
+IDENTITY_KEYS = {f"{who}.{what}" for who in ("user", "author", "committer") for what in ("name", "email")}
+IDENTITY_VARIABLES = {f"GIT_{who}_{what}" for who in ("AUTHOR", "COMMITTER") for what in ("NAME", "EMAIL")}
+#: what clears one of those variables from a shell that holds it
+UNSET_IDENTITY = "`unset GIT_AUTHOR_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_NAME GIT_COMMITTER_EMAIL`"
+#: the words of a `git config` beside which `KEY VALUE` writes the checkout's own configuration, or the machine's
+CONFIG_SCOPE = {"set", "--local", "--worktree", "--global"}
+#: the variables that name another file as the global configuration a `git config --global` writes (not XDG_CONFIG_HOME:
+#: git writes `~/.gitconfig` unless that file is missing and the one under it exists)
+GLOBAL_FILE = {"HOME", "GIT_CONFIG_GLOBAL"}
+
+
+def after_cd(commands: list[list[str]], indexed: list[Git], envs: list[dict[str, str]], dirs: list[str]) -> list[Git]:
+    """`indexed` as the identity rule reads it, and no other rule: each git in the directory the command's plain `cd`s leave
+    it in (`dirs[i]`, shell_hook.cd_dirs; "" where they leave that in doubt) joined with its own `-C`, so `cd CHECKOUT && git
+    ...` is judged in CHECKOUT and `cd SCRATCH && git ...` in SCRATCH. One that anything but a `cd` leaves unplaced stays so
+    (`Git.unknown`): another move anywhere in the command (`moves`), `--git-dir`, `GIT_DIR`."""
+    if moves([words for words in commands if words[:1] != ["cd"]]):
+        return indexed
+    to = [dirs[g.i] if g.i < len(dirs) else "" for g in indexed]
+    return [indexed_invocations([commands[g.i]], d, envs[g.i:g.i + 1])[0]._replace(i=g.i) if d else g for g, d in zip(indexed, to)]
+
+
+def identity_reason(indexed: list[Git], envs: list[dict[str, str]]) -> str | None:
+    """Whatever agent runs it: a git command that names an author or committer of its own in a checkout of QUEUE_REPOS, one
+    whose `origin` is theirs (`queue_remote`), as a worktree's is. A commit there carries the machine's configured identity,
+    so refused are git's own `-c` or `--config-env` of one of IDENTITY_KEYS, one of IDENTITY_VARIABLES assigned ahead of the
+    command (`envs`, shell_hook.git_env), `commit --author`, and a `git config KEY VALUE` that writes one of IDENTITY_KEYS to
+    the checkout's own configuration. `indexed` places each command (`after_cd`). A read passes (`log --author`, `config KEY`,
+    `config --get KEY`), as does a `git config` with any other option (`--file`, `--unset`), a command in any other
+    repository (a scratch one takes any identity) and one the guard can't place (`Git.unknown`). A variable another command
+    in the text sets or unsets (`$` in `envs`) is not judged here: where that command leaves it in the shell, the command is
+    `kept_identity_reason`'s to refuse.
+    The machine's identity sits in its global configuration, which every checkout on it commits with, so a `git config
+    --global KEY VALUE` of one of IDENTITY_KEYS is refused wherever it runs, unless the command names another file as the
+    global configuration (GLOBAL_FILE)."""
+    for g in indexed:
+        sub, rest, env = g.args[0], g.args[1:], envs[g.i] if g.i < len(envs) else {}
+        keys = [w.removeprefix("--config-env=").partition("=")[0] for w in g.options]
+        written = [a for a in rest if a not in CONFIG_SCOPE]
+        wrote = written[:1] if sub == "config" and len(written) == 2 and written[0].lower() in IDENTITY_KEYS else []
+        if wrote and "--global" in rest and not GLOBAL_FILE & set(env):
+            return (f"this `git config --global` writes `{wrote[0]}` to the machine's global configuration, which every checkout "
+                    f"on this machine takes its identity from, verity's and infra's among them: leave it as the machine was "
+                    f"given it. `git config --global user.name` and `git config --global user.email` read the identity the "
+                    f"machine has; if either prints nothing, the machine was not given it: stop and tell your coordinator "
+                    f"rather than set one. A scratch repository that needs a name takes it in its own configuration, `git -C "
+                    f"<scratch> config user.name NAME`, or on the command, `git -C <scratch> -c user.name=NAME -c "
+                    f"user.email=ADDRESS commit ...`.")
+        given = [*(k for k in keys if k.lower() in IDENTITY_KEYS),
+                 *(n for n in sorted(IDENTITY_VARIABLES) if env.get(n, "$") != "$"),
+                 *(a.partition("=")[0] for a in rest if sub == "commit" and a.partition("=")[0] == "--author"),
+                 *(wrote if "--global" not in rest else [])]
+        if given and not g.unknown and queue_remote(git(g.d, "remote", "get-url", "origin") or "", PUSH_REMOTES):
+            return (f"this `git` names an author or committer of its own (`{given[0]}`) in a checkout of verity or infra, where a "
+                    f"commit carries the machine's configured identity, so that the history shows who wrote what: commit with the "
+                    f"machine's configured identity; pass no name or address (no `-c user.*`, `--author`, `GIT_AUTHOR_*` or "
+                    f"`GIT_COMMITTER_*`, and no `git config user.name|user.email VALUE`; `git config user.email` reads the one "
+                    f"it has), and {UNSET_IDENTITY} clears one the shell holds. A scratch repository takes any identity: run "
+                    f"it there, `cd <scratch> && git ...` or `git -C <scratch> ...`.")
+    return None
+
+
+def kept_identity_reason(kept: list[str]) -> str | None:
+    """Whatever agent runs it, wherever it is typed: a command that leaves one of IDENTITY_VARIABLES set in the shell that
+    runs it (`kept`, shell_hook.shell_keeps): an `export`, a `declare`, an assignment with no command after it. Git reads
+    them from its environment in every repository, so a shell that holds one hands it to every later commit, in a checkout
+    of QUEUE_REPOS too, by a git command that names no identity and that `identity_reason` passes. The names ahead of one
+    command (`GIT_AUTHOR_NAME=... git ...`) reach that command alone and are `identity_reason`'s to judge."""
+    for name in kept:
+        if name in IDENTITY_VARIABLES:
+            return (f"this command sets `{name}` in the shell itself (an `export`, a `declare` or an assignment with no command "
+                    f"after it), and the shell keeps an exported name for every later commit, in verity's and infra's checkouts "
+                    f"too, where a commit carries the machine's configured identity. A scratch repository that needs a name "
+                    f"takes it on the one command: put the names ahead of it, `GIT_AUTHOR_NAME=NAME GIT_AUTHOR_EMAIL=ADDRESS "
+                    f"GIT_COMMITTER_NAME=NAME GIT_COMMITTER_EMAIL=ADDRESS git -C <scratch> commit ...`, or pass them to it, "
+                    f"`git -C <scratch> -c user.name=NAME -c user.email=ADDRESS commit ...`. If the shell already holds one, "
+                    f"{UNSET_IDENTITY} clears it.")
+    return None
+
+
 #: what the shell expands after the hook has read the command: a branch or directory named through one can't be judged
 UNEXPANDED = ("$", "`")
 
 
 def unexpanded_reason(commands: list[list[str]], indexed: list[Git], pushes: dict[int, Push]) -> str | None:
     """Whatever agent runs it: a push, branch switch or worktree add whose words the shell has yet to expand. The hook sees
-    `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`."""
+    `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`.
+    Of `git worktree` only `add` creates or checks out a branch (and a subcommand the shell names only later may be it): a
+    `remove`, `prune`, `list`, `move`, `lock` or `repair` over a variable passes."""
     for i, _, args, _, _ in indexed:
         sub = args[0]
         if sub not in ("push", "checkout", "switch", "worktree") or (sub == "checkout" and "--" in args):
+            continue
+        if sub == "worktree" and args[1:2] != ["add"] and not any(c in w for w in args[1:2] for c in UNEXPANDED):
             continue
         remote = pushes[i].repository or "" if sub == "push" else ""
         if sub == "push" and not any(c in remote for c in UNEXPANDED) and judged(pushes[i]) is None:
             continue
         if words := [w for w in commands[i][1:] if any(c in w for c in UNEXPANDED)]:
+            literal = "git worktree add ../wt-<name> -b <branch>" if sub == "worktree" else "git push origin HEAD:refs/heads/<your-branch>"
             return (f"this `git {sub}` names `{words[0]}`, which the shell expands only after the guard has read it, so the guard "
-                    f"can't check which branch or checkout it is. Name it literally (`git push origin HEAD:refs/heads/<your-branch>`).")
+                    f"can't check which branch or checkout it is. Name it literally (`{literal}`).")
     return None
 
 
 def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] | None = None,
-           envs: list[dict[str, str]] | None = None) -> str | None:
+           envs: list[dict[str, str]] | None = None, dirs: list[str] | None = None) -> str | None:
     """Why the agent may not run these git commands here, or None. Registers the branches an allowed command creates.
     `next_ok[i]` is the AGENT_GUARD_PUSH_NEXT_OK reason `commands[i]` was given, if any; `envs[i]` the git variables it runs
-    under (shell_hook.git_env)."""
+    under (shell_hook.git_env); `dirs[i]` the directory its plain `cd`s leave it in (shell_hook.cd_dirs), which the identity
+    rule alone reads."""
     indexed = indexed_invocations(commands, cwd, envs)
     pushes = {g.i: read_push(g, envs[g.i] if envs is not None and g.i < len(envs) else {}) for g in indexed if g.args[0] == "push"}
-    if why := unexpanded_reason(commands, indexed, pushes) or main_or_config_reason(indexed, pushes, next_ok or [], agent):
+    if why := (unexpanded_reason(commands, indexed, pushes) or main_or_config_reason(indexed, pushes, next_ok or [], agent)
+               or identity_reason(after_cd(commands, indexed, envs or [], dirs or []), envs or [])):
         return why
     if not agent:
         return None
-    if why := hand_reason(commands, agent):
+    if why := hand_reason(commands, agent, cwd) or reclaim_reason(commands, agent):
         return why
     for i, d, args, _, unknown in indexed:
         sub = args[0]
@@ -462,9 +684,9 @@ def reason(commands: list[list[str]], agent: str, cwd: str, next_ok: list[str] |
             return (f"{top} is agent {mine}'s checkout, and switching its branch moves everything installed from it under that "
                     f"agent (the `research` CLI follows it). Work in a checkout of your own: `git -C {top} worktree add "
                     f"../wt-<name> -b <branch>` (or `git worktree add ../wt-<name> <existing-branch>`), then run git there "
-                    f"with `git -C ../wt-<name> ...`. One agent per checkout (AGENTS.md).")
+                    f"with `git -C ../wt-<name> ...`. One agent per checkout (AGENTS.md)." + reclaim_note(mine, agent, top))
         if sub == "push" and (judgment := judged(pushes[i])) is not None and (
-                why := owner_reason(push_targets(pushes[i]), agent)):
+                why := owner_reason(push_targets(pushes[i]), agent, "" if unknown else d)):
             return why + judged_note(judgment)
         if (b := created_branch(sub, args[1:])) and sub in ("checkout", "switch", "worktree"):
             register(b, agent)
@@ -476,6 +698,10 @@ def main(argv: list[str]) -> int:
         register(argv[1], argv[2], replace=True)
         print(f"worktree_guard: {argv[1]} is now {argv[2]}'s")
         return 0
+    if argv[:1] == ["reclaim"] and len(argv) == 2:
+        code, said = reclaim(argv[1], CONVERSATION_ID)
+        print(f"worktree_guard: {said}", file=sys.stderr if code else sys.stdout)
+        return code
     if argv[:1] == ["list"]:
         print(json.dumps(registry(), indent=1, sort_keys=True))
         return 0
