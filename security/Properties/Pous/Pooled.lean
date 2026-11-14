@@ -24,7 +24,7 @@ any one under the device model, so `PeriodHeld` bounds each window whatever came
 * `PooledShortLog_honest`: its premises hold at an honest pooled period, and its count condition at one `δ'`.
 * `PooledShortLog_nontrivial`: a verifier that accepts every window (`acceptAll`) fails its conclusion.
 
-`FixedBefore` is a named assumption (`pous-ring-device`, `trusted-host`): the memory challenger releases each
+`FixedBefore` is a named assumption (`pous-ring-device`, `trusted-device`): the memory challenger releases each
 window's capacity coins only after that window's commitment is in. `δ'` is `δ_PoUS`, the failure probability of PoUS
 over a monitoring period, a public deployment parameter that no component publishes.
 -/
@@ -39,12 +39,12 @@ open scoped ENNReal
 
 set_option exponentiation.threshold 20000
 
-/-- `pous-ring-device` and `trusted-host`, per monitoring period: **each window is fixed before its capacity coins**. At
+/-- `pous-ring-device` and `trusted-device`, per monitoring period: **each window is fixed before its capacity coins**. At
 the period's capacity coins `x`, window `u`'s joint run `r u x`, its audit `P u x` and the other audits' coins `o u x`
 read only the earlier windows' coins `x i`, `i < u`.
 
 The memory challenger enforces it. Window `u`'s capacity coins are flipped on the auditor's device, which runs its stated
-code on a host the prover doesn't control (`trusted-host`), and are released only after the window's commitment is in:
+code on a host the prover doesn't control (`trusted-device`), and are released only after the window's commitment is in:
 each index after the previous answer, the coin root only after the last answer and the signature (`pous-ring-device`:
 the coins flipped online, after the server's state is fixed). So nothing fixed for window `u` reads its own coins, while
 the earlier windows' coins are out by then and may be read. -/

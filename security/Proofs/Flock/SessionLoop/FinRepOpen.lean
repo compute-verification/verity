@@ -472,7 +472,7 @@ theorem finRepOpen (hx : Masked.Live x) (hS : Loop.RepSrc L₀ src x w) (hRows :
     have hst' : (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]! = Masked.stAt x ⟨k / 2, hj⟩ := by
       rw [show (2 * (k / 2) + k % 2) / 2 = k / 2 by omega]
       exact getElem!_pos (Masked.stsOf x) (k / 2) hi'
-    have hz' : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]!.m =
+    have hz' : _root_.Flock.Zk.schedule (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]!.wideLeaf (Masked.stsOf x)[(2 * (k / 2) + k % 2) / 2]!.m =
         .ok ((Masked.zkTab x ⟨k / 2, hj⟩).sch, (Masked.zkTab x ⟨k / 2, hj⟩).tPad) := by
       rw [hst']
       exact (Masked.zkTab x ⟨k / 2, hj⟩).hz

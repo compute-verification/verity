@@ -24,10 +24,11 @@ from research.landing import (ACTIVE, AFTER_LANDING, AUTO_PLAN, LAUNCH_LOST_S, L
                               SIGTERM_RC, SLIM_STEPS, Landing, shard_machines, step_paths, step_records)
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, _inherited, _reading, decide, meets)
-from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, OWN_TRAIN, WHOLE, Read,
-                                  _json, _text, abandon, audit_built, audit_failures, audited, audits, based, combine, failures,
-                                  judge, key, lean_inputs, lean_reads, left, read_step, read_suite, reads, replaced,
-                                  joined, shard_count, start, step_kind, step_test, suite_kind, traced_reads, unnamed)
+from research.vqueue_slim import (BUILD, CARRY_ENV, CARRY_WAIT_S, CHECK, HEAVY_PART, LEAN_AUDIT_STEP, LEND_ENV, OWN_TRAIN,
+                                  WHOLE, Read, _json, _text, abandon, answers_suites, audit_built, audit_failures, audited,
+                                  audits, based, borrowed, combine, failures, judge, key, lean_inputs, lean_reads, left,
+                                  lends_suites, read_step, read_suite, reads, replaced, joined, shard_count, start, step_kind,
+                                  step_test, suite_kind, traced_reads, unnamed)
 from test_policy import LIVE, TEST
 from test_landing import CI_TOML, GATED_TREE, LINT_LOG, PREFLIGHTS, Harness, _main, _move_main, _plan_doc, _policy, _slim
 from test_queue import World, _git
@@ -395,8 +396,8 @@ def test_a_launch_again_after_infra_goes_to_other_machines_of_each_shards_set(wo
     (its own machines, then the others it falls back on, `shard_machines`), the whole set where that leaves none, and the
     record keeps them."""
     h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.on, machines, launch = on, [], h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+    h.d.on, machines, launch = on, [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
     rec = start(h.d, sha, base, **({"shards": shards} if shards else {}), avoid=["m1"])
     assert machines == want and rec["avoid"] == ["m1"]
@@ -443,8 +444,8 @@ def test_start_launches_each_shard_with_the_loops_own_train_sh(world, monkeypatc
     """A candidate's tree doesn't decide how long its launch is waited for: every launch runs the loop's own train.sh, this
     tree's, which the loop's pin deploys."""
     h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.on, given, launch = "m1,m2,m3", [], h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, train_from=None, **kw: given.append(train_from) or launch(
+    h.d.on, given, launch = "m1,m2,m3", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, train_from=None, **kw: given.append(train_from) or launch(
         repo, commit, machine, steps, **kw)
     start(h.d, sha, base, shards=shards)
     assert given == [OWN_TRAIN] * shards and OWN_TRAIN.is_file()
@@ -457,8 +458,8 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
     `Landing.beside_args`' keywords, `--shard K/N` on shard K's machines, the record holding each shard's run ids and its
     ``gate``."""
     h, base, sha, _ = _harness(world, monkeypatch, agreement)
-    h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+    h.d.on, machines, launch = "m1,m2,m3,m4", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
     rec = start(h.d, sha, base, shards=3)
     kw = h.d.beside_args(sha, base)[0]
@@ -561,7 +562,7 @@ def test_a_sharded_launch_is_read_once_every_shard_printed_and_a_shard_that_regi
     h, base, sha, _ = _harness(world, monkeypatch)
     h.d.on, printed = "m1,m2", {}
     launches = [{"dir": str(tmp_path / f"launch-{k}"), "pid": 1} for k in (1, 2)]
-    h.d.launch_postland = lambda *a, **kw: launches[int(kw["shard"][0]) - 1]
+    h.d.launch_after_landing = lambda *a, **kw: launches[int(kw["shard"][0]) - 1]
     h.d.launched = lambda got: (printed.get(got["dir"]), "train.sh: no slot")
     rec = start(h.d, sha, base, shards=2)
     assert rec["ids"] == [] and rec["shards"] == [{"ids": [], "launch": x} for x in launches]
@@ -583,8 +584,8 @@ def test_a_shard_whose_train_sh_printed_no_run_at_once_stops_the_others_and_star
     """A shard launched at once whose train.sh printed no run ids: the shards that registered a run are cancelled, and `start`
     logs that shard's tail and gives no record, which `judge` takes as infra."""
     h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.on, launch = "m1,m2,m3", h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: (
+    h.d.on, launch = "m1,m2,m3", h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: (
         ([], "train.sh: no slot") if kw["shard"] == "2/3" else launch(repo, commit, machine, steps, **kw))
     assert start(h.d, sha, base, shards=3) is None and h.cancelled == ["r-post-0", "r-post-1"]
     assert world.logs[-1].endswith(f"as 3 shards as candidate {sha[:12]}'s check registered no run: train.sh: no slot")
@@ -605,7 +606,7 @@ def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_
     finds it made launches each shard `--shard auto:K/N` with its file on shard K's machines, the plan read once.  The file
     goes once every shard has its run ids, each having sent it with its run."""
     h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.on, machines, printed, launches, post = "m1,m2,m3,m4,m5,m6", [], {}, [], h.d.launch_postland
+    h.d.on, machines, printed, launches, post = "m1,m2,m3,m4,m5,m6", [], {}, [], h.d.launch_after_landing
     plans = Plans(h.d, tmp_path)
 
     def launch(repo, commit, machine, steps, **kw):
@@ -616,7 +617,7 @@ def test_start_with_auto_shards_has_the_candidates_plan_made_and_the_judge_that_
         launches.append(got := {"dir": str(tmp_path / f"launch-{len(launches) + 1}"), "pid": 1})
         return got
 
-    h.d.launch_postland, h.d.launched = launch, lambda got: (printed.get(got["dir"]), "")
+    h.d.launch_after_landing, h.d.launched = launch, lambda got: (printed.get(got["dir"]), "")
     rec = start(h.d, sha, base, shards="auto:6")
     kw, out = h.d.beside_args(sha, base)[0], tmp_path / "plan-1"
     assert plans.asked == [(sha, ",".join(AFTER_LANDING), None, 6)] and h.posted == []
@@ -656,7 +657,7 @@ def test_a_shard_of_an_auto_plan_that_registered_no_run_stops_the_others_and_the
     h.d.on, printed = "m1,m2", {}
     plans = Plans(h.d, tmp_path)
     launches = [{"dir": str(tmp_path / f"launch-{k}"), "pid": 1} for k in (1, 2)]
-    h.d.launch_postland = lambda *a, **kw: launches[int(kw["shard"].removeprefix("auto:").split("/")[0]) - 1]
+    h.d.launch_after_landing = lambda *a, **kw: launches[int(kw["shard"].removeprefix("auto:").split("/")[0]) - 1]
     h.d.launched = lambda got: (printed.get(got["dir"]), "train.sh: no slot")
     rec = start(h.d, sha, base, shards="auto:2")
     plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
@@ -690,8 +691,8 @@ def test_with_heavy_on_the_shard_that_audits_security_proofs_alone_launches_on_t
     shard launches on its usual machines and the record is as before."""
     h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": _plans(
         *([plan] if plan else []), [["pytest"]] * (5 - shards))})
-    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
     plain = start(h.d, sha, base, shards=shards)
     usual = shard_machines("m1,m2,m3", shards) if shards > 1 else ["m1,m2,m3"]
@@ -709,8 +710,8 @@ def test_heavy_on_moves_no_run_that_audits_nothing(world, monkeypatch):
     """The run beside a check under graph2 (no shards) runs no lean-audit, nor does a check taking lean-audit's verdict from a
     candidate below (``audit_from``): ``heavy_on`` moves neither."""
     h, base, sha, _ = _harness(world, monkeypatch, change={"tools/verity/check/ci.toml": _plans(HEAVY_PLAN)})
-    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
     assert "heavy_on" not in start(h.d, sha, base, heavy_on="big")
     assert "heavy_on" not in start(h.d, sha, base, shards=3, audit_from=base, heavy_on="big")
@@ -722,8 +723,8 @@ def test_with_heavy_on_the_auto_plan_shard_that_audits_security_proofs_launches_
     """An auto plan's shards launch once it is made: the one its plan gives `HEAVY_PART` goes on the heavy machines, which the
     record kept from `start`."""
     h, base, sha, _ = _harness(world, monkeypatch)
-    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_postland
-    h.d.launch_postland = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
+    h.d.on, machines, launch = "m1,m2,m3", [], h.d.launch_after_landing
+    h.d.launch_after_landing = lambda repo, commit, machine, steps, **kw: machines.append(machine) or launch(repo, commit, machine,
                                                                                                          steps, **kw)
     plans = Plans(h.d, tmp_path)
     rec = json.loads(json.dumps(start(h.d, sha, base, shards="auto:3", heavy_on="big")))
@@ -878,6 +879,99 @@ def test_an_auto_plan_waits_then_is_made_and_each_of_its_shards_names_the_runs_i
     assert judge(h.d, rec) == Verdict(PENDING) and len(plans.asked) == 1 and h.posted == []
     plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
     assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING) and named == ["r-a", "r-a"]
+
+
+@pytest.mark.parametrize("shards", [1, 3, "auto:2"])
+def test_a_check_leaving_suites_to_its_base_s_names_it_to_each_launch_and_its_record_says_whose(world, monkeypatch, tmp_path,
+                                                                                                shards):
+    """``suites_from``, the candidate the check is built on: each launch names it by the setting `check.lender` reads
+    (`LEND_ENV`, which settings.py declares under this name), an auto plan's shards as they launch, and the next launch
+    names none; the record says whose check answers for the suites it leaves out (``suites_from``).  Only the check that
+    gates takes one, and only its own base."""
+    assert LEND_ENV == "TRAIN_SUITES_FROM"
+    h, base, sha, _ = _harness(world, monkeypatch)
+    h.d.on, named, plans = "m1,m2,m3", [], Plans(h.d, tmp_path)
+    h.d._started = lambda got: named.append(_handed().get(LEND_ENV)) or Landing._started(got)
+    rec = start(h.d, sha, base, shards=shards, suites_from=base)
+    assert (rec["suites_from"], rec["gate"]) == (base, CHECK) and LEND_ENV not in _handed()
+    assert any(f"as candidate {sha[:12]}'s check, the suites keyed as in {base[:12]} its check's: " in x for x in world.logs)
+    if shards == "auto:2":
+        assert named == []
+        plans.answers[rec["plan"]["out"]] = (_plan_doc(2), None)
+        assert judge(h.d, json.loads(json.dumps(rec))) == Verdict(PENDING)
+    assert named == [base] * (2 if shards == "auto:2" else shards) and LEND_ENV not in _handed()
+    named.clear()
+    assert "suites_from" not in start(h.d, sha, base, shards=1) and named == [None]
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, suites_from=base)
+    with pytest.raises(ValueError, match="only the check that gates"):
+        start(h.d, sha, base, shards=1, suites_from=sha)
+
+
+def test_a_check_leaves_no_suite_to_its_base_s_under_a_deselect_list(world, monkeypatch, tmp_path):
+    """Under the loop's deselect list two checks may run different tests of one suite, so a check launched with one names no
+    lender, and its record says it left tests out (``deselect``), which keeps it from lending (`lends_suites`)."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    named, listed = [], tmp_path / "deselect"
+    h.d._started = lambda got: named.append(_handed().get(LEND_ENV)) or Landing._started(got)
+    listed.write_text("tools/x/tests/test_x.py::test_slow\n")
+    rec = start(h.d, sha, base, shards=1, deselect=listed, suites_from=base)
+    assert named == [None] and "suites_from" not in rec and rec["deselect"] is True
+    listed.unlink()
+    rec = start(h.d, sha, base, shards=1, deselect=listed, suites_from=base)
+    assert named == [None, base] and rec["suites_from"] == base and "deselect" not in rec
+
+
+def test_a_check_lends_its_suites_only_while_it_and_main_s_answer_for_both_suite_steps(world, monkeypatch, tmp_path):
+    """`lends_suites`: the check that gates, judged on pytest and lean-suites, lends them while the check of `main` keeps a
+    verdict that passed both.  Not the run beside a graph2 check, not a check launched under a deselect list, not where a
+    suite step gates nothing or the candidate's policy isn't its base's (an allowance its check is judged without), and
+    not while `main`'s check keeps no verdict or one that failed a suite step: a candidate above lands on that failure
+    as inherited, and a check that left the suite out would record the step passed."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    green = start(h.d, base, base, shards=1)
+    _slim(h, tmp_path)
+    assert judge(h.d, green) == Verdict(PASS) and {"pytest", "lean-suites"} <= set(green["verdict"]["passed"])
+    rec = start(h.d, sha, base, shards=1)
+    assert lends_suites(h.d, rec, green)
+    assert not lends_suites(h.d, None, green) and not lends_suites(h.d, start(h.d, sha, base), green)
+    assert not lends_suites(h.d, {**rec, "deselect": True}, green)
+    assert not lends_suites(h.d, rec, None) and not lends_suites(h.d, rec, start(h.d, base, base, shards=1)), "no verdict kept"
+    red = json.loads(json.dumps(green))
+    red["verdict"]["passed"] = [s for s in red["verdict"]["passed"] if s != "pytest"]
+    assert not lends_suites(h.d, rec, red)
+    other = world.change({"tools/verity/check/policy.toml": _policy(("suite x", "ci", LIVE), off_gate=OFF)})
+    _git(h.q.workdir, "fetch", "-q", "origin", f"refs/dev/{other}")
+    assert not lends_suites(h.d, start(h.d, other, base, shards=1), green), "its policy isn't its base's"
+    h.d.warn_steps = ("lean-suites",)
+    assert not lends_suites(h.d, rec, green)
+
+
+def test_a_check_that_left_suites_to_another_passes_only_once_that_one_passed_both_suite_steps(world, monkeypatch, tmp_path):
+    """`borrowed`: the check that left suites to its base's (``suites_from``) never passes on its own steps alone.  While
+    that check keeps no verdict a pass is pending and a fail not ended; once it passed both suite steps the verdict is the
+    check's own.  A record that never will answer (`answers_suites`: it failed a suite step or ended in infra, ran under
+    a deselect list, or is no check that gates, as a quick tier's isn't whatever it says it passed) holds it the same way,
+    for the loop to start it again.  A check that left none out is never held."""
+    h, base, sha, _ = _harness(world, monkeypatch)
+    lender = start(h.d, base, base, shards=1)
+    rec = start(h.d, sha, base, shards=1, suites_from=base)
+    _slim(h, tmp_path)
+    own = judge(h.d, rec)
+    red = Verdict(FAIL, (_failed(h, base, sha, "circuit-check"),), ended=True)
+    assert own == Verdict(PASS) and answers_suites(lender) is None and answers_suites(None) is None
+    for source in (None, lender):
+        assert borrowed(own, rec, source) == Verdict(PENDING) and borrowed(red, rec, source) == replace(red, ended=False)
+    passed = {**lender, "verdict": {"state": PASS, "passed": ["pytest", "lean-suites", "lean-audit"]}}
+    assert answers_suites(passed) is True and borrowed(own, rec, passed) == own and borrowed(red, rec, passed) == red
+    never = [{**passed, "verdict": {"state": FAIL, "passed": ["lean-suites"], "failed": []}},
+             {**passed, "verdict": {"state": INFRA}}, {**passed, "deselect": True}, {**passed, "gate": "quick"},
+             {k: v for k, v in passed.items() if k != "gate"}]
+    for source in never:
+        assert answers_suites(source) is False and borrowed(own, rec, source) == Verdict(PENDING)
+        assert not lends_suites(h.d, start(h.d, sha, base, shards=1), source)
+    plain = start(h.d, sha, base, shards=1)
+    assert borrowed(own, plain, None) == own and borrowed(own, plain, never[0]) == own and borrowed(own, None, None) == own
 
 
 def test_a_check_that_waited_and_then_registered_no_run_is_infra_kept(world, monkeypatch):
@@ -1286,7 +1380,7 @@ ___________ test_a_stage_timeout_ends_the_runs_workers_outside_its_group _______
 >       assert trun.main(argv) == 0
 E       AssertionError: assert 75 == 0
 ----------------------------- Captured stderr call -----------------------------
-[tele run] refused to start the workload: this machine caps each login session at MemoryMax=80% (/etc/systemd/system/session-.scope.d), but this run's cgroup /user.slice/check.scope has memory.max max, so its workload would run with no cap of its own.
+[tele run] refused to start the workload: this machine caps each login session at MemoryMax=80% (/etc/systemd/system/session-.scope.d), but this run's cgroup /user.slice/check.scope has memory.max max, so its workload would run with no limit of its own.
 =========================== short test summary info ============================
 FAILED tests/test_telemetry.py::test_a_stage_timeout_ends_the_runs_workers_outside_its_group - AssertionError: assert 75 == 0
 """

@@ -4,6 +4,8 @@ public import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 public import Proofs.Flock.Claims.Complete.Zk.Level0Run
 public import Proofs.Flock.Claims.Complete.Zk.Level0Shape
 public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -58,26 +60,35 @@ namespace FlockComplete.L0
 
 open Flock Transcript FlockComplete Replay ZkTables.Level0
 
-/-- The `--zk` schedule keeps fast100's `n`, which is not zero. -/
-theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : v.1.n ≠ 0 := by
-  unfold Zk.schedule at h
-  obtain ⟨q0, -, h⟩ := except_ok_bind h
-  cases hf : fast100 m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-    rw [hf] at h
-    cases h
-    exact (fast100_ligerito hf).1
+variable {wideLeaf : Bool}
+
+/-- A `--zk` schedule's `n` is not zero: the kernel's evaluation at either statement version, `m < 40` (`queries0`
+refuses the rest). -/
+theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) : v.1.n ≠ 0 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
+        | .ok v => decide (v.1.n ≠ 0)
+        | .error _ => true) = true := by
+      decide +kernel
+    have := key wideLeaf ⟨m, hm⟩
+    simp only [h, decide_eq_true_eq] at this
+    exact this
+  · exfalso
+    unfold Zk.schedule at h
+    obtain ⟨q0, hq0, -⟩ := except_ok_bind h
+    unfold Zk.queries0 at hq0
+    simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
+      show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 /-- **`ZkTables.Level0.ProverRuns`**: the masked prover's Ligerito returns wherever its pair coins are independent. -/
 theorem proverRuns : ProverRuns := by
-  intro resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t l _ _ _ hv0 hrho
+  intro wideLeaf resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t l _ _ _ hv0 hrho
   exact ligeritoPZk_ret resp h _ v.1 T cm0 tb b lay hv rep v.2 extra lanePad salt nonce (zkSchedule_n hv0)
     (zkSchedule_shape hv0).1 t l hrho
 
 /-- **`ZkTables.Level0.ProverShape`**: the masked prover's Ligerito proof has its lengths. -/
 theorem proverShape : ProverShape := by
-  intro resp h m v sh T cm0 tb b lay hv rep extra lanePad salt0 salt nonce t t' l l' P zl rc h64 h25 h35 hv0 hsch
+  intro wideLeaf resp h m v sh T cm0 tb b lay hv rep extra lanePad salt0 salt nonce t t' l l' P zl rc h64 h25 h35 hv0 hsch
     hhl hsl ht _ hcm hrun
   have hn : ∀ l r v, (MerkleScheme.hm96Sha512.opsWith (Hashes.ofSha512 h : Hashes V)).node l r = .ok v →
       v.size = sh.hashLen := fun _ _ _ e => by
@@ -94,7 +105,7 @@ theorem proverShape : ProverShape := by
 
 /-- **`ZkTables.Level0.Lanes`**: the masked prover's lane phase in closed form. -/
 theorem lanes : Lanes := by
-  intro resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t t' l l' P zl rc _ _ hv0 _ _ hrun
+  intro wideLeaf resp h m v T cm0 tb b lay hv rep extra lanePad salt nonce t t' l l' P zl rc _ _ hv0 _ _ hrun
   exact ligeritoPZk_lanes resp _ _ v.1 T cm0 tb b lay hv rep v.2 extra lanePad salt nonce (zkSchedule_n hv0)
     (zkSchedule_shape hv0).1 hrun
 

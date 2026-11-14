@@ -9,8 +9,9 @@ launch contexts a workload's shapes are built under (`verity_vllm.pipeline.launc
 (`verity_vllm.pipeline.report.summarize_md`), the gate whose detail each of its counts reads (`build_card`) and its reading of a
 log's first record (`log_header`), the line `verdict from-record` prints (`verity_vllm.pipeline.verdict_record.main`), the config
 record of a row that ran nothing and the circuit database's index (`verity_vllm.pipeline.config_record`: `record`, `load_index`),
-the timeline report's window and its command, which report a file's last attempt, its reading of a file, its categories and
-its writer (`verity_vllm.pipeline.timeline`: `report`, `main`, `read`, `report_md`, `Timeline`), the
+the timeline report's window and its command, which report a file's last attempt, its reading of a file, its categories, its
+engine counts and its table, and its writer, by a path or by the environment's, with what an event and a span carry
+(`verity_vllm.pipeline.timeline`: `report`, `main`, `read`, `report_md`, `Timeline`), the
 experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`), the command
 a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs`: `main`, and `build_outputs` for a link, a failed
 replay and a stage it does not know) and the one that writes the rows' digests
@@ -30,6 +31,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -353,6 +355,23 @@ def test_prefill_chunks_are_a_requests_prompt_rows_one_a_step_before_its_decodes
         assert LC.bad_chunks(launch, wrapper, 8, T, C) is not None
 
 
+class _Clock:
+    """The clock the timeline's writer reads, at the reading a test sets; a reading is formatted as the real module formats it."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.strftime, self.gmtime = TL.time.strftime, TL.time.gmtime
+
+    def time(self) -> float:
+        return self.now
+
+
+def _span(stage: str, t0: float, t1: float, pid: int = 1, proc: str = "row", **fields: Any) -> list[dict[str, Any]]:
+    """A stage's `start` at `t0` and its `end` at `t1`, the fields on the `end`, as a process's writer leaves them."""
+    start = {"t": t0, "proc": proc, "pid": pid, "stage": stage, "ev": "start"}
+    return [start, {**start, "t": t1, "ev": "end", **fields}]
+
+
 def test_the_timeline_reports_its_window_or_none_without_a_timed_event():
     start = {"t": 10.0, "proc": "row", "pid": 1, "stage": "build", "ev": "start"}
     rep = TL.report([start, {**start, "t": 12.5, "ev": "end"}])
@@ -390,9 +409,7 @@ def test_the_timeline_report_adds_a_categorys_separate_spans_keeps_a_parallel_sp
     """Two spans of one category that do not overlap add up; a stage under no category's prefix is `other`; a span marked `par` is
     counted beside a span it contains, where an unmarked one is that span's wrapper and is left out; the row's span and a whole
     stage's are the envelope, in no category; a start with no end is unclosed.  The table says both."""
-    def span(stage: str, t0: float, t1: float, pid: int = 1, **fields: Any) -> list[dict[str, Any]]:
-        start = {"t": t0, "proc": "row", "pid": pid, "stage": stage, "ev": "start"}
-        return [start, {**start, "t": t1, "ev": "end", **fields}]
+    span = _span
 
     def category(rep: dict[str, Any], name: str) -> tuple[int, float, float]:
         c = rep["categories"][name]
@@ -413,6 +430,121 @@ def test_the_timeline_report_adds_a_categorys_separate_spans_keeps_a_parallel_sp
     assert "unclosed" not in TL.report_md(wrapped) and "envelope" not in TL.report_md(wrapped)
 
 
+def test_the_timeline_report_counts_engine_starts_and_reuses_and_its_table_has_a_line_for_each_category():
+    """An engine start is a span of `engine.build`, with the reason its `end` gives or `unrecorded`; a reuse is a mark or an `end`
+    of `engine.reuse`.  A category's seconds are its spans' added, and their union where two overlap; each span is listed with
+    the fields the report names and no other; an `end` with no `start` is a span of the seconds it carries.  The table is the
+    same figures, a category a line in the report's order, with its share of the window."""
+    events = sorted([
+        *_span("engine.build", 60.0, 80.0, pid=13, proc="commit", restart_reason="fresh process", hot=False),
+        *_span("engine.build", 100.0, 140.0, pid=11, proc="commit", restart_reason="fresh process", engine_reused=False, model="m",
+               build_s=39.5),
+        *_span("prep.warmup", 141.0, 141.1, pid=11, proc="commit", ok=True), *_span("prep.warmup", 142.0, 142.2, pid=11, proc="commit", ok=True),
+        {"t": 145.0, "proc": "commit", "pid": 11, "stage": "engine.reuse", "ev": "mark", "hot": True},
+        *_span("work.pair1", 150.0, 156.0, pid=11, proc="commit", arm="control", pair=1, n=8, rc=0),
+        *_span("work.pair2", 154.0, 160.0, pid=13, proc="commit", arm="capture", pair=2, n=8, rc=0),
+        *_span("engine.build", 300.0, 310.0, pid=12, proc="replay"),
+        *_span("engine.reuse", 320.0, 321.0, pid=12, proc="replay", hot=True, engine_reused=True),
+        *_span("validate.fold", 330.0, 334.0, pid=12, proc="replay", ok=False),
+        {"t": 350.0, "proc": "replay", "pid": 12, "stage": "closure.summary", "ev": "end", "s": 2.0}], key=lambda e: e["t"])
+    rep = TL.report(events)
+    assert (rep["events"], rep["spans"], rep["elapsed_s"], rep["unclosed"], rep["envelope"]) == (20, 10, 290.0, [], [])
+    assert rep["engine"] == {"starts": 3, "reuses": 2, "restart_reasons": {"fresh process": 2, "unrecorded": 1},
+                             "build_s": [20.0, 40.0, 10.0], "hot_values": [False, True], "processes": 3}
+    assert list(rep["categories"].items()) == [
+        ("startup", {"spans": 3, "sum_s": 70.0, "union_s": 70.0, "stages": {"engine.build": 70.0}}),
+        ("preparation", {"spans": 2, "sum_s": 0.3, "union_s": 0.3, "stages": {"prep.warmup": 0.3}}),
+        ("workload", {"spans": 2, "sum_s": 12.0, "union_s": 10.0, "stages": {"work.pair1": 6.0, "work.pair2": 6.0}}),
+        ("validation", {"spans": 1, "sum_s": 4.0, "union_s": 4.0, "stages": {"validate.fold": 4.0}}),
+        ("closure", {"spans": 1, "sum_s": 2.0, "union_s": 2.0, "stages": {"closure.summary": 2.0}}),
+        ("other", {"spans": 1, "sum_s": 1.0, "union_s": 1.0, "stages": {"engine.reuse": 1.0}})]
+    commit, replay = {"proc": "commit", "pid": 11}, {"proc": "replay", "pid": 12}
+    assert rep["spans_detail"] == [
+        {"proc": "commit", "pid": 13, "stage": "engine.build", "s": 20.0, "category": "startup", "t0_utc": "00:01:00",
+         "restart_reason": "fresh process", "hot": False},
+        {**commit, "stage": "engine.build", "s": 40.0, "category": "startup", "t0_utc": "00:01:40", "restart_reason": "fresh process",
+         "engine_reused": False, "model": "m"},
+        {**commit, "stage": "prep.warmup", "s": 0.1, "category": "preparation", "t0_utc": "00:02:21", "ok": True},
+        {**commit, "stage": "prep.warmup", "s": 0.2, "category": "preparation", "t0_utc": "00:02:22", "ok": True},
+        {**commit, "stage": "work.pair1", "s": 6.0, "category": "workload", "t0_utc": "00:02:30", "arm": "control", "pair": 1, "n": 8, "rc": 0},
+        {"proc": "commit", "pid": 13, "stage": "work.pair2", "s": 6.0, "category": "workload", "t0_utc": "00:02:34", "arm": "capture",
+         "pair": 2, "n": 8, "rc": 0},
+        {**replay, "stage": "engine.build", "s": 10.0, "category": "startup", "t0_utc": "00:05:00"},
+        {**replay, "stage": "engine.reuse", "s": 1.0, "category": "other", "t0_utc": "00:05:20", "hot": True, "engine_reused": True},
+        {**replay, "stage": "validate.fold", "s": 4.0, "category": "validation", "t0_utc": "00:05:30", "ok": False},
+        {**replay, "stage": "closure.summary", "s": 2.0, "category": "closure", "t0_utc": "00:05:48"}]
+    window = ("window 1970-01-01T00:01:00Z → 1970-01-01T00:05:50Z · elapsed 290.0 s · 10 spans in 3 processes · engine starts **3** "
+              "(build s [20.0, 40.0, 10.0]) · engine reuses **2** · restart reasons {'fresh process': 2, 'unrecorded': 1} · hot [False, True]")
+    assert TL.report_md(rep, "a-row").split("\n") == [
+        "### Runner timeline — a-row [measured]", "", window, "",
+        "| stage | spans | summed s | union s | share of elapsed | finest stages (s) |", "|---|---:|---:|---:|---:|---|",
+        "| startup | 3 | 70.0 | 70.0 | 24 % | engine.build 70.0 |", "| preparation | 2 | 0.3 | 0.3 | 0 % | prep.warmup 0.3 |",
+        "| workload | 2 | 12.0 | 10.0 | 3 % | work.pair1 6.0, work.pair2 6.0 |", "| validation | 1 | 4.0 | 4.0 | 1 % | validate.fold 4.0 |",
+        "| closure | 1 | 2.0 | 2.0 | 1 % | closure.summary 2.0 |", "| other | 1 | 1.0 | 1.0 | 0 % | engine.reuse 1.0 |", ""]
+
+
+def test_a_timeline_stage_is_of_the_category_its_name_holds_and_the_table_names_a_categorys_eight_longest_stages():
+    """A stage is of the first category one of whose prefixes it begins with, holds after a dot, or is but for the prefix's dot,
+    whatever its case; a name under none is `other`.  The table's line names a category's eight longest stages, longest first."""
+    named = [("commit.engine.build", "startup"), ("prep", "preparation"), ("Work.Pair1", "workload"), ("tp.validate.fold", "validation"),
+             ("summary", "closure"), ("mystery", "other")]
+    rep = TL.report([e for k, (stage, _) in enumerate(named) for e in _span(stage, 10.0 * k, 10.0 * k + 1)])
+    assert [(d["stage"], d["category"]) for d in rep["spans_detail"]] == named
+    nine = TL.report_md(TL.report([e for k in range(9) for e in _span(f"work.s{k}", 100.0 + 10 * k, 101.0 + 11 * k)])).split("\n")
+    window = ("window 1970-01-01T00:01:40Z → 1970-01-01T00:03:09Z · elapsed 89.0 s · 9 spans in 1 processes · engine starts **0** "
+              "(build s []) · engine reuses **0** · restart reasons {} · hot []")
+    line = ("| workload | 9 | 45.0 | 45.0 | 51 % | work.s8 9.0, work.s7 8.0, work.s6 7.0, work.s5 6.0, work.s4 5.0, work.s3 4.0, "
+            "work.s2 3.0, work.s1 2.0 |")
+    assert (nine[0], nine[2], nine[6:]) == ("### Runner timeline [measured]", window, [line, ""])
+
+
+def test_a_timeline_attempt_begins_at_the_rows_start_and_at_no_other_event_of_its_driver():
+    """The row's driver writes more than the row's start: its stages' spans and the row's end.  None of them begins an attempt,
+    so the report of a file of two attempts is of the whole of the second."""
+    def attempt(t: float, pid: int) -> list[dict[str, Any]]:
+        row = {"t": t, "proc": "row_pod", "pid": pid, "stage": "row", "ev": "start"}
+        rest = ((1.0, "stage.build", "start"), (4.0, "stage.build", "end"), (5.0, "row", "end"))
+        return [row, *({**row, "t": t + dt, "stage": stage, "ev": ev} for dt, stage, ev in rest)]
+
+    rep = TL.report([*attempt(100.0, 1), *attempt(500.0, 7)])
+    assert (rep["attempts_in_file"], rep["events"], rep["spans"], rep["elapsed_s"]) == (2, 4, 2, 5.0)
+    assert rep["envelope"] == [{"stage": "stage.build", "s": 3.0, "proc": "row_pod"}, {"stage": "row", "s": 5.0, "proc": "row_pod"}]
+
+
+def test_a_timeline_writers_event_carries_its_clocks_reading_and_an_end_the_seconds_since_its_start(tmp_path, monkeypatch):
+    """An event carries the clock's reading as `t` and as `utc`, the writer's process and its label, `?` when it was given none.
+    An `end` carries the seconds since its stage's `start` unless it was given its own; a mark between the two carries none and
+    leaves the stage open; an `end` with no `start` open, a second `end` among them, carries none.  The writer makes every
+    directory its file is under."""
+    clock = _Clock()
+    monkeypatch.setattr(TL, "time", clock)
+    path = tmp_path / "sweep" / "a-row" / "timeline.jsonl"
+    tl = TL.Timeline(path)
+    written = []
+    for now, stage, ev, fields in ((1000.25, "build", "start", {}), (1001.0, "build", "mark", {}), (1003.75, "build", "end", {}),
+                                   (1004.0, "build", "end", {}), (1010.0, "match", "start", {}), (1012.0, "match", "end", {"s": 99.5})):
+        clock.now = now
+        written.append(tl.event(stage, ev, **fields))
+    assert [json.loads(line) for line in path.read_text().splitlines()] == written
+    assert [(e["t"], e["utc"], e["stage"], e["ev"], e.get("s")) for e in written] == [
+        (1000.25, "1970-01-01T00:16:40Z", "build", "start", None), (1001.0, "1970-01-01T00:16:41Z", "build", "mark", None),
+        (1003.75, "1970-01-01T00:16:43Z", "build", "end", 3.5), (1004.0, "1970-01-01T00:16:44Z", "build", "end", None),
+        (1010.0, "1970-01-01T00:16:50Z", "match", "start", None), (1012.0, "1970-01-01T00:16:52Z", "match", "end", 99.5)]
+    assert {(e["proc"], e["pid"]) for e in written} == {("?", os.getpid())}
+
+
+def test_a_timeline_writer_from_the_environment_writes_the_file_its_setting_names_and_is_off_without_one(tmp_path, monkeypatch):
+    path = tmp_path / "timeline.jsonl"
+    monkeypatch.setenv("VERITY_TIMELINE", str(path))
+    on = TL.Timeline.from_env("commit", hot=False)
+    rec = on.event("engine.build", "start")
+    assert on.enabled is True and rec is not None and (rec["proc"], rec["hot"]) == ("commit", False)
+    assert [json.loads(line) for line in path.read_text().splitlines()] == [rec]
+    monkeypatch.delenv("VERITY_TIMELINE")
+    off = TL.Timeline.from_env("commit", hot=False)
+    assert off.enabled is False and off.event("engine.build", "start") is None
+
+
 def test_a_timeline_writer_with_no_path_is_off_and_one_that_cannot_append_gives_no_event(tmp_path):
     off = TL.Timeline(None)
     assert off.enabled is False and off.event("build", "start") is None
@@ -425,6 +557,26 @@ def test_a_timeline_writer_with_no_path_is_off_and_one_that_cannot_append_gives_
     path.unlink()
     path.mkdir()
     assert on.event("build") is None
+
+
+def test_a_timeline_span_ends_with_what_its_block_set_and_raises_again_what_its_block_raises(tmp_path):
+    """A span's start carries the fields it is given, and its end carries `ok` and what the block set on the dict it was handed.
+    A block that raises, an exit among them, ends `ok=False` with what it had set, and what it raised comes out as it is: a
+    span swallows nothing, so the lines under one stop where they would stop outside it."""
+    path = tmp_path / "timeline.jsonl"
+    tl = TL.Timeline(path, proc="commit")
+    with tl.span("validate.fold", pair=1) as extra:
+        extra["n"] = 3
+    stop = SystemExit("no fold")
+    with pytest.raises(SystemExit) as raised, tl.span("work.pair1") as extra:
+        extra["arm"] = "control"
+        raise stop
+    assert raised.value is stop
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    assert [(e["stage"], e["ev"], e.get("pair"), e.get("ok"), e.get("n"), e.get("arm")) for e in events] == [
+        ("validate.fold", "start", 1, None, None, None), ("validate.fold", "end", None, True, 3, None),
+        ("work.pair1", "start", None, None, None, None), ("work.pair1", "end", None, False, None, "control")]
+    assert ["s" in e for e in events] == [False, True, False, True]
 
 
 def test_the_experiment_index_counts_the_captured_values_and_their_steps(tmp_path):

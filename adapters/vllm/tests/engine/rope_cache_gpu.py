@@ -139,9 +139,9 @@ def timed(fns: dict, seconds: float, clock, calls: dict) -> dict:
         per[arm] = max(1, round(ITEM_MS / max(e0.elapsed_time(e1), 1e-3)))
         graphs[arm] = g
     arms = tuple(fns)
-    us = {arm: [] for arm in arms}
+    us: dict[str, list[float]] = {arm: [] for arm in arms}
     ms = {arm: 0.0 for arm in arms}
-    clocks = {arm: [] for arm in arms}
+    clocks: dict[str, list[list[float | None]]] = {arm: [] for arm in arms}
     r = 0
     while min(ms.values()) < 1e3 * seconds:
         for j in range(len(arms)):

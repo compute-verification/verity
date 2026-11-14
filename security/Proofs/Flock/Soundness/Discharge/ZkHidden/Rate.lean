@@ -44,8 +44,8 @@ theorem logLen_tableZHJ_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (
     (lvOf (tableZHJ dj y₀ S j).sch 0).logLen ≤ L := by
   unfold tableZHJ
   split_ifs with h
-  · exact hL _ _ _ (Classical.choice h).hz
-  · exact hL _ _ _ y₀.hz
+  · exact hL _ _ _ _ (Classical.choice h).hz
+  · exact hL _ _ _ _ y₀.hz
 
 /-- The plan's table at index `i` is `tableZHJ` at `i`. -/
 theorem planZHJ_get (S : Finset (Fin n)) (R : Reg) (i : Fin (planZHJ (Reg := Reg) dj y₀ S R).length) :

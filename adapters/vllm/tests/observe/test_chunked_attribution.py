@@ -331,7 +331,7 @@ def test_randomized_scheduler_ids_are_mapped_back_to_the_submitted_ids():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the adapter wiring (needs torch + vllm importable: runs in the pod's venv-cu129, skipped on the laptop)
+# the adapter wiring (needs torch and vllm importable; skipped where either is absent)
 # ---------------------------------------------------------------------------------------------------------
 
 
