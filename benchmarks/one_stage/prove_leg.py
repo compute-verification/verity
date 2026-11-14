@@ -83,7 +83,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import a7  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402

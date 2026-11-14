@@ -21,7 +21,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
-import a5 as A5  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import window_audit as A5  # noqa: E402
 import fake_challenger as FC  # noqa: E402
 
 XOR8 = PrimitiveDefinition("A5OutputsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,

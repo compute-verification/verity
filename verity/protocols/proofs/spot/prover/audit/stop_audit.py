@@ -91,9 +91,9 @@ import numpy as np
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 sys.path.insert(0, str(HERE))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import prove_leg as PL  # noqa: E402
-import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.device import two_stage as TS  # noqa: E402
 import verity.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
@@ -581,7 +581,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         check, stop = TS.template_fn(handoff["commit"]["check"]), TS._stop(a.stop)
         if stop is None:
             raise ValueError("a stop population is audited under the verifier's own stop rule: --stop")
-        import a5_coins as AC
+        from verity.protocols.proofs.spot.device import challenger_session as AC
         # the verifier's half, from the hand-off and its own copies
         r = resume(handoff, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline,
                    key=AC.verifier_key(a.challenger_key, a.challenger_host), main=AC.lines(Path(a.main)))

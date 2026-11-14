@@ -22,7 +22,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(HERE.parent / "hidden_zk"))
+sys.path.insert(0, str(HERE.parents[6] / "benchmarks" / "pouw" / "hidden_zk"))
 
 from verity.commitments.rowleaf import ROLE_W, ROLE_X  # noqa: E402
 from verity.protocols.accounting.pouw.prover.circuit import leaves as L  # noqa: E402

@@ -82,7 +82,7 @@ from verity.commitments.windows import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 sys.path.insert(0, str(HERE.parent))
-import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
 
 K, M, CALLS, ROUNDS = 2048, 32, 3, 2
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": K, "intermediate_size": 256,

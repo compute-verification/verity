@@ -37,7 +37,7 @@ from typing import Any
 
 sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")))
 
-import a5_coins as AC
+from verity.protocols.proofs.spot.device import challenger_session as AC
 
 #: the longest request line a client may send
 MAX_LINE = 1 << 16
