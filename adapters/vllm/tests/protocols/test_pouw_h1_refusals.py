@@ -79,9 +79,9 @@ else:
 import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
 import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
 import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
-import verity.protocols.accounting.pouw.prover.serving.h1.draw as PHD
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn as DN
-import verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows as DR
+import verity.protocols.accounting.pouw.prover.serving.h1.sample as PHD
+import verity.protocols.accounting.pouw.prover.serving.h1.sampled as DN
+import verity.protocols.accounting.pouw.prover.serving.h1.sampled_rows as DR
 import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
 import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
 import verity.protocols.accounting.pouw.prover.serving.h1.live as LV

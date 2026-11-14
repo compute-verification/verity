@@ -4508,6 +4508,14 @@
         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_cap.py": "verity/protocols/accounting/pouw/verifier/tests/test_circuit_inert_bound.py",
         "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_debit.py": "verity/protocols/accounting/pouw/verifier/tests/test_pouw_pearl_c_inert_work.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/serving/h1/draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/sample.py",
+        "verity/protocols/accounting/pouw/prover/serving/h1/drawn.py": "verity/protocols/accounting/pouw/prover/serving/h1/sampled.py",
+        "verity/protocols/accounting/pouw/prover/serving/h1/drawn_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/sampled_rows.py",
+        "verity/protocols/accounting/pouw/prover/serving/h1/serve_draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_sample.py"
+      }
     }
   ]
 }
