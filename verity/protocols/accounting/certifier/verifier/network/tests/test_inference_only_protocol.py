@@ -1,10 +1,10 @@
 """The inference-only policy as a core protocol (`InferenceOnlyCheck.Protocol`, `inference-only serve`,
-`verity/inference-only/v0`) against `inference_only_reference`'s `check_baseline` behind the protocol's decoders, through the
+`verity/inference-only/v0`) against `inference_only_reference`'s `check_theta` behind the protocol's decoders, through the
 difftest harness's `ProtocolPort`.
 
 The reference decodes the protocol's formats (`InferenceOnlyCheck/Protocol.lean`'s module docstring), checks that the run's
 record names the declared circuit (`names`), rebuilds the policy's check's instance and trusted input (the params' log
-with the run's own record, the commitment, appended, and that record's digest the run) and runs `check_baseline`, which
+with the run's own record, the commitment, appended, and that record's digest the run) and runs `check_theta`, which
 `InferenceOnlyCheck.ThetaDifftest` holds `InferenceOnlyCheck.Theta.check` to. The cases are θ's provenance difftest's declarations
 (`theta_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
 then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
@@ -102,7 +102,7 @@ def check(p: dict, c: tuple[dict, str], e: dict) -> tuple:
     instance = {"alpha": p["alpha"], "gamma": p["gamma"], "owner": e["owner"], "program": p["program"],
                 "provenance": e["provenance"], "theta": e["theta"]}
     trusted = {"log": [*p["log"], record], "params": p["parameters"], "run": run}
-    out = NR.check_baseline(instance, trusted)
+    out = NR.check_theta(instance, trusted)
     if "error" in out:
         return "reject", out["error"]
     if out["complies"] is True:
@@ -273,7 +273,7 @@ def test_each_change_takes_its_path():
     inst = {**{k: s["params"][k] for k in ("alpha", "gamma", "program")}, **s["evidence"]}
     trusted = {"log": [*s["params"]["log"], s["record"]], "params": s["params"]["parameters"],
                "run": NR.record_digest(s["record"])}
-    verdict = NR.check_baseline(inst, trusted)
+    verdict = NR.check_theta(inst, trusted)
     assert out["profile"] == {"blocks": verdict["ius"], "gates": verdict["gates"]} and out["public"] == {}
     assert out["commitment"] == NR.record_digest(s["record"])
 

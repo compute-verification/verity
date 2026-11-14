@@ -7,7 +7,7 @@ public import InferenceOnlyCheck.Desc
 
 `InferenceOnlyCheck.Desc.evaluate` takes θ as given: every entry is a registered input node (`theta-not-registered`), but nothing
 says what value it holds, so a developer could put values computed on unmonitored hardware in θ and read them for free.
-`InferenceOnly.Assumptions.BaselineRegistered` states what θ must hold: registered public data, registered at the start of the
+`InferenceOnly.Assumptions.ThetaRegistered` states what θ must hold: registered public data, registered at the start of the
 deployment. An output of an earlier run, certified or not, is never θ (registration happens at the start
 of a deployment and essentially never changes). One registration log is one deployment, and θ holds what its first
 record registers: the first run's θ cites its own record, which opens the log, and every

@@ -5017,8 +5017,8 @@ def test_a_grandfathered_inline_premise_follows_its_declarations_renames_and_upd
 #: the move of `Verity.Circuit.Transcript` to `Verity.Circuit.Trace`, as `rename.py --moves` printed it
 TRACE_MOVES = {"Claims.Recursion.abortTrace": "Claims.Recursion.abortTranscript", "Claims.Trace": "Claims.Transcript",
                "Verity.Circuit.Transcript": "Verity.Circuit.Trace"}
-NCI_CONSTS = ["Eq", "Exists", "Membership.mem", "InferenceOnly.admissible", "InferenceOnly.values", "SetLike", "SetLike.instMembership"]
-NCI_CONSTANTS = {"InferenceOnly.admissible": ("def", "admissible"), "InferenceOnly.values": ("def", "values"), "Eq": "inductive"}
+INFERENCE_ONLY_CONSTS = ["Eq", "Exists", "Membership.mem", "InferenceOnly.admissible", "InferenceOnly.values", "SetLike", "SetLike.instMembership"]
+INFERENCE_ONLY_CONSTANTS = {"InferenceOnly.admissible": ("def", "admissible"), "InferenceOnly.values": ("def", "values"), "Eq": "inductive"}
 
 
 def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_says_it_names():
@@ -5032,12 +5032,12 @@ def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_say
             "(InferenceOnly.values Sst a) (f s)"
         now = was.replace(f"{d}.D.Transcript", f"{d}.D.Trace")
         fields = [[d, "D", "Verity.RegisteredCircuit.D"], [f"{d}.D", "Trace", "Verity.Circuit.Trace"]]
-        pol, f = renamed_inline(was, now, NCI_CONSTS, NCI_CONSTANTS, TRACE_MOVES, fields)
+        pol, f = renamed_inline(was, now, INFERENCE_ONLY_CONSTS, INFERENCE_ONLY_CONSTANTS, TRACE_MOVES, fields)
         assert inline_codes(pol, f) == [], was
         assert A.inline_failures(pol, f)[1:] == ({"P.t": {now: WHY}}, {"P.t": [now]})
         assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
         for moves, shown in [(None, fields), (TRACE_MOVES, fields[:1]), (TRACE_MOVES, [])]:
-            pol, f = renamed_inline(was, now, NCI_CONSTS, NCI_CONSTANTS, moves, shown)
+            pol, f = renamed_inline(was, now, INFERENCE_ONLY_CONSTS, INFERENCE_ONLY_CONSTANTS, moves, shown)
             assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, moves, shown)
             assert A.inline_failures(pol, f)[1] == {}, (was, moves, shown)
 

@@ -12,7 +12,7 @@ import pytest
 from test_lean_verifier import LEAN, VERIFIER
 
 
-NCI_SCRIPTS = Path(__file__).resolve().parents[4] / "policy" / "inference_only" / "verifier" / "lean" / "scripts"
+INFERENCE_ONLY_SCRIPTS = Path(__file__).resolve().parents[4] / "policy" / "inference_only" / "verifier" / "lean" / "scripts"
 
 
 def _tile_window(bits: bool) -> str:
@@ -43,7 +43,7 @@ def test_width_refusals_agree_with_the_codec(tmp_path):
     template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `InferenceOnlyCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
     (`verity/protocols/proofs/flock/prover/agreement/README.md`'s D22; `qword_program_agree.py --widths`)."""
-    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")
+    spec = importlib.util.spec_from_file_location("desc_difftest_vectors", INFERENCE_ONLY_SCRIPTS / "desc_difftest_vectors.py")
     V = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(V)
     with open(tmp_path / "widths.jsonl", "w") as f:
