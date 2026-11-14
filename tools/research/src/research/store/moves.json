@@ -2415,6 +2415,12 @@
       "paths": {
         "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Pouw/Guarantees/PearlC.lean": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean",
+        "security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean": "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean"
+      }
     }
   ]
 }
