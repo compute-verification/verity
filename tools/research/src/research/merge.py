@@ -538,7 +538,8 @@ def _regenerated_in(run_id: str, audit) -> dict[str, str]:
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
     """(run ``rid``'s local dir, its `research status --json` row) with ``names``, paths under its run dir, fetched from its node
-    (`research status RID --json --also NAME...`, as `landing.evidence` reads a running check), or None when it can't be read.
+    (`research status RID --json --also NAME...`; `landing.read_run` reads one so in the loop's process), or None when it
+    can't be read.
     ``refresh`` fetches them for a run that has ended too (`--refresh`), which a plain read answers from what is kept here."""
     also = [x for n in names for x in ("--also", n)]
     r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *(["--refresh"] if refresh else []), *also],
@@ -1594,8 +1595,10 @@ def sweep_branches(repo: Path, remote: str = "origin", into: str = "main", now: 
     `refs/archive/heads/NAME` (still fetchable: `git fetch origin refs/archive/heads/NAME`). It keeps `KEEP_BRANCHES`, leads'
     run branches (`RUN_BRANCH_RE`), every branch an open PR uses as its head or base, and ``keep`` (the heads of PRs drive
     closed as stale or unlandable, which stay to be reopened: `research.stale`, `drive.Driver._unlandable`).  At most
-    ``limit`` of each, the longest idle first, each
-    logged by name.  Each push leases the tip it saw, so a branch pushed to meanwhile is kept.  Returns (deleted, archived)."""
+    ``limit`` of each, the longest idle first, each logged by name.  Each push leases the tip it saw, so a branch pushed to
+    meanwhile is kept.  Drive sweeps with ``into`` its landing branch (`Queue.into`: `checked` under drive.toml's
+    `land_into`), since `main` lags it by hours; a revert on `checked` then leaves its PR's branch deleted, and the PR's head
+    ref (`refs/pull/N/head`) keeps its commits.  Returns (deleted, archived)."""
     gh = gh or (lambda *a: _gh_cli(repo, *a))
     now = time.time() if now is None else now
     _git(repo, "fetch", "-q", "--prune", remote, f"+refs/heads/*:refs/sweep/{remote}/*")

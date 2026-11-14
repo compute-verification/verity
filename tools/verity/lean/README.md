@@ -91,8 +91,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
 - **The kernel accepts every declaration again** (`replay_step`, `Replay.lean`), and the axioms the replay finds are
   the ones the `.olean` files recorded; a replay killed by a signal is a kill, not a verdict (`killed`). `--closure`
   checks the whole import closure the same way, reusing each module that passed under its key, whichever package
-  checked it (`closure_plan`, `replay_keys`, `build_roots_over`); the audit prints `closure: N modules checked, M
-  reused` under each package's line.
+  checked it, wherever it was compiled: a key reads a module's `.olean` files without the source's path a message keeps
+  (`closure_plan`, `replay_keys`, `replay_digest`, `olean_graph.canonical`, `build_roots_over`); the audit prints
+  `closure: N modules checked, M reused` under each package's line.
 - **`--build` recompiles a sample** of the modules the build didn't compile and compares the outputs
   (`sampled_recompile`, `olean_graph.py`).
 - **Each test under `runs` passes** on the data whose SHA-256 the record holds (`tests`, `run_paths`).
@@ -100,8 +101,9 @@ of `check.py` unless it says otherwise, or the lock's section below.
   the `.olean` files of a package audited earlier while the audit runs: the Lean files run from a copy taken before the
   first build, and everything is sealed and checked after each package (`tampered`, `Seals`).
 
-Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), after taking
-one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
+Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), which reads
+the tree at one fixed path, so a module compiles to the same bytes wherever the tree is (`FIXED`, `--tree`, `bound`),
+after taking one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
 `MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
@@ -258,6 +260,8 @@ The auditor:
   replay and its cache, the report.
 - `Facts.lean`: the facts `check.py` judges, from the `.olean` files as data; the canonical texts the hashes are of.
 - `Replay.lean`: the kernel replay of a package's declarations, and of its import closure.
+- `replay-first.json`: the modules a package's replay checks first, each in a step of its own at its stated threads
+  (`replay_first`).
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
@@ -294,7 +298,8 @@ Lean's job in `check` and the tools around the audit:
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
   module, the guarantee that will read it and the date that guarantee is listed by (`ratchet`, whose failure prints
-  the entry).
+  the entry). Two PRs that each raise an area merge without a conflict: `merge.py --caps` sums their changes
+  (`unread_caps`).
 - `trusted_size.py`: the size of a package's spec, per area.
 - `tool.py`: the store's declarations of the scheduled runs.
 - `tests/`: the suite `verity-lean-audit`, the controls' fixtures among it.
