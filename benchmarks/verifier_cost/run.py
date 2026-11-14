@@ -33,8 +33,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-NCI = ROOT / "verity/protocols/policy/inference_only/verifier/lean"
-EXE = NCI / ".lake/build/bin/inference-only-check"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/lean"
+EXE = INFERENCE_ONLY_PACKAGE / ".lake/build/bin/inference-only-check"
 SCHEMA = "verity/verifier-cost/v1"
 
 sys.path.insert(0, str(HERE))
@@ -55,7 +55,7 @@ BOOLEAN = ("tiny", "tiny-2", "small", "mid", "b0-1", "b0")
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("inference_only_reference", NCI / "scripts/inference_only_reference.py")
+    spec = importlib.util.spec_from_file_location("inference_only_reference", INFERENCE_ONLY_PACKAGE / "scripts/inference_only_reference.py")
     ref = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(ref)
     return ref
@@ -323,7 +323,7 @@ def plot(args) -> int:
         ax.set_ylabel("verifier wall time (s)")
         ax.grid(True, which="both", alpha=0.3)
     axes[1].legend(fontsize=8)
-    fig.suptitle(f"{'NCI check' if inference_only else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
+    fig.suptitle(f"{'inference-only check' if inference_only else 'one-stage partition'} on Serve_v1 ({args.art})", fontsize=10)
     fig.tight_layout()
     fig.savefig(args.to, dpi=130)
     print(args.to)
