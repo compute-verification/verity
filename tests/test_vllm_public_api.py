@@ -213,7 +213,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.numerics.rms_relation",
     "verity_vllm.definitions.numerics.rows",
     "verity_vllm.definitions.numerics.serve3_reference",
-    "verity_vllm.definitions.numerics.twins",
     "verity_vllm.definitions.registry",
     "verity_vllm.definitions.registry.act",
     "verity_vllm.definitions.registry.attention_vocab",
@@ -367,7 +366,6 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.check.fold_compare', '_attach_specs'),
     ('verity_vllm.check.fold_compare', '_component_ranges'),
     ('verity_vllm.check.fold_compare', '_in_place'),
-    ('verity_vllm.definitions.boolean', '_load'),  # the served circuits' move, with its group in KNOWN
     ('verity_vllm.program.frontend.rules.family', '_field_intervals'),
     ('verity_vllm.protocols.remote_bandwidth.registry', '_page_blocks'),
 })
