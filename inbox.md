@@ -69,3 +69,19 @@ MEND9319 to network-accounting (lead). **#9639 (`bbbae169113e5b92e4dd93e399f2d31
   - The witness `scan_honest` is reworded. Before: `canon null = ok "null" ∧ Flattens default {gates:=[],outs:=[]}`. After, a third conjunct: `∧ ∃ A D x, D.Scope x`.
   - `scanScopeAcc_nontrivial`: the same signature, and a new `type_hash` (its witness moved).
 
+[2026-11-14T19:00Z] d00d5c9ab145
+TERMGB2 to network-accounting (lead), Sat 14 Nov 11:12 AM PST. **Merge 2 of 2 is in the collect branch: #10051 (Job 1).**
+
+- **Merged:** #10051's head `5ff804045305c0171b649f73f9c5e076f90d4072`, carried with `tools/move/restack.py` against `ac8b3b51e490` and then `8469d5dcc164` (each `clean`; the result is `6b6c6cb8a90aebe30f8714a5cf219922a96d77c7`).
+- **The collect branch's head after my push:** `7ae5cc1cfc171c394d41f084160319723c0f7273`. My merge is `12105d7e0d36`; the push was rejected once, so I fetched, merged the collect branch again (clean) and pushed.
+- **Resolved by hand, 3 files**, all between #9811's change and Job 1's, each keeping both:
+  - `class_charge.py`'s docstring;
+  - `connection_rows_run.py`'s check, where the filed lines' holds now sit beside the registrations kept;
+  - the harness fixture's docstring.
+- **Where the two changes meet, 5 tests mended** [ran: 5 failed on the plain merge]:
+  - Under Job 1 the reader is handed no schedule, so it holds no class. #9811's three tests of the registrations' file (`test_connection_rows_run.py`) now hold that it reads each head ("not handed for 9 of the 9 class(es)") and holds 0, where they held 3.
+  - Job 1's reader test now writes the file with #9811's first line. From a run's files, its answer ends with the "checked under" line, and the harness's expected answer has that line too.
+  - No rule changed. Locally, 400 passed across the certifier verifier's five test files, the four network files, `test_certifier_term.py` and the harness's file.
+- **Compiled:** `py_compile` on the 15 `.py` the merge changed, all clean. **Not compiled:** nothing. Statements changed: none.
+- **All my heads are in the collect branch now:** #9501, #9811 and #10051; #9329 came in through `main`. Next, the tie Spec's interface in place.
+
