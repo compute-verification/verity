@@ -625,25 +625,24 @@ def layout(c: Certificate) -> bytes:
 
 
 def one_of_each(tmp_path):
-    """The signer's key, a certified record, and a certificate of each kind the issuer signs: a record's at each end,
-    a clock's and a mark's."""
+    """The signer's key, a certified record, and a certificate of each kind the issuer signs: a record's at each end
+    and a mark's."""
     signer = signers.signer(tmp_path)
     issuer = Issuer(signer, SESSION, coins=fresh_coins())
     record = certify_all(issuer, run_shaper(FRAMES, honest_ready(), SYNCS, Certifier("responses", P))[:1])[0]
     ingress = certify_all(issuer, ingress_run([[2, 0, 0, 0]]), INGRESS)[0]
-    clock = issuer.salted_clock("responses", 0, SYNCS[0])
     mark = issuer.mark("responses", 3, MARK)
     return signer.public_key(), record, {"record": record.certificate, "ingress": ingress.certificate,
-                                         "clock": clock.certificate, "mark": mark.certificate}
+                                         "mark": mark.certificate}
 
 
 def test_a_certificates_bytes_are_the_layout_and_decode_is_its_inverse(tmp_path):
-    """`Certificate.encode` is the layout field by field for a record's certificate at each end, a clock's and a
-    mark's, and `Certificate.decode` gives the certificate back, which still verifies and encodes to the same bytes.
-    Two certificates that differ in one field have different bytes."""
+    """`Certificate.encode` is the layout field by field for a record's certificate at each end and a mark's, and
+    `Certificate.decode` gives the certificate back, which still verifies and encodes to the same bytes. Two
+    certificates that differ in one field have different bytes."""
     key, _, kinds = one_of_each(tmp_path)
     assert {c.direction for c in kinds.values()} == {EGRESS, INGRESS}
-    assert kinds["mark"].link == "responses-marks" and len({c.encode() for c in kinds.values()}) == 4
+    assert kinds["mark"].link == "responses-marks" and len({c.encode() for c in kinds.values()}) == 3
     for c in kinds.values():
         data = c.encode()
         assert data == layout(c) and len(data) == 2 + 16 + 2 + len(c.link) + 1 + 8 + 64 + 4 + len(c.signature)
@@ -663,7 +662,7 @@ def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
     """The commitment's leaf of a certified record (`service.encode`) is its head, its 64-byte salt and then the
     certificate, which is where the Lean reads it; the Lean audit's encoding of the record (`lean_audit.encode`) is
     a kind byte, the leaf's length and that leaf. The certificate's part of both is `Certificate.encode`, for a
-    record's certificate at each end, a clock's and a mark's, and `Certificate.decode` reads it back from there."""
+    record's certificate at each end and a mark's, and `Certificate.decode` reads it back from there."""
     _, record, kinds = one_of_each(tmp_path)
     head = record.head.encode()
     for c in kinds.values():

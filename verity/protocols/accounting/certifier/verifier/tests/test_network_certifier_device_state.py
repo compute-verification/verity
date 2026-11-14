@@ -207,5 +207,5 @@ def test_the_starts_tag_is_no_other_separator_and_neither_begins_the_other():
     table = [v.encode() for k, v in domains.TABLE.items() if k != "CERTIFIER_START"]
     own = [(v if isinstance(v, bytes) else v.encode()).rstrip(b"\0") for k, v in vars(certificate).items()
            if k.endswith("_TAG") and k != "START_TAG"]
-    assert domains.CERTIFIER_CLOCK.encode() in table and certificate.CLOCK_TAG.encode() in own
+    assert domains.CERTIFIER_CLOCK.encode() in table and certificate.RECORD_TAG.encode() in own
     assert not [t for t in table + own if t.startswith(mine) or mine.startswith(t)]
