@@ -184,15 +184,15 @@ def _static(v: Any) -> Any:
     return v
 
 
-# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/definitions/ops`)
+# A walk of its own, not the registry's `catalog.load(scope="ops")`: this place loads the catalog (`verity/circuits/ops`)
 # and not the rest of `verity/definitions` (its `loads` in tests/import_order.toml).
 
 @functools.cache
 def _load_catalog() -> None:
-    """Import every module of `verity.definitions.ops`, the catalog's, the embedding's registered read
+    """Import every module of `verity.circuits.ops`, the catalog's, the embedding's registered read
     (`commitments.gates.embedding`) and the streamed SHA-512 a checkpoint tie reads (`commitments.gates.sha512_stream`):
     each registers its Definitions as it loads."""
-    from verity.definitions import ops
+    from verity.circuits import ops
 
     for m in pkgutil.walk_packages(ops.__path__, f"{ops.__name__}."):
         if ".tests" not in m.name:
