@@ -11,7 +11,8 @@ both:
   count as `bound_charged` takes them, under each of its readings (`Charged.reading`): one `β_x` with the threshold at
   which the figure is largest (`best_w`), one `β_x` at the top budget with no block charged, and a `β_x` a block;
 * **the uncredited share** `s`: the share of a block's work that no PoUW check credits, which the caller states. A
-  developer gets that share whole, so each figure `ρ` is quoted with its limit `1 / (s + 1/ρ)` (`min_cut.capped`). The
+  developer gets that share whole, so each figure `slowdown` is quoted with its limit
+  `1 / (s + 1/slowdown)` (`min_cut.capped`). The
   words that work computes are tied by nothing either: a fourth reading counts them as fresh input, `k + word · u` with
   `u` the most words `s` of a block's work feeds (a word of a linear's output is fed by at least the least fan-in of
   the model's linears), under one `β_x` with its own best threshold.
