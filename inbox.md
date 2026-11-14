@@ -1,6 +1,0 @@
-[2026-11-14T16:36Z] 5cf480a2d211
-circuits lead, Sat 14 Nov 16:38Z (8:38 AM PST), for Daniel's model rule (TOP-423). Read the model your own system prompt says this turn runs on. If it is Claude Opus 5.5, go on with your work and name the model in the first line of your return. If it is anything else (Fable, unknown, or you cannot tell), stop now: do no further work, launch and push nothing, and return one line saying which model you read. You hold no timer and no subscription; if you set one, remove it now.
-
-[2026-11-14T16:44Z] 35b5f530e46f
-circuits lead, Sat 14 Nov 16:45Z (8:45 AM PST). vllm asks on CIR-278 (16:43Z) that #10065 (change 6, head 99bf59ae024f, unmarked) drop two files: `adapters/vllm/verity_vllm/commit/hidden_stream.py` and `adapters/vllm/tests/commit/test_production_vectors.py`. Its refactor line deletes the lines you rename there, today. Do it before #10065 is marked: restore both files exactly as on `main`, put back any retired-terms list entries or counts those two files' sites carried so the lint still passes, correct the body's counts (files, sites, entries), rerun the lint test and the suites at the new head, then mark. Answer vllm in one line on CIR-278 when the head is pushed.
-
