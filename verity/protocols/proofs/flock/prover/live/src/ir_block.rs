@@ -1,5 +1,6 @@
 //! `verity/flock-ir-block/v1`: identical units of an IR subcircuit template (`flock-ir-unit/v1`
-//! netlists, `verity_flock.ir_lower`) as ONE block R1CS, so the CPU prover and Flock-CUDA's host-witness mode prove it.
+//! circuit descriptions, `verity_flock.ir_lower`) as ONE block R1CS, so the CPU prover and Flock-CUDA's host-witness mode prove
+//! it.
 //!
 //! Block `b` holds units `U b .. U b + U - 1` (instance-major over the instance file), unit `u` at the 2^unit_log-bit slot
 //! `u`, so `k_log = unit_log + log2 U`. `A = I ⊗ (I_U ⊗ unit) + Δ` (and B), where Δ makes every unit's constant column a
@@ -189,7 +190,7 @@ impl RowWrite for Rows {
     }
 }
 
-/// A `flock-ir-unit/v2` netlist.
+/// A `flock-ir-unit/v2` circuit description.
 #[derive(Clone)]
 pub struct IrUnitNet {
     pub name: String,
@@ -463,7 +464,7 @@ fn fold<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> W {
     bare(x, &row[n..])
 }
 
-/// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
+/// A circuit description's `useful` rows, each line `na a.. nb b..`, written in order.
 fn read_rows<'a, R: RowWrite>(lines: &mut impl Iterator<Item = &'a str>, useful: usize) -> (R, R) {
     let (mut a, mut b) = (R::with_rows(useful), R::with_rows(useful));
     let mut v: Vec<usize> = Vec::new();
@@ -696,6 +697,143 @@ impl IrUnitNet {
     pub fn outputs(&self, inputs: &[F128]) -> Vec<F128> {
         let (z, _, _) = self.eval64(|col| bit(&inputs[col / WORD], col % WORD) as u64);
         self.out_cols.iter().map(|&c| (0..WORD).fold(F128::ZERO, |w, t| if z[c * WORD + t] & 1 == 1 { set(w, t) } else { w })).collect()
+    }
+}
+
+/// The unit's expanded circuit's level schedule: level 0 the input rows and the constant, a row one past its deepest operand
+/// (itself, in an assertion row, excluded), so a level's rows read only earlier levels' and are computed in any order. The
+/// device reads its rows beside it as CSR (`gpu::csr`).
+pub struct UnitSched {
+    /// levels [0, levels0) read no late input row; the rest do
+    pub levels0: usize,
+    pub late_rows: Vec<u32>,
+    pub cut_rows: Vec<u32>,
+    pub level_off: Vec<u32>,
+    pub order: Vec<u32>,
+}
+
+impl UnitSched {
+    /// The levels past level 0, both phases'.
+    pub fn levels(&self) -> usize {
+        self.level_off.len() - 1
+    }
+
+    /// Level `l + 1`'s rows.
+    pub fn level(&self, l: usize) -> &[u32] {
+        &self.order[self.level_off[l] as usize..self.level_off[l + 1] as usize]
+    }
+}
+
+/// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
+/// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
+pub fn schedule(net: &IrUnitNet) -> UnitSched {
+    schedule_of(net, &net.a, &net.b)
+}
+
+/// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
+pub(crate) fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
+    let (u, first, cpos) = (net.useful, net.in_words * WORD, net.const_pos);
+    let rows_of = |g: &Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * WORD + j) as u32).collect() };
+    let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
+    let mut cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
+    let mut late = vec![false; u];
+    for &r in &late_rows {
+        late[r as usize] = true;
+    }
+    for i in first..u {
+        if i != cpos {
+            late[i] = a.row_cols(i).chain(b.row_cols(i)).any(|c| c != i && c != cpos && late[c]);
+        }
+    }
+    if cut_rows.iter().any(|&r| late[r as usize]) {
+        // not two-phase (a cut output reads a late input: attention's and GEMM's tensor-core steps): one phase; such a unit's
+        // witness is the host's (flock-circuit keeps it off the device)
+        late_rows.clear();
+        cut_rows.clear();
+        late = vec![false; u];
+    }
+    let mut level_off = vec![0u32];
+    let mut order = Vec::new();
+    let mut levels0 = 0;
+    for phase in [false, true] {
+        let mut level = vec![0u32; u];
+        let mut max = 0;
+        for i in first..u {
+            if i == cpos || late[i] != phase {
+                continue;
+            }
+            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
+            level[i] = l;
+            max = max.max(l);
+        }
+        let mut by: Vec<Vec<u32>> = vec![Vec::new(); max as usize];
+        for i in first..u {
+            if i != cpos && late[i] == phase {
+                by[level[i] as usize - 1].push(i as u32);
+            }
+        }
+        for l in by {
+            order.extend(l);
+            level_off.push(order.len() as u32);
+        }
+        if !phase {
+            levels0 = level_off.len() - 1;
+        }
+    }
+    UnitSched { levels0, late_rows, cut_rows, level_off, order }
+}
+
+/// The unit's rows as the device's level walk reads them (`fc_unit_walk`, prove_circuit.cuh) beside [`UnitSched::order`]: the
+/// scheduled rows in the schedule's order, row k's A columns at `cols[st[k]..mid[k]]` and its B columns at
+/// `cols[mid[k]..st[k + 1]]`, and per input row whether A's row (bit 0) and B's (bit 1) is the row's own column. A walk a
+/// level at a time gives [`IrUnitNet::eval_wide`]'s rows, so it needs what that needs: a one-pass net.
+pub struct WalkRows {
+    pub st: Vec<u32>,
+    pub mid: Vec<u32>,
+    pub cols: Vec<u32>,
+    pub own: Vec<u32>,
+}
+
+impl WalkRows {
+    /// None: the net has no one-pass form ([`IrUnitNet::one_pass`]), its schedule has two phases (a cut unit's), or its
+    /// rows hold more columns than a `u32` counts.
+    pub fn of(net: &IrUnitNet, sched: &UnitSched) -> Option<WalkRows> {
+        let (cp, first) = (net.const_pos, net.in_words * WORD);
+        if !net.one_pass() || !sched.late_rows.is_empty() || net.a.nnz() + net.b.nnz() >= u32::MAX as usize {
+            return None;
+        }
+        assert_eq!(sched.order.len(), cp - first, "the schedule is not this net's");
+        let n = sched.order.len();
+        let (mut st, mut mid) = (Vec::with_capacity(n + 1), Vec::with_capacity(n));
+        let mut at = 0u32;
+        for &i in &sched.order {
+            st.push(at);
+            at += net.a.row_len(i as usize) as u32;
+            mid.push(at);
+            at += net.b.row_len(i as usize) as u32;
+        }
+        st.push(at);
+        // the columns, a run of rows a task: each run's part of `cols` is its own
+        const RUN: usize = 1 << 14;
+        let mut cols = vec![0u32; at as usize];
+        let mut parts: Vec<(usize, &mut [u32])> = Vec::with_capacity(n.div_ceil(RUN));
+        let mut rest = cols.as_mut_slice();
+        for k0 in (0..n).step_by(RUN) {
+            let (part, tail) = std::mem::take(&mut rest).split_at_mut((st[(k0 + RUN).min(n)] - st[k0]) as usize);
+            parts.push((k0, part));
+            rest = tail;
+        }
+        parts.into_par_iter().for_each(|(k0, part)| {
+            let mut at = 0;
+            for &i in &sched.order[k0..(k0 + RUN).min(n)] {
+                for row in [net.a.row(i as usize), net.b.row(i as usize)] {
+                    part[at..at + row.len()].copy_from_slice(row);
+                    at += row.len();
+                }
+            }
+        });
+        let own = (0..first).map(|i| u32::from(own_row(&net.a, i)) | u32::from(own_row(&net.b, i)) << 1).collect();
+        Some(WalkRows { st, mid, cols, own })
     }
 }
 
@@ -1064,10 +1202,11 @@ fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
         .collect()
 }
 
-/// The cut structure is the pinned netlist's (IR4), never the instance header's: a header carrying its own is refused, and
-/// its cut word and per-instance unit counts must be the netlist's. Checked: units = instances x units per instance; no cut
-/// word (and no second port group) without a tail that computes it; the cut ports exactly the netlist's cut groups (32-bit
-/// ports, in order); every cut word computed exactly once, by one unit of the instance or by the tail.
+/// The cut structure is the pinned circuit description's (IR4), never the instance header's: a header carrying its own is
+/// refused, and its cut word and per-instance unit counts must be the circuit description's. Checked: units = instances x units
+/// per instance; no cut word (and no second port group) without a tail that computes it; the cut ports exactly the circuit
+/// description's cut groups (32-bit ports, in order); every cut word computed exactly once, by one unit of the instance or by the
+/// tail.
 pub fn cut_map(inst: &IrInstances, net: &IrUnitNet) -> Result<CutMap, String> {
     cut_map_of(net, &inst.header, inst.units)
 }
@@ -1198,9 +1337,71 @@ pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
     Ok(())
 }
 
+/// The verdict of the selftest's `device_walk_matches_host`: the device's level walk against the host's units.
+#[derive(Debug, PartialEq)]
+pub enum WalkVerdict {
+    /// every chunk's walk is the host's word for word, `units` units in all
+    Equal { units: usize },
+    /// chunk `chunk` failed, after `units_checked` units of the chunks before it matched
+    Fails { chunk: usize, units_checked: usize, why: String },
+}
+
+/// [`WalkVerdict`] over every chunk, `sizes[k]` units in chunk `k`. `walk(k, walked)` is chunk `k` as the device builds it
+/// (`walked` false: the control, the same slots without the levels) and `same(k, w)` whether `w` is the host's word for word.
+/// A device error or a walk that differs, in any chunk, fails and names the chunk; so does chunk 0's control where the unit
+/// has levels and the control equals the host's (the compare must read what the levels wrote). It never skips: whether there
+/// is a device to ask is decided before it.
+pub fn walk_verdict<W>(sizes: &[usize], levels: usize, mut walk: impl FnMut(usize, bool) -> Result<W, String>,
+                       same: impl Fn(usize, &W) -> bool) -> WalkVerdict {
+    let mut checked = 0;
+    for (k, &n) in sizes.iter().enumerate() {
+        let fails = |why: String| WalkVerdict::Fails { chunk: k, units_checked: checked, why };
+        match walk(k, true) {
+            Ok(w) if same(k, &w) => {}
+            Ok(_) => return fails("a unit's words differ".into()),
+            Err(e) => return fails(format!("the device's level walk: {e}")),
+        }
+        if k == 0 && levels > 0 {
+            match walk(k, false) {
+                Ok(w) if !same(k, &w) => {}
+                Ok(_) => return fails("the control without the levels equals the host's".into()),
+                Err(e) => return fails(format!("the device's control without the levels: {e}")),
+            }
+        }
+        checked += n;
+    }
+    WalkVerdict::Equal { units: checked }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `device_walk_matches_host`'s verdict with stand-ins for the device: a device error or a differing walk in a later
+    /// chunk fails and names it, as does a control that equals the host's; every chunk is walked before it is equal
+    #[test]
+    fn the_walk_verdict_fails_on_a_device_error_or_a_differing_chunk_in_any_chunk() {
+        let sizes = [300, 300, 7];
+        let host = |k: usize| k as u64;
+        let device = |bad: Option<(usize, Result<u64, String>)>| move |k: usize, walked: bool| match &bad {
+            Some((b, r)) if *b == k && walked => r.clone(),
+            _ if !walked => Ok(u64::MAX),
+            _ => Ok(host(k)),
+        };
+        let same = |k: usize, w: &u64| *w == host(k);
+        assert_eq!(walk_verdict(&sizes, 3, device(None), same), WalkVerdict::Equal { units: 607 });
+        assert_eq!(walk_verdict(&sizes, 3, device(Some((2, Err("the device's level walk failed (700)".into())))), same),
+                   WalkVerdict::Fails { chunk: 2, units_checked: 600, why: "the device's level walk: the device's level walk failed (700)".into() });
+        assert_eq!(walk_verdict(&sizes, 3, device(Some((1, Ok(99)))), same),
+                   WalkVerdict::Fails { chunk: 1, units_checked: 300, why: "a unit's words differ".into() });
+        let control_equal = |k: usize, _walked: bool| Ok::<u64, String>(host(k));
+        assert_eq!(walk_verdict(&sizes, 3, control_equal, same),
+                   WalkVerdict::Fails { chunk: 0, units_checked: 0, why: "the control without the levels equals the host's".into() });
+        assert_eq!(walk_verdict(&sizes, 0, control_equal, same), WalkVerdict::Equal { units: 607 });
+        let mut walked = Vec::new();
+        let _ = walk_verdict(&sizes, 3, |k, w| { walked.push((k, w)); device(None)(k, w) }, same);
+        assert_eq!(walked, [(0, true), (0, false), (1, true), (2, true)]);
+    }
 
     fn next(s: &mut u64, m: usize) -> usize {
         *s ^= *s << 13;
@@ -1264,8 +1465,8 @@ mod tests {
                     order: Some(pos), ..net.clone() }
     }
 
-    /// `net` as a `flock-ir-unit/v2` netlist: its rows under one input group of its input words and one output group of the
-    /// word after them.
+    /// `net` as a `flock-ir-unit/v2` circuit description: its rows under one input group of its input words and one output group
+    /// of the word after them.
     fn text_of(net: &IrUnitNet) -> String {
         let (w, cp) = (net.in_words, net.const_pos);
         let mut t = format!("flock-ir-unit/v2 t {} {cp} 1 0 {w} 1 {} 1 {w} 1 1 1\n", net.useful, w * WORD);
@@ -1425,6 +1626,46 @@ mod tests {
     const WALK_PIN: &str = "c084c17e7a051c6e213039b613738958";
 
     #[test]
+    fn the_schedule_puts_every_row_one_level_past_its_deepest_operand() {
+        let g = |col: usize| Group { col, words: 1, bits: vec![WORD] };
+        for (seed, in_words, useful, cut) in [(3u64, 1usize, 600usize, false), (0x51ed, 2, 5000, true), (0x51ed, 2, 5000, false), (99, 3, 40_000, false)] {
+            let mut net = random_net(seed, in_words, useful);
+            if in_words == 2 {
+                // a cut unit: late input rows 128..256, cut output rows 256..384, which read no late row where `cut`
+                net.in_groups = vec![g(0), g(1)];
+                net.out_groups = vec![g(30), g(2)];
+                for i in 2 * WORD..3 * WORD {
+                    let early = |rows: &Rows| -> Vec<usize> { rows.row_cols(i).map(|c| if cut && c < i { c % WORD } else { c }).collect() };
+                    (net.a, net.b) = (net.a.with_row(i, &early(&net.a)), net.b.with_row(i, &early(&net.b)));
+                }
+            }
+            let (first, cp) = (in_words * WORD, net.const_pos);
+            let x = schedule(&net);
+            let y = schedule_of(&net, net.a.to_vecs().as_slice(), net.b.to_vecs().as_slice());
+            assert_eq!((x.levels0, &x.late_rows, &x.cut_rows, &x.level_off, &x.order), (y.levels0, &y.late_rows, &y.cut_rows, &y.level_off, &y.order),
+                       "net {seed}: the schedule from vectors");
+            assert_eq!(x.cut_rows.is_empty(), !cut, "net {seed}: two phases where the cut rows read no late row, else one");
+            assert_eq!((x.late_rows.is_empty(), x.levels0 == x.levels()), (!cut, !cut), "net {seed}: the late rows and their levels");
+            let mut rows = x.order.clone();
+            rows.sort_unstable();
+            assert!(rows.iter().map(|&r| r as usize).eq(first..cp), "net {seed}: every row past the inputs once");
+            let mut level = vec![0usize; useful];
+            for l in 0..x.levels() {
+                assert!(!x.level(l).is_empty(), "net {seed}: level {} is empty", l + 1);
+                x.level(l).iter().for_each(|&r| level[r as usize] = l + 1);
+            }
+            for i in first..cp {
+                let deepest = net.a.row_cols(i).chain(net.b.row_cols(i)).filter(|&c| c != i && c != cp).map(|c| level[c]).max().unwrap_or(0);
+                let phase_start = level[i] == 1 || level[i] == x.levels0 + 1;
+                assert!(deepest < level[i] && (deepest + 1 == level[i] || phase_start), "net {seed}: row {i} at level {}, its deepest operand at {deepest}", level[i]);
+            }
+            assert!(x.late_rows.iter().all(|&r| level[r as usize] == 0) && x.cut_rows.iter().all(|&r| level[r as usize] <= x.levels0),
+                    "net {seed}: a cut output past the first phase");
+            assert!(x.levels() > 3, "net {seed}: a schedule of under three levels");
+        }
+    }
+
+    #[test]
     fn csc_reads_the_rows_in_place() {
         for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
             let net = random_net(seed, in_words, useful);
@@ -1485,7 +1726,7 @@ mod tests {
         }
     }
 
-    /// The parser writes a netlist's rows into `Rows` exactly as into vectors, and those are the rows the text holds.
+    /// The parser writes a circuit description's rows into `Rows` exactly as into vectors, and those are the rows the text holds.
     #[test]
     fn the_parser_writes_rows_alike() {
         for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
