@@ -63,7 +63,7 @@ def clog2(x: int) -> int:
 
 
 def test_per_link_and_at_link_rate_are_chain_records_rows(tmp_path):
-    import scan_zk as sz
+    from verity.protocols.accounting.certifier.prover import scan_zk as sz
     assert sz.CLASS == W63
     cr = _load("chain_record")
     run = tmp_path / "c1"

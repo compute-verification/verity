@@ -545,7 +545,8 @@ def read_response(data: bytes, times: list[float], payload: int, sent: float) ->
 
 
 def warden_modules():
-    """`verity`'s warden and `warden_serve` (benchmarks/network_traces), imported only for a warden trace."""
+    """`verity`'s warden and its device's `warden_serve`, imported only for a warden trace; benchmarks/network_traces
+    is on the path for what `warden_serve` still loads from there by name."""
     for p in (ROOT, ROOT / "benchmarks/network_traces"):
         if str(p) not in sys.path:
             sys.path.insert(0, str(p))

@@ -24,10 +24,9 @@ from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-ROOT = HERE.parents[1]
-sys.path.insert(0, str(HERE))
-import leak_guard as LG  # noqa: E402
+from verity.protocols.accounting.certifier.device import leak_guard as LG, runner_parts as rp
+
+ROOT = Path(__file__).resolve().parents[6]
 
 GATE = "c20261027T000000Z-0000"
 _rnd = random.Random(7)
@@ -348,7 +347,7 @@ def test_a_guard_ended_by_sigterm_leaves_out_without_the_held_files(tmp_path):
     run, out, hold = _held(tmp_path)
     fifo = tmp_path / "fetch.tgz"
     os.mkfifo(fifo)
-    p = subprocess.Popen([sys.executable, str(HERE / "leak_guard.py"), str(run), str(tmp_path / "q"), "--hold",
+    p = subprocess.Popen([sys.executable, LG.__file__, str(run), str(tmp_path / "q"), "--hold",
                           str(hold), "--gates", str(tmp_path / "G"), "--gates", str(fifo)],
                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     with open(fifo, "wb"):
@@ -391,8 +390,6 @@ def test_a_list_of_consecutive_integers_is_no_piece_of_the_certifiers_usage_reco
     outcome's proved units were a find though nothing of the witness is in them. The usage record holds them as one
     string of ranges (`runner_parts._usage`), and under the declared data as shipped the outcome is no find and nothing
     is excused. The CPUs written as a list are a find again: the guard is as it was."""
-    import runner_parts as rp
-
     record = _gate(tmp_path / "G" / "g1") / "witness" / "warden.json"
     usage = rp._usage()
     assert isinstance(usage["cpus"], str) and usage["cpus"] == rp.cpu_ranges(os.sched_getaffinity(0))

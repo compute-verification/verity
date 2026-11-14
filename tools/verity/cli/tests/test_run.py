@@ -171,10 +171,10 @@ def test_the_hash_leaves_out_the_transport_and_fills_the_defaults():
     assert set(K.TRANSPORT["party"]) <= set(K.PARTY) and set(K.TRANSPORT["channel"]) <= set(K.CHANNEL)
 
 
-#: The onsite configuration's hash before the network certifier's response cap and its lengths rows' form were
-#: parameters: a configuration that sets neither keeps it.
-UNCAPPED_ONSITE = ("9899a2d20fcdbe342ba9d409518eb0c9a2547676ffb637c5ab15d61361e5835f"
-                   "a579dc6e804080dd1aa28b9b3fc82dfbba6bb122dc5e2a764742155895a104a3")
+#: The onsite configuration's hash with neither the network certifier's response cap nor its lengths rows' form set:
+#: a configuration that sets neither keeps it.
+UNCAPPED_ONSITE = ("1cd21b0103bf0bf930af8d251e8d8f0a12153d66d56dfbc7d1583b1d3133c87f"
+                   "151b5f774ed98718aabd3453ed9e947fbab982e2b8a107459dbfc1d1d099e17a")
 
 
 def capped(cap):
