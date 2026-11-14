@@ -122,7 +122,7 @@ def test_the_fit_bound_is_void_once_a_window_holds_n_star_weights():
 
 def test_the_table_against_the_red_teams_closed_form():
     """At the structural d = 1 the closed form caps nothing at any of the table's residuals, leaving D = 3.02 at the
-    ladder's r-hat (PoUW's floor credit, 0.323, hosts carrying no compute, the residual at MFU_0), as the ladder's
+    ladder's r-hat (PoUW's floor credit, 0.323, hosts carrying no compute, free compute at MFU_0), as the ladder's
     memory rungs have it; at central boundary bits the fit
     bound is stronger there, and void from 50 GB, where a server holds N* weights at b_w."""
     rows = {r["wipe_gb"]: r for r in F.summary()["rows"]}

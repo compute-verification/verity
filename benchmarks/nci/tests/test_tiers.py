@@ -65,7 +65,7 @@ def test_without_memory_mechanisms_free_compute_trains_at_full_efficiency():
 
 
 def test_free_compute_charges_pouws_deficit_on_the_certified_work():
-    """r = r̂ + ε_W W_cert/C + ε′, the residual inside `InferenceOnly.Guarantees.SlowdownRemote`'s bounds: a certificate
+    """r = r̂ + ε_W W_cert/C + ε′, the free-compute share inside `InferenceOnly.Guarantees.SlowdownRemote`'s bounds: a certificate
     that isn't wrong may credit up to ε_W of its work without its running. At r̂ = 1/2, so W_cert = C/2, and ε_W = 2%,
     the deficit adds 0.01: r = 0.5 + 0.02 x 0.5 + 0.001 = 0.511. Nothing certified, nothing is in deficit."""
     p = T.DEFAULTS | {"free": 0.3, "host_share": 0.1, "clock_share": 0.1, "eps_w": 0.02, "eps_agg": 1e-3}
@@ -101,7 +101,7 @@ def test_the_declared_computation_trains_at_the_thread_bound():
 
 
 def test_the_wipe_floor_is_the_closed_form():
-    """With every gate windowed and the wipe period below R / r, efficiency is 4 R r / (kappa b_a b_w d Phi)."""
+    """With every gate windowed and the wipe period below R / r, the counted share is 4 R r / (kappa b_a b_w d Phi)."""
     p = KEYED | {"free": 1.0, "unfilled_gb": 1.0, "pous_rounds": 1e6, "pous_floor": 0.0, "sigma": 0.0, "wipe_s": 1.0}
     r = T.evaluate(p, T.TIERS["T3"])
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
@@ -220,7 +220,7 @@ def test_an_injected_bit_buys_a_full_block_at_s_1():
 
 
 def test_the_amplifier_multiplies_every_term():
-    """A recipe g times better in counted multiplications per unit of loss multiplies efficiency by g."""
+    """A recipe g times better in counted multiplications per unit of loss multiplies the counted share by g."""
     for tier in ("T1", "T5"):
         base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
         amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
@@ -238,7 +238,7 @@ def test_the_verdict_lag_adds_a_lag_of_skipped_work_per_identity():
 
 
 def test_the_recipe_multiplier_scales_only_the_constrained_terms():
-    """m scales nu, chi and the memory cap but not the residual or unregistered compute (C2 dossier)."""
+    """m scales nu, chi and the memory cap but not free or unregistered compute (C2 dossier)."""
     p = KEYED | BATCHED | {"unregistered": 0.01, "free": 0.01, "host_share": 0.05, "clock_share": 0.0}
     base, amped = T.evaluate(p, T.TIERS["T5"]), T.evaluate(p | {"m": 3.0}, T.TIERS["T5"])
     assert amped["declared"] == pytest.approx(3 * base["declared"], rel=1e-6)

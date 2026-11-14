@@ -50,7 +50,7 @@ def test_closed_forms_break_where_their_regimes_end(probe):
 
 
 def test_the_memory_cap_has_unit_elasticities_once_it_binds():
-    """Served today at R_wipe 4 GB, counted_share = mu = 4 R_wipe alpha / (kappa d b_w b_a) at T4."""
+    """Served today at R_wipe 4 GB, the counted share = mu = 4 R_wipe alpha / (kappa d b_w b_a) at T4."""
     p = T.DEFAULTS | X.SCENARIOS["served today, R_wipe 4 GB"] | X.KEYED
     for key in ("d", "b_w", "b_a", "kappa"):
         assert X.elasticity(p, key, "T4") == pytest.approx(-1, rel=0.02), key
@@ -72,8 +72,8 @@ def test_at_the_design_the_counted_share_is_the_free_compute():
     ("served today", "d", "T4", False),
 ])
 def test_thresholds_are_monotone(scenario, key, tier, rising):
-    """The set where 1/counted_share < 2 lies inside the set where 1/counted_share < 10, which lies inside the set where 1/counted_share < 100; each
-    is one interval at the end of the slider that raises counted_share, so its inner edge moves outward as the level falls."""
+    """The set where 1/(counted share) < 2 lies inside the set where it is below 10, which lies inside the set where it is
+    below 100; each is one interval at the end of the slider that raises the counted share, so its inner edge moves outward as the level falls."""
     th = X.thresholds(T.DEFAULTS | X.SCENARIOS[scenario], key, tier)
     lo, hi = X.SPECS[key]["min"], X.SPECS[key]["max"]
     edges = []
@@ -88,8 +88,8 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
 
 
 def test_the_free_compute_threshold_is_the_closed_form():
-    """At T1, 1/counted_share < X once r_gpu > (1/X - eps_W - eps' - nu) / (1 - eps_W) - host_share - clock_share: counted_share is
-    r-hat + eps_W (1 - r-hat) + eps' + nu."""
+    """At T1, 1/(counted share) < X once r_gpu > (1/X - eps_W - eps' - nu) / (1 - eps_W) - host_share - clock_share: the
+    counted share is r-hat + eps_W (1 - r-hat) + eps' + nu."""
     p = T.DEFAULTS | X.DESIGN | {"lag_s": 0.0}
     th = X.thresholds(p, "free", "T1")
     for level in (10.0, 2.0):
