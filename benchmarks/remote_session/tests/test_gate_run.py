@@ -21,7 +21,7 @@ SNAP = "/workspace/hf/hub/models--org--tiny/snapshots/abc123"
 NODE_ARGS = f"--decode-s 60 --warm-openings 2773 --wait-s 1800 --model-dir {SNAP}"
 SET = ("HOST_GIB", "LEAF_CTAS", "BIND", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES", "PACED", "PACE_PASS_MS", "LEASE_MEM_GB", "LEASE_ON",
        "LEASE_BY", "LEASE_FROM", "ENGINES", "ROLE", "PLAN", "ARENA_GIB", "UTIL", "PORT", "COMMIT", "PIN", "GATE_KEY",
-       "GATE_ON", "PROVER_NODE", "PROVER_RUN", "CIRCUIT", "MAXMIN", "GATE_MEM", "SLOTS", "FETCH")
+       "GATE_ON", "PROVER_NODE", "PROVER_RUN", "CIRCUIT", "MAXMIN", "GATE_MEM", "GATE_POOL", "SLOTS", "FETCH")
 #: the hosts' addresses as the launcher's environment holds them, here documentation addresses
 HOSTS = {"VY_CHALLENGER_1_HOST": "192.0.2.21", "VY_AUDITOR_1_HOST": "192.0.2.22", "VY_NEBIUS_2_HOST": "192.0.2.23"}
 GIT = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
@@ -106,6 +106,20 @@ def test_a_dry_run_prints_the_provers_run_with_the_host_part_and_hands_the_sessi
         assert {k: got[k] for k in HOSTS if k in got} == {k: HOSTS[k] for k in ("VY_CHALLENGER_1_HOST", "VY_AUDITOR_1_HOST")}
         assert got["PROVER_SSH"].endswith(f" research@{HOSTS['VY_NEBIUS_2_HOST']}")
         assert {k: got[k] for k in ("BIND", "PACED", "PACE_PASS_MS", *FORM) if k in got} == form
+
+
+@pytest.mark.parametrize("given, pool", [({}, ["--pool", "research", "--as", "memory-accounting"]),
+                                         ({"GATE_POOL": "network"}, ["--pool", "network", "--as", "memory-accounting"]),
+                                         ({"GATE_POOL": ""}, [])], ids=["default", "given", "none"])
+def test_the_gate_steps_take_a_slot_of_gate_pool(tmp_path, given, pool):
+    """The probe and the fire run in GATE_POOL's check slots on GATE_ON (`research run --pool`, default `research`), the one
+    way a machine with /etc/vy/runs-via-slot takes a run; an empty GATE_POOL names none."""
+    p, _, calls = dry_run(tmp_path, **given)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert len(calls) == 2
+    for c in calls:
+        got = c[c.index("--on") + 2:c.index("--cwd")]
+        assert got == pool
 
 
 @pytest.mark.parametrize("host_gib", ["8.5", "-1", "8G", "eight"])
