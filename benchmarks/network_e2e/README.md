@@ -74,9 +74,9 @@ Each `--from` source is one of these, or a gzipped tar of one:
 
 - A rehearsal's directory (`certifier_serve.py rehearse --out`): `summary.json` and one run directory per strategy.
 - One strategy's run directory: its `certified.jsonl`, `plan.json`, `calibration.json` and `deployment.json`.
-- A gate run. On the auditor's machine the gate runs the rehearsal as the auditor's device:
-  `vy-challenger-gate certifier-rehearse --peer NAME --port PORT --minutes M [--tamper late|extra] [--profile planned|served]`.
-  `vy-challenger-gate fetch RUN` returns the run as a gzipped tar (`request.json`, `out/`, `end.json`). One gate run is one
+- A gate run: a rehearsal kept as the gate keeps one (`request.json`, `out/`, `end.json`). The gate starts no
+  rehearsal of the proxy's; `benchmarks/network_traces/demo_chain.sh` keeps one made off the gate's machine.
+  `vy-challenger-gate fetch RUN` returns a run the gate holds as a gzipped tar. One gate run is one
   strategy, so fetch the honest run and one run per tamper, and pass them all:
   `--from honest.tgz late.tgz extra.tgz`. Reach the gate with your own gate key, as
   `benchmarks/remote_session/auditor.sh` does, or with the shared key, which reads only (`status`, `fetch`):
