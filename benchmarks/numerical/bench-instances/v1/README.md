@@ -2,7 +2,7 @@
 
 The frozen input set for comparing the archived proof systems A-GKR and B-Ligero at K=1536. Every proof-backend number
 at K=1536 is measured on prefixes of `vu-k1536` (B=1, 64, 4096 are ids `[0:1]`, `[0:64]`, `[0:4096]`; sub-batches are
-contiguous id ranges). The relation is `verity.definitions.circuits.targets.target.FIRST`: `y = f32_to_bf16_rne(chain)`, the chain being 96
+contiguous id ranges). The relation is `verity.circuits.targets.target.FIRST`: `y = f32_to_bf16_rne(chain)`, the chain being 96
 sequential Ampere `mma.sync.m16n8k16 bf16` transitions from `c_0 = +0` in ascending k (`verity.circuits.silicon.tc_dot`,
 pipeline `AMPERE_BF16_M16N8K16`). Expected words come from `silicon`, cross-checked step by step against
 `verity_numerical.reference.hawkeye_close` (saturating steps excepted: the discrepancy log's D8,
