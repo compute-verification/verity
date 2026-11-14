@@ -2,8 +2,8 @@
 many reads of a node's registered blocks the node made in each window, from receipts chained pass to pass.
 
 1. Registration.  The prover commits to its payload blocks (`payload_tree`: the weights, KV pages and filler, each an
-   hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier draw the codec seed from its own secret and
-   a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
+   hm96-sha512/row/v2 leaf) and sends the root.  Only then does the verifier sample the codec seed from its own secret
+   and a fresh nonce (`register`), and the prover encodes every block under it (`Store`) with the codec the registration
    names (`codec.DEFAULT`, p1024 masked at k = 3, unless another is named).  The registration also names the receipt
    kind (`receipts.KINDS`: sketch-sha512 by default, or block-sha512 for comparison), whether its receipts bind
    PoUW's tile outputs (`bind`, off by default: PoUW's opt-in join), the block layout its kernels' sketch vectors
@@ -11,7 +11,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    kernel's map), and sketch-sha512's rows (`receipts.ROWS`: 16 by default, or 64; 0 under block-sha512).
    `Registration.digest` binds the node, the store's size, the payload root, the codec seed, the codec's name, the
    receipt kind, `bind`, the layout and the rows.  The verifier keeps one live registration a node (`Registry`): a
-   second while one is live is refused and draws nothing, and a registration ends only when the verifier closes it,
+   second while one is live is refused and samples nothing, and a registration ends only when the verifier closes it,
    counting its sessions, an unended one as failed.
 2. Coins.  Before the session the proof system's challenger flips two live coins a window, its challenge `chal_t` and
    its openings coin, and a coin an append, and commits to them (`coins.SessionCoins`: session k's epoch of the one
@@ -36,7 +36,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    which is its window's last, and starts the next window's chain.  Blocks written after the codec seed (KV pages)
    join the store mid-session: their payloads committed (`append_tree`, `AuditRun.append`) before any pass whose plan
    holds them, and so bound into its seed, at fresh store indices from N up, each encoded under its bound key and its
-   append's coin `c_a`, which the verifier draws and sends in reply to the append (`codec.encode(..., bound=True,
+   append's coin `c_a`, which the verifier releases and sends in reply to the append (`codec.encode(..., bound=True,
    coin=c_a)`, `Store.encode`), so no choice the prover made before committing them depends on their encodings;
    every coin is flipped once, and an append no root follows, or one sent again, rejects the session (`coin`);
    a block released (`AuditRun.release`) is in no later plan, and one the release names withdrawn (released before its
@@ -52,8 +52,8 @@ many reads of a node's registered blocks the node made in each window, from rece
    A window with fewer than `min_passes` roots is rejected.
 6. Openings.  Once window t's roots are final (the next window's first root has arrived, `D_t` has passed, or, in a
    paced session, the window holds its k roots and its boundary has left), the
-   challenger releases the window's openings coin, and the verifier draws `s = samples` distinct receipts uniformly from
-   the window's `U_t = Σ_i L_i` with it (`AuditRun.close`).  The prover opens each (`Prover.open`): the block, its
+   challenger releases the window's openings coin, and the verifier samples `s = samples` distinct receipts uniformly
+   from the window's `U_t = Σ_i L_i` with it (`AuditRun.close`).  The prover opens each (`Prover.open`): the block, its
    receipt leaf with its salt and path to the pass's root, the payload's salt and path to the payload root, and, under a
    registration that binds z, PoUW's evidence for the tile before it; a block appended after the seed carries its
    payload's digest `d_j` too, its path going to its append's root.
@@ -79,7 +79,7 @@ many reads of a node's registered blocks the node made in each window, from rece
    the census's layout rule, the memory-map unit's verdict on the record's appends and heads among them, `mapped`),
    each pass is credited the bits the circuit reads from complete blocks at its step, less a block for each planned
    block it credits no receipt of (`linked_bits`, `Accounting.Guarantees.RequirementMoved`; `GammaTerms.linked`), less
-   the share ε of it the units' draw leaves unproved, its δ added to the ledger's error (`GammaTerms.error`);
+   the share ε of it the units' sample leaves unproved, its δ added to the ledger's error (`GammaTerms.error`);
    without one the credit is the node's reads of its store.
    What an accepted window certifies, and on what, is `PROTOCOL.md`.
 
@@ -149,7 +149,7 @@ FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "rele
             "receipt-path", "codec", "payload-path", "tile", "receipt")
 RECEIPT_LIMIT = 1 << 64
 """A window's receipts, its passes' lengths summed, stay below this: `AuditRun.receive` rejects with `plan` a pass that
-would take them to it, so each draw's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
+would take them to it, so each sample's sampler word lies in its stream's first SHA-512 block (`Key._uniform` at
 `U < 2^448`)."""
 STEP_LIMIT = 1 << 64
 """A step is an integer below this, memory-map/v1's."""
@@ -157,7 +157,7 @@ LIFETIME_NS = 30 * 10**9
 """D, the lifetime cap's duration: a block appended after the codec seed is in no plan of a window L or more after the
 window it joined (the window of the first root received after its append), L = `lifetime_windows(T)` the whole windows
 of T in D, so it leaves the credited store within L windows unless the prover appends it again, which gives it a fresh
-index and a fresh coin, and so a fresh bound key.  A carrier of a declared circuit's may work on a block from its coin
+index and a fresh coin, and so a fresh bound key.  A carrier of a registered circuit's may work on a block from its coin
 until it leaves, so what the carriers may hold grows with the passes in L windows
 (`Accounting.Guarantees.RegisteredCircuitRequirement`'s `C`): over 30 s of 61 ms passes it is under 8% of the store at
 both served models' caps (`PROTOCOL.md` §4, "The lifetime cap"), where 60 windows was an hour at the stated window."""
@@ -236,9 +236,9 @@ class Params:
     deferred: bool = False
     pace: Pace | None = None
     groups_per_coin: int = 1
-    """g (1 by default: an openings coin a window) draws the openings of g consecutive windows from one coin, released
-    after the last root of the last of them: windows cg … min((c + 1)g, W) − 1 are draw c, whose `samples` receipts
-    are drawn uniformly over their receipts together (`AuditRun.close`), and the pooled bound reads each draw as one
+    """g (1 by default: an openings coin a window) samples the openings of g consecutive windows from one coin, released
+    after the last root of the last of them: windows cg … min((c + 1)g, W) − 1 are group c, whose `samples` receipts
+    are sampled uniformly over their receipts together (`AuditRun.close`), and the pooled bound reads each group as one
     window (`pooled_windows`)."""
     schedule_cap: int | None = None
     """a, the most bits of the schedule the prover will publish (`schedule.check`), which it commits with the session's
@@ -281,11 +281,11 @@ class Params:
 
     @property
     def coins(self) -> int:
-        """W + ⌈W/g⌉: each window's challenge and each draw's openings coin, 2W at g = 1."""
+        """W + ⌈W/g⌉: each window's challenge and each group's openings coin, 2W at g = 1."""
         return self.windows + coins.openings_coins(self.windows, self.groups_per_coin)
 
     def draw_of(self, t: int) -> range:
-        """The windows window t is sampled with: its draw's, t // g · g up to the draw's last."""
+        """The windows window t is sampled with: its group's, t // g · g up to the group's last."""
         g = self.groups_per_coin
         return range(t // g * g, min((t // g + 1) * g, self.windows))
 
@@ -409,8 +409,8 @@ def register(source: bytes, node: bytes, blocks: int, payload_root: bytes, codec
     coin (`codec.binding`, PROTOCOL.md §3) and joins the store by an append (`Store.append`, `AuditRun.append`).  None
     of the
     receipt kind, `bind`, the block layout and the sketch rows (`receipts.sketch_rows`: the kind's default if None) is
-    in the codec seed's context, since the store depends on none of them; the digest binds all four.  Each call draws
-    afresh: the verifier draws through its `Registry`, which allows a node one live registration."""
+    in the codec seed's context, since the store depends on none of them; the digest binds all four.  Each call samples
+    afresh: the verifier registers through its `Registry`, which allows a node one live registration."""
     receipts.store_blocks(blocks)
     if type(codec) is not Codec:
         raise ValueError("a registration names a Codec")
@@ -496,7 +496,7 @@ class Store:
     """The prover's encoded store `E` under a registration, with its payload tree and the payloads' salts, and the
     blocks appended after the codec seed (`append`) at the next fresh store indices, each encoded under its bound key
     and its append's coin once the verifier has sent it (`encode`; None until then, its payload `pending`).  A
-    released block is kept, since a window's draws may still open it from a pass before its release.  Each block's
+    released block is kept, since a window's samples may still open it from a pass before its release.  Each block's
     payload (`payload`) is the witness check 3's unit takes (`opening.witness`)."""
 
     def __init__(self, registration: Registration, payloads: Sequence[bytes], salts: Sequence[bytes]) -> None:
@@ -625,7 +625,7 @@ class Opening:
 
 @dataclass(frozen=True)
 class PositionSample:
-    """What the verifier knows of one draw (`AuditRun.drawn`): window t, pass i at step s, position p, block j =
+    """What the verifier knows of one sample (`AuditRun.drawn`): window t, pass i at step s, position p, block j =
     plan_i[p], the pass's seed, plan and root, and the commitment block j's payload is a leaf of: the registration's
     payload tree (``coin`` None) or its append's, under the append's coin."""
 
@@ -706,7 +706,7 @@ class Prover:
 
 @dataclass(frozen=True, slots=True)
 class Verdict:
-    """A window's outcome.  `failure` is one of `FAILURES`, `at` the failing draw (pass, position) when there is one."""
+    """A window's outcome.  `failure` is one of `FAILURES`, `at` the failing sample (pass, position) when there is one."""
 
     window: int
     accepted: bool
@@ -719,7 +719,7 @@ class WindowRecord:
     """What an accepted window established: chained passes of `lengths` reads of distinct registered blocks each, made
     after its challenge left at `released_ns` and committed by `deadline_ns` on the verifier's clock, each pass's root
     arriving at `arrived_ns` on that clock (one a pass, empty in a record no session made); its openings coin
-    released at `opened_ns`; the openings' law (`profile`); of each pass's reads, `post_seed` of blocks appended
+    released at `opened_ns`; the openings' sampling design (`profile`); of each pass's reads, `post_seed` of blocks appended
     after the codec seed (none if empty), which the ledger credits only on the property's verdict; the step each
     pass covers, `steps`, strictly increasing; each pass's head, `heads`, the chain over every append received
     before its root (`append_head`, None before the first), which its seed binds (`chained`); and each pass's stale
@@ -793,10 +793,11 @@ class WindowRecord:
                 "stale": list(self.stale), "steps": list(self.steps), "window": self.window}
 
 
-def window_profile(lengths: Sequence[int], drawn: int, delta: float) -> IntegrityProfile:
-    """A window's openings law (`WindowRecord.profile`): `drawn` distinct receipts uniform over its passes' `lengths`
-    receipts, at `delta`."""
-    return IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(drawn)}, delta, drawn={"receipt": drawn})
+def window_profile(lengths: Sequence[int], sampled: int, delta: float) -> IntegrityProfile:
+    """A window's openings sampling design (`WindowRecord.profile`): `sampled` distinct receipts uniform over its
+    passes' `lengths` receipts, at `delta`."""
+    return IntegrityProfile(("receipt",), (sum(lengths),), {"receipt": Subset(sampled)}, delta,
+                            drawn={"receipt": sampled})
 
 
 @dataclass(frozen=True, slots=True)
@@ -809,14 +810,15 @@ class Record:
     them to (`Params.lifetime`, None
     in a record no session made), and the chain over its appends in the order received (`append_head`, None without
     one), which, with each pass's head (`WindowRecord.heads`), the memory-map unit's verdict is on
-    (`RequirementLink.mapped`), and the receipts every draw requested (`Params.samples`, None in a record no session
-    made): a draw of U receipts drew min(`samples`, U), so `samples` is the k_t of the draw's rejection Σ_t k_t/2^64
-    (`ledger.rejection`), which a draw opening all its receipts doesn't show.  `samples` is also the session's draw cap
-    s and `append_coins` the append coins its coin commitment reserved, which bound every window of the session,
-    whatever its outcome (`ledger.binding`; None in a record no session made).  `public` is what acceptance makes
-    public; `profile` is the protocol's profile, each window's schedule and openings law (the γ terms need the node's
-    capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its share of its draw's openings,
-    and the sampling design is the draw's: `samples` receipts uniform over its g windows' receipts together (`pooled_windows`).
+    (`RequirementLink.mapped`), and the receipts every sample requested (`Params.samples`, None in a record no session
+    made): a sample over U receipts takes min(`samples`, U), so `samples` is the k_t of the sample's rejection
+    Σ_t k_t/2^64 (`ledger.rejection`), which a sample opening all its receipts doesn't show.  `samples` is also the
+    session's sample cap s and `append_coins` the append coins its coin commitment reserved, which bound every window
+    of the session, whatever its outcome (`ledger.binding`; None in a record no session made).  `public` is what
+    acceptance makes public; `profile` is the protocol's profile, each window's schedule and openings sampling design
+    (the γ terms need the node's capacities: `ledger`).  At `groups_per_coin` g > 1 a window's `profile` counts its
+    share of its group's openings, and the sampling design is the group's: `samples` receipts uniform over its g
+    windows' receipts together (`pooled_windows`).
     Given how many land in a window, they are uniform over its receipts, so its own reading holds at its share's
     count (none at a share of none).  A record whose pace has one window in flight (`Pace.in_flight`) releases each
     window's challenge after every root of the window before arrived, and one that doesn't is refused."""
@@ -851,10 +853,10 @@ class Record:
         g = self.groups_per_coin
         for a in range(0, len(self.windows), g):
             ws = self.windows[a:a + g]
-            u, drawn = sum(w.receipts for w in ws), sum(w.profile.drawn["receipt"] for w in ws)
-            if drawn != min(self.samples, u):
+            u, sampled = sum(w.receipts for w in ws), sum(w.profile.drawn["receipt"] for w in ws)
+            if sampled != min(self.samples, u):
                 what = f"window {ws[0].window}" if g == 1 else f"the draw of windows {ws[0].window}…{ws[-1].window}"
-                raise ValueError(f"{what} drew {drawn} of its {u} receipts, not min({self.samples}, {u}) at the "
+                raise ValueError(f"{what} drew {sampled} of its {u} receipts, not min({self.samples}, {u}) at the "
                                  "record's samples")
 
     @property
@@ -884,7 +886,7 @@ class Record:
         `appends`.  No stale bound is here: `WindowRecord.stale[i]` is `blocks` plus the counts of the appends that
         joined window t − `lifetime` or before, counts that follow the workload, so it is a value, which the memory-map
         unit recomputes inside its proof from the committed appends and the verifier never publishes.  It names
-        `groups_per_coin` only when a coin draws over more than one window."""
+        `groups_per_coin` only when a coin samples over more than one window."""
         shared = {} if self.groups_per_coin == 1 else {"groups_per_coin": self.groups_per_coin}
         return shared | {"appended": self.appended, "appends": None if self.appends is None else self.appends.hex(),
                 "bind": self.bind, "block_bytes": self.block_bytes, "blocks": self.blocks,
@@ -956,7 +958,7 @@ class AuditRun:
     registration for the store's first session, so that no read serves receipts of two sessions.  `tiles` is PoUW's
     check if the registration binds z, and None if it does not.  Blocks appended after the codec seed (`append`) are
     the session's: they take indices from N up, and a later session over the store starts again from N.  A window's
-    draws are decided by their openings (`verify`), or by check 3's outcome on each (`drawn`, `decide`).
+    samples are decided by their openings (`verify`), or by check 3's outcome on each (`drawn`, `decide`).
 
     The session is one type over either codec.  Over PoUS's P2 store (a `P2Codec`, registered by `p2.register`) its
     blocks are units of four of C*'s blocks (`block_bytes`, `p2.UNIT_BYTES`), its openings are `p2.Opening`s checked on
@@ -1245,19 +1247,19 @@ class AuditRun:
         return None
 
     def close(self, t: int) -> tuple[tuple[int, int], ...] | Verdict:
-        """Window t's draws, from its openings coin released now: `s` distinct receipts (pass, position), uniform over
+        """Window t's samples, from its openings coin released now: `s` distinct receipts (pass, position), uniform over
         its `U_t = Σ_i L_i`, in order.  Refused until its roots are final: the next window's first root has arrived,
         `D_t` has passed, or, in a paced session, the window holds its k roots, past which `receive` takes none, and
         its boundary has left, so its record has its deadline; the challenger's log fixes a paced window's end at its
         last root.  Its rejection when it has fewer than
         `min_passes` roots, and, at the last window, `coin` if an append's coin went unused: no root followed it.
 
-        At `groups_per_coin` g > 1 the openings coin is draw c's, c = t // g (`Params.draw_of`): only the draw's last
-        window closes, and that makes every window of the draw final (an earlier one's deadline is before t's), each
-        rejected `few` in order; its `s` receipts are sampled over the draw's passes in order, numbered across its
+        At `groups_per_coin` g > 1 the openings coin is group c's, c = t // g (`Params.draw_of`): only the group's last
+        window closes, and that makes every window of the group final (an earlier one's deadline is before t's), each
+        rejected `few` in order; its `s` receipts are sampled over the group's passes in order, numbered across its
         windows, under the key of window c, and each window keeps its own share, (pass, position) in it, which `verify`
         checks.  A window whose share is none has nothing to open: the close accepts it, and `verify` refuses it.  At
-        g = 1 that is the window's own draw, never none."""
+        g = 1 that is the window's own sample, never none."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is not None:
@@ -1285,18 +1287,18 @@ class AuditRun:
         coin = coins.coin(self.coins.openings(c, w.roots[-1]))
         key = derive(coin, OPENINGS_DOMAIN, {"registration": self.registration.digest, "window": c})
         ends = tuple(itertools.accumulate(plan.length for v in ws for plan in v.plans))
-        draws = []
+        sampled = []
         for u in key.subset(min(self.params.samples, ends[-1]), ends[-1], "openings"):
             i = bisect.bisect_right(ends, u)
-            draws.append((i, u - (ends[i - 1] if i else 0)))
+            sampled.append((i, u - (ends[i - 1] if i else 0)))
         base = 0
         for u, v in zip(group, ws):
             n = len(v.plans)
-            v.draws, v.opened_ns = tuple((i - base, p) for i, p in draws if base <= i < base + n), now
+            v.draws, v.opened_ns = tuple((i - base, p) for i, p in sampled if base <= i < base + n), now
             if not v.draws:
                 v.verdict = Verdict(u, True)
             base += n
-        return tuple(draws)
+        return tuple(sampled)
 
     def _previous(self, t: int, i: int) -> bytes:
         """What pass i of window t's seed takes as the root before it: that root, chained to the appends received
@@ -1308,8 +1310,8 @@ class AuditRun:
         return chained(root, self.windows[t].heads[i])
 
     def verify(self, t: int, openings: Sequence[Opening]) -> Verdict:
-        """Window t's verdict on the prover's openings of its draws (`p2.Opening`s over a P2 store), in the order
-        sampled: `malformed` on a window with no draws, whatever its openings."""
+        """Window t's verdict on the prover's openings of its samples (`p2.Opening`s over a P2 store), in the order
+        sampled: `malformed` on a window with no samples, whatever its openings."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
@@ -1373,7 +1375,7 @@ class AuditRun:
         return None
 
     def drawn(self, t: int) -> tuple[PositionSample, ...]:
-        """What the verifier knows of window t's draws, in the order sampled, for check 3 decided by proofs (`opening`)
+        """What the verifier knows of window t's samples, in the order sampled, for check 3 decided by proofs (`opening`)
         in place of `verify`'s openings: over a store under a `Codec`, whose payloads the unit decodes."""
         if self._p2:
             raise SessionError("check 3's unit decodes a Codec store's blocks: a P2 store's openings are checked on "
@@ -1394,8 +1396,8 @@ class AuditRun:
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> Verdict:
-        """Window t's verdict from check 3's outcome on each of its draws (`drawn`), in the order sampled, in place of
-        `verify`'s openings: the first failure (one of `FAILURES`) rejects it, and a window with no draws is
+        """Window t's verdict from check 3's outcome on each of its samples (`drawn`), in the order sampled, in place of
+        `verify`'s openings: the first failure (one of `FAILURES`) rejects it, and a window with no samples is
         `malformed`, as `verify` has it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
@@ -1444,7 +1446,7 @@ class AuditRun:
         return self.bounded(self._record())
 
     def bounded(self, record: Record) -> Record:
-        """`record` with the bounds every window of this session obeys, whatever its outcome: its draw cap and the
+        """`record` with the bounds every window of this session obeys, whatever its outcome: its sample cap and the
         append coins its coin commitment reserved (`Record.samples`, `Record.append_coins`, `ledger.binding`)."""
         return replace(record, samples=self.params.samples, append_coins=self.commitment.family(coins.APPEND) or 0)
 
@@ -1513,9 +1515,9 @@ def _outcomes(value: object) -> list[str]:
 
 
 class Registry:
-    """The verifier's registrations, at most one live a node.  `register` draws a codec seed
+    """The verifier's registrations, at most one live a node.  `register` samples a codec seed
     (`register`) only for a node with none live: a second while one is live is refused (`RegistryError`) and counted
-    (`refused`), and draws nothing, so a retry never resamples.  A registration ends only when the verifier closes it
+    (`refused`), and samples nothing, so a retry never resamples.  A registration ends only when the verifier closes it
     (`close`), which counts each of its sessions as it stands: accepted, the failure that rejected it, or `UNENDED`,
     counted as failed.  So a failed session stays on its registration's record, and every codec seed a node has been
     given is in `closed` or live: `drawn(node)` is R, what an advice form charges as log₂ R.  `to_json` and `from_json`
@@ -1539,8 +1541,8 @@ class Registry:
 
     def register(self, source: bytes, node: bytes, blocks: int, payload_root: bytes, codec: Codec = codec.DEFAULT,
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
-        """`register`'s draw for a node with no live registration, which it makes live; refused, and counted, for one
-        with.  One that would bind PoUW's tile outputs (`bind`) draws nothing either (ValueError): the verifier's
+        """`register`'s registration for a node with none live, which it makes live; refused, and counted, for one
+        with.  One that would bind PoUW's tile outputs (`bind`) samples nothing either (ValueError): the verifier's
         definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
         node = _node(node)
         if node in self._live:
@@ -1665,13 +1667,13 @@ class RequirementLink(Protocol):
     plan unit that lets a plan leave blocks out (PlanShard at GAPS > 0) makes each shard's count public, and so how
     many of a shard's blocks each plan holds; at GAPS = 0 every count is its shard's size.  `mapped(record)` is the
     memory-map unit's verdict on this session's record: that W's memory map, the one the plan unit's plans are of,
-    makes exactly the appends of the chain `Record.appends` (None without one), each a write at its production step,
+    makes exactly the appends of the chain `Record.appends` (None without one), each a write at its serving step,
     in the map's order, at the index the verifier gave it; that each pass's head (`WindowRecord.heads`) is the chain
     through the appends of the steps below the pass's step, so each append was sent after the passes of the steps up to
     its own and before the rest; a re-key only at the lifetime cap, its old index below the stale bound
     (`WindowRecord.stale`, which the unit recomputes from those appends) of the first pass after its step, and of the
     same payload; and no other (PROTOCOL.md §8, "The memory map's choices").  The units are sampled, so the link
-    holds on what their draw established: `epsilon`, the most share of the linked credit (`linked_bits` summed over
+    holds on what their sample established: `epsilon`, the most share of the linked credit (`linked_bits` summed over
     the passes) that the units it leaves unproved can carry, the passes whose plan unit is wrong and those holding a
     block a wrong memory-map unit wrote, except with probability `delta`.  Those checks are theirs; the ledger takes
     the link as given, credits 1 − ε of the linked credit, adds δ to its error, and refuses a link whose `mapped`
@@ -1805,7 +1807,7 @@ class GammaTerms(_Terms):
 
 
 def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
-    """The pooled bound's inputs (`pooled.bound`): each draw's receipts U and draws s, a window's own at
+    """The pooled bound's inputs (`pooled.bound`): each group's receipts U and samples s, a window's own at
     `groups_per_coin` g = 1 and its g windows' together above, and δ, the float's exact value."""
     g, ws = record.groups_per_coin, record.windows
     return ([(sum(w.receipts for w in ws[a:a + g]), sum(w.profile.drawn["receipt"] for w in ws[a:a + g]))
@@ -1826,7 +1828,7 @@ def _up(q: Fraction) -> float:
 def floors(record: Record) -> tuple[float, ...]:
     """Each window's share of wrong receipts at most on `pooled`'s event, min(1 − s_t/U_t, d̄·S/s_t): every window's
     at once, except with δ.  Each is `pooled_bound`'s, rounded up.  At `groups_per_coin` g > 1 the bound's floor f is
-    its draw's, over the draw's U receipts, so a window of U_t of them has at most min(1, f·U/U_t)."""
+    its group's, over the group's U receipts, so a window of U_t of them has at most min(1, f·U/U_t)."""
     g, us = record.groups_per_coin, [w.receipts for w in record.windows]
     fs = pooled_bound(record).floors
     return tuple(_up(min(Fraction(1), fs[t // g] * sum(us[t // g * g:(t // g + 1) * g]) / u)) for t, u in enumerate(us))
@@ -1836,14 +1838,14 @@ def pooled(record: Record) -> tuple[float, float]:
     """The pooled reading of a record's openings: `(wrong, floor)`, at most `wrong` of the session's receipts wrong
     and at most a share `floor` of any window's, both except with probability δ together.
 
-    Window t draws s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
+    Window t samples s_t distinct receipts of its U_t from its own openings coin, released after its roots, so they all
     land on correct ones with probability at most g_t^(s_t), g_t its correct share, however the prover adapted to the
-    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateRunSample`), every draw lands
+    windows before.  Over the session (`Accounting.Guarantees.PooledSampling`, `RateRunSample`), every sample lands
     on a correct receipt while Σ_t s_t·g_t ≤ (1 − d̄)·S, S = Σ_t s_t, with probability at most (1 − d̄)^S = δ.  So
-    except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t draws
+    except with δ the wrong shares f_t = 1 − g_t have Σ_t s_t·f_t < d̄·S, and each f_t ≤ 1 − s_t/U_t (its s_t samples
     found s_t correct receipts).  `wrong` is the most Σ_t f_t·U_t those allow, and `floor` the most any f_t is:
     min(1 − s_t/U_t, d̄·S/s_t), about ln(1/δ)/s_t.  The Lean states `wrong` at each window's own U_t, on the deployed
-    draw, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
+    sample, at δ + Σ_t s_t/2^64 + the PRF advantage of each window's distinguisher, one a window that the session fixes,
     + the receipts' binding term (`Accounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
