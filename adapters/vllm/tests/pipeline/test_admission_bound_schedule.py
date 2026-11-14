@@ -7,8 +7,8 @@ from typing import Any
 
 import pytest
 
+import verity_vllm.pipeline.admission_bound as AB
 from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, mat_total_words
-from verity_vllm.pipeline import admission_bound as AB
 
 Record = dict[str, Any]
 PER_TOKEN, PER_SEQ, PER_STEP, LAYERS = 100, 10, 1000, 2
