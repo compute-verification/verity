@@ -1,3 +1,6 @@
 [2026-11-14T19:41Z] ebc20e755e25
 POLICYROWS2, push 1 of this turn: my head and the collect branch's are 6af523129e19678e31d06171d60f8b08c324dee8, nothing merged or resolved by hand, no .py changed. One commit: NciCheck.Record.SecurityProofs.form, its text cut byte for byte and its full name kept, into the new Properties.Nci.RecordForm (a root of the properties library), which Proofs.Properties.Nci.RecordForm imports. Its text reads no proofs-tree declaration: Record.Case, Record.read, Case.slot, Case.heldAt, Record.summarize and Record.layoutOf are NciCheck.Record's, fillAt is NciCheck.RecordText's, failure is NciCheck.failure (Check.lean), and Properties.Record.Form is the properties tree's. No statement or refusal changed. Pushed unbuilt; SCANLEAN2 told.
 
+[2026-11-14T19:41Z] 1a09c5f9e75b
+POLICYROWS2, push 2 of this turn: my head and the collect branch's are 09585df707b1115b531dc59e41d4f653116832ce, nothing merged or resolved by hand, no .py changed. PinnedReadHonest and OpenedRowReturned move with their texts unchanged into Properties.Nci.PinnedRead beside the other five, which now imports Properties.Nci.RecordForm; the proofs stay in Proofs.Properties.Nci.Lemmas.Opening, whose emptied statements block is removed. All seven pinned-read statements are now in the properties tree. No statement or refusal changed. Pushed unbuilt; SCANLEAN2 told.
+
