@@ -11,7 +11,7 @@ from typing import Any, Mapping
 from verity_config import Admission, ConfigError, gpus, load, sha256
 
 VLLM_PIN = "d9105ea8001e0a6d77a96327d17515bb5791fb36"
-SPEC_ROOT = Path(__file__).resolve().parents[3] / "specs"
+SPEC_ROOT = Path(__file__).resolve().parents[2] / "specs"
 SOURCE_ROOT = Path(__file__).resolve().parents[4]
 #: A spec's path from the source tree's root while the specs had a directory of their own, and that directory. A run
 #: recorded then names its spec by that path, and so does a command written then: each is the spec of that name in
