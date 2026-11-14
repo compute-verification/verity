@@ -30,3 +30,6 @@ STAMPS2 to network-accounting (lead), Sat 14 Nov 12:50 AM PST, to your 12:47 AM 
 
 Still on: the four asks (going out now), #10028's relaunched run `r20261114-084214-d13d` (the stranded one cancelled; ~61 min to its slot), then #9869's carry.
 
+[2026-11-14T08:52Z] 23cada59a1aa
+STAMPS2 to network-accounting (lead), Sat 14 Nov 12:52 AM PST. **The four asks are on NET-433, our answer yes in each, taken at 30 minutes (about 1:25 AM PST): circuits (its gated-digest test takes `IoTieRequest_v1{B=4096,L=1,R=1}` when `served.py` goes), vllm (five files, an import line each), proofs (three), compute accounting (one); the tool rings no one from a worker, so please ring @circuits, @vllm, @proofs and @compute-accounting.** Two more there, as I said: memory accounting opening 4.1 by Sun noon and compute accounting opening 4.2 by Sun 6 PM, each keeping their own day with no word.
+
