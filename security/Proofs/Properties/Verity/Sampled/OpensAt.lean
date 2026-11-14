@@ -40,20 +40,19 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Commit.opens_rowLeaf`: **an opening the deployed commitment accepts is a `Hash.RowLeaf` opening at `placeAt`**
   under SHA-512, whose row holds the opened bit at the place's offset.
 * `Live`: the same at a session, each an instance of `Commit`'s: `Live.placeAt`, `Live.placeOfRead_eq`, `Live.loads`,
-  and `Live.OpensReady`, the session's files passing the ports and roots check (`Live.OpensReady.commit`), with its
-  `domain`, `roots`, `words` and `opens_rowLeaf`.
-* `Instance.opensAt_of`: **`OpensAt`**, wherever each session v2 sets up is `OpensReady` and the base places each
-  non-constant gate at the session's `placeAt` of its claims position. The committed files' circuit is Boolean
-  (`Circuit.ofAudit`), so the opened bit is the gate's whole value. `Instance.opensAt_of_ready`: the same, for a base
-  whose place is `placeOfFiles` at its reading of the files, at sessions `OpensReady` alone;
-  `Instance.opensAt_of_sessions` at every instance, whose base's place is `placeOfFiles` by construction
-  (`Instance.place`).
-* `Instance.SessionsReady`: every session v2 sets up is `OpensReady`: its files pass the ports and roots check.
+  and at `Live.OpensReady` (`Sampled/Instance.lean`), the session's files passing the ports and roots check, which each
+  of the deployment's sessions does (`Instance.sessions`; `Live.OpensReady.commit`), its `domain`, `roots`, `words` and
+  `opens_rowLeaf`.
+* `Instance.opensAt_of`: **`OpensAt`**, wherever the base places each non-constant gate of a session's files at the
+  session's `placeAt` of its claims position. The committed files' circuit is Boolean (`Circuit.ofAudit`), so the
+  opened bit is the gate's whole value. `Instance.opensAt`: at every instance, whose base's place is `placeOfFiles` by
+  construction (`Instance.place`).
 * `remote_soundness_deployedReady_honest`, `remote_soundness_deployedReady_nontrivial`: its premises hold at the idle
   deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
-* `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` discharged** at `SessionsReady`,
-  `SessionAt` by `sessionAt_of_registered` at the deployment's session on the registered files, and the device's log
-  opening only the record's rounds by v2's record check (`Instance.logOpensRecorded`).
+* `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` and `RegisteredFiles` discharged**
+  at every instance (`Instance.opensAt`, `Instance.registeredFiles`), `SessionAt` by `sessionAt_of_registered` at the
+  deployment's session on the registered files, and the device's log opening only the record's rounds by v2's record
+  check (`Instance.logOpensRecorded`).
 -/
 
 @[expose] public section
@@ -369,16 +368,6 @@ theorem placeOfFiles_eq {R : Verity.WindowFiles} (hr : R = Verity.WindowFiles.on
 theorem loads : Commit.Loads A.D A.n {} A.pub A.I :=
   ⟨A.ht, A.hTags, A.hD, A.hpub, A.hn, A.hdup⟩
 
-/-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: they pass `verify --zk`'s ports
-and roots check (`Flock.PortRoots.checkOf` at the circuit `Flock.ProvedScope.circuitOf` reads). The check refuses a
-published frame-v3 domain that is not 64 bytes (`OpensReady.domain`), two ports' published roots that are one root
-under different domains (`OpensReady.roots`: the deployed path check opens a row at the first port of the row's root,
-which is then the row's own) and a row of `2^64` bits or more (`OpensReady.words`). -/
-structure OpensReady : Prop where
-  ports : Flock.PortRoots.checkOf
-    (Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.tables)
-    (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.publicFile = .ok ()
-
 /-- **A session ready for its openings has files ready for them** (`Commit.Ready`). -/
 theorem OpensReady.commit {A : Live} (hA : A.OpensReady) : Commit.Ready A.I := ⟨hA.ports⟩
 
@@ -422,22 +411,19 @@ end Live
 
 namespace Instance
 
-/-- **Every session v2 sets up is `OpensReady`**: its files pass `verify --zk`'s ports and roots check, which gives
-what `Live.opens_rowLeaf` reads of them. -/
-def SessionsReady (I : Instance d α) : Prop :=
-  ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady
-
-/-- **`OpensAt`, at sessions ready for it**: wherever each session v2 sets up on the committed files is `OpensReady`
-and the base places each non-constant gate at the session's registered place of its claims position (`placeAt`), the
-deployed commitment's openings are the base's. -/
+/-- **`OpensAt`, at the base's places**: wherever the base places each non-constant gate of a session's committed files
+at the session's registered place of its claims position (`placeAt`), the deployed commitment's openings are the
+base's: each of the deployment's sessions is set up on the files (`SetsUp`) and passes the ports and roots check
+(`Live.OpensReady`, `Instance.sessions`). -/
 theorem opensAt_of (I : Instance d α)
-    (h : ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady ∧
+    (h : ∀ θ F A, I.sessions θ F = some A →
       ∀ c (hN : (I.base.read θ F).circuit.N = A.Cc.N) (g : Fin (I.base.read θ F).circuit.N),
         (I.base.read θ F).consts g = none →
           I.base.place θ F c g = A.placeAt (Flock.Bridge.posOf A.Cc (Fin.cast hN g))) :
     I.OpensAt := by
-  intro θ F A hs hsu c hN g b m hconst hop v hv
-  obtain ⟨hready, hplace⟩ := h θ F A hs hsu
+  intro θ F A hs c hN g b m hconst hop v hv
+  obtain ⟨-, hsu, hready⟩ := I.sessions_some hs
+  have hplace := h θ F A hs
   obtain ⟨p, hp, o, hacc, hrow⟩ := Live.opens_rowLeaf hready hop
   have hw : (I.base.read θ F).circuit.w g = 1 :=
     w_ofAudit ((congrArg Verity.WindowFiles.circuit hsu.read).trans
@@ -452,46 +438,39 @@ theorem opensAt_of (I : Instance d α)
   rw [hk, Nat.add_zero, hrow]
   exact congrArg some hv.symm
 
-/-- **`OpensAt` at the committed files' places**: wherever the base places each gate at the committed files' place
-(`placeOfFiles`, by definition at the deployment) and each session v2 sets up is `OpensReady`. -/
-theorem opensAt_of_ready (I : Instance d α)
-    (hplace : ∀ θ F c g, I.base.place θ F c g = placeOfFiles (I.base.read θ F) g)
-    (h : I.SessionsReady) : I.OpensAt :=
-  I.opensAt_of fun θ F A hs hsu => ⟨h θ F A hs hsu, fun c hN g _ =>
-    (hplace θ F c g).trans (A.placeOfFiles_eq hsu.read hN g)⟩
-
-/-- **`OpensAt` at sessions `OpensReady`**: an instance's base places each gate at the committed files' place by its
-construction (`Instance.place`), so `OpensAt` needs only that each session v2 sets up is `OpensReady`. -/
-theorem opensAt_of_sessions (I : Instance d α) (h : I.SessionsReady) : I.OpensAt :=
-  I.opensAt_of_ready I.place h
+/-- **`OpensAt` at every instance**: an instance's base places each gate at the committed files' place by its
+construction (`Instance.place`, `placeOfFiles`), which is the session's `placeAt` wherever v2 reads the session's files
+(`Live.placeOfFiles_eq`), and each of its sessions passes the ports and roots check (`Instance.sessions`). -/
+theorem opensAt (I : Instance d α) : I.OpensAt :=
+  I.opensAt_of fun θ F A hs c hN g _ =>
+    (I.place θ F c g).trans (A.placeOfFiles_eq (I.sessions_some hs).2.1.read hN g)
 
 end Instance
 
-/-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
-`opensAt_of_sessions`, its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`, and the
-coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), by v2's record check, which
-refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
+/-- **`remote_soundness_deployedAt` with its openings and registered files discharged**: its openings premise
+`OpensAt` holds at every instance (`Instance.opensAt`), as does the registered files' file check (`RegisteredFiles`,
+`Instance.registeredFiles`); its session premise `SessionAt` is `sessionAt_of_registered`'s from `SessionRegistered`,
+and the coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), is v2's record check's,
+which refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hready : I.SessionsReady) (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
+    (hSr : I.SessionRegistered .remote)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
-  remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
+  remote_soundness_deployedAt I K₀ reg record recordDigest I.opensAt I.registeredFiles
     (I.sessionAt_of_registered .remote hSr) (I.logOpensRecorded .remote) hW hI
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
-reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: each deployment
+reading (`Instance.Honest.inst`) that runs no session, whose base publishes `⊤` for every subprotocol: the session
 premise speaks of the sessions the deployment runs, and the base's PoUW and inference-only targets hold at `⊤`. -/
 theorem remote_soundness_deployedReady_honest :
-    (Instance.Honest.inst ⊤ fun _ => none).SessionsReady ∧ (Instance.Honest.inst ⊤ fun _ => none).RegisteredFiles ∧
-      (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
+    (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
-  ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
-    Instance.Honest.sessionRegistered_none ⊤ .remote,
+  ⟨Instance.Honest.sessionRegistered_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
