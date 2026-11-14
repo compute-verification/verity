@@ -445,8 +445,6 @@
         "benchmarks/pouw/facet_break/",
         "benchmarks/pouw/dc/",
         "benchmarks/pouw/theory/",
-        "benchmarks/pouw/lean_headline.py",
-        "benchmarks/pouw/lean_headline_dc.py",
         "benchmarks/pouw/tests/test_lean_headline.py",
         "benchmarks/pouw/tests/test_lean_headline_dc.py",
         "benchmarks/tensor_duty/",
@@ -487,19 +485,7 @@
       ],
       "linear": "MEM",
       "owns": [
-        "verity/config.py",
-        "verity/party.py",
-        "verity/protocol.py",
-        "verity/runtime/README.md",
-        "verity/runtime/__init__.py",
-        "verity/runtime/channels.py",
-        "verity/runtime/process.py",
-        "verity/runtime/pyproject.toml",
-        "verity/runtime/runner.py",
-        "verity/runtime/sources.py",
-        "verity/runtime/stream.py",
-        "verity/runtime/tests/",
-        "verity/runtime/transcript.py",
+        "verity/config.py", "verity/party.py", "verity/protocol.py", "verity/runtime/README.md", "verity/runtime/__init__.py", "verity/runtime/channels.py", "verity/runtime/process.py", "verity/runtime/pyproject.toml", "verity/runtime/runner.py", "verity/runtime/sources.py", "verity/runtime/stream.py", "verity/runtime/tests/", "verity/runtime/transcript.py",
         "security/Definitions/Pous/",
         "security/Proofs/Pous/",
         "benchmarks/bandwidth/",
@@ -732,7 +718,9 @@
       "retired_usergroups": [
         "S0C5LSDENA1"
       ],
-      "owns": []
+      "owns": [
+        "benchmarks/dashboard/"
+      ]
     },
     {
       "handle": "dashboard-goals",
@@ -744,8 +732,7 @@
         "How do I put my goals on Daniel's Goals page?",
         "How do I publish a live plot of my runs to the console?"
       ],
-      "usergroup": "S0CEC206YBW",
-      "owns": []
+      "usergroup": "S0CEC206YBW"
     },
     {
       "handle": "dashboard-metrics",
@@ -757,8 +744,7 @@
         "How do I get my benchmark's number onto the Metrics dashboard?",
         "Why is a number on the Metrics dashboard stale?"
       ],
-      "usergroup": "S0CH8FZD0KH",
-      "owns": []
+      "usergroup": "S0CH8FZD0KH"
     },
     {
       "handle": "ci",
@@ -806,7 +792,8 @@
         "tools/verity/lean/",
         "tools/lean/",
         ".agents/skills/lean-proofs/",
-        "security/"
+        "security/",
+        "benchmarks/proof_status/"
       ],
       "branch_suffixes": [
         "741b",
