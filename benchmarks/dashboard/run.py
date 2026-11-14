@@ -7,7 +7,7 @@ mark. Higher is better; the dashboard holds to its goal when every top goal's nu
 
 It reads the dashboard's own data (`research metrics show --json`, in the checkout it runs in) and writes under `--out`
 (`out/` outside a research run). The validation's detail names each goal whose number doesn't run, with the first of
-"no number", "no target", "stale or never measured" and "no mark" it fails.
+"no number", "never measured", "no target", "stale" and "no mark" it fails.
 """
 from __future__ import annotations
 
@@ -29,11 +29,13 @@ def _miss(goal: dict, rows: dict[str, dict]) -> str | None:
     row = next((rows[i] for i in goal.get("metrics") or [] if i in rows), None)
     if row is None:
         return "no number"
-    latest = row.get("latest") or {}
+    latest = row.get("latest")
+    if not latest:
+        return "never measured"
     if (latest.get("target") if latest.get("target") is not None else row.get("target")) is None:
         return "no target"
-    if not latest or row.get("stale"):
-        return "stale or never measured"
+    if row.get("stale"):
+        return "stale"
     if (latest.get("mark") or row.get("mark")) not in MARKS:
         return "no mark"
     return None

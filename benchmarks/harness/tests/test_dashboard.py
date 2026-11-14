@@ -32,7 +32,7 @@ def test_each_point_a_number_can_miss():
     }
     assert _runner().running(report) == (2, 8, [
         ("g/none", "no number"), ("g/undeclared", "no number"), ("g/target", "no target"),
-        ("g/stale", "stale or never measured"), ("g/never", "no target"), ("g/mark", "no mark")])
+        ("g/stale", "stale"), ("g/never", "never measured"), ("g/mark", "no mark")])
 
 
 def test_the_value_then_the_row():
@@ -42,4 +42,4 @@ def test_the_value_then_the_row():
     assert run.running({"metrics": [row], "top": [{"id": "g", "metrics": ["a/x"]}]}) == (1, 1, [])
     never = {"id": "a/x", "latest": None, "target": 3.0, "mark": None, "stale": False}
     assert run.running({"metrics": [never], "top": [{"id": "g", "metrics": ["a/x"]}]}) == (0, 1,
-                                                                                         [("g", "stale or never measured")])
+                                                                                         [("g", "never measured")])
