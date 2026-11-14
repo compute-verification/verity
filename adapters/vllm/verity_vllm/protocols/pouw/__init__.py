@@ -90,6 +90,8 @@ from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F
 from verity.protocols.accounting.pouw.prover.serving.operands import Operands, ncp_tiles, quantize, stack_y
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import passes as PP
 
+__all__ = ["challenged", "h1_run"]
+
 NAME = "pouw"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
