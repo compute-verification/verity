@@ -8,7 +8,6 @@ testpaths = ["tests"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
-    "tests/test_auditor_certifier.py",
     "tests/test_auditor_load.py",
     "tests/test_auditor_rt4.py",
     "tests/test_auditor_warden.py",

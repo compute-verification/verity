@@ -2777,7 +2777,6 @@
     {"file": "verity/protocols/compose/device/live_challenger/serve.py", "count": 6},
     {"file": "verity/protocols/compose/device/live_challenger/tests/stub_serve.py", "count": 4},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor.py", "count": 5},
-    {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_certifier.py", "count": 1},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_days.py", "count": 1},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_load.py", "count": 14},
     {"file": "verity/protocols/compose/device/live_challenger/tests/test_auditor_models.py", "count": 7},
