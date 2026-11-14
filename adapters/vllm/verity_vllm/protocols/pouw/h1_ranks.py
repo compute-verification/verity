@@ -53,11 +53,9 @@ from verity.protocols.accounting.pouw.prover.serving import (
     Matmul,
     Shape,
     Workload,
-    batch_order,
     commit_committed,
     commit_site,
     draw_challenger,
-    new_requests,
     numpy_of,
     program_salt,
     to_host,
@@ -79,7 +77,7 @@ ENTRY = f"pouw:{H1_SCHEME}"
 EXTENSION = "verity_vllm.protocols.pouw.h1_ranks.RankExtension"
 #: with ``install``'s ``commit``: `RankExtension` with the Commit on each rank (in ``acquire``, which builds the int8 source)
 COMMIT_EXTENSION = "verity_vllm.acquire.h1_commit.RankCommit"
-#: the module of Model Runner V2, whose `sort_batch_req_ids` orders a step's rows (`pouw_h1_requests.batch_order`)
+#: the module of Model Runner V2, whose `sort_batch_req_ids` orders a step's rows (`h1_hooks.batch_order`)
 MRV2 = "vllm.v1.worker.gpu.model_runner"
 
 
@@ -266,8 +264,8 @@ def executor_of(llm: Any) -> Any:
 
 
 def _runner(decode_query_len: int) -> Any:
-    """What `pouw_h1_requests.batch_order` reads of the ranks' Model Runner V2: its module's batch order (once `install`
-    has imported it; `pouw_h1_requests.sort_batch_req_ids` until then) and its decode_query_len."""
+    """What `h1_hooks.batch_order` reads of the ranks' Model Runner V2: its module's batch order (once `install`
+    has imported it; `h1_hooks.sort_batch_req_ids` until then) and its decode_query_len."""
     return type("GPUModelRunner", (), {"__module__": MRV2, "decode_query_len": int(decode_query_len)})()
 
 
@@ -312,7 +310,7 @@ class Holder:
         def execute_model(scheduler_output: Any, non_block: bool = False) -> Any:
             if int(getattr(scheduler_output, "total_num_scheduled_tokens", 0) or 0) and not self.run.closed:
                 self.pull()
-                self.run.admit(new_requests(scheduler_output), batch_order(self.runner, scheduler_output))
+                self.run.admit(PHK.new_requests(scheduler_output), PHK.batch_order(self.runner, scheduler_output))
                 self._push()
             return orig(scheduler_output, non_block)
         return execute_model
