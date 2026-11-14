@@ -23,7 +23,9 @@ from verity.definitions.registry.sparse_mla_split import (
     SparseMlaSplit,
     launch_num_splits,
 )
+from verity.device import load_card, number
 
+from verity_vllm.engine.profiles.devices import CARD
 from verity_vllm.observe.events import TritonLaunch, ViewDesc
 from verity_vllm.observe.fold.patterns.collectives import TpFusedAllReduceRmsNorm
 from verity_vllm.observe.fold.patterns.cublas import CublasLinear, MlaAbsorbBmm
@@ -61,6 +63,7 @@ FA3_OP = "fwd"
 NORM_SRC_SHA = "2dcf56892eb2b61c0f0249965013fc1f63968c00e473b3df35cb186d42c650de"
 Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
 INDEX_SHARE_SRC_SHA = "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63"
+RECORD_SMS = int(number(load_card(CARD["NVIDIA H200"])["sm"]["count"]))
 
 
 def _module(node: TreeNode) -> str:
@@ -562,7 +565,7 @@ class DsaSparseMla:
             return unsupported(node, "FA3 num_splits is not a nonnegative integer", num_splits=ns_arg)
         valid = [int(position) + 1 for _, position in ctx.start.rows]
         tp = target_of(ctx)[0]
-        if int(tp.num_sms) != 132:
+        if int(tp.num_sms) != RECORD_SMS:
             return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
         splits = launch_num_splits(valid, int(tp.num_sms), 2048, ns_arg)
         parts: list[Compute] = []

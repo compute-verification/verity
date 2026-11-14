@@ -14,8 +14,8 @@ multiples of any tile.
 Timing, per shape: each arm's calls (one per copy of X and W, cycling over enough copies to pass the L2) captured in a
 CUDA graph, warmed, then items of at least --secs seconds, the arms alternating item by item (order rotated each round).
 Around every item, `stamp.cu` reads each SM's %clock64 and %globaltimer (one CTA an SM), so an item reports its declared
-MACs a SM clock against 4,096 (the wgmma s8 rate a clock), its SM clock, and its rate against
-theta = 989.4 T int8 MAC/s (4,096 x 132 x 1,830 MHz).  `dcgmi dmon` samples Tensor Active (1004), SM clock and power
+MACs a SM clock against the H200 card's `rate.tensor` (the wgmma s8 rate a clock), its SM clock, and its rate against
+theta = 989.4 T int8 MAC/s (the card's `sm.count` x `rate.tensor` at `clock.tensor`, to four digits).  `dcgmi dmon` samples Tensor Active (1004), SM clock and power
 beside the run; an item's mean is over the samples inside it.  Back to back, every arm holds the card at its power cap
 (about 1,350 to 1,600 MHz); a served step's GEMMs run near 1,713 MHz between memory-bound kernels.  `--rest R` puts the SMs
 to sleep after each call (`stamp.cu`'s rest, R times the call's clocks at 0.7 of the rate) and takes their rest clocks out
@@ -51,13 +51,17 @@ import time
 from pathlib import Path
 
 import torch
+from verity.device import load_card, number
 
 from verity_vllm.engine import int8_exact as E
 from verity_vllm.engine import int8_fused as X
 from verity_vllm.engine import int8_wgmma as W
+from verity_vllm.engine.profiles.devices import CARD
 
 HERE = Path(__file__).resolve().parent
-THETA, F_REF, PER_CLK = 989.4e12, 1.83e9, 4096
+H200 = load_card(CARD["NVIDIA H200"])
+THETA = 989.4e12
+F_REF, PER_CLK = float(number(H200["clock"]["tensor"]) * 10**6), int(number(H200["rate"]["tensor"]))
 LINEARS = {"qkv": (3072, 2048), "o": (2048, 2048), "gate_up": (16384, 2048), "down": (2048, 8192)}
 TRITON = "128x128x128:w4:s3:k1:t1"  # the tuned Triton tile for Llama-3.2-1B's linears on sm_90 at M 8,192 to 32,768
 EDGES = ((8193, 3072, 2048), (1000, 3000, 2064), (129, 136, 160), (8191, 2050, 8192), (300, 16384, 2048), (17, 256, 16))
@@ -333,7 +337,7 @@ def timed(m, n, k, arms, secs, rounds, clock, dmon, name, kind, rest=0.0) -> lis
 
 
 def summary(items: list[dict]) -> str:
-    out = ["| linear | M | data | arm | us a call | of theta (1,830 MHz) | SM MHz | MACs/SM-clk / 4096 | Tensor Active | W |",
+    out = [f"| linear | M | data | arm | us a call | of theta ({F_REF / 1e6:,.0f} MHz) | SM MHz | MACs/SM-clk / {PER_CLK} | Tensor Active | W |",
            "|---|---:|---|---|---:|---:|---:|---:|---:|---:|"]
     key = {}
     for it in items:
