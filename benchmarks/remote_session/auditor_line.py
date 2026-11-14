@@ -1020,7 +1020,8 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
                                       "period credits its window", bound)
             d = Path(c["dir"]) if Path(c["dir"]).is_dir() else ch_dir / c["session"]
         else:
-            row["credit"] = no_credit("its coins were flipped in the verifier's process: no challenger, no ledger", bound)
+            row["credit"] = no_credit("its coins were flipped in the verifier's process: no challenger, no ledger",
+                                      bound)
             row["skipped"] = "no challenger log: coins flipped in the verifier's process"
             continue
         try:
