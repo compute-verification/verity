@@ -6,7 +6,7 @@ developer's side of the protocols. In SPOT[Flock] on its own they are two partie
 server, and `parties.SPOT_MANIFEST` carries `REPLAY` between them. In the core deployment they are one party on one
 machine, so its manifest has no channel between them, and the rest of these messages travel as files, records in a log
 and function calls. `tests/test_workload_messages.py` holds the list: every protocol's declaration (a module of this
-name beside its manifest), where the tree writes and reads each message today, and what crosses between the two and is
+name in its `verifier/`), where the tree writes and reads each message today, and what crosses between the two and is
 no message of the list.
 
 A message that serves more than one protocol is declared here, once, since the proof system owns the commitments. A
@@ -17,7 +17,7 @@ workload -> prover
 Circuit      the circuit the workload runs, cut into proof blocks, before any run
 Settings     the workload's own statement of how it runs
 Window       a closed execution phase: its commitment's root and what each protocol's hook made of it
-Io           the run's external inputs and outputs, a record each request
+Io           the run's external inputs and outputs
 Summary      that the run ended with every record written
 Advice       the execution phase's advice
 Programs     the compiler's output on the advice: the Programs the execution phase ran

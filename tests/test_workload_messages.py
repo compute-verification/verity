@@ -1,7 +1,7 @@
 """The messages between the workload and the prover are one stated list, and the tree holds to it.
 
-**The list** is every protocol's declaration of its messages with the workload: the module ``workload`` beside its
-manifest (``verity/protocols/GROUP/NAME/verifier/workload.py``), its message types (``MESSAGES``, each a
+**The list** is every protocol's declaration of its messages with the workload: the module ``workload`` of its
+verifier's side (``verity/protocols/GROUP/NAME/verifier/workload.py``), its message types (``MESSAGES``, each a
 ``verity.channel.Schema``) and its channels between the workload and the prover (``CHANNELS``, each a
 ``verity.protocol.Channel``).  A message is declared once: one that serves more than one protocol sits in sampled
 proofs' module, and the others' channels name it.  ``uv run tests/test_workload_messages.py`` prints the list, and so
@@ -285,6 +285,8 @@ def problems(mods: dict[str, Any], today: dict[str, Line], exceptions: tuple[Exc
                 owner[s.type] = path
     way: dict[str, tuple[str, str]] = {}
     for path, m in mods.items():
+        out += [f"{path}: {a} is {getattr(m, a)!r}, and {SPOT}'s is {getattr(spot, a)!r}: a declaration that states it states the same"
+                for a in ("WORKLOAD", "PROVER", "MAX_BODY") if getattr(m, a, getattr(spot, a)) != getattr(spot, a)]
         pairs = [(c.sender, c.receiver) for c in m.CHANNELS if isinstance(c, Channel)]
         if len(pairs) != len(m.CHANNELS) or len(set(pairs)) != len(pairs) or any(set(p) != ends for p in pairs):
             out.append(f"{path}: CHANNELS is at most one verity.protocol.Channel each way between {sorted(ends)}")
@@ -444,19 +446,20 @@ def test_every_exception_is_current() -> None:
 
 
 def test_a_broken_list_is_found() -> None:
-    """The checks above aren't vacuous: a message declared twice, one no channel carries, a name no declaration holds, a
+    """The checks above aren't vacuous: a party under another name, a message declared twice, one no channel carries, a name no declaration holds, a
     line of ``TODAY`` with no message, a list grown past its cap, a second ``Schema`` of a declared type, a writer that
     moved and an import in each form are each found."""
     mods = dict(declarations())
     spot = mods[SPOT]
 
     class Twice:
+        PROVER = "other"
         MESSAGES = (spot.REPLAY, Schema("Lone", 1, "private"))
         CHANNELS = (Channel(spot.WORKLOAD, spot.PROVER, ("Replay", "Nowhere")),)
 
     mods["verity/protocols/proofs/twice/verifier/workload.py"] = Twice
     found = "\n".join(problems(mods, {**TODAY, "Gone": Line("a file")}, EXCEPTIONS, len(EXCEPTIONS) - 1))
-    for want in ("Replay is declared in", "its channels name Nowhere", "declares Lone and none of its channels",
+    for want in ("PROVER is 'other'", "Replay is declared in", "its channels name Nowhere", "declares Lone and none of its channels",
                  "Lone (verity/protocols/proofs/twice/verifier/workload.py) has no line in TODAY", "TODAY has a line for Gone",
                  "above EXCEPTIONS_MAX"):
         assert want in found, (want, found)
