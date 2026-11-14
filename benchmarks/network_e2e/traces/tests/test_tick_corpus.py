@@ -1,7 +1,7 @@
 """``--admit tick`` in the corpus: the client's stand-in network certifier, and the network certifier's release headers
 and watermark as `verity.protocols.accounting.certifier.verifier.release` makes them, against the server's real `tick_plugin.TickFeed`;
 which traces take the tick, τ's calibration on a trace's busy cycle, the checkpoint's stop ids, the hook's record of the
-KV pool, and what the summary keeps of a tick trace, a warden trace's releases taken from the server's feed and checked
+KV pool, and what the summary keeps of a tick trace, a network certifier trace's releases taken from the server's feed and checked
 against the certifier's log."""
 from __future__ import annotations
 
@@ -337,7 +337,7 @@ def test_the_servers_feed_reads_the_wardens_releases_and_watermark(tmp_path, mon
 
 
 def warden_trace(root, released: dict[int, tuple[int, int]], schedule: dict):
-    """`tick_corpus`'s requests a and b as a warden trace's, its network certifier on `schedule`: through its connections
+    """`tick_corpus`'s requests a and b as a network certifier trace's, its network certifier on `schedule`: through its connections
     1 and 2, which its log releases as `released` (ordinal -> (N, a)) in run `RUN`, while the server's feed says the
     release headers gave a N 0 in bucket 0 and b N 1 in bucket 1."""
     d = tick_corpus(root, "warden-heavy", [c | {"warden": {"ordinal": k + 1, "outcome": "end"}} for k, c in enumerate(CLIENT)])
@@ -374,7 +374,7 @@ def test_summary_leaves_out_a_release_the_warden_didnt_make(tmp_path, mod):
     r = summary.summarize(tmp_path)["traces"]["warden-heavy"]["tick"]["releases"]
     assert (r["agree"], r["disagree"], r["disagreeing"]) == (1, 1, [{"id": "b", "server": [RUN, 1, 1], "warden": [RUN, 1, 2]}])
     assert [q.get("release") for q in summary.read_jsonl(d / "requests.jsonl")] == [0, None]
-    # one the warden has no record of keeps the server's; another run's releases are none of this warden's
+    # one the network certifier has no record of keeps the server's; another run's releases are none of this network certifier's
     warden_trace(tmp_path / "unlogged", {1: (0, 0)}, schedule)
     r = summary.summarize(tmp_path / "unlogged")["traces"]["warden-heavy"]["tick"]["releases"]
     assert (r["agree"], r["unlogged"], r["disagree"]) == (1, 1, 0)

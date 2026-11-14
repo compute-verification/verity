@@ -29,7 +29,7 @@ certifier's parameters digest (`gridBytes`) in place of a certifier's; the activ
 clock, so a window declares no sync and nothing is read of the syncs (`synced`). Its outputs are a plain link's.
 
 Its public outputs are `verdict` and the proved `deadline` bit, and `digest` binds them to the registration, the
-sessions and the accept bit (`verdictDigest`). A link is plain, served or a warden's (`service.OF_RECORD`); a case of
+sessions and the accept bit (`verdictDigest`). A link is plain, served or a network certifier's (`service.OF_RECORD`); a case of
 kind ``advised`` is refused by name (`caseOf`): no advised link has a verdict of record.
 
 `transferBlocksFn` is the `link-window` function of `network-records verdicts` (`Difftest.serve`), which `service.py` calls
@@ -87,7 +87,7 @@ structure Sync where
 inductive Kind where
   | plain
   | served
-  /-- the warden's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
+  /-- the network certifier's parameters digest (`service.WardenProfile.digest`), which both ends' heads bind -/
   | warden (digest : ByteArray)
 
 structure Case where

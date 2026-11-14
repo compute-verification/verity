@@ -10,7 +10,7 @@ the three files `network-period` read, as `composite.py` reads a piece's case: w
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
 certificates.json, the five certificates of the case's evidence, each with its own fields alone and each the network
 certifier's signature under the run's public key. The chain's endpoint report, with each Commit window's counts, and
-the scan's answers stay in the kept run. A window request the warden didn't certify is
+the scan's answers stay in the kept run. A window request the network certifier didn't certify is
 rejected before any chain runs; a chain that refused, requests outside the scan's link-window and a period the check
 rejects are rejects; a rehearsal the gate's check failed (each request late) and a step that can't run (no kept run, no
 report, no build, the time limit) refuse, which leaves the certifier missing, and no process of a step's group outlives
@@ -20,7 +20,7 @@ and moves out any file DIR doesn't declare, a period file among them; the certif
 a step that ends without its files released keeps no case. The front's
 warm-ups go straight to the endpoint, one at a time, each recorded in a closed window of its own before the gate is
 asked, and the pick passes over those windows for the group's. At a tick of 4000 ms the front's rehearsal reaches this
-tree's gate with the tick in its request and the minutes counted at it, and the warden runs the scan's schedule there;
+tree's gate with the tick in its request and the minutes counted at it, and the network certifier runs the scan's schedule there;
 a tick the gate refuses (past its range, or on a request that isn't the scan rehearsal) refuses the front before the
 gate is asked."""
 from __future__ import annotations
@@ -436,7 +436,7 @@ def test_a_step_the_leak_guard_refuses_keeps_no_case_and_a_step_that_cant_start_
 
 
 def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, warden):
-    """The chain's report carrying a piece of the warden run's witness (a salt of its cells.salts, as hex) in a key
+    """The chain's report carrying a piece of the network certifier run's witness (a salt of its cells.salts, as hex) in a key
     `PUBLIC` keeps: the guard moves DIR/chain/report/report.json to the quarantine and releases the rest, the answer
     with it. The chain's job.json carrying it is never published, so it reaches neither DIR nor the quarantine."""
     with tarfile.open(warden["fetch"]) as tar:
@@ -456,7 +456,7 @@ def test_a_chain_file_holding_a_witness_value_is_moved_out_of_dir(tmp_path, ward
 def test_a_rehearsal_the_gates_check_failed_late_leaves_the_certifier_missing_not_rejected(tmp_path, warden, capsys,
                                                                                           monkeypatch):
     """Each request late past the network certifier's D·τ: the gate's check fails the rehearsal, and the served answers, longer
-    than what the warden passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
+    than what the network certifier passed, don't bind to its certified ones. That is the endpoint's lateness, not the protocol
     rejecting a served answer, so the piece refuses before any chain and the certifier is missing, as for a busy gate;
     the same window on a rehearsal the check passed is a reject."""
     served = [dict(r, output=[*r["output"], 7]) for r in warden["records"]]
@@ -564,7 +564,7 @@ def _numbers(p: Path) -> set[int]:
 
 
 def _private_chain_out(out: Path) -> Path:
-    """What the chain's warden path leaves in out/ on a served window, the endpoint's report the served node's: each
+    """What the chain's network certifier path leaves in out/ on a served window, the endpoint's report the served node's: each
     step's file carrying the window's private values where the chain writes them, and the report and report.md that
     ``chain_record.py report`` makes of them."""
     docs = {
@@ -604,7 +604,7 @@ def _private_chain_out(out: Path) -> Path:
 def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_moves_out_what_isnt_declared(tmp_path):
     """The chain's out/ holds the window's private values: the endpoint's report (its Commit window's request, step and
     output counts and its advice's bits), the report made of it (the certified I/O's counts, the advice's bits as K's
-    term) and report.md, the certificates step's view of the warden's check and the tie's prompt lengths. `publish`
+    term) and report.md, the certificates step's view of the network certifier's check and the tie's prompt lengths. `publish`
     puts none of them in the hold, only `PUBLIC`'s key paths, the endpoint's step its verdict and where it ran, and
     nothing of the scan's answers, the period check's evidence less its certificates. A file put past `publish`, in the
     hold (the endpoint's report and the scan's answers copied whole, as the piece once published them) or in DIR (the
@@ -853,7 +853,7 @@ def test_the_front_without_the_challenger_hosts_address_is_refused_by_the_variab
 def test_a_fronts_rehearsal_at_4000_ms_reaches_the_gate_with_its_tick_and_the_scans_schedule_there(tmp_path,
                                                                                                    monkeypatch):
     """``--gate local``, this tree's gate in this process: the run's request records the tick and the minutes counted
-    at it, and the warden's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
+    at it, and the network certifier's command is the scan's schedule at it. The tunnel and the rehearsal are stand-ins, the
     rehearsal's check accepting."""
     real, ran, check = CP.SS.A.certifier_run, [], json.dumps({"accepted": True, "problems": []})
 
