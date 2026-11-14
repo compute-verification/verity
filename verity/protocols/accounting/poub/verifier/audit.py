@@ -112,7 +112,6 @@ from verity.commitments import Opening as MerkleOpening
 from verity.commitments.randomness import derive, frame
 from verity.commitments.scheme import DIGEST_BYTES as _DIGEST_BYTES
 from verity.protocols.proofs.spot.verifier.profile import (
-    WINDOW_DELTA,
     IntegrityProfile,
     Subset,
 )
@@ -135,15 +134,20 @@ TILE_DOMAIN = b"verity/remote-bandwidth/stub-tile/v0\0"
 PAYLOAD_SCHEMA = receipts.SCHEMA
 NONCE_BYTES = 32
 NODE_BYTES = _DIGEST_BYTES["sha512"]
-QUERIES_LOG2 = 64
-SLACK_LOG2 = 67
-"""AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-67 a
-pass, which γ's error and the memory line's δ add once a pass.  Up to 2^17 passes they add at most 2^-50, 2^-10 of
-`DELTA`: an hour, six times the stated 10-minute horizon, of the node's 41.2 ms passes over 130,023,424 blocks
-(532.6 GB, eight GPUs' 62 GiB shards) at `timing.READ_BYTES_PER_S` is 87,326 passes."""
+QUERIES_LOG2 = 80
+"""Q = 2^80, the prover's budget: the SHA-512 compressions it makes over a session, on any hardware it reaches, at
+most.  Every bound that counts the prover's hashing reads this one constant: AuditRO's q (`named_bits`), sketch-sha512's
+guesses and keys (`timing.sketch_failure`, `ledger.sketch`) and the receipts' fork finder (`ledger.binding`)."""
+SLACK_LOG2 = 140
+"""AuditRO's slack, the bits a pass is charged beyond `named_bits`: its last term C(q, k)/2^λ is then at most 2^-140 a
+pass, which γ's error and the memory line's δ add once a pass.  Up to 2^30 passes they add at most 2^-110, 2^-9 of
+`DELTA`: 2^30 of the node's 41.2 ms passes are about 1.4 years of passes."""
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
-DELTA = float(WINDOW_DELTA)
+DELTA = 2.0 ** -101
+"""PoUB's δ, its own: each window's profile δ and the pooled bound's (`RemoteAudit.Protocol.DELTA`), 2^-101, half
+of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and PoUB-P2's δ is its own
+(`p2_party.DELTA`)."""
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
@@ -207,7 +211,7 @@ class Pace:
 @dataclass(frozen=True, slots=True)
 class Params:
     """A session's parameters: the store's size `N`, the allowance `A` from a window's boundary message to its roots'
-    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at 2^-40 by default, 555 a second of the
+    deadline, the windows `W`, the openings `s` per window at `delta` (33,273 at `DELTA` by default, 555 a second of the
     stated window), the fewest passes a window may certify, the stated window `T` (`window_ns`, 60 s by default: no
     boundary message leaves sooner after its window's challenge), the store's codec, receipt kind, whether its
     receipts bind z, its block layout and its sketch rows (None for the kind's default, `receipts.sketch_rows`), the

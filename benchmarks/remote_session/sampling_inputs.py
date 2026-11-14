@@ -180,10 +180,10 @@ def check_closed_form() -> list[dict]:
     one openings coin sampling over m groups (d = s/m), at two groups in flight and at one (each root c after its coin,
     the next coin a period after it). It holds while the wrong receipts fit in the stretch (β < G)."""
     out = []
-    for s, m, G, W, k, r, c, N, f in ((1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
+    for s, m, G, W, k, r, c, N, f in ((1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 2), (2, 1, 40, 3, 2, 12.0, 0.03, 10_000, 2),
                                       (64, 1, 12, 4, 1, 11.89, 0.057, 10_000, 2),
                                       (232, 1, 12, 7, 1, 15.0, 0.06, 130_023, 2),
-                                      (1, 4, 400, 3, 1, 8.0, 0.057, 10_000, 2), (1, 1, 40, 3, 1, 8.0, 0.057, 10_000, 1),
+                                      (1, 4, 400, 3, 1, 8.0, 0.057, 10_000, 2), (1, 1, 80, 3, 1, 8.0, 0.057, 10_000, 1),
                                       (64, 1, 12, 4, 1, 11.89, 0.057, 10_000, 1),
                                       (1, 4, 400, 3, 2, 8.0, 0.2, 10_000, 1)):
         d = s / m
@@ -447,8 +447,8 @@ def main() -> None:
         pool = line_at(p32, o=o, d=d, k=k, r=r32, theta=10 * T)
         rows.append([f"{s_T:,}", k, f"{d:.3g}", pct(LN / s_T), pct(per["eps_held"]), pct(LN / (10 * s_T)),
                      pct(pool["eps_held"]), pct(per["rebuild_held"])])
-    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^-40, which reads {ledger.DELTA_FORM}), "
-              f"at 32B x8's {r32:.2f} passes/s\n")
+    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^{math.log2(audit.DELTA):.0f}, which reads "
+              f"{ledger.DELTA_FORM}), at 32B x8's {r32:.2f} passes/s\n")
     md.append(table(["openings a window", "k", "draws a group", "ε a window, snapshot", "ε a window, held",
                      "pooled over 10 windows, snapshot", "pooled over 10, held", "rebuilds held (a window)"], rows))
 

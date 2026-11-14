@@ -330,7 +330,7 @@ def test_the_ledger_counts_every_gamma_term(store) -> None:
     named = [audit.named_bits(k) + audit.SLACK_LOG2 for w in r.windows for k in w.lengths]
     assert g.counting == pytest.approx(sum(named) / 8 / whole) and r.receipts == r.passes * N
     assert sum(named) == r.passes * (audit.named_bits(N) + audit.SLACK_LOG2)
-    assert sum(named) < 64 * r.receipts + audit.SLACK_LOG2 * r.passes
+    assert sum(named) < audit.QUERIES_LOG2 * r.receipts + audit.SLACK_LOG2 * r.passes
     assert g.rebuild == pytest.approx(timing.SQUARINGS_PER_S["p1024"] * 4096 / (65_344 * capacity))
     assert g.gamma == pytest.approx(g.timing + g.chip + g.counting + g.rebuild + 0.002)
     assert g.horizon == g.floor == 0 and g.gamma_horizon == pytest.approx(g.gamma)
@@ -408,14 +408,14 @@ def test_the_ledger_reads_the_openings_per_window_and_over_the_horizon() -> None
     assert g.sample == pytest.approx(0.00981) and g.gamma - g.gamma_horizon == pytest.approx(g.sample - g.horizon)
     assert g.to_json()["horizon"] == {"floor": g.floor, "gamma": g.gamma_horizon, "sample": g.horizon}
     # Every window's own, from the record: the pooled event leaves each window's μ_sample under 1%, every one at once;
-    # its γ adds λ, log2 of q^k/k! for its pass of 10^5 receipts, 48.8 bits a receipt or 0.149% of a 4 KiB block, so
-    # the window's γ is 1.15%.
+    # its γ adds λ, log2 of q^k/k! for its pass of 10^5 receipts, 64.8 bits a receipt or 0.198% of a 4 KiB block, so
+    # the window's γ is 1.20%.
     assert audit.floors(synthetic((u,) * n, d, delta)) == pytest.approx((g.floor,) * n)
     assert all(w.horizon == pytest.approx(g.floor) and w.sample == pytest.approx(g.sample) for w in g.windows)
     w = g.worst_horizon
     assert w.horizon < 0.01 and w.counting == pytest.approx((audit.named_bits(u) + audit.SLACK_LOG2) / 8 / (u * 4096))
-    assert 48.8 < audit.named_bits(u) / u < 48.9
-    assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0114 < w.gamma_horizon < 0.0115
+    assert 64.8 < audit.named_bits(u) / u < 64.9
+    assert w.gamma_horizon == pytest.approx(w.horizon + w.counting) and 0.0119 < w.gamma_horizon < 0.0120
     assert g.to_json()["worst"]["horizon"] == {"gamma": w.gamma_horizon, "window": w.window}
 
 
@@ -905,10 +905,11 @@ def test_a_paced_windows_roots_are_final_at_its_k_th_root(store) -> None:
 
 
 def test_a_boundary_waits_out_the_stated_window(store) -> None:
-    """The window T is stated, 60 s with 33,273 openings at 2^-40 unless the params say otherwise: no boundary message
+    """The window T is stated, 60 s with 33,273 openings at 2^-101 unless the params say otherwise: no boundary message
     leaves sooner than `window_ns` after its window's challenge, and a refused one leaves the window open."""
     p = Params(blocks=N, deadline_ns=A, windows=3)
-    assert (p.window_ns, p.samples, p.delta) == (audit.WINDOW_NS, audit.SAMPLES, audit.DELTA) == (60 * 10**9, 33_273, 2.0**-40)
+    assert (p.window_ns, p.samples, p.delta) == (audit.WINDOW_NS, audit.SAMPLES, audit.DELTA) == (60 * 10**9, 33_273,
+                                                                                                  2.0**-101)
     clock = Clock()
     s = AuditRun(params(), store.registration, None, challenger(store, params()), not_before_ns=0, clock=clock)
     s.start()
@@ -1025,35 +1026,35 @@ def test_the_closed_wrong_bound_is_above_the_profiles_exact_one(units, samples) 
     assert exact <= timing.wrong_bound(units, samples, 2.0 ** -40) <= units
 
 
-def test_the_stated_claim_holds_in_every_window_and_for_the_horizons_sampling_term() -> None:
+def test_the_stated_reading_in_every_window_and_for_the_horizons_sampling_term() -> None:
     """`PROTOCOL.md` §1 and §10's reading through the ledger, on one node whose store spans every tier, 94 GB of each
     GPU's HBM and host DRAM's share, at the node's R, S_chip and squaring ceiling.  At the stated T = 60 s and 33,273
-    openings a window (555 a second), a 10 min session's worst window has its whole γ_t at 0.896–0.927%; over the
-    horizon the pooled μ_sample is under 0.01% and the whole γ about 0.67%, over 0.15%, which μ_chip exceeds alone and
-    λ (0.116%) with μ_rebuild.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 5.8%: R cancels in what is certified.
-    The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.57–5.60%.  The 20 s option at 11,091
-    openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's μ_sample alone is under 1%, at
-    2,773."""
+    openings a window (555 a second) at δ = 2^-101, a 10 min session's worst window has its whole γ_t at 1.07–1.10%,
+    over 1%, its μ_sample 0.21%; over the horizon the pooled μ_sample is under 0.03% and the whole γ about 0.73%, over
+    0.15%, which μ_chip and λ (0.164%) each exceed alone.  At spec every reading is `1 − (1 − γ)·R/R_spec`, 6.0%: R
+    cancels in what is certified.  The same 94 GB a GPU in HBM alone leaves host DRAM's 4.7% of R idle, 5.74–5.77%.
+    The 20 s option at 28,004 openings has μ_sample under 0.25% and a whole γ_t over 1%, and the 1 s option's
+    μ_sample alone is under 1%, at 7,001."""
     s, store = audit.SAMPLES, timing.spanning(94 * 10 ** 9)
     assert 789.0e9 < store < 789.1e9
-    assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (11_091, 2_773)
-    assert s == 3 * 11_091 and audit.WINDOW_NS == 60 * timing.S
+    assert (timing.samples_for(0.0025, audit.DELTA), timing.samples_for(0.01, audit.DELTA)) == (28_004, 7_001)
+    assert s == 33_273 and audit.WINDOW_NS == 60 * timing.S
     idle = timing.HOST_READ_BYTES_PER_S / timing.READ_BYTES_PER_S
     for rtt in (1, 20):
         g = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s)
-        assert g.worst.sample < 0.001 and 0.00895 < g.worst.gamma < 0.00928
-        assert 0.00115 < g.counting < 0.00116 and g.counting + g.rebuild > 0.0015 and g.chip > 0.0015
-        assert g.horizon < 1e-4 and 0.0066 < g.gamma_horizon < 0.0068
+        assert 0.0020 < g.worst.sample < 0.0021 and 0.0107 < g.worst.gamma < 0.01103
+        assert 0.00164 < g.counting < 0.00165 and g.chip > 0.0015
+        assert g.horizon < 3e-4 and 0.0072 < g.gamma_horizon < 0.0074
         spec = timing.stated(store, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
                              capacity_bytes_per_s=timing.SPEC_BYTES_PER_S).worst
         assert spec.gamma == pytest.approx(1 - (1 - g.worst.gamma) * timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
-        assert 0.058 < spec.gamma < 0.0586
+        assert 0.0599 < spec.gamma < 0.0603
         hbm = timing.stated(timing.GPUS * 94 * 10 ** 9, audit.WINDOW_NS, 10, rtt_ns=rtt * timing.MS, samples=s,
                             read_bytes_per_s=timing.GPUS * timing.GPU_READ_BYTES_PER_S).worst
-        assert hbm.timing > idle and 0.0557 < hbm.gamma < 0.0561
-        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=11_091).worst
-        assert twenty.sample < 0.0025 and 0.012 < twenty.gamma < 0.0137
-        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=2_773).worst
+        assert hbm.timing > idle and 0.0573 < hbm.gamma < 0.0578
+        twenty = timing.stated(store, 20 * timing.S, 30, rtt_ns=rtt * timing.MS, samples=28_004).worst
+        assert twenty.sample < 0.0025 and 0.013 < twenty.gamma < 0.0141
+        one = timing.stated(store, timing.S, 600, rtt_ns=rtt * timing.MS, samples=7_001).worst
         assert one.sample < 0.01 < 0.09 < one.gamma
 
 
@@ -1096,7 +1097,7 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
     C(q, k)/2^λ, λ a natural number: charged `named_bits(k) + SLACK_LOG2`, a pass's term is at most 2^-SLACK_LOG2,
     checked in exact integers against `math.comb`.  It is within 2 bits of log2(q^k/k!) (exact factorials up to 10^5),
     never above k·log2 q, and at q = 2^40 at most the 40·k AuditRO's docstring reads.  At 94 GB of 4 KiB receipts and
-    q = 2^64 it is 40.99 bits a receipt, at the node's 789 GB over every tier 37.92, and the grid's sizing reads the
+    q = 2^80 it is 56.99 bits a receipt, at the node's 789 GB over every tier 53.92, and the grid's sizing reads the
     same count."""
     cases = [(q_log2, k) for q_log2 in (1, 10, 40) for k in (0, 1, 2, 3, 7, 2 ** q_log2 // 2, 2 ** q_log2)
              if k <= 2 ** q_log2 and k <= 4096] + [(20, 1000), (64, 3), (64, 3000), (64, 10 ** 4), (64, 10 ** 5)]
@@ -1109,9 +1110,9 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
             assert named <= 40 * k
         assert timing._named_bits(k, q_log2, True) == named and timing._named_bits(k, q_log2, False) == k * q_log2
     k = 94 * 10 ** 9 // codec.BLOCK_BYTES
-    assert 40.98 < audit.named_bits(k) / k < 41.0 and audit.named_bits(k) < 64 * k
+    assert audit.QUERIES_LOG2 == 80 and 56.98 < audit.named_bits(k) / k < 57.0 and audit.named_bits(k) < 80 * k
     k = timing.spanning(94 * 10 ** 9) // codec.BLOCK_BYTES
-    assert 37.92 < audit.named_bits(k) / k < 37.93
+    assert 53.92 < audit.named_bits(k) / k < 53.93
     for bad in (-1, 1.0, True):
         with pytest.raises(ValueError, match="nonnegative integers"):
             audit.named_bits(bad)
@@ -1119,21 +1120,20 @@ def test_the_ledgers_count_bounds_auditros_binomial() -> None:
         audit.named_bits(1, -1)
 
 
-def test_auditros_slack_adds_at_most_2_to_the_minus_50_over_an_hour_of_the_fastest_passes() -> None:
-    """`SLACK_LOG2`'s reason: an hour of the node's passes over eight GPUs' 62 GiB shards, 130,023,424 blocks read at
-    `timing.READ_BYTES_PER_S`, is under 2^17 passes, and their slack adds at most 2^-50 to γ's error and the memory
-    line's δ, 2^-10 of `DELTA`."""
+def test_auditros_slack_adds_at_most_2_to_the_minus_110_over_2_to_the_30_passes() -> None:
+    """`SLACK_LOG2`'s reason: 2^30 of the node's passes over eight GPUs' 62 GiB shards, 130,023,424 blocks read at
+    `timing.READ_BYTES_PER_S`, take about 1.4 years, and their slack adds at most 2^-110 to γ's error and the memory
+    line's δ, 2^-9 of `DELTA`."""
     pass_s = 130_023_424 * codec.BLOCK_BYTES / timing.READ_BYTES_PER_S
-    passes = math.ceil(3600 / pass_s)
-    assert 41.2e-3 < pass_s < 41.3e-3 and passes == 87_326 < 2 ** 17
-    assert 2 ** 17 * 2.0 ** -audit.SLACK_LOG2 <= 2.0 ** -50 == audit.DELTA / 2 ** 10
+    assert 41.2e-3 < pass_s < 41.3e-3 and 1.40 < 2 ** 30 * pass_s / (365.25 * 86400) < 1.41
+    assert 2 ** 30 * 2.0 ** -audit.SLACK_LOG2 <= 2.0 ** -110 == audit.DELTA / 2 ** 9
 
 
 def test_below_the_store_floor_no_window_meets_one_percent() -> None:
     """`store_floor`'s closed form against the ledger: a single 20 min window at 555 openings a second, whose μ_sample
     and ends are under 0.01%, is over 1% just below the floor at g = 50 µs and under it just above.  At g = 0 the floor
-    is μ_chip, λ and μ_rebuild alone, about 380 GB over the node's every tier."""
-    assert 380.4e9 < timing.store_floor() < 380.6e9 and 458.3e9 < timing.store_floor(50 * timing.US) < 458.5e9
+    is μ_chip, λ and μ_rebuild alone, about 405 GB over the node's every tier."""
+    assert 404.4e9 < timing.store_floor() < 404.6e9 and 487.3e9 < timing.store_floor(50 * timing.US) < 487.4e9
     for scale, over in ((0.98, True), (1.02, False)):
         g = timing.stated(round(scale * timing.store_floor(50 * timing.US)), 1200 * timing.S, 1, rtt_ns=timing.MS,
                           samples=555 * 1200)

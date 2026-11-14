@@ -55,19 +55,6 @@ GPU_SHA512_PER_S = 7.0e9
 """One RTX PRO 6000's SHA-512 compressions a second: block-sha512's 33 a block over 2,097,152 blocks in 9.87 ms."""
 SHA512_PER_S = GPUS * GPU_SHA512_PER_S
 """The node's SHA-512 compressions a second, its GPUs'.  The host's cores' rate is not measured and not in it."""
-SKETCH_OUTSIDE = 2 ** 20
-"""F, the outside-compute factor: the SHA-512 compressions a prover makes over a session are at most F times the node's
-own over its span, Q = F·C (`sketch_failure`'s `outside`).  Grinding a sketch-sha512 key reads no block, so it can run
-on any hardware the prover reaches, not only the node's GPUs: 2^20 nodes' SHA-512, about 8.4M RTX PRO 6000s, past any
-one operator's fleet.  What it costs the memory line, at 16 rows and a session of 2,118 one-pass windows over
-97,517,568 blocks in 226.9 s, 48 openings a window: `ledger.delta_parts` returns δs = 2^-31.59 at F = 2^20 and 2^-51.59
-at F = 1, beside the windows' profile δ 2^-40.00, the sample's rejection 2^-47.37, AuditRO's slack 2^-55.95 (2^-67 a
-pass, `audit.SLACK_LOG2`), the coin commitment's hiding 2^-179.95 (for all but a 2^-64 fraction of keys) and the
-receipts' binding 2^-164.86 (2^-184.86 at F = 1).  Their sum, `ledger.memory`'s `Line.delta`, is 2^-31.59 at F = 2^20,
-where δs is its largest part, and 2^-39.99 at F = 1, where the profile δ is, so F = 2^20 costs that line 8.40 bits.
-64 rows bring δs there to 2^-129.94 at F = 2^20 (`sketch_failure` at `rows=64`), at the pass cost `PROTOCOL.md` §4
-states under "The rows".  `tests/test_sketch_reading.py` holds each of these numbers to the function named beside it.
-F = 2^20 is provisional, under the sketch's random-oracle assumption."""
 GPU_READ_BYTES_PER_S = 1.539e12
 """One RTX PRO 6000's measured HBM read rate: the fastest bare read of an encoded store measured on it, 1,539.26 GB/s
 in an honest session's prover, rounded down.  The word codec's 1.488e12 is a slower kernel's."""
@@ -268,22 +255,23 @@ def sketch_reading(rows: int = SKETCH_ROWS) -> tuple[int, Fraction]:
     return min(((r, sketch_rate(rows, r)) for r in range(1, min(rows, SECTOR_BYTES) + 1)), key=lambda x: x[1])
 
 
-def sketch_failure(compressions: int, passes: int, rows: int = SKETCH_ROWS, r: int | None = None,
-                   blocks: int = 0, outside: int = SKETCH_OUTSIDE) -> Fraction:
+def sketch_failure(passes: int, rows: int = SKETCH_ROWS, r: int | None = None, blocks: int = 0,
+                   queries: int = 2 ** audit.QUERIES_LOG2) -> Fraction:
     """A session's chance that some sketch-sha512 receipt is right without its block's sectors, read at rank r (r* by
-    default), over a session of `passes` passes of `blocks` blocks, against a prover of `Q = outside · compressions`
-    SHA-512 compressions: `compressions` the node's own over the span (C), and `outside` the outside-compute factor F
-    (`SKETCH_OUTSIDE`).  Every key the prover sees is a seed it computed or one of the session's, so it sees at most
-    `Q + passes`, ground or not, and every guess is a compression:
+    default), over a session of `passes` passes of `blocks` blocks, against a prover of Q = `queries` SHA-512
+    compressions, the prover's budget (`audit.QUERIES_LOG2`) by default.  Grinding a key reads no block, so the budget
+    counts compressions on any hardware the prover reaches, not the node's alone.  Every key the prover sees is a seed
+    it computed or one of the session's, so it sees at most `Q + passes`, ground or not, and every guess is a
+    compression:
     `Q · 2^-8r + (Q + P) · (SECTORS · sign_rank_at_most(rows, r − 1) + N · 2^-512) + (Q + P)² · 2^-257`, the third
     term a key's 512-bit receipt of a block right without its hash, and the last the keys' distance from uniform
     (`SketchHashRandom`'s ε): two of the `Q + P` seeds whose 256-bit sign keys collide share their signs.  At 16 rows
     and r = 12 it is the δ at which `Accounting.Guarantees.Remote.SketchBoundDeployed` derives `SketchBound`."""
-    if type(outside) is not int or outside < 1:
-        raise ValueError("the outside-compute factor F is a positive integer")
+    if type(queries) is not int or queries < 1:
+        raise ValueError("the prover's budget Q is a positive integer of SHA-512 compressions")
     if r is None:
         r = sketch_reading(rows)[0]
-    q = outside * compressions
+    q = queries
     return (q * Fraction(1, 2 ** (8 * r))
             + (q + passes) * (SECTORS * sign_rank_at_most(rows, r - 1) + Fraction(blocks, 2 ** (8 * DIGEST_BYTES)))
             + Fraction((q + passes) ** 2, 2 ** 257))
@@ -474,15 +462,16 @@ def _grid() -> None:
     t_s, s = audit.WINDOW_NS // S, audit.SAMPLES
     quarter = samples_for(0.0025, audit.DELTA)
     openings = {1: samples_for(0.01, audit.DELTA), 20: quarter, t_s: s, 90: quarter}
-    print(f"# openings at the stated T = {t_s} s, δ = 2^-40 (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
+    d = round(-math.log2(audit.DELTA))
+    print(f"# openings at the stated T = {t_s} s, δ = 2^-{d} (it reads {ledger.DELTA_FORM}): s = {s} from the window's "
           f"coin ({s / t_s:.0f} a second, "
-          f"ε_s = ln(2^40)/s = {math.log(2.0 ** 40) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
+          f"ε_s = ln(2^{d})/s = {math.log(2.0 ** d) / s:.4%}); the 20 s option's ε_s = 0.25% is {openings[20]} and the "
           f"1 s option's 1% is {openings[1]}.  A Fiat–Shamir draw from the window's last root, ground over Q "
-          "transcripts, needs s(δ/Q) = ⌈s·(40 + log2 Q)/40⌉")
+          f"transcripts, needs s(δ/Q) = ⌈s·({d} + log2 Q)/{d}⌉")
     print("| Q | s | × the coin's |")
     print("| --- | --- | --- |")
-    for q in (0, 20, 40, 64):
-        sq = -(-s * (40 + q) // 40)
+    for q in (0, 20, 40, audit.QUERIES_LOG2):
+        sq = -(-s * (d + q) // d)
         print(f"| 2^{q} | {sq} | {sq / s:.2f} |")
     print()
     print("# openings: bytes a window and Gb/s per node, at each window's openings: "
@@ -499,8 +488,8 @@ def _grid() -> None:
           "over its own span at R measured and at spec, and over a 10 min horizon of W windows the pooled μ_sample and "
           f"the whole γ, on one node of {GPUS} RTX PRO 6000s and their host (R = {READ_BYTES_PER_S / 1e12:.4f} TB/s "
           f"measured, {SPEC_BYTES_PER_S / 1e12:.4f} at spec, S_chip = {CHIP_BYTES:,} B), the default codec at the node's "
-          f"stated ceiling, δ = 2^-40 (it reads {ledger.DELTA_FORM}), g = 50 µs, J = 0.05 ms.  Over every tier, the "
-          "store is GB a GPU of each GPU's HBM "
+          f"stated ceiling, δ = 2^{math.log2(audit.DELTA):.0f} (it reads {ledger.DELTA_FORM}), g = 50 µs, "
+          "J = 0.05 ms.  Over every tier, the store is GB a GPU of each GPU's HBM "
           "and host DRAM's share (`spanning`), and a pass its read at R; in HBM, the same GB a GPU and nothing on host "
           f"DRAM, a pass its read at the GPUs' {hbm_rate / 1e12:.3f} TB/s")
     print("| T s | openings | GB a GPU | tiers | store GB | pass ms | RTT ms | μ_timing | μ_sample | μ_chip | λ "
@@ -560,13 +549,12 @@ def _grid() -> None:
             mark = " (r*)" if r == star else ""
             print(f"| {k} | {r}{mark} | {log2(sign_rank_at_most(k, r)):.2f} | {log2(sketch_rate(k, r)):.2f} |")
     print()
-    fl = SKETCH_OUTSIDE.bit_length() - 1
     for k, (star, rate) in readings.items():
-        q40, q64 = -40 - log2(rate), -64 - log2(rate)
-        print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure stays below 2^-40 up to "
-              f"Q = 2^{q40:.2f} compressions, the node's C = 2^{q40 - fl:.2f} at F = 2^{fl} "
-              f"({2 ** (q40 - fl) / SHA512_PER_S:.3g} s of {GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each), "
-              f"and below 2^-64 up to Q = 2^{q64:.2f}, C = 2^{q64 - fl:.2f}")
+        q100 = -100 - log2(rate)
+        print(f"{k} rows: r* = {star}, 2^{log2(rate):.2f} a compression; a session's failure is "
+              f"2^{log2(sketch_failure(0, k)):.2f} at the prover's budget Q = 2^{audit.QUERIES_LOG2} "
+              f"(`audit.QUERIES_LOG2`), and its guesses stay below 2^-100 up to Q = 2^{q100:.2f} compressions "
+              f"({2 ** q100 / SHA512_PER_S:.3g} s of {GPUS} GPUs at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s each)")
     print()
     print("# a grinding try reads no block: compressions to make a key straight (at least 5 with the constant "
           f"midstates kept), at {GPU_SHA512_PER_S / 1e9:.1f}·10^9/s on one GPU; seeing a sector's 16 × 32 signs is 16 "
@@ -578,14 +566,13 @@ def _grid() -> None:
         c = grind_compressions(n)
         print(f"| {name} | {n} | {c} | {c / GPU_SHA512_PER_S * 1e9:.2f} | {math.log2(SHA512_PER_S / c):.2f} |")
     print()
-    f = f"F = 2^{SKETCH_OUTSIDE.bit_length() - 1}"
-    print(f"| a session of {GPUS} GPUs, every compression a guess or a key, 50 passes a second | C, log2 | failure at "
-          f"r*, 16 rows, F = 1 | {f} | 64 rows, {f} |")
-    print("| --- | --- | --- | --- | --- |")
+    print(f"| a session at 50 passes a second, its prover's {GPUS} GPUs' compressions over it beside the budget "
+          f"Q = 2^{audit.QUERIES_LOG2} | the GPUs' C, log2 | failure at r*, 16 rows | 64 rows |")
+    print("| --- | --- | --- | --- |")
     for name, secs in (("1 s", 1), ("10 min", 600), ("1 hour", 3600), ("1 day", 86400), ("30 days", 30 * 86400)):
-        c, p = round(SHA512_PER_S * secs), secs * 50
-        print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
-              f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
+        p = secs * 50
+        print(f"| {name} | {math.log2(SHA512_PER_S * secs):.2f} | 2^{log2(sketch_failure(p)):.2f} | "
+              f"2^{log2(sketch_failure(p, rows=64)):.2f} |")
 
 
 __all__ = ["CHIP_BYTES", "GPUS", "GPU_CHIP_BYTES", "GPU_READ_BYTES_PER_S", "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S",

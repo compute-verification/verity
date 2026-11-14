@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import inspect
 import itertools
 import math
 import random
@@ -109,7 +108,7 @@ def threshold(rows: int, bits: int) -> int:
     lo, hi = 0, 2 ** 256
     while hi - lo > 1:
         mid = (lo + hi) // 2
-        lo, hi = (mid, hi) if timing.sketch_failure(mid, 0, rows, outside=1) <= Fraction(1, 2 ** bits) else (lo, mid)
+        lo, hi = (mid, hi) if timing.sketch_failure(0, rows, queries=mid) <= Fraction(1, 2 ** bits) else (lo, mid)
     return lo
 
 
@@ -125,21 +124,21 @@ def test_the_readings_and_thresholds_the_protocol_states() -> None:
         assert f == Fraction(1, 2 ** (8 * r)) + 128 * timing.sign_rank_at_most(rows, r - 1)
         for bits, want in ((40, c40), (64, c64)):
             c = threshold(rows, bits)
-            assert (timing.sketch_failure(c, 0, rows, outside=1) <= Fraction(1, 2 ** bits)
-                    < timing.sketch_failure(c + 1, 0, rows, outside=1))
+            assert (timing.sketch_failure(0, rows, queries=c) <= Fraction(1, 2 ** bits)
+                    < timing.sketch_failure(0, rows, queries=c + 1))
             assert round(math.log2(c), 2) == want
             assert (c == math.floor(Fraction(1, 2 ** bits) / f)) == (rows == 16), "64 rows: the keys' birthday binds"
     assert timing.sketch_rate(16, 11) == Fraction(1, 2 ** 88) + 128 * timing.sign_rank_at_most(16, 10)
     node_day, passes = round(timing.SHA512_PER_S * 86400), 86400 * 50
-    assert (timing.sketch_failure(node_day, passes, outside=1)
-            == timing.sketch_failure(node_day, passes, r=12, outside=1))
-    assert lg(timing.sketch_failure(node_day, passes, outside=1)) == -43.02
-    assert timing.sketch_failure(30 * node_day, 30 * passes, outside=1) > Fraction(1, 2 ** 40)
+    assert (timing.sketch_failure(passes, queries=node_day)
+            == timing.sketch_failure(passes, r=12, queries=node_day))
+    assert lg(timing.sketch_failure(passes, queries=node_day)) == -43.02
+    assert timing.sketch_failure(30 * passes, queries=30 * node_day) > Fraction(1, 2 ** 40)
     blocks = 1 << 30
-    guess = (timing.sketch_failure(node_day, passes, blocks=blocks, outside=1)
-             - timing.sketch_failure(node_day, passes, outside=1))
+    guess = (timing.sketch_failure(passes, blocks=blocks, queries=node_day)
+             - timing.sketch_failure(passes, queries=node_day))
     assert guess == (node_day + passes) * Fraction(blocks, 2 ** 512)
-    assert lg(timing.sketch_failure(node_day, passes, blocks=blocks, outside=1)) == -43.02
+    assert lg(timing.sketch_failure(passes, blocks=blocks, queries=node_day)) == -43.02
 
 
 def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> audit.Record:
@@ -153,72 +152,47 @@ def one_pass_session(blocks: int, passes: int, span_ns: int, samples: int) -> au
         pace=audit.Pace(1), samples=samples, append_coins=0)
 
 
-def test_the_outside_factor_multiplies_the_queries_the_bound_charges() -> None:
-    """Grinding reads no block, so `sketch_failure` charges Q = F·C, C the node's compressions and F the
-    outside-compute factor, 2^20 by default.  At gate run 8's session 0 (C = 12,708,215,084,432 over 226.9 s, P = 2,118,
-    N = 97,517,568, 48 openings a window, its recorded δs 2^-51.59 at F = 1) F = 2^10 gives 2^-41.59, the red team's
-    reading, and 2^20 gives 2^-31.59; 64 rows give 2^-129.94 at F = 2^20.  The memory line's δ of a record of those
-    counts is the ledger's, typed nowhere as a formula: every `Line.delta` of `ledger.memory` is the sum of
-    `ledger.delta_parts` at `Node.stated(sketch_outside=F)`, AuditRO's slack in it at `audit.SLACK_LOG2` a pass (the
-    run's own record states no slack, so its line is read at `UNRECORDED_SLACK_LOG2` and is another number).  The typed
-    2^-39.99 at F = 1 and 2^-31.59 at F = 2^20 are a second check of that sum and are the ledger's own numbers, and
-    `timing.SKETCH_OUTSIDE`'s docstring must carry every number the ledger returns here."""
-    assert timing.SKETCH_OUTSIDE == 2 ** 20
-    c, p, n, span_ns, samples = 12_708_215_084_432, 2118, 97_517_568, 226_932_412_222, 48
-    assert timing.sketch_failure(c, p, blocks=n) == timing.sketch_failure(c, p, blocks=n, outside=2 ** 20)
-    for f in (2, 2 ** 10, 2 ** 20):
-        assert timing.sketch_failure(c, p, blocks=n, outside=f) == timing.sketch_failure(f * c, p, blocks=n, outside=1)
-    assert [lg(timing.sketch_failure(c, p, blocks=n, outside=2 ** e)) for e in (0, 10, 20, 30)] == [
-        -51.59, -41.59, -31.59, -21.59]
-    wide = lg(timing.sketch_failure(c, p, rows=64, blocks=n))
-    assert wide == -129.94
-
-    def said(x: float) -> str:
-        return f"2^{math.log2(x):.2f}"
-
+def test_the_sketch_charges_the_provers_budget() -> None:
+    """Grinding reads no block, so `sketch_failure` charges the prover's budget, Q = 2^`audit.QUERIES_LOG2`
+    compressions, whatever the node computes.  At a session of P = 2,118 one-pass windows over N = 97,517,568 blocks
+    in 226.9 s, 48 openings a window, 16 rows read 2^-15.12 at Q = 2^80, and 64 rows 2^-97.00, where the keys' distance
+    from uniform binds.  The memory line's δ of a record of those counts is the ledger's: every `Line.delta` of
+    `ledger.memory` is the sum of `ledger.delta_parts`, the windows' profile δ at `audit.DELTA`, AuditRO's slack at
+    `audit.SLACK_LOG2` a pass and the sketch at Q, the largest."""
+    p, n, span_ns, samples = 2118, 97_517_568, 226_932_412_222, 48
+    q = 2 ** audit.QUERIES_LOG2
+    assert audit.QUERIES_LOG2 == 80
+    assert timing.sketch_failure(p, blocks=n) == timing.sketch_failure(p, blocks=n, queries=q)
+    assert timing.sketch_failure(p, blocks=n, queries=q // 2) < timing.sketch_failure(p, blocks=n)
+    assert [lg(timing.sketch_failure(p, rows=rows, blocks=n)) for rows in (16, 64)] == [-15.12, -97.0]
     record, keys = one_pass_session(n, p, span_ns, samples), 64
-    quoted = {f"{p:,} one-pass windows over {n:,} blocks in {span_ns / 1e9:.1f} s, {samples} openings a window":
-              "the session", f"2^-{audit.SLACK_LOG2} a pass": "`audit.SLACK_LOG2`",
-              f"all but a 2^-{keys} fraction of keys": "the key failure `ledger.hiding` is charged at",
-              f"2^{wide:.2f}": "`sketch_failure` at `rows=64` and F = 2^20"}
-    totals = {}
-    for f, largest in ((1, "profile"), (2 ** 20, "sketch")):
-        node = ledger.Node.stated(sketch_outside=f)
-        assert ledger.compressions(record, node) == c
-        parts = ledger.delta_parts(record, node)
-        assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == largest
-        assert parts["sketch"] == float(timing.sketch_failure(c, p, blocks=n, outside=f))
-        assert parts["slack"] == p * 2.0 ** -audit.SLACK_LOG2
-        assert parts["hiding"] == 2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys)
-        total = 0.0
-        for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
-            total += parts[name]
-        assert [x.delta for x in ledger.memory(record, node)] == [total] * 3
-        totals[f] = total
-        quoted |= {said(x): f"`ledger.delta_parts`' {name} at F = {f}" for name, x in parts.items()}
-        quoted[said(total)] = f"`ledger.memory`'s `Line.delta` at F = {f}"
-    assert [round(math.log2(totals[f]), 2) for f in (1, 2 ** 20)] == [-39.99, -31.59], "the ledger's, typed to check it"
-    quoted[f"{math.log2(totals[2 ** 20] / totals[1]):.2f} bits"] = "`Line.delta` at F = 2^20 over `Line.delta` at F = 1"
-    prose = " ".join(inspect.getsource(timing).split("SKETCH_OUTSIDE = 2 ** 20\n", 1)[1].split('"""', 2)[1].split())
-    for text, what in quoted.items():
-        assert text in prose, (f"`timing.SKETCH_OUTSIDE`'s docstring quotes the ledger at this session and has parted "
-                               f"from it: it should say {text} ({what})")
-    for bad in (0, -1, 1.5):
-        with pytest.raises(ValueError, match="outside-compute factor"):
-            timing.sketch_failure(c, p, outside=bad)
+    assert record.windows[0].profile.delta == audit.DELTA == 2.0 ** -101
+    parts = ledger.delta_parts(record)
+    assert tuple(parts) == ledger.DELTA_PARTS and max(parts, key=parts.get) == "sketch"
+    assert parts["profile"] == audit.DELTA
+    assert parts["slack"] == p * 2.0 ** -audit.SLACK_LOG2
+    assert parts["sketch"] == ledger.sketch(record) == float(timing.sketch_failure(p, blocks=n))
+    assert parts["hiding"] == 2 * 2.0 ** receipts.HM96.statistical_distance_log2(p, key_failure_log2=keys)
+    total = 0.0
+    for name in ledger.DELTA_PARTS:  # one float add a part in `memory`'s order, which `sum` doesn't promise
+        total += parts[name]
+    assert [x.delta for x in ledger.memory(record, ledger.Node.stated())] == [total] * 3
+    assert round(math.log2(total), 2) == -15.12, "the ledger's, typed to check it"
+    for bad in (0, -1, 1.5, 2.0 ** 80):
+        with pytest.raises(ValueError, match="budget Q"):
+            timing.sketch_failure(p, queries=bad)
 
 
 def test_the_keys_distance_from_uniform_is_charged() -> None:
     """Two of the `Q + P` candidate seeds whose 256-bit sign keys collide share their signs, so the keys are
-    within `(Q + P)²/2^257` of uniform, not uniform (`SketchHashRandom`'s ε), and `sketch_failure` charges it.  At gate
-    run 8's session 0 it is 2^-129.94 at F = 2^20 (2^-169.94 at F = 1), and moves none of its δs's digits."""
-    c, p, n = 12_708_215_084_432, 2118, 97_517_568
-    for f in (1, 2 ** 20):
-        q = f * c
+    within `(Q + P)²/2^257` of uniform, not uniform (`SketchHashRandom`'s ε), and `sketch_failure` charges it: 2^-97.00
+    at the prover's budget of 2^80 compressions, 2^-169.94 at 12,708,215,084,432."""
+    p, n = 2118, 97_517_568
+    for q in (12_708_215_084_432, 2 ** audit.QUERIES_LOG2):
         rest = (q * Fraction(1, 2 ** 96)
                 + (q + p) * (128 * timing.sign_rank_at_most(16, 11) + Fraction(n, 2 ** 512)))
-        assert timing.sketch_failure(c, p, blocks=n, outside=f) - rest == Fraction((q + p) ** 2, 2 ** 257)
-    assert [lg(Fraction((f * c + p) ** 2, 2 ** 257)) for f in (1, 2 ** 20)] == [-169.94, -129.94]
+        assert timing.sketch_failure(p, blocks=n, queries=q) - rest == Fraction((q + p) ** 2, 2 ** 257)
+    assert [lg(Fraction((q + p) ** 2, 2 ** 257)) for q in (12_708_215_084_432, 2 ** 80)] == [-169.94, -97.0]
 
 
 class Counting:
