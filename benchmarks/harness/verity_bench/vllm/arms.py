@@ -137,6 +137,7 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
 
     if not arm.protocols:
         return ()
+    from verity.errors import Refused
     from verity_vllm import protocols as PO
 
     ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
@@ -145,7 +146,7 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
         try:
             if PO.requires_build(entry, ctx):
                 bound.append(entry)
-        except PO.Refused as e:
+        except Refused as e:
             log.info("arm %r: protocol entry %r refused (%s), so it binds no Build here; the engine's build refuses it",
                      arm.id, entry, e)
     return tuple(bound)

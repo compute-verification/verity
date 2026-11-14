@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Walk
 public import Proofs.Properties.Verity.Sampled.Stops
 
 /-!
-# Sampled proofs' coupling over a window: each member's session's trace in the window's
+# SPOT's coupling over a window: each member's session's trace in the window's
 
 The joint distribution's support over a window (`WindowReaches`, `SeqReach`) nests each member's session's trace in what
 follows it. Here it is read a member at a time, each session's trace from the position it starts at to the position

@@ -44,6 +44,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from verity_vllm import messages as M
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.program.predict import phi as P
 
@@ -56,7 +57,7 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
     count: a run can serve a user again in another window."""
     adv = run / "advice" / f"w{window}"
     reg = json.loads((adv / "registration.json").read_text())
-    serve = json.loads((run / "serve.json").read_text())
+    serve = json.loads(M.read(run / "serve.json", "ServingConfiguration"))
     bodies = {}
     for line in (run / "requests.jsonl").read_text().splitlines():
         if line.strip():

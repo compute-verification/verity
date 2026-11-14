@@ -74,7 +74,7 @@ def samplingDesignK : Flock.Draw.SamplingDesign → ℕ
 /-- **The deployed sample is `sampleUnits` under `sampledDesign`**: at a verifier whose program the descriptor `desc` parses to,
 under the sampling design object `Draw.derive` writes from its own, `sampledFrom` samples under the sampling design `sampledDesign` reads off its query,
 sampling design object and work table. -/
-theorem sampledFrom_sampledDesign {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
+theorem sampledFrom_sampledDesign {desc : Claims.Msg} {v : Spot.Docket.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) (n : ℕ) (src : ByteArray) :
     Spot.OneStage.sampledFrom v lo n src =
@@ -96,7 +96,7 @@ def SamplesUnder (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) 
 /-- **Every sample the one-stage verifier samples is under a sampling design `SamplesUnder` names**: where `sampledFrom` samples,
 at a verifier whose program the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes,
 its sample is `sampleUnits` under a `samplingDesign` with `SamplesUnder desc v.query v.samplingDesign v.workTable n samplingDesign (samplingDesignK samplingDesign)`. -/
-theorem samplesUnder_of_sampledFrom {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
+theorem samplesUnder_of_sampledFrom {desc : Claims.Msg} {v : Spot.Docket.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : Spot.OneStage.sampledFrom v lo n src = .ok r) :
@@ -296,10 +296,37 @@ theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.
   | ok samplingDesign => exact Or.inl ⟨h, rfl⟩
   | error _ => exact Or.inr rfl
 
+/-- **Under a sampling design object of kind `subset`, `sampledDesign` is a subset sampling design**: `deriveSamplingDesign` expands none
+(`deriveSamplingDesign_none`), so it is the one `flockSamplingDesign` parses from the object itself, which is neither stratified nor work, and
+`coveredDesign` refuses a Bernoulli one. -/
+theorem sampledLaw_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ} {samplingDesign : Flock.Draw.SamplingDesign}
+    (hs : SecurityProofs.kindOf lj = "subset") (h : sampledDesign desc q lj tb n = .ok samplingDesign) : ∃ k, samplingDesign = .subset k := by
+  have hnb := notBernoulli_sampledDesign h
+  obtain ⟨p, derived, parsed, -, hd, hpar, rfl⟩ := sampledDesign_ok h
+  rw [SecurityProofs.deriveSamplingDesign_none p q lj tb (by rw [hs]; decide) (by rw [hs]; decide)] at hd
+  obtain rfl : derived = none := (Except.ok.inj hd).symm
+  rcases SecurityProofs.flockSamplingDesign_cases _ n parsed hpar with ⟨k, rfl, -⟩ | ⟨a, b, rfl, -⟩ | hk | hk
+  · exact ⟨k, rfl⟩
+  · exact (hnb a b rfl).elim
+  all_goals
+    rw [show SecurityProofs.samplingDesignObj lj none = lj from rfl, hs] at hk
+    exact absurd hk (by decide)
+
+/-- **Under a sampling design object of kind `subset`, `designAt` is the subset sampling design of its own `samplingDesignK`**
+(`sampledLaw_subset`, and `subset 0` where `sampledDesign` refuses). -/
+theorem designAt_subset {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} (n : ℕ)
+    (hs : SecurityProofs.kindOf lj = "subset") : designAt desc q lj tb n = .subset (samplingDesignK (designAt desc q lj tb n)) := by
+  unfold designAt
+  cases h : sampledDesign desc q lj tb n with
+  | ok samplingDesign =>
+    obtain ⟨k, rfl⟩ := sampledLaw_subset hs h
+    rfl
+  | error _ => rfl
+
 /-- **Every sample the one-stage verifier samples is under `designAt`**: where `sampledFrom` samples, at a verifier whose program
 the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes, its sample is `sampleUnits` under
 `designAt desc v.query v.samplingDesign v.workTable n`. -/
-theorem sampledFrom_designAt {desc : Claims.Msg} {v : Spot.Registration.Verifier} {lo : Lean.Json}
+theorem sampledFrom_designAt {desc : Claims.Msg} {v : Spot.Docket.Verifier} {lo : Lean.Json}
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : Spot.Draw.derive v.program v.query v.samplingDesign v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : Spot.OneStage.sampledFrom v lo n src = .ok r) :

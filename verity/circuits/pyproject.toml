@@ -10,7 +10,8 @@ untraced = ["tests/test_ruff.py"]
 # against its Definition (the kernels and the silicon models they read), tests/test_stacking holds property/v1's table to
 # Lean's registry, and tests/test_lean_gates recomputes the circuit model's rows from s8, census/v1 and property/v1.
 # tests/test_ruff runs ruff, which the guard doesn't trace, under the repository's one configuration (ruff.toml).
-inputs = ["verity", "verity/circuits", "verity/circuits/kernels", "security/Definitions/Accounting/Gates/Registry.lean",
+# the served circuits' Definitions (`verity_vllm.definitions`) its tests import, with the package they sit in
+inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions", "verity/circuits", "verity/circuits/kernels", "security/Definitions/Accounting/Gates/Registry.lean",
           "security/Proofs/Accounting/Gates/Rows.lean", "ruff.toml",
           # `verity`'s settings registry, which tests/test_settings.py tests, with the package it sits in
           "tools/config/verity_config/verity_settings.py", "tools/config/verity_config"]

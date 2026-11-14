@@ -10,9 +10,10 @@ import shutil
 import numpy as np
 import pytest
 
-import slots as S
-import slots_gpu as G
 from conftest import BUILD
+
+from verity.commitments.cuda.commit_slots import slots as S
+from verity.commitments.cuda.commit_slots import slots_gpu as G
 
 pytestmark = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="needs a C++ compiler")
 

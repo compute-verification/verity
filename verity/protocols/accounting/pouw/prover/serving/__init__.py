@@ -16,8 +16,10 @@ read. A run closes with ``finish()``; its ``commits`` and ``details`` are what i
 
 To manage a window: `in_process_coins` (coins held in this process, which credit nothing), `reserve_salt` and `gate_of`
 (a salt session at infra's gate), `PearlCKernel` (Pearl-C's kernel, loaded), `ready_verifier` (the Lean verifier's
-executable, built), and `served_passes`, `coins_of` and `SERVED_SCHEMA` (what a served Pearl-C window records). The rest
-of `__all__` names the runs, their schemes and settings."""
+executable, built), and `served_passes`, `coins_of` and `SERVED_SCHEMA` (what a served Pearl-C window records). A
+workload's own GPU commitments build on the row-table kernels: `RowTableLibrary`, `row_table_host_lib`, `hm_tables`,
+`leaf_prefixes` and the other ``row_table``/``ROW_TABLE`` names. The rest of `__all__` names the runs, their schemes and
+settings."""
 from __future__ import annotations
 
 import importlib
@@ -84,7 +86,6 @@ _LAZY = {
     "challenger_address": (f"{_SERVING}.h1.challenger", "address"),
     "closed_on_error": (f"{_SERVING}.h1.window", "closed_on_error"),
     "commit_committed": (f"{_SERVING}.h1.commit", "committed"),
-    "commit_host": (f"{_SERVING}.h1.commit", "_host"),
     "commit_rows": (f"{_POUW}.verifier.audit", "commit_rows"),
     "commit_site": (f"{_SERVING}.h1.commit", "site"),
     "draw_challenger": (f"{_POUW}.verifier.window", "draw_challenger"),
@@ -158,6 +159,19 @@ _LAZY = {
     "window_units": (f"{_SERVING}.h1.serve_draw", "units"),
     "write_program": (f"{_SERVING}.h1.served", "write_program"),
     "y_value": (f"{_SERVING}.pearl_c.window", "y_value"),
+    "RowTableArgs": (f"{_SERVING}.row_table_kernels", "Args"),
+    "RowTableLibrary": (f"{_SERVING}.row_table_kernels", "DeviceLibrary"),
+    "ROW_TABLE_CUDA_DIR": (f"{_SERVING}.row_table_kernels", "CUDA_DIR"),
+    "ROW_TABLE_SEG_BYTES": (f"{_SERVING}.row_table_kernels", "SEG_BYTES"),
+    "ROW_TABLE_TAB_WORDS": (f"{_SERVING}.row_table_kernels", "TAB_WORDS"),
+    "row_table_host_lib": (f"{_SERVING}.row_table_kernels", "host_lib"),
+    "row_table_nvcc": (f"{_SERVING}.row_table_kernels", "nvcc"),
+    "row_table_side_stream": (f"{_SERVING}.row_table_kernels", "side_stream"),
+    "hm_tables": (f"{_SERVING}.row_table_kernels", "hm_tables"),
+    "leaf_prefixes": (f"{_SERVING}.row_table_kernels", "leaf_prefixes"),
+    "table_width": (f"{_SERVING}.row_table_kernels", "table_width"),
+    "u64_words": (f"{_SERVING}.row_table_kernels", "u64_words"),
+    "to_host": (f"{_SERVING}.h1.commit", "to_host"),
 }
 
 

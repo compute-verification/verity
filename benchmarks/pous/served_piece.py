@@ -59,7 +59,7 @@ DIR``).
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``remote-audit-p2-protocol``) the Lean answers the
    case, and its answer is the one written. ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
-   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_party.SESSION`: two minutes), which
+   ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_parties.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
    bandwidth answer is then undecided. ``--no-bandwidth`` runs none.
 
@@ -125,9 +125,6 @@ CHALLENGER_ADDRESS = "10.96.0.36:47610"
 CHALLENGER_COMMAND = ("ssh", "-i", "~/.ssh/vy-auditor2-pous", "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
                       "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=20", "research@10.96.0.36",
                       "challenger_party")
-#: the SHA-512 of the challenger's public key as its host made it (the gate's `party_key pous`)
-TRUSTED_SHA512 = ("39cd635aea2e124a0fcae035e416b107de27955118914642bb8d9d06814a17a2"
-                  "f73014a3b9229bf1293ce4703ccc52a5f3119d22789db6778f34e237dfa631bb")
 #: the bandwidth party on the auditor's device: the gate's `bw_party` verb under the card's key, its minutes the gate's cap
 BW_PARTY = ("ssh -i ~/.ssh/vy-auditor2-bw -o IdentitiesOnly=yes -o BatchMode=yes -o ConnectTimeout=20 "
             "research@10.96.0.36 bw_party")
@@ -309,20 +306,34 @@ def _private(directory: Path, docs: Mapping[str, Any], digests: bytes) -> None:
     (directory / "digests.bin").write_bytes(digests)
 
 
+def from_runner(env: Mapping[str, str] = os.environ) -> dict[str, Any]:
+    """The run's deployment as its runner passes it (`period.deployment`): ``VERITY_CONFIGURATION``, the configuration's
+    hash, and ``VERITY_PINS``, its ``[[pin]]`` entries as JSON."""
+    return period.deployment({"deployment": {"configuration": env.get("VERITY_CONFIGURATION") or None,
+                                             "pins": json.loads(env.get("VERITY_PINS") or "[]")}})
+
+
 def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str = "cuda", p2_lib: str | None = None,
-        node: str | None = None, party: Side | None = None, trusted_sha512: str = TRUSTED_SHA512,
+        node: str | None = None, party: Side | None = None, trusted_sha512: str | None = None,
+        deployment: Mapping[str, Any] | None = None,
         private: Path | None = None, pins: Path = PINS, schemes: Mapping[str, mc.Verify] = mc.SCHEMES,
         protocol: str = period.PROTOCOL, rounds: int = ROUNDS, bw_party: str | None = None,
         bw_host: str = BW_PARTY_HOST, bw_request: Mapping[str, Any] | None = None, bw_out: Path | None = None,
         bw_private: Path | None = None, bw_case_exe: str | None = None,
         case_exe: str | None = None) -> dict[str, Any]:
     """The piece (module docstring): its answer, written with ``pous.json`` to ``out``; `Refusal` when none can be made.
+    ``deployment`` is what `trusted-device`'s premise reads (`period.deployment`: the configuration's hash, its pins
+    and the committed set), by default `from_runner()`'s, and ``trusted_sha512`` the challenger key the verifier
+    trusts, by default the one its pins give the memory challenger for PoUS (none pinned: no session is accepted).
     ``schemes`` and ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in
     tests), ``rounds`` the session's challenges, ``case_exe`` the run protocol's Lean (``pous-run-protocol``), whose
     answer on the case is then the verdict. With ``bw_party`` (the bandwidth party's command), PoUB-P2's session
     over the held store once PoUS's has completed (`held_bandwidth.session`, under ``bw_request``, by default
     `held_bandwidth.request`'s), its public answer to ``bw_out`` (by default ``out``'s sibling ``bandwidth``) and its
     case to ``bw_private`` (by default ``SERVE_DIR/private/bandwidth``)."""
+    deployed = from_runner() if deployment is None else dict(deployment)
+    if trusted_sha512 is None:
+        trusted_sha512 = min(mc.pinned(deployed["pins"], CS.CHALLENGER, "pous"), default=None)
     if not (serve_dir / "serve.json").is_file():
         raise Refusal(f"{serve_dir} has no serve.json")
     serve = json.loads((serve_dir / "serve.json").read_text())
@@ -464,7 +475,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                     "commitment": {"scheme": "hm96-sha512/row/v2 in frame-v3-sha512 (verity.commitments.advice)",
                                    "rows": 1, "n_bits": 8 * len(row), "binding": bind.hex(),
                                    "of": "the run protocol's commitment, the SHA-512 of setup's published outputs"},
-                    "placement": CS.placement(node, party.host) | {
+                    "placement": CS.placement(node, party.host, key_sha, **deployed) | {
                         "salt": f"drawn by the memory challenger on {party.host} from its OS after the commitment, "
                                 "logged under the window's binding, with the session's id derived from both"},
                     "weights": weights | {"held": "loaded from the served snapshot on the card the window served on, "
@@ -509,7 +520,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-host", default=CHALLENGER_HOST)
     ap.add_argument("--challenger-address", default=CHALLENGER_ADDRESS, help="HOST:PORT the prover connects to")
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
-    ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
+    ap.add_argument("--trusted-sha512", help="the SHA-512 of the challenger key the verifier trusts (default: the one "
+                                             "VERITY_PINS pins for the memory challenger's PoUS sessions)")
     ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
                                        "period.answer (else period.answer alone)")
     bw = ap.add_argument_group("the bandwidth session over the held store (held_bandwidth.py)")

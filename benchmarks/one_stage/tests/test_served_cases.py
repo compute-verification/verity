@@ -1,10 +1,10 @@
-"""served_cases.py: one-stage v1's case (no composite's), the sampled proofs case (`verity/sampled-proofs/v1`:
+"""served_cases.py: one-stage v1's case (no composite's), SPOT case (`verity/sampled-proofs/v1`:
 v2's case, ``case-v2.json``, in the form ``one-stage``) and the inference-only case (`verity/inference-only/v0`) for a
 served window, from its records audit's v1 case (a5's ``window/case.json``), PoUW's period case once its windows name the
 same record, Pearl+'s run case from the parts its piece wrote, its commitment naming that record, and with ``--v2`` its
 bare v2 case, each in a 0700 directory beside its Lean answer, in the directory form a
 composition reads as a case (remote's three subprotocols; no composite runs v2's bare case), and every answer naming the
-window's docket's digest. A window whose a5 wrote no v2 case has no sampled proofs case, refused saying why.
+window's docket's digest. A window whose a5 wrote no v2 case has no SPOT case, refused saying why.
 
 Under H1's tie the window's record R is the Commit record H1 named before its sample coin, a v2 record chained right
 after H1's window docket W and reusing W's tables, as soundness's ``remotetie_demo.py`` builds them (`tied_serve`):
@@ -18,12 +18,12 @@ one whose verdict refused, and names the record's digest either way; the inferen
 Lean check (`inference-only check`) at Γ its gates and α its input bits a gate (which ``--from-division`` reads off the
 check's profile at no budget), and refused one gate or one bit under; v2's Lean (`sampled-proofs-one-stage-zk check`)
 names the record's digest as its commitment (it rejects the toy's v2 case, which holds no coins and no proofs), and so
-does sampled proofs' Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
+does SPOT's Lean (`vstar-recursive sampled check`) on that case in its form, which refuses v1's case in the same
 form by name. A
 tampered field is refused: by the Lean check (the record naming another Program, an input node in a block, θ on an
 unregistered input, an evidence key, the record repeated in the log) or by the producer before any Lean runs (no v1 case
 or one holding another key, a record that isn't v1's Program's, a previous record with no log, α and Γ not given, a v2
-case that isn't the audit's, which refuses sampled proofs' too), and an answer that isn't the window's record's is
+case that isn't the audit's, which refuses SPOT's too), and an answer that isn't the window's record's is
 written nowhere, its refusal saying the
 answer's reason. The slow test makes the inference-only case on the 4,32,4 class's own Program (TINY on the H200)."""
 
@@ -100,7 +100,7 @@ def v1_case(program, query, previous: str | None = None, design: dict | None = N
 
 
 def audited_v1_case(program, query, accepted: bool = True) -> dict:
-    """v1's case of a whole audit of ``program`` (the sampled proofs difftest's accepted case): its record over the
+    """v1's case of a whole audit of ``program`` (SPOT difftest's accepted case): its record over the
     window's ports and their window domains, a stratified sample's first proof blocks of each stratum proved, the
     verifier's receipt, and the verdict of record ``accepted``."""
     law, leaf = {"law": "stratified", "k": 2}, "ee" * 64
@@ -312,7 +312,7 @@ def sampled_exe() -> Path:
 
 def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_path, capsys):
     """Each case is written in its own 0700 directory (files 0600) with the answer line its Lean printed, the Lean ran
-    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, sampled proofs' is v2's
+    on files in a 0700 scratch directory that is gone after, v1's case is a5's as a5 wrote it, SPOT's is v2's
     with the form ``one-stage`` in its params and its evidence and went to `vstar-recursive sampled check` with v2's
     blobs, v2's blobs went to its Lean, and nothing printed carries a case's bytes."""
     program, query = toy()
@@ -366,8 +366,7 @@ def test_each_case_goes_private_beside_an_answer_naming_the_records_digest(tmp_p
 
 def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
     """Without ``--v2`` no bare v2 case is made and v2's Lean never runs. A window whose a5 wrote no v2 case (a plain
-    audit's) has no sampled proofs case either, which is refused saying why (remote's composite then names sampled
-    proofs missing), and v1's and the inference-only case are still written."""
+    audit's) has no SPOT case either, which is refused saying why (remote's composite then names SPOT missing), and v1's and the inference-only case are still written."""
     program, query = toy()
     v1 = v1_case(program, query)
     private = tmp_path / "private"
@@ -382,7 +381,7 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
 def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
     """Where the tree leaves the inference-only policy out (no module `SC.POLICY`, which names the policy's Lean package
     and the Python its check is held to), the inference-only case is refused saying so, never
-    skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
+    skipped, its Lean never runs, and v1's and SPOT's cases are still written; a caller that asks for the
     package is refused the same way."""
     program, query = toy()
     v1 = v1_case(program, query)
@@ -632,7 +631,7 @@ def test_a_log_that_chains_to_the_record_is_the_cases_log(tmp_path):
     ("key", "v2's case holds exactly"),
 ])
 def test_v2_is_refused_when_its_case_is_not_the_audits(tmp_path, capsys, change, reason):
-    """a5's v2 case is taken only as a5 wrote it for this audit, for sampled proofs' case and with ``--v2`` for the bare
+    """a5's v2 case is taken only as a5 wrote it for this audit, for SPOT's case and with ``--v2`` for the bare
     one: none when a5 wrote its error instead (which says why) or nothing, and refused when it commits to another record,
     names a blob that isn't there or holds another key."""
     program, query = toy()
