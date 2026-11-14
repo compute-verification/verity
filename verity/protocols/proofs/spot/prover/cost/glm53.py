@@ -15,11 +15,13 @@ grain the request, which holds one request's count of it (``n_rho``).
 **A stop class's two populations** (`response_blocks`). Under a registered stop rule a response of a stop class adds two
 proof blocks beside the card's, one of each a response whatever its length. Its stop block computes where the response
 ends and why from its T committed ids: here the rule's Boolean Definition, `StopRule16_v2{T, NSTOP}` at the registered
-model's stop ids, taken as a block of its own. That is the leaf holding every gate of the served block but its
+model's stop ids (`STOP_IDS`), taken as a block of its own: the serving adapter's Definition, which the caller passes
+(``stop``). That is the leaf holding every gate of the served block but its
 ``ignore_eos`` choice, and its rows are the rule's five parameters and its word, six rows, where the served block opens
 three: its ids, one request row for two of the parameters, and its word, the stop ids and the model's length being its
 statics. Its response tie (`ResponseTieStop_v1{O}`, O = T) holds the response row the network certifier released to
-those ids and that stop word. Each is a candidate as the card's are, with its ANDs, its rows and its output bits read
+those ids and that stop word: the certifier's Definition, which the caller passes (``tie``). SPOT imports neither the
+adapter nor the certifier. Each is a candidate as the card's are, with its ANDs, its rows and its output bits read
 from its Definition, and a statement holding as many of it as its block allows, as Flock's composer sizes that block.
 
 Both populations are registered at ``rate:1/1``, every block proved. `charged` says what a sample of a population
@@ -28,21 +30,22 @@ arithmetic), that count over the population (ε), and those blocks' output bits,
 sampled no incorrect block escapes, so all three are 0 at every δ; a smaller sample is charged what its bound gives.
 These rows are the plan's: they read no verdict, and say what a sampling design charges, nothing of a served class.
 
-    uv run python verity/protocols/proofs/spot/prover/cost/glm53.py [--card PATH] [--requests N] [--stop T [--delta D]]
+    uv run python verity/protocols/proofs/spot/prover/cost/glm53.py [--card PATH] [--requests N]
+
+``--stop T [--delta D]`` needs the stop block and the response tie from a caller that holds the adapter and the
+certifier (`main`'s ``blocks_of``).
 """
 from __future__ import annotations
 
 import argparse
 import json
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
 from pathlib import Path
+from typing import Any
 
-from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits
 from verity.commitments.periods.interface import proof_block_k_log
-from verity_vllm.definitions.registry.boolean_stop_rule import StopRule16V2
-from verity.protocols.accounting.certifier.prover import response_tie
 from verity.protocols.proofs.spot.prover.cost.inputs import MEASURED
 from verity.protocols.proofs.spot.prover.optimize import Candidate
 from verity.protocols.proofs.spot.verifier.profile import WINDOW_DELTA, Stratified, Stratum
@@ -77,12 +80,13 @@ def candidates(card: dict, requests: int = 1) -> list[Candidate]:
     return out
 
 
-def response_blocks(outputs: int, responses: int = 1, stop_ids: int = STOP_IDS) -> list[Candidate]:
-    """A stop class's two populations over ``responses`` of its responses, each of at most ``outputs`` ids: the stop
-    block and the response tie, one a response, each a candidate whose ANDs are its Definition's Boolean circuit's, whose
-    rows are a row a parameter and a row an output, and whose replay grain is the request, which holds one."""
+def response_blocks(stop: Any, tie: Any, responses: int = 1) -> list[Candidate]:
+    """A stop class's two populations over ``responses`` of its responses: the stop block ``stop`` (`StopRule16_v2` at
+    the class's T and the model's stop ids) and the response tie ``tie`` (the network certifier's at O = T), one a
+    response, each a candidate whose ANDs are its Definition's Boolean circuit's, whose rows are a row a parameter and a
+    row an output, and whose replay grain is the request, which holds one."""
     out = []
-    for d in (bind(StopRule16V2, T=outputs, NSTOP=stop_ids), response_tie.block(response_tie.Shape(outputs, True))):
+    for d in (stop, tie):
         params, ret = d.signature()
         ins = [-(-sum(t.leaf_widths()) // 8) for _name, t in params]
         outs = [sum(t.leaf_widths()) for t in getattr(ret, "fields", (ret,))]
@@ -116,7 +120,9 @@ def totals(card: dict) -> dict[str, dict[str, float]]:
             "request": {k: phase["prefill"][k] + phase["decode"][k] for k in QUANTITIES}}
 
 
-def main() -> int:
+def main(blocks_of: Callable[[int], tuple[Any, Any]] | None = None) -> int:
+    """The card's totals and gaps; with ``--stop T``, a stop class's populations, whose stop block and response tie are
+    ``blocks_of(T)``: the adapter's and the certifier's Definitions, which a caller that holds both passes."""
     ap = argparse.ArgumentParser()
     ap.add_argument("--card", type=Path, default=CARD)
     ap.add_argument("--requests", type=int, default=1)
@@ -124,6 +130,9 @@ def main() -> int:
                     "print its stop blocks and its response ties, and what proving every one leaves charged")
     ap.add_argument("--delta", type=float, default=WINDOW_DELTA, help="the delta the charges are read at")
     a = ap.parse_args()
+    if a.stop and blocks_of is None:
+        ap.error("--stop needs the stop block and the network certifier's response tie, which SPOT never imports: "
+                 "call main(blocks_of=...) from a caller that holds the adapter and the certifier")
     card = load(a.card)
     cs = candidates(card, a.requests)
     print(f"{card['model']}: {len(cs)} proof-block Definitions over {a.requests} request(s) of {card['prompt_len']} prompt "
@@ -133,7 +142,7 @@ def main() -> int:
     for fam, g in card["gaps"].items():
         print(f"  gap {fam}: {g['definitions']} Definitions, {g['prefill']:,} prefill and {g['decode']:,} decode rows, "
               f"{g['ands']:.4g} ANDs; {g['why']}")
-    for c in response_blocks(a.stop, a.requests) if a.stop else ():
+    for c in response_blocks(*blocks_of(a.stop), a.requests) if a.stop else ():
         x = charged(c, a.delta)
         print(f"  stop class {c.template}: {c.units:,} proof block(s), one a response, {c.ands:,} ANDs and {c.out_bits:,} "
               f"output bits each, {sum(c.rows):,} row bytes opened; rate:{x['rate']} leaves at most {x['incorrect']:,} "

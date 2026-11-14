@@ -554,7 +554,7 @@ def write_served(run: Path, out: Path, recs: list[dict[str, Any]], trace: Path, 
              "refused": refused, "open": still_open}
     if not pending:
         out.mkdir(parents=True, exist_ok=True)
-        (out / "windows.json").write_text(json.dumps(index, indent=1) + "\n")
+        M.write(out / "windows.json", "Advice", (json.dumps(index, indent=1) + "\n").encode())
     return {**index, "pending": pending, "reports": reports}
 
 
@@ -585,10 +585,10 @@ def _written(run: Path, out: Path, b: Built, recs: list[dict[str, Any]], trace: 
     public.update(extra or {})
     private = out / "private"
     private.mkdir(parents=True, exist_ok=True)
-    (out / "registration.json").write_text(json.dumps(public, indent=1) + "\n")
-    (private / "advice.bin").write_bytes(data)
-    (private / "advice.json").write_text(json.dumps(WA.to_json(a), separators=(",", ":")) + "\n")
-    (private / "opening.json").write_text(json.dumps(opened) + "\n")
+    M.write(out / "registration.json", "Advice", (json.dumps(public, indent=1) + "\n").encode())
+    M.write(private / "advice.bin", "Advice", data)
+    M.write(private / "advice.json", "Advice", (json.dumps(WA.to_json(a), separators=(",", ":")) + "\n").encode())
+    M.write(private / "opening.json", "Advice", (json.dumps(opened) + "\n").encode())
     steps = ST.steps(recs)
     charged = WA.bits_by_window(a, T)
     outputs = WA.outputs(a)
@@ -658,7 +658,7 @@ def main(a: Options) -> int:
         roots = None
         if a.weights_of_record:
             serve = Path(a.run) / "serve.json"
-            roots = registered_weights(json.loads(Path(a.weights_of_record).read_text()),
+            roots = registered_weights(json.loads(M.read(Path(a.weights_of_record), "RegisteredWeights")),
                                        json.loads(M.read(serve, "ServingConfiguration")) if serve.exists() else None)
         rep = write(a.run, a.out, trace=a.trace, io=a.io, T=a.T, tau=a.tau, window=a.window,
                     compiler=registered_compiler(a.compiler_name, a.compiler_digest, a.cap), registered_roots=roots)
