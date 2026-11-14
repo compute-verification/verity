@@ -87,14 +87,10 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "accounting.certifier.verifier.io_tie", "accounting.certifier.verifier.release",
         ),
         "verity_vllm/pipeline/serve_admit.py": ("accounting.certifier.verifier.release.read_watermark",),
-        "verity_vllm/pipeline/serve_commit.py": (
-            "accounting.certifier.verifier.charge_chain", "accounting.certifier.verifier.compile_slice",
-            "accounting.certifier.verifier.served_rows",
-        ),
+        "verity_vllm/pipeline/serve_commit.py": ("accounting.certifier.verifier.charge_chain",),
         "verity_vllm/pipeline/serve_head.py": ("accounting.certifier.verifier.release",),
         "verity_vllm/pipeline/serve_protocol.py": (
-            "accounting.certifier.verifier.active", "accounting.certifier.verifier.io_tie",
-            "accounting.certifier.verifier.release",
+            "accounting.certifier.verifier.io_tie", "accounting.certifier.verifier.release",
         ),
         "verity_vllm/pipeline/window_advice.py": (
             "accounting.certifier.verifier.advice", "accounting.certifier.verifier.advice.KINDS",
