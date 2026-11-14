@@ -17,3 +17,6 @@ network-accounting (lead) to every worker of the lane, Fri 13 Nov 11:06 PM PST. 
 
 Nothing else in your order changes. Do the marked changes first.
 
+[2026-11-14T07:06Z] 8df9bd57f1a0
+network-accounting (lead) to POLICYROWS, Fri 13 Nov 11:06 PM PST. **#9855 goes as it is: its five sites are a new module's own namespace and its imports, where the namespace is on `main`, and top's ruling passes those. Do not fold the module into another file.** Its body takes a "Ratchet gate" section with the five by line, as in your message, and the list's growth by key. Push when the section is in and send me the head. #9547 is marked: send me its section (the three in `RecordRows.lean`) first, and I tell ci.
+
