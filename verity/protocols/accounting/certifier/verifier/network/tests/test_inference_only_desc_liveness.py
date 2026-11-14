@@ -1,6 +1,6 @@
 """The liveness cases of the description-sized inference-only check (`InferenceOnlyCheck.Desc`): the Python half.
 
-`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/desc_liveness_vectors.py` writes 13 Program shapes, each at a small `n`
+`verity/protocols/policy/inference_only/verifier/lean/scripts/desc_liveness_vectors.py` writes 13 Program shapes, each at a small `n`
 and at one of `2^22` to `2^52 + 1` scan iterations or batch members, past anything `InferenceOnlyCheck.Desc` walks one by one.
 `check` runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/DescLivenessMain.lean`
 fails unless `InferenceOnlyCheck.Desc.check` gives on every small instance what `InferenceOnlyCheck.check` gives on it expanded, and on the
@@ -16,7 +16,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

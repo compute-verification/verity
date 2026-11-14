@@ -1,6 +1,6 @@
 """The difftest of θ's provenance check (`InferenceOnlyCheck.Theta`): the Python half.
 
-`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/theta_difftest_vectors.py` writes 1,218 declarations with θ, θ's
+`verity/protocols/policy/inference_only/verifier/lean/scripts/theta_difftest_vectors.py` writes 1,218 declarations with θ, θ's
 provenance and the service's trusted input (the deployment's registration log, the run and its parameters), each expanded
 gate by gate where the policy check gives a verdict, and `scripts/inference_only_reference.py`'s `check_baseline` on each. `check`
 runs the Lean half in its Lean audit (`runs` in that package's `lean-audit.json`): `InferenceOnlyCheck/ThetaDifftestMain.lean`
@@ -27,7 +27,7 @@ import pytest
 
 from verity.circuits import codec
 
-LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

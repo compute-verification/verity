@@ -44,7 +44,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "tools/config/verity_config/
           "verity/hardware/registration.py", "verity/device.py", "verity/tests", "verity/channel.py", "verity/runtime",
           "verity/protocols/compose/verifier/onsite", "verity/protocols/compose/verifier/remote", "verity/protocols/interface",
           "verity/protocols/accounting/pouw/verifier", "verity/protocols/proofs/spot",
-          "verity/protocols/policy/inference_only/verifier/inference_only", "verity/protocols/accounting/certifier",
+          "verity/protocols/policy/inference_only/verifier", "verity/protocols/accounting/certifier",
           "verity/protocols/accounting/pous", "verity/protocols/accounting/poub/verifier",
           "verity/protocols/accounting/pous/device/lean", "verity/commitments/attest/lean",
           "verity/protocols/proofs/spot/verifier/lean", "verity/protocols/proofs/recursion/verifier/recursive", "verity/protocols/proofs/flock/verifier",
