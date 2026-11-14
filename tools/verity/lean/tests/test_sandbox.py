@@ -144,7 +144,7 @@ def test_inside_the_sandbox_a_read_only_dir_is_read_and_never_written(tmp_path):
 
 @needs_unshare
 @pytest.mark.parametrize("refused", ["tree", "cache"])
-def test_a_mount_whose_read_only_remount_fails_stops_the_sandbox_before_its_command_runs(tmp_path, refused):
+def test_a_mount_whose_read_only_remount_fails_stops_the_sandbox_before_its_command_runs(tmp_path, monkeypatch, refused):
     """The tree and an RO_DIR (Lake's artifact cache, or a seal) are each a mount of their own, made in a mount namespace
     of the test's own, and a `mount` before the real one refuses the read-only remount of one of them, as a node's
     kernel or mount can. That mount would stay writable inside, so the sandbox names it and exits before CMD runs: no
@@ -157,11 +157,12 @@ def test_a_mount_whose_read_only_remount_fails_stops_the_sandbox_before_its_comm
     (bin_ / "mount").write_text(f'#!/bin/sh\n[ "$*" != "-o remount,bind,ro {tmp / refused}" ] || exit 32\n'
                                 f'exec {shutil.which("mount")} "$@"\n')
     (bin_ / "mount").chmod(0o755)
+    monkeypatch.setenv("PATH", os.pathsep.join([str(bin_), *os.get_exec_path()]))
     r = subprocess.run(["unshare", "--user", "--map-root-user", "--mount", "--", "bash", "-c",
                         'mount --bind "$0" "$0" && mount --bind "$1" "$1" && exec "${@:2}"', str(tree), str(cache),
                         *UNSHARE, "--", "bash", str(SANDBOX), "--ro", str(cache), str(tree / "pkg" / ".lake"), "--",
                         "sh", "-c", 'touch "$0/pkg/no" "$1/no"; touch "$0/pkg/.lake/ran"', str(tree), str(cache)],
-                       env={**os.environ, "PATH": f"{bin_}:{os.environ['PATH']}"}, capture_output=True, text=True)
+                       capture_output=True, text=True)
     assert r.returncode == 3, r.stdout + r.stderr
     assert f"these mounts stay writable here, which the build could write through: {tmp / refused} (" in r.stderr, r.stderr
     assert not (tree / "pkg" / "no").exists() and not (cache / "no").exists()
