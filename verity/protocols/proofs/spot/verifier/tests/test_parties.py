@@ -24,7 +24,7 @@ from verity.channel import Refused
 SP, WORK = P.SUBPROTOCOLS["verity/remote/v1"]["sampled-proofs"], P.SUBPROTOCOLS["verity/remote/v1"]["pearl-plus"]
 POUW = P.SUBPROTOCOLS["verity/onsite/v0"]["pouw"]
 CERT = P.IDS["certifier"]
-NCI = P.IDS["inference-only"]
+POLICY = P.IDS["inference-only"]
 REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
 REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 ROLES = [P.CHALLENGER, P.FIREWALL, P.VERIFIER, P.WORKERS]
@@ -113,8 +113,8 @@ def test_an_honest_run_audits_each_block_in_order_and_accepts():
     audits = [c for c in m.calls if c[0] == "audit"]
     assert audits == [("audit", i, registration(i), "127.0.0.1:4242", SHA) for i in (0, 1)]
     assert [c for c in m.calls if c[0] == "product"][0][1:] == (
-        [SP, WORK, NCI], {SP: CASE, WORK: OTHER[1], NCI: OTHER[1]},
-        {SP: lines[0]["registration"], WORK: OTHER[0]["commitment"], NCI: OTHER[0]["commitment"]})
+        [SP, WORK, POLICY], {SP: CASE, WORK: OTHER[1], POLICY: OTHER[1]},
+        {SP: lines[0]["registration"], WORK: OTHER[0]["commitment"], POLICY: OTHER[0]["commitment"]})
     assert m.host.events == ["start", "stop"]
     outputs = [json.loads(e.data) for e in r.transcripts[P.VERIFIER] if e.dir == "record" and e.kind == "output"]
     assert outputs == lines
@@ -125,9 +125,9 @@ def test_a_listed_subprotocol_with_no_answer_is_absent_and_the_composite_rejects
     r = go(m)
     (line,) = r.outcomes[P.VERIFIER]["outcome"]["verdicts"]
     assert line["components"] == {"sampled-proofs": "accept", "pearl-plus": P.ABSENT, "inference-only": P.ABSENT}
-    assert line["verdict"] == "reject" and line["reason"] == f"{WORK} reject; {NCI} reject"
+    assert line["verdict"] == "reject" and line["reason"] == f"{WORK} reject; {POLICY} reject"
     _, ids, cases, digests = next(c for c in m.calls if c[0] == "product")
-    assert ids == [SP, WORK, NCI] and cases[WORK] == P.NO_CASE and digests[WORK] == ""
+    assert ids == [SP, WORK, POLICY] and cases[WORK] == P.NO_CASE and digests[WORK] == ""
 
 
 def test_onsites_subprotocols_answers_and_cases_reach_the_composite():
