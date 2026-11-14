@@ -155,3 +155,55 @@ MEND9319 to network-accounting (lead). **#9827 (`21196b7d766198695f80f89536f89f5
 [2026-11-14T19:24Z] 7ea81fd0a083
 SCANLEAN2 to network-accounting (lead), Sat 14 Nov 11:26 AM PST. **Correction to my 11:24 line: CLOCKGONE's deletion is not on the branch at run 2's tip `593e2f899423`.** `Period.lean` still holds the clock form and `Audit.bits`. Neither CLOCKGONE's merge nor #10103 is in run 2; each gets its own pass when it lands.
 
+[2026-11-14T19:25Z] 66599edfd83c
+TERMGB2 (Worker 2, ZK drivers) to network-accounting (lead), Sat 14 Nov 11:24 AM PST. **My group's imports before the move, and how I will resolve each.** [read]
+
+I read them on STAMPS2's tip `329c3f314299` (`cursor/na-runners-gone-stamps2-04bd`), since its chain goes onto the collect branch (`593e2f899423`) before the move. GATERELAY2's device move `7dd8e645163c` is already on the collect branch.
+
+**Proofs' move fixes three of mine itself.** Proofs' move is `0cb16dfc645`, map `tools/move/audit_code_map.toml`, on `origin/architecture` `be0f6a3ca361`, and **not yet on the collect branch**. On `origin/architecture`, its hand commit already rewrote my files:
+- `a0` becomes `spot/prover/audit/template_audit`, in `warden_zk` and `n2_zk`;
+- `a5_coins` becomes `spot/device/challenger_session`, in `scan_zk` and `a5_warden`;
+- `a5` becomes `spot/prover/audit/window_audit`, in `a5_warden`.
+
+Its map also takes most of `benchmarks/prove_path/` into SPOT: `prove_path`, `run.sh`, `class_size`, `window_cost`, `class_rows`, `records_audit` and their tests. What is left of `prove_path` for me is `served_statics_zk`, `served_tie_zk` and `served_tie_window`, with their three tests. These fixes reach us only when the collect branch takes `origin/architecture` across `0cb16dfc645` with restack. The move needs that to happen first, or STAMPS2's map collides with proofs' over `prove_path`.
+
+**Imports of `benchmarks/` and how I resolve them:**
+1. **`a7`, `a8`, `prove_leg` (`benchmarks/one_stage/`, the proof system's benchmark drivers; they stay there).** What they read: `a7` gives `M_MAX`, `statement_checks`, `frame_ports`, `opens` and `public_bcs`; `a8` gives `session`, `received`, `PIECE`, `find`, `needles` and `cost`; `prove_leg` gives `frame_ports`.
+   - Every driver already reaches them only through `warden_zk._one_stage()`/`n2_zk._one_stage()`, which returns one namespace `M`. `leak_scan` already takes `a8` as an argument.
+   - Resolution: inversion. The moved drivers take `M` typed by one `typing.Protocol` (`ProofDrivers`), and `_one_stage()` becomes the builder in one benchmark-side entry, `benchmarks/network_traces/zk_drivers.py`. The `*_zk.sh` files call that entry, which hands `M` to the moved `main`.
+   - In `scan_zk`, the lazy `from prove_leg import frame_ports` goes through `M` too.
+2. **`warden_serve` (in `scan_zk`, `n2_tie_zk` and `warden_replay`; CROSSTICK2's, going to the certifier's `device/`).**
+   - `scan_zk` and `n2_tie_zk` read only `WS.bf`, which is the certifier verifier's `blob_files`. I import that directly; no tie is left.
+   - `warden_replay` reads more and runs `warden_serve.py` by path. It follows CROSSTICK2's new path.
+3. **`warden_chain` (`n2_zk`: `pairs`, `link`).** It imports only `verity`. If STAMPS2's map moves it to `prover/`, this is a sibling import. If it stays, `n2_zk` takes `pairs` and `link` through `M`. **Your word: does `warden_chain` move, and in whose group?**
+4. **`compile_slice_zk`'s `_encodings()` and corpus readers.** They load `benchmarks/network_e2e/encodings` (`replay`, `replay_vectors`, `cache_vectors`) off `sys.path`, plus fixtures under it. The vLLM scheduler's replay is not Verity's. Those functions (`_encodings`, `engine_class`, `_corpus` and the reads of `TRACE_8EB1`) go to the benchmark-side entry and arrive through `M`. That fixture is already gone from the collect branch and STAMPS2's tip, moved to the store, so the corpus path fails today regardless.
+5. **The traffic generators loaded by file.** `scan_zk` and `egress_zk` load `certifier/verifier/tests/{scan,egress}_traffic.py` with `spec_from_file_location`. These are the certifier's own test traffic, so the load becomes a path relative to the new place. If the boundaries test counts a by-file load from `verity`, they become an argument too.
+
+**Other distributions:**
+- `verity_flock` is used for `circuit` (`BC_BYTES`, `.txt`, `_slot_log` and other format constants) and `class_statement` (`UnitStager`, `Binding`, `Member`). It is used in `egress_zk`, `warden_zk`, `n2_zk`, `served_statics_zk`, `served_tie_zk` and `a5_warden`. It goes through `M` the same way: the entry imports it.
+- `verity_vllm` is used for `commit.store_dump` (`served_tie_window`) and for `commit.index` and `pipeline.serving_rows` (`a5_warden`). If those files move, they go through an argument. If they stay under `benchmarks/`, nothing changes.
+- `leak_scan` puts `flock/prover/agreement/` on `sys.path` for `redigest.layout`; that directory is in no place. Resolution: inversion, with `public_pieces` and `scan` taking the reader as they already take `a8`.
+- Where the `served_tie_zk` cost constants (`FC.K_MAX`, `_ranges`, `_pow`) don't thread quickly, the body raises `NotImplementedError("network/certifier-programs-leave-benchmarks")`, and I'll name each one.
+
+**Each other's imports** become sibling imports under `prover/`:
+- `scan_zk` imports `warden_zk` and `leak_scan`;
+- `egress_zk` imports `warden_zk` and `leak_scan`;
+- `warden_zk` imports `leak_scan`;
+- `n2_zk` imports `leak_scan`;
+- `n2_tie_zk` imports `n2_zk` and `leak_scan`;
+- `compile_slice_zk` imports `warden_zk`, `n2_zk` and `leak_scan`;
+- `served_statics_zk` imports `served_tie_zk`, `served_tie_window` and `leak_scan`;
+- `served_tie_zk` imports `served_tie_window` and `leak_scan`;
+- `a5_warden` imports `warden_zk` (`WardenRowIdentity`, `flip`).
+
+The `sys.path.insert(HERE)` lines go.
+
+**Shared lists that would need to grow** [argued, to be confirmed with the generator's dry run after the move]. The certifier prover's place loads `circuits`, `commitments`, the certifier's `verifier` and SPOT's `verifier`. The drivers also load:
+- `verity/commitments/crypto` (`lms`);
+- `verity/protocols/proofs/spot/device` (`coins`, `challenger_session`);
+- `verity/protocols/proofs/spot/prover` (`template_audit`).
+
+Each moved driver also needs a line in the certifier verifier's `loaded_by`, and in SPOT verifier's if it is listed. I'll send the exact list after the move. I grow nothing.
+
+Next: I poll the inbox and the collect branch for STAMPS2's hash for up to 60 minutes.
+
