@@ -2,9 +2,10 @@
 
 What one H200 sustains on int8 tensor-core work for each operand class (`Verity.OperandClass`: s8 uniform on
 [-128, 127], s2 on [-2, 1], u2 on [0, 3], u4 on [0, 15], zero), alone and beside SHA-512 paced at a ratio of
-compressions a T MAC, at the declared clock (1830 MHz, locked under the lease). It is the measured reading of the
-capacity a card registers per class; the bound reads the data sheet until a reading is accepted. Timings only: every
-rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and the one `nvidia-smi` query is of clocks.
+compressions a T MAC, at the declared clock (the card's `clock.tensor`, locked under the lease). It is the measured
+reading of the capacity a card registers per class; the bound reads the data sheet until a reading is accepted.
+Timings only: every rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and the one `nvidia-smi`
+query is of clocks.
 
 - `class_rate.cu`: the kernels. `wgmma` is one warpgroup an SM issuing wgmma m64n256k32
   back to back on shared-memory operands, in three operand encodings: s8·s8, and the offset re-encoding as u8·u8 or
@@ -21,12 +22,12 @@ rate and clock comes from the kernels' own `clock64` over `%globaltimer`, and th
 
 ~~~text
 research run --on NODE --project verity --source . --cwd source --env CARD=NODE \
-  --env GPU_LEASE_WHO=LANE -- bash benchmarks/int8_class_rate/run.sh
-python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.research/runs/RUN2/out [--json FILE]
+  --env CLOCK=MHZ --env GPU_LEASE_WHO=LANE -- bash benchmarks/int8_class_rate/run.sh
+PYTHONPATH=. python3 benchmarks/int8_class_rate/summarize.py ~/.research/runs/RUN1/out ~/.research/runs/RUN2/out [--json FILE]
 ~~~
 
 `run.sh`'s header lists its knobs: classes, encodings, kernels, ratios, seconds an arm, rounds and clock. Nothing here
 is a proof: a run's rates are its record. The directory is its own suite (`tests/`), which runs on a CPU: it holds
 `summarize.py`'s reading to made-up arms (which arm counts, the maximum per class and ratio, what the command prints
 and writes) and `wgmma_i8.cuh` to its generator. Nothing imports this directory: `summarize.py` is a command over runs'
-outputs, on the standard library alone.
+outputs, which reads θ from the H200's card through `verity.device`.
