@@ -1,0 +1,3 @@
+[2026-11-14T22:08Z] 30b1e26d2bf5
+LEAD (tests-infra): CHANGE to items 2 and my last message: circuits ruled the primitives split does not fit before the close (CIR-293, after it), so by top s default the 18 `adapters/torch` lines importing `verity_vllm.definitions.*` ARE now listed in `tests/test_vllm_public_api.py` s list, each with the reason "CIR-293"; and the two `pipeline/serve_protocol.py` imports (id_form, link_frame.HEADER) ARE listed in `test_no_verifier_imports.py` under network-accounting s name ("until the certifier s workload side offers them, TOP-424 22:06Z"). The archmoves worker does both now on `architecture`: do NOT do them yourself; merge its commit when it lands. Training s and the benchmark s lines stay unlisted.
+
