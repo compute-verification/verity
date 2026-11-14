@@ -33,8 +33,8 @@ theorem creditDev_h100 (s : Shape) : creditDev devH100 s = creditOf Params.pi Co
   norm_num
   ring
 
-theorem debitDev_h100 (x : Debit) : debitDev devH100 x = debitOf Params.pi Costs.adopted x := by
-  simp only [debitDev, debitOf, devH100, Prices.h100, Params.pi, Costs.adopted]
+theorem inertWorkDev_h100 (x : InertWork) : inertWorkDev devH100 x = inertWorkOf Params.pi Costs.adopted x := by
+  simp only [inertWorkDev, inertWorkOf, devH100, Prices.h100, Params.pi, Costs.adopted]
   norm_num
 
 theorem wrefDev_h100 (s : Shape) : wrefDev devH100 s = wrefOf Params.pi Costs.adopted s := by
@@ -44,21 +44,21 @@ theorem wrefDev_h100 (s : Shape) : wrefDev devH100 s = wrefOf Params.pi Costs.ad
 section
 variable {Q R S : Type}
 
-theorem unitDebitDev_h100 (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
-    sem.unitDebitDev devH100 H s U u act = sem.unitDebit H s U u act := rfl
+theorem unitInertWorkDev_h100 (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
+    sem.unitInertWorkDev devH100 H s U u act = sem.unitInertWork H s U u act := rfl
 
 theorem unitUsefulDev_h100 (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (act : Codes) :
     sem.unitUsefulDev devH100 H s U u act = sem.unitUseful H s U u act := rfl
 
-theorem tileDebitDev_h100 (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (rows cols : Finset ℕ)
-    (act : Codes) : sem.tileDebitDev devH100 H s U u rows cols act = sem.tileDebit Costs.adopted H s U u rows cols act := by
-  simp only [PearlCSem.tileDebitDev, PearlCSem.tileDebit, debitDev_h100]
+theorem tileInertWorkDev_h100 (sem : PearlCSem Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (rows cols : Finset ℕ)
+    (act : Codes) : sem.tileInertWorkDev devH100 H s U u rows cols act = sem.tileInertWork Costs.adopted H s U u rows cols act := by
+  simp only [PearlCSem.tileInertWorkDev, PearlCSem.tileInertWork, inertWorkDev_h100]
   rfl
 
 /-- The H100 record's protocol is the granted one. -/
 theorem pearlCProtocolDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
     pearlCProtocolDev devH100 sem ρ = pearlCProtocol sem Costs.adopted ρ := by
-  simp only [pearlCProtocolDev, pearlCProtocol, unitDebitDev_h100, unitUsefulDev_h100, creditDev_h100, debitDev_h100,
+  simp only [pearlCProtocolDev, pearlCProtocol, unitInertWorkDev_h100, unitUsefulDev_h100, creditDev_h100, inertWorkDev_h100,
     wrefDev_h100]
   rfl
 
@@ -78,7 +78,7 @@ theorem pearlCDomainDev_h100 (L : Layout) : pearlCDomainDev devH100 L ↔
 /-- The H100 record's tiles are the granted delta's. -/
 theorem pearlCTilesDev_h100 (sem : PearlCSem Q R S) (ρ : ℚ) :
     pearlCTilesDev devH100 sem ρ = pearlCTiles sem Costs.adopted ρ := by
-  simp only [pearlCTilesDev, pearlCTiles, tileDebitDev_h100, creditDev_h100, wrefDev_h100]
+  simp only [pearlCTilesDev, pearlCTiles, tileInertWorkDev_h100, creditDev_h100, wrefDev_h100]
 
 /-- The granted `TTOutPearlC` gives TT_OUT at the H100 record, whose domain is the granted one's with `n`'s floor. -/
 theorem ttOutPearlCDev_h100 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
@@ -107,16 +107,16 @@ theorem pearlCGapDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [F
     GGap CM (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) (g : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) → ∀ (H : Q → R) (s' : S),
       ∀ u < U.layout.N, ∀ act : Codes, (pearlCProtocolDev d sem ρ).actOK (U.layout.shape u) act →
-        (pearlCProtocolDev d sem ρ).capOK H s' U u act →
+        (pearlCProtocolDev d sem ρ).inertBoundOK H s' U u act →
           (pearlCProtocolDev d sem ρ).Wref U.layout u ≤ (ω : ℝ) * (pearlCProtocolDev d sem ρ).credit H s' U u act := by
     intro U hU H s' u hu act _ hcap
     have hsh : U.layout.shape u = s := hU.2.2 u hu
-    have hc : debitDev d (sem.unitDebitDev d H s' U u act) ≤ ρ * creditDev d (U.layout.shape u) := hcap
+    have hc : inertWorkDev d (sem.unitInertWorkDev d H s' U u act) ≤ ρ * creditDev d (U.layout.shape u) := hcap
     show (wrefDev d (U.layout.shape u) : ℝ) ≤
-      (ω : ℝ) * ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s' U u act) : ℚ) : ℝ)
+      (ω : ℝ) * ((creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s' U u act) : ℚ) : ℝ)
     rw [hsh] at hc ⊢
     rw [hω]
-    have : ω * ((1 - ρ) * creditDev d s) ≤ ω * (creditDev d s - debitDev d (sem.unitDebitDev d H s' U u act)) :=
+    have : ω * ((1 - ρ) * creditDev d s) ≤ ω * (creditDev d s - inertWorkDev d (sem.unitInertWorkDev d H s' U u act)) :=
       mul_le_mul_of_nonneg_left (by linarith) hω0.le
     exact_mod_cast this
   have key := gapFromTTOut CM (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) (1 / 400) (ω : ℝ) δPearlC
@@ -133,7 +133,7 @@ theorem pearlCSampledDevAt {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R
     (hTT : TTOutTilePearlCDev CM d sem ρ) :
     GGapSampled CM (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDevAt d s) (γ : ℝ) δPearlC := by
   have hW : ∀ U : Workload, U.InDomain (pearlCProtocolDev d sem ρ) (pearlCDomainDevAt d s) → ∀ (H : Q → R) (s' : S),
-      ∀ g < ((pearlCTilesDev d sem ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTilesDev d sem ρ).capOK H s' U g act →
+      ∀ g < ((pearlCTilesDev d sem ρ).tiling U.layout).NT, ∀ act : Codes, (pearlCTilesDev d sem ρ).inertBoundOK H s' U g act →
         (pearlCTilesDev d sem ρ).Wcred U.layout g act ≤ (ω : ℝ) * (pearlCTilesDev d sem ρ).credit H s' U g act := by
     intro U hU H s' g hg act _
     have hu := auditTiling_unit_lt 64 64 U.layout hg

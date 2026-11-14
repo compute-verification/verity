@@ -589,7 +589,7 @@ theorem saltDeadP_card_le_of_live {m k : ℕ} (p : Pipeline) (fs : ℕ) (alpha b
 open Classical in
 /-- **ρ_D for `saltDeadP` at sm_120** (`sm120E4m3K32 z`, any floor `z ≤ −5`; `sm120E4m3` at `z = −133`): under `rhoD_atomMixP_flat`'s domain
 conditions at the rows' own scales, at most `ρ_D·m·k = m·k/64` elements are salt-dead, so the forming debit
-`fs·#{saltDeadP ∨ flagged}` (`Forming.formDebit_eq_elems` after `saltDeadP_eq`) stays within `ρ_D` on the salt side. -/
+`fs·#{saltDeadP ∨ flagged}` (`Forming.formInertWork_eq_elems` after `saltDeadP_eq`) stays within `ρ_D` on the salt side. -/
 theorem saltDeadP_card_le {z : ℤ} (hz : z ≤ -5) (fs : ℕ) (s : Shape) (alpha beta : (k : ℕ) → (Fin k → ℚ) → ℚ)
     {ρ c : Fin s.m → ℚ} {X : Matrix (Fin s.m) (Fin s.k) ℚ} (s' : Fin s.m → Fin 32 → Bool)
     (hN : ∀ i, flatNoise (beta s.k (X i)) (s' i) = c i * (alpha s.k (X i) * ρ i))

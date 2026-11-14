@@ -99,7 +99,7 @@ def creditDev (d : PearlCDevice) (s : Shape) : ℚ :=
     2 * d.prices.bf16 * Params.pi.r * s.m * s.n + (d.prices.costs.fs : ℚ) * s.m * s.k
 
 /-- The debit at a device: per flagged atom-word its 32 MACs and its share of the promotion's add, and `fs` per element. -/
-def debitDev (d : PearlCDevice) (x : Debit) : ℚ :=
+def inertWorkDev (d : PearlCDevice) (x : InertWork) : ℚ :=
   (32 + (if d.G = 0 then 0 else d.prices.add / d.G)) * x.atoms + (d.prices.costs.fs : ℚ) * x.elems
 
 /-- The honest reference's work at a device: the credited work plus the forming that depends on the activations alone. -/
@@ -120,9 +120,9 @@ noncomputable def PearlCSem.unitUsefulDev (sem : PearlCSem Q R S) (d : PearlCDev
     (fun i => be (sem.beta sh.k (X i)) (z.EA i)) (fun j => be (sem.beta sh.k (W j)) (z.EB j))
 
 open Classical in
-/-- The unit's replayed debit at a device, as `PearlCSem.unitDebit` with the device's flags and salt-dead predicate. -/
-noncomputable def PearlCSem.unitDebitDev (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
-    (u : ℕ) (act : Codes) : Debit :=
+/-- The unit's replayed debit at a device, as `PearlCSem.unitInertWork` with the device's flags and salt-dead predicate. -/
+noncomputable def PearlCSem.unitInertWorkDev (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
+    (u : ℕ) (act : Codes) : InertWork :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
   let AB := sem.unitChain H s U u act
@@ -137,8 +137,8 @@ noncomputable def pearlCProtocolDev (d : PearlCDevice) (sem : PearlCSem Q R S) (
   actOK := fun sh act => sem.OperandOK sh.m sh.k act
   fixedOK := fun sh w j => sem.RowOK sh.n sh.k w j
   credit := fun H s U u act =>
-    ((creditDev d (U.layout.shape u) - debitDev d (sem.unitDebitDev d H s U u act) : ℚ) : ℝ)
-  capOK := fun H s U u act => debitDev d (sem.unitDebitDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)
+    ((creditDev d (U.layout.shape u) - inertWorkDev d (sem.unitInertWorkDev d H s U u act) : ℚ) : ℝ)
+  inertBoundOK := fun H s U u act => inertWorkDev d (sem.unitInertWorkDev d H s U u act) ≤ ρ * creditDev d (U.layout.shape u)
   Wref := fun L u => (wrefDev d (L.shape u) : ℝ)
 
 /-- Pearl-C's shape domain at a device: positive `m`, `n` a positive multiple of 64, k a whole number of 128-deep
@@ -177,9 +177,9 @@ def llama31_8bLinears : Finset (ℕ × ℕ) := {(6144, 4096), (4096, 4096), (286
 def qwen3_8bLinears : Finset (ℕ × ℕ) := {(6144, 4096), (4096, 4096), (24576, 4096), (4096, 12288)}
 
 open Classical in
-/-- A tile's replayed debit at a device, as `PearlCSem.tileDebit` with the device's flags, salt-dead predicate and prices.
+/-- A tile's replayed debit at a device, as `PearlCSem.tileInertWork` with the device's flags, salt-dead predicate and prices.
 The forming part is P3's per-tile rule ("The per-tile cap"). -/
-noncomputable def PearlCSem.tileDebitDev (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
+noncomputable def PearlCSem.tileInertWorkDev (sem : PearlCSem Q R S) (d : PearlCDevice) (H : Q → R) (s : S) (U : Workload)
     (u : ℕ) (rows cols : Finset ℕ) (act : Codes) : ℚ :=
   let sh := U.layout.shape u
   let X := wordsVal sh.m sh.k act
@@ -189,7 +189,7 @@ noncomputable def PearlCSem.tileDebitDev (sem : PearlCSem Q R S) (d : PearlCDevi
     ((range (sh.k / 32)).filter fun t => fl e.1 e.2 t = true).card
   let elems := ((univ : Finset (Fin sh.m × Fin sh.k)).filter fun e => (e.1 : ℕ) ∈ rows ∧
     (d.saltDead sem.alpha sem.beta sh.k (X e.1) e.2 ∨ ∀ j : Fin sh.n, (j : ℕ) ∈ cols → fl e.1 j ((e.2 : ℕ) / 32) = true)).card
-  debitDev d ⟨atoms, 0⟩ + (d.prices.costs.fs : ℚ) * (cols.card / sh.n) * elems
+  inertWorkDev d ⟨atoms, 0⟩ + (d.prices.costs.fs : ℚ) * (cols.card / sh.n) * elems
 
 /-- **Pearl-C's audit tiles at a device record**, as `pearlCTiles` (credit on the credited rows), with `creditDev` and
 `wrefDev`. -/
@@ -200,10 +200,10 @@ noncomputable def pearlCTilesDev (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ 
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
     (((1 - ρ) * creditDev d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g) : ℚ) : ℝ)
-  capOK := fun H s U g act =>
+  inertBoundOK := fun H s U g act =>
     let tl := auditTiling 64 64 U.layout
     let sh := U.layout.shape (tl.unit g)
-    sem.tileDebitDev d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
+    sem.tileInertWorkDev d H s U (tl.unit g) (sem.passRows sh act (tl.rows g)) (tl.cols g) act ≤
       ρ * creditDev d sh * tileShare sh (sem.passRows sh act (tl.rows g)) (tl.cols g)
   Wref := fun L g =>
     let tl := auditTiling 64 64 L

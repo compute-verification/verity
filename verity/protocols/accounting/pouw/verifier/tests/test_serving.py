@@ -69,8 +69,8 @@ def test_the_formats_are_h0_and_sha512_h3():
     the unhashed default."""
     assert list(HASH_FORMATS) == ["h0", "h3"]
     h0, h3 = HASH_FORMATS["h0"], HASH_FORMATS["h3"]
-    assert (h0.tree_hash, h0.seed_a, h0.row_cap, h0.row_digest) == ("sha256", "unit-root", False, None)
-    assert (h3.tree_hash, h3.seed_a, h3.row_cap, h3.row_digest) == ("hm96-sha512", "row", True, "sha512/row-seg/v1")
+    assert (h0.tree_hash, h0.seed_a, h0.row_inert_bound, h0.row_digest) == ("sha256", "unit-root", False, None)
+    assert (h3.tree_hash, h3.seed_a, h3.row_inert_bound, h3.row_digest) == ("hm96-sha512", "row", True, "sha512/row-seg/v1")
 
 
 def test_hash_format_reads_a_name_an_id_or_a_scheme_object():

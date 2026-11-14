@@ -1,7 +1,7 @@
-"""The hidden cap (`circuit.cap`'s `Pc8TileCap` at `cap.row_rho`'s ρr, the template `cap.served` serves) and the clear
-path's (`clear_work.cap_failure`) on the same tile of the H100 record: one verdict on every tile, accepted and refused,
+"""The hidden cap (`circuit.inert_bound`'s `Pc8TileCap` at `inert_bound.row_rho`'s ρr, the template `inert_bound.served` serves) and the clear
+path's (`clear_work.inert_bound_failure`) on the same tile of the H100 record: one verdict on every tile, accepted and refused,
 under -h3's per-row cap (4ρ at its census k = 256, ρ at k = 1,024) and -h0's tile cap alone.  The clear path's forming
-term (`pearl_c_debit.forming_elements`) reads each row's forming, here α = β = 1 and x = 0, which has no salt-dead
+term (`pearl_c_inert_work.inert_elements`) reads each row's forming, here α = β = 1 and x = 0, which has no salt-dead
 element, and the tiles have no atom block that every word of a row flags, so it is 0, as the circuit's is on no
 salt-dead bits."""
 from __future__ import annotations
@@ -17,8 +17,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "verifier" / "tests"))
 import clear_work as CW  # noqa: E402
-import test_circuit_cap as T  # noqa: E402
-from verity.protocols.accounting.pouw.prover.circuit import cap  # noqa: E402
+import test_circuit_inert_bound as T  # noqa: E402
+from verity.protocols.accounting.pouw.prover.circuit import inert_bound  # noqa: E402
 from verity.circuits.evaluation import evaluate  # noqa: E402
 from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape, Tile  # noqa: E402
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C  # noqa: E402
@@ -53,11 +53,11 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
     credited = set(record.credited(tile)[0])
     ok = [i in credited for i in range(tm)]
     pa, pb = T._peel_rows(k, TILE)
-    cert = [cap.certificates(ac[i], bc[j], d.name) for i in range(tm) for j in range(tn)]
+    cert = [inert_bound.certificates(ac[i], bc[j], d.name) for i in range(tm) for j in range(tn)]
     flat = lambda rows: [x for r in rows for x in r]  # noqa: E731
-    hidden = evaluate(cap.templates(k, d.name, TILE, N, row_rho=cap.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
+    hidden = evaluate(inert_bound.templates(k, d.name, TILE, N, row_rho=inert_bound.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
                       flat(pa), flat(pb), [int(o) for o in ok], [0] * (tm * k // 32), flat(cert))[-1]
-    reason = CW.cap_failure(scheme, record, tile, SimpleNamespace(
+    reason = CW.inert_bound_failure(scheme, record, tile, SimpleNamespace(
         a=SimpleNamespace(codes=ac, alpha=[ONE] * tm, x=[[0] * k] * tm, beta=[ONE] * tm), b=SimpleNamespace(codes=bc)))
     return bool(hidden), reason is None, reason
 
@@ -75,7 +75,7 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
     (H0, 1024, [(5, 3, 2), (5, 9, 4)], (), True, None),
 ], ids=["h3-256-none", "h3-256-one", "h3-256-two-over-4rho", "h3-256-two-voluntary", "h3-256-three-rows",
         "h3-256-tile-over-rho", "h3-1024-one", "h3-1024-two-over-rho", "h0-1024-two"])
-def test_the_hidden_and_clear_caps_agree(scheme, k, at, voluntary, accepted, why):
+def test_the_hidden_and_clear_inert_bounds_agree(scheme, k, at, voluntary, accepted, why):
     """Each case's verdict is the hidden cap's and the clear path's, and the clear reason names the cap that refuses it:
     a row over 4ρ at k = 256 (or over ρ at k = 1,024) under -h3 is refused by both and accepted once given up as
     voluntary, a row within 4ρ but over ρ is accepted by both, a tile over ρ is refused by both, and -h0 caps the tile
@@ -86,7 +86,7 @@ def test_the_hidden_and_clear_caps_agree(scheme, k, at, voluntary, accepted, why
 
 
 @pytest.mark.slow
-def test_the_hidden_and_clear_caps_agree_on_random_flags():
+def test_the_hidden_and_clear_inert_bounds_agree_on_random_flags():
     """Random flag placements at k = 256 under -h3 (up to three flags in a row, up to five in the tile, each in an atom
     block of its own so that `T.flag_words` flags no other word, a random row voluntary): the hidden and clear verdicts
     agree on every tile, and both verdicts occur."""
