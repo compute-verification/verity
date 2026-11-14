@@ -90,19 +90,37 @@ theorem ind_le_onePick {α : Type} (q : α → Prop) (cs : α → List (Prop × 
     ind q a ≤ ind (IsColl H) (onePick cs a) :=
   ind_le_isColl H q (onePick cs) (fun a h => collOf_isColl H (hcs a) (hq a h)) a
 
-/-- **Two runs' conflict at some position, as a finder's output**: the pair `pr` gives at the first position where
-the two runs conflict. -/
-noncomputable def conflictPick {α P V : Type} [Fintype P] (op : α → P → Option V)
-    (pr : α × α → P → List UInt8 × List UInt8) (b b' : α) : Pair :=
-  collOf (Finset.univ : Finset P).toList (Rewinding.ConflictAt op (b, b')) (pr (b, b'))
+/-- **The positions a conflict search runs through, in the order it searches them**: a list that holds every
+position. Each instance is a list written out (`List.finRange n` at `Fin n`), so the order is computed. `Finset.univ`'s
+list is not used: its order is taken by choice. -/
+class Positions (P : Type) where
+  list : List P
+  mem : ∀ p, p ∈ list
 
-theorem ind_le_conflictPick {α P V : Type} [Fintype P] (op : α → P → Option V)
+/-- `Fin n`'s positions, in increasing order. -/
+instance Positions.fin (n : ℕ) : Positions (Fin n) := ⟨List.finRange n, List.mem_finRange⟩
+
+/-- The one position of `Unit`. -/
+instance Positions.unit : Positions Unit := ⟨[()], fun _ => List.mem_singleton.2 rfl⟩
+
+/-- No position. -/
+instance Positions.empty : Positions Empty := ⟨[], fun e => e.elim⟩
+
+@[simp] theorem Positions.list_empty : (Positions.list : List Empty) = [] := rfl
+
+/-- **Two runs' conflict at some position, as a finder's output**: the pair `pr` gives at the first position, in
+`Positions.list`'s order, where the two runs conflict. -/
+noncomputable def conflictPick {α P V : Type} [Positions P] (op : α → P → Option V)
+    (pr : α × α → P → List UInt8 × List UInt8) (b b' : α) : Pair :=
+  collOf (Positions.list : List P) (Rewinding.ConflictAt op (b, b')) (pr (b, b'))
+
+theorem ind_le_conflictPick {α P V : Type} [Positions P] (op : α → P → Option V)
     (pr : α × α → P → List UInt8 × List UInt8)
     (hpr : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pr x p).1 (pr x p).2) (b b' : α) :
     ind (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (b, b') ≤ ind (IsColl H) (conflictPick op pr b b') :=
   ind_le_isColl H (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (fun x : α × α => conflictPick op pr x.1 x.2)
     (fun x h => collOf_isColl H (fun p _ hp => hpr x p hp)
-      (h.elim fun p hp => ⟨p, Finset.mem_toList.2 (Finset.mem_univ p), hp⟩)) (b, b')
+      (h.elim fun p hp => ⟨p, Positions.mem p, hp⟩)) (b, b')
 
 /-- **A collision finder**: a game played by a fixed strategy, with what it found as its output. -/
 structure Finder (γ : Type) : Type 1 where
@@ -156,7 +174,7 @@ theorem expect_one_le {α : Type} (g : Game α) (s : Strategy g) (q : α → Pro
   rw [oneRun_ev]
   exact expect_mono (ind_le_onePick H q cs hq hcs) g s
 
-theorem expect₂_conflict_le {α P V : Type} [Fintype P] (g : Game α) (s : Strategy g) (op : α → P → Option V)
+theorem expect₂_conflict_le {α P V : Type} [Positions P] (g : Game α) (s : Strategy g) (op : α → P → Option V)
     (pr : α × α → P → List UInt8 × List UInt8)
     (hpr : ∀ x p, Rewinding.ConflictAt op x p → Hash.Collision H (pr x p).1 (pr x p).2) :
     expect₂ (fun b b' => ind (fun x : α × α => ∃ p, Rewinding.ConflictAt op x p) (b, b')) g s ≤
@@ -200,7 +218,7 @@ theorem forkE_le_ev (plur : Lock.Chooser T Dc β) (slot : ℕ) {Φ : Dc → β �
         exact expect_mono (fun b => expect_mono (hΦ σ'.1 b) _ _) _ _
       · exact forkE_le_ev plur slot hΦ hdflt _ σ'.2
 
-theorem forkE_conflict_le {P V : Type} [Fintype P] (plur : Lock.Chooser T Dc β) (slot : ℕ)
+theorem forkE_conflict_le {P V : Type} [Positions P] (plur : Lock.Chooser T Dc β) (slot : ℕ)
     (op : Dc → β → P → Option V) (pr : Dc → β × β → P → List UInt8 × List UInt8)
     (hpr : ∀ d x p, Rewinding.ConflictAt (op d) x p → Hash.Collision H (pr d x p).1 (pr d x p).2)
     {i : I} {g : Game α} {g' : Game β} (L : Lock T Dc get R i g g') (σ' : Strategy g') :
@@ -217,7 +235,8 @@ reads the root as. If each run opens at most `Q` positions and the pair `pr` of 
 collision (`hpr`, Merkle binding), then the probability that a run opens a position off `vstar` is at most
 `√(N·Q·q²/2^513)`, for `q` the budget of the finder that runs the prover twice after the registration and outputs
 `pr` at the first position where the two runs conflict (`DESIGN.md` §1: `δ_tree ≤ √(N_s·Q_s·Adv)`). -/
-theorem tree_le_strict {α P V : Type} [Fintype P] [Fintype V] [DecidableEq V] (op : α → P → Option V)
+theorem tree_le_strict {α P V : Type} [Fintype P] [Positions P] [Fintype V] [DecidableEq V]
+    (op : α → P → Option V)
     (g : Game α) (s : Strategy g) (vstar : P → V) (hv : Rewinding.IsPluralityE op g s vstar) (Q : ℕ)
     (hQ : ∀ a, (Finset.univ.filter fun p => (op a p).isSome).card ≤ Q)
     (pr : α × α → P → List UInt8 × List UInt8)
@@ -238,6 +257,7 @@ structure TreeRewind {β : Type} (G : Game β) (S : Strategy G) (bad : β → Pr
   P : Type
   V : Type
   [fintypeP : Fintype P]
+  [posP : Positions P]
   [fintypeV : Fintype V]
   [decEqV : DecidableEq V]
   op : α → P → Option V
@@ -253,7 +273,7 @@ structure TreeRewind {β : Type} (G : Game β) (S : Strategy G) (bad : β → Pr
 
 namespace TreeRewind
 
-attribute [local instance] fintypeP fintypeV decEqV
+attribute [local instance] fintypeP posP fintypeV decEqV
 
 variable {H} {β : Type} {G : Game β} {S : Strategy G} {bad : β → Prop}
 
