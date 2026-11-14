@@ -28,7 +28,9 @@ The page is how Daniel sees what is being done, so it moves when the work does:
   and not saying `Issue: none: REASON`. Work that serves none starts by writing its goal, or asking top.
 - **One outcome, one goal.** Before adding one, look for it under another owner's goal, and make yours its subgoal.
 
-Once a day top rings the owner of a goal past its due, for a new date or its evidence.
+`research goals audit` names, and once a day top rings the owner of, a goal past its due, an off-track goal not written
+in 24 hours, and a goal due within 24 hours not written in the 24 before its due. A goal only under `top/parked` is
+left out.
 
 ## A goal
 
@@ -62,7 +64,11 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
 - **One owner** (`--owner`): the lead of the area the goal mostly builds, who keeps it true. Other areas that do
   parts of it are @handle in its plan; a check the remote demo runs is the demo lead's goal even when proofs writes
   it in Lean.
-- **A due date** (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00` when the hour matters).
+- **A due date**, more precise as it nears (`--due YYYY-MM-DD`, the end of that day, or `YYYY-MM-DDTHH:MM-08:00`):
+  - more than a week away, a day;
+  - inside a week, the day you now expect, moved the day your estimate moves;
+  - inside 24 hours, the hour its last step ends (a run's or a check's end), set that day: 6 PM only when that is
+    the estimate. `research goals confirm ID` if the hour you gave stands.
 - **A priority**, 1 to 3: anyone may set one (`research goals priority ID 1|2|3|clear`), and the page shows
   who set it and when. A goal nobody set takes the highest priority of the goals waiting on it.
 - **Today's work, as a subgoal.** An open goal due within a week waits on a subgoal due within a day: write it
@@ -70,7 +76,7 @@ Once a day top rings the owner of a goal past its due, for a new date or its evi
   link, since `--wait` replaces the list). A goal has no separate next-step field, and the site refuses one.
 - **A status:** `on-track`, `off-track` or `done`, your forecast of whether it will be true by its date.
   - Off track says why: link what it waits on, or say what's wrong in `--blockers`. The site refuses an off-track goal
-    with neither.
+    with neither. The reason is today's: each day it stays off track, rewrite it, or `confirm` it if every word holds.
   - Done needs evidence named in the description: a run, a lock change or a landed commit.
 - **Tags** (`--tag`, repeated) are the development areas responsible for the goal, from one fixed list in
   Daniel's words: `remote-demo`, `onsite-demo`, `proofs`, `circuits`, `lean`, `vllm`, `compute-accounting`,
@@ -141,7 +147,7 @@ Rules:
 - Say where work stands in outcome words: running, in review, waiting to merge, on main. Not the pipeline's words:
   "approved for landing", "marked", "the landing loop", "drive", "a train".
 - Name who does a step as @handle in its sentence ("@ci moves main on it"), never as a tag in parentheses.
-- A step's day is usually enough ("Tue", "by Wed noon"). Give the hour only when another goal waits on it.
+- A step more than a day away names its day ("Tue", "by Wed noon"). One inside a day names its hour.
 - Leave out what Daniel doesn't act on: run counts, restarts, idle machines, GPU counts.
 - Plain words over coined ones. "Fresh products", "whole-making", "the sealed shard" and "a live coin" are terms you
   made; say what they mean ("matrix products whose two inputs were both just computed"), or define the term once.

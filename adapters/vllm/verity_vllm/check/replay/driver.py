@@ -245,7 +245,7 @@ def _cgroup_memory() -> tuple[int, int] | None:
     except OSError:
         return None
     lim, cur = read
-    return (int(lim), int(cur)) if lim.isdigit() and cur.isdigit() else None
+    return (int(lim), int(cur)) if lim.isdecimal() and cur.isdecimal() else None
 
 
 def _malloc_trim() -> bool:
