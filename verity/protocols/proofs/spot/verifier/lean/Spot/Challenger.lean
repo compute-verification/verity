@@ -1,6 +1,6 @@
 /-
 The proof system's challenger: its live coins, the live coins of every protocol, as the verifier checks them
-(`verity/core/protocols/spot/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
+(`verity/protocols/proofs/spot/device/challenger.py`, which `tests/test_challenger_difftest.py` holds to this, the
 verifier).
 
 Coins are indexed by label and index and named by no protocol. A layout is a scheme, an epoch and its families

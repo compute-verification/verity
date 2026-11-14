@@ -7,7 +7,7 @@ public import Definitions.Slowdown.Formalism.Instances
 # The training formalism v2: honest and nontrivial lemmas
 
 The counting lemma, the token cap, Slowdown, Security and Fit's two bounds each have two statements here, at the
-instances of `Security/Definitions/Slowdown/Formalism/Instances.lean`. `<Guarantee>_honest`: its premises hold together, the named
+instances of `security/Definitions/Slowdown/Formalism/Instances.lean`. `<Guarantee>_honest`: its premises hold together, the named
 assumptions among them. `<Guarantee>_nontrivial`: every premise but one holds, that one fails, and the bound fails, its
 last conjunct the bound's negation.
 
@@ -37,7 +37,7 @@ assumption: neither has such lemmas.
 these structural bounds: they rest on no run and no `art:`, and a training run's annotation and checked witness blocks,
 which no check reads yet, would supply the deployed premises.
 
-The proofs are in `Security/Proofs/Slowdown/Formalism/Witnesses.lean`.
+The proofs are in `security/Proofs/Slowdown/Formalism/Witnesses.lean`.
 -/
 
 @[expose] public section

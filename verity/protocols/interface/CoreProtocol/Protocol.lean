@@ -67,7 +67,7 @@ structure Protocol where
   publicJson : Public → Json
   profileJson : Profile → Json
 
-/-- The check accepts: the predicate a protocol's properties (`Security/Properties/<protocol>.lean`) are stated over. -/
+/-- The check accepts: the predicate a protocol's properties (`security/Properties/<protocol>.lean`) are stated over. -/
 def Protocol.Accepts (P : Protocol) (p : P.Params) (c : P.Commitment) (e : P.Evidence) : Prop :=
   ∃ pub prof, P.check p c e = .accept pub prof
 

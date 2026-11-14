@@ -1,12 +1,12 @@
 module
 
 /-!
-# The BF16 tensor-core steps: `verity.ml.circuits.silicon.total.tc_dot_total`
+# The BF16 tensor-core steps: `verity.circuits.silicon.total.tc_dot_total`
 
-A copy of `Security/Definitions/Core/TC/Pipeline.lean` and `Spec.lean`, definition for definition: the grouped-sum
+A copy of `security/Definitions/Core/TC/Pipeline.lean` and `Spec.lean`, definition for definition: the grouped-sum
 pipelines (`models.GroupSum`) and the total semantics of one BF16 step on every encoding (`term.py`, `models.group_sum`,
 `total.py`). Each definition names the Security definition it must equal, to be proved where the equalities live, since code
-never requires `Security/`. `groupSum` is the generic adder (a width below 24 truncates the terms onto it), which
+never requires `security/`. `groupSum` is the generic adder (a width below 24 truncates the terms onto it), which
 `Evaluate.TC.Fp8Atom` copies again in the form Security's FP8 definitions give it.
 
 Words are natural numbers below `2^32` (FP32) and `2^16` (BF16), as the walk gives them to a gate whose operands are

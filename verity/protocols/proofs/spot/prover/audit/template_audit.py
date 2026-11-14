@@ -25,7 +25,7 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from contextlib import AbstractContextManager, nullcontext
 from pathlib import Path
 
@@ -58,10 +58,16 @@ STAND_IN_BINDINGS = {FLOCK_CIRCUIT_BINDING: identity_digest_sha512,
                      "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
 STAND_IN_BINDING = FLOCK_CIRCUIT_BINDING
 STATEMENT_ID = "verity/flock-circuit"
+#: a statement's key under which its circuit file is linked into an archive rather than put there (`archive_put`'s ``link``)
+ARCHIVE_LINK = "archive_link"
 
 
 def sha512_file(path: Path) -> str:
-    return hashlib.sha512(path.read_bytes()).hexdigest()
+    h = hashlib.sha512()
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 24):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def environ(env: dict | None) -> dict:
@@ -346,19 +352,43 @@ def archive_files(st: dict, n: int) -> list[Path]:
             *(Path(st[f"{x}_file"]) for x in bound_files(st))]
 
 
-def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None) -> dict[Path, str]:
+def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None,
+                link: Collection[Path] = ()) -> dict[Path, str]:
     """Each of ``files`` in ``archive`` under its SHA-512 (Lean's ``archive-put``, its log ``log``), and each one's
     key there; a file Lean could not put has none. ``held``, a dict a run's archives share: a file archived once, by its
     identity (`identity`), is linked into a later archive rather than read again, and a call whose every file is held
-    starts no process. Lean holds an object to its key when it reads it (`archiveGet`)."""
+    starts no process. Lean holds an object to its key when it reads it (`archiveGet`).
+
+    A file of ``link`` that no earlier call archived is linked into the archive under its SHA-512, hashed here, and not
+    put, so the archive holds no second copy of it. A wrong hash here is Lean's to refuse when it reads the object, and
+    where the link can't be made (another filesystem) the file is put as without it. A link shares the file's bytes: a
+    write in place through either name changes both."""
     ids = {f: identity(f) if held is not None else None for f in files}
+    linked: dict[Path, tuple[str, Path]] = {}
 
     def known(f: Path) -> tuple[str, Path] | None:
         pre = held.get(ids[f]) if ids[f] is not None else None
-        return pre if pre is not None and pre[1].exists() else None
+        return pre if pre is not None and pre[1].exists() else linked.get(f)
 
+    for f in dict.fromkeys(f for f in files if f in link):
+        if known(f) is not None or not f.is_file():
+            continue
+        key = sha512_file(f)
+        try:
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            if not (archive / "sha512" / key).exists():
+                os.link(f, archive / "sha512" / key)
+        except OSError as e:
+            print(f"A0 archive-link: {f} not linked into {archive} ({type(e).__name__}: {e}), so it is put, a copy",
+                  file=sys.stderr)
+            continue
+        linked[f] = (key, archive / "sha512" / key)
+        if ids[f] is not None:
+            held[ids[f]] = linked[f]
     new, seen = [], set()
     for f in files:
+        if f in linked:
+            continue
         if ids[f] is None or (known(f) is None and ids[f] not in seen):
             new.append(f)
             seen.add(ids[f])
@@ -534,7 +564,9 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     process of its own, and gives the same verdict. ``st["archived"]``, a dict a run's members share (`archive_put`'s
     ``held``): a file archived once, the members' circuit or a file the run put before its sessions, is linked into
     every later archive rather than put again, a check running beside it (`a5.LeanPool`) on the same circuit file
-    waiting for the first to put its files (`archiving`). ``st["statement"]``: the statement `verify` sets up
+    waiting for the first to put its files (`archiving`). With ``st["archive_link"]`` (`ARCHIVE_LINK`) true, a circuit
+    file no earlier member archived is linked into the archive and not put (`archive_put`'s ``link``). ``st["statement"]``:
+    the statement `verify` sets up
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
@@ -546,7 +578,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     archive, files = out / "archive", archive_files(st, n)
     with archiving(st.get("archived"), identity(files[0])):
         keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
-                           st.get("archived"))
+                           st.get("archived"), files[:1] if st.get(ARCHIVE_LINK) else ())
     bound = [y for x in bound_files(st) for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
     args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
             "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,

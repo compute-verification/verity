@@ -107,7 +107,7 @@ def test_a_stratified_sample_is_bounded_by_its_strata_and_not_as_a_uniform_one()
 def test_a_flipped_subprotocol_verdict_is_refused() -> None:
     rec = copy.deepcopy(_load("block-record-r2-period0"))
     rec["legs"]["pouw"]["answer"]["verdict"] = "reject"
-    assert set(R.check(rec)) == {"composed:subprotocols", "composed:joint_horizon", "monitoring_period"}
+    assert set(R.check(rec)) == {"composed:legs", "composed:joint_horizon", "monitoring_period"}
 
 
 def test_the_verdict_is_the_answers_and_nothing_else() -> None:

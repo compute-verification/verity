@@ -62,20 +62,20 @@ theorem pr_found_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : T
     (P : Prover Ω) (β : Ω → (Fin (L.V.k x) → Coin) → ℝ) (hβ0 : ∀ ω r, 0 ≤ β ω r)
     (hβ : Ex (fun p : Ω × (Fin (L.V.k x) → Coin) => β p.1 p.2) ≤ PrB H L.V P x)
     (sel : Ω → (Fin (L.V.k x) → Coin) → List ℕ → Option (Fin (L.nPU x)))
-    (hsel : ∀ ω r e, sel ω (forkOn (L.stage2 x) r e) = sel ω r)
+    (hsel : ∀ ω r e, sel ω (forkOn (L.secondStage x) r e) = sel ω r)
     (G : Ω → (Fin (L.V.k x) → Coin) → Fin (L.nPU x) → Msg → A.W → Prop)
     (hκ : ∀ ω r (sl : List ℕ → Option (Fin (L.nPU x))), Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-      (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-        ∃ i, sl (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-            L.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)
-              (G ω (forkOn (L.stage2 x) r p.1) i)) ≤
+      (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+        ∃ i, sl (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+          ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+            L.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)
+              (G ω (forkOn (L.secondStage x) r p.1) i)) ≤
         2 * Pr (fun p : (Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x =>
-          (run H P L.V x ω (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-            ∃ i, sl (L.checked x (forkOn (L.stage2 x) r p.1)) = some i ∧
-              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r p.1))[i.val]? = some u.val ∧
-                L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r p.1) (p.2 i u)
-                  (G ω (forkOn (L.stage2 x) r p.1) i)) +
+          (run H P L.V x ω (forkOn (L.secondStage x) r p.1)).out = .acc ∧
+            ∃ i, sl (L.checked x (forkOn (L.secondStage x) r p.1)) = some i ∧
+              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r p.1))[i.val]? = some u.val ∧
+                L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r p.1) (p.2 i u)
+                  (G ω (forkOn (L.secondStage x) r p.1) i)) +
           (2 * L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))) :
     Ex (fun ω : Ω => Pr fun rc : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
       (run H P L.V x ω rc.1).out = .acc ∧ ∃ i, sel ω rc.1 (L.checked x rc.1) = some i ∧
@@ -97,26 +97,26 @@ theorem pr_found_le_at (H : Msg → Msg) (L : Compiled Coin A) {x : Msg} {Ω : T
             L.oneWait.FoundWith H x (run H P L.V x ω) u rc.1 (rc.2 i u) (G ω rc.1 i)) +
         (2 * L.κs x + Ex fun r => Real.sqrt (L.V.k x * L.γs x * β ω r)) := by
     intro ω
-    rw [Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
+    rw [Pr_forkOn_prod (L.secondStage x) (fun (r : Fin (L.V.k x) → Coin) (c : L.SlotEC x) =>
         (run H P L.V x ω r).out = .acc ∧ ∃ i, sel ω r (L.checked x r) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x r)[i.val]? = some u.val ∧
             L.FoundWith H x (run H P L.V x ω) u r (c i u) (G ω r i)),
-      Pr_forkOn_prod (L.stage2 x) (fun (r : Fin (L.V.k x) → Coin) (c : L.oneWait.SlotEC x) =>
+      Pr_forkOn_prod (L.secondStage x) (fun (r : Fin (L.V.k x) → Coin) (c : L.oneWait.SlotEC x) =>
         (run H P L.V x ω r).out = .acc ∧ ∃ i, sel ω r (L.checked x r) = some i ∧
           ∃ u : Fin (L.nPU x), (L.checked x r)[i.val]? = some u.val ∧
             L.oneWait.FoundWith H x (run H P L.V x ω) u r (c i u) (G ω r i))]
     have hr : ∀ r : Fin (L.V.k x) → Coin, Pr (fun q : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
-          (run H P L.V x ω (forkOn (L.stage2 x) r q.1)).out = .acc ∧
-            ∃ i, sel ω (forkOn (L.stage2 x) r q.1) (L.checked x (forkOn (L.stage2 x) r q.1)) = some i ∧
-              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r q.1))[i.val]? = some u.val ∧
-                L.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r q.1) (q.2 i u)
-                  (G ω (forkOn (L.stage2 x) r q.1) i)) ≤
+          (run H P L.V x ω (forkOn (L.secondStage x) r q.1)).out = .acc ∧
+            ∃ i, sel ω (forkOn (L.secondStage x) r q.1) (L.checked x (forkOn (L.secondStage x) r q.1)) = some i ∧
+              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r q.1))[i.val]? = some u.val ∧
+                L.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r q.1) (q.2 i u)
+                  (G ω (forkOn (L.secondStage x) r q.1) i)) ≤
         2 * Pr (fun q : (Fin (L.V.k x) → Coin) × L.oneWait.SlotEC x =>
-          (run H P L.V x ω (forkOn (L.stage2 x) r q.1)).out = .acc ∧
-            ∃ i, sel ω (forkOn (L.stage2 x) r q.1) (L.checked x (forkOn (L.stage2 x) r q.1)) = some i ∧
-              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.stage2 x) r q.1))[i.val]? = some u.val ∧
-                L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.stage2 x) r q.1) (q.2 i u)
-                  (G ω (forkOn (L.stage2 x) r q.1) i)) +
+          (run H P L.V x ω (forkOn (L.secondStage x) r q.1)).out = .acc ∧
+            ∃ i, sel ω (forkOn (L.secondStage x) r q.1) (L.checked x (forkOn (L.secondStage x) r q.1)) = some i ∧
+              ∃ u : Fin (L.nPU x), (L.checked x (forkOn (L.secondStage x) r q.1))[i.val]? = some u.val ∧
+                L.oneWait.FoundWith H x (run H P L.V x ω) u (forkOn (L.secondStage x) r q.1) (q.2 i u)
+                  (G ω (forkOn (L.secondStage x) r q.1) i)) +
           (2 * L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r)) := fun r => by
       simp only [hsel]
       exact hκ ω r (sel ω r)
@@ -359,7 +359,7 @@ theorem eventTwo_oneWait_le_of_off {H : Msg → Msg} {L : CompiledTwo Coin A} (h
   obtain ⟨β', hβ0', hβ', hκ'⟩ := Compiled.sessionFinds_of hF (L := L.toCompiled) ⟨hS.fixed, hS.runs⟩ x Ω P
   have hsel : ∀ (ω : Ω) (r e : Fin (L.V.k x) → Coin),
       L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω)
-          (L.oneWait.iregVal H P x ω (forkOn (L.stage2 x) r e)))) =
+          (L.oneWait.iregVal H P x ω (forkOn (L.secondStage x) r e)))) =
         L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) (L.oneWait.iregVal H P x ω r))) :=
     fun ω r e => congrArg (fun I => L.leadSel x (L.selOf x (incorrectAllAt s Pt d.part (tr ω) I)))
       (iregVal_forkOn H L.oneWait P x ω r e)

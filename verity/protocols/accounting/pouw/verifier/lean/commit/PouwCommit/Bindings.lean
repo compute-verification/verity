@@ -4,7 +4,7 @@ public import PouwCommit.Tagged
 public import Identity.Domains.Pouw
 
 /-!
-# The protocol's bindings (`verity.core.protocols.pouw.audit`)
+# The protocol's bindings (`verity.protocols.accounting.pouw.verifier.audit`)
 
 What each of the protocol's trees is bound to, and the one root over the weights' roots, every one a `tagged` digest:
 

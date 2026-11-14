@@ -113,7 +113,7 @@ Usage::
     two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K|COUNTS.json \\
         --challenger local --main FILE --out OUT [--interior FILE.json [--span-values VALUES.json]] [--advice REGISTRATION.json] \\
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
-    two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
+    two_stage.py second --first-stage OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
         [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--gpus 0,1] [--replay-record REPLAY.json]
 
@@ -177,7 +177,7 @@ from verity_vllm.pipeline import interior_rows as IR
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
 FORMAT = "verity-vllm/two-stage/stage1/v0"
 CHALLENGER = "two_stage.py on the auditor's challenger's coins"
-STAGE1 = "stage1.json"
+FIRST_STAGE = "stage1.json"
 #: what round 2 refuses every two-stage run by while the form is off (`second_stage.FORM`)
 FORM_REFUSED = "two-stage-form"
 #: whether the replay block is the class's registered request Definition. It is `boundary_rows`' stand-in (module
@@ -417,7 +417,7 @@ class First:
     read: bytes = b""
     extra: dict[str, Any] = field(default_factory=dict)
 
-    def stage1(self) -> dict[str, Any]:
+    def first_stage(self) -> dict[str, Any]:
         """``stage1.json``: what `resume` and the replay side read."""
         return {"format": FORMAT, "commit": self.pub, "rule": self.rule.to_json(), "spec": self.stream.spec.digest(),
                 "record": self.record, "registration": self.registration.digest, "receipt": dict(self.registration.receipt),
@@ -463,7 +463,7 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
     return First(dict(pub), rule, layout, stream, rec, reg, sample, coins, bytes(coins.read))
 
 
-def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.ChallengerCoins | None = None, *,
+def resume(first_stage: Mapping[str, Any], check: SpecializedDefinition, then: CC.ChallengerCoins | None = None, *,
            delta: float = 0.5, window_root: str | None = None, stop: BS.Stop | None = None, **kwargs: Any) -> First:
     """A class's stream again at the end of its first stage, from its ``stage1.json``, under the verifier's own check
     template and stop rule: the record registered again and sampled again on the bytes the sample read, then on ``then``
@@ -475,35 +475,35 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     ``stage1.json``'s; when the hand-off names another family than the class's or another root than its record's;
     when the record's window is of another run or another place (`window_place.of`) than its commitment's layout; and
     when ``window_root`` is not the record's."""
-    if stage1.get("format") != FORMAT:
+    if first_stage.get("format") != FORMAT:
         raise ValueError(f"not a {FORMAT} hand-off")
-    pub, rule = stage1["commit"], Rule.from_json(stage1["rule"])
+    pub, rule = first_stage["commit"], Rule.from_json(first_stage["rule"])
     layout = BR.layout_of(pub, check, stop)
-    root = first_root(stage1)
+    root = first_root(first_stage)
     if root != layout.run:
         raise ValueError(f"the record's window is of run {str(root)[:16]}, and the class's commitment is of run "
                          f"{layout.run[:16]}: a class's first stage is sampled on the session its commitment's run opens")
     if window_root is not None and window_root != root:
         raise ValueError(f"the registration is held to the session root {str(window_root)[:16]}, and the record's "
                          f"window is of run {root[:16]}: the first stage's session is the one on its record's run")
-    if WP.of(stage1["record"]["window"]) != place(layout):
+    if WP.of(first_stage["record"]["window"]) != place(layout):
         raise ValueError("the record's window names another class than its commitment's layout: a record's sample is "
                          "of the family its window's place names, which is its class's")
-    coins = Staged(bytes.fromhex(stage1["read"]), then)
+    coins = Staged(bytes.fromhex(first_stage["read"]), then)
     stream = stream_of(layout, rule, coins, delta=delta, **kwargs)
     coins.family = family_of(layout)
-    if stage1.get("family") not in (None, coins.family):
-        raise ValueError(another_family(stage1["family"], coins.family))
-    if stream.spec.digest() != stage1["spec"]:
+    if first_stage.get("family") not in (None, coins.family):
+        raise ValueError(another_family(first_stage["family"], coins.family))
+    if stream.spec.digest() != first_stage["spec"]:
         raise ValueError("the class's Spec isn't the one its first stage ran under")
-    reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
-    if reg.digest != stage1["registration"]:
+    reg = stream.register(first_stage["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
+    if reg.digest != first_stage["registration"]:
         raise ValueError("the record registers to another digest than its first stage's")
     sample = stream.select(reg)
-    if list(sample.units) != list(stage1["units"]) or sample.draw != stage1["draw"]:
+    if list(sample.units) != list(first_stage["units"]) or sample.draw != first_stage["draw"]:
         raise ValueError("the first stage samples other spans read again than it did")
-    return First(dict(pub), rule, layout, stream, dict(stage1["record"]), reg, sample, coins,
-                 bytes.fromhex(stage1["read"]))
+    return First(dict(pub), rule, layout, stream, dict(first_stage["record"]), reg, sample, coins,
+                 bytes.fromhex(first_stage["read"]))
 
 
 def stop_spec(layout: BR.Layout, design: str, proof_deadline: float = PROOF_DEADLINE_S) -> S.Spec:
@@ -1229,6 +1229,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     and the order is read under them; a ``local`` challenger is kept where the second stage reopens it
     (`challenger_host`)."""
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     root = pubs[0]["run"]
     caught = (S.Refused, ValueError, KeyError, TypeError, OSError)
@@ -1250,7 +1251,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
     manager, turns, finisher = AC.start(a.challenger, root, sorted([*ranks.values(), *stops.values()]),
                                         Path(a.out) / "challenger", a.main, ssh_key=a.ssh_key, peer=a.peer,
                                         key_record=a.challenger_key, host=challenger_host(a, Path(a.out) / HOST_DIR),
-                                        deployed=getattr(a, "deployed_key", False))
+                                        deployed=getattr(a, "deployed_key", False), local=LC.Local)
     ours = AC.held(turns)
     out: list[dict] = [{} for _ in pubs]
     stop_design = a.stop_design or a.replay
@@ -1277,7 +1278,7 @@ def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefini
             got = first(pubs[k], check, mine, coins, window=window, delta=a.delta, window_root=root, stop=stop, **ours)
             if getattr(a, "first_tree", False) and k == 0:
                 turns.tree(FIRST_TREE_SPEC)
-            out[k] = {**got.stage1(), "window_root": root}
+            out[k] = {**got.first_stage(), "window_root": root}
         except caught as e:  # its stage1.json says why; the others go on
             out[k] = _refusal(pubs[k], e)
         finally:
@@ -1379,15 +1380,15 @@ def first_coins(again: First, evidence: Mapping[str, Any] | None, window_root: s
                            bytes.fromhex(again.registration.digest), again.read, verify)
 
 
-def first_root(stage1: Mapping[str, Any]) -> str:
+def first_root(first_stage: Mapping[str, Any]) -> str:
     """The root of the session a class's first stage was sampled on: its record's window's ``run``, which the
     docket's digest binds and which is the root `_first_all` opens the window's session on. A ``stage1.json``
     names it too (``window_root``), and one that names another is refused, ValueError: a hand-off does not choose the
     session its sample's challenges are read from."""
-    run = WP.run(stage1["record"]["window"])
+    run = WP.run(first_stage["record"]["window"])
     if run is None:
         raise ValueError("the hand-off's record names no run in its window: its first stage has no session")
-    named = stage1.get("window_root")
+    named = first_stage.get("window_root")
     if named is not None and named != run:
         raise ValueError(f"the hand-off names the session root {str(named)[:16]}, and its record's window is of run "
                          f"{str(run)[:16]}: the first stage's session is the one on its record's run")
@@ -1407,11 +1408,12 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     interior's commitment by ``clock``, the replay's own record's seconds); exit 0 when the second stage held
     (`held`)."""
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    handoff = json.loads(Path(a.stage1).read_text())
-    summary: dict[str, Any] = {"stage1": str(a.stage1), "held": False, "unlinked": bool(a.unlinked)}
+    handoff = json.loads(Path(a.first_stage).read_text())
+    summary: dict[str, Any] = {"stage1": str(a.first_stage), "held": False, "unlinked": bool(a.unlinked)}
     if getattr(a, "replay_record", None):
         summary["replay"] = replay_cost(Path(a.replay_record))
 
@@ -1447,7 +1449,8 @@ def _second(a: argparse.Namespace, clock: Callable[[], float] = time.monotonic) 
     trees = bool(getattr(a, "interior_trees", False))
     manager, turns, finisher = AC.start(a.challenger, root, [0], out / "challenger", a.main, ssh_key=a.ssh_key,
                                         peer=a.peer, key_record=a.challenger_key, host=host,
-                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False))
+                                        stage=AC.SECOND if trees else "", deployed=getattr(a, "deployed_key", False),
+                                        local=LC.Local)
     ours = AC.held(turns)
     again.stream.key, again.stream.main = ours["key"], tuple(ours["main"])
     coins = AC.RankCoins(turns, 0)
@@ -1547,7 +1550,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "on two windows; nothing else of the play changes")
     f.add_argument("--out", required=True)
     g = sub.add_parser("second", help="one class's interior registration, second stage, proofs and outcome")
-    g.add_argument("--stage1", required=True, help="the class's stage1.json (first)")
+    g.add_argument("--first-stage", required=True, help="the class's stage1.json (first)")
     g.add_argument("--boundary", required=True, help="the class's directory (w<window>/p<P>-o<O>/), its private files too")
     g.add_argument("--capture", required=True, help="the replay's capture of the sampled spans' sampler inputs "
                                                     "(engine.sampler_capture.write)")
@@ -1631,7 +1634,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     for d, s in zip(a.boundary, _first_all(a, pubs, check, rule, window, stop), strict=True):
         dest = out / Path(d).name
         dest.mkdir(parents=True, exist_ok=True)
-        (dest / STAGE1).write_text(json.dumps(s, indent=1) + "\n")
+        (dest / FIRST_STAGE).write_text(json.dumps(s, indent=1) + "\n")
         print(json.dumps({"class": Path(d).name, "spans": s["commit"]["spans"], "units": s.get("units"),
                           "error": s.get("error"), **({"stop": {x: s["stop"].get(x) for x in ("units", "order", "error")}}
                                                       if "stop" in s else {})}))
