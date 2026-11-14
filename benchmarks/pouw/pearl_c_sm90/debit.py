@@ -24,15 +24,17 @@ import sys
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+KERNEL = os.path.join(HERE, "..", "..", "..", "verity", "protocols", "accounting", "pouw", "prover", "kernels",
+                      "pearl_c_sm90")
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32
 
 
 def _driver():
-    """This directory's run.py, loaded from its file as `pearl_c_sm90_run` once a process: other directories hold a
-    run.py too, so its name alone does not say which."""
+    """The kernel's run.py, loaded from its file as `pearl_c_sm90_run` once a process: other directories hold a run.py
+    too, so its name alone does not say which."""
     name = "pearl_c_sm90_run"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, "run.py"))
+        spec = importlib.util.spec_from_file_location(name, os.path.join(KERNEL, "run.py"))
         module = sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
     return sys.modules[name]

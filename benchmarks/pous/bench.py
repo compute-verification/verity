@@ -30,7 +30,7 @@ Implementations (`IMPLS`), each adding one class:
   - It runs through that tree's frozen harness, `verity-vllm pous-dense-bench`, with the flags of the band's run of
     record (`FROZEN_FLAGS`).
   - Nothing here changes that harness; its `dense-bench.json` is read back.
-* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): its reference pinned by the spec's vectors, its GPU library
+* `p2-v1-gpu`: P2 v4, the specification (`p2_v1/`): the verifier's reference pinned by the spec's vectors, the prover's GPU library
   (decode with per-block keys on `p2_gpu/p2dec.cu`'s tuned squaring, encode by two roots) and the same harness steps as `band-gpu`
   at k = 105, so the two compare side by side (`side_by_side.py`). It is its own scheme (`--scheme` is ignored): the spec's P2 is
   not a `verity.protocols.accounting.pous.verifier` registered scheme, whose P2 is the MVP's `p2-16448/v4` (the spec's
@@ -71,6 +71,8 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 SCHEMA = "verity-pous/bench-result/v1"
+#: the effective weight bandwidth's name in the run's result: the metric's id, OWNER/NAME (``.T<t>`` at each thread count)
+EWB = "memory-accounting/pous-ewb"
 WEIGHT_SETS = HERE / "weight_sets.json"
 FROZEN_FLAGS = ["--reps", "3", "--thread-rows", "500", "--word-io", "--fused", "--pair", "--pair-max-rows", "7500", "--chunked",
                 "--chunked-threads", "64", "--split", "--fused-x", "--whole-chain"]
@@ -340,7 +342,7 @@ class P2V1Gpu:
 
     def conformance_gate(self) -> dict[str, Any]:
         sys.path.insert(0, str(HERE))
-        from p2_v1 import reference
+        from verity.protocols.accounting.pous.verifier.p2_v1 import reference
 
         return reference.conformance()
 
@@ -422,7 +424,7 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     ap.add_argument("--step-reps", type=int, default=200, help="band-gpu: single-row Π₂ calls timed per kernel variant")
     ap.add_argument("--nvme-dir", default="", help="band-gpu, p2-v1-gpu: also time one block's read of C from a file here (O_DIRECT)")
     ap.add_argument("--nvme-samples", type=int, default=2000, help="band-gpu, p2-v1-gpu: block reads timed from --nvme-dir")
-    ap.add_argument("--p2-lib", default=str(HERE / "p2_v1" / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
+    ap.add_argument("--p2-lib", default=str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/Makefile").parent / "bin"), help="p2-v1-gpu: the directory of libp2v1.so")
     ap.add_argument("--p2-encode-blocks", type=int, default=2048,
                     help="p2-v1-gpu: blocks encoded on the device for encode GB/s (0: all; the rest of C is random canonical)")
     ap.add_argument("--p2-c-cache", default="",
@@ -484,8 +486,8 @@ def main(argv: list[str] | None = None, **kw: Any) -> int:
     if run_dir:
         rows = []
         if doc["passed"] and doc.get("metrics"):   # a failed gate publishes no measurement, nor does a --gates-only run
-            rows = ([{"name": f"ewb_T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
-                    else [{"name": "ewb", "value": ewb, "unit": "B/s"}])
+            rows = ([{"name": f"{EWB}.T{t}", "value": v, "unit": "B/s"} for t, v in ewb.items()] if isinstance(ewb, dict)
+                    else [{"name": EWB, "value": ewb, "unit": "B/s"}])
             rows += [{"name": "decode_pass_s", "value": doc["metrics"]["decode_pass_s"], "unit": "s"}, *measurements]
         result = out.resolve() / "bench-result.json"
         rel = str(result.relative_to(Path(run_dir).resolve())) if result.is_relative_to(Path(run_dir).resolve()) else str(result)

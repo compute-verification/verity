@@ -18,7 +18,7 @@ Each statement below is one step of it, about one function of the code, in the s
 
 * `RunAccepts`: what the compiled check accepts is `AcceptedAt` at the auditor's point, keys and session id, on the
   case's setup, table and session, and what it publishes is `certify` of the point alone. With
-  `Properties.Composition.DecodedAccepted` at `Verity.component .pous`, which yields `RunProtocol.protocol.Accepts`, it
+  `Properties.Composition.DecodedAccepted` at `Verity.Subprotocol.protocolAt .pous`, which yields `RunProtocol.protocol.Accepts`, it
   gives the event `PeriodHeldAt` bounds.
 * `RunDigest`: the digest the composition binds for PoUS's case is SHA-512 of the commitment's bytes, so the
   composition's commitment, fixed before the coins, fixes those bytes outside a SHA-512 collision, and they decode to

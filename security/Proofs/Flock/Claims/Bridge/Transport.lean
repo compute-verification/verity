@@ -76,7 +76,7 @@ section Transport
 variable {β : Msg → Type} (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (k : Msg → ℕ) (g : (x : Msg) → Game (β x))
   (I : ∀ x, Iface Coin (g x)) (d : (x : Msg) → β x → OC Bool) (x : Msg)
 
-/-- **The coin distribution for the run**: the run's outcome on uniform coins has the game's law against `stratG`. -/
+/-- **The coin distribution for the run**: the run's outcome on uniform coins has the game's distribution against `stratG`. -/
 theorem ex_outcome (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
     (f : β x → ℝ) :
     Ex (fun r : Fin (k x) → Coin => f (outcome H P k g I x ω r)) = expect f (g x) (stratG H P g I x ω) :=
@@ -117,7 +117,7 @@ theorem Pr_acc_replay (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g 
   refine Pr_congr fun r => ?_
   rw [(run_ofGame H P k g I d x ω r hR).2.2]
 
-/-- **The fork law for the run**: two runs sharing their first `j` coins have the sampling design `forkX` of the game. -/
+/-- **The fork sampling design for the run**: two runs sharing their first `j` coins have the sampling design `forkX` of the game. -/
 theorem ex_fork_run (ω : Ω) (hR : RoundsLe (g x) (I x) (stratOf H P x ω (g x) (I x) [] none) false (k x))
     (j : Fin (k x)) (F : β x → β x → ℝ) :
     Ex (fun rr : (Fin (k x) → Coin) × (Fin (k x) → Coin) =>

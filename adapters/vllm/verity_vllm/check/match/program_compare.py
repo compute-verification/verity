@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import collections
 import difflib
+import hashlib
 import json
 import os
 import re
@@ -38,15 +39,10 @@ from typing import Any
 from verity_vllm.check.match import compiler_form as CF
 from verity_vllm.check.match import split_selects
 from verity_vllm.check.match.instance_sequence import RootView
-
-# tests/program/test_compact.py and tests/check/test_glm53_rank_rehearsal.py read `LOAD_NOTES` through this module.
-from verity_vllm.check.match.program_loaders import (
-    LOAD_NOTES,  # noqa: F401
-    load_derived,
-    load_oracle,
-)
+from verity_vllm.check.match.program_loaders import load_derived, load_oracle
 from verity_vllm.check.match.sampler_geometry import constant_splits_agree
 from verity_vllm.config import UsageError, option
+from verity_vllm.program.compact import expand, first_runs
 from verity_vllm.program.compact import expand_mixed as _expand_mixed
 from verity_vllm.program.compact import hash_operand as _hash_operand
 from verity_vllm.program.compact import n_crosses_step as _n_crosses_step
@@ -62,11 +58,11 @@ def _norm_T(spec: str) -> str:
 
 
 # The divergence REPORT of a step whose spec sequences differ.  difflib.SequenceMatcher over a WHOLE step is
-# O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, and a step differing throughout ran 40 min to 3 h per leg.
+# O(n*m): a prefill step of an LP-row Program is LP x layers x ops instances, so a step differing throughout is quadratic in that count.
 # No verdict depends on it (spec_seq_equal / spec_multiset_equal / canonical_sha256 / the DAG multiset carry the check); it only fills
 # `first_divergences_T_normalised` and `n_divergent_opcodes`.  So the common prefix and suffix are located in O(n) and the matcher runs
 # over the differing CORE only, at most `_DIVERGENCE_WINDOW` items of each side (the first divergences lie at its start); a longer core
-# is reported truncated BY NAME (`divergence_window`).  An equal step never enters this path.  Cost ~ W^2 (W 1024: 0.8 s, 4096: 49 s).
+# is reported truncated BY NAME (`divergence_window`).  An equal step never enters this path.  Cost ~ W^2.
 _DIVERGENCE_WINDOW = 1024
 
 
@@ -169,7 +165,6 @@ def compare_steps(A: RootView, B: RootView, unfold_a: bool = False, *, canon_ste
 def _canonical_hash(P: RootView, seqs: list[list[int]], unfold: bool, canon_step_relative=None) -> str:
     """sha256 of the expanded instance sequence in canonical form: (spec, form, canonical operand sources, out type) per
     instance, producers as (step, index-within-step) — independent of input layout, node numbering and root naming."""
-    import hashlib
     canon_step_relative = canon_step_relative or _canon_step_relative
     h = hashlib.sha256()
     compact = getattr(P, "compact", False)
@@ -201,7 +196,7 @@ def _canon_step_relative(P: RootView, i: int, seqs: list[list[int]], unfold: boo
     keeps ``seqs``' positions for the calls that follow with the same list, and keeps the list with them: a list's address
     alone names whichever list is allocated there next, once this one is freed."""
     pos, key = getattr(P, "_pos_cache", None), getattr(P, "_pos_cache_key", None)
-    if pos is None or key[0] != unfold or key[1] is not seqs:
+    if pos is None or key is None or key[0] != unfold or key[1] is not seqs:
         pos = {}
         for s, idxs in enumerate(seqs):
             for j, ii in enumerate(idxs):
@@ -246,7 +241,6 @@ def audit_padding(P: RootView) -> dict:
             r = P.inst[i]
             kinds[r["spec"]] += 1
             if getattr(P, "compact", False):
-                from verity_vllm.program.compact import expand, first_runs
                 lives[str(expand(r["args"][0]))] += 1
                 if len(r["args"]) > 2 and "SelectBf16" in r["spec"]:
                     zeros[str(first_runs(r["args"][2], 1))] += 1

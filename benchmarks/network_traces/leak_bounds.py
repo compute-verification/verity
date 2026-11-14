@@ -518,7 +518,7 @@ SIMULATED = "simulated"
 #: to it
 RUN_NOT_PROVED = "run, not proved"
 #: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
-SET_TIME_CLAUSE = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the "
+SET_TIME_CLAUSE = ("`trusted-device`, set-time card clause: the network certifier's card releases each bucket at the "
                    "tick its record names, whatever the host and the server send it. It holds only of a calibrated "
                    "hardware card; no such card is deployed, and the software pacer that stands in for it does not "
                    "meet it.")

@@ -89,7 +89,7 @@ The compiler is a circuit the developer registers up front. Given the period's a
 | **Party, channel, device, protocol, config** five files in `verity/` | The shared types: what a party is, what two parties exchange, the registered hardware, what a protocol declares, the file a run starts from. | Nothing. | Types every protocol uses. | Any one protocol. |
 | **Runtime** `verity/runtime/` | Runs a configuration's parties on real machines: sockets, randomness, clock, transcripts. | A configuration. | Running parties and their transcripts. | Any protocol's rules. |
 | **Hardware** `hardware/` | One data sheet per GPU, host or server model: what one device can do in a second and what it holds. Each figure names its source and says whether it is a ceiling or a measurement. Data, no code. The auditor brings it. | The vendor's published figures and our own measurements, written in by hand. | Figures a run passes to the registration check. The protocols take a device's capacity from the registration. | Everything. It never holds a figure the audited device reports about itself. |
-| **Demos** `demos/` | One configuration each: its protocols, its adapter, which party on which machine. The remote demo and the onsite demo. | All of the above. | A run anyone can repeat with one command. | Nothing uses a demo. |
+| **Demos** `demos/` | One file each, a configuration: its protocols, its adapter, which party on which machine. The remote demo, and the onsite demo at three sizes: network, compute (the default) and full. A demo holds no code and is never tuned. | All of the above. | A run anyone can repeat with one command. | Nothing uses a demo. |
 | **Security** `security/` | Lean, in three parts: what each protocol guarantees, written to be read; what ties each guarantee to the verifier's own Lean code; and the proofs. A statement never reads a proof. | The verifiers' Lean. | Guarantees, each with its named assumptions and its open premises; one composition theorem for any list of protocols; and the error budget, each failure chance summed over a week, a month and a year (above 1 it prints "no bound at this period"). | Nothing in the system uses it. |
 | **The Lean check and the guarantee record** `tools/`, and one record file beside each Lean package | Has Lean's kernel check every proof again. Refuses a missing proof, an added axiom or a way around the kernel. Records each guarantee's statement and every premise it rests on. | Every Lean file: each protocol's `verifier/`, and `security/`. | Pass or fail, to the check. For each guarantee the deployed system rests on, the open premises still under it, to the dashboard. | What a proof is about. It decides no verdict. |
 | **Benchmarks** `benchmarks/` | Each benchmark is one command that records named numbers, each marked measured or modeled. Each benchmark's directory declares its numbers: name, owner, unit, command, and how often it should run. | The system, as a user. | Numbers, in the evidence store. | It never decides a verdict, and nothing uses a benchmark. |
@@ -113,7 +113,7 @@ An arrow reads "uses". Nothing points upward.
 ```mermaid
 flowchart TD
     bench["benchmarks/<br/>measure and record"]
-    demos["demos/<br/>one configuration per demo"]
+    demos["demos/<br/>one file per demo"]
     hw["hardware/<br/>data sheets, read by a run"]
     subgraph adapters["adapters/"]
         vllm["vllm/"]
@@ -210,19 +210,24 @@ verity/
   config.py        reads the one public file a run starts from
   runtime/         runs parties over channels: sockets, randomness and clock, transcripts
   protocols/       each protocol with verifier/ (its Lean check), prover/ (with the GPU code it runs) and device/
-    proofs/        flock, spot, recursion: what the other protocols call to prove
+    proofs/        flock, spot, recursion, spot_flock: what the other protocols call to prove
     accounting/    registration, then pouw, pous, poub, certifier. Registration runs once, before any challenge:
                    the hardware against its data sheets, the circuit compiler, the commitments to other
                    information, every device accounted for. The others: compute, memory and network
     policy/        inference_only, on accounting/
     compose/       remote and onsite, on policy/ and accounting/
-    experimental/  a protocol being tried, which no demo lists
+    experimental/  a protocol being tried, which no demo lists: dither, pearl_c4
   circuits/        the circuit language; ops/ holds the circuits a protocol names
   commitments/     hiding commitments, the one hash, signatures, and their GPU code
 adapters/
   torch/
   vllm/            on torch/, with the circuits of the kernels it serves
-demos/             one directory per demo, holding its configuration
+demos/             one file per demo, the configuration `verity run` reads. A demo holds no code
+  README.md        one table: the file, what it shows, its command, how far it runs and is proved
+  remote.toml      SPOT, PoUW and the inference-only policy
+  onsite_network.toml    the network certifier, SPOT and the memory wipe
+  onsite_compute.toml    the default: those three, PoUW and the inference-only policy
+  onsite_full.toml       those five, PoUS and PoUB
 security/          Lean: what each protocol guarantees, and the proofs
 benchmarks/        every measurement, each one command, each on the dashboard
 tools/             the verity command, the check, the test harnesses
@@ -239,7 +244,7 @@ The rules that keep the parts apart. A test enforces each one:
 4. `party.py`, `channel.py` and `device.py` use nothing. `protocol.py` uses only those three. `config.py` uses only `protocol.py`.
 5. `circuits/` uses nothing. `commitments/` uses only `circuits/`.
 6. An adapter uses a protocol's workload side, which is one call over GPU buffers (for PoUW: "run this matrix multiply"). A protocol never uses an adapter.
-7. Inside `protocols/`: two layers, accounting (registration, pouw, pous, poub, certifier) and policy (inference_only), with policy on accounting and compose on top of both. Both layers use the proofs (flock, with spot and recursion on it), and the proofs use neither layer, so they read no registration: a protocol that calls them passes in the circuit, its pieces and the sampling rule. Registration is the base of `accounting/`: it uses the shared files and `commitments/` and no other protocol, and the other accounting protocols, the policy and compose read the registration it accepted. Each group is a directory of its own: `proofs/`, `accounting/` and `policy/`.
+7. Inside `protocols/`: two layers, accounting (registration, pouw, pous, poub, certifier) and policy (inference_only), with policy on accounting and compose on top of both. Both layers use the proofs (flock, with spot and recursion on it and spot_flock on those), and the proofs use neither layer, so they read no registration: a protocol that calls them passes in the circuit, its pieces and the sampling rule. Registration is the base of `accounting/`: it uses the shared files and `commitments/` and no other protocol, and the other accounting protocols, the policy and compose read the registration it accepted. Each group is a directory of its own: `proofs/`, `accounting/` and `policy/`.
 8. A verifier uses no prover code.
 9. Nothing uses a benchmark, and nothing in the repository reads the dashboard. A measurement reaches a guarantee one way only: a person writes it into a data sheet with its source, marked as a measurement, and the guarantee takes the sheet as a parameter.
 10. The tree above is one file in the repository, and a test fails on anything that is not in it. Both are on `main`. The file also lists the 36 places `main` still holds that the tree does not, each with its owner and its day (the last is Tue 24 Nov), and that list only shrinks.
@@ -264,9 +269,8 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Loose files inside five protocols | beside `verifier/`, `prover/`, `device/` | inside one of the three, or out of `verity/` |
 | `fixtures/` | the root | each file beside its reader |
 | GPU code | 61 directories, 49 of them under `benchmarks/`. A served run loads PoUW's kernel from there, which rule 9 forbids | each protocol's `prover/`, `verity/commitments/`, the adapter |
-| The check | `tools/verity/check/` | `tools/check/` |
 | The numbers each benchmark declares | one shared list | each benchmark's own directory, its owner's |
-| The compute audit's cost model, and the commands that run an audit on a served run | proofs' scripts under `benchmarks/` | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
+| The compute audit's cost model, and the commands that run an audit on a served run | in SPOT (`prover/audit/`, `prover/cost/`, `verifier/one_stage/`, `device/`), but the audit commands still load scripts under `benchmarks/` off `sys.path` (the proof leg, the network certifier's pieces), and the demo's orchestration script runs them | SPOT's `prover/` and `verifier/`, started from a demo's configuration. The measured proving costs stay recorded under `benchmarks/` and are handed in as data |
 | Registration | Its Lean is in `protocols/interface/`. The log's Python is in `verity/protocols/accounting/registration/verifier/` already. Three test files of SPOT's read it today and move with it | `verity/protocols/accounting/registration/`, an accounting protocol that runs once, over `device.py`'s types. Its Lean is cut out of the interface's package, so it is a code change and not in the two chains of moves |
 | The policy's two calculators | inside `protocols/inference_only/` | two directories under `benchmarks/`; training renames the slowdown one |
 | The network certifier a served run starts: its serving loop, its keys, its prover | `benchmarks/`, about 25,000 lines, and the auditor's device runs them from there, which rule 9 forbids | the certifier's `device/` and `prover/` |
@@ -279,9 +283,11 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | Every protocol has parties | Only SPOT, PoUS and the remote memory-read audit do |
 | A PyTorch adapter under the vLLM adapter, with one translator from PyTorch to circuits | One adapter, and a second translator inside the training benchmark |
 | The messages between workload and prover as one stated list | Function calls and files; 15 files with no settled name or place |
-| PoUW's serving code and GPU kernels in one package under `protocols/accounting/pouw/`, reached by one call | In the adapter (18,800 lines) and under `benchmarks/` |
+| PoUW's serving code and GPU kernels in one package under `protocols/accounting/pouw/`, reached by one call | The serving code is in `protocols/accounting/pouw/prover/serving/` (17,200 lines), reached by `run_matmul` and `observe_matmul`. The adapter keeps the option with its H1 hooks, the serve loops (`serve_h1`, `serve_pearl`, `serve_tie`), Pearl's row GEMM (`gemm_rows`), H1's commit at acquire, the ncp-v2 replay check and the GPU row-table commit (3,500 lines); the last two and `serve_pearl` still import modules below `serving`. Kernel checks are under `benchmarks/` |
 | Benchmarks and demos reach the adapter through its public interface only | 114 modules are reached past it |
-| The two demos start from a configuration, run by the runtime | The remote demo is a shell script under `benchmarks/`; the onsite demo is not built |
+| Each demo is one file under `demos/` that `verity run` starts: `remote.toml`, `onsite_network.toml`, `onsite_compute.toml` (the default) and `onsite_full.toml` | `demos/` holds three directories with scripts (`vllm/`, `onsite_served/`, `lifecycle/`, the last not a demo); `verity run` accepts two sets of protocols, remote's three and onsite's seven, so the two smaller onsite files do not run yet |
+| Dither and the FP4 variant (Pearl-C4) are protocols being tried, under `protocols/experimental/` | Dither's kernels and circuit are there; Pearl-C4's files are in PoUW's package and under `benchmarks/pouw/` |
+| The team's platform is in its own repository, `platform` | `infra/`, the run recorder, the agents' guard and the move tool are in this one |
 | Python never returns accept or reject | Several protocols still decide in Python. SPOT's two-stage outcome is joined in Python; its Lean check is written and refuses every audit until its proof exists |
 | Each accounting protocol takes the registered hardware and says which part it accounts for | None does |
 | The security model has the auditor's devices as parties, each with a key the auditor pins and its whole signing history | Only the challenger is a party, so no onsite memory or network claim can be proved yet |
@@ -309,7 +315,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 
 Code, docs, CLI help and output fields use these terms. When a term changes, this section changes with it, and the new term is rolled out in the same change.
 
-- **Developer** and **auditor**: the protocol's two parties. The developer runs computations in its datacenters, keeps private records of them and proves properties of those records; the auditor checks the proofs, with a challenger online and a verifier offline, and places its own devices, network certifiers and memory challengers, at the developer's site on machines the developer doesn't control. Nothing the developer runs or hosts is trusted. Trust in a device and its host is the named assumption `trusted-host` (`TrustedDevice`), which per-party `Faithful`, `Secret` and `Confined` are to replace.
+- **Developer** and **auditor**: the protocol's two parties. The developer runs computations in its datacenters, keeps private records of them and proves properties of those records; the auditor checks the proofs, with a challenger online and a verifier offline, and places its own devices, network certifiers and memory challengers, at the developer's site on machines the developer doesn't control. Nothing the developer runs or hosts is trusted. Trust in a device and its host is the named assumption `trusted-device` (`TrustedDevice`), which per-party `Faithful`, `Secret` and `Confined` are to replace.
 - **Program**: the computation a proof claims something about (`verity.circuits.Program`): one circuit, stored compressed as Definitions called from a root body, with the same interface at every level. The proof system is generic, so "model" never names it.
 - **Registered input** and **run input**: the two binding times of a program's input gates (`verity.circuits.program`). A registered input (`RegisteredInput<w>_v1`) is bound when the program is registered and holds what the program brings: its weights, constants such as a norm's epsilon, the attention scale or a softcap, and tables such as `gelu_tanh_bf16`. A run input (`Input<w>_v1`) is bound per request and holds the request's data and parameters, such as temperature, top-p and the Philox positions. Both are values, committed under hiding leaves, so a program holds no data; a constant gate is an operation's own bits (`verity.circuits.constants`).
 - **Workload**: what a datacenter runs over a monitoring period: its Programs, their inputs (weights, and requests or data) and their placement. One thing at every scale, workloads compose, and "row" never names one.
@@ -378,7 +384,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Assumption**: a named `Prop` that guarantees take as a hypothesis and nothing proves, stated once with its rationale in its area's `Definitions/<Area>/Assumptions` (Flock's in `Proofs/Flock/Soundness/Assumptions` until its spec is extracted) and listed by name in its package's lock; the Lean check admits no other unproved fact. One about a primitive has a claim id `property/instance` in `verity.claims`, such as `cr/sha-512`. Proving an assumption removes it from every guarantee that took it.
 - **Trusted computing base (TCB)**: what a guarantee's conclusion about the running system depends on beyond its assumptions: each spec, and the code implementing it for every role, verifier and prover, reference and fast. It is trusted, not certified: code that doesn't implement its spec degrades security, soundness for the auditor or zero knowledge and completeness for the developer. The *assurance TCB* makes "proved" and "passed `check`" believable: Lean's kernel and toolchain, the pinned Mathlib and ArkLib, the Lean check (`tools/verity/lean/`), `check`'s gates, and upstream's Rust verifier through lean-agreement.
 - **Adapter**: what makes Verity work end to end with a real system (section 4, "The parts and their interfaces"). Code keeps its older names, integration and frontend (`verity_vllm.program.frontend` is the vLLM adapter's Torch-to-circuit translator).
-- **Configuration**: the file `verity run` reads, a `.toml` in `demos/`, the only Verity artifact: the protocols it runs on one registration, where each party runs, and its channels. A machine runs `verity run CONFIG --party ROLE`, or every role it is given, and `verity config new|check|hash` writes, checks and hashes one. Verity has no deploy verb; its code reaches a machine by ordinary packaging. Remote and onsite are compose's two lists of protocols with their ties (Lean's `Composite`); a configuration names one.
+- **Configuration**: the file `verity run` reads, a `.toml` in `demos/`, the only Verity artifact: the protocols it runs on one registration, where each party runs, its channels, and the keys the auditor pinned for its devices, by party and protocol. A machine runs `verity run CONFIG --party ROLE`, or every role it is given, and `verity config new|check|hash` writes, checks and hashes one. Verity has no deploy verb; its code reaches a machine by ordinary packaging. Remote and onsite are compose's two lists of protocols with their ties (Lean's `Composite`); a configuration names one.
 - **Channel**: what two parties exchange messages over, declared in a configuration.
 - **Serving** and **proving**: serving is the live inference path, whose cost (computing commitments while serving, say) is serving overhead; proving is proof generation, whose cost is proving overhead. Neither is called "production".
 - **Approach**: a line of work (a scheme, a route or an attack) with a hypothesis, an owning lane and a status: live, parked, killed, superseded or merged. Each is a record in the evidence store (`research notes approach`), rendered into its campaign's `APPROACHES.md`, and every status but live gives its reason and evidence. A dead end is a killed or superseded approach, kept so nobody goes down it again unknowingly.

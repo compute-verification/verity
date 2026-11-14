@@ -76,7 +76,7 @@ def OpeningsCanon : Prop :=
       (wit A (tabOfZ planZ tab S R u).S (tabOfZ planZ tab S R u).sch M) →
     ∀ g ∈ P.io u, canon g (vb.opening S R u M (vb.pos g))
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 open Classical in
 /-- **`analysisZCReg` with "wrong" `wrongRegZc`**, under `OpeningsCanon`: its knowledge and binding errors are

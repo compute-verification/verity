@@ -21,8 +21,8 @@ import pytest
 from verity_flock import ir_lower as IL
 from verity_flock.class_statement import UnitStager
 from verity_flock.gf2 import Circuit
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import stage_rows as ST
@@ -60,7 +60,7 @@ class Served:
             r = {"i": 9 + p, "spec": spec, "args": [[["x", p, 0, v]]]}
             d = {"statics": S, "op_path": "runner.sampler", "members": [("sampled_token_ids", 1, "i64")], "row": p, "step": STEP}
             self.rows.append(("r0", None, r, d))
-        self.tok = np.asarray(toks, dtype=np.int64)
+        self.tok: np.ndarray = np.asarray(toks, dtype=np.int64)
 
     def slices(self, _pi, _store, _weights, _rid, _arrive, g):
         """`serving_rows._slices`: an argument group's elements."""

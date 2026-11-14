@@ -12,12 +12,12 @@ import json
 import numpy as np
 import pytest
 from verity.circuits.defs import REGISTRY, bind
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
 from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
 from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from tests.pipeline import served_rope as SR
 from tests.pipeline.served_rope import HEADS, LAW, ROPE, D

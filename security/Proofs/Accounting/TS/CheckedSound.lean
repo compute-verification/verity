@@ -36,7 +36,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SoundAtBridge
-import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignDraw
 import Proofs.Flock.Soundness.Game
 
 /-!
@@ -56,13 +57,13 @@ a token, so `Proofs/Accounting.lean` imports it.
 
 @[expose] public section
 
-namespace FlockSoundness.Audit.Law
+namespace FlockSoundness.Audit.SamplingDesign
 
 /-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
-theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitDraw}
+theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitSample}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
-  rw [drawWith_subset_run] at hd
+  rw [sampleWith_subset_run] at hd
   cases ho : (Flock.Draw.onWith (tapeGet (tapesOf f) 0) (2 * k * Flock.Draw.width n + 64)
       (Flock.Draw.subset k n)).run (fun _ => 0) with
   | none => rw [ho] at hd; exact absurd hd (by simp)
@@ -79,14 +80,14 @@ theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 
       rw [h2] at h1
       rw [← hD]; exact h1
 
-end FlockSoundness.Audit.Law
+end FlockSoundness.Audit.SamplingDesign
 
 namespace Accounting.TS.Checked
 
 open Flock.SoundAtBridge
 
 /-- **The checked unit's port conditions at `ok`**: the circuit has a port named `ok` that `own` registers a port of. `CheckedSessionSound` takes them of every session; `checkedOn_soundAt` only of a session
-that meets a setup predicate implying them, such as flock-verify's known-read check at known content naming `ok`. -/
+that meets a setup predicate implying them, such as verity-verify-proof's known-read check at known content naming `ok`. -/
 abbrev PortsOk (ok : String) (s : RowsSession) : Prop :=
   (∃ q : Fin s.c.ports.size, s.c.ports[q].name = ok) ∧ ∃ pt ∈ s.own, pt.name = ok
 
@@ -122,7 +123,7 @@ theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t <
 
 /-- **The live audit's event of probability `0`** (`auditLive`, unfolded): an event whose probability is `0` in the
 live session at every registration `R` and sampling coin `ω` has probability `0` at every strategy. -/
-theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type)
+theorem prob_audit_eq_zero {n : ℕ} (L : SamplingDesign n) (Reg : Type)
     (live : Finset (Fin n) → Reg → Game Discharge.Exec.Transcript)
     (p : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Prop)
     (h : ∀ R ω (s' : Strategy (live (L.draw ω) R)), prob (fun t => p (R, L.draw ω, t)) (live (L.draw ω) R) s' = 0)
@@ -142,18 +143,18 @@ variable (s : RowsSession)
 /-- **Under full checking the sample is every unit**: at `kd = n` the subset sample, when it runs, is `n` distinct units
 below `n` (`subset_spec`), and when it doesn't the sampling design samples every unit. -/
 theorem sample_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
-  show (match Law.runOS (s.src ω) (.subset s.kd) s.n with
+  show (match SamplingDesign.runOS (s.src ω) (.subset s.kd) s.n with
     | some d => Finset.univ.filter fun u : Fin s.n => u.val ∈ d.units
     | none => Finset.univ) = Finset.univ
   split
   · rename_i d hd
-    obtain ⟨π, -, hπ, hmem⟩ := subset_spec (Law.runOS_subset hd)
+    obtain ⟨π, -, hπ, hmem⟩ := subset_spec (SamplingDesign.runOS_subset hd)
     refine Finset.filter_true_of_mem fun u _ => (hmem u.val).2 ?_
     rw [hk]
     exact perm_onto_range π hπ u.val u.isLt
   · rfl
 
-/-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every sampled proof block is right at its owned reads,
+/-- **`ServedRootsLinked`'s event at a session**: verity-verify-proof accepts, every sampled proof block is right at its owned reads,
 and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s

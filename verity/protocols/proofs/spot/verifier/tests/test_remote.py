@@ -743,7 +743,7 @@ def tree_record(nonce: bytes, tree_root: bytes, key: bytes, points: list[int], r
                                                  for k, (m, n, coins) in enumerate(rs)]} for s, rs in rounds.items()]}
 
 
-def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
+def test_a_coin_tree_is_sampled_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
     """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
     what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
     them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
@@ -1758,7 +1758,7 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
                 C.ledger_text({"commit": MAIN_PIN, "main": "e1" * 20, "pinned_utc": "2026-02-30T13:00:00Z"}), 5):
         refused(lines, [PINS[0], bad], f"the host's pins log line 1 is malformed: {C.PINS_FORM}")
     refused(lines, PINS[:1], f"the host's pins log has 1 lines, fewer than the 2 the open of session "
-                             f"{RESERVED_SESSION} sealed: take the auditor host's operator's newest published pins log")
+                             f"{RESERVED_SESSION} sealed: take the auditor device's operator's newest published pins log")
     edited = [PINS[0], C.pin_line(MAIN_PIN, "e2" * 20, "2026-10-21T13:00:00Z")]
     for log in (edited, PINS[::-1]):
         refused(lines, log, f"the host's pins log is not the one the open of session {RESERVED_SESSION} sealed: its "

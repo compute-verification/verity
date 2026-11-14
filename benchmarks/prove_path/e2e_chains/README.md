@@ -1,6 +1,6 @@
 # E2E chains per protocol
 
-The detail behind `benchmarks/prove_path/README.md`'s "What an accepted plain audit means": the status of every
+The detail behind `verity/protocols/proofs/spot/prover/audit/README.md`'s "What an accepted plain audit means": the status of every
 protocol's end-to-end chain, and the premises locked statements take from `Proofs/`. The page keeps 2a's and 2b's
 chains; this file keeps the rest, which changes with each status update.
 
@@ -35,8 +35,8 @@ of them, `Proofs.Accounting.TS.Session`, is on PoUW's chain, so this is a Flock 
   is PoUW's.
 - **A first sort** gives each of the 40 a verdict: 10 premises and 30 conclusions.
   - The premises are Flock's:
-    - the plain custody (`DecodeZL.RecordsLive`, `DecodeZL.DrawOk`, `HiddenDec.DrawOkH`);
-    - the `--zk` custody (`ZkLink.RecordsLiveZK`, `ZkLink.DrawOkZK`, `ZkHidden.DrawOkZKH`, `Composed.RecordsLiveZKJ`);
+    - the plain custody (`DecodeZL.RecordsLive`, `DecodeZL.SampleOk`, `HiddenDec.SampleOkH`);
+    - the `--zk` custody (`ZkLink.RecordsLiveZK`, `ZkLink.SampleOkZK`, `ZkHidden.SampleOkZKH`, `Composed.RecordsLiveZKJ`);
     - plain's finder hash bounds (`Exec.LinkCRL`, `Exec.SessCRL`);
     - recursion's `RecDeploy.PlainLeavesAdmitted`.
   - The conclusions are acceptance events and the verifier's checks, events a bound measures, antecedents inside a
@@ -45,7 +45,7 @@ of them, `Proofs.Accounting.TS.Session`, is on PoUW's chain, so this is a Flock 
     `--zk`'s `TableCRZ` and `LinkCRZC`.
 - **Form conditions**, a third class: `StmtWF` and `RegionsWF` (26 guarantees each), `PadOK` (29), and perhaps
   `isRow` and `isRead`. The first sort counts them as conclusions: the first three are fields of setups that
-  `drawSetup*_of` builds from the Lean verifier's setup, and the last two are selectors. A four-class sort (conclusion,
+  `sampleSetup*_of` builds from the Lean verifier's setup, and the last two are selectors. A four-class sort (conclusion,
   premise, form condition, well-formedness) says whether the compiled verifier checks each form condition. A form
   condition the verifier doesn't check comes to this page as a gap.
 - **Moved and listed:** on main, these premises are named assumptions listed in the lock: the plain custody

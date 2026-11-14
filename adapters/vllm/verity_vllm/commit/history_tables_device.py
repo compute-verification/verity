@@ -1,5 +1,5 @@
 """`history.HistoryTable` on the GPU (`Table` with a ``device``) and its CPU twin (`Table` without one): a history table's tree
-built, appended to and opened by `protocols/pouw/pouw_cuda/row_table.cuh`'s history functions, the device's through
+built, appended to and opened by `row_table.cuh`'s history functions (in `row_table_kernels.CUDA_DIR`), the device's through
 `row_table.cu`'s ``rt_hist_*`` kernels and the twin's through `row_table_host.cpp`, the same build `row_tables_device` loads.
 
 A `Table` reads as `history.HistoryTable` does where `commit.history_tables.Histories` reads one (its ``make``): ``rows``,
@@ -20,7 +20,7 @@ import numpy as np
 from verity.commitments import history as HT
 from verity.commitments import hm96
 
-from verity_vllm.commit import row_tables_device as D
+from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as D
 
 __all__ = ["Hist", "Table"]
 
@@ -54,7 +54,7 @@ def _host() -> ctypes.CDLL:
 def _device(lib: ctypes.CDLL) -> ctypes.CDLL:
     vp = ctypes.c_void_p
     lib.rt_hist_init.argtypes = [vp, _hp, vp]
-    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32] + [vp] * 6
+    lib.rt_hist_append.argtypes = [vp, _hp, ctypes.c_uint64, ctypes.c_uint32, *[vp] * 6]
     lib.rt_hist_paths.argtypes = [vp, _hp, vp, vp, ctypes.c_uint32, vp]
     for f in (lib.rt_hist_init, lib.rt_hist_append, lib.rt_hist_paths):
         f.restype = ctypes.c_int
@@ -140,14 +140,15 @@ class Table:
             self._check("rt_hist_append_host", _host().rt_hist_append_host(
                 ctypes.byref(self._h), at, k, host.ctypes.data, D._hm(), D._prefixes(), self._tree, bcs, ys))
         else:
-            self._device_append(rows if on_device else None, host, at, k, bcs, ys)
+            self._device_append(self._dev, rows if on_device else None, host, at, k, bcs, ys)
         self.rows += [r.copy() for r in host]
         self.salts += [salt[SALT_BYTES * i:SALT_BYTES * (i + 1)] for i in range(k)]
         self.bcs += [_bytes(bcs[16 * i:16 * i + 16], ">u8") for i in range(k)]
         return range(at, at + k)
 
-    def _device_append(self, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray, ys: np.ndarray) -> None:
-        torch, d = self._torch, self._dev
+    def _device_append(self, d: D.DeviceLibrary, rows: Any, host: np.ndarray, at: int, k: int, bcs: np.ndarray,
+                       ys: np.ndarray) -> None:
+        torch = self._torch
         written = torch.cuda.Event()
         written.record(torch.cuda.current_stream(d.hm.device))
         d.stream.wait_event(written)

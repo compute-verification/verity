@@ -1,6 +1,6 @@
 """The proof system's challenger as a service on its own host, and its client: `LiveChallenger` over one TCP stream.
 
-The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
+The challenger is auditor-trusted (`trusted-device`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor device, that port is
 one of the prover machine's certifier coin link (`verity/protocols/compose/device/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in

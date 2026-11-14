@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from verity.circuits.constants import program_data
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.program import Program
-from verity.circuits.constants import program_data
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import prims as P
@@ -95,7 +95,7 @@ def test_derive_registered_values_evaluates_like_the_constants_program():
     from verity.definitions.numerics.serve3_reference import materialize
 
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):
@@ -139,7 +139,7 @@ def test_derive_registered_values_on_bits_reads_the_values_through_boolean_defin
     from verity.definitions import boolean as BB
 
     from verity_vllm.program.frontend import derive_examples as ex
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
 
     C = {**b1.B0_CONFIG, "H": 64, "NH": 4, "KVH": 2, "D": 16, "I": 128, "QKV": 128, "GU": 256, "NL": 1, "V": 32, "MAX_POS": 64}
     with torch.device("meta"):

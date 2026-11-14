@@ -7,7 +7,7 @@ port's rows are the rows the window committed. A port the verifier's own program
 (`Registered.regParams`, the template's public structure, never the file) is never bound: `Registered.checkCover`
 holds it to a registered port, opened at its registered root. Nor is a port the window's registered interface declares
 registered (`declaredOf`: its circuit record's registered reads, table reads and openings' verdicts, outputs included): a
-file that binds ports needs that record (`flock-verify --interface`), and each such port of the statement's template must
+file that binds ports needs that record (`verity-verify-proof --interface`), and each such port of the statement's template must
 be a registered port of the file, never bound and never left out, whatever the file's builder omitted. Without `bound`,
 `check` is `Registered.checkComplete`.
 -/
@@ -24,7 +24,7 @@ public import Flock.JsonKeys
 (`INTERFACE`) declares registered; `regParamsOf` gives the template parameters the verifier's own program reads a
 registered input through. `check` holds every port of a statement to a registered port or a bound one, with
 `check_empty` (no bound port: `Registered.checkComplete`), `check_ok` (every port `held`) and `check_declared` (every
-declared port registered). `flock-verify` (`FlockVerify`) reads a `--registered` file through `ofJson` and `ownOf`, its
+declared port registered). `verity-verify-proof` (`FlockVerify`) reads a `--registered` file through `ofJson` and `ownOf`, its
 `--interface` record through `declaredOfBytes`, and runs `check` on each statement; `Flock.Test.RegBound` holds `check`
 to its refusals.
 -/

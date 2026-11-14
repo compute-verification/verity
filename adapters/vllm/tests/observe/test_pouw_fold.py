@@ -1,7 +1,7 @@
 """Match's record of a PoUW call: the executor's own op under the real observer, folded by `observe.fold.patterns.pouw`.
 
 A model's two linear layers, qkv with its bias and o without, have the shapes of `test_pouw_lowering`'s. They run PoUW's
-`ncp-v2` executor installed as a Match capture installs it (`protocol_options.at_capture`: the target's executors, sampled proofs
+`ncp-v2` executor installed as a Match capture installs it (`protocol_options.at_capture`: the target's executors, SPOT
 left out, nothing committed).
 
 - Under the real `Observer` each call is one `verity_pouw.ncp_linear` dispatch, with x, W, b and y as views and nothing of the
@@ -18,6 +18,7 @@ import random
 import numpy as np
 import pytest
 import torch
+from verity.protocols.accounting.pouw.verifier import verifier
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
 from tests.program import test_pouw_lowering as LW
@@ -176,8 +177,8 @@ def test_the_capture_context_leaves_spot_out_and_is_none_without_an_executor():
 
 
 def test_the_served_y_alone_is_the_commits(linears):
-    from verity_vllm.protocols.pouw import circuit as PC
-    from verity_vllm.protocols.pouw import native as PN
+    from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+    from verity.protocols.accounting.pouw.prover.serving import native as PN
     rng = np.random.default_rng(2)
     b = rng.integers(-63, 64, (48, 64)).astype(np.int8)
     t = (np.abs(rng.standard_normal(48)).astype(np.float32) * 0.01 + 1e-3).view(np.uint32)
@@ -192,7 +193,7 @@ def test_the_match_capture_installs_its_workloads_target_executors(linears, monk
     its own (`pouw.challenged`, on the Lean verifier's coins, seeded here), and records the entries in the header."""
     from types import SimpleNamespace
 
-    monkeypatch.setattr(pouw.verifier, "coins", random.Random(5).randbytes)
+    monkeypatch.setattr(verifier, "coins", random.Random(5).randbytes)
 
     from verity_vllm.pipeline import m1_capture
     wl = {"target": {"protocols": ["pouw:ncp-v2", "sampled-proofs:rows-sha512"]}, "protocols_config": {"pouw": {}}}

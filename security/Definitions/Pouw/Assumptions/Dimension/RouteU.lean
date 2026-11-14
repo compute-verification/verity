@@ -57,7 +57,7 @@ def targetSpanU (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → F
     Submodule ℚ (Noise N m n k → ℚ) :=
   Submodule.span ℚ (Set.range fun x : ↥(U ×ˢ range (nonFinal k m n)) => wordU β k m n N R A B x.1.1 x.1.2)
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **The shift is free**: at every position, route U's word minus the unbiased word lies in `V₀`. -/
 def WordUSubV0 : Prop :=
@@ -169,7 +169,7 @@ def AlgBoundWrappedU : Prop :=
       (fun ω => (wrap32 (checkedUPos β k m n N R (A ω.2) B ω u p) : ℚ)) ∈ slots P L) →
     16 * (U.card * (m * n) * (3 * k / 16 - 1)) ≤ cost P
 
-/-- **Theorem D for route U's protocol words, permutation-matrix `R`** (the production `P`): `AlgBoundWrappedU` with
+/-- **Theorem D for route U's protocol words, permutation-matrix `R`** (the served `P`): `AlgBoundWrappedU` with
 a permutation matrix `R` and `k ≤ 2^16`, where the wrap is the identity by `RouteU.Int7Int32UUnsigned`. -/
 def AlgBoundWrappedUUnsigned : Prop :=
   ∀ (β : ℤ) (k m n N : ℕ) (R : Mat) (A : (Fin k → Fin n → Fin 64) → ℕ → Mat) (B : ℕ → Mat) (U : Finset ℕ)

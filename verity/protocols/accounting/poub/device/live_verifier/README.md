@@ -54,7 +54,7 @@ session's end, beside the ledger, and it reads main's first-parent history from 
 
 ~~~sh
 git fetch origin main && git rev-list --first-parent origin/main > main-first-parent.txt
-install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor host
+install -m 0644 -o root -g root main-first-parent.txt /opt/vy-verifier/main-first-parent.txt   # on the auditor device
 ~~~
 
 The gate refuses a run before starting anything while the file is missing. A challenger pinned after the file was
@@ -109,4 +109,4 @@ composite's), and records the pin with the branch it is on (`host.py pinned COMM
 parser, including a bound run's binding to a `models.json`-shaped pin and the host's main list, and the compose gate's
 receive and compose on toy hand-offs (`benchmarks/one_stage/tests/test_served_verdicts.py` sends one through it with
 `gate-compose`). It also runs one session through `tests/stub_verifier.py` (slow). Run the suite as
-`uv run tools/verity/check/suites.py verity/protocols/accounting/poub/device/live_verifier`, on a node (the testing skill).
+`uv run tools/check/suites.py verity/protocols/accounting/poub/device/live_verifier`, on a node (the testing skill).

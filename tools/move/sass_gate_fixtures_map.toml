@@ -1,0 +1,40 @@
+# The SASS gate's fixtures, to PoUW's prover beside the gate: what
+# `tools/move/layout.py --map tools/move/sass_gate_fixtures_map.toml` moves and rewrites.
+#
+# `benchmarks/pouw/tests/fixtures/sass_gate/` (the CUDA 12.9 and 13.0 listings the gate reads, the probes they were
+# compiled from and their tool notes) becomes `verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/`, the
+# test directory of the package that holds `sass_gate.py`, `ieee_pin.cu` and `sass_pins.json`. The tests that read the
+# listings (`test_sass_gate.py`, `test_mma_gate.py`) and `ieee_pin.py` stay in `benchmarks/pouw/`. No file is split,
+# added or deleted, and no Python file moves. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"benchmarks/pouw/tests/fixtures/sass_gate/" = "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
+
+[retired]
+# the directories this map empties: `layout.py` refuses a tracked file under one that has no row
+paths = ["benchmarks/pouw/tests/fixtures/sass_gate/"]
+
+[drop]
+paths = []
+
+[rewrite]
+# Never rewritten: the layout of record (`tests/tree.toml`), records of what was (the earlier moves and their maps,
+# changelogs, research's recorded moves, the archive), files whose bytes a digest pins, and Lean sources.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
+           "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
+
+[modules]
+# the rename [paths] implies (`layout.py --modules`): the directory as a dotted path, which no file spells
+"benchmarks.pouw.tests.fixtures.sass_gate" = "verity.protocols.accounting.pouw.prover.tests.fixtures.sass_gate"

@@ -66,7 +66,7 @@ after its level-0 cap):
   §2). Each runs `P*` to a cap and continues it twice, and every pair it counts is a SHA-512 collision
   (`op₀_conflict_collision`, `opR_conflict_collision`). Level 0 is opened by both reps, hence `2Q_0`.
 - **`Adv_×`** is the probability that one run opens a position two ways, both verifying under one cap. Every such run
-  is a collision (`SelfClash.collision`).
+  outputs a collision (`selfCands_spec`).
 - **Under the generic bound** this is at most `2^-205 + t·2^{17.3−256} + t²/2^511` for a prover making `t` hash
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
@@ -123,13 +123,13 @@ binding error per audit.
   key, and `collide` is an explicit extractor (`ExplicitLeaf.hm96`, `hm96Pair_spec`): two different rows with one leaf
   give a SHA-512 collision of the outer hash, of the salt digest, or of the rows' own digests. What `ValueBinding`
   carried becomes `Assumptions.HmRowComputes` (the circuit's row hashing computes the commit string, phase 2i) and the
-  layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_drawn_hm96` and their `_exec_hm96` forms are
+  layout's facts (`Layout`, `HmRows`). `flock_e2e_count_hm96`, `flock_e2e_sampled_hm96` and their `_exec_hm96` forms are
   the end-to-end theorems with that binding. The headline, `Prog.flock_headline` (`Headline.lean`), is the count curve
   with that binding on the statement's rows' circuit at the live sample under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
   `ecr/sha-512`), platform (A3, and A6, the challenger's OS randomness), model, intended to prove (`hHm`, the placements
   `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`), or a numeric condition.
-- **Over what the verifier accepts** (`Discharge/FailClosed`). `flock-verify verify` refuses every statement outside the
+- **Over what the verifier accepts** (`Discharge/FailClosed`). `verity-verify-proof verify` refuses every statement outside the
   forms the proof covers (the verifier's `Flock.ProvedScope`; `FailClosed.scopeOk_eq`), so the executable's headlines
   (`zk_session_sound` with its `J`, hidden, custody and composed forms, and `flock_headline_exec` with its hidden and
   decoded forms) are restated over `Verifies` (accepted, and in scope) with no hypothesis on the circuit, the public file
@@ -148,7 +148,7 @@ binding error per audit.
   SHA-512 collision (`TwoOpenings.collides`, from `Flock.Registered.opensLeaf_binding`), at most `q²/2^513` likely under
   `cr/sha-512` (`TwoOpenings.conflict_strict`). Where the check holds, a registered read's leaf is the registrant's, and
   the row a satisfying witness holds there is the row the registrant committed, or SHA-512 collides (`Reads.regLeaf_eq`,
-  `Reads.registered_weights`). `flock_e2e_drawn_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
+  `Reads.registered_weights`). `flock_e2e_sampled_hm96_reads` and `flock_e2e_count_hm96_reads` add to the end-to-end
   bounds the event that a registered read's leaf under the prover's registration is not the registrant's, at
   `δ_reg = qR²/2^513` (`Reads.prob_off_le`). With `--registered F` at hidden outputs, sampled proof blocks' reads are
   checked: `SoundZHJR` (`--zk`), `SoundExecHR` (plain, `Discharge/PlainReg/`).
@@ -173,7 +173,7 @@ binding error per audit.
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`BindSound.lean`) | proved |
 | Masking's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
 | The padded bound at Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
-| Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
+| Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.openCollPair_spec` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the challenger's live-coin part keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
@@ -347,7 +347,7 @@ term below 2^-170.
   in place of the standalone one) is not Diamond–Posen's. Its soundness follows from the paper's Appendix B argument
   (injective recombination over GF(2)) plus Schwartz–Zippel. ArkLib's ring switching (legacy layer, 18 admits, the
   other variant) is not used.
-- **Merkle binding.** Two different openings of one position against one cap give a collision: `Merkle.opening_binding`,
+- **Merkle binding.** Two different openings of one position against one cap give a collision that `Merkle.openCollPair` computes: `Merkle.openCollPair_spec`,
   proved, as VCVio proves for its trees.
 - **Johnson list bounds.** ArkLib's `irs_lambda_le_johnson_mds`, proved.
 - **Sumcheck rounds and univariate steps.** Root counting in Mathlib (`Polynomial.card_roots'`,
@@ -410,7 +410,7 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 - **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
   prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
   `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).
-- The coin tree's openings bind under SHA-512 collision resistance (T6, `coin_opening_binding_keyed`), and T7's numeric step
+- The coin tree's openings bind under SHA-512 collision resistance (T6, `coinCollKeyed_isColl`), and T7's numeric step
   (`gk_ratio_le_third`).
 - **Theorem GK**, the Goldreich–Kahan simulator (`ZK/GK/`): `gk` makes a dummy run, estimates the completion rate from
   fresh dummy runs, and rewinds at most `4t/p̃` times with fresh dummy openings, under a cap `M`. `Model.gk_simulate`: for a

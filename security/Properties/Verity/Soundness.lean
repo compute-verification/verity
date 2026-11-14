@@ -44,13 +44,13 @@ event is the verifier's acceptance (`Accepts k`) while the claim of one of `k`'s
 strategy is its published `δ` plus its collision term at the probability that its fixed finder outputs a SHA-512
 collision (`Vocab.error`).
 
-`SoundnessOf` is the one statement, at every composite: each of its subprotocols' targets gives `Vocab.SoundnessAt`,
-with the errors summed over its subprotocols. `Soundness` is it at onsite, from its seven targets
-(`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-`NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's composite of record
-(`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (sampled proofs, and PoUW, which at remote is
-Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that tie the
-inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
+`SoundnessOf` is the one statement, at every composite, a list of its subprotocols' ids: each of its subprotocols'
+targets gives `Vocab.SoundnessAt`, with the errors summed over its subprotocols. `Soundness` is it at onsite's list,
+with its seven targets taken by name (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`,
+`BandwidthAuditSound`, `NetworkCertifierSound`, `WipeSound`), and `RemoteSoundness` the same conclusion at remote's
+composite of record (`Core.Remote.V1.protocol`, `verity/remote/v1`), from two targets (sampled proofs, and PoUW, which
+at remote is Pearl+'s run verdict and its claim in MACs at the credit its check published) and the two statements that
+tie the inference-only policy's clause to the committed files (`Vocab.WiresSound` and `GateARow`,
 `Properties.Verity.Committed`). They are proved by `Properties.Composition` (a composite's acceptance is its
 subprotocols' and its record's) and the union bound over one strategy in one game.
 
@@ -80,13 +80,14 @@ def SoundnessOf : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α) (k : Verity.Registration.Composite),
     (∀ a ∈ subprotocols k, V.Target k a) → V.SoundnessAt k
 
-/-- **Soundness at onsite's verifier, from its seven subprotocols' targets.** If sampled proofs, PoUW, the
-inference-only policy, PoUS, PoUB-P2, the network certifier and the wipe each meet their target at onsite, then the
-probability that onsite's compiled verifier accepts files that passed the commit phase's check while one of the
-period's claims fails (more than an `ε` share of the units unbound in the extractor's transcript, fewer than `W` gates
-computed after their coin, a case of the policy whose Program doesn't meet the policy, fewer than `S` bits held on average,
-fewer than `Q` bits read, more than `K` bits through the network certifiers, or foreign content kept across the wipe past
-its survivor threshold) is at most the seven errors at that strategy summed. -/
+/-- **Soundness at onsite's verifier, from its seven subprotocols' targets**: `SoundnessOf` at onsite's list, each
+target by its name. If sampled proofs, PoUW, the inference-only policy, PoUS, PoUB-P2, the network certifier and the
+wipe each meet their target at onsite, then the probability that onsite's compiled verifier accepts files that passed
+the commit phase's check while one of the period's claims fails (more than an `ε` share of the units unbound in the
+extractor's transcript, fewer than `W` gates computed after their coin, a case of the policy whose Program doesn't
+meet the policy, fewer than `S` bits held on average, fewer than `Q` bits read, more than `K` bits through the network
+certifiers, or foreign content kept across the wipe past its survivor threshold) is at most the seven errors at that
+strategy summed. -/
 def Soundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .onsite → V.PouwSound .onsite → V.InferenceOnlySound .onsite → V.PousSound .onsite →
@@ -106,9 +107,9 @@ proved. The conclusion's clause for the policy is still the one on the case as s
 statement: they stand among the hypotheses so that what remote's soundness rests on names them, and a conclusion on
 the committed files waits on their proofs.
 
-Discharging `V.PouwSound .remote` reads Pearl+'s properties in `Properties.Pouw.PearlPlus` (`AcceptMeans`, proved as
-`acceptMeans`, and `WorkIsTheCredit`, `DrawIsOnItsStreams` and `CoinBytesGiveUniformTickets`, unproved); that is the
-Pearl+ target's proof, not this statement's. -/
+Discharging `V.PouwSound .remote` reads Pearl+'s properties in `Properties.Pouw.PearlPlus` (`AcceptMeans`,
+`WorkIsTheCredit`, `DrawIsOnItsStreams` and `CoinBytesGiveUniformTickets`, each proved under its name in lower camel
+case, `workIsTheCredit` among them); that is the Pearl+ target's proof, not this statement's. -/
 def RemoteSoundness : Prop :=
   ∀ (ι α : Type) [Fintype α] (d : Device ι) (V : Vocab d α),
     V.SpotSound .remote → V.PouwSound .remote → V.WiresSound .remote → GateARow → V.SoundnessAt .remote

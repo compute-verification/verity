@@ -8,11 +8,11 @@ import numpy as np
 import pytest
 from verity.circuits.boolean import table as BT
 from verity.circuits.codec import encode_program, program_digest
+from verity.circuits.constants import REGISTRATION, inputs
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import RegisteredTable, evaluate
 from verity.circuits.program import Program
 from verity.circuits.types import Array, Value
-from verity.circuits.constants import REGISTRATION, inputs
 from verity.definitions.registry import dense as D
 from verity.definitions.registry import tables as T
 
@@ -131,7 +131,7 @@ def test_a_registered_values_derivation_registers_no_gelu_table():
     import torch
     from verity.definitions.numerics.serve3_reference import materialize
 
-    from verity_vllm.program.frontend.derive import derive_report
+    from verity_torch.frontend.derive import derive_report
     from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 
     class GeGLU(torch.nn.Module):

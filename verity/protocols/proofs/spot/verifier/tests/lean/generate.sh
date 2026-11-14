@@ -37,7 +37,7 @@ def write(out: Path, name: str, inputs: dict, keys: tuple) -> None:
 
 write(one, "exfiltration_lean.json",
       {tests + "ExfiltrationVectors.lean": sha(here / "ExfiltrationVectors.lean"),
-       **{soundness + f: sha(pkg / f) for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/Law.lean",
+       **{soundness + f: sha(pkg / f) for f in ("Flock/Soundness/Audit/Influence.lean", "Flock/Soundness/Audit/SamplingDesign.lean",
                                                 "Flock/Soundness/Audit/Stratified.lean",
                                                 "Flock/Soundness/Audit/StratifiedMiss.lean", *pins)}},
       ("vectors", "stratified"))

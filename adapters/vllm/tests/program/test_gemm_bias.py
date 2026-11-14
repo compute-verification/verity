@@ -19,16 +19,16 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
+from verity.circuits import word as W
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
-from verity.circuits import word as W
 from verity.definitions.numerics import rows as RK
 from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import b1, gemm_bias, hopper
 
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules.vllm_bindings import gemm_pins_for, vllm_ruleset

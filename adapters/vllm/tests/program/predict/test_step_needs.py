@@ -49,7 +49,7 @@ def test_a_device_named_by_no_str_names_no_tuned_file(S):
         numbered.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
 
 
-def test_production_sizes_refuse_by_name(S):
+def test_sizes_past_class_g_refuse_by_name(S):
     """Past class G's limits each refusal `dsa` would raise is its own Need, and the step's other calls are still counted: a row
     past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, the 8,192-token launch has no captured
     all-reduce (vLLM's NCCL route), a 2,000-row prefill takes the dense-MHA backend and one past INDEX_TOPK keys the sparse-MQA
@@ -89,17 +89,17 @@ def test_a_step_counts_the_decoders_calls(M, S):
     from verity_vllm.program.predict import dsa
     from verity_vllm.program.predict.build import build_program
     seen: Counter[str] = Counter()
-    orig = dsa._Model.call
+    orig = dsa._Calls.call
 
     def call(self, fn, *refs):
         seen[fn.id] += 1
         return orig(self, fn, *refs)
 
-    dsa._Model.call = call
+    dsa._Calls.call = call
     try:
         build_program(S.phi, "step", M=M, pos0=8)
     finally:
-        dsa._Model.call = orig
+        dsa._Calls.call = orig
     need = S.step(M, M, [(M, 0)], [], 1, {"greedy": 1}, False)
     assert not _gaps(need)
     assert Counter({n.id: c for n, c in need.items()}) == Counter({k: v for k, v in seen.items() if not k.startswith("Const")})

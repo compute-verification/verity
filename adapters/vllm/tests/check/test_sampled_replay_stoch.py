@@ -20,8 +20,8 @@ from verity.definitions.numerics import rows as RK
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import population as POP
-from verity_vllm.check.replay import replay_codes as RC
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records import replay_codes as RC
 
 V, H, T = 64, 8, 2          # vocab, hidden (the logits Gemm's K), decode steps after the arrival step
 
@@ -109,7 +109,7 @@ def test_the_stochastic_selector_has_a_registered_evaluator_equal_to_the_registr
     assert "GumbelTopPTokenSelect_v1" in RK.EVALUATORS and "GumbelTopPTokenSelect_v1" not in RC.NOT_YET
     from verity.definitions.registry import sampling_topp_difftest as DT
 
-    from verity_vllm.properties.admission import evaluate_spec
+    from verity_vllm.check.replay.stoch_recompute import evaluate_spec
     rng = np.random.default_rng(11)
     lg = _logits(rng, 0)
     for S in (1, 2, 4, 8):

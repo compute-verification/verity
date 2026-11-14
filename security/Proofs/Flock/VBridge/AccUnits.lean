@@ -132,7 +132,7 @@ theorem unitSum_of_cols {v : ℕ → Bool} {base : ℕ} {pre rest : ByteArray} (
 section Copy
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **Copy `j`'s output column `col` of unit `u` is a registered bit `b`**: the copy's gate there is committed, at a
 registered read (its commit string, `posK`'s: a returned output's output row), and the registrant's bit there is `b`. -/
@@ -297,7 +297,7 @@ section outer
 
 open FlockVBridge.Compiled (Accepted layers AccChains)
 
-variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
+variable {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {Reg₂ : Type}
 
 /-- **G item 4 from the units' decoded columns**: `accChains_of_units`, each opening's `UnitSums` fact discharged by
 its unit's copy (`OpensAt`, in the session `sess ℓ` of its level) at every accepted outer proof. -/

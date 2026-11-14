@@ -173,7 +173,7 @@ and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_
 past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. Its `trusted_sha512` pins the one memory-challenger key the verifier trusts, by the SHA-512 of its
 public key: a session signed under another key is rejected, and a challenger on its own host with no key pinned is
-refused before its session. That pin decides only what is accepted. The record's `trusted-host` holds only when the
+refused before its session. That pin decides only what is accepted. The record's `trusted-device` holds only when the
 session's key is the one `wipe_party.AUDITOR_KEYS` pins for the challenger's host, and otherwise reads "rehearsal: key
 not the auditor's pinned key, no bound", whatever the host names say; the placement's `kind` (`own-host`, `simulated`,
 `prover-node`) is what the names say, a label. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
@@ -231,7 +231,7 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
   `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
   fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
-  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `verity/protocols/accounting/pous/verifier/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
   `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
   are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
   (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
@@ -265,6 +265,6 @@ authentication, 4 late, 5 decode or payload comparison; 6 is transport and 0 suc
 `SHA-512("verity/pous/p2/transcript/v4\0" ‖ AUDIT_OPEN ‖ every challenge and response frame)`.
 
 The vectors are `vectors.json` (schema `p2-test-vectors/v4`), `audit-vectors.json` and `audit-negative-vectors.json`
-beside `reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
+beside `p2_v1/reference.py`, which pins each file's SHA-512 (`VECTORS_SHA512`, `AUDIT_VECTORS_SHA512`,
 `NEGATIVE_VECTORS_SHA512`) and each entry's by width (`ENTRY_SHA512`, which `PousCheck.SetupDifftest` holds too).
-`cd benchmarks/pous && uv run python -m p2_v1.vectors` regenerates them and rewrites their pins.
+`uv run python -m verity.protocols.accounting.pous.verifier.p2_v1.vectors` regenerates them and rewrites their pins.

@@ -45,6 +45,7 @@ import hashlib
 import json
 import os
 import statistics
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -52,7 +53,7 @@ from typing import Any
 
 from band_gpu import harness as H
 
-from . import reference as R
+from verity.protocols.accounting.pous.verifier.p2_v1 import reference as R
 
 HERE = Path(__file__).resolve().parent
 MEMORY_CHALLENGER = HERE / "memory_challenger.py"
@@ -61,7 +62,7 @@ SETUP_SOURCE = hashlib.sha256(b"verity-pous/bench/p2-v1/setup-source").digest()
 PINS = ("P2MeetsM1pB19Uncond", "P2MeetsM1pFamilyUncond", "P2MeetsM1pW8192Uncond", "P2SlackB19Uncond", "P2SlackFamilyUncond",
         "P2ErrorSplitB19Uncond")
 ASSUMPTIONS = ("P2-EXP-IO", "SHA-512-CTR/P2-EXP-IO", "P2–M1-SGI (not accepted)", "SeqRoot", "perfect isolation", "cr/sha-512",
-               "trusted-host")
+               "trusted-device")
 RECOMPUTE_EVERY = 10
 """The recompute control drops one block in this many; P2's blocks are independent, so any pattern keeps what a block needs."""
 
@@ -210,7 +211,8 @@ def gpu(lib_dir: str, build_dir: str) -> Backend:
 
     from band_gpu import native
 
-    from .gpu import Kernels
+    sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/prover/p2/p2_store/gpu.py").parents[1]))
+    from p2_store.gpu import Kernels
 
     device = torch.device("cuda", torch.cuda.current_device())
     ext = native.load(build_dir)
@@ -257,7 +259,7 @@ def rows(values: list[int], width: int, device: Any) -> Any:
 
 
 KEYS = Path(__file__).resolve().parents[3] / "verity/protocols/accounting/pous/verifier/tests/fixtures/p2-v4-keys.json"
-"""The pinned v4 keys (`p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
+"""The pinned v4 keys (`verity.protocols.accounting.pous.verifier.p2_v1.vectors` writes them from `vectors.json`), which the vector gate holds the device's keys to."""
 
 
 def vector_gate(backend: Backend, params: R.Params, vectors: dict[str, Any] | None = None,

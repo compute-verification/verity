@@ -195,9 +195,9 @@ def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str
     config = {p: {k: expand(v, f"{p}.{k}") for k, v in s.items()} for p, s in (arm.protocols_config or {}).items()}
     if is_h1(arm) or not any(e.partition(":")[0] == "pouw" for e in arm.protocols):
         return config
-    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw import challenged
 
-    return pouw.challenged(config, arm.protocols)
+    return challenged(config, arm.protocols)
 
 
 def is_h1(arm: Arm) -> bool:

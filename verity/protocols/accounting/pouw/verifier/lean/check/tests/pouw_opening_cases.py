@@ -1,11 +1,11 @@
 """The opening difftest's cases: generated openings of one unit, each ``{"params", "commitment": hex, "units", "unit",
-"pub": hex, "opening", "salt": hex or null}``, the arguments of `core_check.opening` (`params` and the registration's
+"pub": hex, "opening", "salt": hex or null}``, the arguments of `core_check.opening_twin` (`params` and the registration's
 bytes as `answer` reads them, `units` null for a unit opened unsampled, `salt` a certified execution phase's).
 
 A case is an honest opening (an execution phase of P entries, a call's and the filler's each with small side trees, the unit one
 of their tiles, its proof's public file a header (over the template's pinned circuit, `core_check.TILES`) and the two
 rows' b ‖ c, the registration's entries root over the
-entries' leaves), then one mutation (`MUTATIONS`) aimed at one refusal of `core_check.opening`, or at a reading both
+entries' leaves), then one mutation (`MUTATIONS`) aimed at one refusal of `core_check.opening_twin`, or at a reading both
 sides must share (hex as `bytes.fromhex` reads it, the header's schemas by port name, in any written order).  A header
 whose keys sort otherwise than its circuit's ports (`schemas-between`, `schemas-shadowed`, `salted-header-order`) is
 refused, the rows never read in key order.  A salted case (`SALTED`) is

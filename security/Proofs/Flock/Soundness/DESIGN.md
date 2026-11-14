@@ -115,7 +115,7 @@ with `log2(√2·S_m)` = 10.7 at m = 22, 16.3 at m = 33 and 17.3 at m = 35 (§1.
    Per cap, the second costs `√(N_ℓ·Q_ℓ·Pr[conflict_ℓ])`, where `conflict_ℓ` is two runs sharing the prefix up to the
    cap opening one position differently: the rewinding lemma for any run distribution (`Rewinding.expect_bad_le`) at
    the cap, and Jensen over the prefixes above it (`Lock.leafE_off_le`).
-4. **Binding.** A conflict, like a self-clash, is a SHA-512 collision (`Merkle.opening_binding`), so
+4. **Binding.** A conflict, like a self-clash, gives a SHA-512 collision that `Merkle.openCollPair` computes (`Merkle.openCollPair_spec`), so
    `Pr[conflict_ℓ] ≤ Adv_ℓ`.
 5. **Rounds.** The kept bytes fix every message before its coins: the `Game` model itself (`send` before `coin`).
 
@@ -557,6 +557,6 @@ If real concurrency is ever needed:
     the `UnitPlace` from the executable's accept step (`Stmt.setupH`), given the unit's instance in `C`.
   - The link event is the weakest one (every satisfying candidate disagrees). For the expected-time extractor's
     analysis (`analysisBE`), `flock_batched_linkSoundE` discharges `δ_link` under A2 and `ValueBinding` (§3).
-  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_drawn_linked` carry no `δ_link`
+  - Composed (`FlockLinked.lean`): `flock_batched_count_linked` and `flock_batched_sampled_linked` carry no `δ_link`
     hypothesis. They rest on A2, `ValueBinding` and the lowering; the `_placed` forms take `UnitPlace`
     (row placement) for the lowering.

@@ -16,10 +16,10 @@ from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics.derived_rows import guard_neg_inf_zero, mul_ftz
 from verity.definitions.registry import attention_vocab
 
+from tests.commit.hidden_stream import SRC_BITS, StreamLayout
 from tests.properties import fa_tap_exactness as X
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.acquire.sources.hidden_source import fa3_tile
-from verity_vllm.commit.hidden_stream import SRC_BITS, StreamLayout
 from verity_vllm.records.property_record import digest_of
 
 ADAPTER = Path(__file__).parents[2]
@@ -46,7 +46,7 @@ def _loaded() -> dict[str, Any]:
 
 def test_importing_the_property_loads_no_definition_and_no_evaluator():
     """A Definition enters the Definition table (`verity.circuits.defs.REGISTRY`) as its module loads, and a reader of the table by id
-    (`verity.commitments.windows.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
+    (`verity.commitments.periods.interface.resolve`) answers for it from then on.  With the evaluator and the Definitions imported
     at the module's head they are in the table from the import on, in a process that has checked no word.  The import runs in a
     process of its own: this one has loaded the Definitions for its other tests."""
     assert _loaded()["at_import"] == []

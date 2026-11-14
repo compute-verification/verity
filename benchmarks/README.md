@@ -112,7 +112,12 @@ doesn't exist. The row's owner runs its `command` at least once every `every`. T
 value reaches the tab up to an hour after its run is preserved. Its keys:
 
 - `id`: `OWNER/NAME`, under its owner's prefix.
-- `title`, `owner` (a handle in the registry) and `unit`, the unit its measurements carry.
+- `title`: the number's headline on the tab, three to six plain words with no digit or backtick.
+- `owner`: a handle in the registry.
+- `unit`: the unit its value is in, at most three words (`hours`, `GB`), a rate's two sides, either side of " a ",
+  counted apart (`prover GPUs a serving GPU`); a span of time or compute goes in the measurement's `period` or `over`,
+  not the unit.
+- `axis`: one sentence, on one line and ending with a period, saying what the chart's y axis is.
 - `better`: `lower` or `higher`.
 - `command`: the one command that measures it, whose script's directory records it under `id`.
 - `every`: how often its owner measures it, in minutes, hours or days (`5m`, `12h`, `7d`); a value older than that is
@@ -128,8 +133,8 @@ A value over a span of time or of compute says which, each as its own field of t
 given: `period`, one of `phase`, `week`, `month` or `year` (`kit.PERIODS`), and `over`, `world` or `datacenter`
 (`kit.OVER`). A run's result holds one measurement a name, period and `over`, and the writer refuses a second, so one
 id may give a value for each period and scope it is computed at, each in its own unit (`verity bench exfiltration`'s
-three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title` and `unit` are those
-of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
+three, over a week, a month and a year of a datacenter's and of the world's compute). Its `title`, `unit` and `axis` are
+those of the period and scope it is named for (`exfiltration-gb-world-year`'s, the `year` over the `world`), which the
 benchmark writes last of its name, so a reader that keys measurements by name alone reads that one; one that keys on
 the name, period and `over` reads the others. A value for one member of a set (a deployed guarantee, a lead) names it
 as `member`, a non-empty string held only where given, and the writer keys on it too, so one id gives a value for each
@@ -140,10 +145,10 @@ that nothing waits on, other than `top/parked`. A number whose goal sits under `
 "parked".
 
 `tests/test_metrics_registry.py` refuses an id declared twice across all the files, an unknown owner, an owner who
-doesn't own the row's file, an id outside its owner's prefix, a `better` other than `lower` or `higher`, an `every`
-that isn't a count of minutes, hours or days, a command whose script is missing or whose directory never names the id,
-a row whose command's first script is outside the directory of the file declaring it, and a shared `metrics.toml`
-directly under `benchmarks/`.
+doesn't own the row's file, an id outside its owner's prefix, a `title`, `unit` or `axis` that breaks its rule above, a
+`better` other than `lower` or `higher`, an `every` that isn't a count of minutes, hours or days, a command whose script
+is missing or whose directory never names the id, a row whose command's first script is outside the directory of the
+file declaring it, and a shared `metrics.toml` directly under `benchmarks/`.
 
 ## Index
 
@@ -165,7 +170,6 @@ What the protocols cost: measured on served inference, and bounded on training.
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |
 | `dsa_topk/` | the DSA indexer's top-k at the integration's vLLM pin made a function of its logits by a vLLM plugin: outputs run to run, its set against the registered relation's, and its cost against the pin's kernels | maintained |
-| `moe_align/` | the Marlin MoE path's `moe_align_block_size` at the integration's vLLM pin made a function of its inputs by the integration's `verity_vllm.engine.moe_align` (also its vLLM plugin), each expert's pairs in pair-index order: outputs run to run, each expert's pairs against the pin's op, and its cost against it | maintained |
 | `replay_ladder/` | whether replaying a saturated window under its recorded schedule gives the served tokens across a ladder of dense and MoE models, run after run, against each request served alone; and the per-model status table | maintained |
 | `serve_tax/` | what each change to serving (step trace, release order, the certified tick, committing tokens and the KV cache) costs vLLM's own server against stock compiled vLLM at three loads, the serving cost (one number with a target: the served engine's best goodput against stock's, by vLLM's own benchmark client), and replaying a recorded window under its committed schedule | maintained |
 | `prod_repro/` | one command over the serving cost benchmark's serve, load and replay: what the serve turned on (prefix caching, speculative decoding, the context limit), whether the replayed window's tokens are the served ones, what our changes cost over stock with its interval, and the advice a request, each measured or said not to be | maintained |
@@ -181,9 +185,10 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses), the served path's SHA-512 commitment library (`lib/`), and vLLM's int8-exact linear kernels (`exactlin/`) | maintained |
+| `hash/` | GPU kernels for PoUW's Dither prover (`dither/`: the no-fold and J10-R units, their gates and harnesses) and the served path's SHA-512 commitment library (`lib/`) | maintained |
 | `flock_kernels/` | Flock's CUDA prover kernels on one GPU, each printing a digest of its output beside its time so that builds against two trees' kernels compare word for word: hm96's leaves (`hm96_leaves.cu`) | maintained |
-| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`), the store's load with bandwidth receipts (`p2_stage`) and the exact W8A8 linear (`s8_linear`) | maintained |
+| `torch_gpu/` | the H200 demo's GPU kernels, each bit-exact to its Definition: the serve-time commit (`commit_slots`, `sha512_rows`) and the store's load with bandwidth receipts (`p2_stage`) | maintained |
+| `kernels/` | the served path's exact kernels and what a kernel build ships with: the exact W8A8 linear (`s8_linear`), vLLM's int8-exact linear kernels' gates and benches (`exactlin`), the ship frame every build here sources (`ship.sh`, `ship_clock.c`, `ship_nvcc.sh`, `ship_probe.sh`), the nvcc a job's own library compiles with (`job_nvcc.sh`), and the Marlin MoE path's `moe_align_block_size` made a function of its inputs by the integration's `verity_vllm.engine.moe_align`, checked run to run and against the pin's op and timed against it (`moe_align`) | maintained |
 | `pouw/` | Pearl-C's kernels on the RTX PRO 6000, their harness, and the served vLLM path and its audits; `contents.py` lists the rest | maintained |
 | `tc_probe/` | tensor-core instructions bit for bit against their silicon models, and the trust each instruction's evidence earns | maintained |
 | `tc_probe_fp4/` | the FP4 path on Blackwell: its conversions bit for bit, and each sm_120a multiplier priced against dense NVFP4 | maintained |
@@ -229,7 +234,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record | maintained |
+| `compute/` | `verity bench compute`, the front door for the compute audit's number: the share of a served model's MACs (its linears', attention's and LM head's) that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record; and `h200_share.py`, the share of an H200's capacity an honest Pearl+ prover is credited, modeled from that share and a recorded tensor-rate run | maintained |
 | `served_errors/` | error terms of the quoted guarantees that had no value, evaluated at the served sizes: PoUW's δ_ks, δ_bind and p, the Sm120 headlines' n_π·δ_ZK, Pearl+'s ε_a and δ_a, Dither's κ_S, the integrity subprotocol's ks_t and the remote product's joint error, each with its formula and premises (a model, not a measurement) | maintained |
 | `machine_model/` | the ACCEL model of each measured card: its rows, census, attack families and designs as data, and a design's ε from them (`machine-model`) | maintained |
 
@@ -296,6 +301,5 @@ How fast the team's leads answer each other: measured on Linear's comments, not 
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `dashboard/` | the top goals of the console's Metrics dashboard whose own number has a target, a value younger than its `every` and a mark, out of the top goals it lists (`run.py`) | maintained |
 | `tree/` | the lines of `tests/tree.toml`'s not-yet list, each a path `main` holds outside the layout of record, and the unowned among them (`not_yet.py`) | maintained |
 | `proof_status/` | the proofs' status as the Lean locks record it (`verity lean deployed`): the deployed guarantees, those at a trust gap of zero, each one's gap, and each lead's open premises and guarantees with no honest witness (`run.py`) | maintained |

@@ -40,7 +40,7 @@ echo "sbench: sm_$ARCH" | tee "$OUT/arch.txt"
 # SBENCH_SHIP_OUT=1 builds the libraries below and the coins' Lean verifier, writes them to out/sbench-ship.tar and exits;
 # SBENCH_SHIP=TAR (such a tar, copied to the host) takes them in place of building, so a host that may not build builds
 # nothing.  A ship is refused (exit 17) unless its key is this run's (what the builds read: the CUDA
-# sources here, verity/circuits/kernels/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
+# sources here, verity/commitments/cuda/sha512.cuh and the coins' Lean packages' trees; the arms that pick builds; SBENCH_ARCH and the flags), its
 # MANIFEST.sha256 holds and lake build --no-build then finds the coins' verifier built, so one ship serves every commit
 # that leaves those alone.  Neither covers --bw-passes.
 COINS_PKG=verity/protocols/accounting/pouw/verifier/lean/check
@@ -52,7 +52,7 @@ COINS_PKGS=$(python3 -c 'import json, os, sys; p = sys.argv[1]; print(p, *(os.pa
 ship_key() {
   git ls-tree -r HEAD -- verity/protocols/experimental/dither/prover/kernels/h1c.cu verity/protocols/experimental/dither/prover/kernels/h1f.cu verity/protocols/experimental/dither/prover/kernels/h1o.cu \
     verity/protocols/experimental/dither/prover/kernels/h1r.cu verity/protocols/experimental/dither/prover/kernels/h1sha.cuh verity/protocols/experimental/dither/prover/kernels/h1u.cu \
-    verity/circuits/kernels/sha512.cuh
+    verity/commitments/cuda/sha512.cuh
   for p in $COINS_PKGS; do echo "lean $p $(git rev-parse "HEAD:$p")"; done
   echo "arms $(for t in dither-a-kh dither-a-hbk dither-a-hbr dither-a-hbc; do case " $* " in *$t*) printf '%s ' $t ;; esac; done)"
   echo "CUDA=$CUDA ARCH=$ARCH HB_KC_FLAGS=${HB_KC_FLAGS:-} HB_KC_H1C_FLAGS=${HB_KC_H1C_FLAGS:-}${HB_KC_FLAGS_B:+ HB_KC_FLAGS_B=$HB_KC_FLAGS_B}"
@@ -141,10 +141,10 @@ esac
 # --bw-passes (dbw.py): PoUB's prover libraries, as remote_session/run.sh builds them (BW_LIB, BW_KV)
 case " $* " in *" --bw-passes"*)
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v \
-    -o "$S/session.so" benchmarks/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
+    -o "$S/session.so" verity/protocols/accounting/poub/prover/remote_session/session.cu > "$OUT/build-session.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL session"; grep -v "^ptxas info" "$OUT/build-session.log" | tail -30; exit 11; }
   nvcc -O3 -gencode "$GEN" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v -DKV_FIELD=1024 \
-    -DKV_MASK=1 -o "$S/kv.so" benchmarks/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
+    -DKV_MASK=1 -o "$S/kv.so" verity/protocols/accounting/poub/prover/word_codec/kv.cu > "$OUT/build-kv.log" 2>&1 \
     || { echo "sbench: NVCC_FAIL kv"; grep -v "^ptxas info" "$OUT/build-kv.log" | tail -30; exit 11; }
   export BW_LIB=$S/session.so BW_KV=$S/kv.so ;;
 esac
@@ -278,7 +278,7 @@ elif [ -n "${DITHER_NCU:-}" ]; then
 fi
 # an exact-fused arm is timed only after exactlin's kgate.py passes on this GPU, in the same lease (OUT/kgate)
 case " $* " in *exact-fused*) KGATE=1 ;; *) KGATE=0 ;; esac
-export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/hash/exactlin/kgate.py
+export KGATE=${SBENCH_KGATE:-$KGATE} KGATE_PY=$PY KGATE_SCRIPT=$ROOT/benchmarks/kernels/exactlin/kgate.py
 # SBENCH_LEASE_AT (a UTC time) holds the lease request until then, the builds done, so a timed lease (GPU_LEASE_TIMED=1)
 # starts inside its clean window; SBENCH_ON (e.g. 4,5,6,7) is the GPUs it may take
 if [ -n "${SBENCH_LEASE_AT:-}" ]; then
@@ -304,7 +304,7 @@ PRE=(); [ "${SBENCH_PREEMPTIBLE:-}" = 1 ] && PRE=(--preemptible)
 [ "${SBENCH_TIMED:-}" = 1 ] && PRE+=(--timed)
 # SBENCH_MEM_GB=G: the host memory the lease reserves (gpu-lease --mem-gb), else gpu-lease's default
 [ -n "${SBENCH_MEM_GB:-}" ] && PRE+=(--mem-gb "$SBENCH_MEM_GB")
-gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/hash/dither/numabind.py" "$OUT/numa.json" \
+gpu-lease 1 --wait "${PRE[@]}" --max-min "$MAX_MIN" -- "$PY" "$ROOT/benchmarks/kernels/numabind/numabind.py" "$OUT/numa.json" \
   bash -c '
   if [ "$KGATE" = 1 ]; then
     timeout 900 "$KGATE_PY" "$KGATE_SCRIPT" --out "$0/kgate" --shapes all --models llama-3.1-8b,qwen3-8b --no-stock \
@@ -334,7 +334,7 @@ if [ -f "$S/gate.nsys-rep" ]; then
     || echo "sbench: nsys stats rc $?"
   "$PY" "$ROOT/benchmarks/hash/dither/kernels.py" "$S/gate.sqlite" | tee "$OUT/kernels.json"
   # the prof op's ranges: each arm's kernels a decode step (exactlin/steps.py); the report kept when under 200 MB
-  "$PY" "$ROOT/benchmarks/hash/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
+  "$PY" "$ROOT/benchmarks/kernels/exactlin/steps.py" "$S/gate.sqlite" > "$OUT/steps.json" || echo "sbench: steps.py rc $?"
   "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" "$S/gate.sqlite" > "$OUT/stepprof.json" \
     && "$PY" "$ROOT/benchmarks/hash/dither/stepprof.py" --table "$OUT/stepprof.json" | tee "$OUT/stepprof.txt" \
     || echo "sbench: stepprof.py rc $?"

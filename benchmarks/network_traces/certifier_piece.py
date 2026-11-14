@@ -61,7 +61,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
      (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the certifier on the gate's host, and the chain, the period check and
-     their proofs' coins in this piece on the developer's node, so `trusted-host` is assumed with the auditor's devices
+     their proofs' coins in this piece on the developer's node, so `trusted-device` is assumed with the auditor's devices
      not placed.
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
   endpoint's report, the report's counts or a step's summary, which are private) and the link-window's five
@@ -162,7 +162,7 @@ PRIVATE = Path("private") / "certifier"
 ENDPOINT = ("advice_trace.jsonl", "requests.jsonl", "windows.jsonl", "serve.json")
 PROTOCOL = "verity/certifier/v0"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
@@ -512,7 +512,7 @@ def kept_run(serve_dir: Path) -> str:
 
 
 def placement(serve_dir: Path, run: str) -> dict:
-    """Which host ran each party, and what `trusted-host`'s premise rests on: the network certifier ran on the gate's
+    """Which host ran each party, and what `trusted-device`'s premise rests on: the network certifier ran on the gate's
     host (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and the chain's checks and samples, the period
     check and their proofs' coins ran in this piece on the developer's node, the kept run's peer. No device of the
     auditor's is on the node's links, so the premise is assumed of both hosts; ``links`` are the node's to the gate,

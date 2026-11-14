@@ -1,16 +1,3 @@
-/-
-The link table's V* part (`RecLink{UB, PB}`, `VStar.Stmt.link`): `VStar.linkParams` reads `rec-link/u<UB>-p<PB>` back
-only as `linkName` writes it; `RecVStar.linkStatements` lists the part over the table's rows only where the inner shape
-names a table, at a shape the link unit takes and a row count that is some table's `grid(L)`; the inner shape's `links`
-reads back from its JSON; an unlisted link part names the missing table; `RecLinkPart.checkShape` holds the statement's
-table (`--rec-links`) to the inner shape's; and `RecLinkPart.check` passes every other unit, refuses a `rec-link/` name
-`linkParams` does not read, and refuses a link part without the table, the registered reads or the inner statement's
-files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` refuses a unit
-that is not V*'s net (`checkUnit_refuses`, over every circuit), and `RecLinkPart.outsOk` passes V*'s link layout and
-refuses it laid out any other way. That V*'s own file passes `checkParsed`, `checkUnit` and `outsOk` is checked by
-`flock-verify` on a link part (`verity/ml/flock/tests/test_lean_rec_links_verify.py`): the interpreter can't build that
-file, or V*'s net, in a module's time.
--/
 module
 
 public import Flock.RecLinkPart
@@ -23,6 +10,20 @@ meta import Flock.Sizes
 meta import Std.Data.HashMap
 meta import Std.Data.HashSet
 meta import Std.Data.TreeMap.Raw.Lemmas
+
+/-!
+The link table's V* part (`RecLink{UB, PB}`, `VStar.Stmt.link`): `VStar.linkParams` reads `rec-link/u<UB>-p<PB>` back
+only as `linkName` writes it; `RecVStar.linkStatements` lists the part over the table's rows only where the inner shape
+names a table, at a shape the link unit takes and a row count that is some table's `grid(L)`; the inner shape's `links`
+reads back from its JSON; an unlisted link part names the missing table; `RecLinkPart.checkShape` holds the statement's
+table (`--rec-links`) to the inner shape's; and `RecLinkPart.check` passes every other unit, refuses a `rec-link/` name
+`linkParams` does not read, and refuses a link part without the table, the registered reads or the inner statement's
+files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` refuses a unit
+that is not V*'s net (`checkUnit_refuses`, over every circuit), and `RecLinkPart.outsOk` passes V*'s link layout and
+refuses it laid out any other way. That V*'s own file passes `checkParsed`, `checkUnit` and `outsOk` is checked by
+`verity-verify-proof` on a link part (`verity/ml/flock/tests/test_lean_rec_links_verify.py`): the interpreter can't build that
+file, or V*'s net, in a module's time.
+-/
 
 @[expose] public section
 

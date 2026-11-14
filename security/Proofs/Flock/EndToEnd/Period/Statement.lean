@@ -9,13 +9,13 @@ public import Proofs.Flock.EndToEnd.Period.Run
 A period's integrity audit is a sequence of sampling blocks, each one `--zk` session under hidden outputs with a fresh
 live subset sample, as in `EndToEndHidden` (a `SamplingBlock`: every binder of `EndToEndHidden` but the prover). One
 prover strategy plays the whole period (`Period.game`), adaptively: the strategy each sampling block is played with may
-depend on everything before it. `Period.run` records, for each sampling block, whether flock-verify accepted it, its
+depend on everything before it. `Period.run` records, for each sampling block, whether verity-verify-proof accepted it, its
 incorrect proof blocks in the committed transcript fixed at its registration (`wrongRegZ` at `XplurZC`, as in `EndToEndHidden`),
 and whether a sampled proof block is one of them.
 
 * `IntegrityPeriod`: the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
   `Σ_w (miss_w + ε_ks,w + δ_link,w)`, each sampling block's `EndToEndHidden` bound. So outside that probability, if
-  flock-verify accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
+  verity-verify-proof accepts every sampling block, every sampling block has fewer than its `K₀` units wrong.
 * `IntegrityPeriodLog`: `IntegrityPeriod` with each sampling block's threshold `K₀ ≥ ln(1/δ)/q`, where its sample covers a
   fraction `q` of its units, so each sampling block's sampling term is at most `δ`.
 * `IntegrityHorizon`: over `T` sampling blocks whose samples each cover at least a fraction `q` of their units, the
@@ -65,7 +65,7 @@ structure SamplingBlock where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
     LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
@@ -102,7 +102,7 @@ open Classical
 variable (w : SamplingBlock)
 
 /-- The sampling block's sample: `Flock.Draw.drawWith`'s uniform `kd`-subset on the challenger's coins. -/
-def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
+def L : SamplingDesign w.n := SamplingDesign.execOS (n := w.n) w.src (.subset w.kd) w.n
 
 /-- The sampling block's audit as it runs: `EndToEndHidden`'s game. -/
 noncomputable def game : Game (w.Reg × Finset (Fin w.n) × Discharge.Exec.Transcript) :=
@@ -123,7 +123,7 @@ noncomputable def sim (τ : Strategy w.game) :=
     (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ w.I w.wr _ _ _ _ _
       (runsZCJH_live w.I w.ht (Flock.Desc.parse_flat w.hD) (Discharge.Layout.scopeOkH_spec w.hU w.hscope).2.1 w.dj w.y₀
         w.wr _ w.hTags w.hCust.1
-        fun _ => drawOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
+        fun _ => sampleOkZKHJ_of_file w.I w.ht (Flock.Desc.parse_flat w.hD) w.kd w.n w.hdiv w.dj w.hCust.2 _)) τ
 
 /-- **The sampling block's incorrect proof blocks** at the strategy `τ`: `wrongRegZ` in the committed transcript fixed at
 registration (`XplurZC`), as in `EndToEndHidden`. -/
@@ -153,13 +153,13 @@ noncomputable def link : ℝ≥0∞ :=
 
 end SamplingBlock
 
-/-- What a period's run records of sampling block `idx`: whether flock-verify accepted it, how many of its units are
+/-- What a period's run records of sampling block `idx`: whether verity-verify-proof accepted it, how many of its units are
 wrong (`SamplingBlock.wrongSet`), and whether a sampled proof block is one of them. -/
 structure WindowRec where
   idx : ℕ
   accepted : Prop
   wrong : ℕ
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace SamplingBlock
 
@@ -191,13 +191,21 @@ end Period
 
 /-- **The integrity audit over a period.** In a period of `T` sampling blocks `W t`, each a `--zk` session under hidden
 outputs with a fresh live uniform `kd`-subset sample, played by one adaptive prover `s`, the probability that some
-sampling block is accepted by flock-verify with at least its `K₀` units wrong is at most the sum of the sampling blocks'
+sampling block is accepted by verity-verify-proof with at least its `K₀` units wrong is at most the sum of the sampling blocks'
 `EndToEndHidden` bounds,
 $$\Pr[\exists t,\ \text{sampling block } t \text{ accepted} \wedge K_{0,t} \le \text{wrong}_t] \le
   \sum_t \left(\frac{\binom{n_t-K_{0,t}}{kd_t}}{\binom{n_t}{kd_t}} + \varepsilon_{ks,t} + \delta_{link,t}\right).$$
 Its named assumptions, at every sampling block: A3 (`Assumptions.UniformRandomBytes`) for the sampling block's sample
 bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512` (`LinkCRZC`),
-`EndToEndHidden`'s hypotheses, at every strategy a sampling block is played with on some run (`Period.Plays`). -/
+`EndToEndHidden`'s hypotheses, at every strategy a sampling block is played with on some run (`Period.Plays`).
+
+**Every committed window is presented.** The statement, like the two below it, is of every sampling block of the
+period's run, so a record is held to it only where the record presents every one. That each root a lane committed
+in a monitoring period under this registration is presented, once, with its one accepted audit, is stated of the
+accept of SPOT's period check, over the auditor's ledger (`Properties.Spot.MonitoringPeriod.CommittedOnce`, with
+`Properties.Spot.MonitoringPeriod.AcceptMeans` for the audit); a root the lane committed under another circuit is published
+by that circuit and not audited (`Properties.Spot.MonitoringPeriod.OthersElsewhere`). No statement here reads them, and a
+reader who holds a record to this one takes them beside it. -/
 def IntegrityPeriod : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ),
     (∀ t < T, Assumptions.UniformRandomBytes (W t).Lb (W t).src) →
@@ -216,7 +224,10 @@ cover at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each s
 `K₀,t ≥ ln(1/δ)/q`, the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
 $$\sum_t (\delta + \varepsilon_{ks,t} + \delta_{link,t}),$$
 each sampling block's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
-`IntegrityPeriod`'s. -/
+`IntegrityPeriod`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityPeriodLog : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
@@ -236,7 +247,10 @@ def IntegrityPeriodLog : Prop :=
 block's sample covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling
 block is accepted and the incorrect proof blocks total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityPeriod`'s. -/
+Its named assumptions are `IntegrityPeriod`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.pooledIntegrity_rate` is this statement at that rate), while
+under a fixed count the largest `q` that holds falls as the prover pads a window's population. -/
 def IntegrityHorizon : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →

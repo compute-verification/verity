@@ -61,6 +61,7 @@ verity/protocols/proofs/flock/prover/tests/fixtures/hidden-outputs
 verity/protocols/proofs/flock/prover/tests/fixtures/honest-session
 verity/protocols/proofs/flock/prover/tests/fixtures/honest-plain
 verity/protocols/proofs/flock/prover/tests/fixtures/plain-tree
+verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case
 benchmarks/machine_model/data/cover/corpus.json
 benchmarks/machine_model/data/cover/bu_12_9.json
 benchmarks/machine_model/data/cover/sass_isa_tables.json

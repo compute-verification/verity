@@ -1,4 +1,4 @@
-"""A TP Commit served on CPU, for the TP serving rows' tests and the one-stage audit's TP run (`benchmarks/one_stage/a5.py --tp-commit`):
+"""A TP Commit served on CPU, for the TP serving rows' tests and the one-stage audit's TP run (`verity/protocols/proofs/spot/prover/audit/window_audit.py --tp-commit`):
 ``world`` ranks, each the toy deferred Commit of `tests.pipeline.served_rope` with its own weights and its act rows ``SiluMul_v2{I}``
 (GLM-5.3's Definition), committed under rows-sha512 as `tp-commit` commits a rank, each rank's window written by
 `pipeline.tp.serving_rows.write` as a vLLM rank writes it, under the SHA-512 TP run root of the ranks' roots (`tp.run_root`), beside
@@ -49,7 +49,7 @@ def commit(root: Path, *, world: int = 2, inter: int = 256, law: str = "subset:2
     pf.write_text(json.dumps({"templates": [*templates, f"SiluMul_v2{{I={int(inter)}}}"], "law": law}))
     ranks = []
     for r in range(world):
-        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", I=inter)
+        c = served_rope.commit(root / "ranks" / f"rank{r}", seed=17 + r, silu="SiluMul_v2", inter=inter)
         b = root / "build" / f"rank{r}"
         b.mkdir(parents=True)
         shutil.copyfile(c["row_dir"] / "build_request" / "instances.json.gz", b / "instances.json.gz")

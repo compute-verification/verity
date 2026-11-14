@@ -560,7 +560,7 @@ and under a registration that binds \(z\), PoUW's noise for the pass (§8).
 Every receipt of its sessions is of that kind, the weights' and the KV pages' alike (§8). sketch-sha512 is the default (`receipts.DEFAULT`) and the stated receipt: the receipt the guarantee is stated for.
 block-sha512 is kept as a second kind, for comparison only; it is not the stated receipt.
 The GPU kernels' sketch-sha512 receipts are held byte for byte to `receipts.SketchReceipter`
-(`benchmarks/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
+(`verity/protocols/accounting/poub/prover/codec_tensor/sketch_receipt.py` lays its signs out for them), and the suite pins its outputs at both row counts.
 Each kind's receipt is 64 bytes, so leaves, salts and the tree don't change. The difference is what is hashed after
 the seed's block: sketch-sha512 hashes \(j\) and the sketch, one compression at 16 rows (64 bytes) and three at 64
 (256 bytes); block-sha512 hashes \(j\) and the 4,096 bytes, 33 SHA-512 compressions. The sketch's signs come from the
@@ -1024,7 +1024,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
   observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
   passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
-  (`IngressCounted`, `trusted-host`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
+  (`IngressCounted`, `trusted-device`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
   `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
   `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
   the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
@@ -1035,7 +1035,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
   file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
   session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
-  (`trusted-host`), that label's name for what the lockdown doesn't close, in C's place.
+  (`trusted-device`), that label's name for what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -1149,7 +1149,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     (I4). The verifier here checks only that each pass names a step above the last.
   - *The timing.* The step says which reads a pass stands for, not when serving made them: nothing yet shows that the
     pass at \(s\) ran while serving executed \(s\). A certifier that stamps each step's record and each pass's root
-    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `benchmarks/remote_session/prover.py`),
+    on one clock would. A prover may run serving ahead of its passes (`Ahead` in `verity/protocols/accounting/poub/prover/remote_session/prover.py`),
     at most \(k\) steps past the pass in flight, \(k\) its own choice: each pass covers the newest step serving has
     handed, the steps serving ran past in between have no pass and are credited nothing, and the pass at \(s\) reads
     the store resident at \(s\) while serving executes later steps. That store must still be in place as the pass

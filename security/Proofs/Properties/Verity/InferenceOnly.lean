@@ -63,8 +63,7 @@ the policy's case decodes. -/
 theorem policyCase_of_component {k : Verity.Registration.Composite} {s : Sent}
     (h : ComponentAccepts k .inferenceOnly s) : ∃ p r e, PolicyCase k s p r e := by
   obtain ⟨Q, hQ, ps, c, ev, hdec, ⟨P, n, cs⟩, hx, hx1, hacc⟩ := h
-  have hQ' : Q = NciCheck.Protocol.protocol := by
-    cases k <;> exact (Option.some.inj hQ).symm
+  have hQ' : Q = NciCheck.Protocol.protocol := (component_eq_some.1 hQ).2
   subst hQ'
   have hx1' : P = NciCheck.Protocol.protocol := hx1
   subst hx1'
@@ -88,14 +87,9 @@ theorem inferenceOnlySound (k : Verity.Registration.Composite) : V.InferenceOnly
 
 end Vocab
 
-theorem remote_soundness_of_subprotocols : RemoteSoundness := by
-  intro ι α _ d V hS hW _ _
-  refine soundness_at_of_targets ι α d V .remote fun a ha => ?_
-  cases a
-  · exact hS
-  · exact hW
-  · exact V.inferenceOnlySound .remote
-  all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
+theorem remote_soundness_of_subprotocols : RemoteSoundness :=
+  fun ι α _ d V hS hW _ _ =>
+    soundness_at_of_targets ι α d V .remote (V.targets_remote hS hW (V.inferenceOnlySound .remote))
 
 /-- **`RemoteSoundness`'s honest lemma**: its two targets and the wires' statement hold at the idle deployment's
 compiled remote composite. -/
@@ -106,6 +100,6 @@ theorem remote_soundness_of_subprotocols_honest :
 /-- **`RemoteSoundness`'s nontrivial lemma**: its conclusion fails at remote for a verifier that accepts everything, at
 the idle deployment whose errors are all `0`. -/
 theorem remote_soundness_of_subprotocols_nontrivial : ¬ Idle.exact.SoundnessFor .remote fun _ => True :=
-  Idle.nontrivial_at .remote (Finset.mem_filter.2 ⟨Finset.mem_univ _, rfl⟩)
+  Idle.nontrivial_at .remote (mem_subprotocols.2 (by decide))
 
 end Verity

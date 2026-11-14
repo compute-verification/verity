@@ -41,7 +41,7 @@ The session's game, prover, value layer and events are those `EndToEndRegistered
 * `Xv`: the plurality value layer the rows extraction finds at the registration (`XplurZC`);
 * `WrongAt u`: sampled proof block `u` is wrong on the registration (`wrongRegZ`);
 * `RowsAt o u`: unit `u`'s rows are right at `Xv` (`RowsRightZC`) at its own owned registered reads;
-* `BadU o`: flock-verify accepts and some sampled proof block is wrong or its rows are off;
+* `BadU o`: verity-verify-proof accepts and some sampled proof block is wrong or its rows are off;
 * `CR`: `EndToEndRegisteredRows`' named assumptions at every unit's opening; `bound`: its bound.
 -/
 
@@ -76,7 +76,7 @@ structure RowsSession where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   rdU : Fin n → FlockSoundness.Registered.ReadsX
     (layShHJ (Reg := Reg) dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU (pub := pub))
     (rsShHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub)
@@ -102,7 +102,7 @@ structure RowsSession where
   hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ
   t' : ℝ
   ht' : 0 ≤ t'
-  τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))
+  τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))
   qF : ℝ
   qS : ℝ
   qR : ℝ
@@ -125,7 +125,7 @@ theorem hc : HmOut.parse (zkTags s.I) s.I.circuitFile s.I.tables = .ok s.c := Fl
 abbrev Out : Type := s.Reg × Finset (Fin s.n) × Discharge.Exec.Transcript
 
 /-- The verifier's sample. -/
-abbrev L := Law.execOS (n := s.n) s.src (.subset s.kd) s.n
+abbrev L := SamplingDesign.execOS (n := s.n) s.src (.subset s.kd) s.n
 
 /-- The live audit. -/
 abbrev G : Game s.Out := auditLive s.L s.Reg (liveOfZJ s.dg (planZHJ s.dj s.y₀) s.N s.wr)
@@ -148,7 +148,7 @@ abbrev σ := simZJ execArith hs512 (planZHJ s.dj s.y₀) s.I s.wr (opnAtZHJ (pla
   (decAtZJ (planZHJ s.dj s.y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) s.N
   (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ s.I s.wr _ _ _ _ _
     (runsZCJH_live s.I s.ht s.hc (Discharge.Layout.scopeOkH_spec s.hU s.hscope).2.1 s.dj s.y₀ s.wr _ s.hTags s.hCust.1
-      fun _ => Discharge.ZkReg.drawOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 _)) s.τ
+      fun _ => Discharge.ZkReg.sampleOkZKHJ_of_file s.I s.ht s.hc s.kd s.n s.hdiv s.dj s.hCust.2 _)) s.τ
 
 /-- **The value layer**: the plurality the rows extraction finds at the registration (`XplurZC`). -/
 abbrev Xv : Fin s.Circ.N → Bool :=
@@ -165,7 +165,7 @@ def RowsAt (o : s.Out) (u : Fin s.n) : Prop :=
     (fun p => OwnReadsHJ s.I s.own s.c s.pub o.2.2 (s.rdU u).isRead (s.rdU u).port (s.rdU u).readAt ∧
       (s.rdU u).isRead p) (s.wo u) s.k s.Rw u
 
-/-- **The per-unit event**: flock-verify accepts, and some sampled proof block is wrong, or its rows are off at its own
+/-- **The per-unit event**: verity-verify-proof accepts, and some sampled proof block is wrong, or its rows are off at its own
 registered reads. -/
 def BadU (o : s.Out) : Prop := LiveAcceptsZKR s.I s.own o ∧ ∃ u ∈ o.2.1, s.WrongAt u ∨ ¬ s.RowsAt o u
 
