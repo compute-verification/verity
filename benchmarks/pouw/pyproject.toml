@@ -258,7 +258,11 @@ paths = ["benchmarks/pouw/filler", "verity/protocols/accounting/pouw/prover/kern
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_salt_bind.py"]
-paths = ["verity/protocols/accounting/pouw/verifier/lean/check/tests"]
+paths = ["verity/protocols/accounting/pouw/verifier/lean/check/tests", "verity/protocols/accounting/pouw/verifier/tests"]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_served_zk.py"]
+paths = ["verity/protocols/accounting/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_theory_cpw.py"]

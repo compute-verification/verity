@@ -3145,6 +3145,11 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pous/verifier/continuous.py": "verity/protocols/accounting/pous/device/continuous.py"
+      }
+    },
+    {
+      "paths": {
         "verity/definitions/registry/": "adapters/vllm/verity_vllm/definitions/registry/",
         "verity/definitions/numerics/": "adapters/vllm/verity_vllm/definitions/numerics/",
         "verity/definitions/tests/": "adapters/vllm/verity_vllm/definitions/tests/",
