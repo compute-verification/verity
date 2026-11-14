@@ -1,5 +1,5 @@
 """Sampled proofs' answer on a served window, from the one-stage records audit
-(`verity/protocols/proofs/spot/verifier/one_stage/records_audit.py`) that ran on it.
+(`verity/protocols/proofs/spot/prover/audit/records_audit.py`) that ran on it.
 
 `answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the docket's digest, the verdict the audit record's, and on acceptance the profile is

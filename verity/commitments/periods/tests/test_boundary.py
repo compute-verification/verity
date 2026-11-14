@@ -1,4 +1,4 @@
-"""An output field's leaves, each written once by dense reads (`verity.commitments.windows.boundary`): the closed form
+"""An output field's leaves, each written once by dense reads (`verity.commitments.periods.boundary`): the closed form
 against a reference that lists every leaf of every read, on every small read and pair of reads, and the cases
 `Spot.BoundaryWritten`'s examples hold."""
 from __future__ import annotations
@@ -8,7 +8,7 @@ import math
 
 import pytest
 
-from verity.commitments.windows import boundary as B
+from verity.commitments.periods import boundary as B
 
 #: four served ids of two 16-bit leaves each, a unit writing one id
 IDS = [(0, (4,), (2,), 2)]

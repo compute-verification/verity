@@ -26,7 +26,7 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.commitments.gates.embedding import arguments, reference
 from verity.commitments.gates.embedding import read as read_of
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NE.FAMILIES}

@@ -165,6 +165,16 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     (A″) are plotted at each of the three sizes, dark to light, and (B) at one machine's; each series gives K, its
     sessions and the shares of its proving in the phase's statements and on padding. No code builds a verification
     phase of a datacenter's size, one committer over every machine's boundary rows: that line is the cost model's.
+  - A two-stage point's bound is for a deployment whose second stage has the coins its cells read first: on fewer it
+    refuses every honest run. Each two-stage exfiltration series carries them at every β that has a design
+    (`second_stage.at_design`): a sampled replay block's cells, the proof blocks sampled of them and the bytes they
+    read first; the rounds of 2^20 bytes and the challenger's 64-byte coins that hold the first reads of the K replay
+    blocks a verification phase samples, and the replay blocks whose first reads one commitment of the challenger's
+    holds (`challenger.MAX_COINS` coins); Lean's bound on the chance the second stage then refuses an honest run at a
+    first-stage coin the first stage accepts, K·Σ_t k_t·2^−64 (`SpotFlock.secondDraw_refused_le_first`); and that
+    bound added up over the replay blocks the scope samples. `total_cost.limits`' second draw is the same read with a
+    block type of under one proof block a replay block counted at the chance a replay block has it; `at_design`
+    counts every cell, the theorem's condition.
   - Exfiltration: (A) and (A′) in the patterns' form (`card_influenceTwo_le_patterns`), under its two modeling
     conditions (each request serves at most S bits, and no proof block is shared across requests), with the capped
     sets' form (`card_influenceTwo_le_served_min`) at one machine's verification phase beside each, thin and dashed;

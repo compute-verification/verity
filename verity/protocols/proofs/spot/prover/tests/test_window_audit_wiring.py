@@ -19,9 +19,9 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.ops import gemm as G
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")))
