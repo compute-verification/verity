@@ -162,11 +162,8 @@ OPENING_ROOT, OPENING_DOMAIN = OPENING_TABLE
 #: the prover's after the sample, and a ``position`` or a ``window`` source the interior record's population or window.
 #: A ``history`` source left unresolved is none of the verifier's bytes.
 OWN_SOURCES = ("bytes",)
-#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
-#: (`SecondStage.VERDICT_ONE`).
-VERDICT_ONE = (("bytes", "00000001"),)
-#: `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
-#: (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`). `_opened_row` doesn't read it until `half_leaves` is written.
+#: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1 as one 16-bit half, one leaf
+#: of the verdict's one word (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`).
 VERDICT_ONE_LEAF = (("bytes", "0001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
@@ -1513,7 +1510,7 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
     (`Own.wired_key`), one wire, whole (`_key_failure`), the key at each sampled unit its writer unit's committed output
     row (``second-read``'s `_read_ok`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference
     statement's reads (`Own.ref_reads`, the template's first), a value the verifier fills, of at least one row, each row
-    `VERDICT_ONE`. With the switch off, a key the block computes, a wire, is refused: no statement covers it
+    `VERDICT_ONE_LEAF`. With the switch off, a key the block computes, a wire, is refused: no statement covers it
     (`_inputs_why`)."""
     t = x.template
     at = lambda p: [y.value for y in own.links or () if y.template == t and y.port == p]  # noqa: E731
@@ -1526,7 +1523,7 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
             and all(_one_table(own, mine, t, r, d) for r in roots for d in domains)
             and ((bool(at(OPENING_KEY)) and all(map(held, at(OPENING_KEY)))) if _wire_of(own, t, OPENING_KEY) is None
                  else own.wired_key and _key_failure(own, t) is None)
-            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE for r in mine[verdict]))
+            and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE_LEAF for r in mine[verdict]))
 
 
 def _read_unlinked(own: Own, v: str) -> bool:

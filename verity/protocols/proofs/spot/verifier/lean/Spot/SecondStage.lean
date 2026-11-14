@@ -269,11 +269,8 @@ place of the table's name (`HistoryTable.resolve`). A `port` or a `value` source
 the prover's after the sample, and a `position` or a `window` source the interior record's population or window. -/
 def OWN_SOURCES : List String := ["bytes"]
 
-/-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1. -/
-def VERDICT_ONE : Array (String × String) := #[("bytes", "00000001")]
-
-/-- `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
-(`Supplied.halfLeaves`). `openedRow` doesn't read it until `halfLeaves` is written. -/
+/-- The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1 as one 16-bit half, one
+leaf of the verdict's one word (`Supplied.halfLeaves`). -/
 def VERDICT_ONE_LEAF : Array (String × String) := #[("bytes", "0001")]
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
@@ -1407,7 +1404,7 @@ linked at values the interior registration doesn't register (`registered`: a por
 `second-links`) or the verifier holds (`own.fixed`, `mine`), or, where the wired key's switch is on (`Own.wiredKey`),
 one wire, whole (`keyFailure`), the key at each sampled unit its writer unit's committed output row (`second-read`'s
 `readOk`); and its verdict (`OPENING_VERDICT`) reads, in its template's reference statement's reads (`Own.refReads`,
-the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE`. With the switch off, a
+the template's first), a value the verifier fills, of at least one row, each row `VERDICT_ONE_LEAF`. With the switch off, a
 key the block computes, a wire, is refused: no statement covers it (`inputsWhy`). -/
 def openedRow (own : Own) (registered : Array String) (mine : Array (String × Array (Array (String × String))))
     (x : Link) : Bool :=
@@ -1429,7 +1426,7 @@ def openedRow (own : Own) (registered : Array String) (mine : Array (String × A
       | some _ => own.wiredKey && (keyFailure own t).isNone) &&
     match verdict with
     | some v => (match ownRows mine v with
-      | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE)
+      | some rows => !rows.isEmpty && rows.all (· == VERDICT_ONE_LEAF)
       | none => false)
     | none => false
 

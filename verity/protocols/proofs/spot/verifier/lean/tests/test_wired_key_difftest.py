@@ -67,7 +67,7 @@ def _moe(statements: bool = False) -> dict:
                    for p in ("root", "domain", "row", "salt", "path")),
                  {"template": TRIPLE, "port": "tok", "per": 3, "runs": [[0, 2, 0, 1]]}]
     c["widths"] = [{"template": TRIPLE, "port": "tok", "reads": 2, "writes": 2}]
-    c["supplied"] = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "one": [[{"bytes": "00000001"}]]}
+    c["supplied"] = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "one": [[{"bytes": "0001"}]]}
     c["reads"] = {TRIPLE: V}
     c["ref_reads"] = {**c["ref_reads"], TRIPLE: {"ports": {"o1": {"value": "one"}}}}
     if not statements:

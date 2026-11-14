@@ -767,7 +767,7 @@ READ_RECORD = {"roots": [{"port": "t", "root": T_ROOT, "domain": T_DOMAIN, "leav
 #: What the verifier fills of a read: its table's root and domain id, as the bytes it computed for the table, its key,
 #: and the 1 its verdict port reads.
 READ_FILLED = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "tok": [[{"bytes": "00000002"}]],
-               "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
+               "one": [[{"bytes": "0001"}], [{"bytes": "0001"}]]}
 READ_REF = ((READ_T, {"ports": {"o1": {"value": "one"}}}),)
 #: The rows of the read's root and domain ports: one row a block, which every unit reads.
 READ_ROWS = tuple(SS.Rows(READ_T, p, 1, (SS.Run(0, 1, 0, 0),)) for p in ("root", "domain"))
@@ -816,7 +816,8 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 2, READ_ROWS[1].runs))), "row"),
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 1, (SS.Run(0, 1, 0, 1),)))), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "root"}), "root"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "0001"}], [{"bytes": "0000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "one": []}), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "one"}, fixed=("one",)), "row"),
     (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": f"{READ_T}/o1"}}}),)), "row"),

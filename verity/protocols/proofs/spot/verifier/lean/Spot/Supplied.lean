@@ -15,7 +15,8 @@ holds before the sample, so the prover never chooses it.
   them, a window that is an object of the canonical domain; none without a binding);
 * a row is its sources' bytes in order (a root the record names, its last entry, as R3 and R7 read a name twice; hex
   non-empty lowercase of whole bytes), read as the parameter's leaves of `w` bits (`bytesLeaves`: each big-endian
-  32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one), except
+  32-bit half, its `32 / w` leaves least significant first, so a digest is 16 leaves of 32 bits or 512 of one; a row of
+  two bytes is one 16-bit half, its `16 / w` leaves: `halfLeaves`, as `SecondStage.VERDICT_ONE_LEAF`), except
   where the parameter's leaves are whole `Digest`s (`digests`: `Array<8, Array<64, Value<1>>>` or an array of them),
   read as a circuit's `Digest` holds them (`digestLeaves`: each big-endian 64-bit word's 64 bits least significant
   first);
@@ -78,10 +79,17 @@ def bytesLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
     (Array.range (32 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
 
 /-- `registered.half_leaves`: two bytes, one big-endian 16-bit half, as its `16 / bits` leaves of `bits` bits least
-significant first: the row `SecondStage.VERDICT_ONE_LEAF` fills, one 16-bit leaf where `bytesLeaves` gives two. Refused
-until written: no source reads it yet. -/
-def halfLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) :=
-  throw s!"{data.size} bytes at leaves of {bits} bits: a 16-bit half's leaves are not yet read (VERDICT_ONE_LEAF)"
+significant first: the row `SecondStage.VERDICT_ONE_LEAF` fills, one 16-bit leaf. -/
+def halfLeaves (data : ByteArray) (bits : Nat) : V (Array Nat) := do
+  if !(0 < bits && bits ≤ 16 && 16 % bits == 0) then throw s!"leaves of {bits} bits hold no whole 16-bit half"
+  if data.size != 2 then throw s!"{data.size} bytes are not one 16-bit half"
+  let h := (data.get! 0).toNat * 256 + (data.get! 1).toNat
+  return (Array.range (16 / bits)).map fun j => h / 2 ^ (bits * j) % 2 ^ bits
+
+/-- A row's bytes as the parameter's leaves of `bits` bits: one 16-bit half's (`halfLeaves`) where it is two bytes,
+else its 32-bit halves' (`bytesLeaves`). -/
+def leavesOf (data : ByteArray) (bits : Nat) : V (Array Nat) :=
+  if data.size == 2 then halfLeaves data bits else bytesLeaves data bits
 
 /-- `registered.digests`: a parameter whose leaves are whole `Digest`s, eight SHA-512 words of 64 one-bit leaves each
 (`gates.rowleaf.digest_bits`'s order), or an array of them. -/
@@ -152,7 +160,7 @@ def rows (rec : Json) (log : Array Json) (binding : Option (String × String)) (
   let [w] := Registered.widthSet p.ty | throw s!"parameter {value}: its leaves are not one width"
   rs.mapM fun r => do
     let data ← r.foldlM (fun acc s => return acc ++ (← sourceBytes rec log binding supplied value s)) ByteArray.empty
-    if digests p.ty then digestLeaves data else bytesLeaves data w
+    if digests p.ty then digestLeaves data else leavesOf data w
 
 /-- A registered row's u16 words: each leaf `wordBits / 16` words, low first, zero-padded to whole SHA-512 blocks. -/
 def rowWords (row : Array Nat) (wordBits : Nat) : Array Nat :=

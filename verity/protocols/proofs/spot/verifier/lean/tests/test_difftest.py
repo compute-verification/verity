@@ -22,8 +22,8 @@ Call among them, whose unit `Q_word` takes in the 32-bit class and `Q_call` at `
 `Q_call` unit at `X = 16` holds a constant another unit reads. Records are v1 and, on the programs with root parameters to register
 (`REGISTERED_SETUPS`, 16- and 32-bit), mostly v2: the verifier expects values registered (`registered`, with its program
 function's `parameters`), and the record (and an earlier one in the log) registers `Registered.commit`'s entries; on
-the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves, or a digest a row in a bit-row
-format) the verifier fills it itself from
+the programs with a pair of digests to fill (`SUPPLIED_SETUPS`, 32- and 1-bit leaves, a digest a row in a bit-row
+format, or one 16-bit leaf a row) the verifier fills it itself from
 the record, the log's positions and its coin bound to its binding and the record's window (`supplied`,
 `registered.supplied_root`), which the record registers as it fills it, and it may pin a value's root (`pinned`, R7-held)
 or take W as an output of the log's earlier record (`outputs`: W's entry is that record's port `EARLIER_OUT`, its domain
@@ -293,7 +293,8 @@ REGISTERED_SETUPS = [
 #: Programs with a value the verifier fills itself, as PoUW's `pouw.roots`: `S`, each row a pair of digests of 32-bit
 #: leaves (rows of x's root and W's registered root, and W's and out's) or of 1-bit leaves (out's root and bytes of its own),
 #: or, in a bit-row format, one `Digest` a row in `row/v2` (out's root, then bytes of its own: 32 u16 words a row) or
-#: one digest of 1-bit leaves a row in `row-seg/v1` (x's root, then bytes of its own).
+#: one digest of 1-bit leaves a row in `row-seg/v1` (x's root, then bytes of its own); or `O`, a read's verdict value,
+#: each row the verifier's two bytes of 1 as one 16-bit leaf (`half_leaves`).
 SUPPLIED_SETUPS = [
     SuppliedSetup(_registered_program("CoreSpotSupplied32", 3, (
         ("S", Array(2, Array(2, Array(16, Value(32))))), ("W", Array(6, Value(16)))), ("S", "W")),
@@ -311,7 +312,10 @@ SUPPLIED_SETUPS = [
         [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "out"}], [{"bytes": "5a" * 64}]]}, {"S": G.SCHEMA_V2}),
     SuppliedSetup(_registered_program("CoreSpotSuppliedBitsSeg", 2, (
         ("S", Array(2, Array(512, Value(1)))),), ("S",)),
-        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG})]
+        [{"S": 32}, {"x": 2, "S": 32}], {"S": [[{"port": "x"}], [{"bytes": "a5" * 64}]]}, {"S": G.SCHEMA_SEG}),
+    SuppliedSetup(_registered_program("CoreSpotSuppliedHalf", 2, (
+        ("O", Array(2, Value(16))),), ("O",)),
+        [{"O": 1}, {"x": 2, "O": 1}], {"O": [[{"bytes": "0001"}], [{"bytes": "0001"}]]})]
 REGISTERED_SETUPS += SUPPLIED_SETUPS
 #: A program whose window opens a pool from `pin` and leaves it in `pout`, each one SHA-512 digest of 32-bit leaves, and
 #: the empty pool's root a chain restarts from.
@@ -5345,7 +5349,7 @@ OPENING_PORTS = ("tok", "root", "domain", "row", "salt", "path")
 
 
 #: How many cases `_read_opening` has.
-OPENINGS = 36
+OPENINGS = 37
 #: The roots and domain ids of the two tables `_read_opening` has round 1's record register.
 OPENING_TABLES = {"t": ("a1" * 64, "a2" * 64), "u": ("b1" * 64, "b2" * 64)}
 
@@ -5358,7 +5362,7 @@ def _read_opening(c: dict, x: int) -> dict:
     (`OPENING_TABLES`, two ports more of that record, each of `OPENING_ROWS` leaves), their ports' rows placing each
     unit alike, and filling its key and the value `one` its verdict port reads in its reference statement's reads, each
     row the bytes
-    of 1: the opened row, its salt and its path are then inputs a replay block may read (`second-inputs`). By `x`, the
+    of 1 (the verdict's, one 16-bit half: `VERDICT_ONE_LEAF`): the opened row, its salt and its path are then inputs a replay block may read (`second-inputs`). By `x`, the
     read is so; its key is the prover's, a port of round 1's record, wired, pinned, or unlinked; its root is the
     prover's, filled from a root of the interior record, or unlinked; its verdict reads a value with a row that is
     not 1, with no row, one the verifier doesn't fill, one it pinned, none, or its reference reads are another
@@ -5369,7 +5373,8 @@ def _read_opening(c: dict, x: int) -> dict:
     differently; its root and domain are of two tables, filled alike row by row; round 1's record registers neither
     table; its root is left as a table's name, which is none of the verifier's bytes; round 1's record registers
     the root under another domain; the params record no read, the read at another count of rows, or another template
-    alone as one; or round 1's record registers the table at another count of leaves."""
+    alone as one; round 1's record registers the table at another count of leaves; or its verdict reads the four bytes
+    of 1, two 16-bit leaves."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))
     b = c.get("boundary")
     if not (isinstance(rec, dict) and isinstance(links, list) and isinstance(wires, list) and isinstance(rows, list)
@@ -5386,7 +5391,7 @@ def _read_opening(c: dict, x: int) -> dict:
               for n, (r, d) in OPENING_TABLES.items()]
     recorded: dict | None = {OPENING: OPENING_ROWS}
     mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"bytes": t_root}]],
-            names["domain"]: [[{"bytes": t_domain}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
+            names["domain"]: [[{"bytes": t_domain}]], one: [[{"bytes": "0001"}], [{"bytes": "0001"}]]}
     linked = [{"template": OPENING, "port": p, "value": v} for p, v in names.items()]
     wired, fixed = list(wires), list(c["fixed"]) if isinstance(c.get("fixed"), list) else []
     ref: dict | None = {"ports": {"o1": {"value": one}}}
@@ -5417,7 +5422,7 @@ def _read_opening(c: dict, x: int) -> dict:
         del mine[names["root"]]
         linked = [y for y in linked if y["port"] != "root"]
     elif kind == 9:
-        mine[one] = [[{"bytes": "00000001"}], [{"bytes": "00000000"}]]
+        mine[one] = [[{"bytes": "0001"}], [{"bytes": "0000"}]]
     elif kind == 10:
         mine[one] = []
     elif kind == 11:
@@ -5436,7 +5441,7 @@ def _read_opening(c: dict, x: int) -> dict:
     elif kind == 17:
         registered.append(f"{OPENING}/unread")
     elif kind == 18:
-        mine[one] = [[{"bytes": "00000001"}, {"bytes": "00000001"}]]
+        mine[one] = [[{"bytes": "0001"}, {"bytes": "0001"}]]
     elif kind == 19:
         ref = None
     elif kind == 20:
@@ -5472,6 +5477,8 @@ def _read_opening(c: dict, x: int) -> dict:
         recorded = {"other": OPENING_ROWS}
     elif kind == 35:
         tables = [{**e, "leaves": 2 * OPENING_ROWS} for e in tables]
+    elif kind == 36:
+        mine[one] = [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]
     supplied = c.get("supplied") if isinstance(c.get("supplied"), dict) else {}
     entries = [{**INTERIOR_VALUES[0], "value": v} for v in registered]
     return {**c, "interior": {**rec, "registered": [*held, *entries]}, "links": [*links, *linked], "wires": wired,
