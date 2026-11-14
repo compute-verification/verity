@@ -12,17 +12,17 @@ import Mathlib.Data.Fintype.Fin
 # Draw laws
 
 A draw law is the verifier's coin space `Ω`, uniform, and the set of units each coin draws, core's `Verity.Law`
-(`Definitions.Core.Draw`) over `Fin n`. What a law gives a consumer is its escape function: the probability that a draw
+(`Definitions.Core.Draw`) over `Fin n`. What a law gives a consumer is its missProb function: the probability that a draw
 misses a set `B` of units.
 
-* `escape L B`: the draw is disjoint from `B`;
-* `miss L K`: the largest escape over sets of at least `K` units, the sampling term of the count
+* `missProb L B`: the draw is disjoint from `B`;
+* `miss L K`: the largest missProb over sets of at least `K` units, the sampling term of the count
   curve `δ(K) = miss K + ε`, zero for `K ≥ 1` at a law that draws every unit (`miss_eq_zero_of_draw_univ`);
 * `incl L u`: the probability that `u` is drawn; a single unit escapes with `1 - incl L u`
   (`escape_singleton`), and a set escapes with at most that for each of its members
   (`escape_le_of_mem`).
 
-`subset n k` is the uniform `k`-subset of `n` units, whose escape is hypergeometric:
+`subset n k` is the uniform `k`-subset of `n` units, whose missProb is hypergeometric:
 `C(n - |B|, k) / C(n, k)` (`subset_escape`), so its count curve is `C(n - K, k) / C(n, k)`
 (`subset_miss`).
 -/
@@ -36,7 +36,7 @@ open scoped ENNReal
 
 namespace Law
 
-open Verity.Law (escape miss incl)
+open Verity.Law (missProb miss incl)
 
 variable {n : ℕ}
 
@@ -51,35 +51,35 @@ theorem prCoin_not {C : Type} [Fintype C] [Nonempty C] (p : C → Prop) :
   have hne : prCoin p ≠ ∞ := ne_top_of_le_ne_top ENNReal.one_ne_top (h ▸ le_self_add)
   exact ENNReal.eq_sub_of_add_eq hne (by rw [add_comm]; exact h)
 
-theorem escape_le_one (L : Law n) (B : Finset (Fin n)) : L.escape B ≤ 1 := by
+theorem escape_le_one (L : Law n) (B : Finset (Fin n)) : L.missProb B ≤ 1 := by
   classical
-  unfold escape prCoin
+  unfold missProb prCoin
   refine (avg_mono fun ω => ?_).trans (avg_const (C := L.Ω) 1).le
   split_ifs <;> simp
 
 /-- Missing more units is less likely. -/
-theorem escape_anti (L : Law n) {B B' : Finset (Fin n)} (h : B ⊆ B') : L.escape B' ≤ L.escape B :=
+theorem escape_anti (L : Law n) {B B' : Finset (Fin n)} (h : B ⊆ B') : L.missProb B' ≤ L.missProb B :=
   prCoin_mono fun _ hd => hd.mono_right h
 
-theorem escape_empty (L : Law n) : L.escape ∅ = 1 := by
-  unfold escape prCoin
+theorem escape_empty (L : Law n) : L.missProb ∅ = 1 := by
+  unfold missProb prCoin
   simp only [Finset.disjoint_empty_right, ite_true]
   exact avg_const 1
 
 /-- A single unit escapes exactly when it is not drawn. -/
-theorem escape_singleton (L : Law n) (u : Fin n) : L.escape {u} = 1 - L.incl u := by
-  unfold escape incl
+theorem escape_singleton (L : Law n) (u : Fin n) : L.missProb {u} = 1 - L.incl u := by
+  unfold missProb incl
   rw [← prCoin_not]
   exact congrArg prCoin (funext fun ω => propext Finset.disjoint_singleton_right)
 
-/-- A set escapes with at most the escape of any one of its units. -/
+/-- A set escapes with at most the missProb of any one of its units. -/
 theorem escape_le_of_mem (L : Law n) {B : Finset (Fin n)} {u : Fin n} (hu : u ∈ B) :
-    L.escape B ≤ 1 - L.incl u :=
+    L.missProb B ≤ 1 - L.incl u :=
   (L.escape_anti (Finset.singleton_subset_iff.2 hu)).trans (L.escape_singleton u).le
 
 theorem escape_le_miss (L : Law n) {K : ℕ} {B : Finset (Fin n)} (h : K ≤ B.card) :
-    L.escape B ≤ L.miss K :=
-  le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : K ≤ B.card) => L.escape B) B h le_rfl
+    L.missProb B ≤ L.miss K :=
+  le_iSup₂_of_le (f := fun (B : Finset (Fin n)) (_ : K ≤ B.card) => L.missProb B) B h le_rfl
 
 theorem miss_le_one (L : Law n) (K : ℕ) : L.miss K ≤ 1 :=
   iSup₂_le fun B _ => L.escape_le_one B
@@ -116,12 +116,12 @@ theorem card_disjoint_subsets (k : ℕ) (B : Finset (Fin n)) :
       exact ⟨⟨S, hk⟩, hS, rfl⟩
   rw [this, Finset.card_powersetCard, Finset.card_compl, Fintype.card_fin]
 
-/-- **The hypergeometric escape.** A uniform `k`-subset misses `B` with probability
+/-- **The hypergeometric missProb.** A uniform `k`-subset misses `B` with probability
 `C(n - |B|, k) / C(n, k)`. -/
 theorem subset_escape {k : ℕ} (hk : k ≤ n) (B : Finset (Fin n)) :
-    (subset n k hk).escape B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
+    (subset n k hk).missProb B = ((n - B.card).choose k : ℝ≥0∞) / (n.choose k : ℝ≥0∞) := by
   classical
-  unfold escape
+  unfold missProb
   rw [prCoin_eq_card]
   congr 1
   · exact congrArg _ (card_disjoint_subsets k B)
@@ -178,7 +178,7 @@ theorem choose_sub_mul_pow_le (n k : ℕ) : ∀ b, b ≤ n →
 /-- **The product bound for the uniform subset**: a set escapes with at most the product of its
 units' miss probabilities, so inclusion probabilities alone give a valid bound. -/
 theorem subset_escape_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finset (Fin n)) :
-    (subset n k hk).escape B ≤ ∏ u ∈ B, (1 - (subset n k hk).incl u) := by
+    (subset n k hk).missProb B ≤ ∏ u ∈ B, (1 - (subset n k hk).incl u) := by
   have hu : ∀ u, 1 - (subset n k hk).incl u = ((n - k : ℕ) : ℝ≥0∞) / (n : ℝ≥0∞) := by
     intro u
     rw [← escape_singleton, subset_escape, Finset.card_singleton, choose_ratio hk hn]
@@ -192,7 +192,7 @@ theorem subset_escape_le_prod {k : ℕ} (hk : k ≤ n) (hn : 1 ≤ n) (B : Finse
   exact_mod_cast this
 
 /-- **The demo's curve** (`docs/audit-protocols.md` §0.2): with 1,024 heads and 16 drawn, 590 or
-more wrong heads escape with probability at most `2^-20`. -/
+more wrong heads missProb with probability at most `2^-20`. -/
 theorem demo_count_590 : (subset 1024 16 (by norm_num)).miss 590 ≤ ((2 : ℝ≥0∞) ^ 20)⁻¹ := by
   rw [subset_miss _ (by norm_num), ENNReal.div_le_iff (by exact_mod_cast (Nat.choose_pos
     (by norm_num : 16 ≤ 1024)).ne') (ENNReal.natCast_ne_top _), ← ENNReal.div_eq_inv_mul,
@@ -248,11 +248,11 @@ theorem bernoulli_avg_prod {num den : ℕ} [NeZero den] (h : num ≤ den) (f : F
   simp only [hu, ite_true]
   exact avg_bern h (f u)
 
-/-- **The Bernoulli escape**: `((den − num)/den)^|B|`. -/
+/-- **The Bernoulli missProb**: `((den − num)/den)^|B|`. -/
 theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Finset (Fin n)) :
-    (bernoulli n num den).escape B = bernFactor num den 0 ^ B.card := by
+    (bernoulli n num den).missProb B = bernFactor num den 0 ^ B.card := by
   classical
-  rw [← Finset.prod_const, ← bernoulli_avg_prod h (fun _ => 0) B, escape, ← avg_ite_eq_prCoin]
+  rw [← Finset.prod_const, ← bernoulli_avg_prod h (fun _ => 0) B, missProb, ← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω => ?_)
   rw [Finset.prod_const, Finset.inter_comm]
   by_cases hd : Disjoint ((bernoulli n num den).draw ω) B
@@ -263,7 +263,7 @@ theorem bernoulli_escape {num den : ℕ} [NeZero den] (h : num ≤ den) (B : Fin
 
 /-! ## The uniform subset is optimal
 
-Averaging `escape B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
+Averaging `missProb B` over a uniformly random `K`-set `B` gives `E[C(n - |S|, K)] / C(n, K)` for any
 law (`avg_escape_subsets`). The map `s ↦ C(n - s, K)` is convex on `ℕ` (its drops fall,
 `drop_anti`), so it lies above its supporting line at `k` (`choose_support`), and Jensen's
 inequality at a mean of `k` gives `C(n - k, K)`, which is the uniform `k`-subset's value. -/
@@ -291,17 +291,17 @@ theorem avg_card (L : Law n) : avg (fun ω => ((L.draw ω).card : ℝ≥0∞)) =
   rw [avg_sum]
   exact Finset.sum_congr rfl fun u _ => avg_ite_eq_prCoin _
 
-/-- **Averaging over `K`-sets.** For any law, the escape of a uniformly random `K`-set is the mean
+/-- **Averaging over `K`-sets.** For any law, the missProb of a uniformly random `K`-set is the mean
 of `C(n - |S|, K) / C(n, K)` over the draw `S`. -/
 theorem avg_escape_subsets (M : Law n) {K : ℕ} (hK : K ≤ n) :
-    avg (fun B : (subset n K hK).Ω => M.escape B.1) =
+    avg (fun B : (subset n K hK).Ω => M.missProb B.1) =
       avg fun ω => (((n - (M.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
   classical
-  unfold escape prCoin
+  unfold missProb prCoin
   rw [avg_comm]
   refine congrArg avg (funext fun ω => ?_)
   rw [← subset_escape hK (M.draw ω)]
-  unfold escape prCoin
+  unfold missProb prCoin
   refine congrArg avg (funext fun B => ?_)
   by_cases h : Disjoint (M.draw ω) B.1
   · simp only [subset, h, h.symm, ite_true]
@@ -380,7 +380,7 @@ theorem subset_minimax (L : Law n) {k : ℕ} (hk : k ≤ n) (hmean : ∑ u, L.in
   have hc : (n.choose K : ℝ≥0∞) ≠ 0 := by exact_mod_cast (Nat.choose_pos hK).ne'
   -- the uniform subset's count curve, read through the averaging identity
   have hU : (subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
-    have h1 : avg (fun B : (subset n K hK).Ω => (subset n k hk).escape B.1) = (subset n k hk).miss K := by
+    have h1 : avg (fun B : (subset n K hK).Ω => (subset n k hk).missProb B.1) = (subset n k hk).miss K := by
       rw [subset_miss hk hK]
       refine (congrArg avg (funext fun B => ?_)).trans (avg_const _)
       rw [subset_escape, B.2]
@@ -404,7 +404,7 @@ theorem subset_minimax (L : Law n) {k : ℕ} (hk : k ≤ n) (hmean : ∑ u, L.in
           rw [avg_add, avg_mul_const]
       _ = _ := by rw [avg_card, hmean]
   -- the average over `K`-sets is at most the maximum
-  have hmax : avg (fun B : (subset n K hK).Ω => L.escape B.1) ≤ L.miss K :=
+  have hmax : avg (fun B : (subset n K hK).Ω => L.missProb B.1) ≤ L.miss K :=
     (avg_mono fun B => L.escape_le_miss B.2.ge).trans (avg_const _).le
   calc (subset n k hk).miss K = (((n - k).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := hU
     _ ≤ (avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞)) / (n.choose K : ℝ≥0∞) := by
@@ -412,7 +412,7 @@ theorem subset_minimax (L : Law n) {k : ℕ} (hk : k ≤ n) (hmean : ∑ u, L.in
     _ = avg fun ω => (((n - (L.draw ω).card).choose K : ℕ) : ℝ≥0∞) / (n.choose K : ℝ≥0∞) := by
         simp only [div_eq_mul_inv]
         rw [avg_mul_const]
-    _ = avg (fun B : (subset n K hK).Ω => L.escape B.1) := (avg_escape_subsets L hK).symm
+    _ = avg (fun B : (subset n K hK).Ω => L.missProb B.1) := (avg_escape_subsets L hK).symm
     _ ≤ L.miss K := hmax
 
 end Law

@@ -16,7 +16,7 @@ certificate (`Run.ComputeSoundPerRun`, `Run.BandwidthSoundPerRun`, `Run.Capacity
 other audits' coins. It implies the sure-bound form.
 
 PoUW's guarantee becomes per-run by truncation: the adversary that runs `A` but stops before its cost would exceed a
-budget `b` costs at most `b` on every coin, and commits `A`'s transcript wherever `A` costs at most `b`. PoUW's cost
+budget `b` costs at most `b` on every coin, and commits `A`'s trace wherever `A` costs at most `b`. PoUW's cost
 model is abstract, so whether that adversary exists is a property of the model (`BudgetAbort`), not a theorem: a model
 whose cost reads what its programs cannot see (the oracle at points they never query, say) has no aborting program.
 
@@ -48,7 +48,7 @@ variable {Q R S : Type}
 workload, activation input and budget `b ≥ 0` there is one program, fixed before the oracle, the preprocessed state and
 the salt, that runs the program and stops before its cost would exceed `b`. On every oracle, preprocessed state and salt
 it costs at most `b` and makes at most the program's oracle calls, and wherever the program costs at most `b` it
-commits the program's transcript and hashes the program's inputs. -/
+commits the program's trace and hashes the program's inputs. -/
 def BudgetAbort (CM : CostModel Q R S) : Prop :=
   (∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
       0 ≤ CM.cost prog H U act σ s) ∧
@@ -76,7 +76,7 @@ variable {Q R S : Type}
 /-- **Pearl-C's cost model truncates**: `BudgetAbort`'s statement over Pearl-C's `CostModel`, whose programs take
 activation codes. Its costs are nonnegative, and for every program, workload, activation input and budget `b ≥ 0` there
 is one program, fixed before the oracle, the preprocessed state and the salt, that costs at most `b`, makes at most the
-program's oracle calls, and commits the program's transcript wherever the program costs at most `b`. -/
+program's oracle calls, and commits the program's trace wherever the program costs at most `b`. -/
 def BudgetAbortPearlC (CM : PearlC.CostModel Q R S) : Prop :=
   (∀ (prog : CM.Prog) (H : Q → R) (U : PearlC.Workload) (act : ℕ → PearlC.Codes) (σ : PearlC.State) (s : S),
       0 ≤ CM.cost prog H U act σ s) ∧
@@ -172,9 +172,9 @@ structure RealizesPearlCPriced {Q R S : Type} (CM : PearlC.CostModel Q R S) (P :
     (r : Run d α (PearlCCoins Q R S U w t) ΩQ ΩS) (p : Price) (pRead : ℝ) where
   /-- the adversary the device is in Pearl-C's game at the other audits' coins -/
   adv : ΩQ × ΩS → PearlC.Adversary CM
-  /-- the compute audit is Pearl-C's audit of the adversary's transcript: every ticket's unit is correct -/
+  /-- the compute audit is Pearl-C's audit of the adversary's trace: every ticket's unit is correct -/
   accepts_iff : ∀ x o, r.accepts .compute (x, o) ↔
-    AuditAccepts (PearlC.correctSet P U x.1 x.2.1 ((adv o).transcript U x.1 x.2.1)) x.2.2
+    AuditAccepts (PearlC.correctSet P U x.1 x.2.1 ((adv o).trace U x.1 x.2.1)) x.2.2
   /-- the priced sum covers the adversary's online cost -/
   cost_le : ∀ x o, CM.cost (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤
     (r.work p (x, o) : ℝ) + pRead * r.pouwRead (x, o)

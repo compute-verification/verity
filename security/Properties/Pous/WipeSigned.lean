@@ -153,7 +153,7 @@ def wipeTreeStrings (d : FV3.Sha512.Domain) (values : Array ByteArray) : List By
 
 /-- What SHA-512 hashes for a wipe `(c, ended, the start mark, the fill's readings, batches)` signed under the
 key `pk`: its records tree, the input of its `message`, and that of `memoryChallengerMessage`. -/
-def wipeSessionStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
+def signedWipeStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : String) (startMark : ByteArray)
     (fillStartNs fillEndNs : Int) (batches : Array StreamedWipe.Batch) : List ByteArray :=
   let head := (StreamedWipe.header c ended startMark fillStartNs fillEndNs batches.size).toUTF8
   (match batches.mapM StreamedWipe.Batch.value with
@@ -170,15 +170,15 @@ def wipeSessionStrings (pk : ByteArray) (c : StreamedWipe.Commitment) (ended : S
     | .error _ => []
 
 /-- The strings the run hashes: the signed wipe's, those of each wipe the challenger ends under its key, and those of
-each PoUS session it ends under the key (`sessionStrings`). -/
+each PoUS session it ends under the key (`challengePhaseStrings`). -/
 def wipeRunStrings (s : StreamedWipe.Signed) (dev : SignedWipeParty) : List ByteArray :=
-  wipeSessionStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches ++
+  signedWipeStrings s.publicKey s.commitment s.ended s.startMark s.fillStartNs s.fillEndNs s.batches ++
     (dev.wipes s.publicKey).flatMap (fun r => match r.recorded.ended with
       | some e =>
-        wipeSessionStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
+        signedWipeStrings s.publicKey r.commitment e r.startMark r.fillStartNs r.fillEndNs r.recorded.batches
       | none => []) ++
     (dev.device.sessions s.publicKey).flatMap fun r => match r.recorded.ended with
-      | some e => sessionStrings s.publicKey r.commitment e r.recorded.rounds
+      | some e => challengePhaseStrings s.publicKey r.commitment e r.recorded.rounds
       | none => []
 
 /-! ### The break's two adversaries -/
@@ -313,7 +313,7 @@ def measuredBatch (digest : Nat → ByteArray) (i : Nat) : StreamedWipe.Batch :=
 
 /-- The honest session: the commitment, ended `complete` after its `k` batches, an empty start mark (a challenger with
 no mark source) and the fill's readings, signed under S1's scheme with the key `pk` and the signature `sig`. -/
-def measuredSession (digest : Nat → ByteArray) (pk sig : ByteArray) : StreamedWipe.Signed :=
+def measuredWipe (digest : Nat → ByteArray) (pk sig : ByteArray) : StreamedWipe.Signed :=
   ⟨measuredCommitment, StreamedWipe.COMPLETE, .empty, MEASURED_FILL_START_NS, MEASURED_FILL_END_NS,
     (Array.range measuredParams.k).map (measuredBatch digest), LMS, pk, sig⟩
 

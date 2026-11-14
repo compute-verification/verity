@@ -853,7 +853,7 @@ declares in the tile passes `RowOK` at `c`'s activations. -/
 def TilePassGivesTheDecl : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (coins : PouwCheck.PearlPlus.EpochCoins)
     (man : Lean.Json) (p : Pass) (tid : ℕ) (o : TileOpening) (U : Pouw.PearlC.Workload) (g : ℕ)
-    (τ : Pouw.PearlC.Transcript) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
+    (τ : Pouw.PearlC.Trace) (c : Pouw.PearlC.Commit) (dec : ℕ → Decl),
     PouwCheck.PearlPlus.load coins man = .ok p → TileOf p tid U g →
     τ ((auditTiling 64 64 U.layout).unit g) = some c → (∀ r ∈ p.records, dec r.matmul.index = declOf r) →
     OpensCommitted p tid o U ((auditTiling 64 64 U.layout).unit g) c →
@@ -926,7 +926,7 @@ def decOf (passes : List Pass) (u : ℕ) : Decl :=
 
 /-- How the run's passes lie over the game's workload `U` and transcript `τ`: 64 × 64 tiles, each record's call a unit
 of `U` that `τ` commits, with the record's shape and weight, and no call in two records. -/
-structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) : Prop where
+structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace) : Prop where
   tile64 : ∀ p ∈ passes, p.scheme.tileM = 64 ∧ p.scheme.tileN = 64
   unit : ∀ p ∈ passes, ∀ r ∈ p.records, r.matmul.index < U.layout.N ∧
     (U.layout.shape r.matmul.index).m = r.matmul.m ∧ (U.layout.shape r.matmul.index).k = r.matmul.k ∧
@@ -936,7 +936,7 @@ structure RunLayout (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.P
     p.records[pos]? = some r → passes[i']? = some p' → p'.records[pos']? = some r' →
     r.matmul.index = r'.matmul.index → i = i' ∧ pos = pos'
 
-variable {passes : List Pass} {U : Pouw.PearlC.Workload} {τ : Pouw.PearlC.Transcript}
+variable {passes : List Pass} {U : Pouw.PearlC.Workload} {τ : Pouw.PearlC.Trace}
 
 theorem decOf_cases (passes : List Pass) (u : ℕ) : decOf passes u = ⟨0, ∅, ∅⟩ ∨
     ∃ (i : ℕ) (p : Pass) (pos : ℕ) (r : UnitRecord), passes[i]? = some p ∧ p.records[pos]? = some r ∧
@@ -1120,7 +1120,7 @@ declaration read from its record (`decOf`), each of `Run.tickets`' entries is a 
 `drawTickets` under `pearlCDrawRev1 devH100` are the entry's tickets; distinct entries are on distinct game tiles, and
 every game tile with a ticket has an entry. -/
 def TicketsAreTheDraw : Prop :=
-  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript),
+  ∀ {Q R S : Type} (TR : TileRules Q R S) (passes : List Pass) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace),
     (∀ L, TR.tiling L = auditTiling 64 64 L) → RunLayout passes U τ →
     ∃ φ : ℕ → ℕ,
       (∀ j id t, (tickets passes)[j]? = some (id, t) →
@@ -1182,7 +1182,7 @@ theorem ticketsAreTheDraw : TicketsAreTheDraw := by
 its pass's salt is the game's, its weight's root is the semantics', each weight row of its columns passes `P`'s rules,
 and its openings are its unit's commitment. -/
 structure DrawnOn {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (P : Pouw.PearlC.Protocol Q R S) (s : S)
-    (pl : Plan) (opener : ℕ → ℕ → Except String TileOpening) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript)
+    (pl : Plan) (opener : ℕ → ℕ → Except String TileOpening) (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace)
     (pi tid g : ℕ) : Prop where
   todo : (pi, tid) ∈ pl.todo
   tile : TileOf pl.passes[pi]! tid U g
@@ -1203,7 +1203,7 @@ tile, one hashed in digesting the words the check forms and one in digesting the
 def AcceptGivesTheAudit : Prop :=
   ∀ {Q R S : Type} (saltOf : S → List ℕ) (rootOf : ℕ → List ℕ) (ρ : ℚ) (P : Pouw.PearlC.Protocol Q R S)
     (TR : TileRules Q R S) (H : Q → R) (s : S) (i : Input) (opener : ℕ → ℕ → Except String TileOpening) (pl : Plan)
-    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Transcript) {w : ℕ → ℕ} {t : ℕ}
+    (U : Pouw.PearlC.Workload) (τ : Pouw.PearlC.Trace) {w : ℕ → ℕ} {t : ℕ}
     (c : Fin t → Ticket w (TR.tiling U.layout).NT),
     TR.tiling = auditTiling 64 64 → TR.rowOK = (tilesH3 saltOf rootOf ρ : TileRules Q R S).rowOK →
     P.ticket = (protocolH3 saltOf rootOf ρ : Pouw.PearlC.Protocol Q R S).ticket →

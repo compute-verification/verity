@@ -21,7 +21,7 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
 * **The tolerant audit** (`…Tol`, `GGapSampledTol`): the same g from the same premises when the audit accepts a sampled tile
   over its inert-work bound and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
   (`gapSampled_of_tol`).
-* **The audit sampled as the run samples** (`pearlCSampledDrawDevRev1RowCapAtTol`, `GGapSampledDrawTol`): each transcript sampled
+* **The audit sampled as the run samples** (`pearlCSampledDrawDevRev1RowCapAtTol`, `GGapSampledDrawTol`): each trace sampled
   by its records' tickets (`pearlCDrawRev1`), at the same g, since a declaration consistent with a tile weighs it at most
   its credited rows' `W_ref` (`pearlCDrawRev1_le`, `wrefRowRev1_le`).
 * **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, sampled as
@@ -44,7 +44,7 @@ variable {Q R S : Type}
 open Classical in
 theorem rowCapAt_credit_sum_le (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ ρr : ℚ) (hadd : 0 ≤ d.prices.add)
     (hbf : 0 ≤ d.prices.bf16) (hρ : ρ ≤ 1) (hρr : ρr < 1) (U : Workload) (hD : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : Trace) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1RowCapAt d sem ρ ρr) (pearlCTilesDevRev1RowCapAt d sem ρ ρr) U H s τ,
         (pearlCTilesDevRev1RowCapAt d sem ρ ρr).credit H s U g
           (actOf τ (((pearlCTilesDevRev1RowCapAt d sem ρ ρr).tiling U.layout).unit g)) ≤
@@ -110,7 +110,7 @@ theorem ttOutTileRowSeed_rowCapAt [Fintype Q] [DecidableEq Q] [Fintype R] [Finty
     rw [← Rat.cast_mul, show (1 - ρ) / (1 - ρr) * ((1 - ρr) / (1 - ρ)) = 1 by field_simp, Rat.cast_one]
   refine ⟨h.1, fun U hU hR T hT q hq A hA => le_trans (Pouw.pr_mono ?_) (h.2 U hU hR T hT q hq A hA)⟩
   intro x hx
-  have hsum := rowCapAt_credit_sum_le d sem ρ ρr hadd hbf hρ.le hρr U hU.2 x.1 x.2 (A.transcript U x.1 x.2)
+  have hsum := rowCapAt_credit_sum_le d sem ρ ρr hadd hbf hρ.le hρr U hU.2 x.1 x.2 (A.trace U x.1 x.2)
   rw [show 1 - (1 - (1 - g₀) * (((1 - ρr) / (1 - ρ) : ℚ) : ℝ)) = (1 - g₀) * (((1 - ρr) / (1 - ρ) : ℚ) : ℝ) by ring,
     div_mul_eq_div_div] at hx
   have h2 := lt_of_lt_of_le hx hsum

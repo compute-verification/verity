@@ -1,7 +1,7 @@
 /-
 **The bits a replay block returns**, counted from its registered Definition (`returnedBits`), which
 `second_stage.returned_bits` mirrors and the difftest's `replay_returned` holds to it. A two-stage registration carries
-the count (`service.WindowCommitmentRecord.returned`), and a served cap below it is refused (`plancheck.two`).
+the count (`service.ExecutionPhaseCommitmentRecord.returned`), and a served cap below it is refused (`plancheck.two`).
 
 A replay block returns, to the boundary, the output fields of its templates' units that its Definition's return names:
 the design's return links (`returnLinks`). The second stage's files lay each returned field on 16-bit words of its own,

@@ -68,8 +68,8 @@ abbrev slots : threading.Slots where
   slot g := (if g.val = 0 ∨ g.val = 6 then 0 else 1 : Fin 2)
   reuse_le := by decide +kernel
 
-/-- Two windows, one per parameter across both steps. -/
-abbrev windows : Partition decl.D 2 where
+/-- Two serverBlocks, one per parameter across both steps. -/
+abbrev serverBlocks : Partition decl.D 2 where
   unit g :=
     if g.val = 4 ∨ g.val = 6 ∨ g.val = 8 then some 0 else if g.val = 5 ∨ g.val = 7 ∨ g.val = 9 then some 1 else none
   input_iff := by decide +kernel
@@ -81,33 +81,33 @@ theorem M_nonempty : threading.M.Nonempty := by decide +kernel
 
 theorem gap : (6 : ℝ) < ((2 : ℕ) : ℝ) * 4 := by norm_num
 
-theorem reads_le : ∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ 6 := by
-  have h : ∀ j, novelReads decl (windows.gates j) ≤ 6 := by decide +kernel
+theorem reads_le : ∀ j, (novelReads decl (serverBlocks.gates j) : ℝ) ≤ 6 := by
+  have h : ∀ j, novelReads decl (serverBlocks.gates j) ≤ 6 := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
 theorem reachSlots : Assumptions.ReachSlots decl threading slots 2 := by
   unfold Assumptions.ReachSlots
   decide +kernel
 
-theorem fitsSlots : Assumptions.FitsSlots decl threading slots windows start 4 1 := by
-  have h : ∀ j, 4 * (slots.slotsUsed (windows.gates j)).card + 1 * (threading.entered windows start j).card ≤
-      novelReads decl (windows.gates j) := by decide +kernel
+theorem fitsSlots : Assumptions.FitsSlots decl threading slots serverBlocks start 4 1 := by
+  have h : ∀ j, 4 * (slots.slotsUsed (serverBlocks.gates j)).card + 1 * (threading.entered serverBlocks start j).card ≤
+      novelReads decl (serverBlocks.gates j) := by decide +kernel
   exact fun j => by exact_mod_cast h j
 
 /-- Window 0 uses two weight gates, both versions of one slot. -/
-theorem window0 :
-    (threading.weightsUsed (windows.gates 0)).card = 2 ∧ (slots.slotsUsed (windows.gates 0)).card = 1 := by
+theorem serverBlock0 :
+    (threading.weightsUsed (serverBlocks.gates 0)).card = 2 ∧ (slots.slotsUsed (serverBlocks.gates 0)).card = 1 := by
   decide +kernel
 
 /-- **`Fits` fails wherever the rest of `FitBound`'s hypotheses hold**: `Reach` allows `N* ≤ 2`, so `S < N* b_w` needs
 `b_w > 0` and `S < 2 b_w`, while `Fits` charges window 0 `2 b_w ≤ 6 ≤ S`. -/
 theorem not_fits (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
-    (hS : ∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ S) (hR : Assumptions.Reach decl threading Nstar) :
-    ¬ Assumptions.Fits decl threading windows start b_w w_e := by
+    (hS : ∀ j, (novelReads decl (serverBlocks.gates j) : ℝ) ≤ S) (hR : Assumptions.Reach decl threading Nstar) :
+    ¬ Assumptions.Fits decl threading serverBlocks start b_w w_e := by
   intro hF
-  have hw : (threading.weightsUsed (windows.gates 0)).card = 2 := by decide +kernel
-  have he : (threading.entered windows start 0).card = 0 := by decide +kernel
-  have hr : novelReads decl (windows.gates 0) = 6 := by decide +kernel
+  have hw : (threading.weightsUsed (serverBlocks.gates 0)).card = 2 := by decide +kernel
+  have he : (threading.entered serverBlocks start 0).card = 0 := by decide +kernel
+  have hr : novelReads decl (serverBlocks.gates 0) = 6 := by decide +kernel
   have hN : Nstar ≤ 2 := by
     have h2 : (threading.threadWeights univ ⟨0, by decide⟩).card = 2 := by decide +kernel
     exact (hR ⟨0, by decide⟩ (by decide +kernel)).trans h2.le
@@ -125,15 +125,15 @@ theorem not_fits (Nstar : ℕ) (S b_w w_e : ℝ) (hgap : S < Nstar * b_w)
 /-- **`FitBoundSlots` strictly generalizes `FitBound`**: here, with counted multiplications to count, all of
 `FitBoundSlots`'s hypotheses hold, and no `N*`, `S`, `b_w`, `w_e` meets all of `FitBound`'s. -/
 theorem strict : threading.M.Nonempty ∧ (6 : ℝ) < ((2 : ℕ) : ℝ) * 4 ∧
-    (∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ 6) ∧ Assumptions.ReachSlots decl threading slots 2 ∧
-    Assumptions.FitsSlots decl threading slots windows start 4 1 ∧
-    ∀ (Nstar : ℕ) (S b_w w_e : ℝ), S < Nstar * b_w → (∀ j, (novelReads decl (windows.gates j) : ℝ) ≤ S) →
-      Assumptions.Reach decl threading Nstar → ¬ Assumptions.Fits decl threading windows start b_w w_e :=
+    (∀ j, (novelReads decl (serverBlocks.gates j) : ℝ) ≤ 6) ∧ Assumptions.ReachSlots decl threading slots 2 ∧
+    Assumptions.FitsSlots decl threading slots serverBlocks start 4 1 ∧
+    ∀ (Nstar : ℕ) (S b_w w_e : ℝ), S < Nstar * b_w → (∀ j, (novelReads decl (serverBlocks.gates j) : ℝ) ≤ S) →
+      Assumptions.Reach decl threading Nstar → ¬ Assumptions.Fits decl threading serverBlocks start b_w w_e :=
   ⟨M_nonempty, gap, reads_le, reachSlots, fitsSlots, not_fits⟩
 
 /-- `FitBoundSlots` at the witness. -/
 theorem bound :
     4 * (1 : ℝ) * ((2 : ℕ) * 4 - 6) * threading.M.card ≤ (2 : ℕ) * threading.reuse * (2 : ℕ) * (6 : ℝ) ^ 2 :=
-  FitBoundSlots decl threading slots 2 windows start 2 6 4 1 gap reads_le reachSlots fitsSlots
+  FitBoundSlots decl threading slots 2 serverBlocks start 2 6 4 1 gap reads_le reachSlots fitsSlots
 
 end Nci.SecurityProofs.FitSlotsWitness

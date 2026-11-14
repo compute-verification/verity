@@ -116,7 +116,7 @@ def HeadlineTables : Prop :=
       (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 plan (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOfJ dg plan N wr)) τ ≤
@@ -162,7 +162,7 @@ def HeadlineTablesSubset : Prop :=
       (plan ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 plan (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfJ dg plan N wr)) τ ≤

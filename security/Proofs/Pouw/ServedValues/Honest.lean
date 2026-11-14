@@ -16,7 +16,7 @@ size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: Flock's `and a b` of two dist
 
 * `right_values_honest`: the honest period meets every premise of `RightValues`, `j10r_meets`' without
   `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the
-  windows' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
+  executionPhases' inputs, as `j10r_meets` is (`hacc`, `hsalt`, `hdraw`).
 * `right_values_nontrivial`: the conclusion fails when the verifier accepts everything. With every window credited
   (`hacc`), every block live and the play accepted, a prover that skips every block whole has no right block, while
   the right values must cover `(1 − ε(n))₊·N_p·n > 0` AND gates once `Λ·ln(1/δ_s) < n`. So the conclusion's event
@@ -120,30 +120,30 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
 /-- **`RightValues`'s bound at the honest J10-R period**: `j10r_meets` gives every
 premise but `UnitFixed`, which the guarantee doesn't take, at `N_p` one-word blocks, one round, `ρ = 1`, any
 `δ_s > 0` and `δ_bind = δ_ks = 0`. -/
-theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem right_values_honest (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) β i)) = u)
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
       rightSize Honest.scheme (circuit (tileCount σ sT)) ((blocks (tileCount σ sT)).size ∅) (fun w t =>
-        (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-          (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
+        (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+          (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
           (monitoringPeriodMode (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-              (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
+            (tileRun σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+              (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
           x w t) <
         creditFloor Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
-          ((windows σ sT regOf evOf n).prefixLen x)
+          ((executionPhases σ sT regOf evOf n).prefixLen x)
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) x)
+            (executionPhases σ sT regOf evOf n) x)
           (creditedSize Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
+            (executionPhases σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
           ((blocks (tileCount σ sT)).size ∅) 1 1 (j10rRate (k sT) 1) δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hM, hS, hρN, hwmax, hlk, hG, hDD, hPre, hMoved, hReg, hDraw, hServ, hSalt, hLucks, -, -, -, -⟩ :=
     j10r_meets σ k hk sT unitOf regOf evOf enc hKd hacc hsalt hdraw n hn hδs
   exact rightValues σ k hk sT unitOf Honest.scheme (circuit (tileCount σ sT)) hn hN (hr1 _) hM hKd
-    (andDecl (tileCount σ sT)) Verity.RegisteredCircuit.D (blocks (tileCount σ sT)) ∅ (windows σ sT regOf evOf n) opened
+    (andDecl (tileCount σ sT)) Verity.RegisteredCircuit.D (blocks (tileCount σ sT)) ∅ (executionPhases σ sT regOf evOf n) opened
     enc place tile (period (Ω1 σ sT) (tileCount σ sT) n) (play Unit (tileCount σ sT) (k sT) n) 1 δs 0 0 hS one_pos
     le_rfl hρN hwmax hlk hG hDD hPre hMoved hReg hDraw hServ hSalt hLucks
 
@@ -155,7 +155,7 @@ end Witnesses
 def skipStages (N : ℕ) : SplitStages Bool (Fin N) 1 :=
   .stage (fun _ _ => .whole) (fun _ _ => True) (fun _ _ => True) fun _ => .done
 
-/-- The skipping period of `n` windows: every tile live, each window's stages `skipStages`. -/
+/-- The skipping period of `n` executionPhases: every tile live, each window's stages `skipStages`. -/
 def skipPeriod (Ω : Type) (N : ℕ) : (n : ℕ) → ExecutionPhasePlay Bool Ω (Fin N) (circuit N).rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) (skipStages N) fun _ => skipPeriod Ω N n
@@ -224,25 +224,25 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (evOf : Bool → Equiv.Perm (Fin (tileCount σ sT)) × Unit → Answered) (enc : Bool → ByteArray)
 
 /-- **The skipping period's live words are `N·n`** when every window is credited. -/
-theorem creditLive_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
+theorem creditLive_skip (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
     creditLive Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-      (windows σ sT regOf evOf n) x = tileCount σ sT * n := by
+      (executionPhases σ sT regOf evOf n) x = tileCount σ sT * n := by
   unfold creditLive
   calc _ = ∑ _w : Fin n, (tileCount σ sT : ℝ) := Finset.sum_congr rfl fun w _ => by
-          have hw : (windows σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
+          have hw : (executionPhases σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
           rw [if_pos hw, liveAt_skipPeriod n x w]
           simp only [liveWords_true]
           exact sum_tileWords _
     _ = tileCount σ sT * n := by simp [mul_comm]
 
 /-- **The skipping period's credited size is `N·n` AND gates** when every window is credited. -/
-theorem creditedSize_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
+theorem creditedSize_skip (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β)) (n : ℕ) (x : Paths (Ω1 σ sT) n) :
     creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-      (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x =
+      (executionPhases σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x =
         tileCount σ sT * n := by
   unfold creditedSize
   calc _ = ∑ _w : Fin n, (tileCount σ sT : ℝ) := Finset.sum_congr rfl fun w _ => by
-          have hw : (windows σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
+          have hw : (executionPhases σ sT regOf evOf n).AcceptedUpTo x w := fun _ _ => hacc _ _
           rw [if_pos hw, liveAt_skipPeriod n x w]
           simp [liveSize, liveWords_true, tileWords_eq, size_blocks]
     _ = tileCount σ sT * n := by simp [mul_comm]
@@ -252,23 +252,23 @@ theorem creditedSize_skip (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
 (`skipPeriod`), so no block is right. The right values must cover `(1 − ε(n))₊·N_p·n` AND gates, positive once
 `Λ·ln(1/δ_s) < n` at `Λ = j10rRate (k s_T) 1`. So the conclusion's event holds on every path: its probability is `1`,
 above `δ_s + n·(0 + 0)` for `δ_s < 1`. -/
-theorem right_values_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
+theorem right_values_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAccepts (regOf c) (evOf c β))
     (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs1 : δs < 1) (hΛ : j10rRate (k sT) 1 * Real.log (1 / δs) < n) :
     ¬ prob (fun x => (play Unit (tileCount σ sT) (k sT) n).accepts x ∧
       rightSize Honest.scheme (circuit (tileCount σ sT))
         ((blocks (tileCount σ sT)).size ∅) (fun w t =>
-        (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-          (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
+        (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+          (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)).Good
           (monitoringPeriodMode (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-            (tileRun σ k hk sT unitOf (windows σ sT regOf evOf n) opened
-              (pinnedAt (saltOf (windows σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
+            (tileRun σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened
+              (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) (j10rAtCoin (hr1 _) enc place tile)))
           x w t) <
         creditFloor Honest.scheme (circuit (tileCount σ sT)) (tileCount σ sT)
-          ((windows σ sT regOf evOf n).prefixLen x)
+          ((executionPhases σ sT regOf evOf n).prefixLen x)
           (creditLive Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) x)
+            (executionPhases σ sT regOf evOf n) x)
           (creditedSize Honest.scheme (circuit (tileCount σ sT)) (skipPeriod (Ω1 σ sT) (tileCount σ sT) n)
-            (windows σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
+            (executionPhases σ sT regOf evOf n) ((blocks (tileCount σ sT)).size ∅) x)
           ((blocks (tileCount σ sT)).size ∅) 1 1 (j10rRate (k sT) 1) δs) ≤
       δs + n * (0 + 0) := by
   have hN : 0 < tileCount σ sT := Nat.lt_of_lt_of_le hKd (hk sT)

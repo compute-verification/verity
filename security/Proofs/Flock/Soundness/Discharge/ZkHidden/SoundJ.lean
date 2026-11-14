@@ -23,7 +23,7 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 `zk_session_soundHJ`: `zk_session_soundJ` under hidden outputs, the configuration production `--zk` runs (the default
 `--statement`, whose tables `Stmt.setupTables` sets up with `Stmt.setupHidden`, at `--session-tables J`). For any live
 prover `τ` of a hidden-output `--zk` session of `J ≥ 1` tables (`J = nTab I`),
-`Pr[flock-verify --zk accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+`Pr[flock-verify --zk accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition, each read at its site in the hidden-output table it is sampled into (`placeZHJ`, `tabZHJ`) and bound to the
 rows it commits, input or output (`rsZHJ`), at the simulated prover `simZJ … τ` in the compiled batched session of the
 `J` tables `planZHJ`.
@@ -78,7 +78,7 @@ theorem zk_session_soundHJ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZHJ dj y₀) (tabZHJ dj y₀)
             ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
             (reg σ) (cont σ) k Rw)).card)

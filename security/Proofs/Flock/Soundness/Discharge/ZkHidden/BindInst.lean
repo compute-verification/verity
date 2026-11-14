@@ -179,7 +179,7 @@ theorem zk_flock_countC_execOS_atHI (Hs : Hashes 𝔽 Dig (List UInt8))
     (tr : StrictCR.TreeRewind Hs.H (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
       (batchedSessionZC execArith Hs (planAtZKH dj y₀))) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
-    prob (fun o => execAccept o ∧ K ≤ (((instProg c n).partition (outsOfI c n)).wrong
+    prob (fun o => execAccept o ∧ K ≤ (((instProg c n).partition (outsOfI c n)).incorrect
         (XplurZC execArith Hs ((instProg c n).partition (outsOfI c n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZHI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ) (cont σ) k Rw)).card)

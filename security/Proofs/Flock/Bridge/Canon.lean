@@ -41,7 +41,7 @@ import Mathlib.Topology.Sheaves.Init
 
 A registered opening counts only when it is canonical at its wire (`Bridge.canonOpen`): the wire has a row
 (`rows g = some r`), the opening's value is a row (`RowShaped`) of the row's width, and its salt is the `saltLen` bytes
-the deployed leaf takes. The game side counts the units wrong with canonical openings (`wrongRegZc`), and the bridge's
+the deployed leaf takes. The game side counts the units wrong with canonical openings (`incorrectRegZc`), and the bridge's
 targets read them:
 
 * `Bridge.canonRow rows g v`: `g` has a row `r`, `v` is `RowShaped` and `v`'s width is `r.width`;
@@ -50,8 +50,8 @@ targets read them:
   `canonOpen rows g v y`. A constant wire has no row: `progOf` reads it as `.const`, with no opening;
 * `Bridge.OpeningsCanonTarget`: at `EndToEndHidden`'s session, a sampled proof block's openings are canonical (`OpeningsCanon`
   at `canonAt` and the circuit's constants `Bridge.constsOf`), the conjunct `zk_flock_countC_regC` takes;
-* `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `wrongRegZc` at `canonAt`. It implies `EndToEndHidden`
-  (`wrongRegZ_subset_wrongRegZc`), and follows from `EndToEndHidden`'s argument at `zk_flock_countC_regC` and
+* `Bridge.EndToEndHiddenC`: `EndToEndHidden` with "wrong" `incorrectRegZc` at `canonAt`. It implies `EndToEndHidden`
+  (`incorrectRegZ_subset_incorrectRegZc`), and follows from `EndToEndHidden`'s argument at `zk_flock_countC_regC` and
   `OpeningsCanonTarget`;
 * `Bridge.TransportsLiveC`: `TransportsLive` at canonical openings of the wires that aren't constants only;
 * `Bridge.FaultyRightTargetC`: `FaultyRightTarget` over `RightRegZc`'s second conjunct and canonical transport. Its
@@ -158,7 +158,7 @@ def _root_.Flock.Bridge.OpeningsCanonTarget : Prop :=
 
 open Classical in
 /-- **`EndToEndHidden` with canonical openings**: its setting and bound, with "wrong" the units wrong on the
-registration with canonical openings (`wrongRegZc` at `Bridge.canonAt`, at the circuit's constants). -/
+registration with canonical openings (`incorrectRegZc` at `Bridge.canonAt`, at the circuit's constants). -/
 def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -204,7 +204,7 @@ def _root_.Flock.Bridge.EndToEndHiddenC : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
+        K₀ ≤ (incorrectRegZc execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb
           (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤

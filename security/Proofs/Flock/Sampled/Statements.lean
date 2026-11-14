@@ -26,7 +26,7 @@ each one.
 * `SlotsSound`: the statement the sessions prove puts every sampled proof block's committed record in its type's relation, or
   slot binding breaks.
 * `Composition`: at each registration, with the recursion's conclusion (`Recursion`, an interface), the audit accepts
-  with probability at most the sampling design's escape over the committed trace's incorrect proof blocks plus the recursion's error, or a run
+  with probability at most the sampling design's missProb over the committed trace's incorrect proof blocks plus the recursion's error, or a run
   breaks.
 * `ZeroKnowledge`, `ZeroKnowledgeAt`: with the recursion's zero knowledge (`Recursion.hides`), an honest audit's view at
   a sample is simulated from the reveal list alone: the menu, the sample's size, the padded sessions and the owed outputs;
@@ -114,12 +114,12 @@ def MenuCompleteAt : Prop :=
       prCoin (fun ω => ¬ ∃ β : Batching N T V, M.Honest Ty X (L.draw ω) β) ≤ δ
 
 /-- **The slots are sound.** Under a commitment whose records determine their contents, with `X` the trace it commits:
-when what the sessions hold hidden satisfies the statement they prove at the sample `S`, no sampled proof block is wrong in `X`, or
+when what the sessions hold hidden satisfies the statement they prove at the sample `S`, no sampled proof block is incorrect in `X`, or
 slot binding breaks. -/
 def SlotsSound : Prop :=
   ∀ {N : ℕ} {T V : Type} (Ty : Types T V) (C : Commit N T V) (X : Trace N T V) (path₀ : Fin N → ByteArray)
     (S : Finset (Fin N)) (h : Hidden N T V),
-    C.Injective → C.Committed X path₀ → Proves Ty C S h → Disjoint S (wrong Ty X) ∨ SlotBreak C X path₀ h
+    C.Injective → C.Committed X path₀ → Proves Ty C S h → Disjoint S (incorrect Ty X) ∨ SlotBreak C X path₀ h
 
 /-- **Composition with the recursion**, per registration: the prover has registered `R` first (its trace root among it),
 then the auditor samples, then the sessions run. For the sampled audit at `R` with the sampling design `L`, the menu `M` and sessions
@@ -127,7 +127,7 @@ then the auditor samples, then the sessions run. For the sampled audit at `R` wi
 contents and the trace `X` it commits (fixed by `R` alone, so before the sample): for every prover `σ` of the sample's
 continuation, a break of `σ`'s sessions at some sample (the recursion's), or an outcome `σ` reaches whose sessions verify
 while a held slot's opening collides with the committed trace's (`SlotBreak`), or
-$$\Pr[\text{the auditor accepts}] \le \mathrm{escape}_L(\mathrm{wrong}(X)) + \mathbb{E}_\omega[\varepsilon].$$
+$$\Pr[\text{the auditor accepts}] \le \mathrm{missProb}_L(\mathrm{incorrect}(X)) + \mathbb{E}_\omega[\varepsilon].$$
 A game that starts with the registration gets the family form, over the registrations whose incorrect proof blocks lie in a family,
 from this one at each. -/
 def Composition : Prop :=
@@ -140,7 +140,7 @@ def Composition : Prop :=
       (∃ ω o, Reaches (session (L.draw ω) R) (contOf σ ω) o ∧ I.verifies o = true ∧
         SlotBreak (com R) X path₀ (I.hid (L.draw ω) R o)) ∨
       prob (fun x => Accepts M view I.verifies x.2 x.1) (sampledAudit L session R) σ ≤
-        L.escape (wrong Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω)
+        L.missProb (incorrect Ty X) + avg fun ω => I.ε (L.draw ω) R (contOf σ ω)
 
 /-- **Zero knowledge at the reveal list.** With the recursion's conclusion for the sessions (`I`, its (ii) as `hides`):
 at every registration `R` and sample `S`, for every honest witness `h` (sessions at the menu's padded shapes for `|S|`,

@@ -11,8 +11,8 @@ import Proofs.Flock.Soundness.Game
 
 **The statement.** Except with the stated ε, whenever the audit accepts, the integrity profile holds for the committed
 circuit and values, 1 on the constants and 0 on the zero, which are public:
-* `flock_e2e_countL`: the count curve, `Pr[accept ∧ at least K units wrong] ≤ miss_L(K) + ε_ks(σ) + δ_link`;
-* `flock_e2e_drawnL`: `Pr[accept ∧ a drawn unit wrong] ≤ ε_ks(σ) + δ_link`.
+* `flock_e2e_countL`: the count curve, `Pr[accept ∧ at least K units incorrect] ≤ miss_L(K) + ε_ks(σ) + δ_link`;
+* `flock_e2e_drawnL`: `Pr[accept ∧ a drawn unit incorrect] ≤ ε_ks(σ) + δ_link`.
 
 "Wrong" is measured on the audit's circuit `C`, at the committed values: the circuit the statement's rows make, each unit
 its template's rows (`Prog.circuit`: the circuit is chosen on the untrusted side, and the lowering does
@@ -68,7 +68,7 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   {L : Law n}
 
 /-- **The end-to-end count curve (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
-acceptance), the probability that at least `K` units of the committed circuit are wrong at the committed values is at
+acceptance), the probability that at least `K` units of the committed circuit are incorrect at the committed values is at
 most `miss_L(K) + ε_ks(σ) + δ_link`. The committed values are 1 on `ones`, 0 on `zeros` and the plurality elsewhere
 (`Xpub`). The gaps are named hypotheses: `hExec`, `dp`, `hConst`, `hZero` and `vb` (`ASSUMPTIONS.md`, The headline);
 `SHA512CRExpected` for `σ`'s link finders (`hCR`) is the assumption of record. -/
@@ -83,7 +83,7 @@ theorem flock_e2e_countL
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
+        K ≤ (P.incorrect (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (prob_mono (fun o h => ⟨hExec o h.1, h.2⟩) _ σ).trans
@@ -91,7 +91,7 @@ theorem flock_e2e_countL
       (P.loweringSoundB_of_place plan tab dp.place) hk hRw hM hρ hr ht K σ hCR)
 
 /-- **The end-to-end drawn-unit bound (skeleton).** If `execAccept` holds (an event that implies the Lean protocol's
-acceptance), the probability that a sampled proof block of the committed circuit is wrong at the committed values (`Xpub`, as in
+acceptance), the probability that a sampled proof block of the committed circuit is incorrect at the committed values (`Xpub`, as in
 `flock_e2e_countL`) is at most `ε_ks(σ) + δ_link`. -/
 theorem flock_e2e_drawnL
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
@@ -104,7 +104,7 @@ theorem flock_e2e_drawnL
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL P H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint (P.wrong (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
+        ¬ Disjoint (P.incorrect (Xpub ones zeros (XplurL P H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
   (prob_mono (fun o h => ⟨hExec o h.1, h.2⟩) _ σ).trans
@@ -123,7 +123,7 @@ variable {D Sl : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D) (E : 
 
 /-- **The end-to-end count curve on the circuit of the statement's rows.** `flock_e2e_countL` at `C = p.circuit outs`,
 each unit its template's rows, with each sampled proof block's place from `ProgPlaces`: if `execAccept` holds, the probability
-that at least `K` units of the program are wrong at the committed values is at most `miss_L(K) + ε_ks(σ) + δ_link`. -/
+that at least `K` units of the program are incorrect at the committed values is at most `miss_L(K) + ε_ks(σ) + δ_link`. -/
 theorem _root_.FlockSoundness.Prog.flock_e2e_countL
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (pp : ProgPlaces p outs plan tab)
@@ -136,7 +136,7 @@ theorem _root_.FlockSoundness.Prog.flock_e2e_countL
     (K : ℕ) (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL (p.partition outs) H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros (XplurL (p.partition outs) H E Lf plan tab vb (reg σ) (cont σ) k Rw))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) +
@@ -157,7 +157,7 @@ theorem _root_.FlockSoundness.Prog.flock_e2e_drawnL
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan)))
     (hCR : LinkCRL (p.partition outs) H E Lf plan tab vb (reg σ) (cont σ) k Rw M t') :
     prob (fun o => execAccept o ∧
-        ¬ Disjoint ((p.partition outs).wrong
+        ¬ Disjoint ((p.partition outs).incorrect
           (Xpub ones zeros (XplurL (p.partition outs) H E Lf plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + (p.partition outs).linkBoundE (L := L) plan tab vb k Rw M ρ t' :=

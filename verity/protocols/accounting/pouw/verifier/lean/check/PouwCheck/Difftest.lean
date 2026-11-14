@@ -205,9 +205,9 @@ def leadEgressOf (j : Json) : Except String Json := do
   let over := Lead.egressRefused (← natOf j "count") shapes (← natOf j "cap") (← natOf j "fwd_macs")
   pure (Json.mkObj [("refused", .bool over), ("count", toJson (Lead.forwardCount buckets (← natOf j "release")))])
 
-def leadWindowOf (j : Json) : Except String Json := do
+def leadExecutionPhaseOf (j : Json) : Except String Json := do
   let .arr events ← get j "events" | throw "the input's events is not a list"
-  let why := Lead.windowRefusal (← hex j "record") (← hex j "weights_root") (← hex j "stream") (← hex j "prover")
+  let why := Lead.executionPhaseRefusal (← hex j "record") (← hex j "weights_root") (← hex j "stream") (← hex j "prover")
     (← hex j "key_leaf") (← intOf j "calls") events.toList
   pure (Json.mkObj [("reason", match why with
     | some r => .str r
@@ -217,6 +217,6 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
   ("opening", openingOf), ("registered", registeredOf), ("pass", passOf), ("draw", drawOf), ("salt", saltOf),
   ("live-salt", liveSaltOf), ("rounds", roundsOf), ("chunks", chunksOf), ("ratio", ratioOf),
   ("lead-record", leadRecordOf), ("lead-instance", leadInstanceOf), ("lead-unit", leadUnitOf),
-  ("lead-egress", leadEgressOf), ("lead-window", leadWindowOf)]
+  ("lead-egress", leadEgressOf), ("lead-window", leadExecutionPhaseOf)]
 
 end PouwCheck.Difftest

@@ -23,7 +23,7 @@ gives `TTOutRowSeed`, and the g theorems carry over with the error at the row co
   the split unit `rowIdx L u i`.
 * **Per unit:** a unit's credit is the sum of its rows' credits as split units (`split_credit`); a correct row under
   C2 is a correct split unit (`split_correct`), and the per-row cap implies rev1's (`rowCap_agg`). So the rows' credit
-  is at most the split transcript's (`split_credit_le`), and with C3 `ttOutRowSeed_of_ttOut` follows.
+  is at most the split trace's (`split_credit_le`), and with C3 `ttOutRowSeed_of_ttOut` follows.
 * **Per audit tile:** the same through the split layout's 64×64 tiles (`split_tileCredit_le`),
   `ttOutTileRowSeed_of_ttOutTile`.
 * **One-row units are admitted:** `pearlCDomainDev_split`, `devSm120v1_domain_row`, `devSm120v2_domain_row`.
@@ -576,15 +576,15 @@ theorem split_correct {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise se
     exact ⟨(hc.2.2.2 i hi j hj').1.trans (split_ticket hd hN ρ H s hu hi c.act j),
       (hc.2.2.2 i hi j hj').2.trans (split_useful hd hN ρ H s hu hi c.act j)⟩
 
-theorem splitTranscript_rowIdx {L : Layout} (τ : Transcript) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
-    splitTranscript L τ (rowIdx L u i) = (τ u).map fun c => rowCommit c i := by
-  unfold splitTranscript
+theorem splitTrace_rowIdx {L : Layout} (τ : Trace) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+    splitTrace L τ (rowIdx L u i) = (τ u).map fun c => rowCommit c i := by
+  unfold splitTrace
   rw [ite_eq_left (rowIdx_lt_rowsOf hu hi), unitOfRow_rowIdx hu hi, rowOfRow_rowIdx hu hi]
 
-theorem actOf_split {L : Layout} (τ : Transcript) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
-    actOf (splitTranscript L τ) (rowIdx L u i) = rowCodes (actOf τ u) i := by
+theorem actOf_split {L : Layout} (τ : Trace) {u i : ℕ} (hu : u < L.N) (hi : i < (L.shape u).m) :
+    actOf (splitTrace L τ) (rowIdx L u i) = rowCodes (actOf τ u) i := by
   unfold actOf
-  rw [splitTranscript_rowIdx τ hu hi]
+  rw [splitTrace_rowIdx τ hu hi]
   rcases τ u with _ | c <;> rfl
 
 /-! ## The credit, row by row, and the reduction -/
@@ -610,14 +610,14 @@ theorem split_credit {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem
         rw [splitShapeW_eq hu (mem_range.mp hi), split_debit hd hN H s hu (mem_range.mp hi) hn act]
 
 open Classical in
-/-- **The row-seeded credit is at most the split game's**, on every transcript. -/
+/-- **The row-seeded credit is at most the split game's**, on every trace. -/
 theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') {ρ : ℚ} (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) {U : Workload} (hU : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : Trace) :
     ∑ u ∈ correctSet (pearlCProtocolDevRev1RowCap d sem' ρ) U H s τ,
         (pearlCProtocolDevRev1RowCap d sem' ρ).credit H s U u (actOf τ u) ≤
-      ∑ v ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) (splitWorkload U) H s (splitTranscript U.layout τ),
-        (pearlCProtocolDevRev1 d sem ρ).credit H s (splitWorkload U) v (actOf (splitTranscript U.layout τ) v) := by
+      ∑ v ∈ correctSet (pearlCProtocolDevRev1 d sem ρ) (splitWorkload U) H s (splitTrace U.layout τ),
+        (pearlCProtocolDevRev1 d sem ρ).credit H s (splitWorkload U) v (actOf (splitTrace U.layout τ) v) := by
   have hmem : ∀ u ∈ correctSet (pearlCProtocolDevRev1RowCap d sem' ρ) U H s τ, u < U.layout.N ∧
       ∃ c, τ u = some c ∧ Correct (pearlCProtocolDevRev1RowCap d sem' ρ) U H s u c := fun u hu => by
     have h := mem_filter.mp hu
@@ -625,7 +625,7 @@ theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
   have h1 : ∀ u ∈ correctSet (pearlCProtocolDevRev1RowCap d sem' ρ) U H s τ,
       (pearlCProtocolDevRev1RowCap d sem' ρ).credit H s U u (actOf τ u) =
         ∑ i ∈ range (U.layout.shape u).m, (pearlCProtocolDevRev1 d sem ρ).credit H s (splitWorkload U)
-          (rowIdx U.layout u i) (actOf (splitTranscript U.layout τ) (rowIdx U.layout u i)) := by
+          (rowIdx U.layout u i) (actOf (splitTrace U.layout τ) (rowIdx U.layout u i)) := by
     intro u hu
     have hu' := (hmem u hu).1
     rw [split_credit hd hN ρ H s hu' (pearlCDomainDev_pos hU hu').2 (actOf τ u)]
@@ -639,7 +639,7 @@ theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
     rfl
   rw [sum_congr rfl h1, sum_sigma']
   refine (sum_image (f := fun v => (pearlCProtocolDevRev1 d sem ρ).credit H s (splitWorkload U) v
-    (actOf (splitTranscript U.layout τ) v)) hinj).symm.trans_le (sum_le_sum_of_subset_of_nonneg ?_ ?_)
+    (actOf (splitTrace U.layout τ) v)) hinj).symm.trans_le (sum_le_sum_of_subset_of_nonneg ?_ ?_)
   · intro v hv
     obtain ⟨⟨u, i⟩, hp, rfl⟩ := mem_image.mp hv
     obtain ⟨hu, hi⟩ := mem_sigma.mp hp
@@ -647,13 +647,13 @@ theorem split_credit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise 
     have hi' := mem_range.mp hi
     refine mem_filter.mpr ⟨mem_range.mpr (rowIdx_lt_rowsOf huN hi'), rowCommit c i, ?_,
       split_correct hd hN ρ H s huN hi' (pearlCDomainDev_pos hU huN).2 hcor⟩
-    rw [splitTranscript_rowIdx τ huN hi', hc]
+    rw [splitTrace_rowIdx τ huN hi', hc]
     rfl
   · intro v hv _
     obtain ⟨hvr, c, hc, _, hcap, _⟩ := mem_filter.mp hv
     have hsp := pearlCDomainDev_split hU v (mem_range.mp hvr)
     have hcr := creditDevRev1_nonneg d hadd hbf ((splitWorkload U).layout.shape v) hsp.2.2.1 hsp.2.2.2.2.1
-    have hact : actOf (splitTranscript U.layout τ) v = c.act := by simp [actOf, hc]
+    have hact : actOf (splitTrace U.layout τ) v = c.act := by simp [actOf, hc]
     rw [hact]
     have h2 : sem.unitDebitRev1 d H s (splitWorkload U) v c.act ≤
         ρ * creditDevRev1 d ((splitWorkload U).layout.shape v) := hcap
@@ -681,10 +681,10 @@ theorem ttOutRowSeed_of_ttOut [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S
     ⟨hR, pearlCDomainDev_split hU.2⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
-  have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
-      splitTranscript U.layout (A.transcript U x.1 x.2) := (hrun x.1 (A.pre.eval x.1) x.2).1
+  have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).trace (splitWorkload U) x.1 x.2 =
+      splitTrace U.layout (A.trace U x.1 x.2) := (hrun x.1 (A.pre.eval x.1) x.2).1
   rw [htr]
-  exact split_credit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.transcript U x.1 x.2)
+  exact split_credit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.trace U x.1 x.2)
 
 end Reduction
 
@@ -912,17 +912,17 @@ theorem splitTile_credit (hN : RowSeedNoise sem sem') (d : PearlCDevice) (ρ : �
 end SplitTileW
 
 open Classical in
-/-- **The row-seeded tile credit is at most the split game's**, on every transcript: each credited row of a good tile
+/-- **The row-seeded tile credit is at most the split game's**, on every trace: each credited row of a good tile
 is a good one-row tile of the split layout with the row's share of the credit. -/
 theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNoise sem sem') {ρ : ℚ} (hρ : ρ ≤ 1)
     (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16) {U : Workload} (hU : pearlCDomainDev d U.layout)
-    (H : Q → R) (s : S) (τ : Transcript) :
+    (H : Q → R) (s : S) (τ : Trace) :
     ∑ g ∈ goodTiles (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ) U H s τ,
         (pearlCTilesDevRev1RowCap d sem' ρ).credit H s U g (actOf τ ((auditTiling 64 64 U.layout).unit g)) ≤
       ∑ g ∈ goodTiles (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (splitWorkload U) H s
-          (splitTranscript U.layout τ),
+          (splitTrace U.layout τ),
         (pearlCTilesDevRev1 d sem ρ).credit H s (splitWorkload U) g
-          (actOf (splitTranscript U.layout τ) ((auditTiling 64 64 (splitWorkload U).layout).unit g)) := by
+          (actOf (splitTrace U.layout τ) ((auditTiling 64 64 (splitWorkload U).layout).unit g)) := by
   have h1 : ∀ g ∈ goodTiles (pearlCProtocolDevRev1RowCap d sem' ρ) (pearlCTilesDevRev1RowCap d sem' ρ) U H s τ,
       (pearlCTilesDevRev1RowCap d sem' ρ).credit H s U g (actOf τ ((auditTiling 64 64 U.layout).unit g)) =
         ∑ i ∈ sem'.passRows (U.layout.shape ((auditTiling 64 64 U.layout).unit g))
@@ -930,7 +930,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
           (pearlCTilesDevRev1 d sem ρ).credit H s (splitWorkload U)
             (splitTile U.layout ((auditTiling 64 64 U.layout).unit g) i
               ((gridTiles 64 64 U.layout).getD g (0, 0, 0)).2.2)
-            (actOf (splitTranscript U.layout τ) ((auditTiling 64 64 (splitWorkload U).layout).unit
+            (actOf (splitTrace U.layout τ) ((auditTiling 64 64 (splitWorkload U).layout).unit
               (splitTile U.layout ((auditTiling 64 64 U.layout).unit g) i
                 ((gridTiles 64 64 U.layout).getD g (0, 0, 0)).2.2))) := by
     intro g hg
@@ -980,7 +980,7 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     rfl
   rw [sum_congr rfl h1, sum_sigma']
   refine (sum_image (f := fun v => (pearlCTilesDevRev1 d sem ρ).credit H s (splitWorkload U) v
-    (actOf (splitTranscript U.layout τ) ((auditTiling 64 64 (splitWorkload U).layout).unit v))) hinj).symm.trans_le
+    (actOf (splitTrace U.layout τ) ((auditTiling 64 64 (splitWorkload U).layout).unit v))) hinj).symm.trans_le
     (sum_le_sum_of_subset_of_nonneg ?_ ?_)
   · intro v hv
     obtain ⟨⟨g, i⟩, hp, rfl⟩ := mem_image.mp hv
@@ -999,9 +999,9 @@ theorem split_tileCredit_le {d : PearlCDevice} (hd : d.RowLocal) (hN : RowSeedNo
     have hiu : i < (U.layout.shape u).m := by have := mem_Ico.mp hiI; omega
     simp only [tile_unit hb, hb]
     refine mem_filter.mpr ⟨mem_range.mpr (splitTileW_lt hu hiu hbj), rowCommit c i, ?_, ?_, ?_, ?_⟩
-    · show splitTranscript U.layout τ
+    · show splitTrace U.layout τ
         ((auditTiling 64 64 (splitWorkload U).layout).unit (splitTile U.layout u i bj)) = _
-      rw [splitTileW_unit hu hiu hbj, splitTranscript_rowIdx τ hu hiu, hc']
+      rw [splitTileW_unit hu hiu hbj, splitTrace_rowIdx τ hu hiu, hc']
       rfl
     · show (pearlCTilesDevRev1 d sem ρ).capOK H s (splitWorkload U) (splitTile U.layout u i bj) (rowCodes c.act i)
       rw [tilesCap_eq, splitTileW_unit hu hiu hbj, splitTileW_rows hu hiu hbj, splitTileW_cols hu hiu hbj,
@@ -1068,10 +1068,10 @@ theorem ttOutTileRowSeed_of_ttOutTile [Fintype Q] [DecidableEq Q] [Fintype R] [F
     ⟨hR, pearlCDomainDev_split hU.2⟩
   refine le_trans (Pouw.pr_mono fun x hx => lt_of_lt_of_le hx ?_)
     (hTT.2 (splitWorkload U) hU' T hT q hq ⟨A.pre, prog', act'⟩ hA')
-  have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).transcript (splitWorkload U) x.1 x.2 =
-      splitTranscript U.layout (A.transcript U x.1 x.2) := (hrun x.1 (A.pre.eval x.1) x.2).1
+  have htr : (⟨A.pre, prog', act'⟩ : Adversary CM).trace (splitWorkload U) x.1 x.2 =
+      splitTrace U.layout (A.trace U x.1 x.2) := (hrun x.1 (A.pre.eval x.1) x.2).1
   rw [htr]
-  exact split_tileCredit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.transcript U x.1 x.2)
+  exact split_tileCredit_le hd hN hρ hadd hbf hU.2 x.1 x.2 (A.trace U x.1 x.2)
 
 end TileReduction
 

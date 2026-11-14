@@ -94,7 +94,7 @@ proves there. `Code` proves the certifier's program
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
 check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
 `Causal` proves `ExpectedGridCausal` (a later window's sync never changes an earlier window's expected grid) and,
-from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` windows.
+from it, `EncardProgramRunsLeExecutionPhases`: the program's runs over their first `m` windows.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
 any compiled sampled verifier where `Claims.SamplingGeneric.Compiled.KS` holds. `SampledAuditInstance` takes that
 `Compiled.KS` from the compiler at Flock (`Claims.SamplingGeneric.flockKS`), at the assembled records.

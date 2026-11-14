@@ -140,7 +140,7 @@ committed before the session's first coin (`audit.Params.schedule_cap`), which i
 (`audit.Ledger.steering`). `a` is one number for every coin, so it is that cap, not the bits of the schedule
 published after the coins, whose length can follow them. A layout the check accepts at cap `a` at every coin is
 `SteeredLayout` at `a + 1` (`Properties.RemoteAudit.steered_of_checked`, at the verifier's own layout,
-`Properties.RemoteAudit.sessionLayout`: its positions of the plan the pass sent, where it checks each opened block),
+`Properties.RemoteAudit.runLayout`: its positions of the plan the pass sent, where it checks each opened block),
 and a layout that follows a
 coin at a counted schedule is refused (`Properties.RemoteAudit.coinLayout_not_scheduled`, `ScheduleFixesLayout`). The
 schedule holds the run inputs and arrival steps the prover chose after the coins of the blocks the pass holds

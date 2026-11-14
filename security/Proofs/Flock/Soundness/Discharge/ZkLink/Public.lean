@@ -9,9 +9,9 @@ import Proofs.Flock.Soundness.Game
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration
 
-`zk_flock_countC` counts the units wrong in the committed transcript `X` (`Partition.wrong`): a unit is wrong there when
+`zk_flock_countC` counts the units incorrect in the committed transcript `X` (`Partition.incorrect`): a unit is incorrect there when
 its committed outputs are not its gates applied to its committed inputs, both read from `X`. Nothing in that event ties
-`X` to what was registered. This file counts the units **wrong on the registration** instead (`wrongRegZ`): a unit is
+`X` to what was registered. This file counts the units **incorrect on the registration** instead (`incorrectRegZ`): a unit is
 right when it is correct in `X` and one opening per commit string makes the circuit's evaluation on `X`'s inputs
 (`Circuit.eval`), on every committed wire the unit reads or computes, the bit of an opening of that wire's registered
 commit string (`ValueBindingZ.cs`). On a unit's input wires the evaluation is `X` itself; on its outputs it is the
@@ -22,9 +22,9 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
 
 * `Partition.ReadsOwn`, `Partition.correct_eval`: when a unit's gates read only its own gates and input gates, a unit
   correct in `X` carries, on each of its committed wires, the circuit's evaluation on `X`'s inputs;
-* `wrong_subset_wrongRegZ`: a unit wrong in `X` is wrong on every registration; `wrongRegZ_congr`: `wrongRegZ` reads the
+* `incorrect_subset_incorrectRegZ`: a unit incorrect in `X` is incorrect on every registration; `incorrectRegZ_congr`: `incorrectRegZ` reads the
   registration only through its commit strings;
-* `analysisZCReg`: `analysisZC` with "wrong" `wrongRegZ` at the registration. Its knowledge and binding errors are
+* `analysisZCReg`: `analysisZC` with "wrong" `incorrectRegZ` at the registration. Its knowledge and binding errors are
   `analysisZC`'s, and its `cover` is the same argument: a satisfying message near the table's oracle that decodes to `X`
   on the unit's wires makes the unit correct in `X` (the lowering) and gives an opening of each of its commit strings
   (`ValueBindingZ.opening_spec`), so the unit is right;
@@ -97,33 +97,33 @@ def RightRegZ (R : Reg) (Xv : Fin C.N → Bool) (u : Fin n) : Prop :=
     vb.com (op (vb.pos g)) = vb.cs R (vb.pos g) ∧ vb.bit (vb.val (op (vb.pos g))) g = C.eval Xv g
 
 open Classical in
-/-- **The units wrong on the registration `R`** at the transcript `Xv`: those not right on it (`RightRegZ`). -/
-noncomputable def wrongRegZ (R : Reg) (Xv : Fin C.N → Bool) : Finset (Fin n) :=
+/-- **The units incorrect on the registration `R`** at the transcript `Xv`: those not right on it (`RightRegZ`). -/
+noncomputable def incorrectRegZ (R : Reg) (Xv : Fin C.N → Bool) : Finset (Fin n) :=
   Finset.univ.filter fun u => ¬ RightRegZ A P planZ tab vb R Xv u
 
 omit [Fintype K] [DecidableEq K] in
-theorem mem_wrongRegZ {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} :
-    u ∈ wrongRegZ A P planZ tab vb R Xv ↔ ¬ RightRegZ A P planZ tab vb R Xv u := by
+theorem mem_incorrectRegZ {R : Reg} {Xv : Fin C.N → Bool} {u : Fin n} :
+    u ∈ incorrectRegZ A P planZ tab vb R Xv ↔ ¬ RightRegZ A P planZ tab vb R Xv u := by
   classical
-  simp [wrongRegZ]
+  simp [incorrectRegZ]
 
 omit [Fintype K] [DecidableEq K] in
-/-- A unit wrong in `Xv` is wrong on every registration. -/
-theorem wrong_subset_wrongRegZ (R : Reg) (Xv : Fin C.N → Bool) : P.wrong Xv ⊆ wrongRegZ A P planZ tab vb R Xv :=
-  fun _ hu => (mem_wrongRegZ A P planZ tab vb).2 fun h => P.mem_wrong.1 hu h.1
+/-- A unit incorrect in `Xv` is incorrect on every registration. -/
+theorem incorrect_subset_incorrectRegZ (R : Reg) (Xv : Fin C.N → Bool) : P.incorrect Xv ⊆ incorrectRegZ A P planZ tab vb R Xv :=
+  fun _ hu => (mem_incorrectRegZ A P planZ tab vb).2 fun h => P.mem_incorrect.1 hu h.1
 
 omit [Fintype K] [DecidableEq K] in
-/-- `wrongRegZ` reads the registration only through its commit strings. -/
-theorem wrongRegZ_congr {R R' : Reg} (h : ∀ p, vb.cs R p = vb.cs R' p) (Xv : Fin C.N → Bool) :
-    wrongRegZ A P planZ tab vb R Xv = wrongRegZ A P planZ tab vb R' Xv := by
+/-- `incorrectRegZ` reads the registration only through its commit strings. -/
+theorem incorrectRegZ_congr {R R' : Reg} (h : ∀ p, vb.cs R p = vb.cs R' p) (Xv : Fin C.N → Bool) :
+    incorrectRegZ A P planZ tab vb R Xv = incorrectRegZ A P planZ tab vb R' Xv := by
   ext u
-  simp only [mem_wrongRegZ, RightRegZ, h]
+  simp only [mem_incorrectRegZ, RightRegZ, h]
 
 variable {L : Law n}
 
 open Classical in
 /-- **The compiled `--zk` audit's analysis, "wrong" measured against the registration** (`analysisZC`'s, with
-`wrongRegZ`). The transcript is the registration with the committed values, so that "wrong" can read the registered
+`incorrectRegZ`). The transcript is the registration with the committed values, so that "wrong" can read the registered
 commit strings; the binding error is `analysisZC`'s at the session's own registration, and `⊤` at any other. -/
 noncomputable def analysisZCReg
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
@@ -133,7 +133,7 @@ noncomputable def analysisZCReg
     (hj : JointZC A Hs planZ k a) :
     ExtractionAnalysis L Reg (batchedSessionZC A Hs planZ) where
   Tr := Reg × (Fin C.N → Bool)
-  wrong Xt := wrongRegZ A P planZ tab vb Xt.1 Xt.2
+  incorrect Xt := incorrectRegZ A P planZ tab vb Xt.1 Xt.2
   committed R τ := (R, Xc R τ)
   ks S R τ u := ENNReal.ofReal (a S R (zcStrat A Hs planZ τ) (tab S R u) / (1 - rateZ (planZ S R) (tab S R u) k))
   link S R τ u Xt := if Xt.1 = R then linkTermZC A Hs P planZ tab decode k S R τ u Xt.2 else ⊤
@@ -149,7 +149,7 @@ noncomputable def analysisZCReg
         by_contra hno
         push Not at hno
         have hcX : P.Correct Xt u := P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R' u hS M hsat)
-        refine (mem_wrongRegZ A P planZ tab vb).1 hu ⟨hcX, fun c => vb.opening S R' u M c, fun g hg => ?_⟩
+        refine (mem_incorrectRegZ A P planZ tab vb).1 hu ⟨hcX, fun c => vb.opening S R' u M c, fun g hg => ?_⟩
         obtain ⟨h1, h2⟩ := vb.opening_spec S R' u hS M hsat g hg
         exact ⟨h1, h2.trans ((hno g hg).trans (P.correct_eval (hown u) hcX g hg))⟩⟩
     set ε := accProbZC A Hs (planZ S R') (zcStrat A Hs planZ τ)
@@ -222,7 +222,7 @@ theorem zk_linkSoundC_reg_at
   simp only [analysisZCReg, analysisZC, ↓reduceIte]
 
 /-- **The compiled `--zk` count curve, "wrong" measured against the registration**: `zk_flock_countC`'s bound, with
-the units wrong on the registration (`wrongRegZ`) at the plurality value layer, for a partition whose units read only
+the units incorrect on the registration (`incorrectRegZ`) at the plurality value layer, for a partition whose units read only
 their own gates and input gates. -/
 theorem zk_flock_countC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
@@ -230,7 +230,7 @@ theorem zk_flock_countC_reg (hlow : LoweringSoundZK A P planZ tab decode) (hown 
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
     prob (fun o => o.1 = true ∧
-        K ≤ (wrongRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (incorrectRegZ A P planZ tab vb (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)).card)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       L.miss K + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
         linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) :=

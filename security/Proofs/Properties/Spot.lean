@@ -129,7 +129,7 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
     ((field? reg "registered").isSome = true ∨ opened.isSome = true →
       SameRoots (opened.getD #[]) (Record.registeredRoots reg)) := by
   unfold Record.checks
-  extract_lets o0 j3 want opened' wrong j2 registered j1 j0 o1
+  extract_lets o0 j3 want opened' incorrect j2 registered j1 j0 o1
   rcases hs : served with _ | s <;> rcases hr : sessionRoots with _ | roots
   all_goals simp (config := {failIfUnchanged := false}) only [↓jp_ite, ↓jp_ite']
   all_goals simp only [j0, hs]
@@ -149,7 +149,7 @@ theorem checks_ok (reg receipt draw law : Json) (units : Array Int) (provedUnits
     not_or, sortStrings, qsort_eq_empty, Array.filterMap_eq_empty_iff,
     sameDict_iff, opened', registered,
     want, reduceCtorEq, false_implies, implies_true, and_true, true_and, Option.some.injEq, forall_eq', and_assoc]
-  all_goals clear j0 j1 j2 j3 o0 o1 wrong want opened' registered
+  all_goals clear j0 j1 j2 j3 o0 o1 incorrect want opened' registered
   case some.some =>
     constructor
     · rintro ⟨h1, h2, h3, h4, h5, h6⟩

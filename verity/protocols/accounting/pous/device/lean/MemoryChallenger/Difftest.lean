@@ -51,17 +51,17 @@ def coinTreeFn (j : Json) : V Json := do
     ("openings", .arr ((Array.range t.k).map fun i => (t.opening i).toJson))])
 
 def verifyCoinFn (j : Json) : V Json := do
-  pure (.bool (verifyCoin (← SessionCommitment.ofJson (← J.get j "commitment" "input"))
+  pure (.bool (verifyCoin (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input"))
     (← CoinOpening.ofJson (← J.get j "opening" "input"))))
 
 def recordsRootFn (j : Json) : V Json := do pure (hexJ (← recordsRoot (← hex j "session") (← rounds j)))
 
 def headerFn (j : Json) : V Json := do
-  pure (.str (header (← SessionCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input")
+  pure (.str (header (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input")
     (← J.nat j "rounds" "input")))
 
 def messageFn (j : Json) : V Json := do
-  pure (hexJ (← message (← SessionCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input") (← rounds j)))
+  pure (hexJ (← message (← ChallengePhaseCommitment.ofJson (← J.get j "commitment" "input")) (← J.str j "ended" "input") (← rounds j)))
 
 def blockDigestFn (j : Json) : V Json := do pure (hexJ (blockDigest (← hex j "block")))
 

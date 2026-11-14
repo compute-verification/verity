@@ -31,19 +31,19 @@ sessions), adaptively, so a block's sessions may depend on everything the prover
   which also covers carried state and is `IntegrityBlock` with no carried leaf.
 * `IntegrityBlocks`: the probability that some block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
   `Σ_b (δ + Σ_{t ∈ b} (ε_ks,t + δ_link,t))`: the per-block form a joint horizon over blocks sums with the other legs.
-* `IntegrityHorizonBlocks`: the probability that every session of every block is accepted and the incorrect proof blocks over the
+* `IntegrityPooledBlocks`: the probability that every session of every block is accepted and the incorrect proof blocks over the
   horizon total at least `ln(1/δ)/q` is at most `δ + Σ_b Σ_{t ∈ b} (ε_ks,t + δ_link,t)`, the pooled reading. It is a
-  lemma: the listed guarantee of the pooled reading is `IntegrityHorizonCarried`, which also covers carried state.
+  lemma: the listed guarantee of the pooled reading is `IntegrityPooledCarried`, which also covers carried state.
 
-The named assumptions are `IntegrityHorizon`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
+The named assumptions are `IntegrityPooled`'s, at the sessions each statement reads: A3 (`uniform/io-getrandombytes`)
 for each session's sample bytes, `live-verifier` (`SamplingBlock.hCust`), and `cr/sha-512` (`TableCRZ`) and `ecr/sha-512`
 (`LinkCRZC`) at every strategy a session is played with on some run (`Period.Plays`). The proofs are
-`Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityHorizonBlocks`.
+`Flock.SecurityProofs.IntegrityBlock`, `IntegrityBlocks` and `IntegrityPooledBlocks`.
 
-An incorrect proof block is counted in the session that holds it (`SamplingBlock.wrongSet`). The state a block carries across a wipe
+An incorrect proof block is counted in the session that holds it (`SamplingBlock.incorrectSet`). The state a block carries across a wipe
 (the KV cache, committed before the wipe and read after it) is an input of the next block's sessions, and these
 statements say nothing of whether the value a session reads there is the one the block before committed;
-`IntegrityBlockCarried` and `IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) do.
+`IntegrityBlockCarried` and `IntegrityPooledCarried` (`EndToEnd/Carry/Statement.lean`) do.
 -/
 
 @[expose] public section
@@ -82,12 +82,12 @@ noncomputable def game : Game Unit := Period.game S.W S.T
 noncomputable def run (s : Strategy S.game) : Game (List WindowRec) := Period.run S.W S.T s
 
 /-- Block `b`'s incorrect proof blocks in a run's records. -/
-def blockWrong (b : ℕ) (l : List WindowRec) : ℕ := ((l.filter fun r => r.idx ∈ S.sessions b).map WindowRec.wrong).sum
+def blockIncorrect (b : ℕ) (l : List WindowRec) : ℕ := ((l.filter fun r => r.idx ∈ S.sessions b).map WindowRec.incorrect).sum
 
 /-- **Block `b` escapes at `ln(1/δ)/q`**: every session of block `b` is accepted, and its incorrect proof blocks total at least
 `ln(1/δ)/q`. -/
-def BlockEscapes (q δ : ℝ) (b : ℕ) (l : List WindowRec) : Prop :=
-  (∀ r ∈ l, r.idx ∈ S.sessions b → r.accepted) ∧ Real.log (1 / δ) / q ≤ (S.blockWrong b l : ℝ)
+def BlockMissProb (q δ : ℝ) (b : ℕ) (l : List WindowRec) : Prop :=
+  (∀ r ∈ l, r.idx ∈ S.sessions b → r.accepted) ∧ Real.log (1 / δ) / q ≤ (S.blockIncorrect b l : ℝ)
 
 /-- Block `b`'s knowledge and binding errors, `Σ_{t ∈ b} (ε_ks,t + δ_link,t)`. -/
 noncomputable def err (b : ℕ) : ℝ≥0∞ := ∑ t ∈ S.sessions b, ((S.W t).ks + (S.W t).link)
@@ -99,7 +99,7 @@ end ServerBlocks
 its session's units, the probability that every session of block `b` is accepted and its incorrect proof blocks total at least
 `ln(1/δ)/q` is at most
 $$\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityHorizon`'s, at block `b`'s sessions. -/
+Its named assumptions are `IntegrityPooled`'s, at block `b`'s sessions. -/
 def IntegrityBlock : Prop :=
   ∀ (S : ServerBlocks) (b : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t ∈ S.sessions b, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -111,13 +111,13 @@ def IntegrityBlock : Prop :=
     (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
       LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    value (S.BlockEscapes q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
+    value (S.BlockMissProb q δ b) (S.run s) ≤ ENNReal.ofReal δ + S.err b
 
 /-- **The integrity audit per server-time block, over a monitoring period of `B` blocks.** In a monitoring period as in
 `IntegrityBlock` whose samples each cover at least a fraction `q > 0` of their session's units, the probability that some
 block is accepted with at least `ln(1/δ)/q` incorrect proof blocks is at most
 $$\sum_{b < B} \Big(\delta + \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t})\Big).$$
-Its named assumptions are `IntegrityHorizon`'s. -/
+Its named assumptions are `IntegrityPooled`'s. -/
 def IntegrityBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
@@ -129,15 +129,15 @@ def IntegrityBlocks : Prop :=
     (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
       LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    value (fun l => ∃ b < S.B, S.BlockEscapes q δ b l) (S.run s) ≤
+    value (fun l => ∃ b < S.B, S.BlockMissProb q δ b l) (S.run s) ≤
       ∑ b ∈ Finset.range S.B, (ENNReal.ofReal δ + S.err b)
 
 /-- **The integrity audit over a monitoring period of `B` server-time blocks, pooled.** In a monitoring period as in
 `IntegrityBlocks`, the probability that every session of every block is accepted and the incorrect proof blocks over the monitoring
 period total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_{b < B} \sum_{t \in b} (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityHorizon`'s. -/
-def IntegrityHorizonBlocks : Prop :=
+Its named assumptions are `IntegrityPooled`'s. -/
+def IntegrityPooledBlocks : Prop :=
   ∀ (S : ServerBlocks) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < S.T, q ≤ ((S.W t).kd : ℝ) / (S.W t).n) →
     (∀ t < S.T, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
@@ -148,7 +148,7 @@ def IntegrityHorizonBlocks : Prop :=
     (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ →
       LinkCRZC execArith hs512 (S.W t).P (planZHJ (S.W t).dj (S.W t).y₀) (tabZHJ (S.W t).dj (S.W t).y₀) (S.W t).vb
         (reg ((S.W t).sim τ)) (cont ((S.W t).sim τ)) (S.W t).k (S.W t).Rw (S.W t).M (S.W t).t') →
-    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.wrong).sum : ℝ)) (S.run s) ≤
+    value (fun l => (∀ r ∈ l, r.accepted) ∧ Real.log (1 / δ) / q ≤ ((l.map WindowRec.incorrect).sum : ℝ)) (S.run s) ≤
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b
 
 end Flock.Guarantees

@@ -8,8 +8,8 @@ public import Proofs.Nci.Threads
 
 The arithmetic core is `sources_le`: the four sources' bounds, summed, with the memory cap taken over the residual and
 the declared computation together, give `η ≤ s + (1 − s) min(r, μ) + ν + χ`; the guarantee drops the factor `1 − s`.
-The window optimization is `window_quadratic` (and `window_quadratic_any` at every window length, with its rounding term
-exact) and `window_linear` (`Λ = e`, one window); `windows_cap` turns the servers' windows into the memory cap's
+The window optimization is `serverBlock_quadratic` (and `serverBlock_quadratic_any` at every window length, with its rounding term
+exact) and `serverBlock_linear` (`Λ = e`, one window); `serverBlocks_cap` turns the servers' windows into the memory cap's
 hypothesis. `DampenerThreadedSlots` discharges the declared computation's bound with `ThreadedThrottledSlots`, and
 `DampenerThreaded` is its instance at one slot per weight gate.
 -/
@@ -90,7 +90,7 @@ theorem Dampener : Guarantees.Dampener := by
 windows of length `L = R/λ`, each reading `R + λL = 2R` bits and holding at most `(2R)²/(2 d b_w b_a)` counted
 multiplications (`K Λ(K)/b_a` with `Λ(K) = K/(2 d b_w)`, `D = d b_w b_a`), holds at most `2 R λ H/D` of them in all, plus
 the rounding term `2 R²/D`: one window more, the last one, cut at `H`. -/
-theorem window_quadratic {R l H D : ℝ} (hR : 0 < R) (hl : 0 < l) (hH : 0 ≤ H) (hD : 0 < D) :
+theorem serverBlock_quadratic {R l H D : ℝ} (hR : 0 < R) (hl : 0 < l) (hH : 0 ≤ H) (hD : 0 < D) :
     (⌈H / (R / l)⌉₊ : ℝ) * (R + l * (R / l)) ^ 2 / (2 * D) ≤ 2 * R * l * H / D + 2 * R ^ 2 / D := by
   have hli : l * l⁻¹ = 1 := mul_inv_cancel₀ hl.ne'
   have hRi : R * R⁻¹ = 1 := mul_inv_cancel₀ hR.ne'
@@ -106,7 +106,7 @@ theorem window_quadratic {R l H D : ℝ} (hR : 0 < R) (hl : 0 < l) (hH : 0 ≤ H
 /-- **The window bound at every window length**, quadratic regime: windows of length `L > 0` over a horizon `H ≥ 0`,
 each reading `R + λL` bits, hold at most `2 R λ H/D` counted multiplications plus `((R − λL)² H/L + (R + λL)²)/(2D)`.
 The first part of that term is the cost of `L ≠ R/λ`, which `L = R/λ` makes zero; the second is the last window. -/
-theorem window_quadratic_any {R l H L D : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hD : 0 < D) :
+theorem serverBlock_quadratic_any {R l H L D : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hD : 0 < D) :
     (⌈H / L⌉₊ : ℝ) * (R + l * L) ^ 2 / (2 * D) ≤
       2 * R * l * H / D + ((R - l * L) ^ 2 * H / L + (R + l * L) ^ 2) / (2 * D) := by
   have hLi : L * L⁻¹ = 1 := mul_inv_cancel₀ hL.ne'
@@ -120,14 +120,14 @@ theorem window_quadratic_any {R l H L D : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hD :
 
 /-- **The window optimization, linear regime** (`Λ = e`): one window over the whole horizon `H > 0` reads `R + λH` bits
 and holds at most `(R + λH) e/b_a` counted multiplications, the bound itself: the starting state counts once. -/
-theorem window_linear {R l H e b : ℝ} (hH : 0 < H) :
+theorem serverBlock_linear {R l H e b : ℝ} (hH : 0 < H) :
     (⌈H / H⌉₊ : ℝ) * ((R + l * H) * e / b) = (R + l * H) * e / b := by
   rw [div_self hH.ne', Nat.ceil_one, Nat.cast_one, one_mul]
 
 /-- **The window bound at every window length**, linear regime (`Λ = e`): windows of length `L > 0` over a horizon
 `H ≥ 0` hold at most `(R + λH + RH/L + λL) e/b_a` counted multiplications, the starting state once a window: no window
-length beats one window (`window_linear`) by more than the state's share. -/
-theorem window_linear_any {R l H L e b : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hR : 0 ≤ R) (hl : 0 ≤ l) (he : 0 ≤ e)
+length beats one window (`serverBlock_linear`) by more than the state's share. -/
+theorem serverBlock_linear_any {R l H L e b : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hR : 0 ≤ R) (hl : 0 ≤ l) (he : 0 ≤ e)
     (hb : 0 < b) :
     (⌈H / L⌉₊ : ℝ) * ((R + l * L) * e / b) ≤ (R + l * H + R * H / L + l * L) * e / b := by
   have hLi : L * L⁻¹ = 1 := mul_inv_cancel₀ hL.ne'
@@ -139,7 +139,7 @@ theorem window_linear_any {R l H L e b : ℝ} (hL : 0 < L) (hH : 0 ≤ H) (hR : 
 
 /-- **The memory cap from windows**: `n` servers' windows of `L` ticks, with `α F L = R` so that each reads `2R` bits,
 in the quadratic regime of `Λ(2R)`, hold at most `μ (1 + L/H) κ C/2` counted multiplications when `n F H ≤ C`. -/
-theorem windows_cap {κ C n F H L R α reuse e d b_w b_a X : ℝ} (hκ : 0 < κ) (hn : 0 ≤ n) (hH : 0 < H) (hL : 0 < L)
+theorem serverBlocks_cap {κ C n F H L R α reuse e d b_w b_a X : ℝ} (hκ : 0 < κ) (hn : 0 ≤ n) (hH : 0 < H) (hL : 0 < L)
     (hR : 0 ≤ R) (hα : 0 ≤ α) (hreuse : 0 ≤ reuse) (hd : 0 < d) (hbw : 0 < b_w) (hba : 0 < b_a)
     (hC : n * F * H ≤ C) (hRL : α * F * L = R) (he : e ≤ reuse * (2 * R) / (4 * d * b_w))
     (hX : b_a * X ≤ n * ⌈H / L⌉₊ * ((R + α * F * L) * Lambda reuse e d b_w (R + α * F * L))) :
@@ -182,11 +182,11 @@ theorem windows_cap {κ C n F H L R α reuse e d b_w b_a X : ℝ} (hκ : 0 < κ)
   calc X * b_a = b_a * X := mul_comm _ _
     _ ≤ _ := h3
 
-theorem DampenerWindows : Guarantees.DampenerWindows := by
+theorem DampenerServerBlocks : Guarantees.DampenerServerBlocks := by
   intro κ C U W ρ χ M Mu Mr Md Mx n F H L R α reuse e d b_w b_a hκ hC hU hH hL hR hα hreuse hd hbw hba hM hu hr hdecl
     hx hnC hRL he hcap
   exact Dampener κ C U W ρ (memoryCap reuse κ R α d b_w b_a * (1 + L / H)) χ M Mu Mr Md Mx hκ hC hU hM hu hr hdecl hx
-    (windows_cap hκ (Nat.cast_nonneg n) hH hL hR hα hreuse hd hbw hba hnC hRL he hcap)
+    (serverBlocks_cap hκ (Nat.cast_nonneg n) hH hL hR hα hreuse hd hbw hba hnC hRL he hcap)
 
 /-- `Lambda` is `Threading.bound` with real arguments. -/
 theorem bound_eq_Lambda {c : RegisteredCircuit} (T : Threading c) (S b_w : ℝ) (d e : ℕ) :
@@ -225,7 +225,7 @@ theorem DampenerThreadedSlots_rate :
             declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ := by
   intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a c d T σ dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
-  exact DampenerWindows κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
+  exact DampenerServerBlocks κ C U W (rhoT α b_a (T.bound (α * Γ) b_w dd e)) χ M Mu Mr T.M.card Mx n F H L R α T.reuse e dd
     b_w b_a hκ hC hU hH hL hR hα (Nat.cast_nonneg _) (Nat.cast_pos.2 hdd) hbw hba hM hu hr
     (declared_le_slots hα hbw hba hdd hcomp hB hT hW hsize) hx hnC hRL he hcap
 

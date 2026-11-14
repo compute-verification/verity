@@ -9,7 +9,7 @@ public import Proofs.WeightSecurity.Two
 The period over windows each audited by SPOT's two-stage verifier, in the form `period_undetected` takes. A window's
 record reads the committed traces (`Claims.SamplingTwoReg`): its sample holds an incorrect proof block when it holds one
 of the committed incorrect set (`CompiledTwo.FregTwo`), and it counts the replay blocks wrong at the committed boundary
-trace (`wrongAtBoundaryAt` at `Compiled.regVal`), which the statement and prover its strategy sends fix before the run's
+trace (`incorrectAtBoundaryAt` at `Compiled.regVal`), which the statement and prover its strategy sends fix before the run's
 coins. `twoRec` counts at the extracted trace instead, which the extractor outputs after the coins, so its windows'
 misses don't multiply and `two_undetected` adds a cap per window.
 
@@ -37,7 +37,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 open Classical in
 /-- **The incorrect replay blocks a window fixes**: at the statement `x` and the prover `P` its strategy sends, the replay
-blocks wrong at the committed boundary trace (`wrongAtBoundaryAt` at `Compiled.regVal`); `0` on a statement out of the
+blocks wrong at the committed boundary trace (`incorrectAtBoundaryAt` at `Compiled.regVal`); `0` on a statement out of the
 two-stage scope. -/
 noncomputable def regCount (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) (P : Prover Unit) : ℕ :=
   match L.parse x with
@@ -45,7 +45,7 @@ noncomputable def regCount (H : Msg → Msg) (L : CompiledTwo Coin A) (x : Msg) 
   | some s =>
     match L.partition s, L.two s with
     | some Pt, some d =>
-      if InScopeTwo Pt d s then (wrongAtBoundaryAt s Pt d.part (L.regVal H P x ())).card else 0
+      if InScopeTwo Pt d s then (incorrectAtBoundaryAt s Pt d.part (L.regVal H P x ())).card else 0
     | _, _ => 0
 
 /-- **A two-stage window's record at the committed traces**: accepted when the run accepts; sampled incorrect when its

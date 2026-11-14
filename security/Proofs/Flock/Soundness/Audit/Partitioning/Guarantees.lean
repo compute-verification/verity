@@ -172,8 +172,8 @@ def Concentration : Prop :=
     (((∑ i, m i) / N : ℕ) : ℝ) * detectionRisk N k p N + detectionRisk N k p ((∑ i, m i) % N) ≤
       ∑ i, detectionRisk N k p (m i)
 
-/-- **The nested law's escape.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof blocks with
-`m_i = wrongIn B i` of them in replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
+/-- **The nested law's missProb.** Under `nested R N k a b`, with `p = a/b ≤ 1`, a set `B` of proof blocks with
+`m_i = incorrectIn B i` of them in replay unit `i` escapes with probability `∏_i (1 − p + p · C(N − m_i, k)/C(N, k))`: each
 replay unit escapes its two stages independently of the others. For `p < 1` that is `exp(−∑_i ψ(m_i))`, with
 `ψ = detectionRisk N k p`.
 
@@ -184,9 +184,9 @@ the footprint (`Claims.Sampling.Design.Two.Pa`) is `E_S ∏_{i ∈ S} C(N − m_
 is this product at the footprints. -/
 def NestedEscape : Prop :=
   ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
-    ((nested R N k a b hk).escape B).toReal =
-        ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - wrongIn B i).choose k : ℝ) / (N.choose k : ℝ)) ∧
-      (a < b → ((nested R N k a b hk).escape B).toReal =
-        Real.exp (-∑ i, detectionRisk N k (a / b) (wrongIn B i)))
+    ((nested R N k a b hk).missProb B).toReal =
+        ∏ i, (1 - (a / b : ℝ) + (a / b : ℝ) * ((N - incorrectIn B i).choose k : ℝ) / (N.choose k : ℝ)) ∧
+      (a < b → ((nested R N k a b hk).missProb B).toReal =
+        Real.exp (-∑ i, detectionRisk N k (a / b) (incorrectIn B i)))
 
 end FlockSoundness.Audit.Partitioning.Guarantees

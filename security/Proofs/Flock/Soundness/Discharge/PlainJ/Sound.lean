@@ -21,7 +21,7 @@ import Proofs.Flock.Soundness.Discharge.Tables.Headline
 
 `plain_session_soundJ`: for any live prover `τ` of a public-output plain session of `J ≥ 1` tables
 (`flock-verify verify --plain-tables --session-tables J`, no `--zk`, `J = nTab I`),
-`Pr[flock-verify accepts ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
+`Pr[flock-verify accepts ∧ at least K incorrect units] ≤ miss(K) + ε_ks + δ_link`, the units those of the key program's
 partition, each read at its site in the table it is sampled into (`sitesPJ`, `tabPJ`) and bound to the rows it commits
 (`rsPJ`), at the simulated prover `simAuditJ … τ` in the batched session of the `J` tables `planPJ`.
 
@@ -87,7 +87,7 @@ theorem plain_session_soundJ
       (planPJ ht dj x₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 (planPJ ht dj x₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (planPJ ht dj x₀)
               (tabPJ ht dj x₀)

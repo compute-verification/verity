@@ -296,7 +296,7 @@ theorem rowsL1_of_pairs {C CB : Verity.Boolean.Circuit} {n : ℕ} (P : Partition
     (ones : Finset (Fin C.N)) (U : ∀ u, UnitPair P PB m u) (hones : ∀ u, (U u).oneGate ∈ ones) :
     P.RowsL1 PB (fun vals => vals ∘ m) ones := by
   intro vals hv u hu
-  rw [Partition.mem_wrong] at hu ⊢
+  rw [Partition.mem_incorrect] at hu ⊢
   exact fun hc => hu ((U u).correct vals (hv _ (hones u)) hc)
 
 end FlockSoundness

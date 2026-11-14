@@ -30,11 +30,11 @@ session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each
 `flock-verify verify --zk --session-tables J`, reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
-* a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
+* a unit wrong (`incorrectRegZ`) unless it is right against the public file: in the committed transcript fixed at
   registration (`XplurZC`: the plurality of what the expected-time extractor recovers behind each commit string) its
   committed outputs are its gates applied to its committed inputs, and one opening per commit string of the public
   file's commitments carries, on each of its committed wires, the key program's evaluation on the committed inputs (on
-  its outputs, the program's output on them). The commitments are the public file's (`rsZJ_wrongRegZ`): at a row its
+  its outputs, the program's output on them). The commitments are the public file's (`rsZJ_incorrectRegZ`): at a row its
   `b ‖ c`, an `hm96` commitment to the row's bytes under a 192-byte salt; elsewhere the SHA-512 leaf of the public
   output word's bits, or of the constant `1` or `0`. So at a unit that is not wrong, the program's output on the
   committed inputs is the public output and its constant columns hold their constants, each up to a SHA-512 collision
@@ -101,7 +101,7 @@ def EndToEnd : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
+        K₀ ≤ (incorrectRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -112,7 +112,7 @@ def EndToEnd : Prop :=
 
 open Classical in
 /-- **`EndToEnd` at A3 per test**: `EndToEnd` with the verifier's bytes passing the sample's escape test
-(`Law.escapeTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
+(`Law.missProbTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
 (`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
 def EndToEndPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -132,7 +132,7 @@ def EndToEndPerTest : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (_hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
+      Assumptions.UniformRandomBytesTest Lb src (Law.missProbTest (.subset kd) n B) η)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZJ (Reg := Reg) dj y₀ S R).length) wr kd)
@@ -155,7 +155,7 @@ def EndToEndPerTest : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
+        K₀ ≤ (incorrectRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) + η +

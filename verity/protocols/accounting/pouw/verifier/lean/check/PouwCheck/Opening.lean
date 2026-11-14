@@ -9,7 +9,7 @@ public import PouwWindow.Side
 # A unit's opening (`core_check.py`, "a unit's opening")
 
 `opening`: the tile proof's public file opens the unit's rows under the registered execution phase root. The unit is sampled
-(unless it is opened unsampled, the filler's). A certified execution phase (its context names a PoUW execution phase, `windowOf`) opens only
+(unless it is opened unsampled, the filler's). A certified execution phase (its context names a PoUW execution phase, `executionPhaseOf`) opens only
 a salted template's units (`Tile.salted`), under the 64-byte certified salt the verifier holds, and any other execution phase no
 salt and no salted unit (`saltReason`). The registered entries root's domain is one-stage's served domain of the
 registered program and partition over the check's P entries (`windowDomain?`). The opening's entry, under its salt, is
@@ -80,7 +80,7 @@ def publicBc (context : String) (salt : ByteArray) (position : Nat) (roots : Byt
 salt and no salted unit. -/
 def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option String :=
   let salted := t.bind (·.salted)
-  if (windowOf p.context).isSome then
+  if (executionPhaseOf p.context).isSome then
     if salted.isNone then
       some "the window is certified, and its template's unit reads no salt: no drawn proof of it is held to the window's certified salt"
     else if (salt.filter (·.size == SALT_BYTES)).isNone then
@@ -92,7 +92,7 @@ def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option
 
 /-- `window_domain`: the execution phase root's domain, one-stage's execution phase domain (`registration.window_domain`) of the
 registered program and partition over the check's P entries in the execution phase's context. -/
-def windowDomain? (p : Params) (c : WindowCommitmentRecord) : Except String Domain := do
+def windowDomain? (p : Params) (c : ExecutionPhaseCommitmentRecord) : Except String Domain := do
   let n := p.check.entries
   let binding ← Identity.identityDigestSha512 SERVED_DOMAIN (Json.mkObj [("program", c.program),
     ("partition", c.partition), ("port", PouwWindow.port), ("schema", entrySchema), ("leaves", n), ("run", p.context)])
@@ -149,7 +149,7 @@ def header? (pub : ByteArray) : Option (Json × ByteArray) := do
 
 /-- `opening`: none when the proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else
 why not, `core_check.opening`'s reason. `salt` is a certified execution phase's salt (`certified_salt`). -/
-def opening (p : Params) (c : WindowCommitmentRecord) (units : Option (List Int)) (unit : Int) (pub : ByteArray)
+def opening (p : Params) (c : ExecutionPhaseCommitmentRecord) (units : Option (List Int)) (unit : Int) (pub : ByteArray)
     (op : Json) (salt : Option ByteArray := Option.none) : Except String (Option String) := do
   if let some us := units then
     if !us.contains unit then return some s!"unit {unit} is not drawn"
@@ -244,7 +244,7 @@ tiles in (row tile, column tile, step, column, row) order (`Shape.tile`), every 
 skipped, and a tile's 128 words in wgmma's fragment order (`fragment`). So a unit's opening (`unitOpening`) is a leaf and
 an offset for each step the unit reads, and an A run for each of its rows.
 
-`windowRefusal` reads the certifier's record of the execution phase. The record opens to the execution phase's weights' root, stream,
+`executionPhaseRefusal` reads the certifier's record of the execution phase. The record opens to the execution phase's weights' root, stream,
 prover, keyLeaf and call count. salt_w is sampled once, before any A root. Forwards are serial: a forward opens at its
 first A root, and its words root closes it under the certifier's verdict on its egress (`egressRefused`, its count kept
 under the certifier's boundary hold, `forwardCount`). Each call has one position and a shape the verifier admits
@@ -444,7 +444,7 @@ call count, and `events` the certifier's record in its order: `{"kind": "salt"}`
 "a_root", "forward", "call", "rows", "cols", "K", "bn"}` (a call's A root and shape, which opens its forward), or
 `{"kind": "words_root", "forward", "verdict"}` (the forward's words root, which closes it, and the certifier's verdict
 on its egress). -/
-def windowRefusal (record weightsRoot stream prover keyLeaf : ByteArray) (calls : Int) (events : List Json) :
+def executionPhaseRefusal (record weightsRoot stream prover keyLeaf : ByteArray) (calls : Int) (events : List Json) :
     Option String := Id.run do
   if !(1 ≤ calls && calls < (WORDS_POSITION : Int)) then return some s!"a window of {calls} calls a forward"
   if [record, weightsRoot, stream, prover, keyLeaf].any (·.size != DIGEST) then

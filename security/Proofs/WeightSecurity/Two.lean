@@ -17,16 +17,16 @@ public import Proofs.WeightSecurity.Served
 sound at the footprint (`CompiledTwo.KS`). A window (`twoGame`): the datacenter commits what leaves on the egress slots,
 its timing bucket and its advice, then sends the window's statement and prover, and the verifier flips the run's live
 coins. Its record (`twoRec`): accepted when the run accepts; sampled incorrect when it rejects or no extraction is in
-`RTwo` at `δ`; incorrect, the fewest replay blocks such an extraction marks (`Design.Two.wrongBlocks`).
+`RTwo` at `δ`; incorrect, the fewest replay blocks such an extraction marks (`Design.Two.incorrectBlocks`).
 
 * `twoRec_accepted_le`: a window is accepted with no extraction in `RTwo` with probability at most `KSLinOn`'s bound at
   the statement and prover it sends, `κ_δ(x) + √(γ(x)·Pr[B]) + Pr[B_ext]` (`twoErr`), and never out of scope.
 * `value_lead_eq_zero`: when every record not sampled incorrect counts at most `c`, the windows before the first
   sampled incorrect one count at most `T·c`.
-* `two_undetected`: under `WindowCap` (a footprint in `M̄_δ` marks fewer than `K` replay blocks), the run leaves
+* `two_undetected`: under `ExecutionPhaseCap` (a footprint in `M̄_δ` marks fewer than `K` replay blocks), the run leaves
   `M = T·(K − 1) + 1` incorrect replay blocks undetected with probability at most `Σ_t ε_t`.
-* `TheftServedTwo`: `TheftServed` at that `M`. `windowCap_of_rates` gives `WindowCap` from the two stages' rates
-  (`Design.Two.card_wrongBlocks_lt_subsetInputs`) at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`, so the budget grows as
+* `TheftServedTwo`: `TheftServed` at that `M`. `executionPhaseCap_of_rates` gives `ExecutionPhaseCap` from the two stages' rates
+  (`Design.Two.card_incorrectBlocks_lt_subsetInputs`) at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`, so the budget grows as
   `T·K_δ`.
 -/
 
@@ -66,7 +66,7 @@ def marks (H : Msg → Msg) {L : CompiledTwo Coin A} (δ : ℝ) (p : TwoPlay L) 
   {n | ∃ (e : L.E.C p.1) (w : Wit) (s : AuditStatement) (Pt : Partition) (d : Design.Two) (ι : ℕ → ℕ → Bool),
     p.extracted H e = some w ∧ L.parse p.1 = some s ∧ L.partition s = some Pt ∧ L.two s = some d ∧
       footprint H L.commit s Pt d.part w ι ∈ d.M Pt δ ∧
-      (d.wrongBlocks Pt (footprint H L.commit s Pt d.part w ι)).card = n}
+      (d.incorrectBlocks Pt (footprint H L.commit s Pt d.part w ι)).card = n}
 
 theorem marks_nonempty (H : Msg → Msg) {L : CompiledTwo Coin A} (δ : ℝ) (p : TwoPlay L) :
     (p.marks H δ).Nonempty ↔ ∃ e, (RTwo H L.commit L.parse L.partition L.two δ).ext p.1 (p.extracted H e) := by
@@ -121,9 +121,9 @@ def twoMiss (H : Msg → Msg) (L : CompiledTwo Coin A) (δ : ℝ) (x : Msg) (P :
 
 /-- **The cap at `δ`**: at every statement in scope, a footprint in `M̄_δ` that counts at most each cell marks fewer
 than `K` replay blocks incorrect. -/
-def WindowCap (L : CompiledTwo Coin A) (δ : ℝ) (K : ℕ) : Prop :=
+def ExecutionPhaseCap (L : CompiledTwo Coin A) (δ : ℝ) (K : ℕ) : Prop :=
   ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
-    ∀ fp ∈ d.M Pt δ, (∀ ρ t, fp ρ t ≤ (cell Pt d.part ρ t).card) → (d.wrongBlocks Pt fp).card < K
+    ∀ fp ∈ d.M Pt δ, (∀ ρ t, fp ρ t ≤ (cell Pt d.part ρ t).card) → (d.incorrectBlocks Pt fp).card < K
 
 theorem twoRec_accepted_iff [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin A) (δ : ℝ)
     (b : ((O → V) × Tick × Adv) × TwoPlay L) :
@@ -175,10 +175,10 @@ theorem twoRec_accepted_le [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin A
       funext fun r => propext (iff_false_intro fun h => hx (href x P r h.1)), Verity.Game.prCoin_false]
     exact zero_le
 
-/-- **A record not sampled incorrect counts fewer than `K`** under `WindowCap`: its run accepts, so its statement is in
+/-- **A record not sampled incorrect counts fewer than `K`** under `ExecutionPhaseCap`: its run accepts, so its statement is in
 scope, and the fewest replay blocks its extractions mark is one of them. -/
 theorem twoRec_incorrect_le [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} {K : ℕ}
-    (href : ∀ x (P : Prover Unit) r, (run H P L.V x () r).out = .acc → L.Scope x) (hcap : WindowCap L δ K)
+    (href : ∀ x (P : Prover Unit) r, (run H P L.V x () r).out = .acc → L.Scope x) (hcap : ExecutionPhaseCap L δ K)
     (b : ((O → V) × Tick × Adv) × TwoPlay L) (hb : ¬ (twoRec H L δ b).sampledIncorrect) :
     (twoRec H L δ b).incorrect ≤ K - 1 := by
   classical
@@ -232,11 +232,11 @@ theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (�
 
 /-- **The run leaves `T·(K − 1) + 1` incorrect replay blocks undetected with probability at most `Σ_t ε_t`**: an
 accepted window with no extraction in `RTwo` at `δ` has probability at most its error (`twoRec_accepted_le`), and
-outside those windows each window before the first sampled incorrect one marks fewer than `K` (`WindowCap`). -/
+outside those windows each window before the first sampled incorrect one marks fewer than `K` (`ExecutionPhaseCap`). -/
 theorem two_undetected [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (T K : ℕ)
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
-    (hcap : ∀ t < T, WindowCap (Lv t) δ K) (ε : ℕ → ℝ)
+    (hcap : ∀ t < T, ExecutionPhaseCap (Lv t) δ K) (ε : ℕ → ℝ)
     (s : Strategy (monitoringPeriodG (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T))
     (herr : ∀ t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T s t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
@@ -265,7 +265,7 @@ theorem two_undetected [Fintype O] (H : Msg → Msg) (Lv : ℕ → CompiledTwo C
   exact h1
 
 /-- **`TheftServed` at a two-stage audit**: with each window's verifier knowledge sound at the footprint, refusing what
-is out of scope, and capped at `K` (`WindowCap`), the outsider steals the weights with probability at most the channel's
+is out of scope, and capped at `K` (`ExecutionPhaseCap`), the outsider steals the weights with probability at most the channel's
 `|S|·p` at the budget `E·M + (L + 1)·|O|`, `M = T·(K − 1) + 1`, plus `Σ_t ε_t`, each `ε_t` bounding window `t`'s
 `KSLinOn` error at every strategy the run plays it with, plus the probability that a window changes more slots than
 `E` per incorrect replay block. -/
@@ -280,7 +280,7 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
       (servedChannel R Q Adv O V Tick T (E * (T * (K - 1) + 1) + (L + 1) * Fintype.card O)))
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
-    (hcap : ∀ t < T, WindowCap (Lv t) δ K)
+    (hcap : ∀ t < T, ExecutionPhaseCap (Lv t) δ K)
     (herr : ∀ θ r t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.avg (fun z : Ω × R => Verity.Game.value
@@ -296,16 +296,16 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The cap from the two stages' rates**: where each statement in scope samples its replay sample as a uniform
 `Q`-subset of its `N` correct-class replay blocks and every input replay block, and its second stage samples at least
-`r₂` of every cell, `WindowCap` holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
-theorem windowCap_of_rates (L : CompiledTwo Coin A) {δ r₂ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)
+`r₂` of every cell, `ExecutionPhaseCap` holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
+theorem executionPhaseCap_of_rates (L : CompiledTwo Coin A) {δ r₂ : ℝ} {K : ℕ} (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1)
     (h : ∀ x s Pt d, L.parse x = some s → L.partition s = some Pt → L.two s = some d → InScopeTwo Pt d s →
       ∃ Q c ic, SubsetInputsDesign d.replay Q ∧ d.part.classes = [c, ic] ∧ Q ≤ c.flatten.length ∧
         (1 - (Q : ℝ) / c.flatten.length * r₂) ^ K ≤ δ ∧
         ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
           r₂ * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ)) :
-    WindowCap L δ K := by
+    ExecutionPhaseCap L δ K := by
   intro x s Pt d hs hPt hd hin fp hfp hcell
   obtain ⟨Q, c, ic, hD, hP, hQ, hK, hrate⟩ := h x s Pt d hs hPt hd hin
-  exact d.card_wrongBlocks_lt_subsetInputs Pt hD hP hQ hr₂ hr₂' hrate hK hfp hcell
+  exact d.card_incorrectBlocks_lt_subsetInputs Pt hD hP hQ hr₂ hr₂' hrate hK hfp hcell
 
 end WeightSecurity.SecurityProofs

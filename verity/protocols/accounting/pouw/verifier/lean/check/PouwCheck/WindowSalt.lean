@@ -8,7 +8,7 @@ public import PouwCheck.Pass
 A live execution phase's (`coins` live) service answer carries its salt, `{coins, epoch, opening, salt, session}`, and its
 verifier holds its salt session's inputs (`Params.live`, `{key, ledger, main, pins, session}`). The salt's execution phase root R
 is `anchoredEpochRoot` of the registration's weights' root W, the root X of the activations it committed before its salt
-(`windowAnchors`) and the answer's `epoch` k, computed here; the session is the one
+(`executionPhaseAnchors`) and the answer's `epoch` k, computed here; the session is the one
 the auditor's ledger opened on `{root: R}`, and it counts as a live Pearl-C pass's does (`saltEpoch`, the steps of
 `liveSaltCheck`); then the answer's coins are the commitment it signed, its opening that commitment's `pouw/salt` coin 0
 opened after R, its salt that coin's round-0 unit salt after R (`h1tile.live_salt`: `PouwWindow.roundKey`'s stream 0,
@@ -81,7 +81,7 @@ def valuesRoot? (g : Json) : Option ByteArray := do
 binds, or why it names none. W is its `W` root, a SHA-512 digest, or, when it registers none, the root of its registered
 weights' entries (`window.registered`); an execution phase with both names no one W. X is the root of the activations it
 committed after serving (`window.activations`). -/
-def windowAnchors (c : WindowCommitmentRecord) : Except String (ByteArray × ByteArray) := do
+def executionPhaseAnchors (c : ExecutionPhaseCommitmentRecord) : Except String (ByteArray × ByteArray) := do
   let port := (c.roots.find? (·.port == "W")).map (·.root)
   let w := match c.window.registered with
     | none => (port.filter isHexDigest).bind fun h => (PouwCommit.pyFromHex h).toOption
@@ -95,9 +95,9 @@ Pearl-C salt session's commitment, reserved for its salt coin alone and opened b
 having released that coin and nothing else, its log showing `r` alone as the root the coin followed. The ledger's
 session, its signed commitment and its open entry. -/
 def saltEpoch (key ledger pins main session : Json) (r : ByteArray) : R (Audited × LiveCommitment × LedgerEntry) := do
-  let (a, c, received) ← saltSession key ledger pins main (Json.mkObj [("root", .str (Flock.hexOf r))]) session
+  let (a, c, received) ← saltChallengePhase key ledger pins main (Json.mkObj [("root", .str (Flock.hexOf r))]) session
   if let some why := PouwWindow.saltEpochReason c then throw ("salt", why)
-  let named := sessionEntries ledger a.session
+  let named := challengePhaseEntries ledger a.session
   let (some reserve, some opened, some ended) :=
       (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"), named.find? (·.kind == "end"))
     | throw ("salt", NO_RESERVE)
@@ -113,9 +113,9 @@ def saltEpoch (key ledger pins main session : Json) (r : ByteArray) : R (Audited
 
 /-- The steps of `core_check.window_salt` on a live execution phase's answer's salt `s`, under the verifier's `live` inputs and the
 execution phase's registration `c`. -/
-def windowSaltCheck (live : Json) (c : WindowCommitmentRecord) (s : Json) : R Unit := do
+def executionPhaseSaltCheck (live : Json) (c : ExecutionPhaseCommitmentRecord) (s : Json) : R Unit := do
   unless keys s == some WINDOW_SALT_KEYS do throw ("salt", WINDOW_SALT_FORM)
-  let (w, x) ← (windowAnchors c).mapError (("salt", ·))
+  let (w, x) ← (executionPhaseAnchors c).mapError (("salt", ·))
   let some k := (PouwWindow.natOf? (at? s "epoch")).filter (· < 2 ^ 64) | throw ("salt", WINDOW_EPOCH)
   let r := anchoredEpochRoot w x k
   let g := Spot.getD live
@@ -131,12 +131,12 @@ def windowSaltCheck (live : Json) (c : WindowCommitmentRecord) (s : Json) : R Un
 
 /-- `core_check.window_salt`: why the salt an accepted execution phase's answer carries (`none` when it carries none) is not its
 live salt, or `none`. -/
-def windowSaltReason (p : Params) (c : WindowCommitmentRecord) (salt : Option Json) : Option String :=
+def executionPhaseSaltReason (p : Params) (c : ExecutionPhaseCommitmentRecord) (salt : Option Json) : Option String :=
   if p.check.coins != some "live" then
     if salt.isSome then some SEEDED_SALT else none
   else match salt with
     | none => some NO_WINDOW_SALT
-    | some s => match windowSaltCheck (p.live.getD .null) c s with
+    | some s => match executionPhaseSaltCheck (p.live.getD .null) c s with
       | .ok () => none
       | .error (_, why) => some why
 

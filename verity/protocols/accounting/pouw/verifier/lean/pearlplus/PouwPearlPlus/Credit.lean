@@ -11,11 +11,11 @@ scheme's cap. Over every pass's records, a record whose tiles credit any cell is
 at its kept width |K|, its ticket weight is those cells at the cell's ticket `wref(1, |K|, n)/n` (`clear_work.ticket_cell`
 at the H100's record), and its MACs a ticket are |K|·n/`wref(1, |K|, n)`. Of t samples by ticket weight, X_O landed on tiles
 over their inert-work bound, which are credited nothing (`over_cap` `uncredited`; under `reject` an accepted run has
-X_O = 0). Except with δ, the tiles that are wrong or over the bound hold at most ε of the tickets' weight, where ε is the
+X_O = 0). Except with δ, the tiles that are incorrect or over the bound hold at most ε of the tickets' weight, where ε is the
 least share such a set can hold and still sample at most X_O times with chance δ (`epsilon`; at X_O = 0, (1 − ε)^t ≤ δ). The
 most MACs that weight can hold, filled from the units with the most MACs a ticket, are taken off:
 
-    credited = ⌊(1 − ρ) · max(macs − wrong, 0)⌋
+    credited = ⌊(1 − ρ) · max(macs − incorrect, 0)⌋
 
 Every quantity is exact (`Rat`), as the Python's `Fraction`s are, ε among them: one more than the least k with
 Σ_{i ≤ X_O} C(t, i) (k/10⁹)^i (1 − k/10⁹)^(t − i) ≤ δ, over 10⁹.
@@ -78,12 +78,12 @@ def creditAtAssumption (passes : List Pass) (t over : Nat) (delta : Rat) : Credi
   let eps := epsilon t over delta
   let rho := mkRat Rule.CAP_NUM Rule.CAP_DEN
   let mut budget := eps * units.foldl (fun s (_, w) => s + w) 0
-  let mut wrong : Rat := 0
+  let mut incorrect : Rat := 0
   for (ratio, w) in units.qsort (fun a b => b.1 < a.1) do
     let take := min budget w
-    wrong := wrong + take * ratio
+    incorrect := incorrect + take * ratio
     budget := budget - take
-  let credited := ((1 - rho) * max ((macs : Rat) - wrong) 0).floor.toNat
+  let credited := ((1 - rho) * max ((macs : Rat) - incorrect) 0).floor.toNat
   return { credited, creditedTiles := tiles, macs, rho, epsilon := eps, overCapDraws := over }
 
 end PouwCheck.PearlPlus

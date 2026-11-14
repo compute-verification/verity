@@ -37,9 +37,9 @@ simulation keeps both (`simAuditZKOn`):
   `Pr[acc ∧ Q o.1 o.2.1]` in the live audit;
 * `zk_headline_exec_drawn`: that at `--zk`, from the decoder at the sampling design's samples; `zk_headline_exec_drawnJ` at sessions
   of `J` tables, and `simZHJ` the simulation it reads at hidden-output tables;
-* `zk_flock_drawnC_cr`: the compiled audit's sampled bound, `Pr[accept ∧ a drawn unit is wrong] ≤ ε_ks + δ_link`
+* `zk_flock_drawnC_cr`: the compiled audit's sampled bound, `Pr[accept ∧ a drawn unit is incorrect] ≤ ε_ks + δ_link`
   (`extraction_audit_drawn` at `analysisZC`), every term on the accepted assumptions;
-* `zk_session_drawnR`: `hwrong` for `flock-verify verify --zk --registered F` sessions: no sampled proof block is wrong in the
+* `zk_session_drawnR`: `hwrong` for `flock-verify verify --zk --registered F` sessions: no sampled proof block is incorrect in the
   committed values `XplurZC` decodes from the rows `rsZAtS` at `simZ … τ`, except with probability `ε_ks + δ_link`.
 -/
 
@@ -217,7 +217,7 @@ variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : 
 /-- **The compiled `--zk` audit's sampled proof blocks are right, every term on the accepted assumptions**
 (`extraction_audit_drawn` at `analysisZC`, `zk_flock_countC_execOS_cr`'s terms): with each sampled proof block read from its
 table at its place (`place`) and the committed values the plurality value layer of `vb`,
-`Pr[accept ∧ some drawn unit is wrong] ≤ ε_ks + δ_link`, `ε_ks = ksAvgStrictZ` under A1 for every table's finders after
+`Pr[accept ∧ some drawn unit is incorrect] ≤ ε_ks + δ_link`, `ε_ks = ksAvgStrictZ` under A1 for every table's finders after
 each sample (`hCR`) and `δ_link = linkBoundZC` under A2 for the link finders. -/
 theorem zk_flock_drawnC_cr (hA : A.Correct) {L : Law n}
     (place : ∀ S R u, u ∈ S → UnitPlace P (tabOfZ planZ tab S R u).S u)
@@ -228,7 +228,7 @@ theorem zk_flock_drawnC_cr (hA : A.Correct) {L : Law n}
     (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ)))
     {qF qS : ℝ}
     (hCR : ∀ ω j, TableCRZ A Hs (planZ (L.draw ω) (reg σ)) j (zcStrat A Hs planZ (cont σ ω)) qF qS) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw)) o.2)
         (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
       ksAvgStrictZ planZ L k qF qS (reg σ) + linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) := by
   have hlow := loweringSoundZK_of_place A P planZ tab place
@@ -244,9 +244,9 @@ end Drawn
 
 variable {mPts n : ℕ} {Reg : Type}
 
-/-- **No sampled proof block of a `--zk --registered` session is wrong, except with probability `ε_ks + δ_link`**: in
+/-- **No sampled proof block of a `--zk --registered` session is incorrect, except with probability `ε_ks + δ_link`**: in
 `flock-verify verify --zk --registered F` sessions, `own` F's ports, at the committed values `XplurZC` decodes from the
-rows `rsZAtS` (the `--zk` rows without `pub.tables = none`) at `simZ … τ`, `Pr[accept ∧ some drawn unit is wrong] ≤
+rows `rsZAtS` (the `--zk` rows without `pub.tables = none`) at `simZ … τ`, `Pr[accept ∧ some drawn unit is incorrect] ≤
 ε_ks + δ_link`, on `Composed.zk_session_sound`'s assumptions without A3 (the sampling design's count curve is not read). This is the
 `hwrong` a registered-reads core theorem takes. -/
 theorem zk_session_drawnR
@@ -277,7 +277,7 @@ theorem zk_session_drawnR
       (zcStrat execArith hs512 (planZAt dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZKR I own o ∧
-        ¬ Disjoint (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        ¬ Disjoint (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
             ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_live I ht dj y₀ wr _ tablesAtZK_live hTags hRec hDraw)) τ))
@@ -298,7 +298,7 @@ theorem zk_session_drawnR
     (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ) hCR
   exact le_trans (prob_mono (fun o h => ⟨acceptsZK_of_R h.1, h.2⟩) _ _)
     (zk_headline_exec_drawn execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ (fun _ S => ¬ Disjoint
-      (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+      (((keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
         (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planZAt dj y₀) (tabZAt dj y₀)
           ((rsZAtS ht dj y₀ hc hU hpub hscope).bindingZ (rsZAtS_computes ht dj y₀ hc hU hpub hscope))
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ)) (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N hdec τ))

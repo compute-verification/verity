@@ -89,7 +89,7 @@ theorem flock_headline_exec_dec (ho : c.outNet = c.unitNet) (hT : TagsOk I)
           (decAt (tablesAt ht dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_exec ht hc ho dj x₀ _ wr wOP wLIG op_carries lig_carries hT hwr hdraw) τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 leaf512 (Integrate.planAt ht dj x₀)
               (Integrate.tabAt ht dj x₀) ((rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).binding
@@ -159,7 +159,7 @@ theorem flock_headline_exec_hidden_dec (ho : c.outNet = c.unitNet) (hT : TagsOkH
           (decAt (tablesAtH dj x₀) wOP wLIG) (fun _ _ _ => true) (fun _ _ _ _ => []) (fun _ _ b _ => capOfRoot b) N
           (decodesOn_execH ht hc ho dj x₀ _ wr hT hwr hdraw) τ) ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
+        K ≤ (((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)).incorrect
           (Xpub {Layout.oneG} {Layout.zeroG}
             (XplurL ((Placed.keyProg c hU n).partition (Layout.outsOf c hU n)) H512 enc512 (leafOfId I.tags.merkleLeaf) (planAtH dj x₀)
               (tabAtH dj x₀) ((rsAtH ht hc hscope dj x₀ hU hpub hpt (Reg := Reg)).binding
@@ -221,7 +221,7 @@ theorem headline_tables_subset_dec
       (planJ ht T₀ dj ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (batchStratL H512 enc512 leaf512 (planJ ht T₀ dj) (cont σ ω)) qF qS) →
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 leaf512 (planJ ht T₀ dj) tab (rs.binding hHm) (reg σ) (cont σ)
               k Rw))).card)

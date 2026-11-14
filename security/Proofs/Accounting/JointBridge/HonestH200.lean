@@ -76,7 +76,7 @@ import Spot.Record
 # `WorkOfH1CheckedCreditMonitoringPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
 
 The positive twin of `Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditMonitoringPeriodH200`, and of `WorkOfCreditedWords`
-at its instance: `Properties.Pouw.Period.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` windows, 128 words
+at its instance: `Properties.Pouw.Period.SecurityProofs.HonestH1`'s live-salt period of `n ≥ 1` executionPhases, 128 words
 live and fixed a window, run by a device that spends `512` INT8 tensor-core multiply-adds on each word and outsources
 no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `2048` multiply-adds a unit and
 `b_unit = 1024`, with the work certificate the whole priced credit, `W = 512·credit` (`meets`, `h200_sound`,
@@ -97,7 +97,7 @@ no unit, meets every hypothesis at the H200's INT8 price, at `PouwH1Tile_v1`'s `
   (`minWordMacs_const`), and `WordCostsMacs` is `512·1·(n·128) ≤ 512·128·n`, the period's work (`work_honestRun`).
 
 The verifier that accepts everything (`acceptAll`) is the same period with every subprotocol accepting at every coin.
-At no windows its device runs nothing, so a work certificate `W = 1` fails on every coin and PoUW's guarantee fails
+At no executionPhases its device runs nothing, so a work certificate `W = 1` fails on every coin and PoUW's guarantee fails
 there at any error below one (`WorkOfH1CheckedCreditMonitoringPeriodH200_nontrivial`).
 -/
 
@@ -172,14 +172,14 @@ theorem step_fits (n : ℕ) : (step n).Fits (device n) := by
 /-- **The deployed check accepts the period**: the compiled PoUW check (`PouwCheck.protocol.check`) accepts every
 window of H1's honest period on the coins `x`, each at its registration and the proof system's answer. -/
 def checkedAccepts (n : ℕ) (x : Paths HonestH1.Ω1 n) : Prop :=
-  ∀ w, Accepts HonestH1.prm ((HonestH1.windows n).reg x w) ((HonestH1.windows n).ev x w)
+  ∀ w, Accepts HonestH1.prm ((HonestH1.executionPhases n).reg x w) ((HonestH1.executionPhases n).ev x w)
 
 /-- H1's honest play, accepted where the deployed check accepts every window. -/
 noncomputable def checkedPlay (n : ℕ) : Play HonestH1.Ω1 n Unit Unit Unit Unit :=
   { HonestH1.play n with accepts := checkedAccepts n }
 
 /-- **The honest period on PoUW's coins**, H1's paths: one tick of the device's whole rate, PoUW's verdict the
-deployed check's on the period's windows at the run's coin, no other subprotocol accepting, and the network
+deployed check's on the period's executionPhases at the run's coin, no other subprotocol accepting, and the network
 certifier's claim at `K` that the bits it saw the node move, none, are within `K`. -/
 noncomputable def honestRun (n : ℕ) :
     Accounting.PeriodRun (device n) Unit emptyCircuit (fun _ : Unit => Paths HonestH1.Ω1 n) where
@@ -238,8 +238,8 @@ noncomputable def realizes (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
     Accounting.RealizesCreditedWords (honestRun n) (cert n δs) (Accounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
       (Accounting.receiptUnitMacs 64 4 8) 1024 (Paths HonestH1.Ω1 n) (fun _ => (checkedPlay n).accepts)
-      (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.windows n).prefixLen HonestH1.prm x)
-        (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period n) HonestH1.prm (HonestH1.windows n) x) 1 1
+      (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.executionPhases n).prefixLen HonestH1.prm x)
+        (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period n) HonestH1.prm (HonestH1.executionPhases n) x) 1 1
         (67 / 8) δs) where
   coin := Equiv.refl _
   accepts_iff := fun _ _ => Iff.rfl
@@ -268,15 +268,15 @@ theorem helpWithin (n : ℕ) (δs : ℝ) (sha fetch : ℚ) :
 /-! ## Every hypothesis -/
 
 /-- **The honest period on the H200 meets every hypothesis of `WorkOfH1CheckedCreditMonitoringPeriodH200`**, in its order, at
-any SHA-512 and fetch price, `n ≥ 1` windows and `δ_s > 0`, with `δ_bind = δ_ks = 0`, and the deployed check accepts
+any SHA-512 and fetch price, `n ≥ 1` executionPhases and `δ_s > 0`, with `δ_bind = δ_ks = 0`, and the deployed check accepts
 the period on every path: the realization at the deployed check's verdict, the two bridge premises, and
 `HonestH1.h1_meets`'s premises of `H1CheckedCreditPeriod` at the checked play. -/
 theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     Nonempty (Accounting.RealizesCreditedWords (honestRun n) (cert n δs) (Accounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
       (Accounting.receiptUnitMacs 64 4 8) 1024 (Paths HonestH1.Ω1 n) (fun _ => (checkedPlay n).accepts)
-      (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.windows n).prefixLen HonestH1.prm x)
-        (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period n) HonestH1.prm (HonestH1.windows n) x) 1 1
+      (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.executionPhases n).prefixLen HonestH1.prm x)
+        (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period n) HonestH1.prm (HonestH1.executionPhases n) x) 1 1
         (67 / 8) δs)) ∧
     Accounting.Assumptions.WordCostsMacs (honestRun n) (Accounting.h200S8Price sha fetch)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
@@ -295,8 +295,8 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer n) (checkedPlay n).game ∧
     (∀ w, prob (fun x => (HonestH1.layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
-    ServiceSound HonestH1.prm (HonestH1.windows n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
+    RegisteredBeforeDraw (HonestH1.executionPhases n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.executionPhases n) ∧
+    ServiceSound HonestH1.prm (HonestH1.executionPhases n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := n)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period n).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
@@ -317,7 +317,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     fun x => hAcc x⟩
 
 /-- **The honest period on the H200 meets `WorkOfH1CheckedCreditMonitoringPeriodH200`'s hypotheses, so PoUW's per-period
-guarantee holds on it**, at any SHA-512 and fetch price, `n ≥ 1` windows and `δ_s > 0`, with `δ_bind = δ_ks = 0`, at
+guarantee holds on it**, at any SHA-512 and fetch price, `n ≥ 1` executionPhases and `δ_s > 0`, with `δ_bind = δ_ks = 0`, at
 the certificate `W = 512·credit`, the whole priced credit. -/
 theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : ℚ) :
     (honestRun n).Sound (cert n δs) (Accounting.h200S8Price sha fetch) .pouw (δs + n * (0 + 0)) := by
@@ -326,7 +326,7 @@ theorem h200_sound (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetc
     hUF, -⟩ := meets n hn hδs sha fetch
   exact WorkOfH1CheckedCreditMonitoringPeriodH200 sha fetch 64 4 8 1024 Unit Unit Unit (fun _ => Paths HonestH1.Ω1 n) (device n)
     emptyCircuit (honestRun n) (cert n δs) Honest.scheme HonestH1.circuit hn hN HonestH1.hr1 hM HonestH1.hK24
-    HonestH1.prm HonestH1.enc HonestH1.staged HonestH1.flat δs 0 0 (fun _ => HonestH1.windows n)
+    HonestH1.prm HonestH1.enc HonestH1.staged HonestH1.flat δs 0 0 (fun _ => HonestH1.executionPhases n)
     (fun _ => HonestH1.opened) (fun _ => HonestH1.salt) (fun _ => HonestH1.period n) (fun _ => checkedPlay n)
     (fun _ _ => 128) (fun _ _ => 0) (realizes n δs sha fetch) hWC hHW
     hS hρN hwmax hlk (fun _ => hG) (fun _ => hDD) (fun _ => hPre) (fun _ => hMoved) (fun _ => hReg) (fun _ => hDraw)
@@ -361,8 +361,8 @@ theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     Nonempty (Accounting.RealizesCreditedWords (honestRun 1) (cert 1 (1 / 1000000)) (Accounting.h200S8Price 0 0)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
       (Accounting.receiptUnitMacs 64 4 8) 1024 (Paths HonestH1.Ω1 1) (fun _ => (checkedPlay 1).accepts)
-      (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.windows 1).prefixLen HonestH1.prm x)
-        (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period 1) HonestH1.prm (HonestH1.windows 1) x) 1 1
+      (fun _ x => creditPrefix Honest.scheme HonestH1.circuit 144 ((HonestH1.executionPhases 1).prefixLen HonestH1.prm x)
+        (checkedLive Honest.scheme HonestH1.circuit (HonestH1.period 1) HonestH1.prm (HonestH1.executionPhases 1) x) 1 1
         (67 / 8) (1 / 1000000))) ∧
     Accounting.Assumptions.WordCostsMacs (honestRun 1) (Accounting.h200S8Price 0 0)
       (minWordMacs Honest.scheme HonestH1.circuit (fun _ => Accounting.receiptWordMacs 4 8))
@@ -381,8 +381,8 @@ theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
     (HonestH1.period 1).EveryExecutionPhase (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer 1) (checkedPlay 1).game ∧
     (∀ w, prob (fun x => (HonestH1.layer 1).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
-    ServiceSound HonestH1.prm (HonestH1.windows 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
+    RegisteredBeforeDraw (HonestH1.executionPhases 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.executionPhases 1) ∧
+    ServiceSound HonestH1.prm (HonestH1.executionPhases 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := 1)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period 1).EveryExecutionPhase
       (fun live W => PerLiveTile Honest.scheme HonestH1.circuit live W
@@ -399,7 +399,7 @@ theorem WorkOfH1CheckedCreditMonitoringPeriodH200_honest :
   meets 1 Nat.one_pos (by norm_num) 0 0
 
 /-- **`WorkOfH1CheckedCreditMonitoringPeriodH200`'s conclusion fails at the verifier that accepts everything**
-(`HonestH200.acceptAll`): at no windows the device runs nothing, so at the work certificate `W = 1` the compute
+(`HonestH200.acceptAll`): at no executionPhases the device runs nothing, so at the work certificate `W = 1` the compute
 account's work, `0`, is below `W` on every coin while PoUW accepts, and PoUW's guarantee fails at error `½`. -/
 theorem WorkOfH1CheckedCreditMonitoringPeriodH200_nontrivial :
     ¬ (acceptAll 0).Sound ⟨0, 1, 0, 0, 0⟩ (Accounting.h200S8Price 0 0) .pouw (1 / 2) := by

@@ -12,7 +12,7 @@ multiplications in a window number at most `reuse` per slot it uses there (`card
 * Token side (`token_bound`): `ReachSlots` gives `A_t + B_t ≥ N*` and `FitsSlots` gives `A_t b_w ≤ S`, so a thread's
   multiplications times `N* b_w − S` are at most `reuse · N* b_w B_t`. A thread with no counted multiplication in its
   start window has `A_t = 0` and needs no `ReachSlots`, so `fitBoundSlots_start` asks it only of the others.
-* Window side (`window_ineq`): `Σ_t B_t ≤ Σ_j p_j e_j`, with `p_j` the slots window `j` uses and `e_j` the threads it
+* Window side (`serverBlock_ineq`): `Σ_t B_t ≤ Σ_j p_j e_j`, with `p_j` the slots window `j` uses and `e_j` the threads it
   entered, and `FitsSlots` gives `b_w p_j + w_e e_j ≤ S`, so `4 b_w w_e p_j e_j ≤ S²` by AM–GM.
 
 `FitBound` is the case of one slot per weight gate (`idSlots`): for a slot map one-to-one on the weight gates,
@@ -205,7 +205,7 @@ theorem token_bound {c : RegisteredCircuit} {T : Threading c} (σ : T.Slots) {k 
       _ = _ := by ring
 
 /-- **The window side**, by AM–GM: `b_w p + w_e e ≤ S` gives `4 b_w w_e p e ≤ S²`. -/
-theorem window_ineq {bw we p e S : ℝ} (hbw : 0 ≤ bw) (hwe : 0 ≤ we) (hp : 0 ≤ p) (he : 0 ≤ e)
+theorem serverBlock_ineq {bw we p e S : ℝ} (hbw : 0 ≤ bw) (hwe : 0 ≤ we) (hp : 0 ≤ p) (he : 0 ≤ e)
     (h : bw * p + we * e ≤ S) : 4 * (bw * we) * (p * e) ≤ S ^ 2 := by
   have h0 : 0 ≤ bw * p + we * e := add_nonneg (mul_nonneg hbw hp) (mul_nonneg hwe he)
   have h1 : (bw * p + we * e) * (bw * p + we * e) ≤ S * S := mul_le_mul h h h0 (h0.trans h)
@@ -323,7 +323,7 @@ theorem fitBoundSlots_start {c : RegisteredCircuit} {T : Threading c} (σ : T.Sl
     rw [mul_sum]
     calc ∑ j, 4 * (b_w * w_e) * (((σ.slotsUsed (P.gates j)).card : ℝ) * (T.entered P start j).card)
         ≤ ∑ _j : Fin k, S ^ 2 := sum_le_sum fun j _ =>
-          window_ineq hbw.le hwe.le (Nat.cast_nonneg _) (Nat.cast_nonneg _) ((hF j).trans (hS j))
+          serverBlock_ineq hbw.le hwe.le (Nat.cast_nonneg _) (Nat.cast_nonneg _) ((hF j).trans (hS j))
       _ = k * S ^ 2 := by rw [sum_const, card_univ, Fintype.card_fin, nsmul_eq_mul]
   exact fit_ineq hwe.le hbw.le hN0 hr0 hgap0 hMr htok hB hwin
 

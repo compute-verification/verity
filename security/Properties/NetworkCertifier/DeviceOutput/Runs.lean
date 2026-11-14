@@ -40,7 +40,7 @@ runs.
 `Proofs.Properties.NetworkCertifier.DeviceOutput.Runs` proves `AcceptedRowsAreProgramRows`; `Proofs.NetworkCertifier.Accepted` (in
 `security_proofs`, through the reference's `Proofs.NetworkCertifier.Code`) proves `AcceptedRunsAreProgramRuns` and the
 count it gives, `EncardAcceptedObservationsLe`; `Proofs.NetworkCertifier.Causal` proves `ExpectedGridCausal` and the
-count over the first `m` windows, `EncardProgramRunsLeWindows`.
+count over the first `m` windows, `EncardProgramRunsLeExecutionPhases`.
 -/
 
 @[expose] public section
@@ -284,7 +284,7 @@ syncs its advice names (`programFrames`, the Program `RunIsProgramRun` reads an 
 (`ExpectedGridCausal`), so the content advice and the first `m` windows' syncs fix those buckets' rows. The syncs are
 `log2 |Σ_sync|` bits per window opened, 7 at 16 × 8, counted from the run's first window. A window on its own, given
 the run before it, may carry more: the queue and the hand ticks carry across windows. -/
-def EncardProgramRunsLeWindows : Prop :=
+def EncardProgramRunsLeExecutionPhases : Prop :=
   ∀ (cfg : Config) {K : Nat} {In Ac : Type} [Fintype Ac]
     (frames : List In → Ac → Fin 1 → List NetworkCertifier.LogicalFrame)
     (op : Nat → List (NetTiming.Obs 1 K cfg.egress.allocation) → In) (m D : Nat),
@@ -298,7 +298,7 @@ end Properties.NetworkCertifier
 /-! ## A one-window instance
 
 The configuration the completeness statements' honest cases run (`Proofs.Properties.NetworkCertifier.DeviceOutput.Instance`), and
-the honest network certifier's record that `EncardProgramRunsLeWindows`'s honest lemma counts at it. -/
+the honest network certifier's record that `EncardProgramRunsLeExecutionPhases`'s honest lemma counts at it. -/
 
 namespace Properties.CertifierNetwork.Instance
 

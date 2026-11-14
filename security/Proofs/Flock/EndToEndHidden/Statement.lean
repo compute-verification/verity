@@ -51,13 +51,13 @@ open Classical in
 are hidden: the circuit is the one its descriptor unrolls to (`D.unroll`, for the `D` that `Desc.parse` reads from the
 circuit file, so the circuit's pin is SHA-512 of `D`), the public file is `HmOut`'s, each table is
 `Stmt.setupHidden`'s, and every row, input or output, is registered under the public file's `b ‖ c`, an `hm96`
-commitment to the row's bytes under a 192-byte salt (`rsZHJ_wrongRegZ`). The prover registers `R`; the verifier samples
+commitment to the row's bytes under a 192-byte salt (`rsZHJ_incorrectRegZ`). The prover registers `R`; the verifier samples
 a uniform `kd`-subset of the `n` proof blocks from its operating system's bytes (`Law.execOS` on the byte source `src`); one `--zk` session of `J = nTab I` tables proves the
 sampled proof blocks, `kd / J` in each; and `flock-verify verify --zk --session-tables J` reads the session's record. Then for
 every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{at least } K_0 \text{ units wrong}] \le
   \frac{\binom{n-K_0}{kd}}{\binom{n}{kd}} + \varepsilon_{ks} + \delta_{link},$$
-* a unit wrong (`wrongRegZ`) unless it is right against the public file: in the committed transcript fixed at
+* a unit wrong (`incorrectRegZ`) unless it is right against the public file: in the committed transcript fixed at
   registration (`XplurZC`) its committed outputs are its gates applied to its committed inputs, and one opening per
   commit string of the public file's commitments carries, on each of its committed wires, the key program's evaluation
   on the committed inputs. That second half binds no row: `hm96` hides (under `hash-derived-key` an honest `b ‖ c` has
@@ -127,7 +127,7 @@ def EndToEndHidden : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+        K₀ ≤ (incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -138,7 +138,7 @@ def EndToEndHidden : Prop :=
 
 open Classical in
 /-- **`EndToEndHidden` at A3 per test**: `EndToEndHidden` with the verifier's bytes passing the sample's escape test
-(`Law.escapeTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
+(`Law.missProbTest`: the live sample runs and misses every unit of `B`) at every `B` up to `η`
 (`Assumptions.UniformRandomBytesTest`), in place of every event exactly, and `η` added to the miss term. -/
 def EndToEndHiddenPerTest : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -158,7 +158,7 @@ def EndToEndHiddenPerTest : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (_hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
+      Assumptions.UniformRandomBytesTest Lb src (Law.missProbTest (.subset kd) n B) η)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
@@ -184,7 +184,7 @@ def EndToEndHiddenPerTest : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+        K₀ ≤ (incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) + η +
@@ -197,7 +197,7 @@ open Classical in
 /-- **Flock's one-stage audit, end to end, under hidden outputs, at the sampled proof blocks.** `EndToEndHidden`'s setting
 with `EndToEndDrawn`'s event: for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-with "wrong" `EndToEndHidden`'s (`wrongRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
+with "wrong" `EndToEndHidden`'s (`incorrectRegZ`, against the public file's `b ‖ c` at every row, in the committed transcript
 fixed at registration), and `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss
 term, so it holds whatever the verifier's bytes: it needs no A3, and the sample need not be uniform.
 
@@ -251,7 +251,7 @@ def EndToEndHiddenDrawn : Prop :=
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
-    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
@@ -303,7 +303,7 @@ def EndToEndHiddenFlat : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+        K₀ ≤ (incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) +
@@ -354,7 +354,7 @@ def EndToEndHiddenDrawnFlat : Prop :=
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
-    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ksAvgStrictZ (planZHJ dj y₀) L k qF qS (reg σ) +
@@ -383,7 +383,7 @@ def EndToEndHiddenPerTestFlat : Prop :=
     -- the verifier's operating-system bytes, and A3
     (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
     {η : ENNReal} (_hA3 : ∀ B : Finset (Fin n),
-      Assumptions.UniformRandomBytesTest Lb src (Law.escapeTest (.subset kd) n B) η)
+      Assumptions.UniformRandomBytesTest Lb src (Law.missProbTest (.subset kd) n B) η)
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
@@ -407,7 +407,7 @@ def EndToEndHiddenPerTestFlat : Prop :=
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
     prob (fun o => LiveAcceptsZK I o ∧
-        K₀ ≤ (wrongRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
+        K₀ ≤ (incorrectRegZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) + η +

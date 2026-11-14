@@ -8,10 +8,10 @@ public import PouwCheck.Pass
 `saltCheck` is `core_check.salt`. It reads the execution phase's coins and roots through the challenger's own session as
 `roundsCheck` does, never ones the prover hands in: the one session the auditor's signed v2 ledger opens and ends closed
 for the execution phase under the execution phase's pinned challenger key, run from a commit the host's pins log records and the
-verifier's copy of main's first-parent history holds (`saltSession`, over `Spot.Challenger.pinnedChallengePhase` and
+verifier's copy of main's first-parent history holds (`saltChallengePhase`, over `Spot.Challenger.pinnedChallengePhase` and
 `challengePhaseNamed`).
 S is the session the ledger's signed reserve entry names (a session opened without one is refused) and R the root its
-signed open entry opened S on; R is `windowOpenRoot` of the execution phase's weights' root, its round-0 request table's root and
+signed open entry opened S on; R is `executionPhaseOpenRoot` of the execution phase's weights' root, its round-0 request table's root and
 S; the session's log shows R, alone, as what its salt coin followed; and under the commitment the session signed, a live
 execution phase's, the salt coin is the execution phase's `pouw/salt` coin 0, opened after R (`Spot.Challenger.liveReason`). A
 refusal is `coin` (the key, the session or the coin rule's, in the challenger's words) or `salt` (a session opened
@@ -50,15 +50,15 @@ def NOT_RECEIVED : String :=
 session S and open root R the ones the auditor's signed reserve and open entries name and its coins and log the
 challenger's session's, else the refusal. -/
 def saltCheck (key ledger pins main window session weights requests opening : Json) : R Unit := do
-  let (a, c, received) ← saltSession key ledger pins main window session
+  let (a, c, received) ← saltChallengePhase key ledger pins main window session
   if let some why := PouwWindow.liveEpochReason c then coin why
-  let named := sessionEntries ledger a.session
+  let named := challengePhaseEntries ledger a.session
   let (some _, some opened) := (named.find? (·.kind == "reserve"), named.find? (·.kind == "open"))
     | throw ("salt", NO_RESERVE)
   let some r := hex? (get (get opened.body "window") "root") | throw ("salt", NO_RESERVE)
   let digest := fun (j : Json) => if (str? j).any isHexDigest then hex? j else none
   let (some w, some t) := (digest weights, digest requests) | throw ("salt", SALT_FORM)
-  if windowOpenRoot w t a.session != r then throw ("salt", OTHER_WINDOW)
+  if executionPhaseOpenRoot w t a.session != r then throw ("salt", OTHER_WINDOW)
   unless (received.lookup PouwWindow.SALT).getD [] == [r] do throw ("salt", NOT_RECEIVED)
   let o ← (LiveOpening.ofJson opening).mapError fun e => ("coin", s!"the salt's {e}")
   if let some why ← port (Spot.Challenger.liveReason c o PouwWindow.SALT 0 r) then coin s!"the salt's {why}"

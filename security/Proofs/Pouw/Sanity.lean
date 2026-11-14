@@ -30,7 +30,7 @@ the pinned statements excludes it or makes it harmless.
 | `d = 0`, `d ∤ k` | `checkIdx_depth_zero`, `tt_false_depth_zero`; `blockEnd_full`, `blockEnd_last`, `Y_last` |
 | zero noise | `tt_false_zero_noise` |
 | `T = 0` | `wins_T_zero_iff` |
-| `q = 0` | `transcript_indep_of_q_zero` |
+| `q = 0` | `trace_indep_of_q_zero` |
 | `Ω_max < 1/(1 − g)` | `certified_le`, `omega_lt_inv_one_sub`, `reductionGap_lt_of_omega_lt_one` |
 | `g₀ ≥ 1` | `tt_false_of_gap0_ge_one`, and `tt_admitsRef_bound` for `g₀ < 1` |
 | randomized adversaries | `randomized_of_deterministic` |
@@ -52,7 +52,7 @@ theorem pr_of_isEmpty {α : Type} [Fintype α] [IsEmpty α] (P : α → Prop) : 
 /-! ## Empty workload -/
 
 theorem wins_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {g T : ℝ} (hg : g < 1) (hT : 0 ≤ T)
-    (τ : Transcript) (H : Q → R) (s : S) : ¬ Wins P U g T τ H s := by
+    (τ : Trace) (H : Q → R) (s : S) : ¬ Wins P U g T τ H s := by
   unfold Wins
   have : correctSet P U H s τ = ∅ := by
     have h := correctSet_subset_range P U H s τ
@@ -62,7 +62,7 @@ theorem wins_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {g 
   exact div_nonneg hT (by linarith)
 
 theorem tt_event_empty (P : Protocol Q R S) (U : Workload) (hN : U.layout.N = 0) {g₀ T : ℝ} (hg₀ : g₀ < 1)
-    (hT : 0 ≤ T) (τ : Transcript) (H : Q → R) (s : S) :
+    (hT : 0 ≤ T) (τ : Trace) (H : Q → R) (s : S) :
     ¬ T / (1 - g₀) < ∑ u ∈ checkedSet P U H s τ, ((U.layout.shape u).Wmm : ℝ) := by
   have : checkedSet P U H s τ = ∅ := by
     refine Finset.subset_empty.1 fun u hu => ?_
@@ -128,20 +128,20 @@ theorem Y_last (P : D1.Params Q R S) (hd : 0 < P.d) (H : Q → R) (s : S) (U : W
 
 /-! ## TT fails in degenerate protocols -/
 
-/-- A cost model in which every constant transcript is a free program with no oracle calls that hashes nothing. -/
+/-- A cost model in which every constant trace is a free program with no oracle calls that hashes nothing. -/
 def FreeConstants (CM : CostModel Q R S) : Prop :=
-  ∀ τ : Transcript, ∃ p : CM.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
+  ∀ τ : Trace, ∃ p : CM.Prog, ∀ (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S),
     CM.run p H U act σ s = τ ∧ CM.cost p H U act σ s ≤ 0 ∧ CM.calls p H U act σ s = 0 ∧
       CM.hashed p H U act σ s = []
 
 theorem freeModel_freeConstants : FreeConstants (freeModel Q R S) :=
   fun τ => ⟨fun _ _ _ _ => QTree.done τ, fun _ _ _ _ _ => ⟨rfl, le_rfl, rfl, rfl⟩⟩
 
-/-- If a constant transcript has every unit's checked values correct for every `H` and `s`, TT fails at `q = 0`
+/-- If a constant trace has every unit's checked values correct for every `H` and `s`, TT fails at `q = 0`
 in every model with free constants, on every workload with positive work. -/
 theorem tt_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [Nonempty R] [Nonempty S]
     (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload)
-    (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (τ : Transcript)
+    (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (τ : Trace)
     (hτ : ∀ H s, checkedSet P U H s τ = range U.layout.N) (g₀ : ℝ) (ε : ℕ → ℕ → ℝ)
     (hTT : Assumptions.TT CM P D g₀ ε) : 1 ≤ ε 0 U.layout.N := by
   obtain ⟨p, hp⟩ := hCM τ
@@ -158,28 +158,28 @@ theorem tt_false_of_const [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] [N
     exact Proofs.not_collisionIn_nil _
 
 /-- The all-zero commitment on every unit. -/
-def zeroTranscript (U : Workload) : Transcript := fun u => if u < U.layout.N then some ⟨0, 0, 0⟩ else none
+def zeroTrace (U : Workload) : Trace := fun u => if u < U.layout.N then some ⟨0, 0, 0⟩ else none
 
-theorem checkedSet_zeroTranscript (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
+theorem checkedSet_zeroTrace (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S)
     (hY : ∀ u < U.layout.N, ∀ x ∈ P.checkIdx (U.layout.shape u), P.Y H s U u 0 x.1 x.2.1 x.2.2 = 0) :
-    checkedSet P U H s (zeroTranscript U) = range U.layout.N := by
+    checkedSet P U H s (zeroTrace U) = range U.layout.N := by
   classical
   ext u
   unfold checkedSet
   rw [Finset.mem_filter, Finset.mem_range, and_iff_left_iff_imp]
   intro hu
-  refine ⟨⟨0, 0, 0⟩, by simp [zeroTranscript, hu], zero_actOK _, fun x hx => ?_⟩
+  refine ⟨⟨0, 0, 0⟩, by simp [zeroTrace, hu], zero_actOK _, fun x hx => ?_⟩
   rw [hY u hu x hx]; rfl
 
-/-- **Zero noise**: with zero activation noise, the zero-input transcript is correct for free, so TT fails. -/
+/-- **Zero noise**: with zero activation noise, the zero-input trace is correct for free, so TT fails. -/
 theorem tt_false_zero_noise [Fintype Q] [DecidableEq Q] [Fintype R] [Nonempty R] (CM : CostModel Q R Salt)
     (hCM : FreeConstants CM) (P : D1.Params Q R Salt)
     (hE : ∀ sh a b, mm P.r (P.expAct sh a b).1 (P.expAct sh a b).2 = 0) (D : Layout → Prop) (U : Workload)
     (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (g₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P.toProtocol D g₀ ε) : 1 ≤ ε 0 U.layout.N := by
   have := salt_nonempty
-  refine tt_false_of_const CM hCM P.toProtocol D U hU hpos (zeroTranscript U) (fun H s => ?_) g₀ ε hTT
-  refine checkedSet_zeroTranscript _ U H s fun u _ x _ => ?_
+  refine tt_false_of_const CM hCM P.toProtocol D U hU hpos (zeroTrace U) (fun H s => ?_) g₀ ε hTT
+  refine checkedSet_zeroTrace _ U H s fun u _ x _ => ?_
   show mm _ (P.noisedAct H s U u 0) (P.noisedWt H s U u) x.2.1 x.2.2 = 0
   have h0 : P.noisedAct H s U u 0 = 0 := by
     unfold D1.Params.noisedAct D1.Params.actF; rw [hE]; simp
@@ -197,21 +197,21 @@ theorem tt_false_depth_zero [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] 
     (CM : CostModel Q R S) (hCM : FreeConstants CM) (P : D1.Params Q R S) (hd : P.d = 0) (D : Layout → Prop)
     (U : Workload) (hU : U.InDomain D) (hpos : 0 < ∑ u ∈ range U.layout.N, ((U.layout.shape u).Wmm : ℝ)) (g₀ : ℝ)
     (ε : ℕ → ℕ → ℝ) (hTT : Assumptions.TT CM P.toProtocol D g₀ ε) : 1 ≤ ε 0 U.layout.N := by
-  refine tt_false_of_const CM hCM P.toProtocol D U hU hpos (zeroTranscript U) (fun H s => ?_) g₀ ε hTT
-  refine checkedSet_zeroTranscript _ U H s fun u _ x hx => ?_
+  refine tt_false_of_const CM hCM P.toProtocol D U hU hpos (zeroTrace U) (fun H s => ?_) g₀ ε hTT
+  refine checkedSet_zeroTrace _ U H s fun u _ x hx => ?_
   have : x ∈ P.checkIdx (U.layout.shape u) := hx
   rw [checkIdx_depth_zero P hd] at this
   exact absurd this (Finset.notMem_empty x)
 
 /-! ## `T = 0` and `q = 0` -/
 
-theorem wins_T_zero_iff (P : Protocol Q R S) (U : Workload) (g : ℝ) (τ : Transcript) (H : Q → R) (s : S) :
+theorem wins_T_zero_iff (P : Protocol Q R S) (U : Workload) (g : ℝ) (τ : Trace) (H : Q → R) (s : S) :
     Wins P U g 0 τ H s ↔ 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ) := by
   unfold Wins; rw [zero_div]
 
-/-- At `q = 0` an adversary of the witness model commits the same transcript against every oracle. -/
-theorem transcript_indep_of_q_zero (A : Adversary (outputPriced Q R S)) (U : Workload) (T : ℝ)
-    (hA : A.Bounded U T 0) (H H' : Q → R) (s : S) : A.transcript U H s = A.transcript U H' s := by
+/-- At `q = 0` an adversary of the witness model commits the same trace against every oracle. -/
+theorem trace_indep_of_q_zero (A : Adversary (outputPriced Q R S)) (U : Workload) (T : ℝ)
+    (hA : A.Bounded U T 0) (H H' : Q → R) (s : S) : A.trace U H s = A.trace U H' s := by
   have h := (hA H s).2
   have h1 : A.pre.calls H = 0 := by omega
   have h2 : (A.online U A.act (A.pre.eval H) s).calls H = 0 := by
@@ -247,7 +247,7 @@ theorem reductionGap_lt_of_omega_lt_one {g₀ Ωmax : ℝ} (hΩ : 0 < Ωmax) (h�
 
 theorem honest_checkedSet (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S)
     (act : ℕ → Mat) (hP : P.Complete D) (hU : U.InDomain D) (hact : ∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) :
-    checkedSet P U H s (honestTranscript P H s U act) = range U.layout.N := by
+    checkedSet P U H s (honestTrace P H s U act) = range U.layout.N := by
   refine le_antisymm (fun u hu => ?_) ?_
   · simp only [checkedSet, Finset.mem_filter] at hu; exact hu.1
   · rw [← honest_correctSet P D U H s act hP hU hact]
@@ -293,7 +293,7 @@ theorem tt_false_of_gap0_ge_one [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype
 /-- **`g ≥ 1`**: every budget is beaten by one correct unit of positive work, so `G_g` cannot hold with `δ < 1`
 against the honest reference (the pinned statements assume `g < 1` or `g₀ < 1`). -/
 theorem wins_of_gap_ge_one (P : Protocol Q R S) (U : Workload) {g T : ℝ} (hg : 1 ≤ g) (hT : 0 ≤ T)
-    (τ : Transcript) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
+    (τ : Trace) (H : Q → R) (s : S) (hpos : 0 < ∑ u ∈ correctSet P U H s τ, (P.Wref U.layout u : ℝ)) :
     Wins P U g T τ H s :=
   lt_of_le_of_lt (div_nonpos_of_nonneg_of_nonpos hT (by linarith)) hpos
 
@@ -428,12 +428,12 @@ theorem randomized_of_deterministic [Fintype Q] [DecidableEq Q] [Fintype R] [Fin
     (P : Protocol Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) (hG : GGap CM P D g δ) (U : Workload)
     (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64) (C : Type) [Fintype C] [Nonempty C]
     (A : C → Adversary CM) (hA : ∀ c, (A c).Bounded U T q) :
-    pr (fun x : (Q → R) × S × C => Wins P U g T ((A x.2.2).transcript U x.1 x.2.1) x.1 x.2.1 ∧
+    pr (fun x : (Q → R) × S × C => Wins P U g T ((A x.2.2).trace U x.1 x.2.1) x.1 x.2.1 ∧
       ¬ (A x.2.2).Breaks U x.1 x.2.1) ≤ δ q U.layout.N := by
   let e : ((Q → R) × S × C) ≃ C × ((Q → R) × S) :=
     { toFun := fun x => (x.2.2, (x.1, x.2.1)), invFun := fun y => (y.2.1, y.2.2, y.1),
       left_inv := fun _ => rfl, right_inv := fun _ => rfl }
-  let W := fun y : C × ((Q → R) × S) => Wins P U g T ((A y.1).transcript U y.2.1 y.2.2) y.2.1 y.2.2 ∧
+  let W := fun y : C × ((Q → R) × S) => Wins P U g T ((A y.1).trace U y.2.1 y.2.2) y.2.1 y.2.2 ∧
     ¬ (A y.1).Breaks U y.2.1 y.2.2
   have hδ : 0 ≤ δ q U.layout.N := by
     obtain ⟨c⟩ := ‹Nonempty C›

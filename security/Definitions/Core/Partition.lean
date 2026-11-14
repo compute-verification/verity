@@ -12,7 +12,7 @@ unit reads (`committed`). Unit `u`'s committed gates are `out(R)` for its gates 
 
 Unit `u` is **correct** in a trace `X` when its committed gates hold what its gates compute from `X` on the gates
 it reads from outside, in(R) (`Correct`): recompute `u`'s gates in order, reading every other gate from `X`
-(`localEval`), and compare with `X` on `u`'s committed gates. Only committed values are bound, and `wrong X` is the set
+(`localEval`), and compare with `X` on `u`'s committed gates. Only committed values are bound, and `incorrect X` is the set
 of units that are not correct.
 -/
 
@@ -48,7 +48,7 @@ def Correct (X : C.Trace) (u : Fin n) : Prop :=
 
 open Classical in
 /-- The incorrect proof blocks of a trace. -/
-noncomputable def wrong (X : C.Trace) : Finset (Fin n) :=
+noncomputable def incorrect (X : C.Trace) : Finset (Fin n) :=
   univ.filter fun u => ¬ P.Correct X u
 
 open Classical in

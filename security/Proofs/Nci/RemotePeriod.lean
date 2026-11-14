@@ -15,8 +15,8 @@ windows of window `t`'s own). Three events carry the failure:
 * PoUW's wrong windows hold more than `ε' C`: `CertificateSlack` at the period's law, each window's marginal from its
   per-window bound, at most `p/ε'`;
 * some window samples a faulty block and detects none: the union over the windows (`prob_exists_le`), at most `∑_t ks t`;
-* no window does, and some identity has more than `K` escaped blocks: `escape_tail`, over the identities, at most
-  `J (1 − q)^(K+1)`. Up to its first detection an identity's windows each miss all their faulty blocks, so the escaped
+* no window does, and some identity has more than `K` missed blocks: `escape_tail`, over the identities, at most
+  `J (1 − q)^(K+1)`. Up to its first detection an identity's windows each miss all their faulty blocks, so the missed
   blocks are the faulty blocks of windows that missed them; counted at a weight fixed before each window's coins, that
   of its faulty blocks while the identity is undetected and has at most `K` so far (`truncated_sum_ge`), the tail is
   `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow`.
@@ -157,10 +157,10 @@ theorem truncated_sum_ge {T : ℕ} (x : Fin T → ℕ) (K : ℕ) (hx : K + 1 ≤
       _ ≤ _ := Finset.sum_le_sum_of_subset (Finset.filter_subset _ _)
 
 /-- **The escape tail, one identity.** Under `DampenerRemotePeriod`'s sampled-proofs legs, the runs where no window
-samples a faulty block without detecting one, and identity `j` has more than `K` escaped blocks (faulty, and accepted
+samples a faulty block without detecting one, and identity `j` has more than `K` missed blocks (faulty, and accepted
 before its first detection), have probability at most `(1 − q)^(K+1)`. Up to its first detection, the identity's windows
 each miss all their faulty blocks, which, at a weight fixed before each window's coins (its faulty blocks while the
-identity is undetected and has at most `K` escaped so far), is `prCoin_forall_sum_le_pow`. -/
+identity is undetected and has at most `K` missed so far), is `prCoin_forall_sum_le_pow`. -/
 theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) → Finset β) (win : β → Fin T) {ι : Type}
     [DecidableEq ι] (idW : Fin T → ι) (τw : Fin T → ℝ) (q : ℝ) (K : ℕ) (j : ι)
     (hbadP : ∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ'))
@@ -173,7 +173,7 @@ theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) →
     (hord : ∀ t t', idW t = idW t' → t < t' → τw t < τw t') :
     prob (PMF.uniformOfFintype ((t : Fin T) → Ω t)) (fun ξ =>
         (∀ t, ¬ ((∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn ξ) ∧ ∀ b ∈ bad ξ, win b = t → b ∉ detected ξ)) ∧
-          K + 1 ≤ ((escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
+          K + 1 ≤ ((missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
             fun b => idW (win b) = j).card) ≤
       (1 - q) ^ (K + 1) := by
   classical
@@ -249,12 +249,12 @@ theorem escape_tail {β : Type} (bad drawn detected : ((t : Fin T) → Ω t) →
   -- the event lies inside the tail's
   have hin : ∀ ξ : (t : Fin T) → Ω t,
       ((∀ t, ¬ ((∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn ξ) ∧ ∀ b ∈ bad ξ, win b = t → b ∉ detected ξ)) ∧
-        K + 1 ≤ ((escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
+        K + 1 ≤ ((missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
           fun b => idW (win b) = j).card) → (∀ t, E t ξ) ∧ K + 1 ≤ ∑ t, wt t ξ := by
     rintro ξ ⟨hG, hesc⟩
     -- identity `j` is undetected up to window `t`
     let A : Fin T → Prop := fun t => idW t = j ∧ ∀ t', t' ≤ t → idW t' = j → ¬ D t' ξ
-    have hfil : (escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
+    have hfil : (missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
         (fun b => idW (win b) = j) = (bad ξ).filter fun b => A (win b) := by
       ext b
       simp only [Finset.mem_filter, mem_escaped, A]
@@ -338,9 +338,9 @@ end Coords
 /-- **The remote overhead bound over a monitoring period.** Three events of the period's coins carry the failure:
 PoUW's wrong windows hold more than `ε' C` (`CertificateSlack` on the run's law, each window's marginal from its
 per-window bound, `prob_le_of_update`: at most `p/ε'`); some window samples a faulty block and detects none (the union
-over windows: at most `∑_t ks t`); or no window does and some identity has more than `K` escaped blocks
+over windows: at most `∑_t ks t`); or no window does and some identity has more than `K` missed blocks
 (`escape_tail`, over the identities: at most `J (1 − q)^(K+1)`). Outside them the wrong windows hold at most `ε' C`,
-each identity's escaped blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
+each identity's missed blocks skip at most `K B`, so `VerdictLag` puts the faulty blocks' skipped work at most
 `(JΔ/H) C + J K B`, and the residual's hypothesis is `DampenerThreaded`'s at
 `(1 − ε_W) W_cert − ε' C − (JΔ/H) C − J K B`; each day's verdict bounds its MACs by `CountHE`, summed over the days into
 `X`; `remote_core` gives both forms, at `ρ = C/X` (`declaredShare_div`). -/
@@ -361,9 +361,9 @@ theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
   -- window `t` samples a faulty block and detects none
   let Bad : Fin T → ((t : Fin T) → Ω t) → Prop := fun t ξ =>
     (∃ b ∈ bad ξ, win b = t ∧ b ∈ drawn ξ) ∧ ∀ b ∈ bad ξ, win b = t → b ∉ detected ξ
-  -- no window does, and identity `j` has more than `K` escaped blocks
+  -- no window does, and identity `j` has more than `K` missed blocks
   let Esc : ι → ((t : Fin T) → Ω t) → Prop := fun j ξ => (∀ t, ¬ Bad t ξ) ∧
-    K + 1 ≤ ((escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
+    K + 1 ≤ ((missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter
       fun b => idW (win b) = j).card
   have h1 : prob μ (fun ξ => ε * C < wrongCapacity cap (fun t => wrong t ξ)) ≤ p / ε :=
     CertificateSlack _ μ T cap (fun ξ t => wrong t ξ) p ε C hp hε hC hc hcC fun t =>
@@ -385,13 +385,13 @@ theorem DampenerRemotePeriod : Guarantees.DampenerRemotePeriod := by
     apply hbad
     have hwrong : wrongCapacity cap (fun t => wrong t ξ) ≤ ε * C := not_lt.1 fun h => hgood (Or.inl (Or.inl h))
     have hG : ∀ t, ¬ Bad t ξ := fun t h => hgood (Or.inl (Or.inr ⟨t, Finset.mem_univ _, h⟩))
-    have hesc : ∑ b ∈ escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)), w b ≤
+    have hesc : ∑ b ∈ missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)), w b ≤
         I.card * K * B := by
-      have hmaps : ∀ b ∈ escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)), idW (win b) ∈ I :=
+      have hmaps : ∀ b ∈ missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)), idW (win b) ∈ I :=
         fun b hb => hI ξ b (mem_escaped.1 hb).1
       rw [← Finset.sum_fiberwise_of_maps_to hmaps]
       let Ej : ι → Finset β := fun j =>
-        (escaped (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter fun b => idW (win b) = j
+        (missed (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b))).filter fun b => idW (win b) = j
       calc ∑ j ∈ I, ∑ b ∈ Ej j, w b
           ≤ ∑ _j ∈ I, (K : ℝ) * B := Finset.sum_le_sum fun j hj => by
             have hcard : (Ej j).card ≤ K := by
@@ -465,7 +465,7 @@ theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := 
   · intro t ξ
     rw [prob_of_forall_not _ fun _ h => h]
     positivity
-  · unfold Assumptions.SampledPerWindow
+  · unfold Assumptions.SampledPerExecutionPhase
     exact ⟨fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, fun t ξ => by simpa using prob_uniform_le_one _,
       fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h]⟩
   · unfold Assumptions.IdentitySchedule
@@ -489,7 +489,7 @@ theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontri
     fun _ => by simp [Assumptions.SourcesCover], fun _ => by norm_num [Assumptions.UnmonitoredAtMost],
     fun _ => by simp [Assumptions.ResidualAtMost, wrongCapacity], fun _ => by norm_num [Assumptions.CheatingAtMost],
     fun h => ?_, ?_⟩
-  · unfold Assumptions.SampledPerWindow
+  · unfold Assumptions.SampledPerExecutionPhase
     exact ⟨fun _ _ _ _ b => b.elim, fun _ _ _ _ b => b.elim, fun t ξ => by simpa using prob_uniform_le_one _,
       fun t ξ => by rw [prob_of_forall_not _ fun _ h => by simp at h]⟩
   · unfold Assumptions.IdentitySchedule

@@ -20,18 +20,18 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   `ComposeMonitoringPeriod.CircuitCreditMonitoringPeriod` credits live words over a period's accepted prefix, not time, so it
   does not give `wrong`'s form.
 * **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
-  proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
+  proof blocks at registration, `incorrectRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
   each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the sample misses all
   `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`,
   under A3: a uniform `kd`-subset of `n` units misses `m` fixed units with probability
   `C(n − m, kd)/C(n, kd) ≤ (1 − kd/n)^m`), and the window is accepted with a sampled faulty block with probability at most
-  `ε_ks,t + δ_link,t` (`HiddenWindow.accepted_drawnWrong_le`, from `Flock.SecurityProofs.EndToEndHiddenDrawn`). That
+  `ε_ks,t + δ_link,t` (`HiddenWindow.accepted_drawnIncorrect_le`, from `Flock.SecurityProofs.EndToEndHiddenDrawn`). That
   the deployment's window `t`, at each value of the other windows' coins, is such a window with its faulty blocks as
   its incorrect proof blocks is a bridge not stated either: `IntegrityPeriod` plays the windows as one sequential game, not over a
   product of window coins. No guarantee implies `SampledDetection`'s per-block form: it conditions each block on its
   own window's other blocks, and it folds the knowledge term into `q`, where the protocol's is additive per window. The
   statement does not need it: a block's time is its window's, and each identity's escaped blocks are bounded at the
-  predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityHorizon`'s own
+  predictable time its faulty blocks reach `K + 1`, the stopped, per-identity form of `IntegrityPooled`'s own
   argument, which `FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow` bounds by `(1 − q)^(K+1)`. That is a tail
   bound, so the escape term needs no Markov's inequality: `J (1 − q)^(K+1)` at an escape share `J K B/C`, against
   `DampenerRemote`'s `J ((1 − q)/q) B/(θC)`.
@@ -113,9 +113,9 @@ def DampenerRemotePeriod : Prop :=
     (R : Type) [Fintype R] (d : R → RegisteredCircuit) (n : R → ℕ) (c k : ℕ) (γ V : Type) [Fintype γ] [DecidableEq γ]
     [DecidableEq V] (Wk : (i : R) → Cut.Work (d i).D γ) (val : (i : R) → Finset (Fin (d i).D.N) → V) (βw βx b : ℝ),
     -- PoUW, per window
-    0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → Assumptions.WithinCompute cap C → Assumptions.PouwPerWindow wrong p →
+    0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → Assumptions.WithinCompute cap C → Assumptions.PouwPerExecutionPhase wrong p →
     -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
-    Assumptions.SampledPerWindow bad drawn detected win q ks → 0 ≤ q → q ≤ 1 →
+    Assumptions.SampledPerExecutionPhase bad drawn detected win q ks → 0 ≤ q → q ≤ 1 →
     -- the identities and the halt
     Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B → 0 < H → 0 ≤ Δ →
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) →
@@ -151,7 +151,7 @@ instance is an honest developer over one window, run by its one identity: its Po
 block, its monitored compute all certified work, and one declared day, the toy `Nci.Cut.Toy` complying with
 `CompliesAtMost 1 2 2` under (H) at unit costs and (E) at `b = 2`, whose two MACs are the run's counted multiplications,
 at `MFU₀ = 1/2`, `p = 3 · 2⁻⁴⁰` and `ε' = 2p/δ` at the pooled `δ = 10⁻⁶`, with every proof block proved (`q = 1`,
-`K = 0`) and no knowledge error (`ks = 0`). The instance's certificate is never wrong, so it meets `PouwPerWindow` at
+`K = 0`) and no knowledge error (`ks = 0`). The instance's certificate is never wrong, so it meets `PouwPerExecutionPhase` at
 any `p ≥ 0`, and its `δ` is `1/(2 · 10⁶)` at any `p > 0`: it shows the premises hold together where the bound exceeds 1,
 and gives no deployment's `p`, `ks` or `δ`. -/
 def DampenerRemotePeriod_honest : Prop :=
@@ -164,9 +164,9 @@ def DampenerRemotePeriod_honest : Prop :=
     (_ : DecidableEq γ) (_ : DecidableEq V) (Wk : (i : R) → Cut.Work (d i).D γ)
     (val : (i : R) → Finset (Fin (d i).D.N) → V) (βw βx b : ℝ),
     -- PoUW, per window
-    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ Assumptions.WithinCompute cap C ∧ Assumptions.PouwPerWindow wrong p ∧
+    0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ Assumptions.WithinCompute cap C ∧ Assumptions.PouwPerExecutionPhase wrong p ∧
     -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
-    Assumptions.SampledPerWindow bad drawn detected win q ks ∧ 0 ≤ q ∧ q ≤ 1 ∧
+    Assumptions.SampledPerExecutionPhase bad drawn detected win q ks ∧ 0 ≤ q ∧ q ≤ 1 ∧
     -- the identities and the halt
     Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B ∧ 0 < H ∧ 0 ≤ Δ ∧
     (∀ ξ, Assumptions.TerminalDetection (bad ξ) (detected ξ) (fun b => idW (win b)) (fun b => τw (win b)) Δ) ∧
@@ -248,7 +248,7 @@ def DampenerRemotePeriod_nontrivial : Prop :=
   -- PoUW's capacities
   (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ Assumptions.WithinCompute AcceptAll.cap 1 ∧
   -- sampled proofs, per window
-  Assumptions.SampledPerWindow (Ω := fun _ => Bool) AcceptAll.bad AcceptAll.drawn AcceptAll.detected AcceptAll.win 1
+  Assumptions.SampledPerExecutionPhase (Ω := fun _ => Bool) AcceptAll.bad AcceptAll.drawn AcceptAll.detected AcceptAll.win 1
     AcceptAll.ks ∧
   (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧
   -- the identities and the halt
@@ -274,7 +274,7 @@ def DampenerRemotePeriod_nontrivial : Prop :=
     (wrongCapacity AcceptAll.cap (fun t => AcceptAll.wrong t ξ)) (∑ b ∈ AcceptAll.bad ξ, AcceptAll.w b)) ∧
   (∀ ξ, Assumptions.CheatingAtMost (AcceptAll.Mx ξ) 2 0 1 0) ∧
   -- PoUW's per-window bound fails
-  ¬ Assumptions.PouwPerWindow (Ω := fun _ => Bool) AcceptAll.wrong 0 ∧
+  ¬ Assumptions.PouwPerExecutionPhase (Ω := fun _ => Bool) AcceptAll.wrong 0 ∧
   -- and so does the conclusion
   ¬ (1 - (0 / (1 / 2) + (∅ : Finset Unit).card * (1 - 1) ^ ((0 : ℕ) + 1) + ∑ t, AcceptAll.ks t) ≤
       prob (PMF.uniformOfFintype (Fin 1 → Bool)) (fun ξ =>

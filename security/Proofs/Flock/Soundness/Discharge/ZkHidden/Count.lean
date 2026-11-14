@@ -62,7 +62,7 @@ theorem zk_flock_countC_execOS_crH (hA : A.Correct)
       (batchedSessionZC A Hs (planAtZKH dj y₀))) σ fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR Hs.H qT) :
     prob (fun o => execAccept o ∧
-        K ≤ (P.wrong (XplurZC A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) vb (reg σ) (cont σ) k Rw)).card)
+        K ≤ (P.incorrect (XplurZC A Hs P (planAtZKH dj y₀) (tabAtZKH dj y₀) vb (reg σ) (cont σ) k Rw)).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
           (batchedSessionZC A Hs (planAtZKH dj y₀))) σ ≤
       (Law.stratified σs ks hks).miss K +

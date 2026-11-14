@@ -45,7 +45,7 @@ verifier samples a `kd`-subset of the `n` proof blocks from its operating system
 `src`); one `--zk` session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and
 `flock-verify verify --zk --session-tables J` reads the session's record. Then for every live prover `τ`,
 $$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
-with "wrong" `EndToEnd`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at registration), and
+with "wrong" `EndToEnd`'s (`incorrectRegZ`, against the public file, in the committed transcript fixed at registration), and
 `ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss term, so it holds whatever
 the verifier's bytes: it needs no A3.
 
@@ -98,7 +98,7 @@ def EndToEndDrawn : Prop :=
       (zcStrat execArith hs512 (planZJ dj y₀) (cont σ ω)) qF qS) →
     -- ecr/sha-512 for the prover's link finders
     LinkCRZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw M t' →
-    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ wrongRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
+    prob (fun o => LiveAcceptsZK I o ∧ ∃ u ∈ o.2.1, u ∈ incorrectRegZ execArith P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ)
           (XplurZC execArith hs512 P (planZJ dj y₀) (tabZJ dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZJ dj y₀) N wr)) τ ≤
       ksAvgStrictZ (planZJ dj y₀) L k qF qS (reg σ) +

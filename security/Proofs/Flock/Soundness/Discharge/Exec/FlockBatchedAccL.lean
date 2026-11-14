@@ -13,7 +13,7 @@ import Proofs.Flock.Soundness.Game
 table is extracted from `k` reruns of everything after `Commit` in which the session accepts, so an
 extraction costs `1 + k` runs in expectation whatever the acceptance probability `ε`. Its knowledge
 bound is relative to `ε` (`joint_le_accBL`): `ε·Pr[fails] ≤ a + r·ε`, with `a = ε_c⁻ + √(k·adv₀L)`
-and `r = N₀/(ek) < 1`. So at a wrong sampled proof block
+and `r = N₀/(ek) < 1`. So at a incorrect sampled proof block
 $$\varepsilon\le\varepsilon\Pr[\text{fails}]+\varepsilon\Pr[\text{link}]\le a+r\varepsilon+
 \varepsilon\Pr[\text{link}],\qquad\varepsilon\le\frac{a+\varepsilon\Pr[\text{link}]}{1-r}.$$
 
@@ -70,7 +70,7 @@ noncomputable def analysisBEL
     (hlow : P.LoweringSoundB plan tab decode) :
     ExtractionAnalysis L Reg (batchedSessionL H E Lf plan) where
   Tr := Fin C.N → Bool
-  wrong := P.wrong
+  incorrect := P.incorrect
   committed := Xc
   ks S R τ u := ENNReal.ofReal (ksBoundAccBL execArith H E Lf (plan S R) (tab S R u) k
     (batchStratL H E Lf plan τ) / (1 - rateB (plan S R) (tab S R u) k))
@@ -83,7 +83,7 @@ noncomputable def analysisBEL
       ⟨hc, fun M _ hsat => by
         by_contra hno
         push Not at hno
-        exact P.mem_wrong.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))⟩
+        exact P.mem_incorrect.1 hu (P.correct_congr (fun g hg => (hno g hg).symm) (hlow S R u hS M hsat))⟩
     set ε := accProbL H E Lf plan τ with hεdef
     set r := rateB (plan S R) (tab S R u) k
     set a := ksBoundAccBL execArith H E Lf (plan S R) (tab S R u) k (batchStratL H E Lf plan τ)
@@ -137,7 +137,7 @@ theorem flock_batched_countEL
     {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
     (hlink : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan))) :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
+    prob (fun o => o.1 = true ∧ K ≤ (P.incorrect (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       L.miss K + ksAvgBEL H E Lf plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_count (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)
@@ -152,7 +152,7 @@ theorem flock_batched_drawnEL
     {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
     (hlink : (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan))) :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
+    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.incorrect (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
       ksAvgBEL H E Lf plan k (reg σ) (cont σ) + δlink (reg σ) (cont σ) :=
   extraction_audit_drawn (analysisBEL P H E Lf plan tab decode Xc k hk hr hlow)

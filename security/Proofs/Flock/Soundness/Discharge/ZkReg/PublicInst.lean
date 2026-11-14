@@ -43,7 +43,7 @@ of `scopeOkH`.
 * `checked_of_acceptsHJI`: the registered reads are checked at every accepted outcome. The registered leaf at a row of
   `instLayoutH` is the public file's, as at `keyLayoutH`, so `checked_of_acceptsHJ`'s argument reads unchanged.
 * `zk_session_soundHJR_custody_regI`, `zk_session_soundHJR_custody_drawn_regI`: the session's bound with "wrong"
-  `wrongRegZ` at `rsZHJI`, and the registered check at every accepted outcome.
+  `incorrectRegZ` at `rsZHJI`, and the registered check at every accepted outcome.
 -/
 
 namespace FlockSoundness.Discharge.ZkReg
@@ -133,7 +133,7 @@ theorem checked_of_acceptsHJI (I : Inputs) (ht : I.tags.typed = false) (own : Ar
 
 /-- **One hidden-output `--zk --registered` sampled session of `J` tables is sound against the registration under
 `live-verifier`, and its registered reads are checked, at `instProg`.** `zk_session_soundHJR_custody_reg` with the
-template instance's program: "wrong" is `wrongRegZ` at the prover's registration `reg σ`, read through `rsZHJI`. -/
+template instance's program: "wrong" is `incorrectRegZ` at the prover's registration `reg σ`, read through `rsZHJI`. -/
 theorem zk_session_soundHJR_custody_regI
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
@@ -161,7 +161,7 @@ theorem zk_session_soundHJR_custody_regI
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧
-        K₀ ≤ (wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+        K₀ ≤ (incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ)
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
@@ -212,7 +212,7 @@ theorem zk_session_soundHJR_custody_drawn_regI
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZKR I own o ∧ ∃ u ∈ o.2.1,
-        u ∈ wrongRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
+        u ∈ incorrectRegZ execArith ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)
           ((rsZHJI dj y₀ ht hc hrf hpub hU hpr hw).bindingZ (rsZHJI_computes dj y₀ ht hc hrf hpub hU hpr hw))
           (reg σ)
           (XplurZC execArith hs512 ((instProg c n).partition (outsOfI c n)) (planZHJ dj y₀) (tabZHJ dj y₀)

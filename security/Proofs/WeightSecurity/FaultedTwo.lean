@@ -25,7 +25,7 @@ open scoped ENNReal
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} {O V Tick Adv : Type}
 
 /-- **`TheftFaulted` at a two-stage audit**: with each window's verifier knowledge sound at the footprint, refusing
-what is out of scope, and capped at `K` (`WindowCap`), the outsider steals the weights with probability at most the
+what is out of scope, and capped at `K` (`ExecutionPhaseCap`), the outsider steals the weights with probability at most the
 atypical weights' probability, plus the fault channel's `|S|·N^(λ−1)·p` at the budget `M = T·(K − 1) + 1` incorrect
 replay blocks, plus `Σ_t ε_t`, each `ε_t` bounding window `t`'s `KSLinOn` error at every strategy the run plays it with,
 plus the probability that an accepted release is not the faulted circuit's run at a pattern of at most its window's
@@ -50,7 +50,7 @@ theorem TheftFaultedTwo {Ω R Θ Q Θ' F : Type} [Fintype Ω] [Fintype R] [Finty
         (T * (K - 1) + 1) ((L + 1) * Fintype.card O)))
     (hks : ∀ t < T, (Lv t).KS H)
     (href : ∀ t < T, ∀ x (P : Prover Unit) r, (run H P (Lv t).V x () r).out = .acc → (Lv t).Scope x)
-    (hcap : ∀ t < T, WindowCap (Lv t) δ K)
+    (hcap : ∀ t < T, ExecutionPhaseCap (Lv t) δ K)
     (herr : ∀ θ r t τ, MonitoringPeriodPlays (fun t => twoGame (Lv t) ((O → V) × Tick × Adv)) 0 T (s θ r) t τ →
       twoErr H (Lv t) δ τ ≤ ε t) :
     Verity.Game.avg (fun z : Ω × R => Verity.Game.value

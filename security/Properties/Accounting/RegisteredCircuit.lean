@@ -8,7 +8,7 @@ public import Properties.Accounting.Remote.Schedule
 
 `Accounting.Guarantees.RegisteredCircuitRequirement` (`G`) takes `Accounting.Assumptions.SteeredLayout`: each pass's layout
 reads the codec and the append coins only through an `a`-bit summary. `ScheduledRequirement` is `G` at the verifier's
-layout (`Properties.RemoteAudit.sessionLayout`: each tile where `checkOpening` checks the block at its position of the
+layout (`Properties.RemoteAudit.runLayout`: each tile where `checkOpening` checks the block at its position of the
 pass's plan) with that premise replaced by what the verifier checks: the schedule check (`RemoteAudit.Schedule.check`)
 at the steering cap the session committed before its first coin (`audit.Params.schedule_cap`,
 `audit.Ledger.steering`) accepts each pass of the session. It is stated here because it reads the verifier's code,
@@ -33,7 +33,7 @@ the bound as it states them) at the verifier's layout, with its premise `Steered
 schedule check's acceptance at the cap `cap`, which is the event's first conjunct. `accepted c y`: at the prefix `c` of
 the session's coins before a pass and the codec and append coins `y`, the check at `cap` over `blocks` registered
 blocks accepts some schedule for a session whose appends are `appended c y` and whose pass `idx c` sent the runs
-`sent c y`. The layout is the verifier's of those appends and runs (`Properties.RemoteAudit.sessionLayout`: tile `i` at
+`sent c y`. The layout is the verifier's of those appends and runs (`Properties.RemoteAudit.runLayout`: tile `i` at
 the position the verifier checks the plan's `i`-th block at), `dflt c` where they give no layout of `N` tiles in
 `Fin T × Fin M` (a plan of other than `N` blocks; `G`'s pass has `N` tiles). `cap` is the one cap the session committed
 before its first coin, over which the check refuses a schedule, so on the coins the check accepts the layout
@@ -74,7 +74,7 @@ def ScheduledRequirement : Prop :=
     (σ : RateSketch.StackedCoins Ω Ca T n P N ρ G → Requirement.Store)
     (plan : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin n → Fin P → Finset ℕ)
     (addr : RateSketch.StackedCoins Ω Ca T n P N ρ G → ℕ → Fin T × Fin M),
-    let layout := Properties.RemoteAudit.sessionLayout blocks dflt appended sent
+    let layout := Properties.RemoteAudit.runLayout blocks dflt appended sent
     7 ≤ n → 0 < P → 0 < N → 0 < E →
     Assumptions.SketchRank 16 128 12 ε →
     Assumptions.KeyBinding T M δ enc →

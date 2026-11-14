@@ -211,7 +211,7 @@ theorem execOS_subset_full_mem {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] 
 no assumption on the source's bytes. -/
 theorem execOS_subset_full_escape {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {B : Finset (Fin n)} (hB : B.Nonempty) :
-    (Law.execOS (n := n) t (.subset n) n).escape B = 0 := by
+    (Law.execOS (n := n) t (.subset n) n).missProb B = 0 := by
   obtain ⟨u, hu⟩ := hB
   refine le_antisymm ?_ zero_le
   refine (FlockSoundness.Game.prCoin_mono (q := fun _ => False) fun ω h => ?_).trans
@@ -384,17 +384,17 @@ def RegAgree (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
 
 /-- **A good layer**: no incorrect proof block, and agreement with the registrant. -/
 def Good (bits : Fin (Layout.keyN c hU nv) → Bool) : Prop :=
-  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong bits = ∅ ∧ zo.RegAgree bits
+  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).incorrect bits = ∅ ∧ zo.RegAgree bits
 
 open Classical in
 /-- The units with a row at a registered read whose leaf under `R` is not the registrant's. -/
 noncomputable def offUnits (R : Reg') : Finset (Fin nv) :=
   Finset.univ.filter fun u => ∃ p, zo.rd.isRead p ∧ rowIn {u} p ∧ zo.lay.regLeaf R p ≠ zo.rd.leaf p
 
-/-- **The bad units at the strategy `τ`**: wrong in the layer, reading a registered-value disagreement at the
+/-- **The bad units at the strategy `τ`**: incorrect in the layer, reading a registered-value disagreement at the
 registrant's leaf, or holding an off-leaf registered read. -/
 noncomputable def badUnits (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Finset (Fin nv) :=
-  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) ∪
+  ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).incorrect (zo.layer dg N k Rw τ) ∪
     regWrongZ execArith ((keyProg c hU nv).partition (Layout.outsOf c hU nv)) (planZHJ zo.dj zo.y₀) (tabZHJ zo.dj zo.y₀)
       zo.vb (regOpenZ zo.ht zo.dj zo.y₀ zo.hcH hU zo.hpub (Layout.scopeOkH_of_scopeOk hscope) zo.rd) (reg (zo.sim dg N τ)) (zo.layer dg N k Rw τ) ∪
     zo.offUnits τ.1
@@ -403,7 +403,7 @@ noncomputable def badUnits (k Rw : ℕ) (τ : Strategy (zo.game dg N)) : Finset 
 theorem badUnits_nonempty (k Rw : ℕ) (τ : Strategy (zo.game dg N)) (hG : ¬ zo.Good (zo.layer dg N k Rw τ)) :
     (zo.badUnits dg N k Rw τ).Nonempty := by
   classical
-  by_cases hw : ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).wrong (zo.layer dg N k Rw τ) = ∅
+  by_cases hw : ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).incorrect (zo.layer dg N k Rw τ) = ∅
   · obtain ⟨u, g, hg, hread, hne⟩ : ∃ u, ∃ g ∈ ((keyProg c hU nv).partition (Layout.outsOf c hU nv)).io u,
         zo.rd.isRead (zo.lay.pos g) ∧ zo.layer dg N k Rw τ g ≠ zo.lay.bit (zo.rd.wv (zo.lay.pos g)) g := by
       by_contra h

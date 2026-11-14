@@ -213,7 +213,7 @@ theorem checked : pop.Checked := by
     simp [pop] at hs
 
 /-- The honest assignment gets no unit wrong. -/
-theorem wrong_honest : pop.incorrect fns (fun _ => 0) = ∅ := by
+theorem incorrect_honest : pop.incorrect fns (fun _ => 0) = ∅ := by
   ext u
   simp [Population.Dataflow.incorrect, Population.Dataflow.Correct, fns]
 
@@ -236,7 +236,7 @@ theorem TheftServedTiedHonest : Guarantees.TheftServedTiedHonest := by
     rintro (⟨w, hw, -, hd⟩ | h)
     · simp only [List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false] at hw
       rcases hw with rfl | rfl <;> exact hd
-    · simp [Served.lead, Served.Traced.counted, WeightSecurity.ToyTied.window, ToyTied.wrong_honest] at h
+    · simp [Served.lead, Served.Traced.counted, WeightSecurity.ToyTied.run, ToyTied.incorrect_honest] at h
   · unfold WeightSecurity.ToyTied.honestRun
     rw [value_ret, ite_eq_right]
     exact not_not.2 (Served.Traced.tied_of_forall _ _ _ fun w hw => by
@@ -257,7 +257,7 @@ theorem TheftServedTiedNontrivial : Guarantees.TheftServedTiedNontrivial := by
     unfold WeightSecurity.ToyTied.leakRun
     rw [value_ret, ite_eq_left]
     simp [WeightSecurity.ToyServed.Stolen, WeightSecurity.ToyServed.gen, WeightSecurity.ToyTied.thief,
-      WeightSecurity.ToyTied.window, Served.view, Served.reply, Served.count, Outsider.view]
+      WeightSecurity.ToyTied.run, Served.view, Served.reply, Served.count, Outsider.view]
   simp only [hsteal, avg_const, ToyTied.rpow_bits, add_zero] at h
   have hlt : ENNReal.ofReal ((144 : ℝ) * (1 / 256)) < 1 := by
     rw [ENNReal.ofReal_lt_one]

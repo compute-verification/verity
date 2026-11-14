@@ -38,7 +38,7 @@ variable {N n : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg 
 
 /-- **The headline over the salted session**: `Prog.flock_headline` for the batched session at the leaf scheme `Lp`
 (`batchedSessionL H512 enc512 Lp plan`). If `execAccept` holds, the probability that at least `K` units of
-the program's rows circuit are wrong at the committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's
+the program's rows circuit are incorrect at the committed values (1 on `ones`, 0 on `zeros`, the plurality of the prover's
 openings elsewhere) is at most `miss(K) + ε_ks + δ_link + δ_tree`:
 * `miss(K)`, `Law.stratified`'s count curve, under A3 (`hA3`);
 * `ε_ks = ksAvgStrict`, under `SHA512CRStrict` (`cr/sha-512`) for each table's knowledge finders at budgets `qF`, `qS`
@@ -71,7 +71,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_L {Lp : Merkle.Leaf (List Floc
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
@@ -112,7 +112,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_LX {Lp : Merkle.Leaf (List Flo
       fun o => execAccept o ∧ o.1 = false)
     {qT : ℝ} (hT : tr.finder.CR H512 qT) :
     prob (fun o => execAccept o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (audit (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg
@@ -159,7 +159,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_execL {Lp : Merkle.Leaf (List 
       (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 Lp plan (cont σ ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
@@ -204,7 +204,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_execLX {Lp : Merkle.Leaf (List
       (plan ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) (reg σ)) j
       (batchStratL H512 enc512 Lp plan (cont σ ω)) qF qS) :
     prob (fun o => LiveAccepts I o ∧
-        K ≤ ((p.partition outs).wrong
+        K ≤ ((p.partition outs).incorrect
           (Xpub ones zeros
             (XplurL (p.partition outs) H512 enc512 Lp plan tab (rs.binding hHm) (reg σ) (cont σ) k Rw))).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg live) τ ≤
