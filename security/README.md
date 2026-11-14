@@ -62,15 +62,15 @@ incorrect set of the trace the extractor recovers.
      `FillRoundEq`; and `OuterViewZK`.
 4. **Composed soundness.** `Verity.Soundness` and `Verity.RemoteSoundness` (`Properties/Verity/Soundness.lean`),
    proved as `Verity.soundness_of_subprotocols` and `Verity.remote_soundness_of_subprotocols`
-   (`Proofs/Properties/Verity/Soundness.lean`): if each of the composite's subprotocols meets its target, then
+   (`Proofs/Properties/Verity/`): if each of the composite's subprotocols meets its target, then
    Pr[the composite's verifier accepts files that passed the commit phase's check ∧ some subprotocol's claim fails]
    ≤ Σ_a error_a, where error_a is a's δ plus ε_forge plus its loss at the probability that a's finder outputs a
    SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
    - Real: SHA-512 collision resistance (`Vocab.FinderCR`) and LMS unforgeability (`Hash.Assumptions.LmsUnforgeable`),
      read in the error.
    - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-     `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until proved
-     (PoUW's: `verity/protocols/accounting/pouw/verifier/`).
+     `NetworkCertifierSound`, `WipeSound`), each open until proved (PoUW's:
+     `verity/protocols/accounting/pouw/verifier/`). Remote: the first two, `WiresSound`, `GateARow`.
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
