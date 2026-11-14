@@ -3162,6 +3162,17 @@
         "verity/definitions/pyproject.toml": "adapters/vllm/verity_vllm/definitions/pyproject.toml",
         "verity/definitions/__init__.py": "adapters/vllm/verity_vllm/definitions/__init__.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/egemm_depthr_check.py": "benchmarks/pouw/theory/egemm_depthr_check.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_egemm_depthr.py": "benchmarks/pouw/tests/test_theory_egemm_depthr.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/eps_profile.py": "benchmarks/pouw/edited_gemm_profile/eps_profile.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/vprod_profile.py": "benchmarks/pouw/edited_gemm_profile/vprod_profile.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/flash_ref.py": "benchmarks/pouw/edited_gemm_profile/flash_ref.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_eps_profile.py": "benchmarks/pouw/tests/test_edited_gemm_eps_profile.py",
+        "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_vprod_profile.py": "benchmarks/pouw/tests/test_edited_gemm_vprod_profile.py"
+      }
     }
   ]
 }
