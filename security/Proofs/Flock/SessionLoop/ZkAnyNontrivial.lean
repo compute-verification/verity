@@ -21,14 +21,14 @@ public import Proofs.Flock.Claims.Prob
 `Flock.Guarantees.SessionLoopZKAnyDeployed` concludes `Loop.ZkAnyAt` at the deployed tables `Masked.dataE` and the
 session loop's own link and `Finish` (`withFiles (withLink L₀ src) src`): the session loop's release meets
 `Claims.ZKOut` within `Loop.anyErr`. That conclusion fails at a level-0 source that refuses at one witness and samples
-the tape's level 0 at another (`Loop.leakSrc`): the link carries an empty root at the one and a root of `64·2^cap` bytes
+the tape's level 0 at another (`Loop.leakSrc`): the link carries an empty root at the one and a root that is not empty
 at the other, so its length tells the two apart (`Loop.not_zkOut_link`), at the concrete statement, wherever the error
 against `Loop.helloRej` sums below `1` over the two.
 
 The statement takes no hiding premise: its error is stated at hm96's hiding gap at the pinned key, whatever that gap is.
 That the error is below `1` there rests on the gap being at most `2^-193`, the pinned key's hiding
 (`FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96`, the witness's one hypothesis), with the
-session's leaves at most `64·leafCap` (`Loop.nLeaves_dataE_le_max`).
+session's leaves within 64 times the per-table leaf limit (`Loop.nLeaves_dataE_le_max`).
 
 * `Loop.pLog_unP_helloRej`, `Loop.fork_unP_helloRej`: against `helloRej` the unswitched prover sends its `Hello` and its
   first message without a SHA-512 call before `helloRej` rejects, so its collision finder finds nothing.
@@ -120,8 +120,8 @@ theorem flat_layer_pos (d c : ℕ) (lf : ℕ → ByteArray) (hc : c < d) :
   rw [hf, hsz]
   positivity
 
-/-- **A level 0 the `--zk` schedule samples has a root**: at `25 ≤ m ≤ 35` its level 0 caps strictly below its depth
-(`zkSchedule_cap0_lt`), so its root is `2^cap` digests. -/
+/-- **A level 0 the `--zk` schedule samples has a root**: at `25 ≤ m ≤ 35` the level's root sits strictly below its
+depth, so the root holds at least one digest. -/
 theorem root_size_pos {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {g : Array _root_.Flock.F128} {d : ByteArray}
     {l : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l) :
     0 < l.root.size := by
@@ -133,8 +133,8 @@ theorem root_size_pos {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {g : Array _ro
   rw [hroot, _root_.Flock.Firewall.Level0.root_of l s hz' hlv]
   exact flat_layer_pos l.lv.d l.lv.cap (fun q => (_root_.Flock.Firewall.Link.leaves l.lv l.tPad l.toIn)[q]!) hlt
 
-/-- A level 0 the loop samples is `ofDraws` at its table's `m` on what the source gave. -/
-theorem ofDraws_of_level0Of {R : Type}
+/-- A level 0 the loop samples is the one built at its table's `m` from what the source gave. -/
+theorem built_of_level0Of {R : Type}
     {src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array _root_.Flock.Stmt} {j : ℕ} {l : _root_.Flock.Firewall.Level0.Level0}
     (h : level0Of src x w ρ sts j = .ok l) : ∃ g d, _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok l := by
@@ -233,7 +233,7 @@ theorem length_linkOf_leak_true {x : Msg} {s : FlockDeploy.Ins} {spec : _root_.F
     rw [getElem!_pos sts 0 h0]
     exact hm 0 h0
   obtain ⟨l, hl⟩ := level0Of_leak_true_ok hsts hj ν t
-  obtain ⟨g, d, hd⟩ := ofDraws_of_level0Of hl
+  obtain ⟨g, d, hd⟩ := built_of_level0Of hl
   exact length_linkOf_of_root hs h0 hl (root_size_pos hm0.1 hm0.2 hd)
 
 /-- The concrete statement's tables: at least one, each at `25 ≤ m ≤ 35`. -/
@@ -252,7 +252,8 @@ open Claims Claims.ZKMal Claims.ZKServer Claims.ZKServer.Loop
 open scoped ENNReal
 
 /-- **The error at each witness is below `1/2`** at `t = 2` against `helloRej`, where hm96 hides at `2^-193` at the
-pinned key: `24·n_L·δ₁ + 2·3^{-2}`, with `n_L ≤ 64·leafCap` (`Loop.nLeaves_dataE_le_max`) and no collision found. -/
+pinned key: `24·n_L·δ₁ + 2·3^{-2}`, with `n_L` within 64 times the per-table leaf limit (`Loop.nLeaves_dataE_le_max`)
+and no collision found. -/
 theorem _root_.Claims.ZKServer.Loop.anyErr_leak_lt
     (hKey : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash
       ((2 : ℝ≥0∞) ^ (-193 : ℤ))) (w₁ w₂ : Flock.Wit) :
@@ -296,8 +297,9 @@ theorem _root_.Claims.ZKServer.Loop.anyErr_leak_lt
 /-- **`SessionLoopZKAnyDeployed`'s conclusion fails at the deployed session**: at the deployed tables, the session
 loop's own link and `Finish` on the source `leakSrc`, the concrete statement under the relation of every pair and the
 witnesses `⟨[]⟩` and `⟨[true]⟩`, `ZkAnyAt` fails at `t = 2`. Against `helloRej` the link carries the empty root at the
-first and a root of `64·2^cap` bytes at the second, and the error at each is `24·n_L·δ₁ + 2·3^{-2}`, below `1/2` where
-hm96 hides at `2^-193` at the pinned key (`HashDerivedKeyHm96`) and the session has at most `64·leafCap` leaves. -/
+first and a root that is not empty at the second, and the error at each is `24·n_L·δ₁ + 2·3^{-2}`, below `1/2` where
+hm96 hides at `2^-193` at the pinned key (`HashDerivedKeyHm96`) and the session's leaves are within 64 times the
+per-table leaf limit. -/
 theorem SessionLoopZKAnyDeployed_nontrivial (hKey : FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96) :
     ¬ Loop.ZkAnyAt Masked.dataE Loop.finS.honestVals
       (LeanRelease.withFiles (LeanRelease.withLink (Loop.constRel Loop.Tp) Loop.leakSrc) Loop.leakSrc)
