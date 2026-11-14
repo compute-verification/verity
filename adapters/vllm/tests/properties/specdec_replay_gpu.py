@@ -4,7 +4,7 @@
 The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers and `EXPERTS` routed experts, with
 its MTP layer, served tensor-parallel 1 on one card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer.
 ``--weights dummy`` keeps vLLM's values, under which a token depends on little but the token before it; ``--weights scaled``
-redraws every weight at `STD` after the load (`rescale`), so a token depends on its whole context and one differing bit shows.
+resamples every weight at `STD` after the load (`rescale`), so a token depends on its whole context and one differing bit shows.
 
 Each arm of `ARMS` is one speculative config (``off`` has none). Each phase is a process of its own:
 
@@ -112,7 +112,7 @@ def engine(model: Path, cfg: dict[str, Any], eager: bool) -> Any:
 
 
 def rescale(eng: Any) -> dict[str, int]:
-    """Redraw the target's and the draft's weights from one seeded generator, in the modules' own order: a norm's gain 1, a
+    """Resample the target's and the draft's weights from one seeded generator, in the modules' own order: a norm's gain 1, a
     quantization scale `FP8_SCALE`, an FP8 weight uniform on [-1, 1], every other float weight normal at `STD`."""
     import torch
 

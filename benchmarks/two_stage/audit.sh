@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The two-stage toy's audit on a CPU node (audit.py): flock-circuit, flock-verify and SPOT's Lean verifier (the
-# stream's draws) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
+# stream's samples) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
 # (never a circuit, a prover file, a private body, or a challenger's key or secret: its *-work/).
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
 #     bash benchmarks/two_stage/audit.sh

@@ -82,7 +82,7 @@ theorem card_biUnion_toFinset_le (l : List ℕ) (f : ℕ → Finset ℕ) :
     rw [List.toFinset_cons, Finset.biUnion_insert, List.map_cons, List.sum_cons]
     exact (Finset.card_union_le _ _).trans (Nat.add_le_add_left ih _)
 
-/-- Where the second stage draws, the checked proof blocks are the always-checked ones and the drawn ones. -/
+/-- Where the second stage samples, the checked proof blocks are the always-checked ones and the sampled ones. -/
 theorem RegTwo.checked_subset (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) :
     (g.checked N src₁ src₂).toFinset ⊆ (Finset.range N).filter (fun v => g.always v = true) ∪
@@ -97,8 +97,8 @@ theorem RegTwo.checked_subset (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray)
     exact Finset.mem_union_right _
       (List.mem_toFinset.2 (List.mem_map.2 ⟨j, Array.mem_toList_iff.2 hj, beq_iff_eq.1 hjv⟩))
 
-/-- **The gates the checked proof blocks need, counted**: where the second stage draws, at most the always-checked
-blocks' needs plus each drawn block's. -/
+/-- **The gates the checked proof blocks need, counted**: where the second stage samples, at most the always-checked
+blocks' needs plus each sampled block's. -/
 theorem RegTwo.card_biUnion_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ) :
     ((g.checked N src₁ src₂).toFinset.biUnion needs).card ≤
@@ -112,7 +112,7 @@ theorem RegTwo.card_biUnion_checked_le (g : RegTwo) (N : ℕ) (src₁ src₂ : B
     ((Spot.Draw.proved draw).toList.map fun j => g.blockAt (g.sample src₁) j.toNat) needs
   simpa only [List.map_map, Function.comp_def] using this
 
-/-- With no always-checked block, at most the drawn blocks' count times the most gates a block needs. -/
+/-- With no always-checked block, at most the sampled blocks' count times the most gates a block needs. -/
 theorem RegTwo.card_biUnion_checked_le_mul (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, n)) (needs : ℕ → Finset ℕ)
     (hal : ∀ v, g.always v = false) (M : ℕ) (hM : ∀ u, (needs u).card ≤ M) :
@@ -181,8 +181,8 @@ theorem code_checked_sub (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coi
   | none => simp [reg, hd] at hu
   | some _ => simpa [reg, hd] using hu
 
-/-- **K at the deployed code**: where the second stage draws, the gates the checked proof blocks need number at most
-the always-checked blocks' needs plus each drawn block's. -/
+/-- **K at the deployed code**: where the second stage samples, the gates the checked proof blocks need number at most
+the always-checked blocks' needs plus each sampled block's. -/
 theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
     {draw : Lean.Json} {n : ℕ}
     (hsel : Spot.Select.selectSecond (h.reg.sample (src (r (order h x).first))) h.reg.ns h.reg.ks
@@ -196,7 +196,7 @@ theorem code_card_biUnion_le (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy
     List.mem_toFinset.2 (code_checked_sub h x r u (List.mem_toFinset.1 hu)))).trans
     (h.reg.card_biUnion_checked_le _ _ _ hsel needs)
 
-/-- **K at the deployed code with no always-checked block**: at most the drawn blocks' count times the most gates a
+/-- **K at the deployed code with no always-checked block**: at most the sampled blocks' count times the most gates a
 block needs. -/
 theorem code_card_biUnion_le_mul (x : Msg) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) (needs : ℕ → Finset ℕ)
     {draw : Lean.Json} {n : ℕ}
