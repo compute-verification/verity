@@ -1,7 +1,6 @@
 module
 
 public import Definitions.NetworkCertifier.SampledAudit
-public import Definitions.NetworkCertifier.Schedule
 public import Definitions.NetworkCertifier.RecordRows
 
 /-!
@@ -18,11 +17,7 @@ conclusion false at an audit that accepts everything. Those statements read thes
 * `certOps`: the network certifier's openings, the input and its negation both `true`, at which `MonitoringPeriodLeakAccepted`'s
   bound fails;
 * `obs0`, `obs1`: one step of one link of one slot, with no frame and with an empty frame;
-* `honestI P a`: the honest certifier at the Program `P` under the advice `a`, which records and puts on the wire `P`'s
-  rows, and `fxHonestI`, it at `fxRate` under `fxAdv`;
-* `fxRate`: the constant-rate Program over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two
-  slots and one advice bit per block (`k = 1`), whose two frames, both at the block's first send tick, carry the
-  block's advice bit and its negation;
+* `unitOp`: the operator, which sends nothing;
 * `acceptAll`, the verifier that accepts everything: `AccSeqsAt acceptAll` is `AccSeqs` with it in place of the
   Program's acceptance;
 * `fxLeakI`: a sender whose secret is its every step's frame length, which `fxLeakDec` reads back from the last step of
@@ -53,38 +48,10 @@ def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
 /-- One step: a frame on the link, every status complete. -/
 def obs1 : Obs 1 1 1 := ⟨fun _ _ => some [], 0, fun _ => .complete⟩
 
-/-! ## The honest certifier -/
+/-! ## The operator -/
 
 /-- The operator, which sends nothing. -/
 def unitOp {L K S : ℕ} : ℕ → List (Obs L K S) → Unit := fun _ _ => ()
-
-/-- **The honest certifier at `P` under the advice `a`**: at each step it records and puts on the wire `P`'s row on
-the ingress so far, jitter class 0 and every status complete, whatever the sender does. -/
-def honestI {L K S : ℕ} {Adv : Type} (P : EgressPrediction L S Unit Adv) (a : Adv) :
-    Interaction L K S Unit Unit Unit (Obs L K S) where
-  certifier :=
-    { obs := fun k xs _ => ⟨P.rows k xs a, 0, fun _ => .complete⟩
-      wire := fun k xs _ => ⟨P.rows k xs a, 0, fun _ => .complete⟩
-      fault := fun _ => False }
-  op := unitOp
-  snd := fun _ _ _ => ()
-
-/-! ## The reference schedule -/
-
-/-- Two frames on the one link at the execution block's first send tick: the block's advice bit, then its negation. -/
-def fxFrames : List Unit → Fin 2 → (Fin 1 → Bool) → Fin 1 → List LogicalFrame :=
-  fun _ _ v _ => [⟨[v 0], 0⟩, ⟨[!v 0], 0⟩]
-
-/-- **The constant-rate Program** over two execution blocks of two buckets (`T = 2`, `g = 1`), one link of two slots,
-one advice bit per block. -/
-def fxRate : EgressPrediction 1 2 Unit (Fin 2 → Fin 1 → Bool) :=
-  constantRate 2 1 2 fxFrames
-
-/-- `fxRate`'s advice: the bit `true` in both execution blocks. -/
-def fxAdv : Fin 2 → Fin 1 → Bool := fun _ _ => true
-
-/-- The honest certifier at `fxRate` under `fxAdv`. -/
-def fxHonestI : Interaction 1 1 2 Unit Unit Unit (Obs 1 1 2) := honestI (K := 1) fxRate fxAdv
 
 /-! ## The verifier that accepts everything -/
 

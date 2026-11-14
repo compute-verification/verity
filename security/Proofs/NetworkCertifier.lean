@@ -80,10 +80,10 @@ import Mathlib.Topology.Sheaves.Init
 
 One theorem `NetTiming.SecurityProofs.G : NetTiming.Guarantees.G` per guarantee and per lemma (`Lemmas`), each the
 theorem of the same statement in `Occupancy` (Proposition 2), `Counting` (Theorem 1(b)), `Advice` (Theorem 3),
-`Schedule` (Theorem 3 for the constant-rate Program), `Ingress` (the ingress bound), `PerWindow` (the last two over
-whole windows) or `SampledCharge` (the leak bound under a sampled audit: the incorrect proof blocks' charge), and every lemma
-behind them. `SampledLeak` composes `SampledCharge`'s count with `SampledAuditAccepted`, taken as a hypothesis
-(`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
+`Ingress` (the ingress bound), `PerWindow` (the ingress bound over whole periods) or `SampledCharge` (the leak bound
+under a sampled audit: the incorrect proof blocks' charge), and every lemma behind them. `Schedule` counts the
+constant-rate Program's runs (Theorem 3 for it), for `Accepted` and `Causal`. `SampledLeak` composes `SampledCharge`'s
+count with `SampledAuditAccepted`, taken as a hypothesis (`NetTiming.sampledLeak`), which the module `SampledAuditAccepted` proves, and `SampledLeakReg` moves its count to the
 registration's values
 (`NetTiming.sampledLeak_registered`);
 `SampledLeakRegPlain` states it at the deployed plain record (`NetTiming.sampledLeak_registered_plain_sha512`). `Sanity` shows every named assumption satisfiable, and `Witnesses` gives each acceptance guarantee its honest and
@@ -92,7 +92,7 @@ monitoring period's guarantee, at the instances of `Definitions.NetworkCertifier
 proves there. `Code` proves the certifier's program
 (`certifier_program`, `NetworkCertifier`), which the difftest runs against the Python audit, equal to these definitions.
 `Accepted` proves `security_properties`' `AcceptedRunsAreProgramRuns` through `Code`: a run the network certificate
-check accepts is a run of the constant-rate Program under the declared advice, so the guarantees here count it.
+check accepts is a run of the constant-rate Program under the declared advice, which `Schedule` counts.
 `Causal` proves `ExpectedGridCausal` (a later window's sync never changes an earlier window's expected grid) and,
 from it, `EncardProgramRunsLeWindows`: the program's runs over their first `m` windows.
 `SampledAuditAccepted` proves that an accepted sampled audit is `Accepted` except at `ε` at `δ` over the selection, at
@@ -118,17 +118,11 @@ the lemma `rootsOfChecked`.
 
 namespace NetTiming.SecurityProofs
 
-theorem CardFree : NetTiming.Guarantees.CardFree := NetTiming.card_free
-theorem CardLeftPacked : NetTiming.Guarantees.CardLeftPacked := NetTiming.card_leftPacked
 theorem FillInjective : NetTiming.Guarantees.FillInjective := @NetTiming.fill_injective
 theorem ExistsFillOfLeftPacked : NetTiming.Guarantees.ExistsFillOfLeftPacked := @NetTiming.exists_fill_of_leftPacked
-theorem CardCountsEqLe : NetTiming.Guarantees.CardCountsEqLe := NetTiming.card_counts_eq_le
 theorem CardCountsLeLe : NetTiming.Guarantees.CardCountsLeLe := NetTiming.card_counts_le_le
 theorem ReleasedSelf : NetTiming.Guarantees.ReleasedSelf := NetTiming.released_self
 theorem SumReleasedLe : NetTiming.Guarantees.SumReleasedLe := NetTiming.sum_released_le
-theorem EncardFifoGridsLeOfAvailable : NetTiming.Guarantees.EncardFifoGridsLeOfAvailable :=
-  @NetTiming.encard_fifoGrids_le_of_available
-theorem EncardFifoGrids : NetTiming.Guarantees.EncardFifoGrids := @NetTiming.encard_fifoGrids
 
 theorem EncardLeProdOfBranching : NetTiming.Guarantees.EncardLeProdOfBranching := @NetTiming.encard_le_prod_of_branching
 theorem EncardAcceptedRunsLe : NetTiming.Guarantees.EncardAcceptedRunsLe := @NetTiming.encard_acceptedRuns_le
@@ -138,16 +132,6 @@ theorem NoFaultOfAccepted : NetTiming.Guarantees.NoFaultOfAccepted := @NetTiming
 
 theorem RecordedRowEqFill : NetTiming.Guarantees.RecordedRowEqFill := @NetTiming.recorded_row_eq_fill
 theorem EncardAccSeqsLeAdvice : NetTiming.Guarantees.EncardAccSeqsLeAdvice := @NetTiming.encard_accSeqs_le_advice
-theorem EncardAccSeqsLeAdviceBits : NetTiming.Guarantees.EncardAccSeqsLeAdviceBits :=
-  @NetTiming.encard_accSeqs_le_adviceBits
-theorem EncardAccSeqsLeConstantRate : NetTiming.Guarantees.EncardAccSeqsLeConstantRate :=
-  fun T g E k frames op n D _ => NetTiming.encard_accSeqs_le_constantRate_bits T g E k frames op n D
-theorem ExpectedRowCausal : NetTiming.Guarantees.ExpectedRowCausal :=
-  fun T g E frames t ins a a' ha => NetTiming.constantRate_rows_causal T g E frames t ins a a' ha
-theorem EncardAccSeqsLeConstantRateExecutionPhases : NetTiming.Guarantees.EncardAccSeqsLeConstantRateExecutionPhases :=
-  fun T g E k frames op n D m _ hm => NetTiming.encard_accSeqs_le_constantRate_executionPhases_bits T g E k frames op n D m hm
-theorem EncardDecodableLeConstantRate : NetTiming.Guarantees.EncardDecodableLeConstantRate :=
-  fun I T g E k frames n D m _ hm => NetTiming.encard_decodable_le_constantRate_bits I T g E k frames n D m hm
 
 theorem EncardIngressObsDecodableLe : NetTiming.Guarantees.EncardIngressObsDecodableLe :=
   @NetTiming.encard_ingress_obsDecodable_le
@@ -157,11 +141,6 @@ theorem EncardIngressObsDecodableLeContents : NetTiming.Guarantees.EncardIngress
   @NetTiming.encard_ingress_obsDecodable_le_contents
 theorem EncardIngressDecodableLeContents : NetTiming.Guarantees.EncardIngressDecodableLeContents :=
   @NetTiming.encard_ingress_decodable_le_contents
-
-theorem EncardAccSeqsLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardAccSeqsLeConstantRatePerExecutionPhase :=
-  @NetTiming.encard_accSeqs_le_constantRate_perExecutionPhase
-theorem EncardDecodableLeConstantRatePerExecutionPhase : NetTiming.Guarantees.EncardDecodableLeConstantRatePerExecutionPhase :=
-  @NetTiming.encard_decodable_le_constantRate_perExecutionPhase
 theorem EncardIngressObsDecodableLePerExecutionPhase : NetTiming.Guarantees.EncardIngressObsDecodableLePerExecutionPhase :=
   @NetTiming.encard_ingress_obsDecodable_le_perExecutionPhase
 theorem EncardIngressObsDecodableLeContentsPerExecutionPhase :
