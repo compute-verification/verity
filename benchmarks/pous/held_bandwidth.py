@@ -275,7 +275,7 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
     (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
-    case written. The summary names the program whose verdict the answer is and the host it ran on (``decided_by``,
+    case written; without it the session's reject or undecided stands and its accept is undecided (`p2_case.unjudged`). The summary names the program whose verdict the answer is and the host it ran on (``decided_by``,
     `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the same session can
     be answered again; the caller removes it once it needs no other answer."""
     public.mkdir(parents=True, exist_ok=True)
@@ -302,7 +302,8 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
         summary["same_store"] = pous_case is not None
         t = time.perf_counter()
         try:
-            judged = p2_case.judged(kept, answer, case_exe)
+            judged = (p2_case.judged(kept, answer, case_exe) if case_exe is not None
+                      else p2_case.unjudged(kept, answer))
         except (OSError, IndexError, ValueError, subprocess.CalledProcessError) as e:
             out = _no("undecided", f"{case_exe} doesn't answer the case: {type(e).__name__}: {e}"[:1000] + f"; {scope}")
         else:

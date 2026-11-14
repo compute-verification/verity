@@ -791,6 +791,19 @@ def registered(served, monkeypatch) -> Served:
     return served
 
 
+#: the PoUB-P2 Lean `_bandwidth_judge` stands in for
+BW_JUDGE = "remote-audit-p2-protocol-stand-in"
+
+
+def _bandwidth_judge(monkeypatch) -> str:
+    """`p2_case.judged` answering for `BW_JUDGE` as the session did (`p2_case.answer`), where the Lean refuses a toy
+    party's session; returns `BW_JUDGE`."""
+    judged = p2_case.judged
+    monkeypatch.setattr(p2_case, "judged", lambda case, session, exe=None: (
+        p2_case.answer(case, session) if exe == BW_JUDGE else judged(case, session, exe)))
+    return BW_JUDGE
+
+
 def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
     site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps
@@ -820,13 +833,13 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                                                                                          monkeypatch, case_exe):
     """PoUS's session and then PoUB-P2's on the one ``C*`` the piece encoded and holds, the bandwidth party's
     registration the challenger's own record of the PoUS session: both accepted. The P2 case, written privately, is of
-    PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, the
-    piece judging without `--bw-case-exe`); `remote-audit-p2-protocol` refuses it, a toy party's session, naming each
-    value off the auditor's (`p2_party.SESSION`). The public answer, which the composed run reads as the bandwidth
+    PoUS's store (`p2_case.same_store` against the run's case), and answered as the session did (`p2_case.answer`, by
+    the stand-in `BW_JUDGE`), which with no Lean is undecided (`p2_case.unjudged`); `remote-audit-p2-protocol` refuses
+    it, a toy party's session, naming each value off the auditor's (`p2_party.SESSION`). The public answer, which the composed run reads as the bandwidth
     piece's, names none of the store. It encodes ``C*`` at the registered point (about 25 s on the CPU), the only point
     a P2 registration names."""
     s = registered
-    answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path))
+    answer, calls = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=_bandwidth_judge(monkeypatch)))
     assert answer["verdict"] == "accept", answer["reason"]
     public = s.out.parent / "bandwidth"
     bw = json.loads((public / "answer.json").read_text())
@@ -849,6 +862,10 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     toy = SP.HB.p2_party.request_of(NODE.encode(), windows=2, passes=2, samples=4, window_ns=10 ** 6,
                                     deadline_ns=10 ** 6)
     assert case["params"]["request"] == toy and own["verdict"] == "accept"
+    session = json.loads((private / "session.json").read_text())["answer"]
+    assert own == p2_case.answer(case, session)
+    assert p2_case.unjudged(case, session) == own | {"profile": None, "public": None, "reason": p2_case.NO_JUDGE,
+                                                     "verdict": "undecided"}
     lean, = p2_case.serve(case_exe, [case])
     why = "; ".join(f"the request's {k} is not the auditor's ({toy[k]}, not {v})"
                     for k, v in SP.HB.p2_party.SESSION.items())
