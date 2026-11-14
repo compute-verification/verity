@@ -23,7 +23,7 @@ package's docstring lists every module.
   importing it.
 - **Loaded by:** `benchmarks/prove_path`, `benchmarks/inference_only`, `benchmarks/compile_cost`,
   `benchmarks/one_stage`, `benchmarks/route_capture`, `benchmarks/spot_proved`, `adapters/vllm/tools` and a test of
-  `verity/definitions/requirement`; the integration's command line (`pipeline.cli`) loads `cli` and `block_counts` by
+  `verity/circuits/requirement`; the integration's command line (`pipeline.cli`) loads `cli` and `block_counts` by
   name. No module of the Build, the Match or the Commit imports it.
 - **Loads:** `verity.circuits`, `verity.definitions`, `verity.commitments.windows` and `verity.commitments`; the
   certifier's modules under `verity.protocols.certifier`, and SPOT's under `verity.protocols.spot.verifier`;
