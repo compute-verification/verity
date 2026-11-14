@@ -454,7 +454,7 @@ def result(held: Path, measured: list[dict]) -> None:
     try:
         writer = kit.writer(held)
         for m in measured:
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     except ValueError as e:
         print(f"memory: the result ({names}) is not written: {e}", file=sys.stderr)
 
