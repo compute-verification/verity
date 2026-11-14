@@ -99,13 +99,15 @@ def _interior(d: TS.Design, window, *, verdicts: bool = True) -> dict:
 
 def test_a_fused_block_on_registered_tables_has_its_verdict_at_a_value_placed_as_its_root():
     """The block's one verdict is its ``o1`` at ``<root's value>/opened``, a row a table, unit j reading row j // W;
-    a block whose root and domain read round 1's history has none, and the verifier's copy of the value is
-    `second_stage.VERDICT_ONE` at every row, which round 2 reads as the verifier's bytes of 1."""
+    a fused block whose root and domain are left to round 1's history is refused, as the interior refuses it, and the
+    verifier's copy of the value is `second_stage.VERDICT_ONE` at every row, which round 2 reads as the verifier's
+    bytes of 1."""
     (v,) = TS.verdicts([_member()], _links())
     assert v == TS.Verdict(TID, SS.OPENING_VERDICT, f"{KEY}/root/opened", T, AT)
     assert IL.tied([_member()], _links())[0][0] == SUPPLIES[0]
     history = (*(replace(x, tables=None) for x in SUPPLIES), *_links()[len(SUPPLIES):])
-    assert TS.verdicts([_member()], history) == ()
+    with pytest.raises(ValueError, match="a fused block's root and domain are left untied"):
+        TS.verdicts([_member()], history)
     src = TS.verdict_sources((v,), Q)
     assert src == {v.value: [[{"bytes": "00000001"}]] * (Q * T)}
     assert SS.supplied_of(src) == ((v.value, (SS.VERDICT_ONE,) * (Q * T)),)
