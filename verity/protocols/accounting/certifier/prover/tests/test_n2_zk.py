@@ -7,28 +7,13 @@ witness pieces the public circuit holds. ``--jobs`` is 1 unless given and 2 is r
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-HERE = Path(__file__).resolve().parents[1]
-
-
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_n2_zk", HERE / "n2_zk.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-n2 = _load()
-sys.path.insert(0, str((Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces" / "tests")))
-from test_warden_chain import gate_run  # noqa: E402
+from verity.protocols.accounting.certifier.prover import n2_zk as n2
+from benchmarks.network_traces.tests.test_warden_chain import gate_run
 
 
 @pytest.fixture(scope="module")

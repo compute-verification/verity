@@ -3,7 +3,7 @@ port registered against the network certifier's signed egress root (`warden_rows
 the Lean ZK server and held by the Lean verifier's registered reads (`flock-verify verify --zk --registered`), through
 the one-stage audit as `n2_zk.py` proves N2's head checks.
 
-    python verity/protocols/accounting/certifier/prover/warden_zk.py prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/zk_drivers.py warden_zk prove --run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--units 16] [--dry]
 
 * **The run.** A warden-serve run's directory (`warden_serve.py rehearse`'s): `deployment.json`, the records, and the
@@ -56,26 +56,20 @@ import argparse
 import hashlib
 import json
 import os
-import sys
 import time
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-ONE_STAGE = HERE.parent / "one_stage"
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-import leak_scan as LS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC  # noqa: E402
-from verity.circuits import boolean as BL  # noqa: E402
-from verity.circuits.defs import CompositeDefinition, bind  # noqa: E402
-from verity.circuits.types import Array  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import Certificate  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.certifier.verifier import record_files as RF, relay_check as RC
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.types import Array
+from verity.protocols.accounting.certifier.verifier import warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
+from verity.protocols.accounting.certifier.verifier.certificate import Certificate
+from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams, cell
+from verity.protocols.proofs.spot.verifier.one_stage import produced, registered as G
 
 #: the unit's ports: its input row and its output row
 PORTS = ("row", "o0")
@@ -230,19 +224,16 @@ def _statement():
     from verity.protocols.proofs.spot.verifier.one_stage import partition as P
     from verity.circuits.codec import canonical_json, encode_program
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_flock import class_statement as CS
 
-    return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2, CS=CS)
+    return SimpleNamespace(np=np, P=P, canonical_json=canonical_json, encode_program=encode_program, V2=V2,
+                           CS=proof_drivers.drivers().class_statement)
 
 
 def _one_stage():
-    sys.path.insert(0, str(ONE_STAGE))
-    import a0
-    import a7
-    import a8
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R, verifier as V
 
-    return SimpleNamespace(**vars(_statement()), a0=a0, a7=a7, a8=a8, D=D, R=R, V=V)
+    d = proof_drivers.drivers()
+    return SimpleNamespace(**vars(_statement()), a0=d.a0, a7=d.a7, a8=d.a8, prove_leg=d.prove_leg, D=D, R=R, V=V)
 
 
 def check_shape(M, sg: SimpleNamespace) -> None:

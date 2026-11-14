@@ -6,7 +6,7 @@ decided by `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the p
 the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
 comparison to each verdict, which decides nothing.
 
-    python verity/protocols/accounting/certifier/prover/n2_zk.py prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
 * **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
@@ -58,26 +58,20 @@ import hashlib
 import json
 import os
 import socket
-import sys
 import time
 from dataclasses import asdict, replace
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent / "benchmarks" / "network_traces")
-ONE_STAGE = HERE.parent / "one_stage"
-sys.path.insert(0, str(HERE))
-sys.path.append(str(Path(__file__).resolve().parents[5]))  # the root, for benchmarks.network_traces
-
-import leak_scan as LS  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import service as SVC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.schedule import ClockSync  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.service import LinkWindows  # noqa: E402
-from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.accounting.certifier.prover import leak_scan as LS, proof_drivers
+from verity.protocols.accounting.certifier.verifier import head_check as HC
+from verity.protocols.accounting.certifier.verifier import service as SVC
+from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction
+from verity.protocols.accounting.certifier.verifier.schedule import ClockSync
+from verity.protocols.accounting.certifier.verifier.service import LinkWindows
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 ENDS = ("egress", "ingress")
 #: the stream's δ, by default
@@ -126,8 +120,7 @@ def warden_link(run: Path) -> tuple[LinkWindows, dict, dict, list]:
     """A network certifier run's link (`warden_chain.link`: the active network certifier's own records, its key and
     session, no sync), the plan it stands for (its windows, no syncs), its certified records by (direction, window) and
     the signer's refusals. A certifier rehearsal's run is refused by name (`warden_chain.PROXY`)."""
-    from benchmarks.network_traces import warden_chain as WC
-
+    WC = proof_drivers.drivers().warden_chain
     lw, dep, _ = WC.link(run)
     got, refused = WC.pairs(run, dep)
     certified = {(d, w): r for w, pair in enumerate(got) for d, r in zip((Direction.EGRESS, Direction.INGRESS), pair)}
@@ -233,16 +226,12 @@ public_pieces = functools.partial(LS.public_pieces, fields=True)
 # --- the statement ----------------------------------------------------------------------------------------------------
 
 def _one_stage():
-    sys.path.insert(0, str(ONE_STAGE))
-    import a0
-    import a8
     import numpy as np
     from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-    from verity_flock import circuit as FC
-    from verity_flock import class_statement as CS
 
-    return SimpleNamespace(a0=a0, a8=a8, np=np, P=P, PF=PF, V2=V2, FC=FC, CS=CS)
+    d = proof_drivers.drivers()
+    return SimpleNamespace(a0=d.a0, a8=d.a8, np=np, P=P, PF=PF, V2=V2, FC=d.circuit, CS=d.class_statement)
 
 
 def stager(M, lw: LinkWindows, out: Path) -> SimpleNamespace:
