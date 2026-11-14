@@ -332,7 +332,7 @@ class WardenParams:
         return self.window // self.every * self.program_slots
 
     def caps(self, windows: int) -> list[int]:
-        """Each connection's cell cap over `windows` windows, the period check's rows-form `cells`
+        """Each connection's cell limit over `windows` windows, the period check's rows-form `cells`
         (`NetworkCheck.Period.Schedule.caps`): `egress_cells` for each of the `lanes · windows · window` connections the
         network certifier can carry, as `_tick` admits only while fewer than `lanes` are live and serves each
         connection in its admission bucket."""

@@ -711,7 +711,7 @@ def params(j) -> Params:
     if schedule is not None and not rows_wf(schedule, windows):
         raise D.Reject(rows_wf_refusal(schedule, windows))
     if schedule is not None and list(cells) != schedule.caps(windows):
-        raise D.Reject(f"cells: the rows form's caps are egress_cells = {schedule.egress_cells} for each of the "
+        raise D.Reject(f"cells: the rows form's cells are egress_cells = {schedule.egress_cells} for each of the "
                        f"lanes · windows · window = {schedule.lanes * windows * schedule.window} connections the "
                        f"schedule can carry (Schedule.caps), not these {len(cells)}")
     circuit = None
@@ -1164,7 +1164,7 @@ UNPINNED = "the scan's state's row 0 is not the empty state"
 
 
 def _state_refusal(p: Params, audits: list[dict], reg: dict) -> str | None:
-    """`stateCheck`'s refusal of a link-window's scan: none when its state is tied (`_state_tied`) and its row 0
+    """`stateCheck`'s refusal of an execution phase's scan: none when its state is tied (`_state_tied`) and its row 0
     opened to the empty state (`_state_empty`)."""
     if not _state_tied(p, audits, reg):
         return UNSTATED if _state_read(p, reg) else MISREAD
@@ -1665,14 +1665,14 @@ WINDOW_PROGRAM = "stand-in/window"
 #: execution phase's tied audit registered under a Program of one more unit, its answer and population that Program's
 #: (`audit`), or the parameters' `circuit` another digest: of no Program, the scan's, or an untied audit's (`params`)
 UNHOLDS = ("audit", "params")
-#: How `rows-state-misindexed` puts its link-window's scan's state reads off the chain while its state stays tied by
+#: How `rows-state-misindexed` puts its execution phase's scan's state reads off the chain while its state stays tied by
 #: root and domain: unit t's `sin` at leaf t + 1 (a leaf no unit registered) or its `o1` at leaf t (over the state
 #: before it), a run over other units, the two ports' runs swapped, the reads or a port's run missing or under
 #: another name, or a field no natural
 MISREADS = ("sin-leaf", "o1-leaf", "units", "swapped", "missing", "untyped")
-#: How `rows-state-unpinned` leaves its link-window's scan's row 0 unopened while its reads and its tie hold: a state
-#: tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name, its
-#: salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
+#: How `rows-state-unpinned` leaves its execution phase's scan's row 0 unopened while its reads and its tie hold: a
+#: state tree whose row 0 is a state the prover chose, opened as committed; the opening missing or under another name,
+#: its salt or its path another, its words another count, leaf 1's opening in its place, or a field of another type
 UNPINS = ("row", "missing", "salt", "path", "words", "leaf", "untyped")
 #: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
@@ -1992,7 +1992,7 @@ def build(m: str, seed: int, small: bool = False) -> dict:
     unstate = rp.choice(UNSTATES) if m == "state-untied" else None
     unpin = rp.choice(UNPINS) if m == "state-unpinned" else None
     unhold = rp.choice(UNHOLDS) if m == "circuit-swapped" else None
-    # each audit's `SCAN_STATE`, the state tree of the link-window tied to it, whose leaf 0 the scan opens
+    # each audit's `SCAN_STATE`, the state tree of the execution phase tied to it, whose leaf 0 the scan opens
     trees = {i: _state_tree(rp, sched.window, not (unpin == "row" and i == ties[first + t]["audit"]))
              for i in range(n_audits)} if rows else {}
     states = {i: {"root": x.root.hex(), "domain": ADV.domain(x.binding, len(x.rows)).domain_id.hex()}
@@ -2403,7 +2403,7 @@ def _bad_params(p: dict, n: int) -> list:
 
 
 def bad_cells(p: dict) -> list[dict]:
-    """Rows-form parameters whose `cells` aren't the schedule's caps (`Schedule.caps`), each one change to `p`: none,
+    """Rows-form parameters whose `cells` aren't the schedule's (`Schedule.caps`), each one change to `p`: none,
     one connection short, one more, and one cap below `egress_cells`."""
     caps = p["cells"]
     return [p | {"cells": []}, p | {"cells": caps[1:]}, p | {"cells": [*caps, caps[0]]},

@@ -771,13 +771,13 @@ def test_a_profile_that_is_no_sample_of_its_level_is_refused(server):
                                  "above", "below")), seen
 
 
-def test_the_rows_forms_caps_are_the_schedules(server):
-    """The rows form's `cells` are the schedule's caps (`Schedule.caps`, `WardenParams.caps`): `egress_cells` for each
-    of the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules and
-    cells terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for caps that miss its connections; no caps, one
-    connection short or over, and a cap below `egress_cells` are refused as parameters by Lean and the mirror alike;
-    and a schedule of 4 lanes over a 32-bucket link-window, 5 egress cells a connection, charges 384 bits for each over
-    one link-window (Lean's `#guard`)."""
+def test_the_rows_forms_cells_are_the_schedules(server):
+    """The rows form's `cells` are the schedule's own (`Schedule.caps`, `WardenParams.caps`): `egress_cells` for each of
+    the `lanes · m · window` connections the network certifier can carry, so an accepted period's schedules and cells
+    terms are each that many `⌈log2 (egress_cells + 1)⌉`, never 0 for cells that miss its connections; no cells, one
+    connection short or over, and a cell count below `egress_cells` are refused as parameters by Lean and the mirror
+    alike; and a schedule of 4 lanes over a 32-bucket execution phase, 5 egress cells a connection, charges 384 bits for
+    each over one execution phase (Lean's `#guard`)."""
     for n in range(4):
         case = build("rows-honest", n, small=n % 2 == 0)
         p, out = PC.params(case["params"]), reference(case)
@@ -802,7 +802,7 @@ def test_a_period_whose_frames_overrun_a_u32_is_refused(server):
     """The rows form refuses a period whose `lanes · windows · window` connections, the k-th at ordinal k + 1, aren't
     distinct u32s, or whose cell's B bytes aren't under 2^32 (`rowsWf`): its frames could not name every connection or
     every payload's length, so its record would not read back (`NetTiming.RowsFormat.Wf`). As parameters it is refused
-    before its caps, which a period that long could never list, by Lean and the mirror alike, and the honest period's
+    before its cells, which a period that long could never list, by Lean and the mirror alike, and the honest period's
     schedule passes `rowsWf` up to the last whole period under 2^32. The check refuses it too (`rowsWfCheck`), which the
     mirror's check shows at an empty period whose B is 2^32: no parameters `params` reads reach it."""
     fragment = "rows format: a frame's ordinal and payload length are u32s"
