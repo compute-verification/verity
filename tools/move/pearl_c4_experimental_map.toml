@@ -2,10 +2,11 @@
 # tools/move/pearl_c4_experimental_map.toml` moves and rewrites.
 #
 # Pearl-C4's sm_120 kernel and its host references, `benchmarks/pouw/pearl_c4/{pearl_c4.cu,build.sh,sass.py,dev.py,
-# twin.py,fixture.py}`, become `verity/protocols/experimental/pearl_c4/prover/kernels/`, its vectorised F1' `f1_fast.py`
-# the protocol's `prover/`, and the tests of those files the protocol's `tests/`. What drives a run or replays one stays
-# in `benchmarks/pouw/pearl_c4/` (the rows whose old and new paths are the same): `run.sh`, the card's runner; `ship.sh`,
-# which makes a build's tree a run's source; `replay.py`, `real.py` and `real_table.py`, which replay a device run's
+# run.sh,twin.py,fixture.py}`, become `verity/protocols/experimental/pearl_c4/prover/kernels/`, its vectorised F1'
+# `f1_fast.py` the protocol's `prover/`, and the tests of those files the protocol's `tests/`. `run.sh` goes with
+# `dev.py`: `build.sh` ships both beside the cubin and the card runs them there. What drives a run or replays one stays
+# in `benchmarks/pouw/pearl_c4/` (the rows whose old and new paths are the same): `ship.sh`, which makes a build's tree
+# a run's source; `replay.py`, `real.py` and `real_table.py`, which replay a device run's
 # dump or a model's captures in the clear and read the benchmarks' settings registry; the README, which documents
 # those; and `real.py`'s and `replay.py`'s tests. Kernel sources are rewritten, each only where a relative `#include`
 # crosses the move's edge. What stays and names `pearl_c4/` as its own directory is not rewritten ([split]).
@@ -23,7 +24,6 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 "benchmarks/pouw/pearl_c4/" = "verity/protocols/experimental/pearl_c4/prover/kernels/"
 "benchmarks/pouw/pearl_c4/f1_fast.py" = "verity/protocols/experimental/pearl_c4/prover/f1_fast.py"
 "benchmarks/pouw/pearl_c4/README.md" = "benchmarks/pouw/pearl_c4/README.md"
-"benchmarks/pouw/pearl_c4/run.sh" = "benchmarks/pouw/pearl_c4/run.sh"
 "benchmarks/pouw/pearl_c4/ship.sh" = "benchmarks/pouw/pearl_c4/ship.sh"
 "benchmarks/pouw/pearl_c4/replay.py" = "benchmarks/pouw/pearl_c4/replay.py"
 "benchmarks/pouw/pearl_c4/real.py" = "benchmarks/pouw/pearl_c4/real.py"
