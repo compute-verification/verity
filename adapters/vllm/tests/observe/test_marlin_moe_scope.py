@@ -21,6 +21,7 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 import dataclasses
 import importlib
 import math
+import re
 
 import pytest
 from verity.definitions.numerics import marlin_moe_rows as MR
@@ -80,7 +81,7 @@ FILL = "aten::fill_.Scalar(Tensor(a!) self, Scalar value) -> Tensor(a!)"
 MM = "aten::mm.dtype(Tensor self, Tensor mat2, ScalarType out_dtype) -> Tensor"
 DYN_MM = ("vllm::dynamic_flashinfer_deepgemm_blockscale_gemm(Tensor input, Tensor weight, Tensor weight_scale, int group_size, "
           "bool use_deep_gemm_e8m0) -> Tensor")
-CLAMP = "_C::silu_and_mul_with_clamp(Tensor($0! -> ) result, Tensor input, float limit, float alpha=1.0, float beta=0.0) -> ()"
+CLAMP = "_C::silu_and_mul_with_clamp(Tensor($0! -> ) result, Tensor input, float limit, float alpha=1., float beta=0.) -> ()"
 HASH_ROUTER = ("_moe_C::topk_softplus_sqrt(Tensor($0! -> ) topk_weights, Tensor($1! -> ) topk_indices, Tensor($2! -> ) token_expert_indices, "
                "Tensor gating_output, bool renormalize, float routed_scaling_factor, Tensor? bias, Tensor? input_ids, Tensor? tid2eid, "
                "Tensor? is_padding, Tensor? bias_vl=None, int image_sentinel_lo=0) -> ()")
@@ -394,6 +395,15 @@ def test_the_mxfp4_type_id_is_the_packing_of_float4_e2m1f():
         packed |= value << at
         at += bits
     assert at <= 64 and packed == MXFP4_TYPE_ID
+
+
+@pytest.mark.parametrize("schema", [EMPTY, FILL, MM, DYN_MM, CLAMP, HASH_ROUTER, ALIGN, MARLIN, SUM, ADD], ids=lambda s: s.split("(")[0])
+def test_each_schema_is_written_as_torch_prints_it(schema):
+    """The observer records `str(func._schema)`, so a schema here is the string torch prints, in which a default of 1.0 is `1.`.  torch
+    prints a `Tensor!` as `Tensor($n! -> )` and does not parse that back, so each is parsed as the `Tensor!` vLLM declares.  `SCOPE` is
+    not held: torch's parser does not read its `PyObject`."""
+    torch = pytest.importorskip("torch")
+    assert str(torch._C.parse_schema(re.sub(r"\(\$\d+! -> \)", "!", schema))) == schema
 
 
 def _specs(group) -> list[str]:
