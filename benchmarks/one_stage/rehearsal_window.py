@@ -140,7 +140,7 @@ def cut(PP: Any, serve: dict, cls: Any, tables: Any, scheme: str, w: Path) -> di
     """CUT (module docstring), W written to `w`."""
     import served_compare as SC
     from verity_vllm.program.predict import window_circuit as WC
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     facts = SC.facts(WC.lower(PP.registered_of_serve(serve, None, None, PP.CAP_BITS), cls, tables=tables))
     params, calls = facts["params"], facts["calls"]
