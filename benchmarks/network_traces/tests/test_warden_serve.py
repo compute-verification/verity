@@ -65,7 +65,7 @@ async def _no_sleep(_: float) -> None:
 
 #: what the relay's runner still imports from the older form's files, by the file: nothing. The keys stay so that a
 #: read of one comes back only by a line here, and the list only shrinks.
-OLDER_FORM_READS = {"certifier_serve": set(), "active_replay": set(), "active": set()}
+OLDER_FORM_READS = {"active": set()}
 
 
 def _imports(path: Path) -> dict[Path, set[str]]:
@@ -91,13 +91,11 @@ def _imports(path: Path) -> dict[Path, set[str]]:
 
 
 def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_listed():
-    """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports, the two
-    older runners left out. Of the older runners and the older form's protocol file, only the runner's own imports, and
-    `OLDER_FORM_READS` and no more, so once that is empty the older form can go without the relay; and the list names
-    nothing the runner no longer imports."""
+    """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports. Of the
+    older form's protocol file, only the runner's own imports, and `OLDER_FORM_READS` and no more, so once that is
+    empty the older form can go without the relay; and the list names nothing the runner no longer imports."""
     runner = Path(ws.__file__)
-    older = {runner.with_name("certifier_serve.py"), runner.with_name("active_replay.py"),
-             ROOT.joinpath(*WR.__package__.split("."), "active.py")}
+    older = {ROOT.joinpath(*WR.__package__.split("."), "active.py")}
     assert all(f.is_file() for f in older) and {f.stem for f in older} == set(OLDER_FORM_READS), older
     files: dict[Path, dict[Path, set[str]]] = {}
     todo = [runner]

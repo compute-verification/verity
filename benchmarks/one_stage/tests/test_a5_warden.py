@@ -11,6 +11,7 @@ altered window's unit 0 doesn't open."""
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import sys
 from pathlib import Path
@@ -195,16 +196,14 @@ def test_salts_of_names_one_salt_for_each_row_of_a_port_of_the_window(run):
 
 
 def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_module(tmp_path, monkeypatch):
-    """A process that holds `network_traces`' `replay` under that name (one that imports `active_replay`, which imports
-    it) holds a module with none of what a5 writes an audit's case with. a5 reads the `replay.py` beside it by its
-    path, so the case is written and no error stands in its place."""
+    """A process that holds `network_traces`' `replay` under that name holds a module with none of what a5 writes an
+    audit's case with. a5 reads the `replay.py` beside it by its path, so the case is written and no error stands in
+    its place."""
     import a5
-    # two directories hold a `replay.py`: `active_replay`'s own `import replay` takes the first on the path, and needs
-    # `network_traces`' one
     monkeypatch.syspath_prepend(str(HERE.parent / "network_traces"))
-    import active_replay
-
-    theirs = active_replay.replay
+    spec = importlib.util.spec_from_file_location("replay", HERE.parent / "network_traces" / "replay.py")
+    theirs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(theirs)
     monkeypatch.setitem(sys.modules, "replay", theirs)
     assert Path(theirs.__file__).parent.name == "network_traces" and not hasattr(theirs, "params")
     RP = a5.own_replay()

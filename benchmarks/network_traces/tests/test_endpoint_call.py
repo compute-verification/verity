@@ -1,12 +1,11 @@
 """The runner's call of its endpoint (`_call`, `served_model`) against a stub over loopback: only HTTP is spoken, so a
 URL of any other form is refused by name before anything is opened; an answer that isn't a 2xx raises with its status,
 a redirect included; a GET and a POST reach the endpoint under the URL's prefix, the POST with its JSON; and the
-bearer key is sent when given, its variable read in one place (`bearer`)."""
+bearer key is sent when given, with no environment read."""
 
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import inspect
 import json
 import re
@@ -18,15 +17,7 @@ import pytest
 HERE = Path(__file__).resolve().parents[1]
 
 
-def _load():
-    sys.path.insert(0, str(HERE))
-    spec = importlib.util.spec_from_file_location("network_traces_endpoint_call", HERE / "certifier_serve.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-rp = _load()
+sys.path.insert(0, str(HERE))
 import runner_parts  # noqa: E402
 
 
@@ -94,20 +85,13 @@ def test_a_get_and_a_post_reach_the_endpoint_under_its_prefix():
     assert b"authorization" not in head
 
 
-def test_the_bearer_key_is_sent_when_given_and_its_variable_is_read_in_one_place(monkeypatch):
-    """`_call` and `served_model` take the key itself and read no environment. `bearer` reads the variable that holds
-    it: None when no variable is named, and a failure by the variable's name when it isn't set."""
+def test_the_bearer_key_is_sent_when_given_and_no_environment_is_read():
+    """`_call` and `served_model` take the key itself and read no environment."""
     stub = _Stub({"data": [{"id": "m"}]})
     assert _ask(stub, lambda url: runner_parts.served_model(url, "dummy")) == "m"
     assert b"\r\nauthorization: Bearer dummy\r\n" in stub.heads[0]
     for call in (runner_parts._call, runner_parts.served_model):
         assert "environ" not in inspect.getsource(call)
-    name = "ENDPOINT_KEY_OF_THIS_TEST"
-    monkeypatch.setenv(name, "dummy")
-    assert rp.bearer(name) == "dummy" and rp.bearer(None) is None
-    monkeypatch.delenv(name)
-    with pytest.raises(KeyError, match=name):
-        rp.bearer(name)
 
 
 def test_an_endpoint_that_serves_two_models_is_refused_by_name():
