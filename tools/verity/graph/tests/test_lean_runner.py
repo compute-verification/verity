@@ -99,10 +99,20 @@ DEEP = {"Deep": "module\n\nprelude\npublic import Init.Prelude\n\npublic noncomp
                 f"public theorem t (h : Eq big {STEPS}) : Eq (id big) {STEPS} := h\n"}
 
 
+def _replay(cache: Path) -> None:
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("CHECK_CACHE", str(cache))
+        module_runner.program("Replay", module_runner.toolchain_dir(TOOLCHAIN), cache)
+
+
 @pytest.fixture(scope="module")
 def lean_env(tmp_path_factory) -> Path:
-    """The check's cache, holding the worker's `lean` env, shared by this file's tests, so `Replay.lean` compiles once."""
-    return tmp_path_factory.mktemp("check-cache")
+    """The check's cache, holding the worker's `lean` env, shared by this file's tests, with `Replay.lean` compiled once a
+    run (`once`) and copied in, where `module_runner.program` finds it."""
+    cache = tmp_path_factory.mktemp("check-cache")
+    programs = Path("lean-env") / "programs"
+    shutil.copytree(once(tmp_path_factory, "replay", _replay) / programs, cache / programs, symlinks=True)
+    return cache
 
 
 class Envs:
