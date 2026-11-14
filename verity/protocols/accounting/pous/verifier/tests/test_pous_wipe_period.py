@@ -540,14 +540,14 @@ def test_run_itself_refuses_a_party_on_another_host_with_no_key_pinned(monkeypat
     def session(party, *args, **kw):
         started.append(party.host)
         raise ConnectionError("the session started")
-    monkeypatch.setattr(WP, "session", session)
+    monkeypatch.setattr(wipe_run, "session", session)
     there, here = Side("auditor", ("true",)), Side("n0", ("true",))
     with pytest.raises(ValueError, match=r"no key is pinned \(trusted_sha512\) with the memory challenger on auditor"):
-        W.run("n0", SMALL, party=there)
+        wipe_run.run("n0", SMALL, party=there)
     assert not started
     for party, pin in ((there, "ab" * 64), (here, None)):
         with pytest.raises(ConnectionError, match="the session started"):
-            W.run("n0", SMALL, party=party, trusted_sha512=pin)
+            wipe_run.run("n0", SMALL, party=party, trusted_sha512=pin)
     assert started == ["auditor", "n0"]
 
 
