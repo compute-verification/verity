@@ -29730,11 +29730,11 @@
    },
    "Nci.SecurityProofs.FitBound": {
     "Real.instLT.lt S (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Fin k), Real.instLE.le (Nci.novelReads c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (j : Fin k), Real.instLE.le (Nci.freshInput c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.FitBoundSlots": {
     "Real.instLT.lt S (instHMul.hMul Nstar.cast b_w)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (j : Fin k), Real.instLE.le (Nci.novelReads c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (j : Fin k), Real.instLE.le (Nci.freshInput c (P.gates j)).cast S": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Nci.SecurityProofs.FitRate": {
     "∀ (a : Fin A.N), SetLike.instMembership.mem θ a → Eq (A.isInput a) Bool.true": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",

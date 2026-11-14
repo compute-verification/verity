@@ -2497,7 +2497,7 @@
     {"file": "security/Proofs/Properties/Nci/DescAgree.lean", "count": 9},
     {"file": "security/Proofs/Properties/Nci/DescVerdict.lean", "count": 11},
     {"file": "security/Proofs/Properties/Nci/Lemmas.lean", "count": 7},
-    {"file": "security/Proofs/Properties/Nci/Novel.lean", "count": 10},
+    {"file": "security/Proofs/Properties/Nci/Fresh.lean", "count": 10},
     {"file": "security/Proofs/Properties/Nci/OperandsResolve.lean", "count": 3},
     {"file": "security/Proofs/Properties/Nci/Protocol.lean", "count": 16},
     {"file": "security/Proofs/Properties/Nci/ReadsExact.lean", "count": 5},
