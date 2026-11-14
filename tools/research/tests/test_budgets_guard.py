@@ -96,6 +96,19 @@ def test_scope_is_the_lines_and_the_project_minus_exempt_names_the_host_and_fore
     assert state["last_ok_poll"] == T0 + 600 and api.deleted == []
 
 
+def test_the_state_keeps_every_live_pods_rate_its_own_host_exempt_and_foreign_ones_too():
+    """infra/control/loop_metrics.py counts every pod the account pays for by the hour: `rate_all` is every live pod's costPerHr,
+    and a pod that lists none is named in `unrated`, so the total can say it can't be read rather than come out smaller."""
+    api = FakeRunPod([pod("a", "vy-a-1", 1, 5), pod("c", "vy-control-verity", 2, 5), pod("me", "vy-a-host", 4, 5),
+                      pod("f", "ligerito-h100", 9, 5), pod("d", "vy-a-done", 100, 5, "EXITED")])
+    state, lines = G.new_state(T0), []
+    step(api, TOML, state, T0, lines)
+    assert state["rate_now"] == 1.0 and state["rate_all"] == 16.0 and state["unrated"] == []
+    api.add({**pod("n", "vy-x-new", 0, 1), "costPerHr": None})
+    step(api, TOML, state, T0 + 60, lines)
+    assert state["rate_all"] == 16.0 and state["unrated"] == ["n"]
+
+
 def test_a_line_at_its_cap_terminates_its_pods_and_holds_until_the_cap_is_raised():
     api = FakeRunPod([pod("a", "vy-a-1", 2, 5), pod("b", "vy-a-2", 2, 5), pod("g", "vy-a-big-1", 2, 5)])
     state, lines = G.new_state(T0), []

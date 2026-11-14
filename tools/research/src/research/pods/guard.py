@@ -5,7 +5,9 @@
     research pods guard stop [--dry-run]
 
 Scope.  Live pods (desiredStatus not EXITED/TERMINATED) whose name a budget line covers or a `[guard] project` prefix starts.  The
-guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it.
+guard's own host and `[guard] exempt` names are never counted or terminated; every other pod on the account is invisible to it,
+but for the state's `rate_all` and `unrated`: every live pod's costPerHr summed, and the pods that list none (infra's hourly
+total, infra/control/loop_metrics.py, reads them).
 
 Every `--poll` seconds (default 60), from the budgets in memory (the last good read):
   tally      each pod's costPerHr x the time since the last poll (RunPod bills a running pod whether or not anything uses it), added
@@ -303,6 +305,9 @@ def poll(api: Any, budgets: B.Budgets, cfg: Config, state: dict[str, Any], now: 
             del w[k]
         t["window_usd"] = sum(w.values())
     state["last_poll"], state["rate_now"] = now, rate_now
+    # every listed pod, its own host, exempt and foreign ones too: what the account pays an hour (infra/control/loop_metrics.py)
+    state["rate_all"] = sum(float(p["costPerHr"]) for p in listed if p.get("costPerHr") is not None)
+    state["unrated"] = sorted(p["id"] for p in listed if p.get("costPerHr") is None)
 
     balance = floor = None
     if budgets.balance_floor is not None:
