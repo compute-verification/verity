@@ -21,12 +21,14 @@ import sys
 
 from verity_bench.cli import main
 
-#: the metrics `benchmarks/metrics.toml` holds this benchmark to, by id: each the total of SPOT's table at the
-#: workload's sampling plan of record that its value names (`prove_records.FIGURES`)
+#: the metrics `benchmarks/prove/metrics.toml` holds this benchmark to, by id: each the figure its value names
+#: (`prove_records.FIGURES`), a total of SPOT's table at the workload's sampling plan of record, or the prover GPUs a
+#: serving GPU at the exfiltration run of record's design (`prove_records.AT_RECORD`)
 METRICS = {"benchmarks/prover-gpus-per-serving-gpu": "gpus_per_serving_gpu",
            "benchmarks/prover-gpu-seconds-per-token": "gpu_seconds_per_token",
            "benchmarks/lean-verifier-seconds-per-token": "lean_verifier_seconds_per_token",
-           "benchmarks/proof-bytes-per-token": "proof_bytes_per_token"}
+           "benchmarks/proof-bytes-per-token": "proof_bytes_per_token",
+           "benchmarks/prover-gpus-per-serving-gpu-at-record": "gpus_per_serving_gpu_at_record"}
 
 if __name__ == "__main__":
     argv = sys.argv[1:]

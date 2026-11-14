@@ -950,6 +950,31 @@ def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(t
     assert CHECK.run(tmp_path, 1)[0] and not grant.exists()
 
 
+def test_no_grant_passes_what_the_slot_books(tmp_path, monkeypatch):
+    """A slot whose book= is lowered under its mem= reserves only the booking (`slot.booked`), so the steps' grants, sized
+    from mem=, must stop at it: circuit-check's budget and its grant once alone, and the suites' shares, between them."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "300")
+    assert CHECK.slot_mem_gb() == 300, "no booking: the slot's mem="
+    monkeypatch.setenv(CHECK.SLOT.BOOK_ENV, "600")
+    assert CHECK.slot_mem_gb() == 300, "a booking past mem= grants no more than mem="
+    monkeypatch.setenv(CHECK.SLOT.BOOK_ENV, "130")
+    assert CHECK.slot_mem_gb() == 130
+
+    def grants(only):
+        steps = {s[0]: s[1] for g in CHECK.groups(tmp_path, 16, only=only) for s in g}
+        return {k: int(v[v.index("--mem-gb") + 1]) for k, v in steps.items() if "--mem-gb" in v}
+
+    for only in (None, ["circuit-check", "pytest"], ["pytest", "lean-build"], ["circuit-check"], ["pytest"]):
+        got = grants(only)
+        assert got and all(gb <= 130 for gb in got.values()), (only, got)
+        assert got.get("circuit-check", 0) + got.get("pytest", 0) * (2 if only is None else 1) <= 130, (only, got)
+    grant, ok = tmp_path / CHECK.CC_GRANT, _py("pass")
+    _fake_run(monkeypatch, [[("pytest", ok, tmp_path)], [("circuit-check", ok, tmp_path)]])
+    assert CHECK.run(tmp_path, 2)[0] and grant.read_text() == "130\n"
+
+
 def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
     """Pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
