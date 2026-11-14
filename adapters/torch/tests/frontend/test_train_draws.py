@@ -7,7 +7,7 @@ import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 
-from tests.program.test_train_quant import BOTH
+from tests.frontend.test_train_quant import BOTH
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.outcomes import Unsupported
 from verity_torch.frontend.rules.training_survey import survey

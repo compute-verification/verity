@@ -28,8 +28,8 @@ from typing import Any
 import pytest
 import torch
 
-from tests.program import test_derive_hf5_heldout as HO
-from tests.program import test_derive_realhf as RH
+from tests.frontend import test_derive_hf5_heldout as HO
+from tests.frontend import test_derive_realhf as RH
 from verity_torch.frontend.derive import DERIVE_VERSION, derive_report
 
 transformers = pytest.importorskip("transformers")
