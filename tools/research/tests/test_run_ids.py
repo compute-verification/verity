@@ -10,15 +10,18 @@ from pathlib import Path
 from research import cli, remote
 from research import runs as R
 
-A, B = "r20261114-022254-f9c5", "r20261114-022254-0b1d"
+A, B = "r20000101-000000-aaaa", "r20000101-000000-bbbb"
 GIVEN = "research run: {} already exists; a rerun gets a fresh id"
 
 
 def _ids(monkeypatch, *ids: str) -> list[str]:
-    """Fix the id source to return ``ids`` in order (the last one ever after); returns the list of ids it handed out."""
+    """Fix the id source to return ``ids`` in order (the last one ever after); returns the list of ids it handed out. Asked for
+    more than one past the bound, it raises, so a lost bound fails the test rather than hanging it."""
     handed: list[str] = []
 
     def new_run_id(now=None):
+        if len(handed) > R.FRESH_ID_TRIES:
+            raise AssertionError(f"picked {len(handed) + 1} fresh ids for one run, past FRESH_ID_TRIES = {R.FRESH_ID_TRIES}")
         handed.append(ids[min(len(handed), len(ids) - 1)])
         return handed[-1]
 
@@ -40,8 +43,19 @@ def test_two_runs_that_pick_the_same_fresh_id_both_start_with_different_ids(tmp_
     assert "already exists" not in capsys.readouterr().err
 
 
+def test_the_claim_is_the_make_itself_so_a_dir_made_after_a_check_still_counts(tmp_path, monkeypatch):
+    """Another process can make A's dir between a check and a make. Here every check says A's dir is not there while it is,
+    so only a take that claims by its `mkdir` alone still picks again."""
+    handed = _ids(monkeypatch, A, B)
+    runs = tmp_path / "runs"
+    (runs / A).mkdir(parents=True)
+    real_exists = Path.exists
+    monkeypatch.setattr(Path, "exists", lambda p, *a, **kw: False if p == runs / A else real_exists(p, *a, **kw))
+    assert R.take_run_dir(runs) == runs / B and handed == [A, B]
+
+
 def test_an_id_the_caller_gives_whose_dir_exists_is_refused_here_on_a_machine_and_on_the_queue(tmp_path, monkeypatch, capsys):
-    _ids(monkeypatch, A)
+    handed = _ids(monkeypatch, A, B)
     runs = tmp_path / "runs"
     assert _run(runs) == 0
     job = (runs / A / "job.json").read_text()
@@ -53,6 +67,7 @@ def test_an_id_the_caller_gives_whose_dir_exists_is_refused_here_on_a_machine_an
                   ["--queue", "--project", "p", "--source", str(tmp_path), "--max-min", "1"]):
         assert _run(runs, "--id", A, *where) == 2, where
         assert GIVEN.format(runs / A) in capsys.readouterr().err, where
+    assert handed == [A], "a refused --id picks no fresh id in its place"
     assert launched == placed == [] and (runs / A / "job.json").read_text() == job, "nothing launched, the first run's dir untouched"
 
 
