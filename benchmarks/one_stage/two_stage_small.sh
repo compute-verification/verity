@@ -27,7 +27,7 @@
 #   takes as --kept: the honest play in 20 units, which takes no negative case's name
 #   SMALL_GPU=1 builds flock-circuit with its device prover (on CUDA 13.3's toolkit: CUDA_TK, the node's own, or the one
 #   verity/protocols/proofs/flock/prover/pod/cuda-13.3.sh finds or unpacks beside flock-circuit's build) and runs `second` with
-#   --devices, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
+#   --gpus, so its sessions prove on a card: the cards the run already holds (the indices in CUDA_VISIBLE_DEVICES, as
 #   research run --gpus N sets them), else one that gpu-lease hands `second` alone, for at most SMALL_LEASE_MIN minutes
 #   (30), so the builds and the first stage hold none
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
@@ -68,7 +68,7 @@ if [ -n "${SMALL_GPU:-}" ]; then
   [ -x "$TK/bin/nvcc" ] || { echo "SMALL_GPU=1: no nvcc under $TK" >&2; exit 8; }
   export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
   # `second` is told its cards as whoever holds them names them: this run's, else a lease's taken for it alone
-  GPU=1; ON_CARDS=(bash -c 'echo "cards $CUDA_VISIBLE_DEVICES ${GPU_LEASE_UUID:-}" >&2; exec "$@" --devices "$CUDA_VISIBLE_DEVICES"' _)
+  GPU=1; ON_CARDS=(bash -c 'echo "cards $CUDA_VISIBLE_DEVICES ${GPU_LEASE_UUID:-}" >&2; exec "$@" --gpus "$CUDA_VISIBLE_DEVICES"' _)
   if [ -z "${CUDA_VISIBLE_DEVICES:-}" ]; then
     command -v gpu-lease >/dev/null || { echo "SMALL_GPU=1: the run holds no card (CUDA_VISIBLE_DEVICES) and the node has no gpu-lease" >&2; exit 8; }
     export GPU_LEASE_WHO=${GPU_LEASE_WHO:-two-stage-small/${RESEARCH_RUN_ID:-local}}

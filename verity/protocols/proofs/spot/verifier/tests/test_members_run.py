@@ -192,8 +192,7 @@ def test_a_session_the_verifier_rejects_is_a_finding_and_the_run_proves_only_the
      "public file: not the registration's: roots"),
     ({"frame_v3": {"domain_ids": {"out": "cc" * 64}, "roots": {"out": "11" * 64}}},
      "public file: not the registration's: domains"),
-    ({"frame_v3": {"domain_ids": {"out": "aa" * 64}, "roots": {"out": "11" * 64, "x": "11" * 64}}},
-     "public file: not the registration's: roots"),
+    ({"frame_v3": {"domain_ids": {"out": "aa" * 64}, "roots": {"out": "11" * 64, "x": "11" * 64}}}, M.unwired_why("x")),
     ({"instances": 5}, "public file: not the registration's: population"),
     ({"instances": 3, "scheme": 5}, "public file: not the registration's: scheme, population"),
 ])
@@ -349,6 +348,29 @@ def test_a_members_slice_outside_the_run_is_the_runs_own():
         with pytest.raises(ValueError) as e:
             M.slices(UNITS, record)
         assert str(e.value) == why
+
+
+def test_a_wired_port_with_no_tree_under_its_member_is_held_at_its_writers_root():
+    """`B`'s port ``x``, wired from `A`'s ``out`` (every unit of `B` reads unit 0 of `A`'s template), has no tree under
+    `B`: its slice holds `A`'s ``out`` root under ``x`` (`wired_roots`, Lean's `OneStageZk.wiredRoots`), at which `B`'s
+    honest header, naming ``x`` at its writer's root and domain, holds; a header naming another root there is refused;
+    and where the wiring names no writer of ``x`` (no wire, a writer template with no range, or no wiring), the header
+    is refused by name (`unwired_why`, Lean's `UNWIRED_WHY`)."""
+    wire = {"reader": "b", "port": "x", "writer": "a", "out": "out", "at": 0, "radix": [3], "base": 0, "step": [0]}
+    wiring = {"templates": {}, "cuts": {}, "wires": [wire]}
+    ranges = [["a", 0, 2], ["b", 2, 3]]
+    strata = P.strata(PROGRAM, QUERY)
+
+    def named(at: str) -> dict:
+        return header(B, frame_v3={"domain_ids": {"out": ROOTS[B][1], "x": ROOTS[at][1]},
+                                   "roots": {"out": ROOTS[B][0], "x": ROOTS[at][0]}})
+    got = M.slices(UNITS, RECORD, wiring, ranges)
+    assert got[B]["roots"][1] == {"domain": ROOTS[A][1], "leaves": 4, "port": "x", "root": ROOTS[A][0]}
+    assert got[A] == M.slices(UNITS, RECORD)[A]
+    assert M.population_why(UNITS[B], strata, named(A), got[B]) is None
+    assert M.population_why(UNITS[B], strata, named(B), got[B]) == "public file: not the registration's: roots, domains"
+    for w in ({**wiring, "wires": []}, {**wiring, "wires": [{**wire, "writer": "z"}]}, None):
+        assert M.population_why(UNITS[B], strata, named(A), M.slices(UNITS, RECORD, w, ranges)[B]) == M.unwired_why("x")
 
 
 def test_what_the_run_does_not_decide_is_outside_and_never_a_pass(tmp_path):
