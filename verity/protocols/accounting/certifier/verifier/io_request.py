@@ -355,7 +355,7 @@ def lanes(shape: Shape, prompt_lens: Sequence[int], releases: Sequence[Release],
 # --- the fake upstream: the network certifier's own ingress ----------------------------------------------------------
 
 class ServedIngress(NamedTuple):
-    """A link's ingress served through the warden: its rows, a bucket each (a slot no connection holds B zero bytes),
+    """A link's ingress served through the network certifier: its rows, a bucket each (a slot no connection holds B zero bytes),
     each connection's release, and the ingress records its grid closed, a window each."""
 
     rows: list[list[bytes]]
@@ -365,7 +365,7 @@ class ServedIngress(NamedTuple):
 
 def serve(params: W.WardenParams, requests: Sequence[bytes], arrivals: Sequence[int], rate: Sequence[int],
           buckets: int, hold: int = 0) -> ServedIngress:
-    """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the warden's own ingress
+    """Connection k, ordinal k + 1, arrives at bucket arrivals[k] with request requests[k], and the network certifier's own ingress
     (`warden.Warden._ingress`) serves it: admitted in arrival order at the first bucket with a free lane, which it
     holds until `hold` buckets after its ingress `END` (standing in for its egress), its client's bytes arriving
     rate[k] a bucket from its admission (its `END` with the last)."""
