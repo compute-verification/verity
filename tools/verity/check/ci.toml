@@ -116,28 +116,29 @@ group = 6
 # spare once its build narrows. The rest (`lean-suites:*`) goes with the Rust build. Beside them circuit-check has only what
 # `SIBLINGS_GB` leaves it until they end (`check.cc_mem_gb`, `grant_when_alone`), so the longer they run, the longer a cold
 # circuit-check, and its shard's slot holds them back; the 5-pod plan gives it a shard of its own. The suites in parts by test
-# id (`[tool.verity.tests] parts`: verity-core-composition, verity-pouw-benchmarks) put one part in each group, so that no shard
-# runs either whole.
+# id (`[tool.verity.tests] parts`) are split so that no shard runs one whole: verity-core-composition and
+# verity-pouw-benchmarks put one part in each group, and verity-vllm one beside the audit and two with the Rust build, whose
+# shard holds no other parallel suite, so its lean-suites lane's memory (`check.SHARD_ASKS_GIB`) holds their workers.
 
 # 3 pods: the security analysis's audit beside pytest and the parallel suites; lean-build, the rest of the Lean and the Flock
 # suite; the Rust build and the circuits beside the rest of lean-suites.
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest", "lean-suites:verity-vllm",
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/accounting/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
-     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
 ]
 
 # 4 pods: the 3-pod plan with pytest on a pod of its own, and circuit-check's four shards one to each pod, so a cold
 # circuit-check is no single pod's long pole.
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4", "lean-suites:verity-vllm",
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "circuit-check:1/4", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/accounting/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
@@ -145,23 +146,24 @@ shards = [
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
     ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3",
-     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*"],
 ]
 
 # 5 pods: pytest apart, and circuit-check alone in the last shard, so no step on the gate waits behind a cold circuit-check, in
 # its run or for its shard's slot (the vqueue loop gives a last shard of 5 on 9 machines a machine of its own,
 # `landing.shard_machines`). The rest of the audit, the Rust build and ratchet-gate go beside the rest of lean-suites.
-# pytest's adapters/vllm/verity_vllm/definitions, whose one served test bounds it whatever its workers, goes beside the security analysis's
+# pytest's verity/definitions, whose one served test bounds it whatever its workers, goes beside the security analysis's
 # audit, as all of pytest does in the 3-pod plan, so pytest's own shard (the rest of its suites) is no longer pytest's whole
 # run; beside the Rust build it would take half that shard's cores from the build (`check.groups`).
 [[plan]]
 shards = [
-    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:adapters/vllm/verity_vllm/definitions", "lean-suites:verity-vllm",
+    ["lean-audit:security/Proofs", "lean-audit:security/Properties", "pytest:verity/definitions", "lean-suites:verity-vllm:1/3",
      "lean-suites:verity/protocols/proofs/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/accounting/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
     ["flock-circuit-build", "flock-rust-tests", "lean-audit:*", "lean-suites:verity-core-composition:2/3",
-     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*", "ratchet-gate"],
+     "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:verity-vllm:2/3", "lean-suites:verity-vllm:3/3", "lean-suites:*",
+     "ratchet-gate"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["pytest:*"],

@@ -26,8 +26,8 @@ import pytest
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as DOT
-from verity_vllm.definitions.registry import dsa as D
-from verity_vllm.definitions.registry import prims as P
+from verity.definitions.registry import dsa as D
+from verity.definitions.registry import prims as P
 
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
 
@@ -461,16 +461,15 @@ def test_at_one_head_per_sum_v3_is_v1() -> None:
         assert evaluate(v3, *args) == evaluate(v1, *args)
 
 
-@pytest.mark.parametrize("fn,contracted", [(D.DsaMqaLogitsV3, True), (D.DsaMqaLogits, False)], ids=["v3", "v1"])
-def test_logits_are_the_logit_per_key(fn, contracted: bool) -> None:
+def test_logits_are_the_logit_per_key() -> None:
     rng = np.random.default_rng(7)
     N = 3
     q = [_e4m3_row(rng, 128) for _ in range(32)]
     w = _f32(rng, 32, 0.0, 0.05)
     ks = [_e4m3_row(rng, 128) for _ in range(N)]
     sc = [D.f32_bits(0.5), D.f32_bits(0.125), D.f32_bits(4.0)]
-    got = _flat(evaluate(bind(fn, N=N, H=32, D=128), [v for r in q for v in r], w, [v for r in ks for v in r], sc))
-    assert got == [logit(q, w, ks[n], sc[n], contracted) for n in range(N)]
+    got = _flat(evaluate(bind(D.DsaMqaLogitsV3, N=N, H=32, D=128), [v for r in q for v in r], w, [v for r in ks for v in r], sc))
+    assert got == [logit(q, w, ks[n], sc[n]) for n in range(N)]
 
 
 @pytest.mark.parametrize("TOPK", [16, 2048])

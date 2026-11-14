@@ -2413,6 +2413,11 @@
     },
     {
       "paths": {
+        "verity/hardware/registration.py": "verity/protocols/accounting/registration/verifier/registration.py"
+      }
+    },
+    {
+      "paths": {
         "verity/definitions/registry/": "adapters/vllm/verity_vllm/definitions/registry/",
         "verity/definitions/numerics/": "adapters/vllm/verity_vllm/definitions/numerics/",
         "verity/definitions/tests/": "adapters/vllm/verity_vllm/definitions/tests/",

@@ -406,8 +406,8 @@ _SLOTS: dict = {}
 
 
 def cache_slot_circuits() -> None:
-    """Build the SHA-512 and hm96 slot circuits, their layouts and netlists once: `circuit.compose` rebuilds them for every
-    statement, identically, and they are about 95% of a small class's staging time."""
+    """Build the SHA-512 and hm96 slot circuits, their layouts and circuit descriptions once: `circuit.compose` rebuilds them for
+    every statement, identically, and they are about 95% of a small class's staging time."""
     if _SLOTS:
         return
     from . import sha512_circuit as S
@@ -458,7 +458,7 @@ def distinct_calls(graph_path: str | None, modules: str | None = None, definitio
     from verity.circuits.codec import definition_digest, descriptor_id
     from verity.circuits.defs import CompositeDefinition
     from verity.circuits.program import Program
-    from verity_vllm.definitions.encoding import encode_specialization
+    from verity.definitions.encoding import encode_specialization
 
     g = json.loads(open(graph_path).read()) if graph_path else {"groups": []}
     index = g.get("definitions_index") or {}

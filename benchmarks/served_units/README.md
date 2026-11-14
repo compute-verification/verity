@@ -62,7 +62,10 @@ Files:
   the break-even planner reads a measured row in (`benchmarks/spot_figures/breakeven/headline.py --steady`): a type's
   largest statement whose prover exited 0 with every session accepted, one prover on a GPU; the statements that gave
   no time are listed with their reasons.
+- `cover_count.py (COVER | art:ID) [--form listed] [--check]`: how many of a request's block types have no statement
+  the Lean verifier accepted, from its request cover record (below).
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `prove_rows.py` on a stand-in run, `settings.py`,
+  `cover_count.py` on a small hand-written cover record,
   `ks_form.py` on synthetic circuit heads,
   `stage.py`'s `census:NAME`, `full/D`, its bound default, `--unbound` and its retired names on a stub stager, `stage_window.py`'s member choice and public-body
   check, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s, with the paths the key hashes (`KEY_PATHS` in
@@ -86,11 +89,26 @@ research run --on NODE --cwd source -- bash benchmarks/served_units/prove_time.s
   PT_UNITS="fp8-coord:K=6144 fp8-coord:K=6144+public-weights" PT_NS="16 64" PT_DEVICE=gpu SM=120
 ~~~
 
+## The request cover record
+
+`cover.json` (schema `circuits/request-cover/v7`) is one served request's block types, each with how many blocks it
+holds, whether it is on the card, the outcome of staging and verifying it in its listed form (`bound_outcome`, its run in
+`bound_runs`) and, for a type whose listed form was not run, the run of its Boolean version (`beside_extras`), with each
+run's Lean verdicts and their two controls. It lives in the evidence store, never in the tree. `cover_count.py`
+recounts it from those entries, refuses it when the recount and its stored totals disagree, and prints the types with
+none accepted, by family, ending in a line that starts with their count:
+
+~~~text
+uv run -q python benchmarks/served_units/cover_count.py art:ID              # the Boolean version counted where the listed form has none
+uv run -q python benchmarks/served_units/cover_count.py art:ID --form listed # the listed form only
+uv run -q python benchmarks/served_units/cover_count.py cover.json --check  # exit 1 unless every type has one
+~~~
+
 ## Interface
 
 - **Provides:** `stage.py`, which stages a served proof block's statement, and the runners and scripts around it.
 - **Loaded by:** `benchmarks/one_stage`, which imports `stage`. Nothing else.
-- **Loads:** `verity_vllm.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
+- **Loads:** `verity.definitions`, `verity.circuits` with the primitive circuits (`verity.circuits.ops`),
   `verity.commitments`, `verity.protocols.proofs.spot.verifier`, `verity.hardware`, Flock (`verity_flock`),
   `circuit_check.targets` and `verity_vllm.pipeline`; the scripts build and run Flock's circuit prover and its Lean
   verifier.

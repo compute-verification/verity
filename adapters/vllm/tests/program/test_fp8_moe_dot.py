@@ -25,14 +25,14 @@ from verity.circuits.codec import lookup_primitive
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity_vllm.definitions import boolean as SW
-from verity_vllm.definitions.numerics import fp8_moe_rows as MR
+from verity.definitions import boolean as SW
+from verity.definitions.numerics import fp8_moe_rows as MR
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
-from verity_vllm.definitions.registry import boolean_fp8_moe as BM
-from verity_vllm.definitions.registry import fp8_moe as M
-from verity_vllm.definitions.registry import fp8_moe_experts as X
+from verity.definitions.registry import boolean_fp8_moe as BM
+from verity.definitions.registry import fp8_moe as M
+from verity.definitions.registry import fp8_moe_experts as X
 
 from tests.program.test_boolean_fp8 import _flat, _inputs
 from tests.program.test_fp8_moe import (
@@ -48,8 +48,7 @@ from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.target_profile import TargetProfile
 
-PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3),
-         (M.MoeExpertFp8BlockGemm, M.MoeExpertFp8BlockGemmV3), (M.MoeExpertFp8BlockGemmW, M.MoeExpertFp8BlockGemmWV3)]
+PAIRS = [(M.MoeExpertFp8BlockCoordinate, M.MoeExpertFp8BlockCoordinateV3), (M.MoeExpertFp8BlockCoordinateW, M.MoeExpertFp8BlockCoordinateWV3)]
 
 
 def _model(dot, x, sx, w, sw, K: int, G: int, KB: int, g: int | None = None) -> int:
@@ -64,22 +63,20 @@ def _model(dot, x, sx, w, sw, K: int, G: int, KB: int, g: int | None = None) -> 
     return _bf16(acc if g is None else _fmul(acc, g))
 
 
-def _args(fam, x, sx, g, w, ws, rows: bool):
+def _args(fam, x, sx, g, w, ws):
     weighted = "W" in fam.name.removeprefix("MoeExpertFp8Block")
-    lead = (x, sx, g) if weighted else (x, sx)
-    return lead + ((sum(w, []), sum(ws, [])) if rows else (w[0], ws[0]))
+    return ((x, sx, g) if weighted else (x, sx)) + (w[0], ws[0])
 
 
 @pytest.mark.parametrize("v1,v3", PAIRS, ids=[p[1].name for p in PAIRS])
 def test_the_dot_forms_with_the_hopper_step_are_the_v1_definitions(v1, v3) -> None:
     K, N, G = 256, 72, 64
-    rows = "Gemm" in v1.name
     rng = np.random.default_rng(len(v1.name))
     x, sx, w, ws = _operands(rng, K, G, N)
     g = int(np.float32(0.4375).view(np.uint32))
     for KB, SWAP in ((32, False), (64, True)):
-        st = {"K": K, "G": G, "KB": KB, "SWAP": SWAP, **({"N": N} if rows else {})}
-        args = _args(v1, x, sx, g, w, ws, rows)
+        st = {"K": K, "G": G, "KB": KB, "SWAP": SWAP}
+        args = _args(v1, x, sx, g, w, ws)
         assert evaluate(bind(v3, **st, DOT=HP), *args) == evaluate(bind(v1, **st), *args)
 
 

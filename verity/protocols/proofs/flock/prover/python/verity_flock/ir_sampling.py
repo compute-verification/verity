@@ -22,7 +22,7 @@ lane bodies in the circuit and the row-level values out of it:
   the scalar operands (top_p, seed, pos, temp, splits) are public, their frame-v3 row digests computed natively; the token
   (lane V-1's ``best_i``, a u64 as the row kernel returns it) is public.
 
-The unit netlist does not depend on V (only the arrangement does) and is pinned by :data:`PIN`.
+The unit's circuit description does not depend on V (only the arrangement does) and is pinned by :data:`PIN`.
 """
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ PIECES = IL.PIECES
 
 def _composites(V: int):
     from verity.circuits.defs import bind
-    from verity_vllm.definitions.registry import sampling as SM
+    from verity.definitions.registry import sampling as SM
 
     return SM.TemperatureLane, bind(SM.TopPMaskStep, V=V), SM.GumbelSelectStep
 
@@ -147,8 +147,8 @@ class Lane:
 
     @property
     def cut(self) -> dict:
-        """The cut structure the netlist pins: the word count, no tail program (every unit-less cut word is native), the native
-        rule, and per lane its cut ports as ``[column, cut word]``."""
+        """The cut structure the circuit description pins: the word count, no tail program (every unit-less cut word is native),
+        the native rule, and per lane its cut ports as ``[column, cut word]``."""
         lay = self.layout
         cin = lay.in_port_cols[1:]
         cout = [c - lay.out_col * IL.WORD for c in lay.out_port_cols]
@@ -165,7 +165,7 @@ class Lane:
 
     @property
     def unit_text(self) -> str:
-        """The netlist without its cut line: what does not depend on V (:data:`PIN`)."""
+        """The circuit description without its cut line: what does not depend on V (:data:`PIN`)."""
         return IL.netlist(self.layout, self.name)
 
     @property
@@ -187,7 +187,7 @@ def lane(V: int) -> Lane:
 # --- the words of one row, as the verifier computes them ------------------------------------------------------------------------
 
 def _prim(name: str):
-    from verity_vllm.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
     from verity.circuits.ops import scalar as S
 
     return getattr(P, name, None) or getattr(S, name)
@@ -202,7 +202,7 @@ def row_scalars(temp: int) -> list[int]:
 
 def _add_ftz_rows(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """``F32AddFtz_v1`` lane for lane: the vectorised twin, and the primitive itself on every lane with a NaN operand."""
-    from verity_vllm.definitions.registry import sampling_rows as SR
+    from verity.definitions.registry import sampling_rows as SR
 
     out = np.asarray(SR.add_ftz(a, b), dtype=np.uint32)
     nan = ((a & 0x7F800000) == 0x7F800000) & ((a & 0x7FFFFF) != 0) | ((b & 0x7F800000) == 0x7F800000) & ((b & 0x7FFFFF) != 0)
@@ -231,10 +231,10 @@ def _scan(y: np.ndarray):
 
 def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[np.ndarray, int]:
     """Every cut word of one instance (:func:`words` of them) and its token: the units' words by the vectorised twins of the
-    IR primitives (``verity_vllm.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the primitives
-    and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
-    from verity_vllm.definitions.registry import sampling as SM
-    from verity_vllm.definitions.registry import sampling_rows as SR
+    circuits' primitives (``verity.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the
+    primitives and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
+    from verity.definitions.registry import sampling as SM
+    from verity.definitions.registry import sampling_rows as SR
 
     logits = np.asarray(logits, dtype=np.uint16).reshape(-1)
     V = len(logits)
@@ -256,8 +256,8 @@ def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, sp
 def native_words(cuts: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> np.ndarray:
     """The native cut words of one instance recomputed from its public words (the scalar ports and the units' ``scaled``
     words): what :func:`check_native` holds a file's cut words to."""
-    from verity_vllm.definitions.registry import sampling as SM
-    from verity_vllm.definitions.registry import sampling_rows as SR
+    from verity.definitions.registry import sampling as SM
+    from verity.definitions.registry import sampling_rows as SR
 
     V = (len(cuts) - len(SCALARS) - len(INIT)) // len(LANE)
     lane = np.asarray(cuts[len(SCALARS) + len(INIT):], dtype=np.uint32).reshape(V, len(LANE))

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("verity_vllm.definitions.registry.prims")
+pytest.importorskip("verity.definitions.registry.prims")
 from verity.circuits import library  # noqa: E402
 from verity_flock import circuit_types as CT  # noqa: E402
 from verity_flock import lowerings  # noqa: E402
@@ -26,8 +26,8 @@ PIN_PARAMS = {"rope-head": ("D",), "silu-mul": ("I",), "silu-mul-v2": ("I",), "r
               "rmsnorm-triton": ("N", "EPS"), "rmsnorm-triton-v5": ("N", "EPS"), "rmsnorm-fused-cuda-vec8": ("N", "EPS", "BLOCK"),
               "rmsnorm-cuda-vec8": ("N", "EPS", "BLOCK"), "ingress-prompt": ("MODEL", "LP", "V"), "token-select-chunk": ("C",),
               "token-select-combine": ("V", "C")}
-#: Pinned units of about 3.5M rows (GLM-5.3's width-8 RMSNorms), and RMSNormTriton_v5's, which is rmsnorm-triton's netlist text
-#: (test_ir_lowering), derived only with FLOCK_IR_SLOW=1, as test_ir_lowering builds them
+#: Pinned units of about 3.5M rows (GLM-5.3's width-8 RMSNorms), and RMSNormTriton_v5's, which is rmsnorm-triton's circuit
+#: description text (test_ir_lowering), derived only with FLOCK_IR_SLOW=1, as test_ir_lowering builds them
 SLOW_UNITS = {"rmsnorm-fused-cuda-vec8", "rmsnorm-cuda-vec8", "rmsnorm-triton-v5"}
 SLOW = pytest.mark.skipif(not os.environ.get("FLOCK_IR_SLOW"), reason="derives a 3.5M-row unit: set FLOCK_IR_SLOW=1")
 #: Every pinned unit with its pin, and one small unpinned unit.

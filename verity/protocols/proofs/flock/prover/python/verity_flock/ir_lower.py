@@ -32,8 +32,8 @@ from .gf2 import Circuit, L, const_bits
 
 FORMAT = "flock-ir-unit/v2"
 WORD = 128
-#: the netlist's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past 100 KB),
-#: and the characters a digest encodes at a time
+#: the circuit description's rows per piece (what a caller that writes it as it renders it holds at a time; one row can be past
+#: 100 KB), and the characters a digest encodes at a time
 NETLIST_ROWS = 1 << 10
 HASH_CHUNK = 1 << 24
 NAN_TORCH = 0x7FC0
@@ -55,7 +55,7 @@ def _rope_out_add(C, x, y, c, s):
 @lru_cache(maxsize=None)
 def silu_table() -> tuple[int, ...]:
     """``bf16_rn(silu_f32(f32(g)))`` for every bf16 word g: the first half of ``SiluMulBf16``, from the primitive's own helpers."""
-    from verity_vllm.definitions.registry import prims as P
+    from verity.definitions.registry import prims as P
 
     return tuple(P.f32_to_bf16_rn_bits(P._silu_f32_bits(P.bf16_to_f32_bits(g)), P.BF16_NAN_TORCH) for g in range(1 << 16))
 
@@ -129,7 +129,7 @@ def _boolean_build(key):
     """The ``build`` of the registered Boolean Definitions (``verity.circuits.boolean.trace.definition``) whose ``word`` is the
     primitive ``key``: a `forms` builder on the operand words, as a piece is. So the word primitive lowers by the builder that
     lowers an activation of the Definition itself (`lower_gates`), commits included. One marked ``opt_in`` is left out, as
-    `verity_vllm.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
+    `verity.definitions.boolean` leaves it out: it lowers only the activations that bind it. None when none is left;
     `AmbiguousWord` when those left hold more than one builder (by identity, unwrapped), so no import order picks one. Every
     module of `verity.circuits.ops.boolean` is imported first: a Program of word primitives (`ops.prims`' s8 IMMA steps,
     `ops.s8`'s limb steps) imports none of the modules that hold their Boolean versions, and without them the registry has
@@ -283,7 +283,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
 def _boolean_activation(g):
     """``(scope, build)``: the activation of a Boolean Definition that the gate ``g``'s scope chain reaches, and its builder on
     the activation's elements; or None. A Definition with statics takes them first (``build(C, S, *elements)``, as
-    `verity_vllm.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
+    `verity.definitions.registry.sampling_boolean.traced_family` traces it). A folded Definition
     (`verity.circuits.boolean.trace.folded`) has no ``build``, so its caller's builder lowers it; only one no builder in the
     chain holds is lowered by its own (``fold_build``)."""
     s = getattr(g, "scope", None)
@@ -442,7 +442,7 @@ class Units:
     output leaf p, ``("cut", k)`` the k-th cut gate (``cut[k]``, a gate index). Cut gates are the words where the instance is
     split: a unit that computes one outputs it, a unit that reads one takes it as an input. ``tail`` lists the gates of the
     components that read no input leaf (they compute cut words from cut words); the verifier evaluates them itself with the
-    IR evaluator. ``gates`` is unit 0's gate list and ``signature`` the shape every unit shares."""
+    circuits' reference evaluator. ``gates`` is unit 0's gate list and ``signature`` the shape every unit shares."""
 
     target: object
     in_widths: list[int]
@@ -686,7 +686,7 @@ def _leaf_width(target, pos: int) -> int:
     return widths[pos]
 
 
-# --- the unit netlist ------------------------------------------------------------------------------------------------------
+# --- the unit's circuit description ---------------------------------------------------------------------------------------------
 
 @dataclass
 class LoweredUnit:
@@ -1016,8 +1016,8 @@ def netlist_pieces(lay: LoweredUnit, name: str, cut: dict | None = None, leaves:
 
     The text: a header line ``FORMAT name rows const n_in_groups (col words n bits..)..
     n_out_groups (col words n bits..)..``, then one line per row ``|A| A.. |B| B..``, then ``LEAVES <canonical JSON>``
-    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the netlist's sha256
-    pins the units' leaf maps and the cut structure."""
+    (:attr:`Lowering.leaves`) and, for a cut lowering, ``CUT <canonical JSON>`` (:attr:`Lowering.cut`): the circuit description's
+    sha256 pins the units' leaf maps and the cut structure."""
     head = [FORMAT, name, lay.useful, lay.const]
     for groups in (lay.in_groups, lay.out_groups):
         head.append(len(groups))
@@ -1178,7 +1178,8 @@ class Lowering:
 
     def sha256_of(self, expanded: str) -> str:
         """:attr:`sha256` from ``expanded``, the unit's ``netlist(layout, name)`` (:attr:`text` without its LEAVES and CUT
-        lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the netlist is rendered once."""
+        lines), for a caller that renders it anyway (`circuit.compose`'s unit section): the circuit description is rendered
+        once."""
         return self.sha256_after(_sha256(expanded))
 
     def sha256_after(self, h: hashlib._Hash) -> str:
@@ -1298,7 +1299,7 @@ def write_tables(out_dir) -> dict:
     :data:`TABLES`. FA2's MUFU.RCP table (``fa2_relation.tables().rcp``) is ``rcp`` byte for byte."""
     from pathlib import Path
 
-    from verity_vllm.definitions.numerics import fa2_relation, rms_relation
+    from verity.definitions.numerics import fa2_relation, rms_relation
 
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -1337,10 +1338,10 @@ def _pack_words(ports: Sequence[np.ndarray], widths: Sequence[int], words: int, 
 
 
 def write_instances(low: Lowering, flat_in: np.ndarray, flat_out: np.ndarray, path, meta: dict, cuts: np.ndarray | None = None) -> dict:
-    """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes, the netlist's
-    input columns), then every unit's output words (``out_words`` x 16 bytes, the netlist's output columns); units are
-    instance-major. Cut words (``cut_words``) are public words of the units that read or compute them; which ports hold them
-    and the tail that relates them are the netlist's (:attr:`Lowering.cut`), never the header's."""
+    """``flock-ir-instances/v1``: one JSON header line, then every unit's input words (``in_words`` x 16 bytes, the circuit
+    description's input columns), then every unit's output words (``out_words`` x 16 bytes, the circuit description's output
+    columns); units are instance-major. Cut words (``cut_words``) are public words of the units that read or compute them; which
+    ports hold them and the tail that relates them are the circuit description's (:attr:`Lowering.cut`), never the header's."""
     n = flat_in.shape[0]
     lay, U = low.layout, low.units
     if U.cut and cuts is None:

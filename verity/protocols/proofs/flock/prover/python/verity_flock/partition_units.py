@@ -108,7 +108,7 @@ class ClassCircuit:
 
 
 def lower_class(act: Activation, uc: ProofBlockCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
-    """C-Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
+    """Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
     prims = {act.gate(j).prim.id for j in uc.gates}
     missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith("Const") and input_id(p) is None))
     if missing:
@@ -269,7 +269,7 @@ def _program(a: argparse.Namespace) -> Any:
     from verity.circuits.program import Program
 
     if a.model == "tiny":
-        from verity_vllm.definitions.registry import b1
+        from verity.definitions.registry import b1
         from verity.circuits.tiny import TINY
         return Program(bind(b1.Serve, C=TINY, LP=3, STEPS=2))
     return one_call(resolver(a.resolver, "--definition")(a.definition))

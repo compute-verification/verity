@@ -46,7 +46,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.hardware import registration
+from verity.protocols.accounting.registration.verifier import registration
 from verity.circuits import boolean as BL
 from verity.circuits import types as T
 from verity.circuits.census import PRECISION, PRODUCTS, census, family
@@ -114,7 +114,7 @@ def census_of(program: Program, boolean: bool = False) -> dict:
     """The Program's census/v1 (one step), computed once; with `boolean` its Boolean work too, or `census.NoBooleanWork`."""
     memo = _census.setdefault(program, {})
     if boolean not in memo:
-        from verity_vllm.definitions.boolean import boolean_version
+        from verity.definitions.boolean import boolean_version
         memo[boolean] = census(program, digest=program_digest(program), boolean=boolean and boolean_version)
     return memo[boolean]
 

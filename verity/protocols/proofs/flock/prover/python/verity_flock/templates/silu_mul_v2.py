@@ -8,9 +8,9 @@ each one ``SiluMulBf16_v2`` over (gate[i], up[i]).
 That circuit is exact arithmetic on g's fields off a band of exponents and a constant table on it, so it is half
 ``silu-mul``'s 16-bit lookup in ANDs (1,380 against 2,606).
 
-The unit's rows do not depend on I; its ``flock-ir-unit/v2`` netlist, whose LEAVES line places the units on the row's words, is
-pinned per I by :data:`PINS` (GLM-5.3 at TP8: I = 1536 for the dense layers, 256 for the shared expert). ``verity/flock-circuit``
-holds a power-of-two number of units an instance, so there a unit is I's odd part of consecutive elements
+The unit's rows do not depend on I; its ``flock-ir-unit/v2`` circuit description, whose LEAVES line places the units on the row's
+words, is pinned per I by :data:`PINS` (GLM-5.3 at TP8: I = 1536 for the dense layers, 256 for the shared expert).
+``verity/flock-circuit`` holds a power-of-two number of units an instance, so there a unit is I's odd part of consecutive elements
 (:func:`circuit_lowering`, pinned by :data:`CIRCUIT_PINS` where that part is not 1)."""
 TEMPLATE = "silu-mul-v2"
 UNIT = "silu-mul-v2/bf16/element"
@@ -20,7 +20,7 @@ CIRCUIT_PINS = {1536: "861aaba839ead11166bd84e3f028a39988fc033022aab8f85494838a1
 
 
 def definition(subcircuit):
-    import verity_vllm.definitions.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
+    import verity.definitions.registry.boolean_silu  # noqa: F401  (registers SiluMulBf16_v4, the unit's builder)
 
     return subcircuit.definition()
 

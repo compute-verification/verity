@@ -17,7 +17,7 @@ import numpy as np
 import pytest
 
 pytest.importorskip("verity.circuits.units")
-pytest.importorskip("verity_vllm.definitions.registry")
+pytest.importorskip("verity.definitions.registry")
 from circuit_check import targets as TG  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
@@ -30,7 +30,7 @@ from verity_flock import partition_units as PU  # noqa: E402
 @pytest.fixture(scope="module")
 def units():
     TG.load_registries()
-    from verity_vllm.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     CS.cache_slot_circuits()
     return PU.partition_units(Program(bind(b1.Serve, C=TG.TINY, LP=3, STEPS=2)), "q-word")
@@ -115,7 +115,8 @@ def test_a_partitions_binding_and_owners_are_its_own_when_a_freed_partitions_add
 def test_packed_rows_are_the_packed_tensor_bytes_and_the_unit_is_the_definition(dtype, tmp_path: Path):
     """FLOCK_PACK_WORDS's layout on an sm_120 FP coordinate: four FP4 or two FP8 elements a u16 leaf, so a row's little-endian
     bytes are its tensor's packed bytes (two FP4 a byte, low nibble first; one FP8 or scale a byte), every leaf bit before the
-    block padding is read, the unit has the default layout's gates, and on circuit-check's vectors it equals the IR evaluator."""
+    block padding is read, the unit has the default layout's gates, and on circuit-check's vectors it equals the circuits'
+    reference evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
     from verity.circuits.evaluation.reference import signature_of
@@ -184,7 +185,8 @@ def test_core_rows_are_core_bit_rows_and_decode_as_the_default_layout(dtype):
     """FLOCK_CORE_ROWS's layout on an sm_120 FP coordinate at K=128: x with its scales one row and the W column with its scales
     another, each row's bytes core's bit row of the lane's codes and scales (here zero-padded, which the stager refuses). The unit
     has the default layout's gates; on rows of every bit random it computes the default lowering's outputs and ok flags on the
-    same values re-laid, from either layout to the other; on circuit-check's vectors it equals the IR evaluator."""
+    same values re-laid, from either layout to the other; on circuit-check's vectors it equals the circuits' reference
+    evaluator."""
     from circuit_check import checks as CK
     from circuit_check import vectors as V
     from verity.commitments.rowleaf import bit_row

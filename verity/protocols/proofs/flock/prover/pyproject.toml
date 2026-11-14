@@ -6,7 +6,7 @@ requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "numpy", "blake3>=1.0"]
 
 [project.optional-dependencies]
-# the numerical bench (its contract, cell, generator suites and frozen instance sets), which Flock's bench drivers,
+# the numerical bench (its contract, cell, generator suites and frozen input sets), which Flock's bench drivers,
 # `instances` and their tests import where they run
 bench = ["verity-numerical"]
 
@@ -104,7 +104,7 @@ inputs = [
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/proofs/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
-    # lock, the release side's (its Flock.Firewall.Honest is C-Flock's, which the flock-firewall artifact keys)
+    # lock, the release side's (its Flock.Firewall.Honest is Flock's, which the flock-firewall artifact keys)
     "tools/difftest/python/verity_difftest", "verity/circuits/difftest", "verity/protocols/proofs/recursion/verifier/firewall",
           "verity/__init__.py", "verity/commitments/__init__.py", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/policy/__init__.py",
           # `verity`'s settings registry, whose opt-in flags (`VERITY_ML_*`) some tests read, with the package it sits in
@@ -199,11 +199,11 @@ paths = ["verity/protocols/accounting/pouw/verifier/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]
-paths = ["adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
+paths = ["verity/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_flock_rows.py"]
-paths = ["verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
+paths = ["verity/circuits/ops", "verity/definitions/registry", "verity/protocols/proofs/flock/prover/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_keyed.py"]
@@ -262,7 +262,7 @@ paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/accounting/certifier",
     "verity/protocols/accounting/pous",
-    "verity/circuits", "verity/commitments", "adapters/vllm/verity_vllm/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
+    "verity/circuits", "verity/commitments", "verity/definitions", "verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "verity/protocols/proofs/flock/prover/agreement", "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/accounting/pouw/prover", "verity/protocols/accounting/poub/verifier/commitments", "verity/commitments/windows",
 ]
 
 [[tool.verity.tests.reads]]

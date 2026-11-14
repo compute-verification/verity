@@ -1,6 +1,6 @@
-"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the IR primitives, the lane
-unit against the IR composites it is lowered from, a row's words against the IR evaluator on synthetic sets (a row whose last
-BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
+"""Flock's lowering of GumbelTopPTokenSelect_v1 (``verity_flock.ir_sampling``): the pieces against the circuits' primitives, the
+lane unit against the IR composites it is lowered from, a row's words against the circuits' reference evaluator on synthetic sets
+(a row whose last BLAKE3 chunk is short included), the staged file's units, the native words, the pin, and the negatives."""
 from __future__ import annotations
 
 import os
@@ -14,7 +14,7 @@ from verity_flock import gf2
 from verity_flock import ir_lower as IL
 from verity_flock import ir_sampling as S
 
-P = pytest.importorskip("verity_vllm.definitions.registry.prims")
+P = pytest.importorskip("verity.definitions.registry.prims")
 from verity.circuits.evaluation import evaluate  # noqa: E402
 from verity.circuits.defs import bind  # noqa: E402
 from verity.circuits.ops import fp32 as F  # noqa: E402
@@ -23,8 +23,8 @@ from verity_flock import lowerings  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from synthetic_sets import synthetic_set  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
-from verity_vllm.definitions.registry import ref_prims as RP  # noqa: E402
-from verity_vllm.definitions.registry import sampling as SM  # noqa: E402
+from verity.definitions.registry import ref_prims as RP  # noqa: E402
+from verity.definitions.registry import sampling as SM  # noqa: E402
 
 REG = lowerings.registry("C-Flock")
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FC00123, 0x7F800001, 0xFFC00000, 0xFF800007, 1, 0x80000001,
@@ -138,7 +138,7 @@ def _set(tmp_path, V, n=3):
 
 
 def _replay_scan(masked, g, noisy, V):
-    """``GumbelSelectF32``'s scan replayed from its Definition with the IR primitives: every lane's carry out."""
+    """``GumbelSelectF32``'s scan replayed from its Definition with the circuits' primitives: every lane's carry out."""
     y0 = SelectF32.evaluate(noisy, F.F32AddFtz.evaluate(masked[0], g[0]), masked[0])
     carry = (y0, 0, 1)
     out = [carry]

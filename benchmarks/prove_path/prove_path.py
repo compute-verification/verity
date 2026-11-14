@@ -80,9 +80,10 @@ Two kinds of committed run:
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
   sample's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
-  ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
-  witness, and a window passes when its registration passed every check before the sample and Lean refused the outcome
-  (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
+  ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it proves the false
+  witness, and a window passes when its registration passed every check before the sample, the outcome is a reject and
+  the forged unit's member was stopped (`forged_row`): the ZK server released no proof of it, or under ``--plain``, where
+  the proof leaves, Lean refused it. ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
   law ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
   --stratified K`, no ZK server), and the summary names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``; ``c``, the advice's bits where the window's leak count
@@ -109,7 +110,8 @@ Two kinds of committed run:
   compile check runs: the circuit record the advice compiles to, over its own Build of each Program (`own_builds`; it takes
   no row dir), and the length it charges. ``records_audit.py`` audits a window
   from the records its integration hands Verity alone (``circuit.json``, the registration and the values, the advice's
-  opening) and imports no `verity_vllm`; this file's ``audit`` holds a window to the vLLM run's own records.
+  opening) and loads of `verity_vllm` only a catalog package (`verity.circuits.defs.catalog_package`); this file's
+  ``audit`` holds a window to the vLLM run's own records.
 * **window-circuit**: the same advice through I2 as its window class's one Circuit (`window_circuit_of_advice`, V3; the
   class ``--class``, by default the class of record, `window_circuit.CLASS_OF_RECORD`: 8 slots, 4 at each of buckets 0
   and 16, 1,024 prompt ids and 64 outputs, the certifier run of record's envelope at the fixed slots; every slot's
@@ -205,7 +207,7 @@ from typing import Any
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from records_audit import PORTS, REFUSED, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
+from records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.circuits.codec import canonical_json  # noqa: E402
@@ -369,7 +371,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity_vllm.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -1084,19 +1086,16 @@ def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping
     return {"refused": not v["ok"], "codes": v["codes"], "before_draw_checks_pass": src["ok"]}
 
 
-def forged_row(s: dict, forged: dict | None) -> dict:
-    """A forged window's verdict: its registration passed every check before the sample, the forged unit was sampled, and the outcome
-    is a reject with Lean's verifier refusing a sampled member."""
-    verdicts = (s.get("audit") or {}).get("verdicts") or {}
-    lean = {k: v for k, v in verdicts.items() if k.startswith("lean-verify/")}
+def forged_row(s: dict, forged: dict | None, wdir: Path) -> dict:
+    """A forged window's verdict (`records_audit.forged_outcome`, over its audit directory ``wdir``): its registration passed
+    every check before the sample, the forged unit was sampled, the outcome is a reject, and the forged unit's member was
+    stopped. Behind the ZK server, that is no proof of it released (``no_proof_released``); in a plain audit, which has no
+    ZK server, Lean's verifier refusing the proof it read (``lean_refused``)."""
     unit = None
     if forged is not None:
         unit = next(m["base"] for m in s.get("members") or [] if m["k"] == forged["member"]) + forged["unit"]
-    checks = {"checks_before_draw": bool(s.get("checks_before_draw")) and all(s["checks_before_draw"].values()),
-              "forged_unit_drawn": unit is not None and unit in (s.get("draw") or []),
-              "rejected": (s.get("audit") or {}).get("accepted") is False,
-              "lean_refused": any(v is False for v in lean.values())}
-    return {"ok": all(checks.values()), "checks": checks, "why": (s.get("audit") or {}).get("why")}
+    return forged_outcome(s, wdir, None if forged is None else forged["member"],
+                          {"forged_unit_drawn": unit is not None and unit in (s.get("draw") or [])})
 
 
 def per_unit(s: dict) -> dict[str, dict]:
@@ -1195,7 +1194,7 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
     row["ok"] = ok and ordered
     if a.forged:
         forged = ((json.loads((Path(a.windows) / "commit.json").read_text())["ranks"]).get(str(r)) or {}).get("forged")
-        row["forged"] = {"unit": forged, **forged_row(s, forged)}
+        row["forged"] = {"unit": forged, **forged_row(s, forged, out)}
         row["ok"] = row["forged"]["ok"] and ordered
     return row
 

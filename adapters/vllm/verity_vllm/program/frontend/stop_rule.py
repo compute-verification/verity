@@ -5,22 +5,30 @@ request had there (`of`). The stop ids are the registered model's (`stop_ids`), 
 fields are refused (`body_refusal`). A Program whose outputs follow earlier ones (a window carrying its request in) reads the rule
 from its first output on: max_tokens less those and the prompt with them (`check`). Its config is the derive config's ``stop``
 (the Build's `--stop`) and `build_program`'s ``stop`` alike, which the SRC's ``config_sha256`` holds, so a predicted Program and
-its trace carry the same check, the last Call of the body and the last check. Imports without torch."""
+its trace carry the same check, the last Call of the body and the last check. Imports without torch.
+
+A class's Definition, which every request of its (n outputs) runs, holds of the rule only what they share: the stop ids and the
+model's length (`CLASS_KEYS`). It computes the rule (`StopClass_v1`, `class_definition`) over its outputs and the request's
+max_tokens and prompt length, values it reads (`request_values`), and gives (n, finish) where a request Program checks them
+against its config's: where that check is 1, the class's Call gives (n, the config's finish), and only there."""
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
-from verity.circuits.defs import bind
-from verity.circuits.refs import Coll
-from verity.circuits.types import Array, Value
-from verity_vllm.definitions.registry import stop_check as SC
-from verity_vllm.definitions.registry import stop_rule as X
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.refs import Coll, concat
+from verity.circuits.types import Array, Tuple, Value
+from verity.definitions.registry import stop_check as SC
+from verity.definitions.registry import stop_rule as X
+from verity.definitions.registry.prims import I32
 
 #: the rule's Call's name in a request Program's body
 NAME = "stop_rule"
 #: the rule's config's keys (`spec`)
 KEYS = ("stops", "max_tokens", "prompt_len", "max_model_len", "outputs", "finish")
+#: the config's keys a class's Definition holds as statics (`class_definition`); a request's max_tokens and prompt length are values
+CLASS_KEYS = ("stops", "max_model_len")
 
 
 def stop_ids(hf_config: Mapping[str, Any]) -> tuple[int, ...]:
@@ -91,15 +99,46 @@ def check(B: Any, ids: Coll, config: Mapping[str, Any]) -> tuple[Coll, str]:
     return B.call(fn, ids, name=NAME), what(s)
 
 
-def definition(n: int, config: Mapping[str, Any]) -> tuple[Any, dict]:
-    """The rule's Call over a Program's n outputs (`check`'s): (`StopCheck_v1` bound, the config `spec` makes)."""
+def request_values(n: int, config: Mapping[str, Any]) -> tuple[dict, int, int]:
+    """Over a Program's n outputs, the rule as it reads from the first of them: (the config `spec` makes, max_tokens less the
+    outputs before them, the prompt length with those)."""
     if sorted(config) != sorted(KEYS):
         raise ValueError(f"the stop rule's config has the keys {sorted(config)}, not {list(KEYS)}")
     s = spec(config["stops"], **{k: config[k] for k in KEYS[1:]})
     if (before := s["outputs"] - n) < 0:
         raise ValueError(f"the Program returns {n} outputs, and its request has {s['outputs']} through its last")
-    return bind(SC.StopCheck, T=n, STOP=tuple(s["stops"]), MAX_TOKENS=s["max_tokens"] - before, PROMPT_LEN=s["prompt_len"] + before,
+    return s, s["max_tokens"] - before, s["prompt_len"] + before
+
+
+def definition(n: int, config: Mapping[str, Any]) -> tuple[Any, dict]:
+    """The rule's Call over a Program's n outputs (`check`'s): (`StopCheck_v1` bound, the config `spec` makes)."""
+    s, max_tokens, prompt_len = request_values(n, config)
+    return bind(SC.StopCheck, T=n, STOP=tuple(s["stops"]), MAX_TOKENS=max_tokens, PROMPT_LEN=prompt_len,
                 MAX_MODEL_LEN=s["max_model_len"], FINISH=s["finish"]), s
+
+
+def _class_body(B: Any, S: Any, ids: Coll, max_tokens: Coll, prompt_len: Coll) -> Coll:
+    o, stops = X.word_ops(B), S.STOP or (SC.NOT_AN_ID,)
+    words = [o.word(s) for s in stops]
+    return B.call(bind(X.StopRule, T=S.T, NSTOP=len(stops)), ids, max_tokens,
+                  Coll(Array(len(stops), I32), concat([w.refs for w in words])), prompt_len, o.word(S.MAX_MODEL_LEN))
+
+
+#: `StopClass_v1{T, STOP, MAX_MODEL_LEN}` (ids: Array<T, i32>, max_tokens: i32, prompt_len: i32) -> (n: i32, finish: i32):
+#: `StopRule_v1` over a class's T outputs at its stop ids and model length, statics, and a request's max_tokens and prompt
+#: length, values; with no stop ids it reads `stop_check.NOT_AN_ID`, as `StopCheck_v1` does
+StopClass = CompositeDefinition(
+    "StopClass", 1, ("T", "STOP", "MAX_MODEL_LEN"),
+    lambda S: ((("ids", Array(S.T, I32)), ("max_tokens", I32), ("prompt_len", I32)), Tuple(I32, I32)), _class_body,
+    register=False, refuse=SC.refuse, doc="StopRule_v1 over a class's outputs at its stop ids and model length",
+    conformance="model-untested: StopRule_v1's, which holds no capture of vLLM's finish yet")
+
+
+def class_definition(n: int, stops: Iterable[int], max_model_len: int) -> SpecializedDefinition:
+    """The rule's Call in a class's Definition over its n outputs, bound from the class's statics alone (`CLASS_KEYS`):
+    `StopClass_v1`, whose inputs are the outputs and a request's `request_values`, and whose (n, finish) a request Program's
+    `definition` checks against its config's."""
+    return bind(StopClass, T=n, STOP=tuple(int(x) for x in stops), MAX_MODEL_LEN=max_model_len)
 
 
 def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
@@ -118,4 +157,5 @@ def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
     ctx.node_hints[len(ctx.B.nodes) - 1] = NAME
 
 
-__all__ = ["NAME", "KEYS", "stop_ids", "spec", "of", "body_refusal", "check", "definition", "in_derive"]
+__all__ = ["NAME", "KEYS", "CLASS_KEYS", "StopClass", "stop_ids", "spec", "of", "body_refusal", "check", "request_values",
+           "definition", "class_definition", "in_derive"]

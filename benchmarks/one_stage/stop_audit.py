@@ -22,7 +22,10 @@ verified by Lean (`verify --zk --registered`), and the stop stream's outcome wit
   rule and sampling design, and the session's public files; it opens no file of the class's directory.
   The boundary record is the one the class's boundary stream registers again (`two_stage.resume`), never one rebuilt
   from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R7) and samples it
-  again on the bytes its sample read; each is held to the hand-off. The ``--registered`` file is the verifier's
+  again on the bytes its sample read; each is held to the hand-off. Which family of which session those bytes are
+  challenges of is not the hand-off's to say: the family is the stop blocks' place's (`two_stage.family_of`, from the
+  class's layout), the session's root is the run its records' window names (`two_stage.first_root`), and a hand-off
+  that names another of either is refused. The ``--registered`` file is the verifier's
   own: the two parameters' ports as `boundary_stop.stop_registration` gives them, and ``o0`` at the stop record's
   root. The hand-off's coin evidence names no key: both streams read it under the challenger's key this command
   holds (``--challenger-key``, the deployment's key record, or ``--challenger-host``, the development challenger the
@@ -86,7 +89,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import prove_leg as PL  # noqa: E402
 import two_stage as TS  # noqa: E402
-import verity_vllm.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
+import verity.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.defs import SpecializedDefinition  # noqa: E402
 from verity.commitments.merkle import tree_levels  # noqa: E402
@@ -269,17 +272,20 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     """The class's stop stream again from its hand-off, under the verifier's own check template, stop rule and
     sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
     record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
-    registered (R1 to R7) and sampled again on the bytes its sample read, as coins of the challenger's family the
-    first stage read them from (the hand-off's, as `two_stage.resume` takes a class's own). Both streams are made with
-    the verifier's challenger key ``key`` and its copy of main's history ``main``, which every coin evidence of the
-    hand-off is read under (none: every evidence is refused). `Unlogged` when that
+    registered (R1 to R7) and sampled again on the bytes its sample read, as challenges of the family of the stop
+    blocks' place in the window's session (`two_stage.family_of`, from the class's layout, as `two_stage.resume`
+    names a class's own), on the session whose root is the boundary record's run, which the stop record's window
+    repeats. Both streams are made with the verifier's challenger key ``key`` and its copy of main's history
+    ``main``, which every coin evidence of the hand-off is read under (none: every evidence is refused). `Unlogged`
+    when that
     log holds no such record; ValueError when the first stage sampled no stop block, or
-    the Spec, the record, its registration or the sample isn't the hand-off's; `service.Refused` as the streams
-    refuse."""
+    the Spec, the record, its registration or the sample isn't the hand-off's, or the hand-off names another family
+    for the stop sample than its place's, or another session root than its record's (`two_stage.first_root`);
+    `service.Refused` as the streams refuse."""
     s = handoff.get("stop")
     if not isinstance(s, Mapping) or "units" not in s:
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or handoff.get('error')}")
-    root = handoff.get("window_root")
+    root = TS.first_root(handoff)
     first = TS.resume(handoff, check, delta=delta, window_root=root, stop=stop, key=key, main=main)
     layout, logged = first.layout, {R.digest(rec): (i, rec) for i, rec in enumerate(first.stream.log)}
     if s["record"].get("previous") not in logged:
@@ -287,7 +293,9 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
     received, boundary = logged[s["record"]["previous"]]
     coins = TS.Staged(bytes.fromhex(s["read"]))
-    coins.family = s.get("family")
+    coins.family = TS.family_of(layout, blocks=True)
+    if s.get("family") not in (None, coins.family):
+        raise ValueError(TS.another_family(s["family"], coins.family))
     stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
                       challenger=TS.CHALLENGER, coins=coins, log=[boundary], key=key, main=main)
     if stream.spec.digest() != s["spec"]:
@@ -297,7 +305,7 @@ def resume(handoff: Mapping[str, Any], check: SpecializedDefinition, stop: BS.St
     if R.digest(want) != R.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
     reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
-                          schemas=held.schemas, **({} if root is None else {"window_root": root}))
+                          schemas=held.schemas, window_root=root)
     if reg.digest != s["registration"]:
         raise ValueError("the stop record registers to another digest than its first stage's")
     sample = stream.select(reg)
@@ -323,14 +331,16 @@ def reads(r: Resumed) -> dict[str, Any]:
 
 def link(handoff: Mapping[str, Any], first: TS.First, outcome: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """The stop record's read across the class's two streams, as the Lean verifier's piece ``across`` takes it: the
-    window's root, the boundary stream's own log (``first``'s `Stream.log`), the boundary stream's audit record
-    (``outcome``'s, none when no outcome is handed), the stop record, and the stop sample's coin evidence, the
-    challenger's family it read those coins from and the bytes it read (``handoff``'s ``stop``), with the challenger's
-    key and the copy of main's history ``first``'s stream was made with, which Lean reads that evidence under."""
+    window's root, which is the run the class was laid out under (`resume` holds the hand-off's and its records' to
+    it); the boundary stream's own log (``first``'s `Stream.log`); the boundary stream's audit record (``outcome``'s,
+    none when no outcome is handed); the stop record; the stop sample's coin evidence and the bytes it read
+    (``handoff``'s ``stop``); the family those are held to, the stop blocks' place's (`two_stage.family_of`), never
+    the one the hand-off names; and the challenger's key and the copy of main's history ``first``'s stream was made
+    with, which Lean reads that evidence under."""
     s, held = handoff["stop"], first.stream
-    return {"window": handoff.get("window_root") or first.layout.run, "log": [dict(x) for x in first.stream.log],
-            "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None,
-            "later": dict(s["record"]), "coins": s.get("evidence"), "family": s.get("family"), "read": s["read"],
+    return {"window": first.layout.run, "log": [dict(x) for x in first.stream.log],
+            "audit": outcome.get("audit") if isinstance(outcome, Mapping) else None, "later": dict(s["record"]),
+            "coins": s.get("evidence"), "family": TS.family_of(first.layout, blocks=True), "read": s["read"],
             "key": None if held.key is None else held.key.to_json(), "main": list(held.main)}
 
 

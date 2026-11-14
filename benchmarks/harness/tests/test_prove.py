@@ -696,7 +696,7 @@ def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_price
     assert t["lean_verify"] == [{"block": GEMM64, "time_share": share, "k_log": 20, "blocks": 8, "full": 8,
                                  "seconds": [40.0, 16.0, 24.0], "statement_seconds": 24.0, "proof_bytes": 4000,
                                  "run": "r20260105-000000-0005", "host": "node-a (64 cores, a CPU)",
-                                     "label": L.COVER_LABEL}]
+                                 "label": L.COVER_LABEL, "form": None}]
     row = next(r for r in doc["rows"] if r["block"] == GEMM32)
     assert (row["lean_verifier_seconds"], row["lean_source"], row["proof_bytes"], row["proof_bytes_source"]) == (
         pytest.approx(1.2), P.LEAN_FAMILY, 250.0, P.LEAN_FAMILY)
@@ -773,6 +773,72 @@ def test_an_unmeasured_type_takes_its_definitions_measured_rate_by_its_ands_else
     assert {k: v["block_types"] for k, v in t["sources"].items()} == {P.LEAN_MEASURED: 3, P.LEAN_FAMILY: 1, P.LEAN_FITTED: 1}
     assert t["sources"][P.LEAN_FAMILY]["share"] == pytest.approx(sibling.lean_seconds / t["value"])
     assert t["fitted_rate"] == pytest.approx((320.0 + 350.0 + 16.0) / ands)
+
+
+def test_each_block_types_lean_verifier_row_carries_the_mark_its_source_earns_and_the_record_it_rests_on():
+    """The Lean verifier's table holds a row for every block type, each marked by where its seconds are from: measured
+    only on a statement of its own Definition, which its row cites with the circuit file it was read from (the
+    unrolled file, the templates, or neither named); modeled only on its Definition's measured statement, cited; assumed
+    at the fitted rate, citing none; none with no AND gates. A mark that says more than its source fails here."""
+
+    heads = {**HEADS, "definitions": {**HEADS["definitions"], "Bare_v1{N=1}": {"of": {"Bare_v1": "row"}, "prefill": 1,
+                                                                                 "decode": 0}}}
+    statements = {"Head_v1{NVIS=64,FIRST=false}": (256, 27, 320.0, "r20260105-000000-0001", "verity/flock-circuit"),
+                  "Head_v1{NVIS=64,FIRST=true}": (256, 27, 350.0, "r20260105-000000-0002", "verity/flock-circuit/tmpl"),
+                  "Gemm_v1{K=64,N=1}": (512, 25, 16.0, "r20260105-000000-0003", None)}
+    timed = tuple(replace(lean(P.definition_id(name), run, (s,), 1000, k_log=k, blocks=n, full=1024 if k == 25 else n),
+                          form=form) for name, (n, k, s, run, form) in statements.items())
+    doc = P.report(P.Flock((), (), None, lean=timed).table(P.Census.of(heads)), 1.0)
+    rows = {r["block"]: r for r in doc["rows"]}
+    assert {name: (r["lean_mark"], r["lean_record"], r["lean_form"]) for name, r in rows.items()} == {
+        "Head_v1{NVIS=64,FIRST=false}": ("measured", "r20260105-000000-0001", "verity/flock-circuit"),
+        "Head_v1{NVIS=64,FIRST=true}": ("measured", "r20260105-000000-0002", "verity/flock-circuit/tmpl"),
+        "Gemm_v1{K=64,N=1}": ("measured", "r20260105-000000-0003", None),
+        "Head_v1{NVIS=8,FIRST=true}": ("modeled", "r20260105-000000-0002", "verity/flock-circuit/tmpl"),
+        "Read_v1{H=4}": ("assumed", None, None),
+        "Bare_v1{N=1}": (None, None, None)}
+    measured = {v.definition for v in timed}
+    for r in doc["rows"]:
+        assert r["lean_mark"] == P.LEAN_MARKS.get(r["lean_source"])
+        assert (r["lean_mark"] == "measured") == (P.definition_id(r["block"]) in measured)
+        if r["lean_mark"] == "measured":
+            assert r["lean_definition"] == P.definition_id(r["block"])
+        elif r["lean_mark"] == "modeled":
+            assert r["lean_definition"] in measured and r["lean_definition"] != P.definition_id(r["block"])
+        else:
+            assert r["lean_record"] is r["lean_definition"] is None
+    assert [(x["block"], x["form"]) for x in doc["totals"]["lean_verify"]] == [
+        (name, form) for name, (*_, form) in statements.items()]
+
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 1.0,
+            **doc, "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+            "periods": {"gates_basis": "stated", "only": None, "rows": []}}
+    text = R.render(page)
+    assert f"\n{R.LEAN_ROWS}:\n\n| block type | Lean verifier ms per block | mark | record | rests on |\n" in text
+
+    def line(name: str, mark: str, record: str, basis: str) -> str:
+        seconds = rows[name]["lean_verifier_seconds"]
+        return f"| `{name}` | {'—' if seconds is None else R._n(1e3 * seconds)} | {mark} | {record} | {basis} |"
+
+    assert line("Head_v1{NVIS=64,FIRST=false}", "measured", "r20260105-000000-0001",
+                "its own statement of 256 blocks (a full statement), measured from the unrolled circuit file") in text
+    assert line("Head_v1{NVIS=64,FIRST=true}", "measured", "r20260105-000000-0002",
+                "its own statement of 256 blocks (a full statement), measured from its circuit's templates") in text
+    assert line("Gemm_v1{K=64,N=1}", "measured", "r20260105-000000-0003",
+                "its own statement of 512 blocks (512/1024 of a full statement), its record names no statement id") in text
+    assert line("Head_v1{NVIS=8,FIRST=true}", "modeled", "r20260105-000000-0002",
+                f"`{P.definition_id('Head_v1{NVIS=64,FIRST=true}')}`'s statement of 256 blocks (a full statement), "
+                "measured from its circuit's templates") in text
+    assert line("Read_v1{H=4}", "assumed", "—", "the fitted rate") in text
+    assert line("Bare_v1{N=1}", "none", "—", "—") in text
+    rest = [r["lean_mark"] or "none" for r in doc["rows"][2:]]
+    counts = ", ".join(f"{m} {rest.count(m)}" for m in ("measured", "modeled", "assumed", "none") if m in rest)
+    assert f"\n| 4 more block types | | {counts} | | |\n" in R.render(page, rows=2)
+
+    # the reader takes the statement id its record names, and None where it names none
+    assert R.lean_verify(lean_record("r1") | {"statement": {"id": "verity/flock-circuit/tmpl"}}, "r1").form == (
+        "verity/flock-circuit/tmpl")
+    assert R.lean_verify(lean_record("r1"), "r1").form is None
 
 
 def test_spot_takes_the_lean_verifiers_seconds_at_the_blocks_its_plan_samples():
@@ -883,7 +949,7 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
     assert ("- where the two differ, this table's proving time over the plan's by this table's source: measured at steady "
             f"state 2x (1 block types), modeled from k_log {(20 * own[1] + 8 * own[2]) / 12:.3g}x (2 block types); `") in text
     assert f"alone is {gaps[top] / sum(gaps):.1%} of the difference" in text
-    assert text.count(" --- |") == 9 + 6 + 6                              # the rows' table has the plan's column
+    assert text.count(" --- |") == 9 + 6 + 5 + 6                          # the rows' table has the plan's column
 
     bare = [{k: v for k, v in c.items() if k != "prove_s"} for c in cells]
     one = P.report(P.Spot(flock, plan(bare), serving).table(census), 1.0)
@@ -1037,8 +1103,8 @@ def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_
     tell" prices nothing. `one_numa_node` is no condition here: a row that fails it, or can't show it, is still
     priced."""
 
-    assert R.CHECKS == tuple(getattr(S, name) for name in GATES)
-    assert S.CHECKS == tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) and S.one_numa_node not in R.CHECKS
+    assert tuple(getattr(S, name) for name in GATES) == R.CHECKS
+    assert tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) == S.CHECKS and S.one_numa_node not in R.CHECKS
     good = {row["type"]: row for row in REFUSALS}["good"]
     rows = [row for row in REFUSALS if "stage" in row] + [changed(good, change) for change, _ in STRICT]
     for row in rows:
@@ -1392,7 +1458,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- prover GPUs per serving GPU: 0.542 (range 0.186 to 0.542), modeled" in text
     assert "- served tokens covered per second per prover GPU: 14,246 (range 14,246 to 41,509)" in text
     assert "| world year | year |" in text and "no plan of record covers another period, or a datacenter." in text
-    assert text.count("\n| `") == 150
+    assert text.count("\n| `") == 2 * 150                               # the cost table and the Lean verifier's
 
 
 def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):
@@ -1436,7 +1502,7 @@ def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_re
             f"not read: {nothing}\n") in text
     (none,) = R.measurements(bare, {"a/z": R.AT_RECORD})
     assert none == {"name": "a/z", "value": None, "unit": "prover GPUs a serving GPU", "mark": "modeled",
-                    "why": f"not read: {nothing}", "inputs": []}
+                    "why": f"not read: {nothing}", "inputs": [], "target": R.GPUS_PER_SERVING_GPU_TARGET}
     assert kit.writer(tmp_path / "bare-run").measurement(**none)["inputs"] == ["modeled"]
 
     designed(s, tmp_path)
@@ -1462,7 +1528,8 @@ def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_re
             "5.214% of total compute over 1 - its audit budget, 5.456%\n") in text
     (one,) = R.measurements(spot, {"a/z": R.AT_RECORD})
     assert one == {"name": "a/z", "value": got["gpus_per_serving_gpu"], "unit": "prover GPUs a serving GPU",
-                   "mark": "modeled", "inputs": [f"modeled: {R._design(got)}", DESIGN]}
+                   "mark": "modeled", "inputs": [f"modeled: {R._design(got)}", DESIGN], "target": 0.0545,
+                   "verdict": "misses"}
 
     s.label(DESIGN, R.SUPERSEDED_BY, "r20261114-000000-0000")
     gone = R.build("spot", "glm53", store=s.fresh("gone"), root=REPO)["at_record"]
@@ -1678,16 +1745,16 @@ HEAD_BLOCK = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={"
 def registered(block: str) -> str:
     """The id of the Definition the tree registers as a census type's Boolean version, asked of the registry itself."""
 
-    from verity_vllm.definitions import boolean
+    from verity.definitions import boolean
     from verity.circuits.call_scope import spec_base, spec_statics, specialization
-    from verity_vllm.definitions.registry.catalog import load
+    from verity.definitions.registry.catalog import load
 
     return boolean.boolean_version(specialization(spec_base(block), spec_statics(block), load()[0])).id
 
 
 def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():
     """`boolean_version` asks the tree's registry: a census type's Boolean version is the one Definition
-    `verity_vllm.definitions.boolean.boolean_version` gives for the type's own, at the statics it binds, a function-valued
+    `verity.definitions.boolean.boolean_version` gives for the type's own, at the statics it binds, a function-valued
     static's Boolean version among them. The type's own Definition, its Boolean Definition at other statics, a
     version the tree doesn't hold, and anything of a type the registry doesn't bind are none."""
 
@@ -1900,7 +1967,8 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
     assert seconds["sources"] == lean_shares((1, measured), (0, 0.0), (149, 1 - measured))
     assert t["lean_verify"] == [{"block": RMSNORM, "time_share": own["time_share"], "k_log": 27, "blocks": 256, "full": 256,
                                  "seconds": [600.0, 500.0, 520.0], "statement_seconds": 520.0, "proof_bytes": 2_000_000,
-                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)", "label": L.COVER_LABEL}]
+                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)", "label": L.COVER_LABEL,
+                                 "form": None}]
     assert doc["inputs"][-1] == {"slot": R.LEAN, "record": "prove-glm53-lean-verify", "targets": [run],
                                  "what": "the Lean verifier (its `verify`) on one statement of each of 1 block "
                                          "type(s); every other type's Lean verifier seconds and proof bytes are priced "
@@ -2119,7 +2187,7 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
     # the record is the one `prove` reads
     read = R.lean_verify(doc, "r20261110-000000-0001")
     assert read == P.LeanVerify(P.definition_id(RMSNORM), 27, 256, 256, (12.5, 10.0, 11.0), 500, "r20261110-000000-0001",
-                                "cpu-node-0 (64 cores, A CPU 9000)", L.COVER_LABEL)
+                                "cpu-node-0 (64 cores, A CPU 9000)", L.COVER_LABEL, L.STATEMENT_ID)
     assert read.statement_seconds == 11.0 and read.bits == 2**35
 
 
@@ -2414,20 +2482,27 @@ def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_sa
     design = by["benchmarks/prover-gpus-per-serving-gpu-at-record"]
     assert design["value"] == pytest.approx(0.055147426108551965, rel=1e-12) and design["mark"] == "modeled"
     assert design["inputs"] == [f"modeled: {R._design(doc['at_record'])}", DESIGN] and "why" not in design
+    # goal benchmarks/proof-system-performance's target is on the two prover GPUs a serving GPU and on no other
+    # measurement; both are over it on these records
+    assert R.GPUS_PER_SERVING_GPU_TARGET == 0.0545
+    assert {m["name"]: (m["target"], m["verdict"]) for m in by.values()} == {
+        "benchmarks/prover-gpus-per-serving-gpu": (0.0545, "misses"), "benchmarks/prover-gpu-seconds-per-token": (None, None),
+        "benchmarks/lean-verifier-seconds-per-token": (None, None), "benchmarks/proof-bytes-per-token": (None, None),
+        "benchmarks/prover-gpus-per-serving-gpu-at-record": (0.0545, "misses")}
     t, targets = doc["totals"], [*dict.fromkeys(x for i in doc["inputs"] for x in i["targets"])]
     assert arts[R.SAMPLING] in targets
     head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
     assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
     assert head["mark"] == "modeled" and head["inputs"][:2] == [
-        "modeled", f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
-                   f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}"]
+        "modeled", (f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                    f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")]
     assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == targets
     assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
     assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
     for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
         assert by[name]["value"] is None and by[name]["mark"] == "modeled" and by[name]["inputs"] == ["modeled", *targets]
-        assert by[name]["why"] == "not measured: no Lean verifier run of record measures a block type " \
-                                  "(`run_of_record=prove-glm53-lean-verify`)"
+        assert by[name]["why"] == ("not measured: no Lean verifier run of record measures a block type "
+                                   "(`run_of_record=prove-glm53-lean-verify`)")
     steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
     assert got["validation"] == {
         "status": "passed", "checker": "verity_bench.prove_records.CHECKS", "evidence": [R.TABLE],
@@ -2492,6 +2567,28 @@ def test_the_prover_gpus_a_serving_gpu_take_the_weaker_of_provings_and_the_servi
         assert seconds["inputs"][0].startswith(own)
         w = kit.writer(tmp_path / f"{proving}-{len(missing)}-{serving}")
         assert w.measurement(**head)["inputs"] == head["inputs"] and w.measurement(**seconds)["mark"] == own
+
+
+def test_the_prover_gpus_a_serving_gpu_carry_the_goals_target_and_meet_it_at_or_under_it(tmp_path):
+    """Both prover GPUs a serving GPU carry the goal's target, lower being better: a value at or under it `meets` it,
+    one over it `misses` it, and a figure with no value carries the target and no verdict. The kit writes both."""
+
+    s, _ = recorded(tmp_path)
+    designed(s, tmp_path)
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/r": R.AT_RECORD, "a/y": "gpu_seconds_per_token"}
+    target = R.GPUS_PER_SERVING_GPU_TARGET
+    for value, verdict in ((target, "meets"), (0.9 * target, "meets"), (1.1 * target, "misses")):
+        given = doc | {"totals": doc["totals"] | {"gpus_per_serving_gpu": value},
+                       "at_record": doc["at_record"] | {"gpus_per_serving_gpu": value}}
+        head, design, seconds = R.measurements(given, metrics)
+        assert [(m["target"], m["verdict"]) for m in (head, design)] == [(target, verdict)] * 2, value
+        assert "target" not in seconds and "verdict" not in seconds
+        w = kit.writer(tmp_path / verdict / str(value))
+        assert [(m["target"], m["verdict"]) for m in (w.measurement(**head), w.measurement(**design))] == [(target, verdict)] * 2
+    unread = doc | {"at_record": doc["at_record"] | {"gpus_per_serving_gpu": None, "why": "no record"}}
+    (design,) = R.measurements(unread, {"a/r": R.AT_RECORD})
+    assert design["target"] == target and "verdict" not in design and design["value"] is None
 
 
 def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():

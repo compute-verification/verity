@@ -8,7 +8,7 @@ layouts:
 * ``read``: a table read (`gates.embedding.EmbeddingRead_v1{V=E, H}`), a unit a block of a pair: ``in0`` the pair's expert (the
   read's key), ``in1`` and ``in2`` the table's root and domain id, ``in3``, ``in4`` and ``in5`` the table's row at the expert, its
   salt and its path -> ``o0`` the row and ``o1`` its verdict;
-* ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
+* ``expert``: a block GEMM (`fp8_moe.MoeExpertFp8BlockGemm(W)_v3`), a unit a block of a pair: ``xq``, ``sx``, (``g``,) then ``w`` and
   ``ws``, the block's rows of the pair's expert and their G-block's scale row -> ``o0`` the pair's output words of those rows;
 * ``fused``: a block GEMM that reads its block's rows itself (`boolean_fp8_moe.MoeExpertFp8ReadGemm(W)_v1`), a unit a block of a
   pair: a read's six ports (``in0`` .. ``in5``), then ``xq``, ``sx``, (``g``,) and ``ws`` -> ``o0`` the pair's output words of
@@ -544,7 +544,7 @@ class Reader:
     def pair(self, x: Row) -> dict[str, Any]:
         """Pair row ``x``'s operands: its activation, scales, routed weight, expert, that expert's weight and scale rows and the
         row's served words, which the twin of the row on them must be."""
-        from verity_vllm.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
+        from verity.definitions.numerics.fp8_moe_rows import TWIN_DOT_OF, moe_expert_fp8_block_row
         from verity_vllm.query.program_view import spec_statics
 
         rid, _pi, r, d = x

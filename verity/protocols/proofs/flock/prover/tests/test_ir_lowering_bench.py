@@ -1,5 +1,5 @@
-"""C-Flock's generic IR lowering on sets the numerical bench generates and in the bench's IR cell: the lowered templates
-against the IR evaluator on synthetic sets, and an IR cell's plan, run result and domain."""
+"""Flock's generic IR lowering on sets the numerical bench generates and in the bench's IR cell: the lowered templates
+against the circuits' reference evaluator on synthetic sets, and an IR cell's plan, run result and domain."""
 from __future__ import annotations
 
 import random
@@ -7,7 +7,7 @@ import random
 import numpy as np
 import pytest
 
-P = pytest.importorskip("verity_vllm.definitions.registry.prims")
+P = pytest.importorskip("verity.definitions.registry.prims")
 from test_ir_lowering import LOWERED, REG, SLICES, _check_set  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 from verity_flock import subcircuit_templates as TM  # noqa: E402
@@ -31,7 +31,7 @@ def test_the_ingress_parse_is_one_unit_equal_to_its_definition(tmp_path):
     """``ingress-prompt`` (the I/O shell's ``IngressPrompt_v1``) lowers as ONE unit (``ir_lower.whole``) whose input row is the
     body, whole SHA-512 blocks: its rows equal the IR on a synthetic set of schema bodies, and give ``io_shell.reference``'s
     (ok, ids, max_tokens) on the same bodies with one byte changed, which leaves the schema or moves a field."""
-    from verity_vllm.definitions.registry import io_shell as X
+    from verity.definitions.registry import io_shell as X
 
     mod, sub = REG.module("ingress-prompt"), TM.subcircuit("ingress-prompt", **INGRESS)
     s = InputSet.open(generate(sub, 4, 20261024, tmp_path)["path"])
@@ -55,7 +55,7 @@ def test_the_greedy_select_is_its_chunk_and_combine_units(tmp_path):
     chunk boundary, behind a NaN at a chunk's first logit, or alone in the last, short chunk."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_batch
-    from verity_vllm.definitions.registry import b1
+    from verity.definitions.registry import b1
 
     V = 200
     lows = {}
@@ -110,9 +110,9 @@ def test_a_wrong_row_scalar_changes_the_outputs(tmp_path):
 
 @pytest.mark.slow
 def test_the_netlist_accounts_for_every_cut_word(tmp_path):
-    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the netlist's CUT line lists each
-    unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words defined
-    before. The instance header only counts them."""
+    """IR1 (the Python half; the Rust verifier refuses the rest, `flock-ir-block selftest`): the circuit description's CUT line
+    lists each unit's cut ports and the native tail; every cut word is computed exactly once, by a unit or by the tail, from words
+    defined before. The instance header only counts them."""
     import json
 
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
@@ -139,7 +139,7 @@ def test_the_netlist_accounts_for_every_cut_word(tmp_path):
 @pytest.mark.slow
 def test_frame_staging_carries_the_cut_words(tmp_path):
     """A cut template's frame file ends with every instance's cut words (the IR's), which the verifier checks against the
-    netlist's pinned tail; the empty run slot of a three-port component block is padding."""
+    circuit description's pinned tail; the empty run slot of a three-port component block is padding."""
     import json
 
     sub = TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5)
@@ -183,8 +183,9 @@ def test_an_ir_cell_plans_through_the_spine():
 
 
 def test_attention_key_classes_and_the_class_manifest(tmp_path):
-    """Key-count classes [1, 128], [129, 256], [257, 512], ...; a class manifest lists every T of its range with its v3 netlist's
-    sha256 and the unit rows they share (the pin is the manifest's sha256); a class cell's sub-batches split at T boundaries."""
+    """Key-count classes [1, 128], [129, 256], [257, 512], ...; a class manifest lists every T of its range with its v3 circuit
+    description's sha256 and the unit rows they share (the pin is the manifest's sha256); a class cell's sub-batches split at T
+    boundaries."""
     import hashlib
     import json
 

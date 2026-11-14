@@ -1,4 +1,4 @@
-"""The reference-mode kinds of `adapters/vllm/verity_vllm/definitions/registry/ref_prims.py`.
+"""The reference-mode kinds of `verity/definitions/registry/ref_prims.py`.
 
 Three layers, kept separate (semantics vs evidence):
   1. **definition consistency** — the numpy twins equal the gate-by-gate circuit evaluation of the registered bodies on
@@ -35,10 +35,10 @@ from verity.circuits import codec
 from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
 from verity.circuits.evaluation import evaluate_call
 from verity.circuits.program import Program
-from verity_vllm.definitions.numerics import ref_prims_twins
-from verity_vllm.definitions.registry import b1
-from verity_vllm.definitions.registry import prims as P
-from verity_vllm.definitions.registry import ref_prims as R
+from verity.definitions.numerics import ref_prims_twins
+from verity.definitions.registry import b1
+from verity.definitions.registry import prims as P
+from verity.definitions.registry import ref_prims as R
 
 if TYPE_CHECKING:
     import torch
@@ -643,12 +643,10 @@ def test_rope_gptj_profile_head_is_a_pairing_permutation_of_rope_head():
         unperm = np.empty(D, dtype=neox.dtype)
         unperm[0::2], unperm[1::2] = neox[:R_], neox[R_:]
         assert (gptj == unperm).all() and n == n2 == D
-        heads, _ = gates(bind(R.RoPEGptJ, NHEADS=3, D=D), np.stack([x, x, x]), cs)
-        assert (heads.reshape(3, D) == gptj).all()
-    write_record("RoPEHeadGptJ_v1+RoPEGptJ_v1", "bf16", statics={"D": [8, 64, 128], "NHEADS": 3},
+    write_record("RoPEHeadGptJ_v1", "bf16", statics={"D": [8, 64, 128]},
                  oracle_op="RoPEHead_v1 (exact-model-tested vLLM NeoX kernel) under the (2i,2i+1)<->(i,i+D/2) permutation; no CUDA run",
                  domain={"x": "N(0,3) bf16", "cs": "N(0,0.7) bf16"},
-                 result={"words": 3 * (8 + 64 + 128), "exact_words": 3 * (8 + 64 + 128), "exact_fraction": 1.0, "max_ulp": 0},
+                 result={"words": 8 + 64 + 128, "exact_words": 8 + 64 + 128, "exact_fraction": 1.0, "max_ulp": 0},
                  gate_check={"evaluated": "gate-by-gate on both sides"},
                  notes="PROFILE-MODE kind (not in the reference digest): the vLLM is_neox=False kernel with one bf16 rounding. "
                        "Conformance status model-untested: the pairing is read from vLLM's kernel source; its arithmetic is the "
