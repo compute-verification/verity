@@ -1,0 +1,147 @@
+# The retired "coin source" family (GLOSSARY.md: "coin source", "randomness source", "coin device" are the challenger's
+# live-coin part): what `tools/move/rename.py --map tools/move/coin_source_words_map.toml` renames over the whole tree.
+# - `CoinSource`, Flock's recursion algebra's coins by round (`Flock.RecAlgebra.CoinSource` and its `ofRounds`, `zeros`,
+#   `round`, `drawnAll`; `verity_flock.rec_algebra.CoinSource`), is `RoundCoins`, in Lean, Python and prose;
+# - `coin_source`, the name in code of where a run's coins come from (a parameter, an attribute, a local, a test's name),
+#   is `coins_from`;
+# - the prose "coin source(s)", by sense, file by file: a party's coins, a stream's or a window's coins' origin, the
+#   challenger's entropy, a coin key, Flock's `RoundCoins`.
+# It leaves every byte a stored record, a wire format or a digest takes: the key "coin_source" of a window's commitment,
+# a served record and the Lean verifier's input (quoted, in backticks, and the keywords `.update(...)` or a test's
+# `Run(**commits)` turns into keys), and SPOT's refusal `RAN_OUT` ("the randomness source ran out"), which verdicts record
+# and the lock pins. GLOSSARY.md's retired-terms row and the lints that name the terms are not rewritten.
+
+[words]
+"CoinSource" = "RoundCoins"
+"coin_source" = "coins_from"
+
+[[words_in]]
+files = ["**/protocols/test_pouw_h1.py"]
+[words_in.words]
+"test_the_challenger_setting_is_h1s_one_coin_source" = "test_the_challenger_setting_is_where_h1s_coins_come_from"
+
+[[words_in]]
+files = ["**/protocols/pouw_h1_gpu.py"]
+[words_in.words]
+"coin source" = "coins' origin"
+
+[[words_in]]
+files = ["**/network_traces/scan_zk.py"]
+[words_in.words]
+"coin source the challenger" = "coins from the challenger"
+
+[[words_in]]
+files = ["**/one_stage/a5_coins.py"]
+[words_in.words]
+"coin source is then" = "coins then come from"
+"coin source is" = "coins come from"
+
+[[words_in]]
+files = ["**/memory_challenger/live.py"]
+[words_in.words]
+"coin source" = "coin key"
+
+[[words_in]]
+files = ["**/Accounting/Assumptions/Parties.lean"]
+[words_in.words]
+"coin source's sample" = "coins"
+"a sample of its coin source" = "its coins"
+"its coin source's included" = "its coins included"
+
+[[words_in]]
+files = ["**/claims/__init__.py"]
+[words_in.words]
+"coin source's draws among them" = "coins among them"
+
+[[words_in]]
+files = ["**/Accounting/Guarantees/Compose.lean"]
+[words_in.words]
+"not of the coin source" = "not of the coins"
+
+[[words_in]]
+files = ["**/VBridge/Algebra/RunSkel.lean"]
+[words_in.words]
+"at every coin source" = "at every `RoundCoins`"
+"at two sized coin sources" = "at two sized `RoundCoins`"
+"at two coin sources" = "at two `RoundCoins`"
+"A coin source that hands out" = "A `RoundCoins` that hands out"
+
+[[words_in]]
+files = ["**/flock/verifier/Flock/RecAlgebra.lean"]
+[words_in.words]
+"at a coin source" = "at a `RoundCoins`"
+
+[[words_in]]
+files = ["**/flock/verifier/Flock/Statement.lean"]
+[words_in.words]
+"The coin source named in" = "The coins' origin named in"
+
+[[words_in]]
+files = ["**/flock/verifier/FlockVerify.lean"]
+[words_in.words]
+"the one coin source a session may have" = "the one origin of coins a session may have"
+
+[[words_in]]
+files = ["**/flock/prover/live/src/lib.rs"]
+[words_in.words]
+"has no coin source" = "has no live coins"
+
+[[words_in]]
+files = ["**/circuits/partition.py", "GLOSSARY.md"]
+[words_in.words]
+"the client's request commitment, the randomness source" = "the client's request commitment, the challenger's live coins"
+
+[[words_in]]
+files = ["**/certifier/verifier/service.py", "**/certifier/verifier/tests/test_network_certifier_period.py"]
+[words_in.words]
+"a coin source with a `commit` method is first committed" = "coins with a `commit` method are first committed"
+"a coin source with a `commit` is first committed" = "coins with a `commit` are first committed"
+"A coin source with a `commit`" = "Coins with a `commit`"
+
+[[words_in]]
+files = ["**/pouw/prover/serving/h1/__init__.py"]
+[words_in.words]
+"the one coin source a credited window's coins come from" = "the one origin a credited window's coins may come from"
+
+[[words_in]]
+files = ["**/pouw/prover/serving/lead/feed.py"]
+[words_in.words]
+"the coin source gave" = "`rand` gave"
+
+[[words_in]]
+files = ["**/pouw/prover/tests/test_pouw_lead_feed.py"]
+[words_in.words]
+"A coin source that answers" = "A `rand` that answers"
+
+[[words_in]]
+files = ["**/spot/device/challenger.py", "**/spot/verifier/lean/Spot/Challenger.lean"]
+[words_in.words]
+"the one live-coin source of every protocol" = "the live coins of every protocol"
+
+[[words_in]]
+files = ["**/spot/device/challenger.py", "**/spot/verifier/tests/test_coin_claims.py"]
+[words_in.words]
+"Every coin source is named by a claim instance" = "The challenger's entropy is named by a claim instance"
+"every coin source's claim instance" = "each entropy's claim instance"
+"a coin source's claim is" = "an entropy's claim is"
+
+[[words_in]]
+files = ["**/lean-audit.json"]
+[words_in.words]
+"the coin device's tree" = "the challenger's coin tree"
+
+[keep]
+# the key of a stored record, a served record and the Lean verifier's input: quoted, in backticks (but a parameter's
+# ``coin_source`` is), a keyword `.update(...)` turns into a key, and the key in a Lean refusal's text
+patterns = ["[\"']coin_source[\"']", "`+coin_source`+(?! is\\b)", "\\.update\\([^\\n]*?\\bcoin_source(?==)",
+            "\\(coin_source, when given"]
+
+[keep_in]
+# a test whose `Run(y, **commits)` makes each keyword a key of the record the code reads
+"**/harness/tests/test_bench.py" = ["coin_source"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the archive), files whose bytes a
+# digest pins, lock files, the lints that name the retired terms and the Glossary's row of them.
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**", "*.patch",
+           "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "tests/test_retired_terms.py", "tests/lint/**"]
