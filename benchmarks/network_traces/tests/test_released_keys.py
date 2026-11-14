@@ -19,9 +19,9 @@ import released_keys as RK  # noqa: E402
 
 LIST = {"name": "a step's summary", "writer": "step.py", "files": ["step/*.json"], "form": "json",
         "keys": {"schema": "structure", "verdict/accepted": "output", "rounds/*/root": "commitment",
-                 "rounds/*/draw/*": "challenge", "units/*/root": "commitment", "units/total": "structure"},
+                 "rounds/*/sample/*": "challenge", "units/*/root": "commitment", "units/total": "structure"},
         "maps": {"units/*": "u[0-9]+"}}
-GOOD = {"schema": "s/v1", "verdict": {"accepted": True}, "rounds": [{"root": "00", "draw": [1, 2]}, {"root": "01"}],
+GOOD = {"schema": "s/v1", "verdict": {"accepted": True}, "rounds": [{"root": "00", "sample": [1, 2]}, {"root": "01"}],
         "units": {"total": 2, "u0": {"root": "02"}, "u17": {"root": "03"}}}
 CERTIFICATE = {"key_id": "k", "link": 0, "direction": "ingress", "window": 0, "digest": "00", "signature": "11"}
 
@@ -114,7 +114,7 @@ def test_a_file_is_read_by_key_and_strictly():
     assert _undeclared({**GOOD, "schema": ["s"]}) == {"schema/*": 1}
     assert _undeclared({**GOOD, "schema": {"v": 1}}) == {"schema/v": 1}
     assert _undeclared({**GOOD, "verdict": "accepted"}) == {"verdict": 1}
-    assert _undeclared({**GOOD, "rounds": [{"root": "0", "draw": 7}]}) == {"rounds/*/draw": 1}
+    assert _undeclared({**GOOD, "rounds": [{"root": "0", "sample": 7}]}) == {"rounds/*/sample": 1}
     assert _undeclared([GOOD]) == {"*": 1} and _undeclared(3) == {"(the document)": 1}
     listing = RK.Listing(LIST, "list 0")
     assert listing.undeclared(b'{"schema": ') == {RK.NOT_JSON: 1} == listing.undeclared(b"\xff\xfe")
