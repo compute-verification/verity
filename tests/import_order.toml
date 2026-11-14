@@ -13,7 +13,7 @@
 # the tree's own, written by `uv run tools/verity/check/import_order.py`, and the test holds this file to what it writes.
 
 order = [
-    ["fixtures", "tools/config", "verity"],
+    ["tools/config", "verity"],
     ["verity/circuits"],
     ["tools/difftest"],
     ["verity/commitments"],
@@ -26,6 +26,7 @@ order = [
     ["verity/protocols/proofs/spot"],
     ["verity/protocols/proofs/flock"],
     ["verity/protocols/proofs/recursion"],
+    ["verity/protocols/proofs/spot_flock"],
     ["verity/protocols/accounting/registration"],
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],
@@ -325,7 +326,6 @@ loaded_by = [
     "verity/hardware/tests/test_cards.py",
     "verity/hardware/tests/test_lean.py",
     "verity/hardware/tests/test_nodes.py",
-    "verity/hardware/tests/test_policy.py",
 ]
 
 [[place]]

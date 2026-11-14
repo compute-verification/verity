@@ -3,7 +3,7 @@
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
 composition's weight phase, with the model untouched and no coin opened, `commit_weights` finds the linear layers by
 type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity.protocols.accounting.pouw.verifier.audit.commit_rows`).
-`install` then asks the execution phase's challenger (the setting ``coins``, or under ``ncp-v2`` and Pearl-C the auditor host's
+`install` then asks the execution phase's challenger (the setting ``coins``, or under ``ncp-v2`` and Pearl-C the auditor device's
 session, ``challenger``: `pouw_h1_window.salt_session`) for its salt coin, opened after those roots' weights root, and
 starts the execution phase from it (`verity.protocols.accounting.pouw.verifier.audit.Epoch.start`, which refuses any other coin; Pearl-C's
 `pouw_pearl_c_host.epoch_of`, a live session's under the same rules), and replaces each ``apply`` through the
@@ -26,7 +26,7 @@ weights were served.  Pearl-C commits one pass per engine step, a step held to w
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.protocols.accounting.pouw.verifier.audit`'s, after the run.  Beside sampled proofs the composition asks
 `verity.protocols.accounting.pouw.prover.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside sampled proofs only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+runs beside SPOT only in an execution phase whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its execution phase's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
@@ -51,7 +51,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 from verity.commitments import MerkleTree
@@ -177,7 +177,7 @@ class Settings:
     #: (`pearl_c.passes.hook_steps`), for a caller whose committer patched it before the option's install
     runner: Any = None
     rounds: Any = None
-    #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor host's challenger, ``HOST:PORT``
+    #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor device's challenger, ``HOST:PORT``
     #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
     #: nothing; ``session`` is the challenger gate's reply for the execution phase: ncp-v2's its open answer for the execution phase's
     #: Commit (`pouw_h1_challenger.session_of`), H1's and Pearl-C's its reserve answer (`pouw_h1_window.reserved_of`),
@@ -555,7 +555,7 @@ def ncp_linear_op() -> Any:
     return torch.ops.verity_pouw.ncp_linear
 
 
-def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
+def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int, _orig: Any):
     if isinstance(run, _CircuitRun):
         op = ncp_linear_op()
 
@@ -627,8 +627,8 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
         key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
-        device_roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)},
-                                        scheme, salt_key=key)
+        device_roots = PPD.weight_roots(PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
+                                        {w: m.weight for w, m in enumerate(layers)}, scheme, salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in device_roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
     key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
@@ -656,7 +656,7 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.protocols.accounting.pouw.verifier.coins.Challenger`, its coins the Lean verifier's, `pouw.verifier.coins`) when
     `enabled` (the protocol set) has PoUW, for a pipeline that is its run's own auditor (it replays and judges what it
-    served); a config's own ``coins``, or its auditor host's ``challenger`` (the coins' one source), is kept alone. The
+    served); a config's own ``coins``, or its auditor device's ``challenger`` (the coins' one source), is kept alone. The
     lead takes no salt coin (its coins come off its coin link), so under it nothing is added."""
     out = {k: dict(v) for k, v in settings.items()}
     takes_salt = any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != PL.SCHEME for e in (enabled or ()))
@@ -687,7 +687,7 @@ def install(scheme: str, target: Target) -> Option:
         salt = Epoch.start(declared, roots, commitment, opening).salt
     with PHW.closed_on_error(session):
         if device:
-            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(settings.kernel, settings.cubin),
+            run = PPD.PearlCDeviceRun(s, entry, PPD.Kernel.load(cast(str, settings.kernel), settings.cubin),
                                       {w: m.weight for w, m in enumerate(layers)}, roots, commitment, opening,
                                       schedule=settings.schedule, salt_key=_SALT_KEYS.get(entry), pass_index=k)
             run.commits["registration"], end_pass = weights_claim(s), run.end_pass
@@ -701,7 +701,7 @@ def install(scheme: str, target: Target) -> Option:
             _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
-            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+            h.wrap(layer.quant_method, "apply", functools.partial(_executor, run, w))
         if device:
             PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir, settings.runner)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=end_pass,
@@ -718,13 +718,13 @@ def h1_run(entry: str) -> PH.H1Run | None:
 
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the execution phase's salt `audit.salt_of` over the weights' root, as every scheme's, from the
-    challenger's salt coin (the auditor host's opened after the execution phase's open root, once round 0 is admitted:
+    challenger's salt coin (the auditor device's opened after the execution phase's open root, once round 0 is admitted:
     `pouw_h1.H1Run.open_window`), and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners
     (`pouw_h1_hooks.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
     under the credit gate's trace (`pouw_h1_hooks.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
     requests and its batch order to the run (`pouw_h1_hooks.admitting`), each entry and each served row's request under its
     round's root before the ``rounds`` coin, and the execution phase's sampling coin opens at release after its manifest. With the
-    setting ``challenger`` the salt and round coins are the auditor host's, from the one session infra's gate
+    setting ``challenger`` the salt and round coins are the auditor device's, from the one session infra's gate
     reserved for the execution phase (``session``, the gate's reserve answer) and ``gate`` opened on its execution phase-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the execution phase has
     finished, and the sampling coin is ``draw_session``'s, opened withheld on the sample root (`pouw_h1_window.DrawSession`);
@@ -741,7 +741,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     if settings.rows is None or settings.steps is None:
         raise ValueError(f"{entry}: the static layout needs the pouw settings 'rows' (T) and 'steps' (S)")
     session, rounds, draw, salt, opener = None, settings.rounds, None, None, None
-    shapes = [(int(n), int(k)) for n, k in (m.weight.shape for m in layers)]
+    shapes = cast("list[tuple[int, int]]", [tuple(int(d) for d in m.weight.shape) for m in layers])
     modules = {w: f"linear {w}" for w in roots} | _named(target.model, layers)
     wroot = (settings.served and settings.served.weights_root(shapes, modules, settings.rows, settings.steps, layers,
                                                               target.context.stage != "capture")) or weights_root(roots)

@@ -369,6 +369,11 @@ def lessOwnReads (reg : Json) (opened : Option (Array (String × Json))) : Optio
   let ports := byPort reg
   opened.map (·.filter fun (v, r) => !ports.any fun (p, x) => p == v && jeq (getD x "root") r)
 
+/-- Whether every verdict ran (`accepted` not null): the audit record's `complete` (`record`), and what one-stage's
+accept publishes under the same name (`OneStage.Public`). -/
+def allRan (verdicts : Array (String × Json)) : Bool :=
+  (verdicts.filter fun (_, v) => !(getD v "accepted" matches .null)).size == verdicts.size
+
 def record (i : Input) : V Json := do
   let reg := i.registration
   let get := getD reg
@@ -428,7 +433,7 @@ def record (i : Input) : V Json := do
   return obj [("format", Json.str FORMAT), ("registration", reg), ("registration_digest", Json.str digest),
     ("receipt", i.receipt), ("draw", i.draw), ("law", Draw.lawOf i.draw), ("proved_units", Json.arr i.provedUnits),
     ("statement", i.statement), ("checks", obj (cs.toList.map fun (n, c) => (n, c.toJson))),
-    ("verdicts", obj i.verdicts.toList), ("accepted", Json.bool accepted), ("complete", Json.bool (ran.size == i.verdicts.size)),
+    ("verdicts", obj i.verdicts.toList), ("accepted", Json.bool accepted), ("complete", Json.bool (allRan i.verdicts)),
     ("profile", profile), ("integrity_profile", integrity), ("wrong_units", wrongUnits)]
 
 /-! ## `Flock.canon` is `canonical_json` on records `pyCanonical` admits

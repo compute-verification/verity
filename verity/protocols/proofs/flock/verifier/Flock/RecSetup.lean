@@ -1,4 +1,10 @@
-/-
+module
+
+public import Flock.RecBudget
+public import Flock.RecRecord
+public import Flock.Witness
+
+/-!
 What `verify` and `statement` check of V*'s statements at setup, beside their own steps: the inner transcript as the
 verifier holds it (`commits`, from the files `--rec-inner-transcript` and `--rec-inner-registration` and the inner
 circuit's META), candidate 3's check 5 inputs (`c3`), candidate 3's checks before the session's own setup
@@ -9,11 +15,6 @@ the verifier's inner shape, a V* session whose sample is not every unit of its p
 an inner session whose record holds no sample (`innerDrawn`), and a session at a holo or sparse inner shape or a
 recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`, `zkOnly`).
 -/
-module
-
-public import Flock.RecBudget
-public import Flock.RecRecord
-public import Flock.Witness
 
 @[expose] public section
 
