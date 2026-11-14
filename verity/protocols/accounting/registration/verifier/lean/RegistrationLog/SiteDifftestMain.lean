@@ -1,8 +1,8 @@
 module
 
 public import Difftest
-public import Spot.SiteDifftest
+public import RegistrationLog.SiteDifftest
 
 @[expose] public section
 
-def main : IO Unit := Difftest.serve (Difftest.table Spot.SiteDifftest.table)
+def main : IO Unit := Difftest.serve (Difftest.table RegistrationLog.SiteDifftest.table)

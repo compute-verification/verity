@@ -26,7 +26,7 @@ from verity.device import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, 
                                   DeviceFigures, Entry, HostFigures, Link, Loc, Malformed, MemoryFigures, Refused,
                                   Registration, Sheet, Site, check, genesis, refusal)
 
-PACKAGE = (Path(__file__).resolve().parents[5] / "proofs" / "spot" / "verifier" / "lean")
+PACKAGE = Path(__file__).resolve().parents[1]
 EXE = "site-difftest"
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 

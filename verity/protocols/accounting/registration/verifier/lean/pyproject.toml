@@ -1,0 +1,16 @@
+# A suite of `verity`'s tests: they run in the workspace's environment, against the editable `verity`.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# test files that start a program the read guard can't trace (lake): keyed on the suite's whole tree
+untraced = ["tests/test_site_difftest.py"]
+# Test-only: the reference is the Site's Python mirror, `verity.device` (with what it imports and the data sheets it
+# reads); `lake` builds this package against the core protocol interface and the difftest harness, both required by
+# path, and through them the base packages.
+inputs = ["verity/__init__.py", "verity/device.py", "verity/channel.py", "verity/errors.py", "hardware",
+          "verity/protocols/interface", "verity/circuits/difftest", "verity/circuits/base", "verity/circuits/lean",
+          "verity/commitments/lean", "tools/difftest"]
+# Build outputs the tests run (`check` runs this suite after its Lean steps): the Site's difftest server.
+artifacts = ["verity/protocols/accounting/registration/verifier/lean/.lake/build/bin/site-difftest"]

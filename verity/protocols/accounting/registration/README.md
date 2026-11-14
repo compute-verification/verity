@@ -3,7 +3,9 @@
 The accounting protocol that runs once, before any challenge: a deployment's registration log and its check.
 Its Lean check is `verifier/lean/` (the Lake package `core_registration`: `RegistrationLog.lean`, and the
 `core-registration` executable, `RegistrationLog/Main.lean`), on the interface every core protocol implements
-(`../../interface/`), and its Python verifier, until the Lean replaces it, is `verifier/registration.py`.
+(`../../interface/`), and its Python verifier, until the Lean replaces it, is `verifier/registration.py`. The same
+package serves the Site's port (`site-difftest`, `RegistrationLog/SiteDifftest.lean`), which its suite
+(`verifier/lean/tests/test_site_difftest.py`) holds to `verity.device`.
 
 ## The registration log (`verifier/lean/RegistrationLog.lean`)
 
