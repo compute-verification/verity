@@ -1,5 +1,5 @@
 """Pearl+ for `verity bench overhead`: the PoUW harness's arm (`benchmarks/pouw/harness/arm.py`, v0.6) over the served
-Pearl-C call on an H100 or H200 (`verity_vllm.protocols.pouw.pearl_c` under `SERVED`, on this directory's kernels, the
+Pearl-C call on an H100 or H200 (`verity_vllm.protocols.pouw.pearl_c` under `SERVED`, on the kernel's, the
 serial schedule), and its ε. The door registers both in `verity_bench.overhead.SCHEMES`; the three names it fixes are each
 one definition here: `SCHEME` (Pearl+'s id in the door), `verifier` (the reference verifier's declaration) and `epsilon`.
 
@@ -55,13 +55,15 @@ if TYPE_CHECKING:
 __all__ = ["PearlPlus", "epsilon"]
 
 HERE = Path(__file__).resolve().parent
+#: the kernel the arm builds and loads
+KERNEL = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm90"
 #: Pearl+'s id in the door (`verity_bench.overhead.SCHEMES`), and the arm's name in its transcripts' paths
 SCHEME = "pearl-plus"
-#: the served scheme the arm runs: `verity_vllm.protocols.pouw.pearl_c.SCHEMES`' H100 record, this directory's kernels
+#: the served scheme the arm runs: `verity_vllm.protocols.pouw.pearl_c.SCHEMES`' H100 record, the kernel's
 SERVED = "pearl-c-h100-v1-h3"
 #: the stock scaling the door times beside it, its useful output's (`baselines.FAMILIES`)
 FAMILY = "fp8-e4m3-rowwise"
-#: the build target this directory's cubin is for (`identity.CARDS`)
+#: the build target the kernel's cubin is for (`identity.CARDS`)
 ARCH = "sm_90a"
 #: where the door's cubin arrives (`verity_bench.overhead_node.CUBIN_ENV`)
 CUBIN_ENV = "VERITY_BENCH_CUBIN"
@@ -129,7 +131,7 @@ def build_dev(out: Path) -> Path:
     log = out.with_name(out.name + ".log")
     out.parent.mkdir(parents=True, exist_ok=True)
     with log.open("w") as f:
-        rc = subprocess.run(["bash", str(HERE / "build.sh"), str(out)], stdout=f, stderr=subprocess.STDOUT).returncode
+        rc = subprocess.run(["bash", str(KERNEL / "build.sh"), str(out)], stdout=f, stderr=subprocess.STDOUT).returncode
     if rc:
         raise RuntimeError(f"build.sh exited {rc} (see {log}): send the cubin instead (`verity bench overhead run --cubin ART`)")
     return out / "pearl_c_sm90.cubin"
@@ -151,11 +153,11 @@ def settings() -> Any:
 
 
 def kernels() -> Any:
-    """This directory's run.py, for its constants off the device (on it, `Kernel.load` loads its own copy, whose
+    """The kernel's run.py, for its constants off the device (on it, `Kernel.load` loads its own copy, whose
     `Pipeline` the arm's buffers are sized by)."""
     name = "pearl_c_sm90_overhead_run"
     if name not in sys.modules:
-        spec = importlib.util.spec_from_file_location(name, HERE / "run.py")
+        spec = importlib.util.spec_from_file_location(name, KERNEL / "run.py")
         mod = sys.modules[name] = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
     return sys.modules[name]
@@ -247,7 +249,7 @@ class PearlPlus:
 
             if self.cubin is None:
                 raise RuntimeError("prepare before build: the harness builds an arm first")
-            k = PPD.Kernel.load(str(HERE), str(self.cubin))
+            k = PPD.Kernel.load(str(KERNEL), str(self.cubin))
             if not k.dev.has("widen_a"):
                 raise RuntimeError(f"{self.cubin} has no widen_a: the launch widens x on the device, as the served call does")
             self._kernel = k

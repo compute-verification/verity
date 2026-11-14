@@ -15,14 +15,20 @@ blocks of words, so A′ and B̃ run padded with zero rows, whose words are drop
 from __future__ import annotations
 
 import ctypes as C
+import importlib.util
 import json
 import os
 import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import run
+_RUN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "verity", "protocols", "accounting",
+                    "pouw", "prover", "kernels", "pearl_c_sm90", "run.py")
+if "pearl_c_sm90_kernel_run" not in sys.modules:
+    _spec = importlib.util.spec_from_file_location("pearl_c_sm90_kernel_run", _RUN)
+    sys.modules[_spec.name] = importlib.util.module_from_spec(_spec)
+    _spec.loader.exec_module(sys.modules[_spec.name])
+run = sys.modules["pearl_c_sm90_kernel_run"]
 
 WINDOW, BLOCK_ROWS, BLOCK_COLS = 128, 64, 32
 

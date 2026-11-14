@@ -47,7 +47,7 @@ before.
 
 ## Who reads it
 
-`../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
+`../pearl_c_sm90/` and `../served_zk/` load this directory's Python by path, and `../served_zk/`'s jobs start
 `window.sh`; the harness loads `bench_arm.py` by its module name with `benchmarks/pouw` on `PYTHONPATH`; the tests in
 `../tests/` run the arm on a stand-in driver. A replay here opens rows and words in the clear, a development shortcut:
 its ACCEPT is never the protocol's verdict, which is a zero-knowledge proof. Nothing here is read by a verifier.

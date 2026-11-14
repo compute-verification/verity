@@ -36,6 +36,8 @@ from typing import Any
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
@@ -201,7 +203,7 @@ class PearlCArm:
     run_options: dict[str, Any] = {}
 
     def __init__(self) -> None:
-        self.kernel_dir = Path(settings.PEARLC_KERNEL or HERE.parent / "pearl_c_sm120")
+        self.kernel_dir = Path(settings.PEARLC_KERNEL or SM120)
         self.cubin = settings.PEARLC_CUBIN
         self.scheme = settings.PEARLC_SCHEME or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = settings.PEARLC_SCHEDULE
