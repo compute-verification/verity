@@ -3,7 +3,7 @@
 
 `load_match_account` reads the Match attempt's serving transcript and GM-01's account beside the Commit; `link_to_match_account`
 accepts a prefix reduced from its cap only when the Commit's served tokens equal the Match record's, G6 passed with the same two lengths
-per request, and the lag agrees on every leg.  A config run has no Match stage: its link is `check.commit_tokens`.
+per request, and the lag agrees in every record.  A config run has no Match stage: its link is `check.commit_tokens`.
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
     """Conditions (a) and (b) of the module docstring: the executed prefix of record is ACCEPTED only when the Commit's own served tokens are linked to the served
     output and the Match account of the SAME attempt: for every request, the Match record's tokens.json generated ids == the Commit's
     served tokens (tokens_equal), its served_output_len / executed_prefix_len == this rule's; GM-01 (global_match.json, when present)
-    PASSED and its G6 lengths_by_request agree; the lag rule is attested on every leg (Program declared == the Match record's tokens.json
+    PASSED and its G6 lengths_by_request agree; the lag rule is attested in every record (Program declared == the Match record's tokens.json
     lag == G6's declared / record_attests; no variable lag).  `order`: {workload request_id: r<i>}.
 
     A request whose prefix was REDUCED from its cap (an EOS stop) with no linkable Match account is a problem: the committer's count alone
@@ -140,7 +140,7 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             problems.append(f"lag not attested on the record: the Program declares LAG {declared_lag}, the Match record's tokens.json attests {tj_lag!r} (executed-prefix condition (b))")
     if gm is None:
         if required and tok is not None:
-            res["notes"].append("global_match.json not beside the Match record: the G6 account leg is missing")
+            res["notes"].append("global_match.json not beside the Match record: the G6 account file is missing")
             problems.append(f"executed prefix reduced from the cap for {reduced}: GM-01's account (global_match.json) is not beside the Match record -- the "
                             f"Commit's count is linked to the served output only, not to the Match account (executed-prefix condition (a))")
     else:
@@ -159,9 +159,9 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
             if gl.get("variable_lag"):
                 problems.append("G6 reports VARIABLE LAG on this record: no constant-lag placement is linkable (executed-prefix rule)")
             if declared_lag is not None:
-                for leg in ("declared", "record_attests"):
-                    if gl.get(leg) is None or int(gl[leg]) != int(declared_lag):
-                        problems.append(f"G6 lag.{leg} {gl.get(leg)!r} != the Program's declared LAG {declared_lag} (executed-prefix condition (b))")
+                for key in ("declared", "record_attests"):
+                    if gl.get(key) is None or int(gl[key]) != int(declared_lag):
+                        problems.append(f"G6 lag.{key} {gl.get(key)!r} != the Program's declared LAG {declared_lag} (executed-prefix condition (b))")
             # recorder request id -> r<i> by the workload request id (G6's lengths are keyed by the recorder's id)
             g6_by_r: dict[str, dict[str, Any]] = {}
             for rec_rid, L in lens.items():
@@ -182,11 +182,11 @@ def link_to_match_account(epr: dict[str, Any], account: dict[str, Any], *, order
                     problems.append(f"{rid}: G6 executed_prefix_len {L['executed_prefix_len']} != this rule's {rec['executed_prefix_len']} (executed-prefix condition (a))")
             res["global_match"]["requests_linked"] = sorted(g6_by_r)
             res["global_match"]["lengths_by_request"] = {r: {k: L.get(k) for k in ("served_output_len", "executed_prefix_len", "cap", "cap_exhausted")} for r, L in g6_by_r.items()}
-    # (b) on every leg, one boolean the C2 population's class reads: declared == tokens.json == G6.declared == G6.record_attests
+    # (b) in every record, one boolean the C2 population's class reads: declared == tokens.json == G6.declared == G6.record_attests
     # `res` holds each block as this function built it: None where its record is not beside the Commit, else with its `lag` stated
     tokens_json, global_match = res["tokens_json"], res["global_match"]
     g6_lag = global_match["lag"] if global_match else {}
-    _legs = [declared_lag, tokens_json["lag"] if tokens_json else None, g6_lag.get("declared"), g6_lag.get("record_attests")]
+    _lags = [declared_lag, tokens_json["lag"] if tokens_json else None, g6_lag.get("declared"), g6_lag.get("record_attests")]
     res["lag_attested"] = (declared_lag is not None and tok is not None and gm is not None and all(v is not None and int(v) == int(declared_lag) for v in _legs)
                            and not g6_lag.get("variable_lag"))
     res["problems"] = problems

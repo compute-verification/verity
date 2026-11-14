@@ -116,7 +116,7 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
     if not po:
         po = {}   # a binding that records no openings sampled from the population: none unbound, none opened
     if int(po.get("unbound_n") or 0) > 0:
-        return False, f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
+        return False, f"{po['unbound_n']} population-sampled openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
     if not po.get("skipped"):
         if int(po.get("opened") or 0) < min(min_openings, int(po.get("n") or 0)):
             return False, f"population openings opened {po.get('opened')} < {min(min_openings, int(po.get('n') or 0))}"
@@ -335,7 +335,7 @@ def rule_openings(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     ops = _d(commit.get("openings"))
     oar = commit.get("openings_after_release")
     n_open, n_ok = _int(ops.get("n") or 0, "openings.n"), _int(ops.get("verified") or 0, "openings.verified")
-    claim = "Every challenge-drawn opening of the committed bytes verified against the run root, and at least min_openings were drawn (C3)."
+    claim = "Every challenge-sampled opening of the committed bytes verified against the run root, and at least min_openings were sampled (C3)."
     compat = ["openings.n", "openings.verified", "openings.skipped", "openings.deferred_replay_n", "commit_summary.openings"]
     scope = {"sample_size": n_open, "verified": n_ok, "min_openings": min_openings, "skipped": ops.get("skipped"), "challenge_n": ops.get("challenge_n"),
              "deferred_replay_n": ops.get("deferred_replay_n")}
@@ -547,7 +547,7 @@ def rule_identity_coverage(commit: dict, ctx: dict) -> CheckResult:
 def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
     """binding_check (3): openings sampled from the EXPECTED population all had a binding and all verified."""
     b = _binding_of(commit)
-    claim = "Every opening drawn from the required-value population had a binding and verified (BIND-01 (3); retain=none: the deferred share opens by replay)."
+    claim = "Every opening sampled from the required-value population had a binding and verified (BIND-01 (3); retain=none: the deferred share opens by replay)."
     compat = ["binding.openings_population.n", "binding.openings_population.unbound_n", "binding.openings_population.opened", "binding.openings_population.verified", "binding.openings_population.skipped"]
     name, rule = "runtime_match/openings_population", "BIND-01 (3)"
     if b is None:
@@ -561,7 +561,7 @@ def rule_openings_population(commit: dict, ctx: dict, min_openings: int) -> Chec
     if _int(po.get("unbound_n") or 0, "binding.openings_population.unbound_n") > 0:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope,
                    differences=[{"name": "population_openings_unbound", "n": _int(po.get("unbound_n") or 0, "binding.openings_population.unbound_n"), "first": _first(po.get("unbound"))}],
-                   reason=f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short(_d(_first(po.get('unbound'))))})")
+                   reason=f"{po['unbound_n']} population-sampled openings had no binding (first: {json_short(_d(_first(po.get('unbound'))))})")
     if not po.get("skipped"):
         want = min(min_openings, _int(po.get("n") or 0, "binding.openings_population.n"))
         if _int(po.get("opened") or 0, "binding.openings_population.opened") < want:

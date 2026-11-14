@@ -1,4 +1,4 @@
-"""`pouw:ncp-v2` beside sampled proofs, end to end on a small model (CPU).
+"""`pouw:ncp-v2` beside SPOT, end to end on a small model (CPU).
 
 A two-request Program, lowered at its PoUW site by the Build's `pouw_circuit.lower`:
 Embedding → RMSNorm → up_proj (the PoUW linear, 64 → 16) → logits → TokenSelect, over a 16-token prefill and one decode
@@ -18,7 +18,7 @@ template by the IR reference, and each sampled Y strip linked to the weight side
   and an A strip that is not the quantized input are each rejected, each committed by a prover that commits and opens its
   wrong values and recomputes its root.
 - Without the delegate the PoUW rows are not evaluable, so the run fails closed.
-- Every other PoUW scheme stays refused beside sampled proofs.
+- Every other PoUW scheme stays refused beside SPOT.
 """
 from __future__ import annotations
 
@@ -413,8 +413,8 @@ def test_a_wrong_x_strip_is_rejected(world):
 
 
 @pytest.mark.slow
-def test_wrong_tile_words_are_rejected_whatever_the_draw(world):
-    """Word 7 of every tile of the first call, committed and opened wrong: every call draws a tile, at K = 1 too."""
+def test_wrong_tile_words_are_rejected_whatever_the_sample(world):
+    """Word 7 of every tile of the first call, committed and opened wrong: every call samples a tile, at K = 1 too."""
     records, where = RC.tamper_tiles(world.records)
     for k in (None, 1):
         _rep, pw, _issues = _verdict(world, records, _recommitted(world, records), k)
@@ -423,8 +423,8 @@ def test_wrong_tile_words_are_rejected_whatever_the_draw(world):
 
 
 @pytest.mark.slow
-def test_a_smaller_budget_draws_fewer_units_and_names_its_k(world):
-    """At K = 1 each call draws its share of the window's budget, at least one tile (the tile stratum's floor)."""
+def test_a_smaller_budget_samples_fewer_units_and_names_its_k(world):
+    """At K = 1 each call samples its share of the window's budget, at least one tile (the tile stratum's floor)."""
     _rep, pw, _issues = _verdict(world, k=1)
     assert pw["result"] is True and pw["law"] == "work K=1" and pw["proved_by_role"]["tile"] == 2, pw
 

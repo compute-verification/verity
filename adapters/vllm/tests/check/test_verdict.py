@@ -4,7 +4,7 @@ What is pinned here: (1) the schema round-trips (dumps -> load -> the same docum
 (2) the old -> new MAPPING is complete with no loss -- every compat field a check names is documented in OLD_TO_NEW and every
 documented old fact lands on a check that exists, every group has rules and a claim; (3) DECISION EQUIVALENCE with v1 -- over a PASS
 record and one-fault mutations of it, `run_outcome(run_checks(...)) == PASS` iff `commit_verdict(...)[0]`; (4) a MISSING INPUT is
-INSUFFICIENT_EVIDENCE, not FAIL: the Match account leg(s) absent beside the Commit (`account_missing`) grade
+INSUFFICIENT_EVIDENCE, not FAIL: the Match account file(s) absent beside the Commit (`account_missing`) grade
 `execution_extent` INSUFFICIENT_EVIDENCE while the overall verdict is still not PASS (v1 fails the same record by name); (5) X-03's
 per-layer uniformity finding is carried as the named difference `fa2_layers_bad` under `program_source_identity/identity_layout`;
 (6) `from_record` over a row dir reads the execution configuration from the Commit's own evidence (`execution_of_record`; an older
@@ -387,13 +387,13 @@ def test_account_missing_is_insufficient_evidence_not_fail():
     assert link.outcome == V.INSUFFICIENT and link.differences[0] == {"name": "account_missing", "legs": ["tokens.json"]}
     assert by["local_replay/population_scope"].outcome == V.INSUFFICIENT and out != V.PASS
     # the cause is read from the facts of record (`account_missing`), never the fault's text: a reworded fault grades the same
-    c["sampled_replay"]["population"]["query_checks"]["executed_prefix_rule"]["faults"][0]["faults"] = ["the tokens.json leg is gone"]
+    c["sampled_replay"]["population"]["query_checks"]["executed_prefix_rule"]["faults"][0]["faults"] = ["the tokens.json file is gone"]
     reworded = {c_.name: c_.outcome for c_ in _both(c)[2]}
     assert reworded == {c_.name: c_.outcome for c_ in checks}
     groups = V.group_checks(V.aggregate_runs([(0, checks)]))
     g = {x.name: x.outcome for x in groups}
     assert g["execution_extent"] == V.INSUFFICIENT, g
-    # the SAME missing legs on a record where no request stopped before its cap: recorded, not gating (v1 passes it too)
+    # the SAME missing files on a record where no request stopped before its cap: recorded, not gating (v1 passes it too)
     c2 = _base()
     c2["sampled_replay"]["executed_prefix_of_record"] = {"facts_of_record": {"r0": {"executed_prefix_len": 8, "cap": 8, "linked": False, "account_missing": ["tokens.json"]}}}
     c2["binding"]["coverage"]["match_account_link"] = _link(ok=False, required=False, problems=["tokens.json: not beside the Commit"])

@@ -271,7 +271,7 @@ def component(req, d, witness=None):
 
 
 def p_attention_tgrouped(node, ctx):
-    """The PRODUCTION emission order (`patterns.AttentionScope.match`): one Compute per DISTINCT T = position+1 over the batch's rows
+    """The SERVED emission order (`patterns.AttentionScope.match`): one Compute per DISTINCT T = position+1 over the batch's rows
     in first-occurrence order, rows = the rows sharing that T (a running decode at position p and an arriving prefill's row p land
     in one group, created when the decode row is seen). The toy default (`p_attention`) emits per row in row order and therefore
     never shows M-ARRIVAL-ORDER; this variant reproduces it on CPU with the same fold code path (`fold._compute_emit` per group)."""
@@ -784,7 +784,7 @@ def test_record_serving_a_request_the_program_did_not_declare_fails_g1(memory, t
     assert set(res["request_ids"]["unknown_ids"]) == {U1["id"]}   # the record's UUID is not in the Program's table -> undeclared
 
 
-# ------------------------------------------------- arrival order: the production emission order on CPU
+# ------------------------------------------------- arrival order: the served emission order on CPU
 
 # r0's decode at engine step 1 is position 3 (T=4); a prefill of LP 5 arriving at step 1 has a position-3 row -> AttentionScope's
 # T=4 group is created by r0's row first, so rX's position-3 attention is emitted before its positions 0..2 (the pod fixture:
@@ -2108,7 +2108,7 @@ def test_g6_puts_the_scheduled_state_and_the_lag_row_on_the_record(memory, tmp_p
 
 @pytest.mark.slow
 def test_a_record_without_tokens_json_fails_g6_by_name_unless_tokens_optional_is_asked_for_and_labelled(memory, tmp_path):
-    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association legs cannot run);
+    """capture/tokens.json is part of the record: absent -> G6 FAILS by name (the output-association checks cannot run);
     tokens_optional=True (CLI --tokens-optional) accepts it LABELLED checks[G6].tokens_json=false -- mechanism/fixture runs only."""
     gp, oracle = assemble([R0, R1], tmp_path, lag=0)
     _set_async_scheduling(oracle, False)
@@ -2309,7 +2309,7 @@ def test_cli_decomp_out_is_the_standalone_batch_decomp_document(memory, tmp_path
     produced, in batch_decomp's CLI schema: key for key what a standalone decompose() over the same fold and components returns
     (utc / seconds aside), under both implementations; exit 4 when X-09 names missing derived shapes (the row driver's derive-and-rerun)."""
     monkeypatch.setenv(GMF.FLAG, impl)
-    monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 legs return the per-request entries: the document must not depend on W
+    monkeypatch.setenv("MATCH_WORKERS", workers)   # mfast's forked X-09 workers return the per-request entries: the document must not depend on W
     gp, oracle = assemble([R0, R1_LATE, R2_LATE], tmp_path)
     gpp = tmp_path / "gp.json"
     gpp.write_text(json.dumps(gp))

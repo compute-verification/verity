@@ -236,11 +236,11 @@ def link_to_commit_account(epr: dict[str, Any], record: dict[str, Any], *, opene
     rec_eos = srule.get(C.EOS_IDS)
     if (None if rec_eos is None else sorted(int(x) for x in rec_eos)) != (None if eos_set is None else sorted(eos_set)):
         problems.append(f"record stop_rule.eos_token_ids {rec_eos} != the Program's declared {None if eos_set is None else sorted(eos_set)}")
-    legs = {"stop_rule.lag": srule.get(C.LAG), "lag.value": lg.get(C.LAG_VALUE), "the engine's read-back": stop.get("engine_lag")}
-    lag_attested = (decl is not None and all(v is not None and int(v) == int(decl) for v in legs.values())
+    readings = {"stop_rule.lag": srule.get(C.LAG), "lag.value": lg.get(C.LAG_VALUE), "the engine's read-back": stop.get("engine_lag")}
+    lag_attested = (decl is not None and all(v is not None and int(v) == int(decl) for v in readings.values())
                     and lg.get(C.ASYNC) == stop.get("async_scheduling") and lg.get(C.SOURCE) == C.ENGINE_READ_BACK)
     if not lag_attested:
-        problems.append(f"(5) lag not attested: the Program declares LAG {decl!r}; " + ", ".join(f"{k} {v!r}" for k, v in legs.items())
+        problems.append(f"(5) lag not attested: the Program declares LAG {decl!r}; " + ", ".join(f"{k} {v!r}" for k, v in readings.items())
                         + f"; record async_scheduling {lg.get(C.ASYNC)!r} vs the engine's {stop.get('async_scheduling')!r}, source {lg.get(C.SOURCE)!r}")
     by_rid: dict[str, list[dict[str, Any]]] = {}
     entries = request_entries(record)

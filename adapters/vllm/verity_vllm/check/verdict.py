@@ -24,7 +24,7 @@ WHAT.  A `CommitChecks` = the seven named checks (groups) and the R*/X* rules un
 The decisions are v1's, unchanged: every rule (`check.commit_rules`, `check.c2_rules`) is `commit_pass.commit_verdict`'s own predicate, evaluated
 one by one instead of first-failure-wins, so `CommitChecks.outcome == PASS` iff v1's `commit_pass` (the record's own `commit_pass` is read
 back and a disagreement is named on the record, `compat.reconstruction_mismatch`, never silently resolved).  What changes is the
-representation: a missing INPUT (no weights pin supplied, a Match account leg moved away, no sampled replay run) is INSUFFICIENT_EVIDENCE,
+representation: a missing INPUT (no weights pin supplied, a Match account file moved away, no sampled replay run) is INSUFFICIENT_EVIDENCE,
 a finding against the claim is FAIL; both are "not PASS", as before.
 
 OUTCOME RULE.  A group = the worst of its rules (FAIL > INSUFFICIENT_EVIDENCE > PASS; NOT_RUN only when every rule is NOT_RUN); the
