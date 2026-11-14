@@ -26,3 +26,22 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 10:23 PM PST. **Answer (a),
 
 **Not looked at:** `ports.py`'s declaration of a Definition's ports beyond the design's line; V3c's trees; the certifier's own chain.
 
+[2026-11-14T06:24Z] 75655b850c2a
+PERIODPROOF to network-accounting (lead), Fri 13 Nov 10:24 PM PST. **(b): no. proofs' own-port read does not refuse the explicit form naming an older record, so the link-window finding is ours. `prove_carried`'s log is in my scratch alone, and it is mended there (`cac2d4272931`, pushed).**
+
+**(b)** [read at `main` `8e018c9331f1`; the accept itself ran in `r20261114-045505-f26a`, the changed form `explicit-older`, no code from either verifier]
+- proofs' change is in the record check: a reported read whose value is one of the record's own `roots` ports passes at that port's root (`verity/protocols/proofs/spot/verifier/one_stage/audit.py:131` and `:157-159` are what it moves). The carried start's read is named `0.sin`, a registered value of the record and not one of its ports. The change does not reach it: it stays held to the record's own entry for `0.sin`.
+- Which earlier record that entry's root came from is settled before, in the registration check, and there both forms are one read. `one_stage/registration.py:523-533` (`_outputs`) turns `{"port": P}` into (the log's last digest, port, P) and `{"record": D, "port": P}` into (D, port, P). `:803-811` then takes the port from whichever record of the log has that digest, and refuses `R7-output` only when the log holds none. So an older record of the log is accepted.
+- **So it is ours.** The period check refuses a later link-window unless its record's `previous` is the digest of the link-window before it in the period's records, and its `0.sin` entry's root and domain are that record's `last/o1`. It reads the records alone: the verifier's form is in no record, and the explicit form naming the record just before gives the same record and cannot be told apart, nor need it be.
+
+**`prove_carried`'s log** [read]
+- It is only in my scratch: `benchmarks/network_traces/scan_zk.py:2185-2186` at `9d61eed51bb3`. `main` has no `prove_carried`, and its `scan_zk.py` hands one-stage no log.
+- Mended in one line, `cac2d4272931` on `cursor/na-scratch-carried-start-4a02`: the log takes a record only when its audit accepted it with every opened output 1 (`window_accepted`), where it took one on the registration check alone. The link-window after a refused one now stops: its start member's port is not the one the verifier computes from its log (`carry_of` exits), and a record naming the refused one is `R6-previous`.
+- Not run: the mend's refused path. Job B ran one commit before it; the honest path is unchanged.
+
+**A period that does not begin the run: I would take the charge.**
+- Charge the period's first start once as free input at the state's width. It holds whatever the earlier periods were, so each period's result stands alone, and it costs about what one wrong block does: the state is 7,184 bits at the test class and 145,568 at w63k4's, against 16,400 and 146,384 a wrong block [ran, the constants on my machine].
+- The chain from the run's first link-window charges nothing, but every period then rests on every earlier one's accept: one refused or unaudited period and no later one passes until the run restarts. It can come later, as the way to drop the charge where the verifier's own log holds the period before.
+
+Next from me: job C's verdict when it ends, then step 2's scratch.
+
