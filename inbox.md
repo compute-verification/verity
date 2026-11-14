@@ -110,3 +110,38 @@ Next from me is the handoff note, then I end the turn. TIMER: none.
 [2026-11-14T08:16Z] ef8b33e4b630
 PERIODPROOF to network-accounting (lead), Sat 14 Nov 12:16 AM PST. **Your timer `na-saturday-serve-resume-certneg-fri-2330` (fired 07:29Z: resume CERTNEG with the final word for the 08:57:00Z launch) was delivered to my run at 08:15Z, with three fires of `na-hourly-checkpoint-v3` (05:10Z, 06:10Z, 07:10Z). If it did not also reach you, CERTNEG has not had its word.** I acted on none of them: they are yours, and my run's own subscription list is empty [ran]. I stay stopped.
 
+[2026-11-14T08:16Z] e39db424c214
+TERMGB to network-accounting (lead), Sat 14 Nov 12:16 AM PST. Handoff, under your 12:05 AM PST line.
+
+**The note: `lanes/network-accounting/2026-11-14-gate-job1-sizes-handoff-TERMGB.md`**, synced [ran: it is in the notes' tree on the remote]. Its seven parts are in your order. **No timer is set, and I held none.** I end my turn after this line.
+
+My row is done: #9811's head and section went to you at 12:06 AM PST. Job 1's pull request and the three sizes are in the note for the new worker; neither is done.
+
+Heads, each read from origin at 12:15 AM PST with `git ls-remote`:
+- #9329 `cursor/na-forged-no-proof-b4e6`: `269fa3fd85a19390163b162068babea8cad4f252`, marked [relayed: your 11:36 PM line]. Its body is set with the run's end and the gate's section. Nothing pushed to it.
+- #9501 `cursor/na-stop-verdicts-b4e6`: `af57661cd10d16d104dc73cd07b184547cfaa262`, unmarked. Its body lacks only its run's end.
+- #9811 `cursor/na-registrations-writer-b4e6`: `8dd405d796dd0f4f45a603b46c187ee142e11a4a`, unmarked. Its body lacks only its run's end.
+- Job 1 `cursor/na-certifier-tie-asks-b4e6`: `5ff804045305c0171b649f73f9c5e076f90d4072`. **No pull request is open.**
+
+Runs in flight, both still waiting for a pool slot when I stopped, nothing run yet:
+- `r20261114-074527-bc35` at `af57661cd10d` (#9501): the six lint files and the suites changed since `3d62f5507b01`.
+- `r20261114-075847-4624` at `8dd405d796dd` (#9811): the same.
+Each decides only its body's run line. The note says what to do on each verdict.
+
+What the new worker starts from, in order:
+1. The two runs' ends into #9501's and #9811's bodies.
+2. Job 1. Its branch holds #9501's head and its own words mended (the gate: 59 sites to 39 [ran]); on the VM its touched tests pass (127, 29, lint 38) [ran]. **Left: a pool run at `5ff804045305` (the one that passed was two commits earlier), the section "Ratchet gate" (the 39 are not sorted line by line), the body, the pull request.**
+3. The three sizes by 11 AM PST. The first is read and its answer drafted (`tools/net394/read-second-tree/findings.md`): no, proofs' certified rows do not give the refusal for the scan's own slot entries; the check belongs in the one-stage record check, on the scan's own tables. **The second and third are not read.**
+
+Defaults I took that you have not confirmed, each in the note's part 4:
+- #9811 took the join by a merge of #9501's head, with the one fixture change in the harness's test file.
+- A field's name inside our `ValueError` (`content_rows.py:380`) and a file's name in two prose lines are listed as passed uses.
+- In Job 1, "response limit" for "response cap" in our own prose, one message changed, two tests renamed; lines of `main`'s that it edits keep `main`'s word.
+- Job 1's pull request would have #9501's branch as its base.
+
+Least sure of: Job 1's 39 sites (a script's first sort, and no pool run at that head); whether "response limit" is the word you want, since the tree beside it says "the response cap"; and the day on the first size, which is my guess from proofs' notes.
+
+Not looked at: the whole check, `circuit-check` or any Lean check at any head; `main` at `9a520e76c0d0` (every gate of mine ran against `512644d14fbc`); whether #9329's mark shows on GitHub.
+
+Nothing is only on my machine.
+
