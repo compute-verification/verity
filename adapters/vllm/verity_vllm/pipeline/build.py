@@ -28,6 +28,7 @@ from verity.definitions.boolean import write_word
 from verity_vllm.config import RowConfig, option, workload_arg
 from verity_vllm.engine import env as engine_env
 from verity_vllm.engine import hooks
+from verity_vllm.errors import Refused
 from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline.build_instances import (  # noqa: F401 (read through here)
@@ -264,21 +265,22 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                              "definitions_available": {"GumbelTokenSelect_v1": "temperature + Gumbel-max, top_p == 1, no top_k"},
                                              "missing": ["TopPMask", "wrapper authoring of the stochastic select (Bet A)",
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
-            raise _Refused()
+            raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
         # the request's launch batch where the row's kernels read it; the stochastic policy's Definition coverage and launch geometry (S)
         geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T)) or LC.bad_chunks(launch, wrapper, LP, T, cached)
                        or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
         if geo_refusal:
             res["unsupported"] = geo_refusal
-            raise _Refused()
+            raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             logger.info("[derive_step] declared target %s x%s: vLLM platform %s", target.sm_arch, tp, select_cuda_platform(tp, device_name))
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
-    except _Refused:
-        pass
+    except Refused as e:
+        if e.what != _CONSTRUCTION:
+            raise
     res = _finish(out, res, t_start)
     if emit is not None:
         from verity_vllm.pipeline.tp.emit_ranks import finish
@@ -289,8 +291,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
 _WRAPPER_NAMES = {"step": "vLLMStep", "request": "vLLMRequest", "padded": "vLLMPaddedRequest"}
 
 
-class _Refused(Exception):
-    """The construction refused before derive (target profile mismatch, unbound sampler); `res["unsupported"]` carries the verbatim reason."""
+# the `what` of the construction's own refusals before derive (target profile mismatch, unbound sampler), whose verbatim reason
+# `res["unsupported"]` carries; any other `Refused` propagates
+_CONSTRUCTION = "the construction"
 
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
@@ -394,7 +397,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bad = profile_mismatches(target, applied)
             if bad:
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "instantiation", "hint": "; ".join(bad)}
-                raise _Refused()
+                raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
             chunks = list((launch or {}).get("chunks", ()))
@@ -424,7 +427,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bad = profile_mismatches(target, applied_export)
             if bad:
                 res["unsupported"] = {"reason": "target_profile_mismatch", "phase": "export", "hint": "; ".join(bad)}
-                raise _Refused()
+                raise Refused(res["unsupported"]["reason"], what=_CONSTRUCTION)
             res["declared_derived"] = declared_derived_accounting(target, applied)
             # derive: the wrapper module IS the source, derived from the export above (same module, same example input, same shims)
             t1 = time.time()
