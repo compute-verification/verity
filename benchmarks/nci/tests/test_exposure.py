@@ -30,7 +30,7 @@ def test_the_defaults_give_the_statements_numbers():
     assert t["chi"] == pytest.approx(1.73e-3 * T.DEFAULTS["step_bits"] / 16, rel=0.01)
     assert T.evaluate(T.DEFAULTS, T.TIERS["T5"])["cheat"] == 1.0
     assert X.terms(T.DEFAULTS | X.BATCHED)["chi"] == pytest.approx(9.46e-4, rel=0.01)
-    assert t["eta_T4"] == pytest.approx(0.329, rel=0.01)
+    assert t["counted_share_T4"] == pytest.approx(0.329, rel=0.01)
 
 
 @pytest.mark.parametrize("probe", HOLDS, ids=[f"{c[0]}-{c[2]}-{c[3]}" for c in HOLDS])
@@ -50,14 +50,14 @@ def test_closed_forms_break_where_their_regimes_end(probe):
 
 
 def test_the_memory_cap_has_unit_elasticities_once_it_binds():
-    """Served today at R_wipe 4 GB, eta = mu = 4 R_wipe alpha / (kappa d b_w b_a) at T4."""
+    """Served today at R_wipe 4 GB, counted_share = mu = 4 R_wipe alpha / (kappa d b_w b_a) at T4."""
     p = T.DEFAULTS | X.SCENARIOS["served today, R_wipe 4 GB"] | X.KEYED
     for key in ("d", "b_w", "b_a", "kappa"):
         assert X.elasticity(p, key, "T4") == pytest.approx(-1, rel=0.02), key
     assert X.elasticity(p, "free", "T4") == pytest.approx(0, abs=1e-9)
 
 
-def test_at_the_design_eta_is_the_free_compute():
+def test_at_the_design_the_counted_share_is_the_free_compute():
     p = T.DEFAULTS | X.DESIGN | X.KEYED
     r = T.free_share(p)
     assert X.elasticity(p, "host_share", "T1") == pytest.approx(p["host_share"] * (1 - p["eps_w"]) / r, rel=0.01)
@@ -72,8 +72,8 @@ def test_at_the_design_eta_is_the_free_compute():
     ("served today", "d", "T4", False),
 ])
 def test_thresholds_are_monotone(scenario, key, tier, rising):
-    """The set where 1/eta < 2 lies inside the set where 1/eta < 10, which lies inside the set where 1/eta < 100; each
-    is one interval at the end of the slider that raises eta, so its inner edge moves outward as the level falls."""
+    """The set where 1/counted_share < 2 lies inside the set where 1/counted_share < 10, which lies inside the set where 1/counted_share < 100; each
+    is one interval at the end of the slider that raises counted_share, so its inner edge moves outward as the level falls."""
     th = X.thresholds(T.DEFAULTS | X.SCENARIOS[scenario], key, tier)
     lo, hi = X.SPECS[key]["min"], X.SPECS[key]["max"]
     edges = []
@@ -88,7 +88,7 @@ def test_thresholds_are_monotone(scenario, key, tier, rising):
 
 
 def test_the_free_compute_threshold_is_the_closed_form():
-    """At T1, 1/eta < X once r_gpu > (1/X - eps_W - eps' - nu) / (1 - eps_W) - host_share - clock_share: eta is
+    """At T1, 1/counted_share < X once r_gpu > (1/X - eps_W - eps' - nu) / (1 - eps_W) - host_share - clock_share: counted_share is
     r-hat + eps_W (1 - r-hat) + eps' + nu."""
     p = T.DEFAULTS | X.DESIGN | {"lag_s": 0.0}
     th = X.thresholds(p, "free", "T1")

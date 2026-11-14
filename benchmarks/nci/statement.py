@@ -394,11 +394,11 @@ def fit_edges() -> dict[str, dict[float, float | None]]:
 
 
 def tornado(tier: str) -> tuple[str, float]:
-    """The parameter outside ``TORNADO_SKIP`` whose range in ``exposure.RANGES`` moves eta most at the floor credit,
+    """The parameter outside ``TORNADO_SKIP`` whose range in ``exposure.RANGES`` moves counted_share most at the floor credit,
     and by what share."""
     p = T.DEFAULTS
-    base = X.eta(p, tier)
-    swings = {k: max(abs(X.eta(p | {k: v}, tier) / base - 1) for v in (lo, hi))
+    base = X.counted_share(p, tier)
+    swings = {k: max(abs(X.counted_share(p | {k: v}, tier) / base - 1) for v in (lo, hi))
               for k, (lo, hi, _) in X.RANGES.items() if k not in TORNADO_SKIP}
     key = max(swings, key=swings.__getitem__)
     return key, swings[key]
@@ -421,7 +421,7 @@ def exposures(th: dict) -> list[dict]:
         ("ν at 1,000 times today's K", X.nu(p | {"K": 1000 * p["K"]})),
         (f"factor by which α must fall for D ≥ 100, defaults, T3, K's slider down to {num(X.SPECS['K']['min'])} bits",
          falls),
-        ("η at T4, served today with a 4 GB wipe residual and σ = 1e7 bit/s", X.eta(loud, "T4")),
+        ("η at T4, served today with a 4 GB wipe residual and σ = 1e7 bit/s", X.counted_share(loud, "T4")),
         ("R_wipe there, helpers refilling within the read deadline, GB", X.wipe_residual(loud) / T.GB),
         ("multiple of today's proving cost at which χ reaches 1%",
          bisect(lambda x: cheat(p | {"overhead": x * p["overhead"]}) >= 0.01, 1e-6, 1e4)),

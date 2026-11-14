@@ -1,16 +1,16 @@
-"""Compute efficiency eta of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
+"""Compute efficiency counted_share of frontier pretraining from scratch under the verification stack: the FLOP an unconstrained run
 needs, divided by the FLOP the developer spends, registered plus unregistered. The developer must still compute the counted
 multiplications M (an updated weight times an activation or activation gradient). Terms and symbols follow the proposal
 "Terms and symbols for the training-efficiency bound" (Notion, under the assumptions register) and ARCHITECTURE.md's Glossary.
 
-eta <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
+counted_share <= s + min(r, memory cap) + 1/rho_NCI + chi, each term an upper bound under the model; ``STATUS`` says which steps are
 proved.
 
 * s, the unregistered compute share, trains at full efficiency.
 * r, the registered compute residual: r-hat, the share of registered capacity outside the compute certificate
   (1 - W_cert/C), plus PoUW's deficit on the certified work, eps_W W_cert/C, plus the aggregation slack eps'. r-hat is
   idle and uncredited GPU time, plus host CPUs, which PoUW neither credits nor bounds and which count at their datasheet
-  peak. It trains at full efficiency unless the memory cap binds: at peak in eta, at MFU_0 in D (``evaluate``'s
+  peak. It trains at full efficiency unless the memory cap binds: at peak in counted_share, at MFU_0 in D (``evaluate``'s
   ``free_mfu``, the reference-efficiency assumption: free compute runs no better than the reference). A
   spatial unit's window reads its starting state plus its novel intake, K_w = state + lambda_in L, and contains at most
   K_w Lambda(K_w) / b_a counted multiplications (``ThreadedRuntime``, reads counted by width; counting them by
@@ -37,7 +37,7 @@ proved.
   the share stops at 1, the fleet's whole capacity.
 
 The four terms bound counted multiplications relative to the reference recipe. A private recipe g times better in counted
-multiplications per unit of loss is a compute amplifier, multiplying eta by g; it cancels when verification is compared on
+multiplications per unit of loss is a compute amplifier, multiplying counted_share by g; it cancels when verification is compared on
 against off. A recipe better at working under the mechanisms, m times more progress per counted multiplication, scales
 only the constrained terms (nu, mu and chi), not the residual or unregistered compute. The slowdown D, the
 hardware multiple over an unconstrained developer with the same recipe on the same hardware at model-FLOP utilization
@@ -299,8 +299,8 @@ def state_threshold(p: dict, mech: dict) -> float:
 
 
 def evaluate(p: dict, mech: dict, free_mfu: float = 1.0) -> dict:
-    """The terms of eta at ``mech``, each in counted multiplications over the FLOP spent, the residual's capacity
-    training at ``free_mfu`` of peak: 1 for eta, MFU_0 for D under the reference-efficiency assumption."""
+    """The terms of counted_share at ``mech``, each in counted multiplications over the FLOP spent, the residual's capacity
+    training at ``free_mfu`` of peak: 1 for counted_share, MFU_0 for D under the reference-efficiency assumption."""
     gpm = 2 / p["kappa"]
     H = p["years"] * YEAR
     C = p["nodes"] * p["node_flops"] * H
@@ -354,7 +354,7 @@ def evaluate(p: dict, mech: dict, free_mfu: float = 1.0) -> dict:
     if largest == "declared":
         largest = "declared (thread bound)"
     return {
-        "efficiency": sum(terms.values()), **terms, "largest": largest, "memory_caps_free": capped,
+        "counted_share": sum(terms.values()), **terms, "largest": largest, "memory_caps_free": capped,
         "rho_T": rho_T, "wipe_state_bits": wipe_state, "envelope_bits": envelope,
         "state_threshold_bits": state_threshold(p, mech), "cheat_steps": k, "cheat_bits": bits,
     }
@@ -377,9 +377,9 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"spec": SPEC, "defaults": DEFAULTS, "tiers": TIERS,
                           "status": [{"piece": a, "status": b} for a, b in STATUS], "results": results}, indent=1))
         return 0
-    print(f"{'tier':5} {'efficiency':>10} {'unregistered':>12} {'free':>9} {'declared':>9} {'cheat':>9}  largest")
+    print(f"{'tier':5} {'counted':>10} {'unregistered':>12} {'free':>9} {'declared':>9} {'cheat':>9}  largest")
     for name, r in results.items():
-        print(f"{name:5} {r['efficiency']:10.3g} {r['unregistered']:12.3g} {r['free']:9.3g} {r['declared']:9.3g} "
+        print(f"{name:5} {r['counted_share']:10.3g} {r['unregistered']:12.3g} {r['free']:9.3g} {r['declared']:9.3g} "
               f"{r['cheat']:9.2g}  {r['largest']}{' (memory caps it)' if r['memory_caps_free'] else ''}")
     return 0
 

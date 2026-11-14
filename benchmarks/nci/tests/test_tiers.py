@@ -46,7 +46,7 @@ def test_the_gpus_read_the_card_file():
 
 
 def test_each_tier_gives_the_adversary_no_more_than_the_last():
-    effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["efficiency"] for k in ("T1", "T2", "T3", "T4")]
+    effs = [T.evaluate(T.DEFAULTS, T.TIERS[k])["counted_share"] for k in ("T1", "T2", "T3", "T4")]
     assert all(b <= a * (1 + 1e-12) for a, b in zip(effs, effs[1:]))
 
 
@@ -107,7 +107,7 @@ def test_the_wipe_floor_is_the_closed_form():
     rate = p["tau"] + p["K"] / p["Gamma"] * p["node_flops"]
     closed = 4 * r["wipe_state_bits"] * rate / (p["kappa"] * p["b_a"] * p["b_w"] * p["d"] * p["node_flops"])
     assert r["memory_caps_free"]
-    assert r["efficiency"] == pytest.approx(closed, rel=1e-3)
+    assert r["counted_share"] == pytest.approx(closed, rel=1e-3)
 
 
 def test_memory_caps_free_compute_below_the_state_threshold():
@@ -140,7 +140,7 @@ def test_disks_left_in_place_count_as_state():
     """An unwiped disk is state a wipe leaves (8 TB of NVMe undoes the memory cap)."""
     p = KEYED | {"free": 0.5, "pous_rounds": 74000.0, "pous_floor": 0.0, "unfilled_gb": 1.83}
     assert T.evaluate(p, T.TIERS["T3"])["memory_caps_free"]
-    assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["efficiency"] > T.evaluate(p, T.TIERS["T3"])["efficiency"]
+    assert T.evaluate(p | {"disk_gb": 8000.0}, T.TIERS["T3"])["counted_share"] > T.evaluate(p, T.TIERS["T3"])["counted_share"]
 
 
 def test_helpers_within_the_read_deadline_refill_what_a_wipe_leaves():
@@ -168,7 +168,7 @@ def test_the_cheating_share_stops_at_the_fleets_capacity():
     sparse, batched = (T.evaluate(T.DEFAULTS | over, T.TIERS["T5"]) for over in ({}, BATCHED))
     worth = 2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, sparse["cheat_bits"]) * sparse["cheat_bits"]
     capacity = T.DEFAULTS["nodes"] * T.DEFAULTS["node_flops"] * T.DEFAULTS["years"] * T.YEAR
-    assert worth > capacity and sparse["cheat"] == 1.0 and sparse["efficiency"] > 1
+    assert worth > capacity and sparse["cheat"] == 1.0 and sparse["counted_share"] > 1
     assert 1 > batched["cheat"] == pytest.approx(
         2 / T.DEFAULTS["kappa"] * T.chord(T.DEFAULTS, batched["cheat_bits"]) * batched["cheat_bits"] / capacity)
 
@@ -224,7 +224,7 @@ def test_the_amplifier_multiplies_every_term():
     for tier in ("T1", "T5"):
         base = T.evaluate(T.DEFAULTS, T.TIERS[tier])
         amped = T.evaluate(T.DEFAULTS | {"g": 10.0}, T.TIERS[tier])
-        for term in ("efficiency", "unregistered", "free", "declared", "cheat"):
+        for term in ("counted_share", "unregistered", "free", "declared", "cheat"):
             assert amped[term] == pytest.approx(10 * base[term], rel=1e-9)
 
 

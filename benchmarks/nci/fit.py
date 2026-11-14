@@ -205,9 +205,9 @@ def slowdown(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
     return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
 
 
-def attack_slowdown(p: dict, efficiency: float) -> float:
-    """D of a developer whose only route to the target is an attack of this efficiency; ``inf`` when it never gets there."""
-    return multiple_bound(p["mfu"], 0.0, efficiency, reference_efficiency=False)
+def attack_slowdown(p: dict, counted_share: float) -> float:
+    """D of a developer whose only route to the target is an attack of this counted share; ``inf`` when it never gets there."""
+    return multiple_bound(p["mfu"], 0.0, counted_share, reference_efficiency=False)
 
 
 def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu", gain: float = 1.0,
@@ -224,7 +224,7 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
     return {
         "params": N, "dense_params": gain * N, "tokens": tokens_to_reach(fit, gain * N, L), "m": m,
         "sync_s": sync_s, "tokens_per_sync": p["mfu"] * r * p["node_flops"] * b_sync / (6 * lam),
-        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "efficiency": p["mfu"] * r * m,
+        "outer_steps": p["years"] * T.YEAR / sync_s if sync_s > 0 else math.inf, "counted_share": p["mfu"] * r * m,
     }
 
 
@@ -254,8 +254,8 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
         "fit_over_closed": mu["central"] / closed_form(p, R),
         "visits_train": visits(S, N, B_TRAIN["central"]), "periods_train": periods_train, "mu_fit_train": mu_train,
         "slowdown_fit_train": slowdown(p, mu_train, declared),
-        "replica": rep, "slowdown_replica": attack_slowdown(p, rep["efficiency"]),
-        "path": path, "slowdown_path": attack_slowdown(p, path["efficiency"]),
+        "replica": rep, "slowdown_replica": attack_slowdown(p, rep["counted_share"]),
+        "path": path, "slowdown_path": attack_slowdown(p, path["counted_share"]),
         "slowdown_none": slowdown(p, math.inf, declared),
     }
 

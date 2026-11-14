@@ -51,7 +51,7 @@ def test_the_slowdown_is_a_hardware_multiple_against_the_unconstrained_run():
 
 def test_the_remote_slowdown_at_the_defaults():
     """At tiers' server (the floor credit; hosts carry no compute; reference efficiency) the residual r = 0.33 trains at
-    MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/eta =
+    MFU_0 and the inference-only policy's term nu is counted multiplications, so D = 1/(r + nu/MFU_0) is 3.02 at T1 to T4, just under 1/counted_share =
     3.04, the same terms against a reference at capacity. Without the reference-efficiency assumption the residual is at
     peak, ``InferenceOnly.Guarantees.SlowdownRemote``'s slowdown max(1, 1/(s + x/MFU_0)) as stated, and D is 1.21; without the hosts
     assumption too (host CPUs at 12.6% of the GPUs) x = 0.45 is above MFU_0 and D is 1; without the hosts assumption
@@ -63,7 +63,7 @@ def test_the_remote_slowdown_at_the_defaults():
         assert S.slowdown(P, t) == pytest.approx(1 / (r["free"] / P["mfu"] + r["declared"] / P["mfu"]), rel=1e-9)
         assert r["free"] / P["mfu"] == pytest.approx(T.free_share(P) + LAG, rel=1e-9)
     assert S.slowdown(P, "T1") == pytest.approx(3.022, abs=1e-3)
-    assert 1 / T.evaluate(P, T.TIERS["T1"])["efficiency"] == pytest.approx(3.04, abs=0.01)
+    assert 1 / T.evaluate(P, T.TIERS["T1"])["counted_share"] == pytest.approx(3.04, abs=0.01)
     assert at_peak(P, "T1") == pytest.approx(1.215, abs=1e-3)
     hosts = P | {"host_share": 0.12608}
     assert all(at_peak(hosts, t) == 1.0 for t in T.TIERS)
@@ -197,9 +197,9 @@ def test_the_symbols_closed_forms_are_what_evaluate_uses():
     assert sym[("χ", "cheating share (T5)")] == T.evaluate(P, T.TIERS["T5"])["cheat"]
 
 
-def test_the_thresholds_are_on_d_not_on_one_over_eta():
+def test_the_thresholds_are_on_the_slowdown_not_on_one_over_the_counted_share():
     """At T1 with host CPUs and the clock at 0, D < X once r̂ > (1 / X - nu / MFU_0 - Delta/H - eps_W - eps') / (1 - eps_W):
-    the residual trains at MFU_0 (reference efficiency) and nu is counted multiplications; on 1/eta, nu counts at 1."""
+    the residual trains at MFU_0 (reference efficiency) and nu is counted multiplications; on 1/counted_share, nu counts at 1."""
     found = S.search(("defaults", "T1", 0))
     for level in S.LEVELS:
         edge = (1 / level - X.nu(P) / P["mfu"] - LAG - P["eps_w"] - EPS) / (1 - P["eps_w"])
