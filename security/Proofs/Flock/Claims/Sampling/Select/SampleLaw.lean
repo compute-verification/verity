@@ -43,13 +43,7 @@ import Proofs.Flock.Claims.Prob
 import VCVio.Prelude.Core
 
 /-!
-<<<<<<< ours
-# The sampling design from the deployed sample (`Claims.Sampling.DrawDesign`)
-||||||| base
-# The sampling design from the deployed sample (`Claims.Sampling.DrawLaw`)
-=======
 # The sampling design from the deployed sample (`Claims.Sampling.SampleLaw`)
->>>>>>> theirs
 
 * `Design.Pa_empty`: a well-formed design has `P_a(∅) = 1`.
 * `allSlots`, `sampleChecked`: every slot of a layout, and the deployed sample's checked slots, `Slots.select`'s or, where
@@ -58,13 +52,7 @@ import VCVio.Prelude.Core
   only it (`Design.Pa_of_shape`, `Partition.blocks_length_of_shape`, `Design.wellFormed_of_shape`).
 * `DrawSlots`: the deployed sample is `Slots.select`'s on a layout of the statement's partition's shape and on its design,
   from uniform bytes of the coins.
-<<<<<<< ours
-* `drawDesign_of_slots`: `DrawDesign` there, from `drawMisses`.
-||||||| base
-* `drawLaw_of_slots`: `DrawLaw` there, from `drawMisses`.
-=======
 * `sampleLaw_of_slots`: `SampleLaw` there, from `sampleMisses`.
->>>>>>> theirs
 -/
 
 @[expose] public section
@@ -229,13 +217,7 @@ def DrawSlots (D : Deploy Coin Col T) : Prop :=
 /-- **The sampling design from the deployed sample**: where the sample is `Slots.select`'s on uniform bytes (`DrawSlots`), its
 miss probability at fixed first-stage coins averages at most `P_a(B)` (`sampleMisses`); a refused sample checks every slot,
 so it misses no nonempty `B`, and a well-formed design has `P_a(∅) = 1`. The partition is read through its shape. -/
-<<<<<<< ours
-theorem drawDesign_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawDesign D := by
-||||||| base
-theorem drawLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : DrawLaw D := by
-=======
 theorem sampleLaw_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : SampleLaw D := by
->>>>>>> theirs
   intro x s Pt hx hP hin B hB
   obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, hds, hunif, hch⟩ := h x s Pt hx hP
   have hnPU : nPU D x = (slotPartition l).blocks.length := by
