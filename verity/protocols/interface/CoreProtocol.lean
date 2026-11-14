@@ -11,6 +11,7 @@ public import CoreProtocol.Cli
 public import CoreProtocol.Example
 public import CoreProtocol.Blobs
 public import CoreProtocol.BlobsExample
+public import CoreProtocol.Stream
 public import CoreProtocol.Site
 public import CoreProtocol.Registration
 public import CoreProtocol.Account
