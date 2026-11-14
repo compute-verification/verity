@@ -12,8 +12,8 @@ import pytest
 
 pytest.importorskip("scipy")
 sys.path.insert(0, os.path.dirname(__file__))
-import zk_rewind_stats  # noqa: E402
-from test_zk_stats import _row  # noqa: E402
+import zk_rewind_stats
+from test_zk_stats import _row
 
 
 def _hexes(rng, n):

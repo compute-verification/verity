@@ -152,6 +152,7 @@ def ssh_probe(vm: dict, known_hosts: Path) -> dict | None:
     try:
         r = subprocess.run(argv, capture_output=True, text=True, timeout=90)
     except subprocess.TimeoutExpired:
+        print(f"{vm['name']}: ssh probe timed out after 90 s; read as no probe", file=sys.stderr, flush=True)
         return None
     lines = r.stdout.strip().splitlines()
     return parse_probe(lines[-1]) if r.returncode == 0 and lines else None
