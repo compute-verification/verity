@@ -116,6 +116,7 @@ import fcntl
 import fnmatch
 import gzip
 import hashlib
+import io
 import ipaddress
 import json
 import os
@@ -183,6 +184,16 @@ UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
 COMPOSE_SUMS = "private/compose/inputs.sha256"
+COMPOSE_ENV = "private/compose/compose.env"
+"""The hand-off's settings, the prover's bytes, which `served_verdicts.sh compose` reads (`compose_settings`)."""
+COMPOSE_SETTINGS = ("K", "PRODUCT", "PEARLPLUS_TIE", "COMPOSITE", "ALPHA", "GAMMA", "SERVED_NODE", "SERVED_DIR",
+                    "COMPOSE_NODE", "COMPOSE_TREE", "AUDITED_ON", "SAMPLED_AUDIT", "STEPS")
+"""The settings a hand-off may set: served_verdicts.sh's COMPOSES, in its order, which `tests/test_host.py` holds it to."""
+ENV_NAME = re.compile(r"[A-Z][A-Z0-9_]*")
+ENV_VALUE = re.compile(r"([A-Za-z0-9._/:+@=,-]|\\,)*")
+"""A setting's value as handoff's `printf %q` writes it, each character as itself but a comma (`\\,`), or `''` for an
+empty one: served_verdicts.sh's ENV_VALUE, which `tests/test_host.py` holds it to."""
+COMPOSE_ENV_BYTES = 1 << 16
 COMPOSE_MINUTES = 180
 COMPOSE_BYTES = 64 << 30
 """The most a hand-off may carry, in bytes, over all its files."""
@@ -895,14 +906,39 @@ def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
     return out
 
 
+def compose_settings(body: bytes) -> dict[str, str]:
+    """A hand-off's `COMPOSE_ENV` read as data, as served_verdicts.sh's `read_env` reads it: the settings by name, each
+    line NAME=VALUE (NAME up to its first `=`), NAME one of `COMPOSE_SETTINGS` and set once, VALUE `''` or of
+    `ENV_VALUE`, a last line without its newline read too; else refused, naming the line and never quoting it."""
+    if len(body) > COMPOSE_ENV_BYTES:
+        raise Refused(f"the hand-off's {COMPOSE_ENV} is over {COMPOSE_ENV_BYTES} bytes")
+    lines = body.decode("latin-1").split("\n")
+    got: dict[str, str] = {}
+    for i, line in enumerate(lines[:-1] if lines[-1] == "" else lines, 1):
+        name, eq, value = line.partition("=")
+        why = ("is not NAME=VALUE" if not eq else "names no setting" if not ENV_NAME.fullmatch(name)
+               else "sets no setting of a hand-off" if name not in COMPOSE_SETTINGS
+               else f"sets {name} a second time" if name in got
+               else f"sets {name} to a value of other characters than A-Za-z0-9._/:+@=,-"
+               if value != "''" and not ENV_VALUE.fullmatch(value) else None)
+        if why:
+            raise Refused(f"the hand-off's {COMPOSE_ENV}, which the compose reads as data and never runs: its line {i} "
+                          f"{why}")
+        got[name] = "" if value == "''" else value.replace("\\,", ",")
+    return got
+
+
 def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, str]:
     """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
     the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
     served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
-    past `cap` in all; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum."""
+    past `cap` in all, or it is `COMPOSE_ENV` and not settings `compose_settings` reads, or its path is another member's
+    file or directory; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum,
+    so a path the sums name is only ever one of the members it wrote."""
     d.mkdir(mode=0o700, parents=True)
     got: dict[str, str] = {}
     total = 0
+    name = "(none yet)"
     try:
         with tarfile.open(fileobj=src, mode="r|") as t:
             for m in t:
@@ -923,6 +959,9 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 f.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 h = hashlib.sha256()
                 fin = t.extractfile(m)
+                if name == COMPOSE_ENV:
+                    compose_settings(body := fin.read(COMPOSE_ENV_BYTES + 1))
+                    fin = io.BytesIO(body)
                 with open(f, "wb", opener=lambda p, fl: os.open(p, fl, 0o600)) as fout:
                     while chunk := fin.read(1 << 24):
                         h.update(chunk)
@@ -930,6 +969,9 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 got[name] = h.hexdigest()
     except tarfile.TarError as e:
         raise Refused(f"the hand-off isn't a tar: {e}") from None
+    except OSError as e:
+        raise Refused(f"the hand-off's member {name} can't be written under the serve dir ({e.strerror}): its path is "
+                      "another member's, or the disk refused it") from None
     if COMPOSE_SUMS not in got:
         raise Refused(f"the hand-off has no {COMPOSE_SUMS}, the sums the served node wrote")
     listed: dict[str, str] = {}
@@ -987,18 +1029,29 @@ def run_compose(env: dict[str, str], log: Path, minutes: int = COMPOSE_MINUTES, 
 
 
 def answered(out: Path, cap: int = COMPOSE_ANSWER_BYTES) -> dict[str, Any]:
-    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size."""
+    """$OUT's files by path, as text, each in its published form, while their bytes stay under `cap`; the rest by size.
+    A link is named and never followed, so the answer carries no byte from outside $OUT."""
     files: dict[str, str] = {}
     over: dict[str, int] = {}
+    links: list[str] = []
     used = 0
-    for f in sorted(p for p in out.rglob("*") if p.is_file()) if out.is_dir() else []:
-        rel, n = str(f.relative_to(out)), f.stat().st_size
-        if used + n > cap:
-            over[rel] = n
+    walked = [Path(r) / n for r, ds, fs in os.walk(out) for n in [*ds, *fs]] if not out.is_symlink() else []
+    for f in sorted(walked):
+        rel = str(f.relative_to(out))
+        if f.is_symlink():
+            links.append(rel)
             continue
-        files[rel] = f.read_text(errors="replace")
+        if not f.is_file():
+            continue
+        fd = os.open(f, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, "rb") as fin:
+            n = os.fstat(fd).st_size
+            if used + n > cap:
+                over[rel] = n
+                continue
+            files[rel] = fin.read().decode(errors="replace")
         used += n
-    return {"files": files, **({"not_sent": over} if over else {})}
+    return {"files": files, **({"not_sent": over} if over else {}), **({"links": links} if links else {})}
 
 
 def compose_handoff(host: Host, scratch: Path, src: BinaryIO, *, pinned: str, on: str | None,

@@ -926,6 +926,8 @@ def _member(name: str, kind: bytes = tarfile.REGTYPE, link: str = "") -> tarfile
     (tar_of(HANDED, extra=((_member("/etc/x"), b"x"),)), "the hand-off's member '/etc/x' isn't a path under the serve dir"),
     (tar_of(HANDED, extra=((_member("h1/../../x"), b"x"),)), "isn't a path under the serve dir"),
     (tar_of(HANDED, extra=((_member("h1/log.jsonl"), b"{}\n"),)), "the hand-off carries h1/log.jsonl twice"),
+    (tar_of(HANDED, extra=((_member("h1"), b"x"),)), "the hand-off's member h1 can't be written under the serve dir"),
+    (tar_of(HANDED, extra=((_member("h1/log.jsonl/x"), b"x"),)), "member h1/log.jsonl/x can't be written under the serve"),
     (tar_of(HANDED, unlisted=("h1/log.jsonl",)), "the hand-off carries h1/log.jsonl, which its sums don't list"),
     (tar_of(HANDED, sums={"h1/log.jsonl": "0" * 64}), "h1/log.jsonl isn't the file the served node hashed"),
     (tar_of(HANDED, extra=((_member(H.COMPOSE_SUMS), b"0" * 64 + b"  h1/gone.json\n"),)),
@@ -954,6 +956,9 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  h1/gone.json\n")), tmp_path / "lacks")
     with pytest.raises(H.Refused, match=r"sums list the served run's witness: private/h1/key \(H1's prover state"):
         H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  private/h1/key\n")), tmp_path / "listed")
+    for i, outside in enumerate(("../../etc/passwd", "/etc/passwd", "h1/../../x")):
+        with pytest.raises(H.Refused, match="lacks .*, which its sums list"):
+            H.receive(io.BytesIO(tar_of(HANDED, more=f"{'0' * 64}  {outside}\n")), tmp_path / f"outside{i}")
     with pytest.raises(H.Refused, match="a line that isn't sha256sum's"):
         H.receive(io.BytesIO(tar_of(HANDED, more="nonsense\n")), tmp_path / "line")
     with pytest.raises(H.Refused, match="over 10 bytes"):
@@ -962,6 +967,86 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
     assert got == {**{f: hashlib.sha256(b).hexdigest() for f, b in HANDED.items()},
                    H.COMPOSE_SUMS: hashlib.sha256((tmp_path / "ok" / H.COMPOSE_SUMS).read_bytes()).hexdigest()}
     assert oct((tmp_path / "ok").stat().st_mode & 0o777) == "0o700"
+
+
+@pytest.mark.parametrize("line, why", [
+    ("K=$(touch {ran})", "its line 1 sets K to a value of other characters"),
+    ("K=`touch {ran}`", "its line 1 sets K to a value of other characters"),
+    ("K=7; touch {ran}", "its line 1 sets K to a value of other characters"),
+    ("K=7 touch {ran}", "its line 1 sets K to a value of other characters"),
+    ("K=7\r", "its line 1 sets K to a value of other characters"),
+    ("touch {ran}", "its line 1 is not NAME=VALUE"),
+    ("", "its line 1 is not NAME=VALUE"),
+    ("$(touch {ran})=7", "its line 1 names no setting"),
+    ("ONSITE_PIECES=x", "its line 1 sets no setting of a hand-off"),
+    ("K=7\nK=8", "its line 2 sets K a second time"),
+    ("K=7\nPRODUCT=x\nSTEPS=0\\,3\nGAMMA=$(touch {ran})", "its line 4 sets GAMMA to a value of other characters"),
+])
+def test_a_hand_off_whose_settings_are_not_data_is_refused_before_they_are_written_and_runs_nothing(
+        composer, tmp_path, line, why):
+    """A hand-off's compose.env is the prover's bytes, which the compose's script reads on this host: `receive`
+    refuses one that isn't NAME=VALUE lines of the hand-off's settings in handoff's characters before writing it, so a
+    `$(...)` in it reaches no shell; nothing composes, and the command it carries never ran."""
+    ran = tmp_path / "ran"
+    handed = tar_of({**HANDED, H.COMPOSE_ENV: f"{line.format(ran=ran)}\n".encode()})
+    (rc, out), seen = compose(composer, handed)
+    said = refused((rc, out))
+    assert f"{H.COMPOSE_ENV}, which the compose reads as data and never runs: {why}" in said, said
+    assert str(ran) not in said and "env" not in seen and not seen["scratch"].exists() and not ran.exists()
+    d = tmp_path / "serve"
+    with pytest.raises(H.Refused, match="reads as data"):
+        H.receive(io.BytesIO(handed), d)
+    assert not (d / H.COMPOSE_ENV).exists() and not ran.exists()
+
+
+def test_the_served_nodes_own_settings_are_received_as_the_script_reads_them(tmp_path):
+    """The served node's compose.env as handoff writes it (`printf '%s=%q\\n'`: a comma as `\\,`, an empty value as
+    `''`), its last line with or without a newline, is received whole and reads as the settings it was written from."""
+    settings = {"K": "7", "PRODUCT": "remote", "STEPS": "0,3", "AUDITED_ON": "", "SERVED_DIR": "/workspace/research/r-1",
+                "ALPHA": "0.25", "GAMMA": "1e-3", "COMPOSE_TREE": "a+b@c:d=e"}
+    body = subprocess.run(["bash", "-c", 'printf "%s=%q\\n" "$@"', "_", *(x for kv in settings.items() for x in kv)],
+                          capture_output=True, check=True).stdout
+    assert b"STEPS=0\\,3\n" in body and b"AUDITED_ON=''\n" in body
+    for i, b in enumerate((body, body.rstrip(b"\n"))):
+        got = H.receive(io.BytesIO(tar_of({**HANDED, H.COMPOSE_ENV: b})), tmp_path / f"ok{i}")
+        assert (tmp_path / f"ok{i}" / H.COMPOSE_ENV).read_bytes() == b and H.COMPOSE_ENV in got
+        assert H.compose_settings(b) == settings
+    assert H.compose_settings(b"") == {}
+    with pytest.raises(H.Refused, match="over 65536 bytes"):
+        H.compose_settings(b"K=7\n" * 20000)
+
+
+def test_a_compose_answers_no_byte_a_link_in_its_out_points_at(composer, tmp_path):
+    """The answer is $OUT's own files: a link there, to a file or a directory outside it, is named and never followed,
+    so no byte of the auditor's host outside $OUT reaches the caller."""
+    (tmp_path / "secret").write_text("SECRET\n")
+    (tmp_path / "secrets").mkdir()
+    (tmp_path / "secrets" / "key").write_text("KEY\n")
+
+    def run(env, log):
+        out = Path(env["OUT"])
+        (out / "record").mkdir(parents=True)
+        (out / "verdicts.txt").write_text("RECORD {}\n")
+        (out / "record" / "a.json").symlink_to(tmp_path / "secret")
+        (out / "dir").symlink_to(tmp_path / "secrets", target_is_directory=True)
+        return 0
+
+    rc, doc = H.compose_handoff(composer, tmp_path / "scratch", io.BytesIO(tar_of(HANDED)), pinned=PIN, on=None, run=run)
+    assert rc == 0, doc
+    assert doc["files"] == {"verdicts.txt": "RECORD {}\n"} and doc["links"] == ["dir", "record/a.json"]
+    assert "SECRET" not in json.dumps(doc) and "KEY" not in json.dumps(doc)
+
+
+def test_the_settings_rule_is_the_compose_scripts():
+    """`COMPOSE_SETTINGS` is served_verdicts.sh's COMPOSES, and `ENV_NAME` and `ENV_VALUE` its read_env's patterns once
+    it states them: one edited alone fails here, so the gate refuses no hand-off the script reads and passes none it
+    refuses."""
+    sh = (ROOT / "benchmarks" / "one_stage" / "served_verdicts.sh").read_text()
+    (composes,) = re.findall(r'^COMPOSES="([^"]*)"$', sh, re.M)
+    assert tuple(composes.split()) == H.COMPOSE_SETTINGS, "make COMPOSE_SETTINGS served_verdicts.sh's COMPOSES"
+    value = re.findall(r"^ENV_VALUE='\^(.*)\$'$", sh, re.M)
+    assert value in ([], [H.ENV_VALUE.pattern]), "make ENV_VALUE served_verdicts.sh's, without its ^ and $"
+    assert not value or f"$_n =~ ^{H.ENV_NAME.pattern}$" in sh, "make ENV_NAME read_env's name pattern"
 
 
 def witness_rule(source: str) -> tuple[dict[str, list], str]:
