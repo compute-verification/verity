@@ -1,0 +1,37 @@
+# The slowdown's names: what `tools/move/rename.py --map tools/move/slowdown_map.toml` renames, the older name "dampener"
+# in paths and Lean (GLOSSARY.md, Older names: "dampener", "compute dampener" D). The prose's words are
+# `slowdown_prose_map.toml`'s.
+# - `Dampener` becomes `Slowdown` as a word or one part of a name: the modules `Dampener.lean`, the namespace of the
+#   slowdown's vocabulary (`Nci.Dampener`), its guarantees and proofs (`Dampener`, `DampenerRemote`,
+#   `DampenerRemotePeriod`, `DampenerThreaded`, `DampenerThreadedSlots`, `DampenerWindows`, with their `_honest` and
+#   `_nontrivial`) and `remoteDampener`, with every mention of them outside Lean.
+# - The proofs' three lemmas that spell it in lower case, each by its whole name.
+# What stays, each for a change of its own (`move_check.py` certifies a word that renames a path, a module or a Lean
+# declaration to a name its base never spells, and `slowdown` in lower case is spelled already): Python's
+# `dampener`, `fit_dampener` and `attack_dampener` (`benchmarks/nci`), and the constant `REMOTE_DAMPENER`.
+#
+# It renames declarations the Lean lock records: their records follow in a commit of their own,
+# `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves` prints.
+
+[words]
+"Dampener" = "Slowdown"
+"dampener_core" = "slowdown_core"
+"dampener_attained" = "slowdown_attained"
+"dampener_T0_fails" = "slowdown_T0_fails"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lints' own examples, the frozen backends, files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line
+# itself), lock files, move_check's own tests, and the Lean tools' fixtures, locks as they were on a past tree, which
+# their tests read as such. GLOSSARY.md is rewritten, since its symbol table names the Lean, and its rows of older names
+# stay as they are ([keep]).
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
+            'lanes/[\w.-]+']
+# GLOSSARY.md's rows of older names.
+strings = ["the Lean's `Nci.Dampener` and `Dampener*` names",
+           "and the Lean's `Nci.Dampener.unmonitoredShare`"]
