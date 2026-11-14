@@ -59,7 +59,7 @@ from verity.commitments.merkle import merkle_depth
 __all__ = ["LAG", "TEMP_BYTES", "E", "Pending", "Plan", "SmPartition", "StepCommitter", "build", "commit", "driver_bindings",
            "regroup"]
 
-HERE = Path(__file__).resolve().parent
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "torch_gpu" / "commit_slots")
 ENGINE = HERE.parent / "sha512_rows" / "engine.py"
 LAG = 1               # adds a plan holds unread tensors for before their producer waits for the read: 1 keeps no more
                       # tables alive at the producer's next allocation than it holds itself (at the HBM limit, 2 ran out)
