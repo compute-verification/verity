@@ -325,8 +325,6 @@
     {"file": "security/Definitions/Pouw/Guarantees/DitherInstance.lean", "count": 7},
     {"file": "security/Definitions/Pouw/Guarantees/Eps1.lean", "count": 2},
     {"file": "security/Definitions/Pouw/Guarantees/OnsiteFreed.lean", "count": 6},
-    {"file": "security/Definitions/Pouw/Guarantees/PearlC.lean", "count": 123},
-    {"file": "security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "count": 6},
     {"file": "security/Definitions/Pouw/Guarantees/ShaRealize.lean", "count": 3},
     {"file": "security/Definitions/Pouw/Guarantees/Window.lean", "count": 39},
     {"file": "security/Definitions/Pouw/H1Zy.lean", "count": 1},
@@ -2717,11 +2715,7 @@
     {"file": "benchmarks/hash/dither/dither_manifest.py", "count": 2},
     {"file": "benchmarks/hash/dither/dither_one.py", "count": 16},
     {"file": "benchmarks/hash/dither/dither_so.py", "count": 159},
-    {"file": "verity/protocols/experimental/dither/prover/kernels/h1c.cu", "count": 1},
-    {"file": "verity/protocols/experimental/dither/prover/kernels/h1o.cu", "count": 1},
     {"file": "benchmarks/hash/dither/h1ogate.py", "count": 16},
-    {"file": "verity/protocols/experimental/dither/prover/kernels/h1r.cu", "count": 1},
-    {"file": "verity/protocols/experimental/dither/prover/kernels/h1u.cu", "count": 41},
     {"file": "benchmarks/hash/dither/live_audit.py", "count": 9},
     {"file": "benchmarks/hash/dither/pin_glm53.sh", "count": 1},
     {"file": "benchmarks/hash/dither/sbench.py", "count": 13},
@@ -5217,6 +5211,12 @@
     {"file": "security/Proofs/Flock/SpotFlock/AddressesWired.lean", "count": 1},
     {"file": "security/Proofs/Flock/SpotFlock/RevealsWired.lean", "count": 1},
     {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean", "count": 3},
-    {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean", "count": 3}
+    {"file": "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordChosen.lean", "count": 3},
+    {"file": "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean", "count": 6},
+    {"file": "security/Proofs/Pouw/Lemmas/PearlCRecords.lean", "count": 123},
+    {"file": "verity/protocols/experimental/dither/prover/kernels/h1c.cu", "count": 1},
+    {"file": "verity/protocols/experimental/dither/prover/kernels/h1o.cu", "count": 1},
+    {"file": "verity/protocols/experimental/dither/prover/kernels/h1r.cu", "count": 1},
+    {"file": "verity/protocols/experimental/dither/prover/kernels/h1u.cu", "count": 41}
   ]
 }
