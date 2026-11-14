@@ -3142,6 +3142,11 @@
       "paths": {
         "adapters/vllm/tests/engine/int8_kscale_gpu.py": "benchmarks/ppl/int8_kscale_gpu.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/vllm_encoded/paged.cu": "verity/protocols/accounting/poub/prover/word_codec/paged.cu"
+      }
     }
   ]
 }
