@@ -1,8 +1,8 @@
 # This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
 # enforces it.
 
-# Each is modeled from the recursion bench's run of record (r20261106-010929-a7ae: twelve V* releases on time, an
-# accepted recursive run), read from the evidence store with this tree's reader, and written for each fleet's week,
+# Each is modeled from the recursion bench's run of record, the run its command names, read from the evidence store
+# with this tree's reader, and written for each fleet's week,
 # month and year; the world's year, the one each id names, is written last. Recursion is parked (top/parked), so the
 # figures are redrawn monthly, from a newer run once one is recorded.
 [[metric]]
