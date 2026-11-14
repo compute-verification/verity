@@ -113,8 +113,8 @@ at every R, and a `static_assert` bounds R to 1..64.
 `egemm.cu` and `prof.cu` include `masked_gemm/lpgemm.cu`; `cgemm.cu` and `d2sgemm.cu` include `egemm.cu`; `cwgemm.cu`,
 `cpv.cu` and `apv.cu` include `cgemm.cu`; `fattn.cu` includes `apv.cu`. Four references (`egemm_ref.py`, `cgemm_ref.py`,
 `d2sgemm_ref.py`, `egemm80_ref.py`) load `floored_gemm/derive.py` from its file for its `tile_receipts`, putting
-nothing on `sys.path`, and the Dither-C and P V references recompute through
-`benchmarks/pouw/theory/checked_strip.py`, which `cgemm_ref.py` loads the same way. Inside the directory,
+nothing on `sys.path`, and the Dither-C and P V references recompute through `co_words.py` (the words
+`benchmarks/pouw/theory/checked_strip.py` analyses, which loads it back), which `cgemm_ref.py` loads the same way. Inside the directory,
 `cwgemm_ref.py`, `cpv_ref.py` and `apv_ref.py` import `cgemm_ref.py`, `apv_ref.py` imports `cpv_ref.py`'s
 `patch_cols`, and `vprod_profile.py` imports `eps_profile.py`; each module another script imports lists in `__all__`
 what they read of it (the suite's tests read more of a module than its list). From outside the directory,

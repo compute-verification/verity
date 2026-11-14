@@ -1,7 +1,8 @@
 """CPU reference for sgemm.cu's gate dump: the SHA-512 noise, every edited operand, product, receipt and generation word,
 bit for bit.
 
-python3 sref.py DIR [--no-receipts] prints one JSON line of checks and exits 0 only if every check passes.
+PYTHONPATH=. python3 verity/protocols/accounting/pouw/prover/kernels/masked_gemm/sref.py DIR [--no-receipts], from the repository root,
+prints one JSON line of checks and exits 0 only if every check passes.
 
 Recomputed independently of the device, from the dumped A and B (stacked over the batch) and the seed alone: sigma
 (splitmix64 from the seed), the noise of every patch (4 rows x 128 columns) with hashlib's SHA-512 in counter mode, as
@@ -21,8 +22,11 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "floored_gemm"))
-from mref import decode, duo_receipts, words
+from verity.protocols.accounting.pouw.prover.kernels.masked_gemm.mref import (
+    decode,
+    duo_receipts,
+    words,
+)
 
 #: what pvref.py and lpref.py import
 __all__ = ["fold", "noise", "sigma"]

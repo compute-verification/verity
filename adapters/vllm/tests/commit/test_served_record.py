@@ -230,7 +230,7 @@ def test_an_overrun_input_off_the_chain_fails():
     assert not got["passed"] and any(p.startswith("overrun:") for p in got["problems"])
 
 
-def test_readback_refuses_a_draw_at_another_position_and_unknown_requests():
+def test_readback_refuses_a_sample_at_another_position_and_unknown_requests():
     com = FakeCommitter()
     com.step([("a", 0, 3, 0, 3)], [1, 2, 3], [9], pos=[1])
     com.step([("zz", 0, 1, 0, 1)], [1], [9])

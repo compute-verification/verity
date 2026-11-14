@@ -49,8 +49,8 @@ the one in flight unended.
 
 The payload's salts are the verifier's: its first message (`payload-key`) carries a fresh key, and the prover salts its
 payload tree's leaves under it (`store.store_salt`). With `--model ROLE --checkpoint DIR --pin FILE
---arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store.Binding`, the
-remote audit's own code, so the circuit a period commits to names it): at startup
+--arena-blocks A [--engines E]` the registered store is bound to a pinned model (`store.Binding`,
+PoUB's own code, so the circuit a period commits to names it): at startup
 every file the pin names is held to its SHA-512 and the arena the checkpoint lays out is digested; a hello's store is
 then E arenas of A blocks, weights and zero filler each, and the rest host filler, and its payload root must be that
 store's under the key sent, else the hello is refused with the reason before the registry samples anything. The
@@ -183,7 +183,7 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
 
 def regions_of(layout, blocks: int) -> tuple[tuple[str, str, int, int], ...] | None:
     """The hello's layout of the registered store as regions `(kind, tier, first, blocks)` in index order, covering its
-    `blocks` exactly (`verity_vllm.protocols.remote_bandwidth.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
+    `blocks` exactly (`verity.protocols.accounting.poub.prover.node_store.registry.NodeMemory.layout`'s), or None without one.  The labels are the prover's,
     public as protocol structure: that a plan's weights blocks hold the circuit's weights is the plan unit's to show
     (`audit.RequirementLink`), not this."""
     if layout is None:
@@ -966,8 +966,15 @@ class Verifier:
                  disk_burst_bytes: float | None = None, link_burst_bytes: float | None = None,
                  challenger: challengers.Local | challengers.Serve | challengers.ChallengerGate | None = None,
                  appends: int | None = None, payload_key: bytes | None = None,
-                 binding: rstore.Binding | None = None, groups_per_coin: int = 1) -> None:
+                 binding: rstore.Binding | None = None, groups_per_coin: int = 1,
+                 node: ledger.Node | None = None) -> None:
         coins.openings_coins(1, groups_per_coin)
+        if node is not None and (disk_bytes_per_s or link_bytes_per_s or disk_burst_bytes is not None
+                                 or link_burst_bytes is not None):
+            raise ValueError("a node handed in states its own disk and link ceilings and bursts: give them in it")
+        if node is not None and sorted(node.tiers) != ["dram", "hbm"]:
+            raise ValueError("a node handed in states its tiers, every GPU's HBM (hbm) and the host's DRAM (dram)")
+        self.node = node
         self.groups_per_coin = groups_per_coin
         self.conn, self.source, self.W, self.T, self.lifetime = conn, source, windows, window_ns, lifetime
         self.payload_key = secrets.token_bytes(rstore.KEY_BYTES) if payload_key is None else payload_key
@@ -1461,9 +1468,10 @@ class Verifier:
 
     def ledgers(self, record: audit.Record, arrivals: list[list[int]] = (), plans=None) -> dict:
         """The session's declared outputs (`declared`), the protocol's (`ledger`: γ against the node's R at spec and
-        measured, per window as declared, and the memory line's forms), on the verifier's node (`ledger.Node.stated`:
-        every GPU's HBM and the host's DRAM, the node's S_chip and squaring ceiling, `--disk-bytes-per-s` and
-        `--link-bytes-per-s`, and their bursts), whatever share of the node the store is on.  Both R are the verifier's, which the
+        measured, per window as declared, and the memory line's forms), on the verifier's node (the one handed in,
+        `--node`, else `ledger.Node.stated`: every GPU's HBM and the host's DRAM, the node's S_chip and squaring
+        ceiling, `--disk-bytes-per-s` and `--link-bytes-per-s`, and their bursts), whatever share of the node the
+        store is on, published whole as `inputs`' `capacities`.  Both R are the verifier's, which the
         prover's calibration can only raise: a prover reporting a slower read would shrink every term but the timing.
         Each reading (`spec`, `measured`) also carries the session's terms (`audit.GammaTerms`) and its
         certified bytes, `(1 − γ)·R·Σ`, the same in both readings: they are what a session over part of the node
@@ -1479,10 +1487,9 @@ class Verifier:
         (`slack_log2`); a record without it was charged `UNRECORDED_SLACK_LOG2`."""
         cal = self.calibration
         reported = float(cal["read_bytes_per_s"])
-        stated = ledger.Node.stated(self.figures, reported_read_bytes_per_s=reported,
-                                    disk_bytes_per_s=self.disk_bytes_per_s,
-                                    link_bytes_per_s=self.link_bytes_per_s, disk_burst_bytes=self.disk_burst_bytes,
-                                    link_burst_bytes=self.link_burst_bytes)
+        stated = (self.node if self.node is not None else ledger.Node.stated(
+            self.figures, disk_bytes_per_s=self.disk_bytes_per_s, link_bytes_per_s=self.link_bytes_per_s,
+            disk_burst_bytes=self.disk_burst_bytes, link_burst_bytes=self.link_burst_bytes)).raised(reported)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
         hbm, dram = stated.tiers["hbm"], stated.tiers["dram"]
@@ -1491,7 +1498,7 @@ class Verifier:
                 "host_read_bytes_per_s": dram.read_bytes_per_s, "gpu_chip_bytes": hbm.chip_bytes,
                 "host_chip_bytes": dram.chip_bytes}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
-                          "reported_read_bytes_per_s": reported, "node": node,
+                          "reported_read_bytes_per_s": reported, "node": node, "capacities": stated.to_json(),
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
                           "rebuild_burst_bytes": stated.rebuild_burst_bytes,
                           "disk_burst_bytes": stated.disk_burst_bytes, "link_burst_bytes": stated.link_burst_bytes,
@@ -1613,6 +1620,9 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
                     help="one link burst, charged with the links (default: `figures.link_window_bytes`)")
+    ap.add_argument("--node", type=Path, metavar="FILE",
+                    help="the node's capacities, as `ledger.Node.to_json` writes them (default: `ledger.Node.stated`'s, "
+                         "with the disk and link flags, which a node handed in states itself)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
@@ -1689,6 +1699,11 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
     a = ap.parse_args(argv)
     a.hbm_bytes = figures.hbm_bytes if a.hbm_bytes is None else a.hbm_bytes
     a.engines = figures.gpus if a.engines is None else a.engines
+    capacities = None
+    if a.node is not None:
+        if a.disk_bytes_per_s or a.link_bytes_per_s or a.disk_burst_bytes is not None or a.link_burst_bytes is not None:
+            ap.error("--node states the disk and link ceilings and bursts: drop --disk-* and --link-*")
+        capacities = ledger.Node.of_json(json.loads(a.node.read_text()))
     if a.memory_of is not None:
         v = json.loads(a.memory_of.read_text())
         print(json.dumps([{"k": s["k"], "memory": recorded_memory(s, chip_bytes=figures.chip_bytes,
@@ -1766,7 +1781,8 @@ def main(argv: Sequence[str] | None = None, *, figures: timing.Figures, verify: 
                  lean_exe=a.lean_exe, transcript=a.transcript, disk_bytes_per_s=a.disk_bytes_per_s,
                  link_bytes_per_s=a.link_bytes_per_s, disk_burst_bytes=a.disk_burst_bytes,
                  link_burst_bytes=a.link_burst_bytes,
-                 challenger=challenger, appends=a.appends, binding=binding, groups_per_coin=a.groups_per_coin)
+                 challenger=challenger, appends=a.appends, binding=binding, groups_per_coin=a.groups_per_coin,
+                 node=capacities)
     c0 = time.process_time_ns()
     try:
         reg, cal = v.register()

@@ -7,7 +7,7 @@ import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
 /-!
-# The snapshot a remote audit shows held
+# The snapshot a PoUB session shows held
 
 `Accounting.Guarantees.Remote.Held` from its premises: at each outcome where the sketch bound and the live coins' bound
 hold (a union bound, `holdsAnd`), each credited pass's registered blocks are its wrong receipts, the blocks in node

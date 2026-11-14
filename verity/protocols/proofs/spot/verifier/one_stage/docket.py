@@ -933,7 +933,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
-#: `OneStageZk.TABLE_PORT`, the port a registration names a window's row tables' root at
+#: `OneStageZk.TABLE_PORT`, the port a docket names a window's row tables' root at
 TABLE_PORT = "row-table"
 #: `OneStageZk.ROW_TABLES`
 ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "

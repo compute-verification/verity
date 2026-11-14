@@ -968,9 +968,9 @@ def template_reads(proofs: Mapping[str, Any] | None) -> tuple[tuple[str, int], .
 
 
 def tables_served(record: Any, tables: Iterable[tuple[str, bytes, bytes]]) -> bool:
-    """Whether each history table the interior reads is one the boundary registration served (`interior-table`): every
+    """Whether each history table the interior reads is one the boundary docket served (`interior-table`): every
     table of `tables`, `(name, root, domain)` with the root and domain id `history.roots_of` computed for it, is a port
-    of the boundary registration's record `record` of that name with that root and domain, at the port's last root
+    of the boundary docket's record `record` of that name with that root and domain, at the port's last root
     (`Record.byPort`, the one round 1's checks hold). The interior's copies name the tables round 2 recomputes from the
     writers it opens; this holds each one to the table round 1 registered under its name. The Lean verifier's
     `Run.tablesServed` is this."""
