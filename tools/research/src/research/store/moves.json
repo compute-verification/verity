@@ -2954,6 +2954,11 @@
     },
     {
       "paths": {
+        "verity/commitments/cuda/sha512_rows/settings.py": "benchmarks/torch_gpu/settings.py"
+      }
+    },
+    {
+      "paths": {
         "security/Proofs/Flock/Bridge/SampledLaw.lean": "security/Proofs/Flock/Bridge/SampledDesign.lean",
         "security/Proofs/Flock/Claims/Sampling/Select/SampleLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/SampleDesign.lean",
         "security/Proofs/Flock/Soundness/Discharge/Exec/LawSample.lean": "security/Proofs/Flock/Soundness/Discharge/Exec/SamplingDesignSample.lean"
