@@ -90,6 +90,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   members in turn (`a0.VerifyMembers`), and a member's seconds there are from its line to its answer. Among the readers
   run alone is `verify` on each member's session, a process of its own: it must print the audit's verdict line for that
   member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
+- `cold_sessions.sh` (`cold_sessions.py`): one cold session a member of a kept audit window behind the ZK server, on one
+  card (`prove --zk --gpu`, a lease a session, after a check that no other run's lease or compute process is on the card)
+  and on the CPU prover in turn, each on a proof server of its own and the member's own sample from the audit, then Lean's
+  verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
+  clock's witness, proving and wait, and the ZK server's rest of it), its host and card peak memory, or its refusal's
+  text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
+  `a5.py --gpus` hands an audit's proof server the same devices.
 - `a5_glm53_commit.sh`, `a5_glm53_cpu.sh`: A5 on GLM-5.3 in its two halves. The first is the GPU job, from the source tree
   (`bash benchmarks/one_stage/a5_glm53_commit.sh`): the TP8 Commit with served windows, their
   private bodies kept on the GPU machine off custody. The second, `a5_glm53_cpu.sh GPU_RUN` from a VM, copies them to the CPU
@@ -131,7 +138,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   step's verdict line is in `out/verdicts.txt`. The network certifier's piece, the longest, starts as soon as the window is
   picked. No line counts a window's requests: the serve dir's request lists, serve-openai's log and the load's records,
   timings and log stay on the node, and leave it only as `served_overhead.py metrics`' aggregate, less the load's counts,
-  tokens and span, which `publish` holds in the serve dir's private/out.
+  tokens and span, which `publish` holds in the serve dir's private/out. It holds there too what Pearl+'s documents say
+  of its exclusion tiles, their count and every replayed tile's id, which the retained values decide, and the exact
+  credit of a run held to its class's fixed load (`exact_work`): such a run publishes its work in the grid form, the
+  class's structural credit less the give-up padded up to H1's window grid (`verify_run.grid_work`). And the give-up
+  before the coin itself: the piece's give-up document (`development.json`'s and its line's `give_up`: the A and B rows
+  given up, the tiles over a cap before and left after, those replayed on the CPU) and the same counts in
+  `served_passes.py volunteer`'s and `retain`'s lines in the piece's log.
 - `a6.sh`: run A6's entry point on a CPU machine, on hidden_zk's cached builds. A6 is the W8A8 coordinates of an int8
   decoder layer (`ScaledMmS8Coordinate_v1` at each K, Llama-3.2-1B's by default) under the stratified sampling design, stand-in values
   staged by Flock's `UnitStager` bound to the partition in statements the spec's shape admits (m <= 35), each stratum's
@@ -299,7 +312,7 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
 - `served_shares.py SERVE_DIR [--credit ANSWER.json]`: a served run's utilization (the work its step trace's
   steps declare, the linears at θ and attention and the LM head at θ/2, over the loads' busy wall), term by term, and its
   credited share (the MACs Pearl+'s verdict, `served_passes.py verify`'s answer, credited at θ, over the same wall), at
-  the tensor and boost clock readings.
+  each reading of the tensor's clock the card states (`verity.device.readings`: the tensor clock's and the SM clock's).
 - `served_pearlplus.sh SERVE_DIR WINDOW PIECE_DIR`: PoUW's piece with Pearl+ (`served_verdicts.sh`'s `POUW=pearlplus`).
   After the window's serve, it serves Llama-3.2-1B's BF16 checkpoint on the same card through `pouw:pearl-c-h100-v1-h3`
   (`benchmarks/pouw/pearl_c_vllm/served_passes.py`, a prefill-heavy load), retains every pass, and while Pearl+'s

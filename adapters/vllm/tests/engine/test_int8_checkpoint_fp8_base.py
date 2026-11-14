@@ -173,6 +173,17 @@ def test_the_bf16_linears_are_vllms_upcast():
     assert np.array_equal(got, want[8:136])
 
 
+@pytest.mark.parametrize("shape", [(4,), (), (1, 2, 4)])
+def test_codes_that_are_no_matrix_are_refused_by_the_call_that_lays_out_their_scales(shape):
+    """Both reads spread the codes' shape over `_block_rows`' arguments, so codes that are not [r, K] are a call it refuses
+    (TypeError), for one dimension, none and three."""
+    codes: np.ndarray = np.zeros(shape, dtype=np.uint8)
+    s: np.ndarray = np.ones((2, 2), dtype=np.float32)
+    for read in (I.fp8_exact, I.fp8_served_bf16):
+        with pytest.raises(TypeError, match=r"_block_rows\(\) (missing|takes)"):
+            read(codes, s, 0, 2)
+
+
 @pytest.mark.parametrize("bad", ["code", "scale"])
 def test_nan_codes_and_non_finite_scales_are_refused(tmp_path, bad):
     base = _base(tmp_path / "base")

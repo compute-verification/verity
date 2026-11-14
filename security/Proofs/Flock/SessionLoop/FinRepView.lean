@@ -177,7 +177,7 @@ theorem finRepTab (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.R
   unfold FlockComplete.schedsPZk at hschs
   obtain ⟨hsz, hall⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hschs
   have hk' : k / 2 < schs.size := by rw [hsz]; exact hj'
-  have e : _root_.Flock.Zk.schedule (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2].m = .ok schs[k / 2] :=
+  have e : _root_.Flock.Zk.schedule (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2].wideLeaf (FlockDeploy.tabsOf (Masked.stsOf x))[k / 2].m = .ok schs[k / 2] :=
     hall (k / 2) hj' hk'
   rw [getElem!_pos schs (k / 2) hk']
   rw [← getElem!_pos (FlockDeploy.tabsOf (Masked.stsOf x)) (k / 2) hj', htab, hts, hsch] at e

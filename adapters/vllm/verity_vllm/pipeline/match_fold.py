@@ -272,7 +272,7 @@ def run_input_bindings(address_map: dict, identities: list[dict], *, rank: int =
     for r in address_map["requests"]:
         for i in r["inputs"]:
             name = str(i["name"])
-            if name == RUN_PARAM or (name.startswith(RUN_PARAM + "[") and name.endswith("]") and name[len(RUN_PARAM) + 1:-1].isdigit()):
+            if name == RUN_PARAM or (name.startswith(RUN_PARAM + "[") and name.endswith("]") and name[len(RUN_PARAM) + 1:-1].isdecimal()):
                 k = int(name[len(RUN_PARAM) + 1:-1]) if name != RUN_PARAM else 0
                 batches[f"r{int(r['index'])}"].append((k, str(i["global"]), int(i["gates"][0]), int(i["gates"][1])))
     fields: dict[str, list[dict]] = defaultdict(list)
