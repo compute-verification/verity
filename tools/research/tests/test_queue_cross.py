@@ -19,7 +19,7 @@ from research.clone import RECORD_DRIVER
 from research.queue import StoreLabels, label_target
 from research.store import vocab
 from test_queue import World, _git
-from test_queue_moves_carry import LIB, A, B, _kept, _land, _mark, _move, _push_main, _queue, world  # noqa: F401
+from test_queue_moves_carry import LIB, MAP, A, B, _kept, _land, _mark, _move, _push_main, _queue, world  # noqa: F401
 
 
 def _open(world: World, n: int, head: str) -> None:
@@ -190,7 +190,8 @@ def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_t
     """restack.py runs each head's own code, which needs none of the queue's GitHub and Slack credentials nor the store's keys a
     node's run reads marks with: it sees none of them, and `gh` finds no stored login.  It merges with `main`'s drivers, the
     environment `cross_drivers` gave `cross_one`."""
-    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "RESEARCH_STORE_CONFIG"):
+    for k in (*Q.SCRIPT_UNSET, "AWS_ACCESS_KEY_ID", "R2_BUCKET", "RESEARCH_STORE_CONFIG", "RESEARCH_EXPORT_ACCESS_KEY_ID",
+              "CLOUDFLARE_API_TOKEN", "STORE_INDEXER_DATABASE_URL"):
         monkeypatch.setenv(k, "dummy-" + k.lower())
     seen: dict[str, str] = {}
     monkeypatch.setattr(Q, "run_group", lambda argv, cwd, left, env=None: seen.update(env or {}) or (1, "refused"))
@@ -200,6 +201,21 @@ def test_restack_runs_with_mains_drivers_and_without_the_queues_credentials_or_t
     assert not [k for k, v in seen.items() if v.startswith("dummy-")]
     assert seen["GH_CONFIG_DIR"].startswith(seen["TMPDIR"]) and not Path(seen["GH_CONFIG_DIR"]).exists()
     assert seen["GIT_CONFIG_PARAMETERS"] == drivers["GIT_CONFIG_PARAMETERS"]
+
+
+def test_a_store_with_no_remote_is_refused_before_any_pr_is_listed_and_the_refusal_names_the_read_only_key(world, monkeypatch):
+    """A machine's run has no store secrets: its store has no remote, so no mark or land verdict can be read.  The run is refused
+    before it lists or fetches a PR, naming the read-only key a machine's run takes."""
+    monkeypatch.setattr(world.gh, "open_prs", lambda: pytest.fail("listed the PRs"))
+    monkeypatch.setattr(Q, "GitHub", lambda slug: world.gh)
+    monkeypatch.setattr(Q, "PublicGitHub", lambda slug: world.gh)
+    _git(world.tmp, "clone", "-q", str(world.origin), str(node := world.tmp / "node"))
+    monkeypatch.chdir(node)
+    (cfg := world.tmp / "no-remote.toml").write_text("")
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    with pytest.raises(SystemExit) as refused:
+        Q.main(["cross", "--remote", str(world.origin), "--repo", Q.REPO, "--store", str(world.tmp / "node-store")])
+    assert f"--store-read -- research queue cross --repo {Q.REPO}`" in str(refused.value)
 
 
 def test_the_push_never_pushes_main_checked_or_next_whatever_a_pr_names(tmp_path):
@@ -326,4 +342,25 @@ def test_a_crossing_whose_tree_fails_the_root_suite_is_refused_with_the_test_and
     assert (report["crossed"], r["pr"], r["root"]) == ([], 1, ["tests/test_toy.py::test_the_proto_is_there"])
     assert r["why"] == (f"crossed clean as {r['new'][:12]}, but the root suite fails on the crossed tree: "
                         "tests/test_toy.py::test_the_proto_is_there")
+    assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == old
+
+
+def test_a_crossing_that_leaves_a_word_its_map_renames_only_in_other_files_is_refused_naming_it_and_never_pushed(world,
+                                                                                                             monkeypatch):
+    """The map renames `zed` only in `b.py`, the file its `[[words_in]]` block names, and #1, marked and passed, adds a file
+    that spells it, so the move's script leaves it there: restack.py's crossing is `stale-words`, not clean, so the run
+    refuses it, its line naming the file, line and word, and `--push` leaves its branch alone."""
+    words = _git(world.dev, "show", f"origin/main:{MAP}") + '\n[[words_in]]\nfiles = ["b.py"]\nwords = { "zed" = "zeta" }\n'
+    _push_main(world, world.change({MAP: words}))
+    _open(world, 1, old := world.change({"d.py": "import b\n\nQ = b.zed\n"}))
+    _mark(world, 1, old)
+    _land(world, _move(world))
+    out = world.tmp / "out"
+    assert _cross(world, monkeypatch, "--out", str(out)) == 0
+    report = _report(out)
+    (r,) = report["refused"]
+    assert (report["crossed"], r["pr"], r["old"]) == ([], 1, old)
+    assert r["why"].startswith(f"{Q.RESTACK}: stale-words: 1 of the branch's own lines still spell a word a crossed move ")
+    assert r["why"].endswith(": d.py:3 zed (-> zeta)")
+    assert f"  refused #1 {old[:12]}: {Q.RESTACK}: stale-words: " in Q.cross_table(report)
     assert _cross(world, monkeypatch, "--push", "--from", str(out)) == 0 and _branch(world, 1) == old

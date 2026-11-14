@@ -155,5 +155,6 @@ using-slack skill).
 
 top's hourly sweep (`infra/control/top_watch.py`) runs the same audit and only reports. Once every 12 hours it rings a
 lane with findings, and a lane with a person's ask off track until it holds (a slip, until its `slip:` comment), and it
-records the counts in `linear-audit.jsonl`. Once a day top rings the owner of a goal past its due, for a new date or its
-evidence. top reads the campaign's state from the Goals page and Linear, not from Slack.
+records the counts in `linear-audit.jsonl`. Once a day top rings the owner of each goal `research goals audit` names as
+past its due, off track and not written in a day, or due within a day and not written in the day before. top reads the
+campaign's state from the Goals page and Linear, not from Slack.
