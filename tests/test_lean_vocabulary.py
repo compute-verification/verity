@@ -136,7 +136,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Window": (),
     "Witness": (f"{CORE}TC/Relation.lean::Verity.TC.Relation.Witness",),
 }
-CANONICAL["Record"] = ("verity/protocols/interface/CoreProtocol/Record.lean::Core.Record",)
+CANONICAL["Record"] = ("verity/protocols/interface/CoreProtocol/Record.lean::Core.Record", "verity/channel.py::Record")
 #: The slots a knowledge-soundness or zero-knowledge statement quantifies over: the claims core's counted programs.
 CONCEPTS += ("Extractor", "Simulator")
 CANONICAL["Extractor"] = (f"{CORE}Interaction.lean::Claims.Extractor",)

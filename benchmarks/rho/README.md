@@ -16,7 +16,8 @@ A scenario is one choice from every part: a fleet (its location and unregistered
 inference-only policy, a monitoring period (its `horizon`, one of core's), a run (the target and its model), the
 algorithm families the adversary may use, and the bounds and attacks applied. For each one the package reports:
 
-- **the slowdown's lower bound** (`Result.lo`): every bound met at once, at the family the adversary picks. Under a
+- **the slowdown's lower bound** (`Result.lo`): every bound a lock states met at once (`bounds.lock_only`, below), at
+  the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
@@ -92,7 +93,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 
 - **The physical model** `𝒜_phys` (`hardware.py`, `data/hardware.toml`): the inventory's locations, each with its
   capacity `Φ_X` in gates per second and its servers' memory `M_s`, the unregistered hardware `ε_unreg`, and the monitoring
-  period (core's `reporting.PERIODS`, through `params.py`). `Units`
+  period (core's `verity.protocol.MONITORING_PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the free compute
@@ -128,6 +129,11 @@ structure (`structure.train-step-v1`, SmolLM2-135M's training step) is `s_×` in
 `evidence`, the runs that measured it, cited beside the straddling premise; `circuits.in_place` puts it in place with
 `units.gates_per_flop` counted on the same design, where `G` no longer cancels and a gate holds `u/w = 2G / (κ s_×)` of
 the reference's weight.
+
+**Only a bound a lock states sets the lower bound.** A class one of whose own citations is a `draft:` statement sets
+it at no block size (`bounds.lock_only`, `data/premises.toml`; `scenario._combine`). The class is still evaluated alone
+and listed, labeled draft (`Estimate.drafts`). A cut's premises and the structure's (`draft:no-straddle`) are not a
+class's own. `--set bounds.lock_only=false` admits every bound whose premises aren't refuted at a block.
 
 **The min-cut bound.** `min_cut.py` is the one place that computes Lean's `HE`, `HEShared` and `HECharged`
 (`min_cut.HE`, `min_cut.HE_SHARED`, `min_cut.HE_CHARGED`), each function one side of an inequality they conclude or
@@ -191,7 +197,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
 | `min_cut.py` | `alpha`, `share`, `macs_at_most`, `blocks_at_least`, `slowdown_at_least`, `macs_a_block`, `macs_on`, `beta`; `bound(c, k, n, N, O, size) → Bound`; `bound_charged(c, k, n, blocks, untied, untied_macs, w, N, O, size, rows) → Charged`, `best_w`, `capped` |
-| `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
+| `attacks.py` | the same `Argument`, side `attack`, on a server block's layout; `held_layers`, the forward products of a block that holds whole layers, against E1's Proposition 3 |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `benchmarks/circuit_properties` read |

@@ -30,6 +30,7 @@ def config(tmp_path, **over) -> dict:
     cfg["spend"].update(budgets=[str(tmp_path / "budgets.toml")], guard_state=str(tmp_path / "guard.json"),
                         steward_log=str(tmp_path / "watch.log"), gap=[])
     cfg["nebius"]["machines_d"] = [str(tmp_path / "machines.d")]
+    cfg["github"]["token_command"] = [str(tmp_path / "gh_read_token.sh"), "--cached"]     # absent, so no test mints a token
     cfg.update(over)
     return cfg
 
@@ -324,9 +325,49 @@ def test_a_missing_credential_is_a_gap_in_the_digest_and_never_an_anomaly(tmp_pa
     gaps = [ln for ln in digest.split("*Unmonitored* (")[1].splitlines()[1:] if ln.startswith("• needs ")]
     assert len(gaps) == len(set(gaps))
     for need in ("needs R2_BUCKET, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, R2_ENDPOINT: R2 bucket `store`",
-                 "needs STORE_INDEXER_DATABASE_URL", "needs GH_TOKEN", "needs NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID, NEBIUS_SA_PRIVATE_KEY_B64", "needs budgets.toml"):
+                 "needs STORE_INDEXER_DATABASE_URL", f"needs {tmp_path}/gh_read_token.sh: the GitHub API rate limit",
+                 "needs NEBIUS_SA_ID, NEBIUS_SA_PUBLIC_KEY_ID, NEBIUS_SA_PRIVATE_KEY_B64", "needs budgets.toml"):
         assert any(need in g for g in gaps), need
     assert state["open"] == {}
+
+
+def test_github_is_read_with_the_token_its_command_prints_at_each_pass_never_one_from_the_environment(tmp_path):
+    """The pod's watchers read GitHub with one read-only App token, which lives an hour: the watch runs the token command
+    each pass, and a GH_TOKEN in its environment is not what it reads with. A command that gives none, or a token GitHub
+    refuses, is a check that couldn't read, which opens an anomaly for infra."""
+    cfg = config(tmp_path)
+    assert REAL["github"]["token_command"] == ["/data/infra/gh_read_token.sh", "--cached"] and "token_env" not in REAL["github"]
+    cfg["github"]["token_command"] = [sys.executable, "--cached"]         # a program that exists here; `run` stands in for it
+    tokens, ran, sent = iter([(0, "dummy-one\n", ""), (0, "dummy-two\n", ""), (0, "dummy-three\n", ""),
+                              (1, "", "gh_read_token: GitHub refused: Bad credentials\n")]), [], []
+    answer = {"status": 200, "remaining": 4000}
+
+    def run(argv, env, stdin=""):
+        ran.append(argv)
+        return next(tokens)
+
+    def http(method, url, headers=None, body=None, timeout=30):
+        sent.append((url, headers["Authorization"]))
+        return answer["status"], json.dumps({"resources": {"core": {"remaining": answer["remaining"], "limit": 5000,
+                                                                     "reset": T0 + 1800}}}).encode()
+
+    def check(now):
+        rep = W.Report()
+        W.check_github(ctx(cfg, {}, now, {"GH_TOKEN": "dummy-from-a-file"}, run=run, http=http), rep)
+        return rep
+
+    assert check(T0).lines == ["GitHub: 4,000 of 5,000 core requests left, resets 2026-10-18T12:30:00Z"]
+    answer["remaining"] = 400
+    (low,) = check(T0 + 3600).findings
+    assert low.key == "github|core" and "400 of 5,000 core requests left* for the watchers' read token" in low.text
+    assert sent == [("https://api.github.com/rate_limit", "Bearer dummy-one"), ("https://api.github.com/rate_limit", "Bearer dummy-two")]
+    assert ran == [[sys.executable, "--cached"]] * 2
+    answer["status"] = 401
+    with pytest.raises(W.Unreadable, match="GitHub rate_limit answered HTTP 401"):
+        check(T0 + 7200)
+    with pytest.raises(W.Unreadable, match="gave no token .exit 1: gh_read_token: GitHub refused: Bad credentials"):
+        check(T0 + 7200)
+    assert len(sent) == 3 and "dummy" not in low.text
 
 
 def test_the_digest_posts_once_a_day_from_its_hour(tmp_path, posts):
