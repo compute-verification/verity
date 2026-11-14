@@ -126,6 +126,11 @@
   that the one before left open at its edge is part of its certified input, which the verifier pins at the root the
   network certifier signed for the window, so a root the certifier didn't sign is `R7-held`, whether the window
   carries the pool or restarts it.
+* **Verdicts** (`verdicts`, the pool's form): a verifier may give its verdict log, and R7 then refuses a record with an
+  output value that reads a port of an earlier record the log names refused (`R7-output-refused`, after
+  `R7-pool-chain`), so a window carries no start past a window whose run the verifier refused. A record the log
+  doesn't name passes, as the pool's lag rule reads it, and a reused registered value (`value`, the pool's `pin`
+  among them) is not held to it.
 """
 from __future__ import annotations
 
@@ -237,7 +242,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           held: Sequence[str] | None = None, members: Sequence[LP.Member] = (), day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-          history: Mapping[str, Any] | None = None) -> Verdict:
+          history: Mapping[str, Any] | None = None, verdicts: Mapping[str, bool] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
     (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
@@ -273,7 +278,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     and held to the root the window registers for it, which needs `leaf_layer`; a supplied value's source
     ``{"history": "H/root"}`` or ``{"history": "H/domain"}`` is then the bytes of the root or domain id it computed for
     table ``H`` (`history.resolve`).  History tables it can't read or hold to their roots raise `HistoryRefused`, which
-    the verifier reports as `HISTORY` where its Lean refuses them too.  R3
+    the verifier reports as `HISTORY` where its Lean refuses them too.  `verdicts`: the verifier's verdict log, in the
+    pool's form (`_verdicts`), which R7 holds each output value's earlier port to: a record it names refused is
+    `R7-output-refused`, after `R7-pool-chain`, and a record it doesn't name passes.  R3
     reads `ports` by name, so its codes come in the ports' sorted order whatever order the mapping has, as the Lean port
     reads them.  Under a template query R8 refuses a run Input node the proof blocks don't each read alone, unless it
     is a parameter's that `registered` names (`partition.shared_inputs`) or one of `tied`'s, and the verdict carries the
@@ -292,6 +299,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     v2 = bool(registered)
     log = list(log)
     pool = _pool(pool, registered or {}, supplied, pinned, outputs, schemas)
+    verdicts = _verdicts(verdicts) if verdicts is not None else {}
     supplied, outputs, schemas = pool_values(pool, program, supplied, outputs, schemas, log)
     if history is not None:
         if not isinstance(history, Mapping) or set(history) != {"digests", "held", "registered", "tables"}:
@@ -409,6 +417,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         if pool is not None:
             _pool_chain(c, rec, pool, pool_open(pool, rec, program, registered, formats, window, fixed, sup, earlier,
                                                 bound))
+        _ports_refused(c, outs, verdicts)
     # R8
     if bad:
         c.fail("R8-tied", {"tied": bad, "why": TIED_WHY})
@@ -690,12 +699,23 @@ def _pool(pool: Mapping[str, Any] | None, registered: Mapping[str, int], supplie
         raise ValueError(f"the pool's lag is a positive integer: {pool['lag']!r}")
     if not (type(pool["week"]) is int and pool["week"] >= 0):
         raise ValueError(f"the pool's week is a natural: {pool['week']!r}")
-    verdicts = pool["verdicts"]
+    _verdicts(pool["verdicts"], "the pool's verdicts")
+    return dict(pool)
+
+
+def _verdicts(verdicts: Any, what: str = "the verdicts") -> dict[str, bool]:
+    """A verdict log: an object of record digests (lowercase hex of 64 bytes) to whether the verifier's run on that record
+    accepted; ValueError otherwise, which the Lean verifier refuses too (`OneStage.verdictsOf`)."""
     if not (isinstance(verdicts, Mapping) and all(isinstance(d, str) and len(d) == 128 and _HEX.fullmatch(d)
                                                   and type(a) is bool for d, a in verdicts.items())):
-        raise ValueError(f"the pool's verdicts are an object of record digests (lowercase hex of 64 bytes) to bools: "
-                         f"{verdicts!r}")
-    return dict(pool)
+        raise ValueError(f"{what} are an object of record digests (lowercase hex of 64 bytes) to bools: {verdicts!r}")
+    return dict(verdicts)
+
+
+def refused(verdicts: Mapping[str, bool], d: str) -> bool:
+    """Whether the verdict log names the verifier's run on record `d` refused; a record it holds no verdict for is not
+    refused (`Registration.refusedIn`)."""
+    return verdicts.get(d) is False
 
 
 def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
@@ -709,7 +729,7 @@ def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> b
         d = digest(log[len(log) - lag])
     except (TypeError, ValueError):
         return False
-    return pool["verdicts"].get(d) is False
+    return refused(pool["verdicts"], d)
 
 
 def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
@@ -784,6 +804,20 @@ def _pool_chain(c: _Collect, rec: Mapping[str, Any], pool: Mapping[str, Any], wa
     mine = (hits[-1].get("domain"), hits[-1].get("root")) if hits else None
     if mine != want:
         c.fail("R7-pool-chain", {"value": pool["pin"], "registered": mine, "verifier": want})
+
+
+PORTS_REFUSED_WHY = ("an output value reads a port of an earlier record whose run the verifier refused, so nothing the "
+                     "verifier accepted computed it")
+
+
+def _ports_refused(c: _Collect, outs: Mapping[str, tuple[str, str, str]], verdicts: Mapping[str, bool]) -> None:
+    """R7's verdicts: no output value reads a port of an earlier record the verdict log names refused (`refused`), else
+    one `R7-output-refused` naming those values and records. A reused registered value (`value`) is not held to it
+    (`Registration.portsAccepted`)."""
+    bad = sorted(v for v, (d, kind, _) in outs.items() if kind == "port" and refused(verdicts, d))
+    if bad:
+        c.fail("R7-output-refused", {"values": bad, "records": sorted({outs[v][0] for v in bad}),
+                                     "why": PORTS_REFUSED_WHY})
 
 
 def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[str, int], pinned: Mapping[str, str],
@@ -870,5 +904,5 @@ registered_entries = G.registered_entries
 
 __all__ = ["FORMAT", "FORMAT_V2", "KINDS", "POOL_KEYS", "PROTOCOL", "RECEIPT", "WINDOW_DOMAIN", "check", "digest",
            "held_roots", "matches_public", "pool_chains", "pool_open", "pool_refused", "pool_spent_before",
-           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed",
+           "pool_values", "query_digest", "receipt", "record", "record_digest", "refuse_unwindowed", "refused",
            "registered_entries", "unwindowed", "window_domain"]
