@@ -128,3 +128,22 @@ def test_the_party_follows_period_json() -> None:
     held = verifier_party.placement("n0", "auditor-host")
     assert held["parties"] == {"challenger": "auditor-host", "prover": "n0", "verifier": "auditor-host"}
     assert held["trusted-device"].startswith("holds: ")
+
+
+class Handed(Exception):
+    """What a stand-in for the runtime's `Side.of` raises once it has seen what it is handed."""
+
+
+def test_a_period_asks_its_caller_for_the_bandwidth_side(tmp_path) -> None:
+    """A period's PoUB takes the side from the program that starts the run: `period.json`'s challenger under
+    bandwidth's key, started on this node by `verifier_party.command`."""
+    (tmp_path / "period.json").write_text("{}")
+    handed = []
+
+    def side_of(doc, node, key, local, what=None):
+        handed.append((doc, node, key, local, what))
+        raise Handed
+
+    with pytest.raises(Handed):
+        PP.leg(tmp_path, "n0", tmp_path / "out", side_of=side_of)
+    assert handed == [({}, "n0", "bandwidth", verifier_party.command(), None)]

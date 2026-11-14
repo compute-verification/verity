@@ -22,6 +22,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import threading
 from collections.abc import Callable
@@ -234,6 +235,15 @@ def test_the_split_wipe(how: str) -> None:
         assert answered == 3 and c.ended is None and c.signed is None
 
 
+def test_the_module_run_with_no_side_refuses_and_names_the_start_file(tmp_path) -> None:
+    """An old command, `python -m ...wipe_period --expect accept`, exits non-zero naming the file that starts the wipe,
+    so it never reads as the verdict it expected."""
+    r = subprocess.run([sys.executable, "-m", W.__name__, "--period", str(tmp_path), "--out", str(tmp_path / "out"),
+                        "--expect", "accept"], capture_output=True, text=True)
+    assert r.returncode == 1 and r.stdout == "", r.stdout + r.stderr
+    assert "run benchmarks/pous/streamed_wipe/wipe_on_node.py" in r.stderr and not (tmp_path / "out").exists()
+
+
 def test_the_party_follows_period_json(tmp_path) -> None:
     local = Side.of({}, "cpu-node", "wipe", WP.command(tmp_path), "the wipe")
     assert (local.host, local.address) == ("cpu-node", None) and str(tmp_path) in local.command
@@ -372,9 +382,9 @@ def test_who_decided_is_the_leans_file_name_or_python_on_this_host(tmp_path) -> 
 def test_with_no_wipe_protocol_the_pythons_accept_is_undecided(tmp_path, monkeypatch, capsys) -> None:
     """The leg with no `wipe-protocol` among the period's tools: the Python accepts the honest session, and that decides
     nothing. The answer is undecided, with no public outputs and no profile, and `main` exits 1."""
-    period = _side(tmp_path, monkeypatch, {})
+    period, side_of = _side(tmp_path, {})
     out = tmp_path / "out"
-    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0"]) == 1
+    assert W.main(["--period", str(period), "--out", str(out), "--node", "n0"], side_of=side_of) == 1
     s = json.loads(capsys.readouterr().out)
     assert (s["verdict"], s["reason"], s["public"]) == ("undecided", W.NO_JUDGE, None)
     record = json.loads((out / "wipe.json").read_text())
@@ -411,8 +421,8 @@ def test_a_pinned_session_with_a_zero_count_is_not_certified(tmp_path, monkeypat
     record names the egress as the evidence writer's count."""
     monkeypatch.setitem(WP.AUDITOR_KEYS, "auditor", wipe_side.key_sha512())
     period, side_of = _side(tmp_path, {"egress_bits": 0})
-    wipe_judge.judge(period, monkeypatch)
     out = tmp_path / "out"
+    wipe_judge.judge(period, monkeypatch)
     answer = W.leg(period, "n0", out, side_of=side_of)
     assert answer["verdict"] == "accept", answer
     assert WP.holds(answer["profile"]["placement"]) and answer["public"] == VACUOUS
