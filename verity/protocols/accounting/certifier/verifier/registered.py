@@ -4,11 +4,12 @@
 `registered(site, head, link, key)` reads a link's name and a certifier's key off the site of an accepted registration
 log's view: the link joins a network certifier and a host, and the key is the one that certifier registered. It returns
 what the registration states of them (`Registered`): the link's id, its host end, the certifier's id and registered
-key, the link's capacity β in bits a tick each way, and the head of the log the site was read at, which it carries and
-doesn't read. `Refused`, with the Lean's message, for a link that is no link of the site, a link that doesn't join a
+key, the link's capacity β in bits a second each way, and the head of the log the site was read at, which it carries
+and doesn't read. `Refused`, with the Lean's message, for a link that is no link of the site, a link that doesn't join a
 network certifier and a host (the certifier's other half, to the outside; a host's bare uplink; a link between two
-hosts; a memory challenger's link), a certifier whose registered key is not lower-case hex, and a key that is not the
-certifier's registered key.
+hosts; a memory challenger's link), a certifier whose registered key is not lower-case hex, a key that is not the
+certifier's registered key, and a network certifier's link that states no capacity, with or without a reason no
+certifier splits it: there is no line rate to read for it.
 
 The registered key of a network certifier is the string the checks' `key` parameter is: its LMS public key, I ‖ T[1],
 in lower-case hex. `key_refusal` is the one function that reads it.
@@ -21,19 +22,23 @@ not such a site, where the two sides agree on the refusal and not on its words.
 
 from __future__ import annotations
 
+import math
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 OUTSIDE = "outside"
-KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "outside")
+KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "auditor-host", "outside")
 OWNERS = ("prover", "auditor")
 TIERS = ("hbm", "dram", "disk")
-LOC_KEYS = ("bytes", "id", "key", "kind", "owner", "parent", "sheet", "tier")
-LINK_KEYS = ("beta", "ends", "id", "latency")
+LOC_KEYS = ("bw", "bytes", "chip", "drift", "id", "key", "kind", "owner", "parent", "scheme", "shared", "sheet", "tier",
+            "time_unit", "timebase")
+SHARED_KEYS = ("bw", "tier")
+LINK_KEYS = ("beta", "ends", "id", "latency", "unmediated")
 SITE_KEYS = ("links", "locs", "sheets")
 _LOWER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
+_NATURAL = re.compile(r"0|[1-9][0-9]*")
 
 
 class Refused(ValueError):
@@ -53,7 +58,7 @@ class Registered:
     host: str
     certifier: str
     key: str
-    beta: int
+    beta: int  # bits a second each way
 
 
 def _exactly(j: Any, keys: tuple[str, ...], what: str) -> None:
@@ -85,15 +90,39 @@ def _named(x: Any, names: tuple[str, ...], what: str) -> str:
     return x
 
 
+def _figure(x: Any, what: str) -> str:
+    """A figure as the Site writes one, and only so: `n`, or `n/d` in lowest terms with d at least 2, each a natural
+    number in ASCII digits with no leading zero."""
+    parts = _str(x, what).split("/")
+    if len(parts) > 2 or not all(_NATURAL.fullmatch(part) for part in parts):
+        raise Malformed(f"{what}: {x} is not a ratio n/d of natural numbers in canonical form")
+    if len(parts) == 2 and (int(parts[1]) <= 1 or math.gcd(int(parts[0]), int(parts[1])) != 1):
+        raise Malformed(f"{what}: {x} has denominator 0 or 1, or is not in lowest terms")
+    return x
+
+
+def _or_none(x: Any, read: Callable[[Any, str], Any], what: str) -> Any:
+    return None if x is None else read(x, what)
+
+
 def _loc(j: Any) -> dict[str, str]:
     _exactly(j, LOC_KEYS, "a location")
     _named(j["owner"], OWNERS, "a location's owner")
     _str(j["sheet"], "a location.sheet")
     _nat(j["bytes"], "a location.bytes")
-    if j["parent"] is not None:
-        _str(j["parent"], "a location's parent")
+    _str(j["scheme"], "a location.scheme")
+    _or_none(j["parent"], _str, "a location's parent")
+    _or_none(j["bw"], _nat, "a location's bw")
+    _or_none(j["chip"], _nat, "a location's chip")
+    _or_none(j["drift"], _figure, "a location's drift")
+    _or_none(j["time_unit"], _figure, "a location's time unit")
+    _or_none(j["timebase"], _str, "a location's time base")
     if j["tier"] is not None:
         _named(j["tier"], TIERS, "a location's tier")
+    for shared in _list(j["shared"], "a location.shared"):
+        _exactly(shared, SHARED_KEYS, "a shared rate")
+        _named(shared["tier"], TIERS, "a shared rate's tier")
+        _nat(shared["bw"], "a shared rate.bw")
     return {"id": _str(j["id"], "a location.id"), "kind": _named(j["kind"], KINDS, "a location's kind"),
             "key": _str(j["key"], "a location.key")}
 
@@ -104,13 +133,15 @@ def _link(j: Any) -> dict[str, Any]:
     if len(ends) != 2:
         raise Malformed("a link: ends: not two ends")
     _nat(j["latency"], "a link.latency")
+    _or_none(j["unmediated"], _str, "a link's unmediated")
     return {"id": _str(j["id"], "a link.id"), "ends": (_str(ends[0], "a link's end"), _str(ends[1], "a link's end")),
-            "beta": _nat(j["beta"], "a link.beta")}
+            "beta": _or_none(j["beta"], _nat, "a link.beta")}
 
 
 def site_of(site: Any) -> dict[str, tuple[dict[str, Any], ...]]:
     """The site of a registration log's view, as the Site's JSON writes it: its locations (`id`, `kind`, `key`) and its
-    links (`id`, `ends`, `beta`), each in the site's order. Its sheets are not read."""
+    links (`id`, `ends`, and `beta`, None where the link states no capacity), each in the site's order. Every other
+    field of a location and a link is held to the Site's form and dropped. Its sheets are not read."""
     _exactly(site, SITE_KEYS, "the site")
     _list(site["sheets"], "the site.sheets")
     locs = tuple(_loc(x) for x in _list(site["locs"], "the site.locs"))
@@ -170,7 +201,7 @@ def registered(site: Mapping[str, Any], head: str, link: str, key: str) -> Regis
     """The network certifier's link and key, as registered: `link` names a link of `site` (a `site_of`) that joins a
     network certifier and a host, and `key` is that certifier's registered key. `head`, the head of the log the site
     was read at, is carried unread. `Refused` otherwise, naming the network certifiers' links of the site or the
-    certifier's registered key."""
+    certifier's registered key, and last for a link that states no capacity."""
     k = next((x for x in site["links"] if x["id"] == link), None)
     if k is None:
         raise Refused(f"link {link}: no link of the registered hardware; {_right_links(site)}")
@@ -185,4 +216,6 @@ def registered(site: Mapping[str, Any], head: str, link: str, key: str) -> Regis
     why = key_refusal(x, key)
     if why is not None:
         raise Refused(f"link {link}: {why}")
+    if k["beta"] is None:
+        raise Refused(f"link {link}: it states no capacity; a network certifier's link states its line rate")
     return Registered(head=head, link=k["id"], host=host, certifier=c, key=x["key"], beta=k["beta"])
