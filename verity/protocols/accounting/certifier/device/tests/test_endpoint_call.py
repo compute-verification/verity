@@ -9,16 +9,10 @@ import asyncio
 import inspect
 import json
 import re
-import sys
-from pathlib import Path
 
 import pytest
 
-HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "network_traces")
-
-
-sys.path.insert(0, str(HERE))
-import runner_parts  # noqa: E402
+from verity.protocols.accounting.certifier.device import runner_parts
 
 
 class _Stub:

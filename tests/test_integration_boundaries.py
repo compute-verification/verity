@@ -34,7 +34,7 @@ IMPORT_CALLS = {"import_module", "__import__", "importorskip"}
 #: ``verity`` (or drop the use) and delete its line; a new line needs a reason the dependency cannot go through ``verity``.
 KNOWN = {
     ("verity/circuits/evaluate/tests/test_difftest.py", "verity_vllm.definitions.registry"),
-    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.boolean"),
+    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.circuits.ops.boolean.versions"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.registry"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.registry.catalog"),
     ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity_vllm.definitions.replay"),

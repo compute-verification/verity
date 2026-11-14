@@ -9,7 +9,7 @@ public import Mathlib.Logic.Equiv.Fin.Basic
 /-!
 # A declaration's circuit, bit by bit
 
-The cover theorem is stated over a circuit of one-bit gates (`InferenceOnly.Cover.Circuit`); a declaration (`Verity.RegisteredCircuit`)
+The cover theorem is stated over a circuit of one-bit gates (`Slowdown.Cover.Circuit`); a declaration (`Verity.RegisteredCircuit`)
 has gates of `w g` bits each. `Circuit.ofDecl d` is `d`'s circuit bit by bit. It keeps the wiring and nothing of what the
 gates compute:
 
@@ -27,7 +27,7 @@ numbers.
 
 @[expose] public section
 
-namespace InferenceOnly.Cover
+namespace Slowdown.Cover
 
 open Finset
 
@@ -84,4 +84,4 @@ def Circuit.ofDecl (d : Verity.RegisteredCircuit) : Circuit where
     obtain ⟨x, hx, rfl⟩ := mem_map.1 hy
     simp [(mem_filter.1 hx).2.1]
 
-end InferenceOnly.Cover
+end Slowdown.Cover

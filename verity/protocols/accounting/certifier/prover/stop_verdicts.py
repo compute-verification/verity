@@ -217,9 +217,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
-import leak_bounds as LB
 from verity.protocols.accounting.certifier.verifier import class_charge as CC
 from verity.protocols.accounting.certifier.verifier import connection_rows as C
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
@@ -257,6 +256,40 @@ CONTROLS = {CC.STOP_RECORD: ("stop_word", "a stop word changed, the count off by
 #: refused for any other reason is none of its verifier's
 REASONS = {CC.STOP_RECORD: "stop_word", CC.RESPONSE_TIE: "id", CC.CERTIFIED_READ: "max_tokens",
            CC.COMPUTE_AUDIT: "output"}
+#: the mark of what a run gives and no proof covers: a verdict a run produced is printed under it, since a
+#: verifier judged it and no proof of that verifier is read (the harness's mark of that name,
+#: `verity_bench.exfiltration`'s `MARKS`, whose tests hold this string to it)
+RUN_NOT_PROVED = "run, not proved"
+
+
+class Stop(NamedTuple):
+    """How the stop class is charged, as the verdict records of a served run say (`stop_verdicts.stop`, which reads
+    them through the network certifier's own rule, `class_charge.charge`). ``held``: how many execution phases of a
+    link are charged below their schedule, those whose signed head was read and in which every class that holds a
+    row has its verdicts. Every other execution phase of a scope's monitoring period is charged its whole schedule,
+    one no registration was read for among them. ``why``: one line a class and execution phase read, and what was
+    read. ``verdicts``: each verdict read that is on a signed head read, with the mark it is printed under
+    (`RUN_NOT_PROVED`), its ``withheld`` word or null, its ``codes`` and its ``stopped`` word or null; one that is
+    not accepted is printed stopped with its word or withheld for its word, or refused where it states neither."""
+    held: int
+    why: tuple[str, ...]
+    verdicts: tuple[Mapping[str, Any], ...] = ()
+
+    def share(self, phases: Any) -> Fraction:
+        """The share of a scope's ``phases`` execution phases over a monitoring period that is charged below its
+        schedule: the ``held`` ones, and at most all of them. The phases counted are the monitoring period's, so
+        one that no record covers is in the rest."""
+        if type(self.held) is not int or self.held < 0:
+            raise ValueError(f"a stop class's held execution phases are a count, an integer from 0, not "
+                             f"{self.held!r}: `stop_verdicts.stop` counts them from a run's records")
+        return Fraction(1) if self.held >= phases else Fraction(self.held) / Fraction(phases)
+
+
+#: how the stop class is charged where no verdict record is read: its whole schedule
+NO_RECORDS = Stop(0, (f"no verdict record was read, so each connection is charged its whole schedule: the "
+                      f"{', the '.join(CC.VERDICTS)} are each missing",))
+
+
 #: the rate a record says its verdict ran at, and the one rate at which a class is held: every block proved. A
 #: rate's text is `NUM/DEN` in lowest terms, with no prefix
 RATE, EVERY_BLOCK = "rate", "1/1"
@@ -267,7 +300,7 @@ RATED = (CC.STOP_RECORD, CC.RESPONSE_TIE)
 STREAM, PREVIOUS, POPULATION, DESIGN, SUBSET = "stream_registration", "previous", "population", "law", "subset"
 #: what the answer's second line says of the serve an execution phase is of
 SERVE_NAMED = ("an execution phase is one serve's, and a head's serve is the one its verdict records name, which is "
-               f"{LB.RUN_NOT_PROVED}")
+               f"{RUN_NOT_PROVED}")
 #: what the answer's first line says where each of the four verdicts was read and they are not one class's
 NOT_ONE_CLASS = "not one class: unchecked"
 #: what the answer's first line ends with where the rule charged no class below its schedule for want of the
@@ -360,8 +393,8 @@ def classes(head: C.Head) -> list[int]:
                   if e.name.startswith(f"{CT.REQUEST}.") and e.name.removeprefix(f"{CT.REQUEST}.").isdecimal())
 
 
-def _whole(why: str, *more: str) -> LB.Stop:
-    return LB.Stop(0, (f"each connection is charged its whole schedule: {why}", *more))
+def _whole(why: str, *more: str) -> Stop:
+    return Stop(0, (f"each connection is charged its whole schedule: {why}", *more))
 
 
 def _named(x: object) -> bool:
@@ -544,7 +577,7 @@ def _handed(kind: str, record: Mapping[str, Any]) -> dict[str, Any]:
     return {"verdict": kind, **{k: verdict.get(k) for k in CC.READ}, **{k: verdict[k] for k in CC.SAID},
             CC.STOPPED: verdict.get(CC.STOPPED),
             **{k: record.get(k) for k in CC.FIELDS if k != CC.VERDICT}, RATE: record.get(RATE),
-            "mark": LB.RUN_NOT_PROVED}
+            "mark": RUN_NOT_PROVED}
 
 
 def _not_one(by_verdict: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:
@@ -566,7 +599,7 @@ def _not_one(by_verdict: Mapping[str, Sequence[Mapping[str, Any]]]) -> str:
 def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[str, Any]],
          left: Sequence[str] = (), controls: Iterable[Mapping[str, Any]] = (),
          served: Iterable[Mapping[str, Any]] = (), spent: Iterable[Mapping[str, Any]] = (),
-         unread: Iterable[str] = ()) -> LB.Stop:
+         unread: Iterable[str] = ()) -> Stop:
     """How the stop class is charged (the module docstring's "The answer"), from registrations, verdict records,
     control records and serves' registrations as `read` returns them; ``left`` are lines on what the
     registrations' files were checked under and on what was not read, which the answer carries, and ``spent`` the
@@ -576,7 +609,7 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
     phase is held only where its serve was launched after the newest of them ("The order of runs")."""
     registrations, records, spent, unread = list(registrations), list(records), list(spent), list(unread)
     if not registrations and not records:
-        return LB.Stop(0, (*LB.NO_RECORDS.why, *left))
+        return Stop(0, (*NO_RECORDS.why, *left))
     if not registrations:
         return _whole(f"{len(records)} verdict record(s) were read and no registration (`{REGISTRATIONS_FILE}`), so "
                       "no class's count is known", *left)
@@ -725,7 +758,7 @@ def stop(registrations: Iterable[Mapping[str, Any]], records: Iterable[Mapping[s
                  "phase of a monitoring period is charged its whole schedule, one no registration was read for "
                  "among them")
     other = len(records) - unlisted - len(counted) - elsewhere
-    return LB.Stop(held, (
+    return Stop(held, (
         first, SERVE_NAMED, *lines,
         *([f"{other} verdict record(s) read are on no head read, or on no class of one that holds a row, and count "
            "for nothing"] if other else []),
@@ -875,7 +908,7 @@ def read(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()
     return registrations, records, left, controls, served, spent, [run for run, _ in unread]
 
 
-def of_runs(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()) -> LB.Stop:
+def of_runs(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()) -> Stop:
     """How the stop class is charged by the records ``runs`` hold in ``store`` (`read`, `stop`): ``runs`` is every
     run that carries the record, and ``superseded`` those of them that another run replaces (the module docstring's
     "A superseded run"). With no run it is its whole schedule, and the line says no run carries the record; so it
@@ -883,7 +916,7 @@ def of_runs(store: Any, runs: Iterable[str], superseded: Iterable[str] = ()) -> 
     be fetched or a line that is no JSON in a run that is not superseded."""
     runs, superseded = list(runs), list(superseded)
     if not runs:
-        return LB.Stop(0, (*LB.NO_RECORDS.why, f"no run in the store carries `run_of_record={RECORD}`"))
+        return Stop(0, (*NO_RECORDS.why, f"no run in the store carries `run_of_record={RECORD}`"))
     if unread := sorted(set(superseded) - set(runs)):
         return _whole(f"the superseded run(s) {', '.join(unread)} are not among the runs handed, so what they "
                       "refused was not read: a superseded run adds no accept and takes away no refusal")

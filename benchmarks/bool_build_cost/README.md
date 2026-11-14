@@ -1,7 +1,7 @@
 # The Boolean Build's cost against the word Build's
 
 `run.py` takes one workload's Calls as their word specializations (`WORKLOADS`: Qwen3-0.6B's B1 / 256-token prompt / 32-token
-output workload, `qwen3-06b`, or the `small` case), and their Boolean versions (`verity_vllm.definitions.boolean.boolean_version`, as the Boolean Build's lift
+output workload, `qwen3-06b`, or the `small` case), and their Boolean versions (`verity.circuits.ops.boolean.versions.boolean_version`, as the Boolean Build's lift
 calls them). For each of the two, word and Boolean (`--ir`), it measures:
 
 - `descriptor`: the descriptor of one Program calling every specialization once, which writes each Definition once, as a

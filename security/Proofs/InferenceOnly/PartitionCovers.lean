@@ -15,7 +15,7 @@ It computes exactly `I`, so the completions compute every operation gate.
 
 namespace InferenceOnly.SecurityProofs
 
-open Verity InferenceOnly.Covering Finset
+open Verity Slowdown.Covering Finset
 
 /-- Proof block `u`'s completion `I ∪ in(I)`, with inputs `in(I)`, on a circuit of positive fan-in. -/
 def completion {d : RegisteredCircuit} {B : ℕ} (P : Partition d.D B)

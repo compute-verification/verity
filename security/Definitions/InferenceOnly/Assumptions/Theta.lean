@@ -11,6 +11,8 @@ through a containment, total or partial (`PartialContainment`), rests on it.
 
 @[expose] public section
 
+open Slowdown
+
 namespace InferenceOnly.Assumptions
 
 open Verity

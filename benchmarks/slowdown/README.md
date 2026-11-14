@@ -20,8 +20,8 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   the family the adversary picks. Under a
   bound it is `max(1, 1/(s + a x))` (`theorem.multiple_bound`), with the unregistered share `s` training like the reference and
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
-  at `a = 1/MFU₀` (peak) without it, Lean's `InferenceOnly.Slowdown.remoteSlowdown` and, for a remote regime,
-  the slowdown `InferenceOnly.Guarantees.SlowdownRemote` bounds. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
+  at `a = 1/MFU₀` (peak) without it, Lean's `Slowdown.Slowdown.remoteSlowdown` and, for a remote regime,
+  the slowdown `Slowdown.Guarantees.SlowdownRemote` bounds. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
   comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
@@ -257,7 +257,7 @@ The package and its outputs (`benchmarks/slowdown`, `slowdown.md`, `slowdown.jso
 identifiers `Slowdown.value`, `Estimate.slowdown`, `slowdown_worst`, `Corner.slowdown` and a bound's or an attack's `slowdown` in the
 JSON all name the slowdown, once called the overhead; a result's or a family's `slowdown` and
 `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound. The slowdown is what Lean's
-`InferenceOnly.Guarantees.SlowdownRemote` bounds (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
+`Slowdown.Guarantees.SlowdownRemote` bounds (`remoteSlowdown`, bounded by `hardwareMultiple`) and `benchmarks/nci`'s
 slowdown `D`; the padded size ratio `|A| / T_0` (`Slowdown.padded`, `Estimate.padded`, the JSON's `padded`) is the
 intermediate, not the slowdown. The one key that keeps the older name is the board's `"rho"`
 (`nci.bracket.search`), which `tests/test_attacks.py` reads.
