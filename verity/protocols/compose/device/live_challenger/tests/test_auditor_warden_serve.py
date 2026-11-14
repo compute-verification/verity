@@ -111,11 +111,11 @@ def test_the_gates_scan_rehearsal_is_rehearse_ids_at_scan_zks_schedule_and_its_l
     assert sz.main(["schedule"]) == 0 and capsys.readouterr().out.split() == list(A.SCAN_SCHEDULE)
     traffic = ws.traffic_of(args, "m")
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(0.6, 0.9)}
-    drawn = ws.id_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED, max_tokens=(1, 64))
+    sampled = ws.id_traffic(7, model="m", rate=A.WARDEN_RATE, seed=A.WARDEN_SEED, max_tokens=(1, 64))
 
     def rest(t):
         return [{**x, "ids": {k: v for k, v in x["ids"].items() if k not in ("temperature", "top_p")}} for x in t]
-    assert rest(traffic) == rest(drawn) and {x["ids"]["top_p"] for x in drawn} == {1.0}
+    assert rest(traffic) == rest(sampled) and {x["ids"]["top_p"] for x in sampled} == {1.0}
     plain = ws.parser().parse_args(A.warden_command({"requests": 7, "scan": True}, tmp_path, "http://h:1")[2:])
     assert {(x["ids"]["temperature"], x["ids"]["top_p"]) for x in ws.traffic_of(plain, "m")} == {(0.0, 1.0)}
 

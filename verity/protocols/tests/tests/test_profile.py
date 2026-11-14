@@ -1,6 +1,6 @@
 """IntegrityProfile: what verification established, and the worst case a consumer's utility reads off it.
 
-The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
+The two consumer utilities below stand in for PoUW's incorrect-block bound and the KV touched-unit bound, which live
 with their consumers, not in core.  `two_level` is SPOT's shape (n_r units sampled with p, then k of the n_v
 inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
 oracle the level form must reproduce: `accept` exactly, and `worst_case` from above, within its directed margin.
@@ -54,7 +54,7 @@ def _before_levels(n_r, n_v, p, k, delta):
     return accept, worst_case
 
 
-def incorrect_units(profile: IntegrityProfile) -> float:
+def incorrect_blocks(profile: IntegrityProfile) -> float:
     return profile.worst_case(lambda m: m)
 
 
@@ -66,9 +66,9 @@ TOY = two_level(n_r=512, n_v=4, p=Fraction(1, 2), k=2, delta=0.01)
 
 def test_the_prototype_toy_numbers():
     """The protocol prototype's composed toy: 26.6 incorrect VUs for PoUW, 16.0 touched RUs for a KV claim."""
-    assert round(incorrect_units(TOY), 1) == 26.6
+    assert round(incorrect_blocks(TOY), 1) == 26.6
     assert round(touched_units(TOY), 1) == 16.0
-    assert TOY.worst_case(lambda m: 4 * m) == pytest.approx(4 * incorrect_units(TOY))
+    assert TOY.worst_case(lambda m: 4 * m) == pytest.approx(4 * incorrect_blocks(TOY))
 
 
 def test_consumers_are_maximised_by_different_strategies():
@@ -77,7 +77,7 @@ def test_consumers_are_maximised_by_different_strategies():
     touched = {m: 1 / a.rho(m) for m in range(1, 5)}
     assert max(ratio, key=ratio.get) == 4      # free compute concentrates into fully incorrect replay units
     assert max(touched, key=touched.get) == 1  # KV laundering spreads one incorrect proof block per replay unit
-    assert incorrect_units(a) == pytest.approx(ratio[4] * log(100))
+    assert incorrect_blocks(a) == pytest.approx(ratio[4] * log(100))
     assert touched_units(a) == pytest.approx(touched[1] * log(100))
 
 
@@ -87,14 +87,14 @@ def test_accept_is_exact():
 
 
 def test_full_check_admits_nothing_and_no_check_admits_everything():
-    assert incorrect_units(two_level(n_r=100, n_v=4, p=Fraction(1), k=4, delta=0.01)) == 0
-    assert incorrect_units(two_level(n_r=100, n_v=4, p=Fraction(0), k=4, delta=0.01)) == 400
+    assert incorrect_blocks(two_level(n_r=100, n_v=4, p=Fraction(1), k=4, delta=0.01)) == 0
+    assert incorrect_blocks(two_level(n_r=100, n_v=4, p=Fraction(0), k=4, delta=0.01)) == 400
     assert touched_units(two_level(n_r=100, n_v=4, p=Fraction(1, 2), k=0, delta=0.01)) == 100
 
 
 def test_the_bound_uses_n_r_when_it_binds():
     few = two_level(n_r=3, n_v=4, p=Fraction(1, 100), k=1, delta=0.01)
-    assert incorrect_units(few) == pytest.approx(12)
+    assert incorrect_blocks(few) == pytest.approx(12)
 
 
 @pytest.mark.parametrize("n_r, n_v, p, k, delta", [(3, 3, Fraction(1, 2), 1, 0.3), (4, 2, Fraction(1, 3), 1, 0.2),
@@ -119,8 +119,8 @@ def test_a_bernoulli_sampling_design_is_the_single_unit_case():
     rate = Fraction(1, 10)
     a = two_level(n_r=10_000, n_v=1, p=rate, k=1, delta=0.01)
     assert a.accept(1) == 1 - rate
-    assert incorrect_units(a) == pytest.approx(log(100) / -log(0.9))
-    assert exp(-a.rho(1) * incorrect_units(a)) == pytest.approx(0.01)
+    assert incorrect_blocks(a) == pytest.approx(log(100) / -log(0.9))
+    assert exp(-a.rho(1) * incorrect_blocks(a)) == pytest.approx(0.01)
 
 
 @pytest.mark.parametrize("kw", [dict(n_v=0), dict(k=5), dict(p=Fraction(3, 2)), dict(delta=0.0), dict(delta=1.0), dict(n_r=-1)])
@@ -165,7 +165,7 @@ def test_undrawn_levels_only_group():
                                {"replay": Bernoulli(Fraction(1, 2)), "check": Subset(2)}, 0.01)
     for a in (above, between):
         assert [a.accept(m) for m in range(5)] == [TOY.accept(m) for m in range(5)]
-        assert incorrect_units(a) == incorrect_units(TOY) and touched_units(a) == touched_units(TOY)
+        assert incorrect_blocks(a) == incorrect_blocks(TOY) and touched_units(a) == touched_units(TOY)
     assert above.count("request") == 32 and above.count("replay") == 512 and above.count("check") == 2048
     assert above.count("check", within="replay") == 4 and above.count("replay", within="request") == 16
     assert between.count("tile", within="replay") == 2 and between.count("replay", within="replay") == 1
@@ -186,7 +186,7 @@ def test_the_cap_bounds_a_touched_utility_read_above_the_replay_level():
 def test_one_bernoulli_level_and_one_subset_level_are_the_degenerate_chains():
     rate = Fraction(1, 10)
     single = IntegrityProfile(("unit",), (10_000,), {"unit": Bernoulli(rate)}, 0.01)
-    assert single.accept(1) == 1 - rate and incorrect_units(single) == incorrect_units(two_level(10_000, 1, rate, 1, 0.01))
+    assert single.accept(1) == 1 - rate and incorrect_blocks(single) == incorrect_blocks(two_level(10_000, 1, rate, 1, 0.01))
     whole = IntegrityProfile(("call",), (100,), {"call": Subset(3)}, 0.01)
     assert [whole.accept(m) for m in range(101)] == [two_level(1, 100, Fraction(1), 3, 0.01).accept(m) for m in range(101)]
 
@@ -730,7 +730,7 @@ def test_a_profile_sampled_by_strata_reads_its_bounds_off_the_sampling_design():
         one = one_level(n, k, delta)
         assert one.strata() == Stratified.uniform(n, k) and one.bound() == Stratified.uniform(n, k).count_bound(delta)
         assert one.bound() == int(one.worst_case(lambda m: m)) and one.stratum_bounds() == {"unit": one.bound()}
-    assert TOY.strata() is None and TOY.stratum_bounds() == {} and TOY.bound() == incorrect_units(TOY)
+    assert TOY.strata() is None and TOY.stratum_bounds() == {} and TOY.bound() == incorrect_blocks(TOY)
     assert TOY.harm_bound(4) == TOY.worst_case(lambda m: 4 * m)
     with pytest.raises(ValueError):
         TOY.harm_bound({"check": 4.0})

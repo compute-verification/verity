@@ -30,7 +30,7 @@ then `configuration-unordered` (a configuration item, which the log has no coin 
 `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`; where every entry
 passes and the Site the log folds to lacks hardware the auditor's figures list (`verity.device.incomplete`), it
 raises `Refused` by `inventory` at the log's length. A component reads its view of an accepted log (`View`): the Site,
-θ's values (`View.value`), the builder and the days' declared circuits (`View.declared`), at the head, and the head
+θ's values (`View.value`), the builder and the days' registered circuits (`View.declared`), at the head, and the head
 after the log's first entry (`View.first`). Decoding takes exactly what the encoders write and raises `Malformed`
 otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
 `Core.canonicalJson`'s words.
@@ -80,7 +80,7 @@ class Information:
 
 @dataclass(frozen=True)
 class Declaration:
-    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
+    """A day's registered circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
     days, its program's SHA-512 as hex, and its block Definitions by descriptor key; and the head of the log it follows
     (`previous`, set by `chain`)."""
 
@@ -309,7 +309,7 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 @dataclass(frozen=True)
 class View:
     """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
-    the days' declared circuits in order, the head, `first`, the head after the log's first entry (None for an empty
+    the days' registered circuits in order, the head, `first`, the head after the log's first entry (None for an empty
     log): the log only appends, so every later head of this log has the same one, and a value bound to it is bound to
     this log whatever is registered after; and the head of each prefix of the log with the prefix's length (shortest
     first), the heads an answer may name."""
@@ -327,7 +327,7 @@ class View:
         return next((t for t in self.theta if t["value"] == name), None)
 
     def declared(self, day: int) -> Declaration | None:
-        """Day `day`'s declared circuit, the one declaration of the day in an accepted log; None when it declares none.
+        """Day `day`'s registered circuit, the one declaration of the day in an accepted log; None when it declares none.
         A window of that day runs its program."""
         return next((d for d in self.declarations if d.day == day), None)
 

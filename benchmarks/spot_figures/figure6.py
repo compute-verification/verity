@@ -125,7 +125,7 @@ def _sweep_caption(out: dict) -> str:
         if r["old_rule"] and r["step_ms"] is not None and (f := ratio(g, r, "ttft_p50_s")) is not None:
             text += (f"{r['point']} took τ_sat from the no-tick step at its load, the old rule: {r['sat_ms']:.0f} ms "
                      f"against the tick arm's own {r['step_ms']:.0f} ms step, so its queue grew (TTFT p50 {_times(f)}); "
-                     "it is drawn hollow, off its load's line. ")
+                     "it is sampled hollow, off its load's line. ")
     return text
 
 

@@ -228,8 +228,8 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
         try:
             ans = derived(records, salt, first)
             ledger = windows.open(CA.Receipt(tuple((a, r.shape, PC.call_leaf(r)) for a, r in zip(ans, records))))
-            laws = CPL.window_sampling_designs([t.layout() for t in traced], k)
-            plans = [t.draw(law, a, ledger) for t, law, a in zip(traced, laws, ans)]
+            sampling_designs = CPL.window_sampling_designs([t.layout() for t in traced], k)
+            plans = [t.draw(sampling_design, a, ledger) for t, sampling_design, a in zip(traced, sampling_designs, ans)]
             ledger.sent()
             record = ledger.record()
         except (DomainError, ValueError) as e:

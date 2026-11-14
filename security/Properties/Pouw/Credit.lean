@@ -176,7 +176,7 @@ def lanesStrata : Array Flock.Draw.WorkStratum :=
 def lanesK : ℕ := 8
 
 /-- Its strata under `work:8` (`PouwCheck.Credit.samplingDesign`): eight samples from K = 2048's sixteen leaves. -/
-def lanesLaw : Array Flock.Draw.Stratum := #[{ template := "k2048", units := #[(0, 16)], k := 8 }]
+def lanesSamplingDesign : Array Flock.Draw.Stratum := #[{ template := "k2048", units := #[(0, 16)], k := 8 }]
 
 /-- The blocks: leaf `u`'s are `33u, …, 33u + 32`, its 32 lanes and then their combine. -/
 def lanesBlocks : Finset ℕ := Finset.range (16 * 33)
@@ -188,6 +188,6 @@ def lanesLeaf (b : ℕ) : ℕ := b / 33
 def lanesWork (b : ℕ) : ℕ := if b % 33 < 32 then 4 * 8 * 2048 else 0
 
 /-- The strata a sampling design that accepts everything may give: none. -/
-def idleLaw : Array Flock.Draw.Stratum := #[]
+def idleSamplingDesign : Array Flock.Draw.Stratum := #[]
 
 end Properties.Pouw.Credit

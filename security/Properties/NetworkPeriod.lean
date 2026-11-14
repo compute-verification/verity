@@ -15,7 +15,7 @@ of ceilings is at least the ceiling of the sum, so `K` is at least `⌈log2⌉` 
 it.
 
 The count is the statement's, factor by factor, over the network certifier's `m` connections and the period's `n`
-windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #faultySets · 2^β · Dj^k))`. A reader of `K` (the
+windows: `#Ss · ((∏_c (cap_c + 1)) · ∏_i (2^#(free inputs) · #incorrectSets · 2^β · Dj^k))`. A reader of `K` (the
 communication audit's bridge to `MonitoringPeriodLeakAccepted`) instantiates it at the run's caps and the windows' facts, and
 supplies each of the statement's quantities as at most the check's number. The windows are the execution phases' scans:
 `#Ss ≤ ∏_c (cap_c + 1)` (a schedule is its lanes' lengths), a window's free inputs at most its scan's Program's and its
@@ -76,7 +76,7 @@ connections, the facts `w` of `n` execution phases' scans, their tied audits' fr
 slot entry bits their tied audits' incorrect proof blocks can set `faulty` (`faultyEntries`), under one scan's terms `scan`, the
 jitter bound `jitter`, the charged audits' facts `charged` and the period's charged start `start`: the start's free
 inputs at `2 ^ start`, `#Ss` and `∏_c (cap_c + 1)` each at `∏_j (caps j + 1)` (`schedules` and `cells`), and window
-`i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#faultySets` at `atMost N b`, `2^β` at
+`i`'s `2^#(free inputs)` at `2 ^ (scan.free + tied i)`, `#incorrectSets` at `atMost N b`, `2^β` at
 `2 ^ (b · max(b_ing, b_eg))` times `2 ^ faulty i` and `Dj^k` at `jitter ^ scan.steps`, their product is at most
 `2 ^ K`. -/
 def RowsKBoundsCount : Prop :=

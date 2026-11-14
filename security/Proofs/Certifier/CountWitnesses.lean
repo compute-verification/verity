@@ -32,8 +32,8 @@ over one step, its one free input admits two values, each possible incorrect set
 the incorrect set `{0}` is possible there, and the step `obs1` is accepted. -/
 theorem EncardAccSeqsSampledLe_honest :
     notLay.Fits sampProg 1 ∧ (AsReg sampProg notLay 1 ∅ fun _ => false).encard ≤ ((2 ^ 1 : ℕ) : ℕ∞) ∧
-      (∀ F ∈ faultySets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3) ∧
-      ({0} : Finset ℕ) ∈ faultySets sampDesign sampPart (1 / 4) ∧
+      (∀ F ∈ incorrectSets sampDesign sampPart (1 / 4), faultyBits sampProg sampPart F ≤ 3) ∧
+      ({0} : Finset ℕ) ∈ incorrectSets sampDesign sampPart (1 / 4) ∧
       [obs1] ∈ AccSeqsSampled sampProg sampPart sampDesign notLay 1 (AsReg sampProg notLay 1 ∅ fun _ => false) (1 / 4)
         (fun _ _ => [false]) 1 :=
   ⟨sampLay_fits, sampAs_encard, sampBits, single_mem_sampFaulty, obs1_sampAcc⟩
@@ -42,7 +42,7 @@ theorem EncardAccSeqsSampledLe_honest :
 `c = 1`, `β = 3`, its possible incorrect sets at `δ = 1/4`, `D = 1`. -/
 theorem EncardAccSeqsSampledLe_nontrivial :
     ¬ (AccSeqsAt (acceptAll (L := 1) (K := 1) (S := 1)) 1 1).encard ≤
-      ((2 ^ 1 * (faultySets sampDesign sampPart (1 / 4)).card * 2 ^ 3 * 1 ^ 1 : ℕ) : ℕ∞) :=
+      ((2 ^ 1 * (incorrectSets sampDesign sampPart (1 / 4)).card * 2 ^ 3 * 1 ^ 1 : ℕ) : ℕ∞) :=
   accSeqsAt_acceptAll_not_le (by norm_num) (by norm_num) _
 
 

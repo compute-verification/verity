@@ -16,7 +16,7 @@ flowchart LR
         D["The auditor's devices at the site<br/>network certifier, memory challenger"]
     end
     subgraph aud["The auditor"]
-        C["Challenger<br/>draws the challenges"]
+        C["Challenger<br/>samples the challenges"]
         V["Verifier<br/>checks proofs and decides"]
         L["Account<br/>adds up each monitoring period<br/>and its failure chance"]
     end
@@ -31,7 +31,7 @@ flowchart LR
 
 - **Only messages cross between boxes.** The workload transcript never leaves the developer. The protocol transcript is what the prover and the verifier exchange.
 - **The auditor's devices hand what they see to the prover, signed.** The auditor sees only proofs about it. This is today's rule, and it is still to be confirmed.
-- **Challenges come only from the auditor's side**, and only after the commitments they sample are recorded: from the challenger, and at the site from the memory challenger, which draws the challenges of its own timed rounds.
+- **Challenges come only from the auditor's side**, and only after the commitments they sample are recorded: from the challenger, and at the site from the memory challenger, which samples the challenges of its own timed rounds.
 - **Whatever the auditor decides, the verifier decides, and the verifier is Lean.**
 
 ## 2. The ideas that organize everything
@@ -44,7 +44,7 @@ flowchart LR
 6. **Hardware and configuration are data, passed in.** A data sheet per GPU model. One file per run that says which protocols run and which party runs on which machine.
 7. **Measuring is separate from the system.** A benchmark never decides a verdict. Every benchmark's numbers show on one dashboard.
 8. **Trust follows the directory.** What the auditor runs and must trust is each protocol's `verifier/` and `device/`. What a reader checks to believe a guarantee is its statement and its named assumptions in `security/`, and that Lean's kernel accepted its proof, which the check does again on every change. Nothing else in the repository is trusted.
-9. **What a guarantee may rest on.** That SHA-512 resists collisions, that Lean's kernel is right, that the auditor's verifier and devices are honest and draw uniformly random challenges, and the few assumptions approved by name. Anything else a guarantee needs is an open premise with an owner and a date, printed beside the figure.
+9. **What a guarantee may rest on.** That SHA-512 resists collisions, that Lean's kernel is right, that the auditor's verifier and devices are honest and sample uniformly random challenges, and the few assumptions approved by name. Anything else a guarantee needs is an open premise with an owner and a date, printed beside the figure.
 10. **GPU code implements and never defines.** A kernel computes what its owner states: a commitment, a protocol's circuit, an operation the adapter serves. It lives beside the prover or adapter that runs it, a run names it by the hash of its binary, and a benchmark measures the same binary the served run loads.
 
 ## 3. One period, step by step
@@ -304,7 +304,7 @@ Each difference's owner and day are in `tests/tree.toml` (its `[[not_yet]]` line
 | The circuit checker is handed the served circuits and names none | It names them |
 | The compiler cuts a period's circuit into pieces wired to each other | For the demo's model the pieces are wired only where the eight GPUs combine results, so the audit's second round runs over a stand-in |
 | Every kernel the serving settings run has a circuit held to the kernel on an H200 | Three of five on `main` (the cache's write and both its reads) |
-| Every kind of piece in a request has a statement the Lean verifier accepts | 241 of the plan's 271 kinds (44 on Boolean versions only) by a stored record; 30 whole rows have none; `cover_count.py --card` checks its kinds |
+| Every kind of piece in a request has a statement the Lean verifier accepts | 111 of the plan's 1,272 kinds (5 on Boolean versions only) by a stored record; 1,161 split units have none; `cover_count.py --card` checks its kinds |
 | One form of the network certifier | Two: the remote demo runs an older one, a proxy in front of the server; the onsite demo runs the device on the link |
 | Every benchmark on the dashboard | 5 of 69 wired; 3 of the 5 show a value no older than their schedule allows |
 | The proofs' status on the dashboard: guarantees fully proved, open premises per lead | Printed by the Lean check only |

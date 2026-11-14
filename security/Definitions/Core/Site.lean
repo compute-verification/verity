@@ -76,7 +76,7 @@ the entry's own refusal, else by these (`Registration.refusal`).
 declaration names its day by the part's index. The prover declares one circuit a day, before the day's first coin: the
 verifier reads the day's declaration from the log it holds when it samples (`Registration.declared`), and since a second
 declaration of the day is refused, that declaration is the day's for the rest of the log. A window runs its day's
-declared circuit when its span lies within the day's and its program is the one the day declares
+registered circuit when its span lies within the day's and its program is the one the day declares
 (`Registration.RunsDeclared`).
 
 The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check. The auditor's data sheets, public
@@ -263,7 +263,7 @@ def Registration.Item.key : Registration.Item → String
   | .theta t => "theta " ++ t.value
   | .builder _ => "builder"
 
-/-- **A day's declared circuit**: the day, by its index among the parts of the monitoring period's span cut into days
+/-- **A day's registered circuit**: the day, by its index among the parts of the monitoring period's span cut into days
 (`Registration.RunsDeclared`), and the digest of the circuit's program. -/
 structure Registration.Declared where
   day : ℕ
@@ -325,12 +325,12 @@ def builder? (log : Registration) : Option Builder := log.items.findSome? fun | 
 /-- The days the log's declarations declare, in the log's order. -/
 def days (log : Registration) : List ℕ := log.filterMap fun e => e.declared?.map (·.day)
 
-/-- **Day `j`'s declared circuit** in the log: the declaration that declares day `j`, the first when a log the check
+/-- **Day `j`'s registered circuit** in the log: the declaration that declares day `j`, the first when a log the check
 refuses declares it twice; `none` when the log declares no circuit for day `j`. -/
 def declared (log : Registration) (j : ℕ) : Option Declared :=
   log.findSome? fun e => e.declared?.filter (·.day == j)
 
-/-- **A window runs its day's declared circuit**: the days are the cut `days` of the monitoring period `m`'s span into
+/-- **A window runs its day's registered circuit**: the days are the cut `days` of the monitoring period `m`'s span into
 `n` consecutive spans, the window's span `w` lies within day `j`'s, and `program` is the program the log declares for
 day `j`. -/
 def RunsDeclared (log : Registration) (m : MonitoringPeriod) {n : ℕ} (cut : m.span.Cut n) (w : TickSpan)

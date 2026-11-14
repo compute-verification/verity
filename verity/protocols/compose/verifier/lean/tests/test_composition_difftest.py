@@ -95,17 +95,17 @@ def _sessionless_audit(i: int, after: str | None = None) -> tuple[dict, dict, di
     and its params name the circuit and public files `BLOBS` hold. Its log is empty, or with `after` (a record's
     canonical JSON) that one record, which its record is chained right after. Made once each: a challenger's signed
     session is slow to make."""
-    s, law = OS.SETUPS[i], {"k": 1, "law": "subset"}
+    s, sampling_design = OS.SETUPS[i], {"k": 1, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
     log = [json.loads(after)] if after else []
-    rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
+    rec = OS.R.record(s.program, s.query, sampling_design, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
-    ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, sampling_design, rec, trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}}
-    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
+    params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": sampling_design,
               "leaf_layer": OS.LEAF, "log": log, "partition": part, "ports": s.ports, "program": s.desc,
               "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": None}, "query": s.query,
               "registered": None, "scheme": OS.SCHEME, "window_root": ch.ledger.window["root"], "work_table": None}
@@ -999,7 +999,7 @@ def test_remote_v1_on_a_served_pearl_plus_run(tmp_path, monkeypatch):
     assert got["reason"].startswith(f"{audit['id']} reject") and R.PEARL_PLUS.id not in got["reason"], got
 
 
-INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/inference_only/lean"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/protocols/policy/inference_only/verifier/lean"
 #: How Pearl+'s refusal of params that name none of its keys starts (`PouwCheck.PearlPlus.Protocol`'s guard, which gives
 #: no digest); the reference compares no reason
 PEARL_PLUS_REFUSED = "params: keys are not coins,"

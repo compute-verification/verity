@@ -57,7 +57,7 @@ The logical layer (`CircuitWork`) rests on four claims, the headlines', sampled 
   `Declared.atIR`) and the tiles' words. Its good units are the ones the run paid for, so a receipt-lucky skipped tile
   isn't credited.
 
-The service's commit order (`Accounting.Compose.LayerCommitted`) is protocol structure, a fact of the declared circuit,
+The service's commit order (`Accounting.Compose.LayerCommitted`) is protocol structure, a fact of the registered circuit,
 and lives in the live statements' `Scope`, not here: today's code doesn't meet it, so a live window it serves is out of
 scope.
 
