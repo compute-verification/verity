@@ -138,7 +138,7 @@ def test_the_tie_is_the_checkpoints_public_bytes_and_commits_no_weight(x, monkey
     assert set(got["registered"][1]["values"]) == {n for c in t.chains for n in c.supplied()}
     assert got["circuit"] == t.digest(DESIGN, CAP) != WT.tie(reg, d, man, grain=GRAIN, run_id="other").digest(DESIGN, CAP)
     w = t.window(DESIGN, CAP).window
-    rated = D.derive(w.program, w.query, *SV.params_law("work-rate:613/613", w.program, w.query, w.work_table))
+    rated = D.derive(w.program, w.query, *SV.params_sampling_design("work-rate:613/613", w.program, w.query, w.work_table))
     assert D.same_design(D.derive(w.program, w.query, DESIGN, w.work_table), rated)
     assert all(s["k"] == s["floor"] == sum(hi - lo for lo, hi in s["units"]) for s in rated["strata"])
 

@@ -10,7 +10,7 @@ public import Definitions.Core.Game
 public import Definitions.Core.Site
 public import Definitions.Hash.Assumptions
 public import Definitions.Hash.RowLeaf
-public import Definitions.Nci
+public import Definitions.InferenceOnly
 public import Flock.CoinTree
 public import Flock.Hash
 public import Flock.Hm96
@@ -40,7 +40,7 @@ period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 | SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit; one-stage v1 and the recursive audit refused) | yes | yes |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`, its period credit) | yes | |
 | | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`: Pearl+'s run verdict, its credit at Pearl's assumption) | | yes |
-| the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
+| the inference-only policy | | `InferenceOnlyCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | yes | |
 | PoUB-P2 | `.poub` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | yes | |
 | the network certifier | `.network` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | yes | |
@@ -157,7 +157,7 @@ inductive Subprotocol
   | inferenceOnly
   /-- PoUS: space -/
   | pous
-  /-- PoUB-P2, the remote bandwidth audit's P2 session on PoUS's store: bits read from device memory -/
+  /-- PoUB-P2, PoUB's P2 session on PoUS's store: bits read from device memory -/
   | poub
   /-- the network certifier: communication through the network certifiers -/
   | network
@@ -185,7 +185,7 @@ def Subprotocol.protocolAt : Subprotocol → Verity.Registration.Composite → B
   | .pouw, k =>
     if PouwCheck.PearlPlus.Protocol.protocolId ∈ k then PouwCheck.PearlPlus.Protocol.protocol
     else PouwCheck.Period.protocol
-  | .inferenceOnly, _ => NciCheck.Protocol.protocol
+  | .inferenceOnly, _ => InferenceOnlyCheck.Protocol.protocol
   | .pous, _ => PousCheck.RunProtocol.protocol
   | .poub, _ => RemoteAudit.P2Protocol.protocol
   | .network, _ => NetworkCheck.Period.protocol
@@ -205,7 +205,7 @@ def componentsOf (k : Verity.Registration.Composite) : List BlobProtocol :=
 /-- The subprotocols of composite `k` that must commit to one record: the inference-only policy and SPOT,
 each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
-  [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
+  [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
 
 /-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.windows`),
 PoUS and PoUB-P2 on one store (`Core.Onsite.store`), Pearl+'s run on the policy's record (`Core.Remote.V1.run`), and
@@ -272,16 +272,16 @@ def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
 /-- **The inference-only policy's case in what the prover sent composite `k`**, decoded: the three byte strings decode
-under the composition's formats, one of the subprotocols' cases is the policy's (`NciCheck.Protocol.protocol`, which
+under the composition's formats, one of the subprotocols' cases is the policy's (`InferenceOnlyCheck.Protocol.protocol`, which
 reads no blobs, as one of `k`'s subprotocols), and under the parameters `k` names for it that case decodes to the
-policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k NciCheck.Protocol.protocol s`
+policy's parameters `p`, its record `c` and its evidence `e`. It is `CaseAccepts k InferenceOnlyCheck.Protocol.protocol s`
 without the check's acceptance. -/
-def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : NciCheck.Protocol.Params)
-    (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) : Prop :=
+def PolicyCase (k : Verity.Registration.Composite) (s : Sent) (p : InferenceOnlyCheck.Protocol.Params)
+    (c : InferenceOnlyCheck.Protocol.Commitment) (e : InferenceOnlyCheck.Protocol.Evidence) : Prop :=
   ∃ ps cm ev, Decoded s ps cm ev ∧
-    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = NciCheck.Protocol.protocol ∧
-      (canonicalJson x.2.1.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
-      NciCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
+    ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = InferenceOnlyCheck.Protocol.protocol ∧
+      (canonicalJson x.2.1.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
+      InferenceOnlyCheck.Protocol.commitmentOf x.2.2.commitment = .ok c ∧ InferenceOnlyCheck.Protocol.evidenceOf x.2.2.evidence = .ok e
 
 /-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=

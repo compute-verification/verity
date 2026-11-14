@@ -157,7 +157,7 @@ def test_traced_as_is_the_compositions_entry_point():
     assert t.weight is ncp2.weight(ncp2.Shape(32, 64, 32)) and t.kind == "shift24"
 
 
-def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
+def test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_budget():
     """K = 27,713 is an execution phase's budget: alone, a call is capped at its units instead of raising; in an execution phase each
     call samples ⌈K·W_c/W_window⌉, so C equal calls sample about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))

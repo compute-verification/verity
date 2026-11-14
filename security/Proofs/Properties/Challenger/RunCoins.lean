@@ -42,7 +42,7 @@ theorem fromDevice_of_code (dev : Properties.Challenger.History) {key : Option S
     {main coins record : Json} {window family : Option String} {read : ByteArray}
     (h : Spot.Run.coinsCode key main coins record window family read = none) (hr : 0 < read.size) :
     ∃ k w label d, key = some k ∧ window = some w ∧ family = some label ∧
-      Spot.Registration.digest record = .ok d ∧ FromDevice dev k w label d coins read := by
+      Spot.Docket.digest record = .ok d ∧ FromDevice dev k w label d coins read := by
   obtain ⟨k, w, label, d, hk, hw, hf, hd, hn⟩ := coinsCode_read h hr
   exact ⟨k, w, label, d, hk, hw, hf, hd, fromDevice_of_reason dev hn⟩
 

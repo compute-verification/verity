@@ -82,7 +82,8 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+import tomllib
+from collections.abc import Callable, Collection, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -354,6 +355,46 @@ def register(scheme: str, verify: Verify) -> None:
     if scheme.startswith(TEST_PREFIX):
         raise ValueError(f"{scheme} is a test signer's scheme: it is accepted only by a test's own mapping")
     _SCHEMES[scheme] = verify
+
+
+PREMISE = "trusted-device"
+REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+UNCOMMITTED = "rehearsal, no bound: the configuration is not a committed one"
+COMMITTED = Path(__file__).resolve().parents[5] / "tools" / "verity" / "cli" / "verity_cli" / "configurations.toml"
+"""The committed configurations' hashes, each demo's configuration by its path: the only configurations under which
+`trusted_device` says `PREMISE` holds."""
+
+
+def committed(path: Path = COMMITTED) -> frozenset[str]:
+    """The hashes `path` (`COMMITTED`) commits, as `verity config hash` prints them."""
+    return frozenset(tomllib.loads(path.read_text()).values())
+
+
+def pinned(pins: Sequence[Mapping[str, str]], party: str, protocol: str) -> frozenset[str]:
+    """The keys' SHA-512s a configuration's pins (its checked `[[pin]]` entries) give `party` for `protocol`'s sessions."""
+    return frozenset(p["key-sha512"] for p in pins if p["party"] == party and p["protocol"] == protocol)
+
+
+def trusted_device(pins: Sequence[Mapping[str, str]], party: str, protocol: str, key_sha512: str | None, names: str, *,
+                   configuration: str | None, committed: Collection[str]) -> str:
+    """`PREMISE` for a session of `protocol` signed under the key whose SHA-512 is `key_sha512`, its device the
+    configuration's party `party`: that the device ran on a machine the developer doesn't control. It holds only under a
+    configuration whose hash `configuration` is one of `committed`, and only when the key is one the configuration's
+    `pins` give that party for that protocol. Under any other configuration it reads `UNCOMMITTED`, and under any other
+    key `REHEARSAL`, a run's own pin included, whatever the names say. `names` is what the run's names say of where each
+    party ran, a label and never the reason. Every protocol whose device signs its sessions reads its premise here,
+    with the same pins."""
+    under = f"configuration {configuration}" if configuration else "no configuration"
+    if configuration is None or configuration not in committed:
+        return f"{UNCOMMITTED} ({under}); {names}"
+    if key_sha512 is not None and key_sha512 in pinned(pins, party, protocol):
+        return f"holds: the session is signed under the key {under} pins for {party}'s {protocol} sessions; {names}"
+    return f"{REHEARSAL} ({under}); {names}"
+
+
+def holds(where: Mapping[str, Any]) -> bool:
+    """Whether a placement's `PREMISE` holds (`trusted_device`)."""
+    return where[PREMISE].startswith("holds: ")
 
 
 @dataclass(frozen=True, slots=True)
@@ -736,7 +777,7 @@ class MemoryChallenger:
 @contextmanager
 def collector_paused() -> Iterator[None]:
     """Python's cyclic garbage collector off inside, and as it was after. A timed round can't absorb a collection: the
-    first full one after `period.challenger` loads the deployed key, whose tree is 2^21 objects, stalls the process
+    first full one after `onsite.device_key` loads the deployed key, whose tree is 2^21 objects, stalls the process
     for about 35 ms, 40 times Δ + RTT at the certified point, and where it falls is set by the allocation count."""
     was = gc.isenabled()
     gc.disable()
@@ -803,7 +844,8 @@ def verdict(signed: SignedSession, commitment: SessionCommitment, openings: Sequ
     return Verdict(not reasons, tuple(reasons), late, wrong)
 
 
-__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMPLETE", "HM96", "LATE", "LMS", "PROTOCOL",
+__all__ = ["CLOCK_RESOLUTION_NS", "COIN_DOMAIN", "COIN_TREE", "COMMITTED", "COMPLETE", "HM96", "LATE", "LMS", "PREMISE",
+           "PROTOCOL", "REHEARSAL", "UNCOMMITTED", "committed", "holds", "pinned", "trusted_device",
            "RECORDS", "RECORD_BYTES", "SALT_BYTES", "SALT_LOG", "SCHEMES", "SESSION_LOG", "SETUP_RECORD_TAG",
            "TEST_PREFIX", "CoinOpening", "CoinTree", "LmsSigner", "MemoryChallenger", "Round", "SaltLog",
            "SessionCommitment", "SessionLog", "SessionLogError", "SetupRecord", "SignedSession", "SignedSetupRecord",

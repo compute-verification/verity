@@ -23,7 +23,7 @@ XOR8 = PrimitiveDefinition("R2PopulationTestXor8", 1, (("a", Bits(8)), ("b", Bit
 AND8 = PrimitiveDefinition("R2PopulationTestAnd8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a & b,
                            register=False)
 SCHEME = "frame-v3-sha512/hm96-sha512"
-LAW = {"law": "subset", "k": 1}
+SAMPLING_DESIGN = {"law": "subset", "k": 1}
 WINDOW = {"kind": "served", "row": 1, "run": "r-test"}
 
 
@@ -53,10 +53,10 @@ def test_r2_registers_another_nonempty_partition(population, mixed, counts):
     assert P.units(other, query) == sum(counts)
     assert P.digest(P.partition(other, query)) != P.digest(P.partition(own, query))
     ports = _ports(own, query)
-    rec = R.record(own, query, LAW, SCHEME, [{"port": p, "root": "ab" * 64, **w} for p, w in ports.items()], WINDOW,
+    rec = R.record(own, query, SAMPLING_DESIGN, SCHEME, [{"port": p, "root": "ab" * 64, **w} for p, w in ports.items()], WINDOW,
                    leaf_layer="ee" * 64)
-    assert R.check(rec, own, query, LAW, SCHEME, ports, leaf_layer="ee" * 64).ok
-    v = R.check(rec, other, query, LAW, SCHEME, ports, leaf_layer="ee" * 64)
+    assert R.check(rec, own, query, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64).ok
+    v = R.check(rec, other, query, SAMPLING_DESIGN, SCHEME, ports, leaf_layer="ee" * 64)
     assert not v.ok and any(c.startswith("R2-") for c in v.codes)
 
 

@@ -40,6 +40,7 @@ from verity.protocols.accounting.poub.verifier.remote_session import verifier_pr
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
+import lean_stands_in  # noqa: E402
 from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier  # noqa: E402
 from verity.protocols.proofs.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
@@ -241,8 +242,11 @@ def test_a_served_or_gate_verifier_needs_the_verify_and_the_challengers_process_
     with pytest.raises(ValueError, match=re.escape(f"--challenger {kind} checks the challenger's signatures with the "
                                                    "LMS verify its process's entry hands in")):
         challengers.of(kind, tmp_path / "out", key, None, **flags)
-    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
-    assert source.verify is VP.lms_verify
+    if kind == "serve":
+        with pytest.raises(ValueError, match="reads its session with the LMS verify that asks the Lean"):
+            challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify)
+    source = challengers.of(kind, tmp_path / "out", key, None, **flags, verify=VP.lms_verify, served_verify=VP.verify)
+    assert source.verify is (VP.verify if kind == "serve" else VP.lms_verify)
     if kind == "serve":
         assert source.command == ("python", "serve.py")
         with pytest.raises(ValueError, match="starts the challenger's process its entry hands in"):
@@ -254,7 +258,7 @@ def test_the_verifiers_entry_hands_its_main_the_lms_verify_and_the_live_challeng
     monkeypatch.setattr(VP.verifier, "main", lambda argv, **kw: got.update(argv=argv, **kw) or 0)
     assert VP.main(["--port", "7781"]) == 0
     assert got == {"argv": ["--port", "7781"], "figures": VP.timing.RTX_PRO_6000_NODE, "verify": VP.lms_verify,
-                   "serve": (sys.executable, str(LIVE / "serve.py"))}
+                   "served_verify": VP.verify, "serve": (sys.executable, str(LIVE / "serve.py"))}
 
 
 def test_a_challenger_key_other_than_the_pinned_one_is_refused_before_a_reserve(store, host, tmp_path):
@@ -315,7 +319,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
     else:
         (tmp_path / "served").mkdir()
         serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
-        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.lms_verify)
+        source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
     pace = verifier.pace_of("1:4:160:2", 1.0)
     (honest, dropper), _ = run_sessions("honest,skip:0.0625", paces=[pace, pace], challenger=source,
                                         defer_openings=False)
@@ -370,21 +374,24 @@ def analysed(out: Path, host: Host, sessions: list[dict], reg: dict, desc: bytes
                       commit=commit, pins=pins, main=main, model=model, peer=peer, lean=line_by, lockdown=lockdown)
 
 
-def test_the_line_reads_the_sketch_at_its_outside_factor() -> None:
-    """`sketch_at` reads a session's SketchBound δ at F times the compressions its verifier charged the node
-    (gate run 8's session 0: 2^-51.59 at F = 1, the red team's 2^-41.59 at 2^10), at the record's F unless asked
-    another (1 for a record written before F), and the line's error there is the horizon's plus it; a session with no
-    sketch term has none."""
+def test_the_line_reads_the_sketch_at_the_queries_its_record_charged() -> None:
+    """`sketch_at` reads a session's SketchBound δ at the Q its record charged (`recorded_queries`) unless asked
+    another: 2^`queries_log2`, the prover's budget, in a record that states it (2^-15.12 at 2^80 over P = 2,118 passes
+    of N = 97,517,568 blocks), and F·C in one written before, C the compressions its verifier charged the node and F
+    its outside-compute factor, 1 where the record states none (2^-51.59 at F = 1, 2^-41.59 at 2^10).  The line's error
+    there is the horizon's plus it; a session with no sketch term has none."""
     c, p, n, horizon = 12_708_215_084_432, 2118, 97_517_568, 9.64e-10
     sf = {"compressions": c, "log2": -51.59}
     s = {"ledger": {"sketch_failure": sf, "inputs": {"passes": p, "rows": 16}, "spec": {"error": {"horizon": horizon}}}}
-    for f, want in ((1, -51.59), (2 ** 10, -41.59), (2 ** 20, -31.59)):
-        got = verifier.sketch_at(s, {"blocks": n}, f)
-        assert (got["outside"], got["compressions"], got["queries"], round(got["log2"], 2)) == (f, c, f * c, want)
+    for q, want in ((c, -51.59), (2 ** 10 * c, -41.59), (2 ** 80, -15.12)):
+        got = verifier.sketch_at(s, {"blocks": n}, q)
+        assert (got["queries"], round(got["log2"], 2)) == (q, want)
         assert got["error"] == pytest.approx(horizon + 2.0 ** got["log2"])
-    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 1)
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, c)
     sf["outside"] = 2 ** 10
-    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10)
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 10 * c)
+    s["ledger"]["sketch_failure"] = {"queries_log2": al.audit.QUERIES_LOG2, "log2": -15.12}
+    assert verifier.sketch_at(s, {"blocks": n}) == verifier.sketch_at(s, {"blocks": n}, 2 ** 80)
     assert verifier.sketch_at({"ledger": {}}, {"blocks": n}) is None
 
 
@@ -422,7 +429,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert json.loads(closed)["body"]["complete"] is defer_openings
     doc = line("lean")
     honest, dropper = doc["sessions"]
-    assert doc["sketch_outside"] == [2 ** 20] and honest["sketch"]["outside"] == 2 ** 20
+    assert doc["sketch_queries"] == [2 ** 80] and honest["sketch"]["queries"] == 2 ** 80
     assert honest["of_record"] and dropper["of_record"] and honest["credit"]["credited"]["ok"]
     assert dropper["credit"]["accepted"]["reason"] == "the Lean refused it (receipt)"
     for s in (honest, dropper):
@@ -489,8 +496,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
     assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
     for bound, model, why in (
-            (None, MODEL, "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin "
-                          "FILE), so its payload root is the prover's choice"),
+            (None, MODEL, "the verifier holds no checkpoint, so the store's payload root is the developer's choice"),
             (None, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one"),
             (MODEL, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one")):
         unbound = analysed(out, host, sessions, reg, desc, bound=bound, model=model)
@@ -531,8 +537,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 
 def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store_and_exits_0(host, tmp_path,
                                                                                            monkeypatch, capsys):
-    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
-    verifier bound the store to none. `auditor_line.py` prints a line that credits the session on its four checks,
+    """A gate run (`gate.sh`): its period signs no model (`period-open` without `--model`) and its verifier holds no
+    checkpoint. `auditor_line.py` prints a line that credits the session on its four checks,
     conditional on DeveloperStore, printing that the verifier held no checkpoint, so the store's bytes are the
     developer's choice, and why (no model is there to bind the store to), with `"model": null, "bound": false,
     "store": "the developer's choice"` in its JSON, and exits 0."""
@@ -601,6 +607,41 @@ def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_
             continue
         credit = analysed(out, host, sessions, reg, desc)["sessions"][0]["credit"]
         assert not credit["ok"] and any(z.endswith(why) for z in credit["zero"]), (piece, lean, credit["zero"])
+
+
+def test_without_their_lean_the_ledger_complete_and_main_leave_an_honest_gate_session_undecided(host, tmp_path,
+                                                                                                 monkeypatch):
+    """With the real interfaces (`lean_stands_in.unwritten`), an honest gate session that the Python and the Lean pieces
+    written credit earns none: the ledger's windows and periods, *complete* and its verifier's commit on main are each
+    undecided, with the goal's id, and the line credits zero."""
+    host.seal(monkeypatch, PINS)
+    out = tmp_path / "run"
+    sessions, reg, desc = gate_run(host, out, "honest", True)
+    rc, closed = host.call(["period-close", "--name", "p-1"])
+    assert rc == 0, closed
+    lean_stands_in.unwritten(monkeypatch)
+    doc = analysed(out, host, sessions, reg, desc)
+    credit = doc["sessions"][0]["credit"]
+    assert doc["ledger"]["verify_ledger"] == "undecided" and coins.UNWRITTEN in doc["ledger"]["undecided"]
+    assert not credit["ok"] and credit["accepted"]["ok"] and credit["pinned"]["ok"]
+    on_main, read = coins.undecided("verifier's commit on main"), coins.undecided("ledger's windows and periods")
+    assert credit["zero"] == [f"not credited: {on_main}", f"not complete: {coins.undecided('completeness')}",
+                              f"not credited: {read}"]
+    assert doc["credit"]["credited_sessions"] == []
+
+
+def test_without_its_lean_a_served_sessions_lms_verify_leaves_an_honest_session_undecided(tmp_path, monkeypatch):
+    """`challengers.Serve` reads its session with `verifier_process.verify`: where the Python's LMS verify holds, the
+    Lean's (`lms_answer`) decides, and while that isn't written an honest session is undecided, with the goal's id,
+    and not refused as `coins`."""
+    lean_stands_in.unwritten(monkeypatch)
+    (tmp_path / "served").mkdir()
+    serve = (sys.executable, str(LIVE / "tests" / "stub_serve.py"), str(LIVE / "serve.py"), "--keygen-workers", "1")
+    source = challengers.Serve(tmp_path / "served", tmp_path / "key", "4,4", command=serve, verify=VP.verify)
+    (honest,), _ = run_sessions("honest", paces=[verifier.pace_of("1:4:160:2", 1.0)], challenger=source,
+                                defer_openings=False)
+    assert not honest["accepted"] and honest["failure"]["failure"] == "undecided" and honest["challenger"]["undecided"]
+    assert honest["failure"]["reason"] == coins.undecided("served session's LMS signatures")
 
 
 def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
@@ -957,7 +998,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
     which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
-    slack is split at it: at 67 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
+    slack is split at it: at 140 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
     and 2^-40.0000 before the rejection."""
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]
     window = {"lengths": [2 ** 27], "profile": {"delta": 2.0 ** -40, "drawn": {"receipt": drawn}}}
@@ -980,6 +1021,6 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     stated["ledger"]["inputs"]["slack_log2"] = al.audit.SLACK_LOG2
     slack = al.line.number(al.session_error(stated)["exact"]["delta_slack"])
     assert slack == Fraction(passes, 2 ** al.audit.SLACK_LOG2) and al.timing.log2(slack) < -55.9
-    at67 = parts["profile"] + slack + parts["sketch"]
-    assert al.timing.log2(at67) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
-    assert al.timing.log2(at67 + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)
+    stated_total = parts["profile"] + slack + parts["sketch"]
+    assert al.timing.log2(stated_total) == pytest.approx(-39.9995 if passes == 2118 else -40.0000, abs=1e-4)
+    assert al.timing.log2(stated_total + rejection) == pytest.approx(-39.9908 if passes == 2118 else -39.9981, abs=1e-4)

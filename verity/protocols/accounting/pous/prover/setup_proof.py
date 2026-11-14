@@ -16,6 +16,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from verity.circuits.defs import bind
+from verity.protocols.accounting.pous.verifier.setup_proof import base
 
 from .decode_circuit import P2_BASE_BYTES
 from .setup_circuit import PousP2SetupCheck, slot_payload, slots
@@ -53,8 +54,7 @@ def unit_inputs(w: int, prefix: bytes, blocks_per_segment: int, block: bytes, ro
     that holds its payload and its slot."""
     if len(row) != row_bytes:
         raise ValueError(f"block {u}'s row is {len(row)} bytes, not the {row_bytes} the unit reads")
-    s, v = divmod(u, blocks_per_segment)
-    return block, prefix + s.to_bytes(8, "big") + v.to_bytes(8, "big"), row, place(w, row_bytes, u)[1]
+    return block, base(prefix, blocks_per_segment, u), row, place(w, row_bytes, u)[1]
 
 
 __all__ = ["GOAL", "padded", "payload_bytes", "place", "setup_unit", "unit_inputs"]

@@ -19,8 +19,7 @@
   - R2: the program, query and partition digests and the population are the verifier's own (an explicit partition
     object must be over the verifier's program);
   - R3: the scheme is the verifier's, and the roots are exactly the ports its layout derives, each exactly
-    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain; a port the layout wires to
-    another port's tree (`"wired"`) has that port's root (`R3-wired`);
+    `{port, root, leaves, domain}` with a hex root and the verifier's leaf count and domain;
   - R4: the leaf layer is the digest of the verifier's copy, so a null one is refused when the verifier holds one;
   - R5: the anchors are the verifier's;
   - R6: `previous` is the digest of this prover's last record (null for the first), and no earlier record has the same
@@ -184,18 +183,18 @@ def query_digest(query: Mapping[str, Any]) -> str:
     return hashlib.sha512(canonical_json(dict(query))).hexdigest()
 
 
-def record(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
+def record(program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str, roots: Sequence[Mapping[str, Any]],
            window: Mapping[str, Any], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
            previous: str | None = None, partition: Mapping[str, Any] | None = None,
            work_table: Mapping[str, Any] | None = None, registered: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """`partition`: an explicit partition object over `program` (default: the canonical `P.partition(program, query)`).
-    `law` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
+    `sampling_design` is written expanded over the program and query (`draw.derive`: a `stratified` rule becomes its strata, and a
     `work` rule its strata sized by `work_table`). `registered`: the registered values' entries (`Registered.entry`),
     which make the record v2."""
     part = dict(partition) if partition is not None else P.partition(program, query)
     rec = {"format": FORMAT_V2 if registered else FORMAT, "protocol": PROTOCOL, "program": part["program"],
            "query": query_digest(part["query"]), "partition": P.digest(part), "population": P.units(program, query),
-           "law": D.derive(program, query, law, work_table), "scheme": scheme,
+           "law": D.derive(program, query, sampling_design, work_table), "scheme": scheme,
            "roots": [{"port": r["port"], "root": r["root"], "leaves": int(r["leaves"]), "domain": r["domain"]} for r in roots],
            "leaf_layer": leaf_layer, "anchors": list(anchors), "window": dict(window), "previous": previous}
     if registered:
@@ -254,7 +253,7 @@ def resolved(supplied: Any, history: Mapping[str, Any] | None) -> Any:
     return HT.resolve(roots, supplied)
 
 
-def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], law: Mapping[str, Any], scheme: str,
+def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], sampling_design: Mapping[str, Any], scheme: str,
           ports: Mapping[str, Mapping[str, Any]], leaf_layer: str | None = None, anchors: Sequence[Any] = (),
           log: Iterable[Mapping[str, Any]] = (), partition: Mapping[str, Any] | None = None,
           work_table: Mapping[str, Any] | None = None, registered: Mapping[str, int] | None = None,
@@ -269,9 +268,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           certified: Mapping[str, Mapping[str, Any]] | None = None,
           verdicts: Mapping[str, bool] | None = None) -> Verdict:
     """R1-R8 against the verifier's own copies: its program and query, its sampling design and scheme, the ports its layout derives
-    (`{port: {"leaves", "domain"}}`, a port whose rows are the leaves of another port's tree naming that port too,
-    `"wired"`: R3 refuses a record whose roots under the two names differ, `R3-wired`), the digest of its copy of the
-    leaf layer, its anchors, its log of this prover's
+    (`{port: {"leaves", "domain"}}`), the digest of its copy of the leaf layer, its anchors, its log of this prover's
     earlier records, the parameters it expects registered (`registered`: `{parameter: words}`), of those the ones it
     fills itself (`supplied`: `{parameter: [[source, ...], ...]}`, `registered.sources`) and the roots it held before the
     record for others (`pinned`: `{parameter: root}`, the weights' root recorded before the salt, say), and of the rest the
@@ -369,9 +366,9 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
     if (rec["format"], rec["protocol"]) != (FORMAT_V2 if v2 else FORMAT, PROTOCOL):
         c.fail("R1-protocol", [rec["format"], rec["protocol"]])
     try:
-        mine = D.derive(program, query, law, work_table)
+        mine = D.derive(program, query, sampling_design, work_table)
     except (P.QueryRefused, ValueError) as e:
-        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(law)} does not apply: {e}"})
+        c.fail("R1-law", {"registered": rec["law"], "verifier": f"{dict(sampling_design)} does not apply: {e}"})
     else:
         if not D.same_design(rec["law"], mine):
             c.fail("R1-law", {"registered": rec["law"], "verifier": mine})
@@ -416,13 +413,6 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                 c.fail("R3-leaves", {"port": p, "registered": r["leaves"], "verifier": want["leaves"]})
             if r["domain"] != want["domain"]:
                 c.fail("R3-domain", {"port": p, "registered": r["domain"], "verifier": want["domain"]})
-        # one tree at two names: a port its layout wires to another's tree has that port's root. Only as good as the
-        # layout's `wired` entries: a second check of what the second stage holds each session's read of a wired port to
-        for p, want in sorted(ports.items()):
-            q = want.get("wired")
-            if isinstance(q, str) and not (p in got and q in got and isinstance(got[p]["root"], str)
-                                           and got[p]["root"] == got[q]["root"]):
-                c.fail("R3-wired", {"port": p, "wired": q})
     # R4: when the verifier holds the leaf layer, the record must name it (a null leaf layer is refused)
     if rec["leaf_layer"] != leaf_layer:
         c.fail("R4-leaf-layer", {"registered": rec["leaf_layer"], "verifier": leaf_layer})
@@ -447,7 +437,7 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
         c.fail("R8-shared-input", {"inputs": shared, "why": SHARED_WHY})
     if members:
         try:
-            refused = LP.refused(*LP.law_of(program, query, law, work_table), members)
+            refused = LP.refused(*LP.sampling_design_of(program, query, sampling_design, work_table), members)
         except (P.QueryRefused, ValueError) as e:
             c.fail("link-points", str(e))
         else:
@@ -481,7 +471,7 @@ def _tied(program: Program, tied: Sequence[str], registered: Sequence[str], held
     """Each of `tied`'s Input gates where R8 may let it through, else None: a parameter of the program that the verifier
     neither expects registered nor holds, whose gates are one non-empty interval (`registered.held_gates`) of run Input
     nodes (`partition.run_inputs`). A tied Input is never a registered value: R7 holds nothing of it. The Lean's
-    `Registration.tiedGate` is this."""
+    `Docket.tiedGate` is this."""
     fixed = {*registered, *held}
     out: list[range | None] = []
     for t in tied:
@@ -530,7 +520,7 @@ def refuse_unwindowed(again: Sequence[str]) -> None:
 
 def last_digest(log: Sequence[Mapping[str, Any]]) -> str:
     """The previous record's digest, the one R6 holds `previous` to: the log's last record's, and empty, which names no
-    record, when the log is empty (`Registration.lastDigest`)."""
+    record, when the log is empty (`Docket.lastDigest`)."""
     if not log:
         return ""
     try:
@@ -773,14 +763,14 @@ def _verdicts(verdicts: Any, what: str = "the verdicts") -> dict[str, bool]:
 
 def refused(verdicts: Mapping[str, bool], d: str) -> bool:
     """Whether the verdict log names the verifier's run on record `d` refused; a record it holds no verdict for is not
-    refused (`Registration.refusedIn`)."""
+    refused (`Docket.refusedIn`)."""
     return verdicts.get(d) is False
 
 
 def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the verifier refused the window `lag` windows of record before this one (Pool chain): its verdict log
     (`verdicts`) names its run on that record of the log refused. A log shorter than the lag, or a record it holds no
-    verdict for, is not refused, so where every run accepted the chain never restarts (`Registration.Pool.refused`)."""
+    verdict for, is not refused, so where every run accepted the chain never restarts (`Docket.Pool.refused`)."""
     lag = pool["lag"]
     if len(log) < lag:
         return False
@@ -794,7 +784,7 @@ def pool_refused(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> b
 def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]]) -> bool:
     """Whether the week's one reset is spent before this window (Pool chain): the log's last record, the previous window
     of record, names it spent (`POOL_SPENT`) in the verifier's week (`POOL_WEEK`), so a week starts unspent
-    (`Registration.Pool.spentBefore`)."""
+    (`Docket.Pool.spentBefore`)."""
     last = log[-1] if log else None
     w = last.get("window") if isinstance(last, Mapping) else None
     return isinstance(w, Mapping) and w.get(POOL_SPENT) is True and _names(w.get(POOL_WEEK), pool["week"])
@@ -803,7 +793,7 @@ def pool_spent_before(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]])
 def pool_chains(pool: Mapping[str, Any], log: Sequence[Mapping[str, Any]], program: Program) -> bool:
     """Whether the window carries the previous window's pool (Pool chain): neither the verifier refused the window the
     public lag back (`pool_refused`) nor serving reset it (`reset`), and the log's last record, the previous window of
-    record, registered its program (`Registration.Pool.chains`). Otherwise it opens the empty pool."""
+    record, registered its program (`Docket.Pool.chains`). Otherwise it opens the empty pool."""
     last = log[-1] if log else None
     return (not pool["reset"] and not pool_refused(pool, log) and isinstance(last, Mapping)
             and last.get("program") == P.program_digest(program))
@@ -837,7 +827,7 @@ def pool_open(pool: Mapping[str, Any], rec: Mapping[str, Any], program: Program,
     """The domain and root of the pool the record's window opens (Pool chain): the previous record's entry for `pout` (its
     last naming it) when the window carries the previous window's pool (`pool_chains`), else the empty pool's: the
     domain the verifier gives `pin` (`registered_entries`) and the root R7 recomputes for it filled from `genesis`
-    (`registered.supplied_root`); where there is none, why (`Registration.poolOpen`, none there)."""
+    (`registered.supplied_root`); where there is none, why (`Docket.poolOpen`, none there)."""
     if pool_chains(pool, log, program):
         es = log[-1].get("registered")
         hits = [e for e in es if isinstance(e, Mapping) and e.get("value") == pool["pout"]] if isinstance(es, list) else []
@@ -933,7 +923,7 @@ def _check_registered(c: _Collect, got: Any, program: Program, values: Mapping[s
             c.fail("R7-supplied", {"value": v, "registered": e["root"], "verifier": root})
 
 
-#: `OneStageZk.TABLE_PORT`, the port a registration names a window's row tables' root at
+#: `OneStageZk.TABLE_PORT`, the port a docket names a window's row tables' root at
 TABLE_PORT = "row-table"
 #: `OneStageZk.ROW_TABLES`
 ROW_TABLES = ("roots: the registration names a row tables' root (row-table), the window's and no member's: the per-member "

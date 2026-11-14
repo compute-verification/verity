@@ -42,7 +42,7 @@ What it reads (`read`, "grader-products/v2"):
   circuit's products, by phase, op and dims: their count, N, O, operand widths, token dims and |C| (the trace's at its
   gates a MAC), and both sides' |C| of the step, of each op's products and of the rest.
 
-A pure function of its inputs: no network, nothing published. It doesn't compute the bound ρ.
+A pure function of its inputs: no network, nothing published. It doesn't compute a record's slowdown.
 """
 from __future__ import annotations
 
@@ -680,7 +680,8 @@ def boolean_prices(prims: dict) -> dict[str, dict]:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.evaluation.bits import compile as compile_bits
     from verity.circuits.program import is_input
-    from verity.definitions.boolean import boolean_version
+    from verity_vllm.definitions.boolean import boolean_version
+    import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
     out = {}
     for pid, fn in sorted(prims.items()):

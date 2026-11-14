@@ -32,6 +32,7 @@ from verity_difftest import protocol as P
 from verity.protocols.accounting.pous.device import challenger_session
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.prover import period_prover
 from verity.protocols.accounting.pous.verifier import run as R
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -103,8 +104,8 @@ deployed_server = D.server_fixture(DEPLOYED)
 
 
 @cache
-def held() -> period.EncodedStore:
-    return period.setup_store(STORE, COINS, period.point_for(len(STORE), period.W, period.C0))
+def held() -> period_prover.EncodedStore:
+    return period_prover.setup_store(STORE, COINS, period.point_for(len(STORE), period.W, period.C0))
 
 
 @dataclass(frozen=True)
@@ -128,9 +129,9 @@ def _zeros_on_odd_rounds(blocks):
     return lambda i: bytes(len(blocks[i])) if i % 2 else blocks[i]
 
 
-def signed_run(signer, coins: bytes = COINS, prover=period.honest, setup_signer=None, setup_session: bytes | None = None,
+def signed_run(signer, coins: bytes = COINS, prover=period_prover.honest, setup_signer=None, setup_session: bytes | None = None,
                **record) -> Signed:
-    """The memory challenger's session on `held()` under `coins` (as `period.audit` runs it), signed by `signer`, whose
+    """The memory challenger's session on `held()` under `coins` (as `period_prover.audit` runs it), signed by `signer`, whose
     key the verifier trusts; the setup record signed by
     `setup_signer` (by default the session's key, at its next leaf for a test key) under `setup_session` (by default the
     session's id) for the published outputs, each overridden by `record`; and the openings from the prover's table."""

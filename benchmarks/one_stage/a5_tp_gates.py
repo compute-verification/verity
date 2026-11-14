@@ -91,7 +91,7 @@ from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # n
 from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
-from verity.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402
+from verity_vllm.definitions.registry.b1_tp2 import AllReduce2  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 
 #: the stand-in's TP run root, which every rank's window and every partial's domain bind
@@ -219,8 +219,8 @@ def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Bin
                             schemas=tuple((p, V2) for p in (*ports, "o0"))) for u, (q, k) in enumerate(sites(requests)))
     w = REST_BYTES // 2
     others = (CS.Member(rid, rows=(("row", w),), outs=(("o0", w),), n=rest, base=units, schemas=(("row", V2), ("o0", V2))),)
-    law, table = S.params_law(RULE, program, query, SRW.work_table_of(SRW.law_of(RULE), {tid: units, rid: rest}, [tid]))
-    return CS.Binding(program, query, law, f"{ROOT}/rank{r}", gates + others, work_table=table)
+    sampling_design, table = S.params_sampling_design(RULE, program, query, SRW.work_table_of(SRW.sampling_design_of(RULE), {tid: units, rid: rest}, [tid]))
+    return CS.Binding(program, query, sampling_design, f"{ROOT}/rank{r}", gates + others, work_table=table)
 
 
 def chunks(mine: CS.Binding) -> list[tuple[int, int, CS.Member]]:

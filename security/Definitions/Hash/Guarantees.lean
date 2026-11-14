@@ -79,7 +79,7 @@ inputs the two openings hashed. It is stated for any 64-byte `H` and `G`.
 Scope:
 * **Leaves.** The verifier's format (`RowLeaf.Format`): `hm96-sha512/row-seg/v1` leaves (`seg`: PoUW's per-call A rows,
   the vLLM row tables, A6's `x` port, the clear sampled audit's rows) or `hm96-sha512/row/v2` leaves (`v2`: H1's tables
-  and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, the remote audit's
+  and registered weights, serving's step rows, the chunked templates' `w`, `in<g>` and `o0` rows, PoUB's
   receipts) or `hm96-sha512/row/v1` leaves (`v1`: Flock's default ports, the registered values, M0's serving rows,
   each a row of 16-bit words). A row cut into several leaves (H1's chunk rows past K = 4096, n leaves a row) is bound
   leaf by leaf, at each leaf's rank; which leaves form a row is the layout's.

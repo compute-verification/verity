@@ -62,7 +62,7 @@ Two kinds of committed run:
     prove_path.py class-size --serve-run DIR --window K --row-dir DIR --advice FILE \\
         [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--probe SLOTS,PROMPT,OUTPUTS] [--hf-config F] [--target F] [--cap-bits L]
     prove_path.py window-commit --serve-run DIR --window K --row-dir DIR --advice FILE --key FILE --registration FILE \\
-        --checkpoint-dir DIR --out DIR --law RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
+        --checkpoint-dir DIR --out DIR --sampling-design RATE [--checkpoints F] [--class SLOTS,PROMPT,OUTPUTS[,LANES,EVERY]] [--cap N] \\
         [--workers N] [--window-registration W (--h1-key FILE | --pearl-passes DIR)] [--hf-config F] [--target F] \\
         [--cap-bits L]
 
@@ -147,7 +147,7 @@ Two kinds of committed run:
   the certifier front kept the network certifier's run under the serve dir, slot k is instead the request whose Program
   the network certifier's scan of that run starts there (`kept_scan`), its row the scan's. ``--out`` is the window's
   records for ``records_audit.py audit --circuit``: the circuit is the class's, a function of the class alone, so the
-  verifier's own ``window-circuit`` record is the circuit it holds it to. ``--law`` is the rate that audit states as
+  verifier's own ``window-circuit`` record is the circuit it holds it to. ``--sampling-design`` is the rate that audit states as
   its stream's rule, and the window is committed under the sampling design that rate names over the circuit's proof
   blocks (`window_design`), the design the stream holds its docket to. Each Program's Build is its own, from its
   compile (`own_builds`, beside ``--out``, as ``circuit``'s), so it commits a window at its close, before the row dir holds
@@ -371,7 +371,7 @@ def build_of(d: str, digest: str) -> dict[str, Any]:
     from verity.circuits.codec import decode_program, descriptor_id, program_digest
     from verity.circuits.program import is_input
     from verity_vllm.program.compact import expanded_file_args, file_items_from_refs
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity_vllm.query.manifest import format as MF
 
     p = Path(d) / "descriptor.json.gz"
@@ -1135,10 +1135,10 @@ def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits
     if not record.get("accepted"):
         return None
     p = AU.profile(record["registration"], record["draw"], delta)
-    law = p.strata()
+    sampling_design = p.strata()
     weights: float | dict[str, float] = max(bits.values())
-    if law is not None and {s.name for s in law.strata} <= set(bits):
-        weights = {s.name: float(bits[s.name]) for s in law.strata}
+    if sampling_design is not None and {s.name for s in sampling_design.strata} <= set(bits):
+        weights = {s.name: float(bits[s.name]) for s in sampling_design.strata}
     within = count["bound"] == "within the charge"
     return {"advice_bits": advice_bits, "c": advice_bits if within else None, "other_inputs": count["other_inputs"],
             "bound": count["bound"], "delta": delta, "wrong_units": record.get("wrong_units"), "template_bits": dict(bits),
@@ -1458,6 +1458,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from dataclasses import asdict
 
     from verity.protocols.proofs.spot.prover.audit import class_size as CZ
+    from verity_vllm.definitions.registry.attention_vocab import fa2_masked_from
+    from verity_vllm.program.predict import scan_state as SS
     from verity_vllm.program.predict.window_circuit import class_circuit
 
     compiler = compiler_of_args(a)
@@ -1467,7 +1469,8 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     seen = CZ.census(class_circuit(compiler.inner.registered, probe, 1, provable=False))
     lowered = time.time() - t0
     try:
-        one = CZ.project(seen, probe, cls)
+        one = CZ.project(seen, probe, cls, CZ.label(SS.bridge(cls.scan, cls.prompt)),
+                         lambda T, BN: fa2_masked_from(T, 1, 0, BN, False))
         sizes = {"program": CZ.size(one), "window": CZ.size(one, cls.slots)}
     except ValueError as e:
         raise ValueError(f"{e} (the probe's census: {json.dumps(seen, sort_keys=True)})") from None
@@ -1490,15 +1493,18 @@ def network_traces() -> Iterator[None]:
             sys.modules["replay"] = replay
 
 
-def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[list[int]], list[str | None]] | None:
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
+              ) -> tuple[list[list[int]], list[str | None]] | None:
     """The network certifier's scan of its run the certifier front kept under ``serve_dir``
     (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
     state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
     None for a slot no request starts (`scan_state.scan_state`). The window is the link-window, of the class's
     buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
     certifier's certified ingress rows from link-window 0 and the outputs its egress cells carry (`warden_chain.io`).
-    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan."""
-    from verity.protocols.accounting.certifier.verifier import warden_rows as WRW
+    ``window_rows`` reads one ingress record's rows: the network certifier's reader, which the caller passes, since SPOT
+    reads the certifier's record as a certified input and never imports the certifier.
+    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan or the
+    caller passed no reader."""
     from verity_vllm.program.predict import scan_state as SS
 
     with network_traces():
@@ -1508,6 +1514,10 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
 
     if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
         return None
+    if window_rows is None:
+        raise ValueError("the serve kept a network certifier run, whose scan reads its certified ingress rows by the "
+                         "certifier's reader, which SPOT never imports: run this from a caller that passes it "
+                         "(main's window_rows)")
     unpacked = None
     try:
         run = CP.kept_run(serve_dir)
@@ -1536,7 +1546,7 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str]) -> tuple[list[lis
     windows = sorted(r.window for r in records[WSV.INGRESS])
     if windows != list(range(len(windows))):
         raise ValueError(f"the kept run's ingress records are link-windows {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in WRW.window_rows(r, params)]
+    ingress = [x for r in sorted(records[WSV.INGRESS], key=lambda r: r.window) for x in window_rows(r, params)]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
@@ -1630,15 +1640,15 @@ def h1_tie(a: argparse.Namespace, cls: Any, key: bool = True) -> tuple[dict[str,
 
 
 def window_design(rule: str, circuit: IF.Circuit) -> dict[str, Any]:
-    """The sampling design a window of ``circuit`` is committed under (``window-commit --law``): the one the rate ``rule``,
-    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_law`), so the
-    window registers the design the stream holds it to. A fixed count is refused by name (`service.Law`): no stream
+    """The sampling design a window of ``circuit`` is committed under (``window-commit --sampling-design``): the one the rate ``rule``,
+    which the window's audit states to its stream, names over the circuit's proof blocks (`service.params_sampling_design`), so the
+    window registers the design the stream holds it to. A fixed count is refused by name (`service.SamplingDesign`): no stream
     takes it, and the audit would hold the window to another design."""
     from verity.protocols.proofs.spot.verifier import service as S
 
-    S.Law(rule)
+    S.SamplingDesign(rule)
     program, query = circuit.program()
-    return dict(S.params_law(rule, program, query, None)[0])
+    return dict(S.params_sampling_design(rule, program, query, None)[0])
 
 
 def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dict[str, Any]], list[int], Any] | None:
@@ -1668,7 +1678,7 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     return w, [json.loads(Path(held[s]["manifest"]).read_text()) for s in rounds], rounds, WC.PearlTables(scheme)
 
 
-def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
+def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
@@ -1685,7 +1695,7 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     linears and the docket reuses Pearl+'s W's values (`pearl_c.window.reuse`). -> the window's run root, its circuit record's SHA-512, its
     population and members, the scan state's kind (``scanned`` or ``stand-in``), the registered weights whose root the
     window's is (``held``) and those it isn't, whose reads are free (``free``), ``tie``, and the seconds each part took.
-    The window's sampling design is the one its rule ``--law``, a rate, names over the class circuit (`window_design`); a
+    The window's sampling design is the one its rule ``--sampling-design``, a rate, names over the class circuit (`window_design`); a
     rule that is no rate is refused before the class is lowered."""
     import tempfile
 
@@ -1693,10 +1703,10 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="builds-", dir=out.parent) as builds:
         a.builds = builds
-        return window_commit_of_builds(a)
+        return window_commit_of_builds(a, window_rows)
 
 
-def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
+def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
     """`window_commit_of_advice` over its own Build of each Program, from its compile (`own_builds`, into ``a.builds``
     beside ``--out``, as ``circuit``'s), never its row dir's: those are `advice_compile`'s, written once the serve is done,
     and a window tied to W is committed at its close, before its sample coin (`serve_tie`)."""
@@ -1722,7 +1732,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         nonlocal t
         seconds[what], t = round(time.time() - t, 1), time.time()
 
-    S.Law(a.law)
+    S.SamplingDesign(a.sampling_design)
     key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
     requests = compile_advice(compiler, data)
@@ -1756,7 +1766,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
-    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units])
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], window_rows=window_rows)
     state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
@@ -1793,7 +1803,7 @@ def window_commit_of_builds(a: argparse.Namespace) -> dict[str, Any]:
         values |= PWR.reuse(pw, manifests, filled.value, rounds)
         previous = R.digest(pw)
     lap("rows")
-    win = IF.Window(low.circuit, run, window_design(a.law, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
+    win = IF.Window(low.circuit, run, window_design(a.sampling_design, low.circuit), a.cap, registered=values, forms=WRS.FORMS)
     win.supply(CR)
     filled.record(win)
     lap("record")
@@ -1858,7 +1868,9 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
             "requests": len(reqs)}
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None) -> int:
+    """The commands (the module docstring). ``window_rows`` is the network certifier's reader of its ingress rows, which
+    ``window-commit`` needs where the serve kept a certifier run (`kept_scan`): a caller that holds the certifier passes it."""
     from verity_vllm.pipeline.workload_file import workload_file
 
     def workload_arg(s: str) -> str:
@@ -2006,7 +2018,7 @@ def main(argv: list[str] | None = None) -> int:
                    "opened from against the committed weights root")
     p.add_argument("--checkpoints", help="the manifest pinning the checkpoint's shards, checked when given (each tensor is "
                    "held to its committed tensor root either way)")
-    p.add_argument("--law", required=True, help="the rate the window's audit states as its stream's rule (rate:NUM/DEN or "
+    p.add_argument("--sampling-design", required=True, help="the rate the window's audit states as its stream's rule (rate:NUM/DEN or "
                    "stratified-rate:NUM/DEN), the window committed under the sampling design it names over the class "
                    "circuit's proof blocks (`window_design`)")
     p.add_argument("--cap", type=int, default=64, help="units a member (a statement)")
@@ -2048,7 +2060,7 @@ def main(argv: list[str] | None = None) -> int:
                  "weights-registration"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
                     "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
-                    "window-commit": window_commit_of_advice, "weights-registration": weights_docket_of_serve}
+                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows), "weights-registration": weights_docket_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

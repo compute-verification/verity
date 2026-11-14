@@ -9,7 +9,7 @@ from typing import Any
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import docket as R, verifier as V
 
-from test_registered import (BINDING, BOUND, LAW, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
+from test_registered import (BINDING, BOUND, SAMPLING_DESIGN, MIXED, Q, SCHEME, SERVED, _mixed_case, _program, _registered,
                              _record as _registered_record, _seeded_case)
 from test_service import DELTA, PAIR, RUN, SESSION, Clock, _lean, _ports, _record, _spec
 
@@ -165,12 +165,12 @@ def test_r8_lets_a_tied_value_through_on_both_verifiers():
     is never a registered value."""
     prog = _program()
     first, ports = _registered_record(prog, _registered(prog))
-    v1 = R.record(prog, Q, LAW, SCHEME, first["roots"], SERVED)
+    v1 = R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], SERVED)
     for rec, registered, tied, codes, through in (
             (v1, None, ["W"], (), ("W",)), (v1, None, None, ("R8-shared-input",), ()),
             (v1, None, ["nope"], ("R8-tied", "R8-shared-input"), ()), (first, {"W": 2}, ["W"], ("R8-tied",), ()),
             (first, {"W": 2}, None, (), ())):
-        v = V.check(rec, prog, Q, LAW, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
+        v = V.check(rec, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), (), None, None, registered, tied=tied)
         assert v.codes == codes and v.rests_on_period_check == through, (tied, v)
         assert v.verifiers["lean"]["codes"] == list(codes), (tied, v)
 
@@ -186,7 +186,7 @@ def test_r7_reads_each_values_first_registration():
     stream = _stream()
 
     def at(row: int, previous: Any, entry: Any, **change: Any) -> dict:
-        return {**R.record(prog, Q, LAW, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
+        return {**R.record(prog, Q, SAMPLING_DESIGN, SCHEME, first["roots"], {**SERVED, "row": row}, previous=previous,
                            registered=[entry] if entry else ()), **change}
 
     stream._append(stream._registration(first, 0))
@@ -205,8 +205,8 @@ def test_r7_reads_each_values_first_registration():
         earlier = stream._earlier(cand)
         assert earlier == [first, stream._log[-1]] or (cand["window"]["row"] != row and len(earlier) == 3)
         held = ["W"] if registered else None
-        part = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
-        whole = V.check(cand, prog, Q, LAW, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
+        part = V.check(cand, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), earlier, None, None, registered, held=held)
+        whole = V.check(cand, prog, Q, SAMPLING_DESIGN, SCHEME, ports, None, (), stream.log, None, None, registered, held=held)
         assert part == whole and part.codes == codes and part.verifiers["lean"]["codes"] == list(codes)
 
 
@@ -222,7 +222,7 @@ def test_a_supplied_position_reads_the_whole_log():
         log.append(rec)
     cand, check, _ = _mixed_case(base, log=log, window={**BOUND, "row": SERVED["row"] + 6})
     assert stream._earlier(cand, MIXED) is stream._log and len(few := stream._earlier(cand)) == 2
-    args = (cand, check["program"], check["query"], LAW, SCHEME, check["ports"], None, ())
+    args = (cand, check["program"], check["query"], SAMPLING_DESIGN, SCHEME, check["ports"], None, ())
     assert V.check(*args, stream.log, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).ok
     assert V.check(*args, few, None, None, check["registered"], MIXED, binding=BINDING, held=["W"]).codes == ("R7-supplied",)
 

@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 from verity.circuits.query_ast import NameSel
 
+from tests.pipeline.test_vu_store_export import logged
 from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.pipeline import vu_export as VX
 from verity_vllm.pipeline import vu_store as VS
@@ -214,14 +215,14 @@ def test_a_set_takes_no_instance_past_its_limit(tmp_path):
     assert [r[7] for r in _index(tmp_path / "sets", sets[0]["set"])] == ["interior", "interior", "committed"]
 
 
-def test_an_evaluation_whose_words_its_cut_does_not_reproduce_is_printed_and_counted_under_its_units_family(tmp_path, capsys):
+def test_an_evaluation_whose_words_its_cut_does_not_reproduce_is_logged_and_counted_under_its_units_family(tmp_path, caplog):
     (a_ops, a_out), (b_ops, b_out) = _gemm(1), _gemm(2)
     wrong = {"0": b_out["0"] ^ 1}
     root = _store(tmp_path, [(MLP, "Outer_v1", [(a_out, a_ops), (wrong, b_ops)])], VX.Limits(gemm_coords_per_row=2))
     sets, by_family = VS.extract(root, tmp_path / "sets")
     assert [s["n"] for s in sets] == [2] and by_family == {"Outer_v1": 2, "decomposition_error:Outer_v1": 1}
     assert [r[7] for r in _index(tmp_path / "sets", sets[0]["set"])] == ["interior", "interior"]
-    (line,) = capsys.readouterr().out.splitlines()
+    (line,) = logged(caplog)
     assert line.startswith("[vu-export] unit 0 evaluation 1: Gemm_v1 coordinate ") and " != row word 0x" in line
 
 
@@ -296,7 +297,7 @@ def _hook(tmp_path, monkeypatch, export, **given):
     return got, kept
 
 
-def test_the_hook_hands_the_export_the_replays_own_record_and_population(tmp_path, monkeypatch, capsys):
+def test_the_hook_hands_the_export_the_replays_own_record_and_population(tmp_path, monkeypatch, caplog):
     seen: list[tuple[tuple, dict]] = []
     summary = {"sets": [{"n": 2, "bytes": 10}, {"n": 3, "bytes": 20}], "wall_s": 1.5}
 
@@ -318,7 +319,7 @@ def test_the_hook_hands_the_export_the_replays_own_record_and_population(tmp_pat
                   "provenance": {"row": 101, "model": "tiny/model", "revision": "abc", "program_digests": {"r0": "d" * 64},
                                  "manifest_digest": "m" * 64, "pair": 0, "versions": {"git_head": "f00", "n": 3},
                                  "weights": {"checkpoint": checkpoint}}}
-    assert capsys.readouterr().out == f"[vu-export] 2 sets, 5 instances, 30 bytes in 1.5 s -> {tmp_path}\n"
+    assert logged(caplog) == [f"[vu-export] 2 sets, 5 instances, 30 bytes in 1.5 s -> {tmp_path}"]
 
 
 def test_the_hook_without_a_provenance_file_a_manifest_or_a_checkpoint_states_none_of_them(tmp_path, monkeypatch):
@@ -336,11 +337,11 @@ def test_the_hook_without_a_provenance_file_a_manifest_or_a_checkpoint_states_no
                                 "weights": {"checkpoint": {"repo": None, "revision": None, "weights_of_record_root": None}}}
 
 
-def test_an_export_that_raises_is_printed_and_returned_by_name_in_its_first_400_characters(tmp_path, monkeypatch, capsys):
+def test_an_export_that_raises_is_logged_and_returned_by_name_in_its_first_400_characters(tmp_path, monkeypatch, caplog):
     def export(*_a, **_kw):
         raise ValueError("x" * 500)
 
     got, _kept = _hook(tmp_path, monkeypatch, export)
     why = repr(ValueError("x" * 500))
     assert got == {"ok": False, "why": why[:400]} and len(got["why"]) == 400
-    assert capsys.readouterr().out == f"[vu-export] FAILED: {why}"[:400] + "\n"
+    assert logged(caplog) == [f"[vu-export] FAILED: {why}"[:400]]

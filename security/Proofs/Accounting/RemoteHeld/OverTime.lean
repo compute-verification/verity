@@ -8,7 +8,7 @@ import Mathlib.Combinatorics.Enumerative.DoubleCounting
 import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# The time a remote audit shows held
+# The time a PoUB session shows held
 
 `Accounting.Guarantees.Remote.HeldOverTimeLinks` from its premises, and `HeldOverTime` from it at links of rate 0
 (`heldOverTime_of_links`). At each outcome where the sketch bound and the live coins' bound hold (`holdsAnd`), each tick

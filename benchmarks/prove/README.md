@@ -28,7 +28,7 @@ verity bench prove lean-verify --lean VERIFIER --proof TREE         the Lean ver
 - **A row priced from a steady-state row names the Definition that row's statements are of**, with its parameters,
   after the staged type: `` `TYPE` (`DEFINITION`) ``. A row may be staged for a census type in another Definition than
   the type's own, so the line says which form priced the type: `its Boolean version` where the tree registers that
-  Definition as the type's (`verity.definitions.boolean.boolean_version`), `another Definition` otherwise, and nothing
+  Definition as the type's (`verity_vllm.definitions.boolean.boolean_version`), `another Definition` otherwise, and nothing
   where it is the type's own. A family's row names the Definition of the row it is scaled from the same way, after that
   row's own type's. The JSON rows hold it as `definition`, null on a row no steady-state row prices. Which Definition
   was staged changes no figure: a row prices the census type it was staged for.
@@ -183,7 +183,7 @@ a steady-state measurement when the report wasn't stopped or timed out, every pr
 accepted and its cache was flat. A run that holds `rate.json` is read from it alone.
 
 The serving rate is not a record. It is a stated, modeled input: the census's MACs a served token at the fleet's assumed
-serving MFU (`benchmarks/rho/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
+serving MFU (`benchmarks/slowdown/data/reference.toml`) of the card's data-sheet peak (`benchmarks/census/hardware.json`).
 
 
 ## The Lean verifier's seconds and the proof's bytes

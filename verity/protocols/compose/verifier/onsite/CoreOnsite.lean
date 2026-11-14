@@ -4,11 +4,11 @@ accounts for space, bandwidth and communication. Its subprotocols are integrity 
 (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`: one-stage v2's audit on the proofs themselves, on the
 blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, and the recursive audit, which SPOT's
 soundness doesn't cover, are refused), the
-inference-only policy (`NciCheck.Protocol.protocol`,
+inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
-by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol.protocol`,
+by PoUB's P2 session on PoUS's store (`RemoteAudit.P2Protocol.protocol`,
 `verity/remote-bandwidth/p2/v0`), communication by the network certifier over the period
 (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the period's link-windows certified and proved, and the bound
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
@@ -16,8 +16,8 @@ by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Proto
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
 answer. The policy's commitment and SPOT's are the run's registration record (in either form, the one-stage
 one), and both must commit to the same one; every window of the period must name that record as its Commit record,
-remote's tie (`Core.Remote.windows`). Two records reject onsite whatever the subprotocols answer. PoUS and the remote
-bandwidth audit must also be on one store (`store`): two stores reject onsite unless it rejects already.
+remote's tie (`Core.Remote.windows`). Two records reject onsite whatever the subprotocols answer. PoUS and PoUB
+must also be on one store (`store`): two stores reject onsite unless it rejects already.
 
 A stated exception: the policy's v0 publishes the declared division and each inference block's profile (its gates and
 fresh-input bits) in the clear. Onsite composes it for one run of record only, as an exception to
@@ -31,7 +31,7 @@ public import CoreComposition.Cases
 public import CoreComposition.Tie
 public import CoreRemote
 public import MemoryChallenger.WipeProtocol
-public import NciCheck.Protocol
+public import InferenceOnlyCheck.Protocol
 public import NetworkCheck.Period
 public import PousCheck.RunProtocol
 public import PouwCheck.Period
@@ -44,7 +44,7 @@ meta import CoreComposition.Cases
 meta import CoreComposition.Tie
 meta import CoreRemote
 meta import MemoryChallenger.WipeProtocol
-meta import NciCheck.Protocol
+meta import InferenceOnlyCheck.Protocol
 meta import NetworkCheck.Period
 meta import PousCheck.RunProtocol
 meta import PouwCheck.Period
@@ -61,13 +61,13 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
+  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
     RemoteAudit.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and SPOT. -/
-def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
-/-- PoUS and the remote bandwidth audit on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
+/-- PoUS and PoUB on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
 and the store the P2 session audits, the root its registration names (its commitment's `reg.root`, the case's
 `store_root`), each read by its own decoder. -/
 def store : Tie :=
@@ -78,7 +78,7 @@ def store : Tie :=
         fun k => (RemoteAudit.P2Protocol.decodeCommitment k.commitment).toOption.map ([·.held.reg.root]))]⟩
 
 /-- Onsite's ties: every window of PoUW's period on the policy's record (remote's, `Core.Remote.windows`), and PoUS and
-the remote bandwidth audit on one store. -/
+PoUB on one store. -/
 def ties : List Tie := [Core.Remote.windows, store]
 
 def protocol : BlobProtocol := tiedSameB "verity/onsite/v0" tied ties components
@@ -109,7 +109,7 @@ private def allRefused : Answer := answer (components.map refused)
 -- v1's nor v2's one-stage audit alone is onsite's integrity subprotocol
 #guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
-#guard (answer ((components.filter (·.id != NciCheck.Protocol.protocolId)).map refused)).reason ==
+#guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
 #guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
 #guard (answer ((components.filter (·.id != PousCheck.RunProtocol.protocol.id)).map refused)).reason ==
@@ -137,7 +137,7 @@ private def record (p : String) : ByteArray :=
 
 private def committed (policy audit : ByteArray) : Answer :=
   answer (components.map fun P =>
-    if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy }
+    if P.id == InferenceOnlyCheck.Protocol.protocolId then { refused P with commitment := policy }
     else if P.id == VStar.Recursive.Sampled.protocol.id then { refused P with commitment := audit }
     else refused P)
 
@@ -161,7 +161,7 @@ private def executionPhaseOn (r : String) : String := s!"\{\"commit\":\"{Flock.h
 `rs`. -/
 private def executionPhasesOn (policy : String) (rs : List String) : List Case :=
   components.map fun P =>
-    if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
+    if P.id == InferenceOnlyCheck.Protocol.protocolId then { refused P with commitment := policy.toUTF8 }
     else if P.id == PouwCheck.Period.protocolId then
       { refused P with evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map executionPhaseOn) ++ "]}").toUTF8 }
     else refused P

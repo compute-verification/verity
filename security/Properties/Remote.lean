@@ -3,8 +3,8 @@ module
 public import CoreRemote
 public import Definitions.Core
 public import Properties.Composition
-public import Properties.Nci.Desc
-public import Properties.Nci.Baseline
+public import Properties.InferenceOnly.Desc
+public import Properties.InferenceOnly.Theta
 public import Properties.Spot
 public import VStarRecursive.Caller
 
@@ -12,7 +12,7 @@ public import VStarRecursive.Caller
 # Remote's acceptance and the inference-only policy
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
-their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
+their ids: the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`), PoUW's period credit
 (`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
 one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). The policy's
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
@@ -20,28 +20,28 @@ forms) are the run's registration record, and the composite rejects unless both 
 (`Core.Composition.strays` over `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
 record its windows name (`Core.Remote.executionPhaseRecords`) has that digest too. The policy's check
-(`NciCheck.Protocol.check`) refuses a record whose `program` is not the
+(`InferenceOnlyCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
-the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
-(`NciCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
+the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at the size of the description
+(`InferenceOnlyCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
 * `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and SPOT's records have
   one digest, which every Commit record the period's windows name has, the record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
-  registers (`NciCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
-  (`NciCheck.Properties.Expands`), has a parse and a registered circuit the program lays out with θ, whose inference
+  registers (`InferenceOnlyCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
+  (`InferenceOnlyCheck.Properties.Expands`), has a parse and a registered circuit the program lays out with θ, whose inference
   blocks `d.𝓘` its owners are; on every such parse, `program`, `Γ` and `α = num / den` are the policy's parameters
   (`VerifierOwn`), and every such registered circuit's inference blocks meet the policy (`PolicyMet`): every one has
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
-  (`Nci.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
+  (`InferenceOnly.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
   bit wide, its bit-level expansion a `(ΓW, ⌊αΓW⌋)`-partition when they are at most `W` bits wide, with no assumption
   that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program the form its params
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
   registered circuit the policy checked and the program SPOT verifies have one SHA-512.
-* `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerThreaded` reads, `Nci.CompliesRate Γ α d` from
-  acceptance, on a declaration acceptance exhibits and on every other. `Nci.Guarantees.DampenerRemote` reads the count
-  verdict instead, `Nci.CompliesAtMost c k n d`, which a published `complies` of the count gives
-  (`NciCheck.Properties.DescCountsCK`).
+* `AcceptComplies`: its corollary in the form `InferenceOnly.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
+  acceptance, on a declaration acceptance exhibits and on every other. `InferenceOnly.Guarantees.SlowdownRemote` reads the count
+  verdict instead, `InferenceOnly.CompliesAtMost c k n d`, which a published `complies` of the count gives
+  (`InferenceOnlyCheck.Properties.DescCountsCK`).
 
 A check that accepts every input accepts `ev = []`, where neither conclusion holds (`InferenceOnlyHeld` and
 `CompliesHeld` take three cases): the proofs show both fail there.
@@ -64,11 +64,11 @@ namespace Properties.Remote
 open Core Core.Composition Verity
 open Lean (Json)
 open Flock.Program (Prog)
-open NciCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld)
-open NciCheck.Protocol (instanceOf trustedOf)
+open InferenceOnlyCheck.Properties (Parses Expands LaysOut Names Divides Meets ProvenanceHeld)
+open InferenceOnlyCheck.Protocol (instanceOf trustedOf)
 
 /-- The policy, met by the declaration `d` and its division `U` at `Γ` and `α`: every inference block of `U` has at most
-`Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`Nci.CompliesRate`); and `d`
+`Γ` gates and reads at most `α` fresh input bits per gate (`Meets`), so `d` complies (`InferenceOnly.CompliesRate`); and `d`
 with its constants registered (`RegisteredCircuit.constInputs`, as the model takes a constant) has a division that is
 a `(Γ, ⌊αΓ⌋)`-partition (`Partition.IsCK`) when every gate of `d` is one bit wide, and a bit-level expansion with a
 division that is a `(ΓW, ⌊αΓW⌋)`-partition when every gate is at most `W` bits wide. Neither clause assumes `d`
@@ -76,16 +76,16 @@ Boolean or of positive fan-in: registering its constants makes it so. Where `d` 
 bits with every computed gate at least a bit wide, it has no constant, and the clauses give partitions of `d` and its
 expansion themselves (`SecurityProofs.policyMet_old_clauses`). -/
 def PolicyMet (d : RegisteredCircuit) {n : ℕ} (U : Partition d.D n) (Γ : ℕ) (α : ℝ) : Prop :=
-  (∀ u, Meets d U Γ α u) ∧ Nci.CompliesRate Γ α d ∧
+  (∀ u, Meets d U Γ α u) ∧ InferenceOnly.CompliesRate Γ α d ∧
     ((∀ g, d.D.w g = 1) → ∃ (B : ℕ) (P : Partition d.constInputs.D B), P.IsCK d.constInputs Γ ⌊α * Γ⌋₊) ∧
     ∀ W : ℕ, (∀ g, d.D.w g ≤ W) →
       ∃ (B : ℕ) (P : Partition d.constInputs.expand.D B), P.IsCK d.constInputs.expand (Γ * W) ⌊α * (Γ * W : ℕ)⌋₊
 
 /-- The parse `i` of the policy's instance carries the policy's own parameters `p`: its program, and `Γ` and
 `α = num / den` as the parameters write them. -/
-def VerifierOwn (p : NciCheck.Protocol.Params) (i : NciCheck.Instance) : Prop :=
-  i.program = p.program ∧ NciCheck.natOf? p.gamma = some i.gamma ∧
-    ∃ a b, p.alpha = .arr #[a, b] ∧ NciCheck.natOf? a = some i.num ∧ NciCheck.natOf? b = some i.den
+def VerifierOwn (p : InferenceOnlyCheck.Protocol.Params) (i : InferenceOnlyCheck.Instance) : Prop :=
+  i.program = p.program ∧ InferenceOnlyCheck.natOf? p.gamma = some i.gamma ∧
+    ∃ a b, p.alpha = .arr #[a, b] ∧ InferenceOnlyCheck.natOf? a = some i.num ∧ InferenceOnlyCheck.natOf? b = some i.den
 
 /-- What the policy's case establishes, decoded as its parameters `p`, the run's record `c` and the evidence `e`: the
 registered circuit decodes to `P`; the record registers `P` by its SHA-512; θ holds what the log's first record
@@ -93,22 +93,22 @@ registers; the instance the policy checked has an expansion gate by gate with a 
 lays out with the θ it names, whose inference blocks `d.𝓘` its owners are, which meet the policy; and on every such
 expansion and parse, the parse carries the policy's parameters and every such registered circuit's inference blocks
 meet the policy at its `Γ` and `α`. -/
-def PolicyHeld (p : NciCheck.Protocol.Params) (c : NciCheck.Protocol.Commitment) (e : NciCheck.Protocol.Evidence) :
+def PolicyHeld (p : InferenceOnlyCheck.Protocol.Params) (c : InferenceOnlyCheck.Protocol.Commitment) (e : InferenceOnlyCheck.Protocol.Evidence) :
     Prop :=
   ∃ P : Prog, Flock.Program.decode p.program.toUTF8 = .ok P ∧
-    NciCheck.Baseline.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
+    InferenceOnlyCheck.Theta.strAt c.record "program" = some (Flock.hexOf P.sha512) ∧
     ProvenanceHeld (instanceOf p e) (trustedOf p c) ∧
-    (∃ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+    (∃ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ Divides i.owner d.𝓘 ∧
         VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den)) ∧
-    ∀ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+    ∀ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ → Divides i.owner d.𝓘 →
         VerifierOwn p i ∧ PolicyMet d d.𝓘 i.gamma ((i.num : ℝ) / i.den)
 
 /-- The policy's case `k` decodes under the policy's own decoders, and what it decodes to is `PolicyHeld`. -/
 def CaseHeld (k : Case) : Prop :=
-  ∃ p c e, (canonicalJson k.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
-    NciCheck.Protocol.commitmentOf k.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf k.evidence = .ok e ∧
+  ∃ p c e, (canonicalJson k.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
+    InferenceOnlyCheck.Protocol.commitmentOf k.commitment = .ok c ∧ InferenceOnlyCheck.Protocol.evidenceOf k.evidence = .ok e ∧
     PolicyHeld p c e
 
 /-- **The caller's check finds nothing exactly where the record keeps the caller's facts.** On every record and every
@@ -119,14 +119,14 @@ the verifier expects values registered, the pool its window opens and no output 
 verdict log names refused. SPOT's one-stage form and the recursive audit read SPOT's acceptance through that
 check (`VStar.Recursive.Caller.gate`), so `StageHeld` reads the caller's facts off it (`CallerCheckSound`). -/
 def CallerCheckMeans : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] ↔ Properties.Spot.CallerHeld rec v
 
 /-- **Where the caller's check finds nothing, the record keeps the caller's facts**: `CallerCheckMeans`' forward half,
 which is all `StageHeld` reads. On every record and every verifier, where `VStar.Recursive.Caller.check` returns no
 code, the record keeps `Properties.Spot.CallerHeld` against that verifier. -/
 def CallerCheckSound : Prop :=
-  ∀ (rec : Json) (v : Spot.Registration.Verifier),
+  ∀ (rec : Json) (v : Spot.Docket.Verifier),
     VStar.Recursive.Caller.check rec v = #[] → Properties.Spot.CallerHeld rec v
 
 /-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
@@ -145,7 +145,7 @@ def StageHeld (k : Case) : Prop :=
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier ∧
     Properties.Spot.CallerHeld c.record p.base.verifier) ∨
   (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
-    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
+    (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr (.inl q)) ∧
     Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier ∧
     Properties.Spot.CallerHeld c.record q.base.verifier)
 
@@ -162,7 +162,7 @@ and every declaration the registered circuit lays out, with the declared divisio
 against, and keeps the caller's facts against that form's verifier. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
-    Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
+    Properties.Composition.digestOf InferenceOnlyCheck.Protocol.protocol kI.commitment = some r ∧
     (∀ ds, Core.Remote.executionPhaseRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
     Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some r ∧
     CaseHeld kI ∧ StageHeld kS
@@ -173,27 +173,27 @@ def AcceptInferenceOnly : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),
     (Core.Remote.protocol.on blobs).check ps c ev = .accept pub prof → InferenceOnlyHeld ev
 
-/-- What remote's acceptance establishes in the form `Nci.Guarantees.DampenerThreaded` reads, about its cases `ev`: they
+/-- What remote's acceptance establishes in the form `InferenceOnly.Guarantees.SlowdownThreaded` reads, about its cases `ev`: they
 are the three subprotocols' cases in order, the policy's case decodes to the parameters `p`, the run's record `cr` and
 the evidence `e`, the record names the registered circuit `P` by its SHA-512, the instance the policy checked, expanded
 gate by gate, has a parse carrying the policy's parameters and a declaration `P` lays out with its θ, which complies at
 the policy's `Γ` and `α`, and on every such expansion and parse, the parse carries the policy's parameters and every
 such declaration complies. -/
 def CompliesHeld (ev : List Case) : Prop :=
-  ∃ (kI kW kS : Case) (p : NciCheck.Protocol.Params) (cr : NciCheck.Protocol.Commitment)
-    (e : NciCheck.Protocol.Evidence) (P : Prog), ev = [kI, kW, kS] ∧
-    (canonicalJson kI.params.toUTF8 >>= NciCheck.Protocol.paramsOf) = .ok p ∧
-    NciCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ NciCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
+  ∃ (kI kW kS : Case) (p : InferenceOnlyCheck.Protocol.Params) (cr : InferenceOnlyCheck.Protocol.Commitment)
+    (e : InferenceOnlyCheck.Protocol.Evidence) (P : Prog), ev = [kI, kW, kS] ∧
+    (canonicalJson kI.params.toUTF8 >>= InferenceOnlyCheck.Protocol.paramsOf) = .ok p ∧
+    InferenceOnlyCheck.Protocol.commitmentOf kI.commitment = .ok cr ∧ InferenceOnlyCheck.Protocol.evidenceOf kI.evidence = .ok e ∧
     Flock.Program.decode p.program.toUTF8 = .ok P ∧
-    NciCheck.Baseline.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
-    (∃ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+    InferenceOnlyCheck.Theta.strAt cr.record "program" = some (Flock.hexOf P.sha512) ∧
+    (∃ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' ∧ Parses j' i ∧ LaysOut P d.D ∧ Names i.theta d.θ ∧ VerifierOwn p i ∧
-        Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d) ∧
-    ∀ (j' : Json) (i : NciCheck.Instance) (d : RegisteredCircuit),
+        InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d) ∧
+    ∀ (j' : Json) (i : InferenceOnlyCheck.Instance) (d : RegisteredCircuit),
       Expands (instanceOf p e) j' → Parses j' i → LaysOut P d.D → Names i.theta d.θ →
-        VerifierOwn p i ∧ Nci.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
+        VerifierOwn p i ∧ InferenceOnly.CompliesRate i.gamma ((i.num : ℝ) / i.den) d
 
-/-- **Remote's acceptance gives `Nci.CompliesRate`**, the hypothesis `Nci.Guarantees.DampenerThreaded` takes: on every input
+/-- **Remote's acceptance gives `InferenceOnly.CompliesRate`**, the hypothesis `InferenceOnly.Guarantees.SlowdownThreaded` takes: on every input
 remote's check accepts, on any blobs, its cases are `CompliesHeld`. -/
 def AcceptComplies : Prop :=
   ∀ (blobs : Array ByteArray) (ps : List Named) (c : ByteArray) (ev : List Case) (pub prof : Keyed),

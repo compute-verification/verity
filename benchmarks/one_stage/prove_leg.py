@@ -437,14 +437,14 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    law = D.parse_design(f"stratified:{k}")
+    sampling_design = D.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof leg's members (prove_leg.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}
-    honest = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    honest = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     rec = mutate(copy.deepcopy(honest)) if mutate else honest
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for s in staged:
         checks[f"statement/{s['name']}"] = a7.statement_checks(s, rec, want)
     receipt = R.receipt(rec, "prove-leg verifier (prove_leg.py)")
@@ -796,7 +796,7 @@ def attention_call(shape: str) -> Any:
     ``CUT_TARGETS`` target (`targets.attention_spec`, one query row), cut as `window_circuit.CUTS` cuts it, and its first
     visited block (keys (nb - 1) BN ... T - 1), the full block below it (T > BN) or its epilogue."""
     from verity.circuits.defs import bind
-    from verity.definitions.registry import dead_free as DF
+    from verity_vllm.definitions.registry import dead_free as DF
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.predict.window_circuit import CUTS
@@ -841,7 +841,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
     from verity.circuits.defs import bind
     from verity_vllm import TargetProfile
     from verity_vllm.program.frontend import targets as TG
-    from verity.definitions.registry import b1, dead_free as DF
+    from verity_vllm.definitions.registry import b1, dead_free as DF
 
     fam, model, *arg = shape.split(":")
     L = LLAMA[model]

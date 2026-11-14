@@ -1,5 +1,8 @@
 """The streamed wipe's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the
-challenger host, `trusted-device`) while the prover stays on its node: `challenger_party`'s shape, for the wipe.
+challenger host, `trusted-device`) while the prover stays on its node: `challenger_party`'s shape, for the wipe. This
+module is what both sides and the verifier share: the wire's frames, the request (`request_of`, `params_of`), the
+report's readers (`commitment_of`, `signed_of`) and where the challenger ran (`placement`). The challenger's side is
+`verity/protocols/accounting/pous/device/wipe_challenger.py` (`serve`, `report`, `main`).
 
 The challenger listens and the prover connects. The challenger streams the fill as frames `F ‖ u64 first ‖ u32 count ‖
 labels` and ends it with `D`, which the prover acknowledges with `A` once it holds the fill, so that no read's time
@@ -15,45 +18,29 @@ prover that leaves before the session ends leaves it unsigned. The side reports 
 prover connected) and `t1` (the session signed, or ended unsigned) on the challenger host's real-time clock: the
 interval a network certifier counts the session's egress over.
 
-`python -m verity.protocols.accounting.pous.verifier.wipe_party --device DIR [--listen HOST:PORT] [--reads K]
-[--streamer build|PATH [--threads T]]` is the challenger's side (`main`): it reads the request `{"labels", "limit_ns",
-"node", "tiers"}` as one JSON line on stdin, prints `{"listening": PORT}`, serves one prover (`serve`) and prints its report.
-With `--streamer` the fill is `wipe_stream`'s, native on this host's CPUs and gated before the side listens, and the
-report adds the streamer's gate (`streamer`) and its figures for the fill (`fill`). `command(device, extra)` is the argv
-that starts that side on this machine, `Side` the side as what starts a run hands it over, wherever `period.json` puts
-it, and `session(side, request, prover)` is the prover's: one session with the side, answered from `prover` (`answer`),
-with the connection's two addresses as it saw them. The wipe's two parties as the deployment layer runs them speak
-`wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
+`command(device, extra)` is the argv that starts the challenger's side (`python -m
+verity.protocols.accounting.pous.device.wipe_challenger`, `MODULE`) on this machine; the prover's end of the session,
+which answers it, is `pous/prover/wipe_run.py`'s (`session`, `answer`). The wipe's two parties as the deployment layer
+runs them speak `wipe_parties`'s messages: `pous/device/wipe_challenger.py` and `pous/prover/wipe_prover.py`.
 """
 
 from __future__ import annotations
 
-import argparse
-import json
-import logging
-import os
-import secrets
-import socket
 import sys
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from pathlib import Path
-from typing import Any, BinaryIO, Protocol, TypeVar
+from typing import Any, BinaryIO
 
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 
-from . import period, wipe_stream
 from . import streamed_wipe as sw
 
-MODULE = "verity.protocols.accounting.pous.verifier.wipe_party"
-logger = logging.getLogger(__name__)
-PREMISE = "trusted-device"
-AUDITOR_KEYS = {"vy-auditor-2": "c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
-                                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252"}
-"""Each auditor device's wipe party's public key, by its SHA-512 in 128 lowercase hex digits: the one key under which
-`placement` says `trusted-device` holds for a challenger on that host. A run's own pin (`--trusted-sha512`) decides only
-which session the verifier accepts, never this."""
-REHEARSAL = "rehearsal: key not the auditor's pinned key, no bound"
+MODULE = "verity.protocols.accounting.pous.device.wipe_challenger"
+"""The module `command` starts as the challenger's side: `wipe_challenger.main`."""
+PREMISE = mc.PREMISE
+PARTY = "memory-challenger"
+"""The configuration's party whose `[[pin]]` entries for the wipe name the keys `placement` reads."""
 FILL, DONE, ACK, CHALLENGE, END = b"F", b"D", b"A", b"C", b"E"
 CHUNK = 1 << 14
 """Labels a fill frame: 1 MiB."""
@@ -78,87 +65,11 @@ def params_of(request: Mapping[str, Any], reads: int = READS) -> sw.WipeParams:
     return sw.WipeParams(request["labels"], reads, 1, request["limit_ns"], tuple((t, b) for t, b in request["tiers"]))
 
 
-def serve(f: BinaryIO, request: Mapping[str, Any], *, signer: mc.Signer, log: mc.SessionLog,
-          reads: int = READS, clock: Callable[[], int] = sw.raw_clock_ns, chunk: int = CHUNK,
-          fill: Callable[[bytes, int], Any] | None = None) -> sw.WipeMemoryChallenger:
-    """The challenger's side of one wipe over the connection `f`: the labels' secret and the session id sampled here, the
-    fill streamed (by `fill(K, N)` when given, which writes the frames to `f`'s connection itself: the native streamer,
-    `wipe_stream`), `reads` batches revealed and their answers read on `clock` (the raw monotonic clock,
-    `sw.raw_clock_ns`, which the header names), the session signed by `signer` once it ends. A prover that closes first
-    leaves it unsigned. This side has no mark source, so the session's start mark is empty."""
-    c = sw.WipeMemoryChallenger(secrets.token_bytes(32), request["node"].encode(), secrets.token_bytes(32),
-                                params_of(request, reads), signer, log=log, clock=clock)
-    try:
-        if fill is not None:
-            f.flush()
-            c.fill_by(fill)
-        else:
-            for first, data in c.fill(chunk):
-                f.write(FILL + first.to_bytes(8, "big") + (len(data) // sw.LABEL_BYTES).to_bytes(4, "big") + data)
-        f.write(DONE)
-        f.flush()
-        if _read(f, 1) != ACK:
-            raise ConnectionError("the prover didn't acknowledge the fill")
-        while c.ended is None:
-            idx = c.challenge()
-            f.write(CHALLENGE + len(idx).to_bytes(4, "big") + b"".join(i.to_bytes(8, "big") for i in idx))
-            f.flush()
-            c.receive(_read(f, sw.LABEL_BYTES * len(idx)))
-        f.write(END)
-        f.flush()
-    except (ConnectionError, BrokenPipeError) as e:
-        logger.warning("the prover left before the wipe ended, so its session stays unsigned: %s", e)
-        return c
-    c.close()
-    return c
-
-
-def answer(f: BinaryIO, prover: sw.Prover, stop_after: int | None = None) -> int:
-    """The prover's side over the connection `f`: each fill frame kept by `prover` (read straight into its store when
-    it has `receive_into`, as `wipe_store.StoreProver`), the fill acknowledged once it is in the store (after the
-    prover's `sync`, when it has one: a disk's writes on the media), each batch answered from it until the challenger
-    ends the session (or, with `stop_after`, the prover leaves after that many batches); the batches answered."""
-    n = 0
-    into, sync = getattr(prover, "receive_into", None), getattr(prover, "sync", None)
-    while (tag := _read(f, 1)) != END:
-        if tag == FILL:
-            first, count = int.from_bytes(_read(f, 8), "big"), int.from_bytes(_read(f, 4), "big")
-            if into is not None:
-                into(first, count, f)
-            else:
-                prover.receive(first, _read(f, sw.LABEL_BYTES * count))
-        elif tag == DONE:
-            if sync is not None:
-                sync()
-            f.write(ACK)
-            f.flush()
-        elif tag == CHALLENGE:
-            if stop_after is not None and n >= stop_after:
-                return n
-            count = int.from_bytes(_read(f, 4), "big")
-            f.write(prover.answer([int.from_bytes(_read(f, 8), "big") for _ in range(count)]))
-            f.flush()
-            n += 1
-        else:
-            raise ValueError(f"the challenger sent the frame tag {tag!r}")
-    return n
-
 
 def utc(unix_ns: int) -> str:
     """A real-time clock reading as ISO 8601 UTC, to the microsecond."""
     s, ns = divmod(unix_ns, 10 ** 9)
     return time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(s)) + f".{ns // 1000:06d}Z"
-
-
-def report(c: sw.WipeMemoryChallenger, public_key: bytes, window: tuple[int, int] | None = None) -> dict[str, Any]:
-    """The side's report; `window`, the session's `(t0, t1)` in Unix nanoseconds on this host's real-time clock."""
-    out = {"commitment": c.commitment.to_json(), "ended": c.ended, "host": socket.gethostname(),
-           "public_key": public_key.hex(), "reads": len(c.batches),
-           "signed": None if c.signed is None else c.signed.to_json()}
-    if window is not None:
-        out["window"] = {"t0": utc(window[0]), "t1": utc(window[1]), "t0_unix_ns": window[0], "t1_unix_ns": window[1],
-                         "clock": f"{out['host']}'s real-time clock"}
-    return out
 
 
 def commitment_of(j: Mapping[str, Any]) -> sw.WipeCommitment:
@@ -182,18 +93,6 @@ def signed_of(j: Mapping[str, Any]) -> sw.SignedWipe:
                          bytes.fromhex(j["signature"]))
 
 
-T = TypeVar("T")
-
-
-class Side(Protocol):
-    """The wipe challenger's side as what starts a run hands it over (the runtime's `Side` is one): the machine it runs
-    on, and `talk(request, drive)`, one session with it: `request` sent, `drive` handed the connected socket, the side's
-    report back with what `drive` returned."""
-
-    host: str
-
-    def talk(self, request: Mapping[str, Any], drive: Callable[[socket.socket], T]) -> tuple[dict[str, Any], T]: ...
-
 
 def command(device: str | Path, extra: Sequence[str] = ()) -> tuple[str, ...]:
     """The argv that starts the challenger's side as a process on this machine, its key and session log in `device`,
@@ -209,17 +108,20 @@ def link(name: str, node: str, to: str, via: str, *, mbps: int | None = None,
     return {"name": name, "ends": [node, to], "via": via, "mbps": mbps, "counted_by": counted_by}
 
 
-def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | None = None,
-              store: Mapping[str, Any] | None = None, simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
+def placement(node: str, host: str, key_sha512: str | None, *, pins: Sequence[Mapping[str, str]] = (),
+              configuration: str | None = None, committed: Collection[str] = frozenset(), verifier: str | None = None,
+              store_gaps: Sequence[str] = (), simulated: bool = False, links: Sequence[Mapping[str, Any]] = (),
               undeclared: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
-    machine the developer doesn't control. It holds (`holds: …`) only when `key_sha512`, the SHA-512 of the key the
-    session was signed under, is `AUDITOR_KEYS`' pin for `host`; under any other key, a run's own pin included, it reads
-    `REHEARSAL`, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
+    machine the developer doesn't control (`memory_challenger.trusted_device`). It holds (`holds: …`) only under a
+    configuration whose hash `configuration` is one of `committed`, when `key_sha512`, the SHA-512 of the key the
+    session was signed under, is a key that configuration's `pins` (its `[[pin]]` entries) give `PARTY` for the wipe;
+    under any other configuration or key, a run's own pin included, it reads rehearsal, whatever the names say. `kind` is what the two names say, a label and never the reason: `own-host`,
     `simulated` (the challenger a process of its own on the developer's node, standing in for its own host) or
-    `prover-node`. `store` is the memory the prover kept the fill in (`wipe_store`'s `info`), when it says.
-    `links` are the links leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's
-    declared tiers (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
+    `prover-node`. `store_gaps` is what the memory the prover kept the fill in leaves outside the bound
+    (`wipe_period.store_gaps`), by tier and never by device: the placement names no device. `links` are the links
+    leaving the developer's node (`link`), and `undeclared` the memory the node has outside the fill's declared tiers
+    (`{"tier", "bytes", "what"}`), which the bound doesn't count."""
     if simulated and host != node:
         raise ValueError(f"a simulated placement runs the memory challenger on the developer's node {node}, not on {host}")
     kind = "own-host" if host != node else "simulated" if simulated else "prover-node"
@@ -227,16 +129,16 @@ def placement(node: str, host: str, key_sha512: str | None, *, verifier: str | N
              "simulated": f"the memory challenger ran as a process of its own on the developer's node {node}, standing "
                           "in for a host the developer doesn't control",
              "prover-node": f"the memory challenger ran on the developer's node {node}"}[kind]
-    premise = (f"holds: the session is signed under {host}'s pinned key; {names}"
-               if key_sha512 is not None and AUDITOR_KEYS.get(host) == key_sha512 else f"{REHEARSAL}; {names}")
-    out = {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
-           PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared]}
-    return out if store is None else out | {"prover_store": dict(store)}
+    premise = mc.trusted_device(pins, PARTY, "wipe", key_sha512, names, configuration=configuration,
+                                committed=committed)
+    return {"kind": kind, "parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},
+            PREMISE: premise, "links": [dict(e) for e in links], "undeclared_tiers": [dict(u) for u in undeclared],
+            "store_gaps": list(store_gaps)}
 
 
 def holds(where: Mapping[str, Any]) -> bool:
-    """Whether a placement's `trusted-device` holds: the session signed under the challenger host's pinned key."""
-    return where[PREMISE].startswith("holds: ")
+    """Whether a placement's `trusted-device` holds: the session signed under a key the committed configuration pins."""
+    return mc.holds(where)
 
 
 def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
@@ -246,65 +148,6 @@ def request_of(node: str, params: sw.WipeParams) -> dict[str, Any]:
             "tiers": [[t, b] for t, b in params.tiers]}
 
 
-def session(side: Side, request: Mapping[str, Any], prover: sw.Prover, *,
-            stop_after: int | None = None) -> dict[str, Any]:
-    """One wipe with the challenger's side `side` starts: `request` sent, the fill kept and each batch answered by
-    `prover`, the side's report back, with `answered`, the batches the prover answered, and `connection`, the
-    socket's `local` and `peer` addresses (`HOST:PORT`) on the prover's side."""
 
-    def drive(s: socket.socket) -> tuple[int, dict[str, str]]:
-        s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        connection = {k: f"{a[0]}:{a[1]}" for k, a in (("local", s.getsockname()), ("peer", s.getpeername()))}
-        with s.makefile("rwb") as f:
-            return answer(f, prover, stop_after), connection
-
-    out, (answered, connection) = side.talk(request, drive)
-    return out | {"answered": answered, "connection": connection}
-
-
-def main(argv: Sequence[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog=MODULE, description=__doc__.split("\n\n")[0])
-    ap.add_argument("--device", required=True, help="the challenger's key and session log (`period.challenger`)")
-    ap.add_argument("--listen", default="127.0.0.1:0", help="HOST:PORT to listen on (port 0: any)")
-    ap.add_argument("--reads", type=int, default=READS,
-                    help=f"the timed spot reads, which the certificate is computed at (default {READS})")
-    ap.add_argument("--streamer", help="stream the fill natively (`wipe_stream`): a built wipe_stream, or `build` to "
-                    "compile it into --device; gated before the side listens")
-    ap.add_argument("--threads", type=int, help="the streamer's threads (default: every CPU of this host)")
-    a = ap.parse_args(argv)
-    request = json.loads(sys.stdin.readline())
-    params_of(request, a.reads)
-    device = Path(a.device)
-    streamer, extra = None, {}
-    if a.streamer:
-        streamer = (wipe_stream.Streamer.build(device, threads=a.threads) if a.streamer == "build" else
-                    wipe_stream.Streamer(Path(a.streamer), a.threads))
-        extra["streamer"] = streamer.gate()
-    signer = period.challenger(device, workers=len(os.sched_getaffinity(0)))
-    if not (device / "sessions").exists():
-        mc.SessionLog.create(device / "sessions")
-    host, _, port = a.listen.rpartition(":")
-    with socket.create_server((host, int(port))) as srv:
-        print(json.dumps({"listening": srv.getsockname()[1]}), flush=True)
-        conn, _ = srv.accept()
-        t0 = time.time_ns()
-        with conn:
-            conn.setblocking(True)
-            conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-
-            def native(key: bytes, n: int) -> None:
-                extra["fill"] = streamer.stream(key, n, conn.fileno())
-
-            with conn.makefile("rwb") as f:
-                c = serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), reads=a.reads,
-                          fill=None if streamer is None else native)
-            t1 = time.time_ns()
-    print(json.dumps(report(c, signer.public_key, (t0, t1)) | extra, sort_keys=True), flush=True)
-    return 0
-
-
-__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "answer", "command", "commitment_of", "link",
-           "main", "params_of", "placement", "report", "request_of", "serve", "session", "signed_of", "utc"]
-
-if __name__ == "__main__":
-    sys.exit(main())
+__all__ = ["CHUNK", "PREMISE", "READS", "REQUEST_KEYS", "command", "commitment_of", "link", "params_of",
+           "placement", "request_of", "signed_of", "utc"]
