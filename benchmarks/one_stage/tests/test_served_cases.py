@@ -1154,7 +1154,8 @@ def test_the_log_is_walked_back_to_the_deployments_first_record_however_long_and
 
 def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deployments_first_record_must(tmp_path):
     """An empty or a truncated file under `SC.RECORDS` beside a whole log is skipped, as a record nobody names is, so the
-    walk gives the same log; the serve's first registration record (`SC.DEPLOYMENT`) truncated is still refused."""
+    walk gives the same log, and a walk refused at a missing link names each skipped file; the serve's first
+    registration record (`SC.DEPLOYMENT`) truncated is still refused."""
     w0 = h1_registration(R.digest(FIRST))
     r0 = {"format": R.FORMAT_V2, "previous": R.digest(w0), "program": "11" * 64}
     files = {SC.DEPLOYMENT: json.dumps(FIRST), Path("pearlplus/w0/registration.json"): json.dumps(w0),
@@ -1168,6 +1169,10 @@ def test_a_record_file_that_does_not_parse_is_no_part_of_the_log_but_the_deploym
         return tmp_path / name
 
     assert SC.pearl_log(serve("beside"), None, r0) == [FIRST, w0]
+    with pytest.raises(SC.Refused) as e:
+        SC.pearl_log(serve("beside"), None, {**r0, "previous": "ab" * 64})
+    assert str(e.value).endswith("; no record either, since they don't parse: pearlplus/w9/registration.json "
+                                 "(JSONDecodeError), v3c-w9-4-27-2/audit/window/registration.json (JSONDecodeError)")
     with pytest.raises(SC.Refused, match="deployment-registration.json: JSONDecodeError"):
         SC.pearl_log(serve("first", {SC.DEPLOYMENT: json.dumps(FIRST)[:-3]}), None, r0)
 

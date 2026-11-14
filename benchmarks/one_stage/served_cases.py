@@ -498,8 +498,9 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
     must parse where it is there) and each window's W and R (`RECORDS`), which is all a copy of the compose hand-off
     holds of them. A file under `RECORDS` that doesn't parse, or that is no record of the digest a later one names, is
     no part of the log, and a link no record answers is refused, saying the log doesn't reach the deployment's first
-    record. Empty when ``rec`` names no previous record."""
+    record and naming each file under `RECORDS` that didn't parse. Empty when ``rec`` names no previous record."""
     held: dict[str, dict[str, Any]] = {}
+    unread: list[str] = []
     if parts is not None:
         w = (_json(parts / "parts.json").get("window") or {}).get("record")
         if isinstance(w, dict):
@@ -509,8 +510,8 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
         for f in sorted(f for pattern in RECORDS for f in serve.glob(pattern) if f.is_file()):
             try:
                 found.append(json.loads(f.read_text()))
-            except (OSError, ValueError):
-                continue
+            except (OSError, ValueError) as e:
+                unread.append(f"{f.relative_to(serve)} ({type(e).__name__})")
         for r in found:
             if isinstance(r, dict):
                 held[R.digest(r)] = r
@@ -521,7 +522,8 @@ def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) ->
               "the record's previous records are not all among Pearl+'s window record and the serve's registration "
               f"records (its first, each window's W and R): none is the record of digest {str(at)[:16]}…, which "
               f"{'the record' if not log else 'the earliest of them found'} names as its previous, so its log doesn't "
-              "chain from the deployment's first record: pass the deployment's log (--log)")
+              "chain from the deployment's first record: pass the deployment's log (--log)"
+              + (f"; no record either, since they don't parse: {', '.join(unread)}" if unread else ""))
         log.insert(0, held[at])
         at = held[at].get("previous")
     return log
