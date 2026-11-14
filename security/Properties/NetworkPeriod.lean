@@ -427,4 +427,62 @@ def AnswersVerified : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → AnswersVerifiedAt e
 
+/-! ## A key's listed sessions: their signed ordinals, unproved
+
+In the rows form a key may be listed in several sessions, each entry held to its session's signed start
+(`startChecks`). `RowsSessionsFollow` states what the check holds of those starts' ordinals. It and its witnesses are
+unproved, and no guarantee reads them. -/
+
+/-- The listed entries `i < j` of `p` are consecutive under one key identifier: both name keys with one first 16 bytes
+(an identifier names one key in the rows form, `certifierEntriesOf`), and no entry listed between them does. -/
+def ConsecutiveUnderKey (p : Params) (i j : ℕ) : Prop :=
+  i < j ∧ ∃ a b : Entry, p.entries[i]? = some a ∧ p.entries[j]? = some b ∧
+    a.key.extract 0 16 = b.key.extract 0 16 ∧
+    ∀ (k : ℕ) (x : Entry), i < k → k < j → p.entries[k]? = some x → x.key.extract 0 16 ≠ a.key.extract 0 16
+
+/-- What `RowsSessionsFollow` says of a period its check accepted: in the rows form, the evidence shows one signed start
+for each listed entry; each start's certificate signs the start digest of its base, its ordinal and its schedule
+(`startDigest`) and verifies under its entry's key in its entry's session; and of two entries consecutive under one key
+identifier (`ConsecutiveUnderKey`), the later's start's ordinal is the earlier's plus one. -/
+def RowsSessionsFollowAt (p : Params) (e : Evidence) : Prop :=
+  ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
+    e.starts.size = p.entries.size ∧
+    (∀ (i : ℕ) (a : Entry) (x : Start), p.entries[i]? = some a → e.starts[i]? = some x →
+      startDigest x.baseMs x.ordinal x.schedule = some x.certificate.digest ∧
+        x.certificate.signs p.lms a.key a.session = true) ∧
+    ∀ (i j : ℕ) (xa xb : Start), ConsecutiveUnderKey p i j → e.starts[i]? = some xa → e.starts[j]? = some xb →
+      xb.ordinal = xa.ordinal + 1
+
+/-- `RowsSessionsFollow` of the period check `chk`: `RowsSessionsFollowAt` of every period `chk` accepts. -/
+def RowsSessionsFollowOf (chk : Params → Commitment → Evidence → Core.Outcome Public Profile) : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    chk p c e = .accept pub prof → RowsSessionsFollowAt p e
+
+/-- **The rows form accepts a key's later listed session only as the one right after its entry listed before it.** If
+the check accepts a period in the rows form, each listed entry's session's start is shown, its certificate signed over
+its base, its ordinal and its schedule under the entry's key in the entry's session, and the listed sessions under one
+key identifier carry consecutive ordinals in the entries' order (`RowsSessionsFollowAt`). The network certifier's
+device state gives each session it starts the next ordinal and none twice (`certificate.DeviceState`, on
+`trusted-host`), so no session of the key started between two such entries' sessions.
+
+It says nothing about when the earlier session stopped: a session's start is signed and its stop is not, so a session
+that ended before its span did is not seen here, and whether the period's execution phases after its stop have
+certificates is the execution phases' own checks', not stated here. Nor does it say anything of a key's first listed
+entry's ordinal, of a session of the key before its first listed entry or after its last, or of a key's entries'
+stretches (`heldTo`). -/
+def RowsSessionsFollow : Prop :=
+  ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
+    check p c e = .accept pub prof → RowsSessionsFollowAt p e
+
+/-- `RowsSessionsFollow`'s honest witness, unproved: `check` accepts a rows-form period at the deployed LMS parameters
+that lists one key in two sessions. -/
+def RowsSessionsFollowHonest : Prop :=
+  ∃ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile) (s : Schedule) (sd : ByteArray)
+    (scan : Scan) (a b : Entry),
+    p.lms = Lms.deployed ∧ p.form = .rows s sd scan ∧ p.entries[0]? = some a ∧ p.entries[1]? = some b ∧
+      a.key = b.key ∧ a.session ≠ b.session ∧ check p c e = .accept pub prof
+
+/-- `RowsSessionsFollow`'s nontrivial witness, unproved: `RowsSessionsFollowOf` fails at `acceptAllRows`. -/
+def RowsSessionsFollowNontrivial : Prop := ¬ RowsSessionsFollowOf acceptAllRows
+
 end Properties.NetworkPeriod
