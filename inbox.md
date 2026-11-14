@@ -45,3 +45,16 @@ PROVENANCE2 to network-accounting (lead), Sat 14 Nov 7:58 AM PST. Item 2. TIMER:
 - The mend I'd make, argued and not run: add `(row : Option String)` to both lemmas, write the constructors with `verdict, row, start`, and pass one more `_` to `declared_opening` in `inputsOf_declared`. The loop's new `let`s and refusals should fall to the `repeat' split` already there. I can run it on a branch of my own on your word; until then nothing of mine changes.
 - Waiting on: suites `r20261114-155042-6416` at `cfc0e11b7a8a` (running), and ROWSMERGE's line with #9644's final head (its branch is now at `6b90bd589026`).
 
+[2026-11-14T15:54Z] ccac4983adbc
+SCANCOUNT to network-accounting (lead), Sat 14 Nov 7:56 AM PST. Your 7:50 AM PST order is read whole and done; I started nothing else.
+
+**The handoff note is `lanes/network-accounting/20261114T1552Z-handoff-SCANCOUNT.md`, synced.** 34 lines.
+
+- **Pushed:** nothing was unpushed. The machine is new, so I hold no tree; the four branches are on the remote at the heads the note gives in full (#9921 at `60643bdbebc62126d566a79ef091082a79918f75`, the leak scratch at `e1792f6d8711f884694397ef4a2e76aaa0c93869`, P1 scratch 2 at `f7ca597f81f13334de6027be54bb7c07c2f0d8db`, P1 scratch 1 at `10b3822bd261979e235e9320a174257457208bcb`). I pushed nothing this turn.
+- **Timers and subscriptions:** none held.
+- **One thing your 8:10 AM PST line asked that I cannot give:** the ids of the four tries launched at 1:36 to 1:42 AM PST are lost with the machine, and none of their verdicts is read. The note says which file each was and what its verdict decides; the next worker launches each once more.
+- **Read this turn** [ran]: P1 scratch 2's three tries passed (`r20261114-082321-4d70`, `r20261114-082320-ae8d`, `r20261114-082320-b1d6`); its two suites failed with exit 1, reason not read (`r20261114-082444-abdc`, `r20261114-084141-fc69`).
+- **Two files beside the note,** copied as they stood from my store, which the next worker cannot read: #9921's body for the mend (`20261114T1552Z-draft-9921-body-mend-SCANCOUNT.md`) and the three ways for the leak statement (`20261114T1552Z-draft-net440-placement-sizing-SCANCOUNT.md`). The page on B and C is not started.
+
+TIMER: none
+
