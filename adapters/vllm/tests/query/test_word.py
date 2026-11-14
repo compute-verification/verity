@@ -38,12 +38,13 @@ from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import manifest as M
+from verity_vllm.query import program_view as PV
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import population
 
 
 def _fn(fam: str, **statics):
-    return W.specialization(fam, statics)
+    return PV.specialization(fam, statics)
 
 
 @pytest.fixture(scope="module")
@@ -129,7 +130,7 @@ def _copies_bits(prim, rng) -> bool:
 
 
 def test_wiring_only_rearranges_bits():
-    W.specialization("Gemm_v1", {"K": 16, "N": 1})
+    PV.specialization("Gemm_v1", {"K": 16, "N": 1})
     rng = np.random.default_rng(0)
     assert all(_copies_bits(REGISTRY.defs[p], rng) for p in W.WIRING)
     assert not _copies_bits(REGISTRY.defs["F32Add_v1"], rng) and not _copies_bits(REGISTRY.defs["GuardNegInfZero_v1"], rng)
@@ -161,17 +162,17 @@ def test_attention_commits_scores_p_row_values_and_inverse_sum(attn):
 
 def test_a_width_over_x_and_w_is_named():
     with pytest.raises(W.QueryRuleViolation, match=r"Gemm_v1\{K=64,N=8\}: output:F2fpBf16_v1"):
-        W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8)
+        W.check_calls([{"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 3, "where": "m.proj"}], 8, 8, specialize=PV.specialization)
 
 
 def test_the_gate_limit_is_the_runs_not_the_querys(norm):
     g = {"family": "RMSNormTriton_v1", "statics": {"N": 2048, "EPS": 1e-05}, "definition": norm.id, "calls": 1}
     low = norm.gates - 1
-    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}")
+    capped = W.check_calls([g], strict=False, max_gates=f"{low:_}", specialize=PV.specialization)
     assert [(v["class"], v["limit"]) for v in capped["violations"]] == [("too-large", low)]
-    assert W.check_calls([g], strict=False)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
+    assert W.check_calls([g], strict=False, specialize=PV.specialization)["ok"] and W.gate_limits() == {"*": W.MAX_GATES}
     for raised in (f"{low},RMSNormTriton_v1={norm.gates}", {"RMSNormTriton_v1": norm.gates}, norm.gates):
-        r = W.check_calls([g], strict=False, max_gates=raised)
+        r = W.check_calls([g], strict=False, max_gates=raised, specialize=PV.specialization)
         assert r["ok"] and r["units"] == 2049 and r["query"] == capped["query"] == W.query_id()
     assert W.gate_limit(norm, f"{low},Gemm_v1=5") == low and W.gate_limit(norm, {norm.id: 7, "RMSNormTriton_v1": 9}) == 7
     for cmd, argv in (("manifest", ["build", "--program", "p", "--out", "o"]), ("program-graph", ["o", "i"])):
@@ -182,11 +183,11 @@ def test_the_gate_limit_is_the_runs_not_the_querys(norm):
 def test_uncommitted_boundaries_are_named():
     g = {"family": "Gemm_v1", "statics": {"K": 64, "N": 8}, "definition": "Gemm_v1{K=64,N=8}", "calls": 2, "where": "m.proj",
          "outputs_committed": False}
-    r = W.check_calls([g], strict=False)
+    r = W.check_calls([g], strict=False, specialize=PV.specialization)
     assert [v["class"] for v in r["violations"]] == ["output-not-committed"] and r["violations"][0]["where"] == ["m.proj"]
     with pytest.raises(W.QueryRuleViolation, match="output-not-committed, 2 Call"):
-        W.check_calls([g])
-    ok = W.check_calls([dict(g, outputs_committed=True)])
+        W.check_calls([g], specialize=PV.specialization)
+    ok = W.check_calls([dict(g, outputs_committed=True)], specialize=PV.specialization)
     assert ok["ok"] and ok["units"] == 16 and ok["gates"] == 2 * _fn("Gemm_v1", K=64, N=8).gates
 
 
@@ -446,12 +447,13 @@ def test_the_graph_holds_a_few_bytes_per_operand_read():
 PREFETCH_PROBE = """
 import json, multiprocessing
 from verity.circuits import word as W
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}",
          "NoSuch_v1{N=1}"]
-n = W.prefetch(specs, jobs=2)
+n = W.prefetch(specs, jobs=2, specialize=specialization)
 memo = W._RULES.get(tuple(sorted(W.gate_limits(None).items())), {})
-same = all(rule == W.unit_rule(W.specialization(spec_base(fid), spec_statics(fid)), X, W_, e, memo={}) for (fid, X, W_, e), rule in memo.items())
+same = all(rule == W.unit_rule(specialization(spec_base(fid), spec_statics(fid)), X, W_, e, memo={}) for (fid, X, W_, e), rule in memo.items())
 print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "families": sorted({k[0].split("{")[0] for k in memo}),
                   "same": same}))
 """
@@ -471,6 +473,7 @@ def test_prefetch_memos_the_rules_the_check_computes_in_place():
 PREFETCH_BUDGET_PROBE = """
 import json, multiprocessing
 from verity.circuits import word as W
+from verity_vllm.query.program_view import specialization
 specs = ["Attention_v3{T=5,NH=2,KVH=1,D=64,BN=128}", "batch:RMSNormTriton_v1{N=64,EPS=1e-05}", "EmbeddingShard_v1{VS=4099,H=4,START=0}"]
 live, most = multiprocessing.Value("i", 0), multiprocessing.Value("i", 0)
 cut = W._rule_of_pending
@@ -489,9 +492,9 @@ def counted(i):
 
 W._rule_of_pending = counted
 key = tuple(sorted(W.gate_limits(None).items()))
-n = [W.prefetch(specs, jobs=4, budget=1)]
+n = [W.prefetch(specs, jobs=4, budget=1, specialize=specialization)]
 budgeted, at_once = W._RULES.pop(key, {}), most.value
-n.append(W.prefetch(specs, jobs=4))
+n.append(W.prefetch(specs, jobs=4, specialize=specialization))
 free = W._RULES.get(key, {})
 print(json.dumps({"fork": "fork" in multiprocessing.get_all_start_methods(), "n": n, "at_once": at_once,
                   "same": list(budgeted.items()) == list(free.items())}))

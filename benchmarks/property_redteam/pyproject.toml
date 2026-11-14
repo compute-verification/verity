@@ -24,7 +24,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # `verity.definitions.boolean` too.
 # The key-binding test reads the remote audit, on the commitments, the randomness, the profile and the kernels' plans.
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/circuits",
-          "verity/hardware/record.py",
+          "verity/channel.py",
           "verity/circuits/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "verity/protocols/proofs/spot/verifier/profile.py",
           "verity/protocols/accounting/poub/verifier", "verity/protocols/proofs/spot/verifier/__init__.py",
