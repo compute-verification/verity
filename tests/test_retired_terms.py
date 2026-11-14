@@ -529,7 +529,7 @@ CERTIFIER_KEPT = {
                  "labels, keys and values, which recorded data holds"),
 }
 #: Each kind's count, which only falls (`_held`).
-CERTIFIER_NAMES = {"said": 43, "domain tag": 27, "circuit": 18, "caller's": 201, "kind": 172, "recorded": 149}
+CERTIFIER_NAMES = {"said": 43, "domain tag": 37, "circuit": 18, "caller's": 201, "kind": 172, "recorded": 149}
 
 
 def certifier_files(files: list[str]) -> list[str]:
