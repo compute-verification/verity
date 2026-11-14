@@ -155,7 +155,7 @@ from pathlib import Path
 
 from . import clone
 from . import compare as C
-from . import record, remote, result, treelock
+from . import pipefail, record, remote, result, treelock
 from . import runs as R
 from . import waitcap
 from .timefmt import both
@@ -358,8 +358,15 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "would preserve them. REASON says what does instead; it is printed and recorded in job.json (default "
                          "$RESEARCH_LOCAL_ONLY). A usable remote is pushed to either way; --on MACHINE gets custody on the remote instead")
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
+    ap.add_argument("--allow-pipe", action="store_true",
+                    help="run a workload whose shell script pipes without `pipefail` (`bash -lc 'a | tee f'`), which is refused "
+                         "otherwise: the run's exit code is then the pipe's last command's, whatever failed before it "
+                         "(research/pipefail.py)")
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if not ns.claimed and not ns.allow_pipe and (why := pipefail.refusal(command)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
     if ns.id is not None and not ns.claimed:
         from .store import ids as store_ids
 
