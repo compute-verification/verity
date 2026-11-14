@@ -1,20 +1,27 @@
 """The P2 session's party (`p2_parties.py`): its registration, plan and openings round-trip their JSON, and a registration
 whose digest isn't its fields' or a plan that isn't one of its units is refused; a session's parameters are the
 auditor's, and a request carrying other values is refused by name; its answer in the core interface's form is one
-`core_check` reads, and the prover reads a challenge in either form. Its sessions, decided by the Lean verifier with
-these books beside it, are `lean/tests/test_p2_party.py`'s, which run where Lake is."""
+`core_check` reads, and the prover reads a challenge in either form. The parties' lines are named by their key, the
+verifier's side reading any other as `Malformed` and the channel's end as the runtime's `Closed`; the verifier claims
+the session id before it draws its coins, and a line before it asked for one ends the session out of phase. Its
+sessions, decided by the Lean verifier with these books beside it, are `lean/tests/test_p2_party.py`'s and
+`lean/tests/test_p2_parties.py`'s, which run where Lake is."""
 
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 from fractions import Fraction
 from pathlib import Path
 
 import pytest
 
+from verity.channel import Message
+from verity.party import Finish, Identity, Received, Send
 from verity.protocols.accounting.poub.prover import p2_party_prover, p2_prover
 from verity.protocols.accounting.poub.verifier import coins, p2, p2_parties, receipts
+from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import setup
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
 from verity.protocols.accounting.pouw.verifier import core_check
@@ -161,3 +168,59 @@ def test_the_prover_reads_a_challenge_released_or_as_its_whole_opening() -> None
     assert p2_party_prover.released_of(r.to_json() | {"path": ["03" * 64], "salt": "04" * 32}) == r
     with pytest.raises(ValueError):
         p2_party_prover.released_of(r.to_json() | {"path": []})
+
+
+@pytest.mark.parametrize("line, named", [(b'{"root": "ab"}\n', "Root"), (b'{"request": {}}\n', "Request"),
+                                         (b'{"openings": []}\n', "Openings"), (b'{"hold": {}}\n', "Malformed"),
+                                         (b'{"root": "ab", "t": 0}\n', "Malformed"), (b'not json\n', "Malformed"),
+                                         (b'{"root": "ab"}', "Malformed")],
+                         ids=["root", "request", "openings", "another-key", "two-keys", "not-json", "cut-short"])
+def test_the_verifier_names_a_line_by_its_key_and_carries_it_whole(line, named) -> None:
+    got = p2_parties.Lines(p2_parties.LINES[p2_parties.PROVER], strict=False).read(io.BytesIO(line))
+    assert got == Message(named, body=line)
+
+
+def test_the_channels_end_is_closed_and_the_prover_raises_on_a_line_it_cannot_name() -> None:
+    verifier_side = p2_parties.Lines(p2_parties.LINES[p2_parties.PROVER], strict=False)
+    assert verifier_side.read(io.BytesIO(b"")) == Message("Closed", {"how": "end"})
+    prover_side = p2_parties.Lines(p2_parties.LINES[p2_parties.VERIFIER], strict=True)
+    assert prover_side.read(io.BytesIO(b'{"answer": {}}\n')) == Message("Answer", body=b'{"answer": {}}\n')
+    with pytest.raises(ValueError, match="no message 'root'"):
+        prover_side.read(io.BytesIO(b'{"root": "ab"}\n'))
+    with pytest.raises(ConnectionError):
+        prover_side.read(io.BytesIO(b""))
+
+
+class Log:
+    def __init__(self, held: bool) -> None:
+        self.held = held
+
+    def claim(self, session: bytes) -> None:
+        if self.held:
+            raise mc.SessionLogError("the session id is already in the log")
+
+
+def verifier(store, held: bool = False) -> tuple[p2_parties.Verifier, list]:
+    closer = p2_parties.Closer(None, Log(held), bytes(32))
+    capabilities = {"lean": None, "registration": store.registration, "closer": closer, "host": "auditor-under-test"}
+    v = p2_parties.Verifier()
+    return v, v.start({}, Identity(p2_parties.VERIFIER, capabilities=capabilities))
+
+
+def test_the_verifier_claims_its_session_id_before_it_draws_its_coins(store) -> None:
+    _, first = verifier(store)
+    assert first == [Send("coins", Message("CoinsDraw", {"n": p2_parties.COIN_BYTES}))]
+    _, refused = verifier(store, held=True)
+    (sent, done), = [refused]
+    assert sent.channel == p2_parties.PROVER and sent.message.type == "Answer"
+    assert json.loads(sent.message.body) == {"answer": done.outcome["answer"]}
+    assert done.outcome["answer"]["verdict"] == "refused" and "already in the log" in done.outcome["answer"]["reason"]
+
+
+def test_a_line_before_the_verifier_asked_for_one_ends_it_out_of_phase(store) -> None:
+    v, _ = verifier(store)
+    assert v.on(Received("coins", Message("Coins", body=bytes(64)))) == []
+    line = p2_parties.line_of("request", {})
+    assert v.on(Received(p2_parties.PROVER, Message("Request", body=line))) == [Send("clock", Message("ClockRead"))]
+    *_, done = v.on(Received(p2_parties.PROVER, Message("Root", body=b'{"root": "ab"}\n')))
+    assert isinstance(done, Finish) and done.outcome["answer"]["reason"] == "out-of-phase"

@@ -18,7 +18,7 @@ padding past the last tensor, which is PoUS's and which the decode never reads; 
   the toy's that `hold` gives it, and the case's replay `SESSION`'s alone, so a toy party's case is refused there.
 - The verifier answers `{"hold": {"registration"}}`: the registration with its plan, which the prover checks against
   its store and reads each pass in.
-- It then drives the session on its clock (`session`): `{"run": {"challenge", "i", "previous", "t"}}` asks for pass i
+- It then drives the session on its clock (`Verifier`): `{"run": {"challenge", "i", "previous", "t"}}` asks for pass i
   of window t under the window's challenge, its value and the root it was opened after (`coins.Released`), after the
   root `previous`, answered `{"root": hex}` when the step that read it is done. Once a window's roots are final (the
   next window's first root, or its deadline for the last) it sends `{"open": {"draws", "t"}}`, answered `{"openings":
@@ -74,6 +74,9 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, BinaryIO
 
+from verity.channel import Body, Message, Schema
+from verity.party import Finish, Identity, Received, Send, Timer
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -86,6 +89,25 @@ from .receipts import Plan
 
 MODULE = "verity.protocols.accounting.poub.verifier.p2_parties"
 PROTOCOL = "verity/remote-bandwidth/p2/v0"
+ID, VERSION = PROTOCOL, 1
+VERIFIER, PROVER = "verifier", "prover"
+COIN_BYTES = 64
+"""The session's secret, which its challenger's coins come from (`coins.local`)."""
+LINE = Body(max=(1 << 32) - 1)
+MANIFEST = Manifest(
+    ID, VERSION, "verity.protocols.accounting.poub.verifier.p2_parties:request_of",
+    parties=(Role(VERIFIER, "auditor", needs=("clock", "coins", "signing-key")),
+             Role(PROVER, "developer", per="server", needs=("store",))),
+    channels=(Channel(VERIFIER, PROVER, ("Hold", "Run", "Open", "End", "Case", "Answer"), carries_coins=True),
+              Channel(PROVER, VERIFIER, ("Request", "Root", "Openings", "Malformed"))),
+    messages=(Schema("Request", 1, "structure", body=LINE), Schema("Hold", 1, "coins", body=LINE),
+              Schema("Run", 1, "coins", body=LINE), Schema("Root", 1, "commitment", body=LINE),
+              Schema("Open", 1, "coins", body=LINE), Schema("Openings", 1, "private", body=LINE),
+              Schema("End", 1, "coins", body=LINE), Schema("Case", 1, "private", body=LINE),
+              Schema("Answer", 1, "output", body=LINE), Schema("Malformed", 1, "private", body=LINE)))
+LINES = {PROVER: {"request": "Request", "root": "Root", "openings": "Openings"},
+         VERIFIER: {"hold": "Hold", "run": "Run", "open": "Open", "end": "End", "case": "Case", "answer": "Answer"}}
+"""Each side's lines by their one key, the message types it sends."""
 CASE_DIGESTS = "case-digests.txt"
 """The file under a party's ``private/`` that `_keep` appends each session's `case_digest` to."""
 REQUEST_KEYS = ("deadline_ns", "node", "passes", "samples", "window_ns", "windows")
@@ -612,104 +634,272 @@ class Closer:
         return None
 
 
+def line_of(key: str, value: Any) -> bytes:
+    """The line `send` writes for `{key: value}`."""
+    return json.dumps({key: value}, sort_keys=True).encode() + b"\n"
+
+
+class Lines:
+    """The parties' messages as the channel's bytes (`MANIFEST`): each message's body is its line, written whole, and
+    a line read is named by its one key (`names`, the types the other side sends). A side that is `strict` raises as
+    `recv` does on a line it can't name; the verifier's side names it `Malformed`, and reads the end of the channel
+    or an OSError on it as the runtime's `Closed` (`how` is `end`, or the error)."""
+
+    def __init__(self, names: Mapping[str, str], strict: bool) -> None:
+        self.names, self.strict = names, strict
+
+    def write(self, f: BinaryIO, m: Message) -> None:
+        f.write(m.body)
+        f.flush()
+
+    def read(self, f: BinaryIO) -> Message:
+        if self.strict:
+            line = f.readline()
+            (key, _), = message(line).items()
+            if key not in self.names:
+                raise ValueError(f"no message {key!r}")
+            return Message(self.names[key], body=line)
+        try:
+            line = f.readline()
+        except OSError as e:
+            return Message("Closed", {"how": f"{type(e).__name__}: {e}"})
+        if line == b"":
+            return Message("Closed", {"how": "end"})
+        try:
+            (key, _), = message(line).items()
+        except (ConnectionError, ValueError):
+            key = None
+        return Message(self.names.get(key, "Malformed"), body=line)
+
+
+class _Pair:
+    """The channel's two streams as one, which `challenger_session.run` reads and writes."""
+
+    def __init__(self, f_in: BinaryIO, f_out: BinaryIO) -> None:
+        self.readline, self.write, self.flush = f_in.readline, f_out.write, f_out.flush
+
+
+def broken(e: OSError) -> Message:
+    """A failed write to the prover, as the runtime tells a party its channel failed."""
+    return Message("Closed", {"how": f"{type(e).__name__}: {e}"})
+
+
+def drive(party: Any, params: Mapping[str, Any], identity: Identity, f_in: BinaryIO, f_out: BinaryIO, *, peer: str,
+          clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
+          wait: Callable[[Callable[[], int], int], None] = P._sleep_until) -> Finish:
+    """`party` against `peer` over the channel (`f_in`, `f_out`) until it finishes, stepped by
+    `challenger_session.run` on the codec of its side (`Lines`): its finish. The verifier's side is handed a failed
+    write as the prover's side failing (`broken`)."""
+    side = VERIFIER if peer == PROVER else PROVER
+    codec = Lines(LINES[peer], strict=side == PROVER)
+    done, _ = CS.run(party, params, identity, _Pair(f_in, f_out), codec, peer=peer, clock=clock, coins=coins,
+                     wait=wait, broken=broken if side == VERIFIER else None)
+    return done
+
+
+class Verifier:
+    """The verifier and its challenger: one session, decided by the Lean beside the books (`Twin`), on its clock and
+    coins. Its capabilities are `lean` (holding `registration` and `plan`: `hold`), the auditor's session parameters
+    `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None) and a progress `log`.
+    It claims the closer's session id, draws the session's coins, and reads the prover's request; then each pass is
+    asked for in order under the plan, each window's openings sampled once its roots are final and verified, and the
+    session ends with its coins disclosed, its case and the answer sent, finishing with `{"answer", "case"}`. Every
+    line the prover sends reaches the Lean whole whatever its type, the end of the channel as an empty line; a channel
+    that fails rejects the session `malformed`, as the prover's side failing."""
+
+    def start(self, params: Mapping[str, Any], identity: Identity) -> list[Any]:
+        c = identity.capabilities
+        self.lean, self.registration, self.closer = c["lean"], c["registration"], c.get("closer")
+        self.plan = Plan.whole(self.registration.blocks) if c.get("plan") is None else c["plan"]
+        self.auditor, self.host = c.get("auditor", SESSION), c["host"]
+        self.log: Callable[[str], None] = c.get("log") or (lambda _m: None)
+        self.twin: Twin | None = None
+        self.coins = b""
+        self.due: Callable[[bytes], list[Any]] | None = self._request
+        self.then: Callable[[int], list[Any]] | None = None
+        self.at: int | None = None
+        self.after: Callable[[], list[Any]] = self._next
+        self.gone = False
+        if self.closer is not None and (why := self.closer.claim()) is not None:
+            return self._refused(why)
+        return [Send("coins", Message("CoinsDraw", {"n": COIN_BYTES}))]
+
+    def on(self, r: Received) -> list[Any]:
+        m = r.message
+        if m.type == "Coins":
+            self.coins = m.body
+            return []
+        if m.type in ("ClockReading", "ClockTimer"):
+            if self.then is None or (m.type == "ClockTimer" and m.fields["at"] != self.at):
+                return []
+            then, self.then, self.at = self.then, None, None
+            return then(m.fields["ns"]) if then == self._open else self._step(then, m.fields["ns"])
+        if m.type in ("Closed", "Refused"):
+            how = m.fields["how"] if m.type == "Closed" else f"refused {m.fields['name']}: {m.fields['detail']}"
+            if how == "end" and self.due is not None:
+                return self._line(b"")
+            if how == "end" and self.twin is not None:
+                self.gone = True
+                return []
+            self.then = self.at = None
+            why = f"the prover's side failed: {how}"
+            return self._refused(why) if self.twin is None else self._end(why)
+        return self._line(m.body)
+
+    def _line(self, line: bytes) -> list[Any]:
+        due, self.due = self.due, None
+        if due is None:
+            return self._end("out-of-phase") if self.twin is not None else self._refused("out-of-phase")
+        return due(line) if due == self._request else self._step(due, line)
+
+    def _step(self, f: Callable[..., list[Any]], *args: Any) -> list[Any]:
+        try:
+            return f(*args)
+        except _Ended as e:
+            return self._end(e.reason)
+        except (OSError, ValueError, KeyError, TypeError, audit.SessionError) as e:
+            return self._end(f"the prover's side failed: {type(e).__name__}: {e}")
+
+    def _read(self, then: Callable[[int], list[Any]]) -> list[Any]:
+        self.then = then
+        return [Send("clock", Message("ClockRead"))]
+
+    def _alarm(self, at: int, then: Callable[[int], list[Any]]) -> list[Any]:
+        self.then, self.at = then, at
+        return [Timer(at)]
+
+    def _request(self, line: bytes) -> list[Any]:
+        self.line = line
+        return self._read(self._open)
+
+    def _open(self, now: int) -> list[Any]:
+        try:
+            self.twin = Twin.open(self.lean, self.registration, self.plan, self.line, self.coins, now, self.auditor)
+        except _Refused as e:
+            return self._refused(str(e))
+        params = self.twin.books.s.params
+        self.windows, self.passes, self.t, self.i = params.windows, params.min_passes, 0, 0
+        hold = line_of("hold", {"registration": registration_json(self.registration, self.plan)})
+        return [Send(PROVER, Message("Hold", body=hold)), *self._read(self._start)]
+
+    def _start(self, now: int) -> list[Any]:
+        got, self.challenge = self.twin.start(now)
+        if got != {"released": 0}:
+            raise _Ended("the session's first coin was refused")
+        self.previous = self.registration.digest
+        return self._run()
+
+    def _expect(self, due: Callable[[bytes], list[Any]], sent: Message) -> list[Any]:
+        """`sent` to the prover, then its next line due to `due`: at once, an empty line, if it has gone."""
+        self.due = due
+        return [Send(PROVER, sent), *(self._line(b"") if self.gone else [])]
+
+    def _run(self) -> list[Any]:
+        run = {"challenge": C.Released.of(self.challenge).to_json(), "i": self.i, "previous": self.previous.hex(),
+               "t": self.t}
+        return self._expect(self._root, Message("Run", body=line_of("run", run)))
+
+    def _root(self, line: bytes) -> list[Any]:
+        self.line = line
+        return self._read(self._rooted)
+
+    def _rooted(self, now: int) -> list[Any]:
+        t, i = self.t, self.i
+        if self.twin.root(t, i, self.line, now) != {"ok": True}:
+            raise _Ended(self.twin.books.why)
+        self.previous = self.twin.books.s.windows[t].roots[i]
+        self.log(f"window {t} pass {i}: root {self.previous.hex()[:16]}")
+        if i == 0 and t > 0:
+            self.after = self._next
+            return self._read(self._close)
+        return self._next()
+
+    def _next(self) -> list[Any]:
+        self.i += 1
+        if self.i < self.passes:
+            return self._run()
+        return self._alarm(self.twin.books.s.next_boundary_ns(), self._boundary)
+
+    def _boundary(self, now: int) -> list[Any]:
+        got, self.challenge = self.twin.boundary(now)
+        if "released" not in got:
+            raise _Ended(f"window {self.t}'s boundary was refused")
+        self.t, self.i = self.t + 1, 0
+        if self.t < self.windows:
+            return self._run()
+        self.after = self._done
+        return self._alarm(self.twin.books.s.deadline(self.windows - 1) + 1, self._close)
+
+    def _close(self, now: int) -> list[Any]:
+        t = self.t - 1
+        got = self.twin.close(t, now)
+        if "draws" not in got:
+            raise _Ended
+        self.draws = len(got["draws"])
+        return self._expect(self._openings, Message("Open", body=line_of("open", {"draws": got["draws"], "t": t})))
+
+    def _openings(self, line: bytes) -> list[Any]:
+        t = self.t - 1
+        v = self.twin.openings(t, line)
+        self.log(f"window {t}: {self.draws} openings, "
+                 f"{'accepted' if 'accepted' in v else 'rejected ' + str(v.get('failure'))}")
+        if v != {"accepted": t}:
+            raise _Ended(self.twin.books.why)
+        return self.after()
+
+    def _done(self) -> list[Any]:
+        return self._end(None)
+
+    def _refused(self, why: str) -> list[Any]:
+        out = {"protocol": PROTOCOL, "registration": self.registration.digest.hex(), "verdict": "refused",
+               "reason": why, "host": self.host}
+        return [Send(PROVER, Message("Answer", body=line_of("answer", out))),
+                Finish({"answer": out, "case": None}, kind="private")]
+
+    def _end(self, reason: str | None) -> list[Any]:
+        """The session's end (`reason`, None when it ran to its last window): the books' outcome, the prover gone
+        failing the window filling, its coins disclosed, its case unless the books vetoed it or no closer signs its
+        close, and the answer, each sent while the prover is there to read them."""
+        self.due = self.then = self.at = None
+        twin = self.twin
+        if twin.books.s.outcome is None:
+            twin.fail()
+        commitment, openings = twin.books.s.disclose()
+        out = twin.answer(reason) | {"host": self.host}
+        case = None
+        if twin.disagreement is None and self.closer is not None:
+            from . import p2_case
+
+            close = p2_case.close_of(self.closer.signer, self.closer.session, twin.log)
+            case = p2_case.case_of(registration_json(self.registration, self.plan), twin.request, twin.not_before_ns,
+                                   twin.log, session=self.closer.session, trusted=[self.closer.signer.public_key],
+                                   close=close)
+        end = {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]}
+        sent = [Send(PROVER, Message("End", body=line_of("end", end)))]
+        if case is not None:
+            sent.append(Send(PROVER, Message("Case", body=line_of("case", case))))
+        return [*sent, Send(PROVER, Message("Answer", body=line_of("answer", out))),
+                Finish({"answer": out, "case": case}, kind="private")]
+
+
 def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, coins: bytes, lean: Lean,
             plan: Plan | None = None, clock: Callable[[], int] = time.monotonic_ns,
             sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until,
             log: Callable[[str], None] = lambda _m: None, host: str | None = None,
             keep: Callable[[dict[str, Any]], None] | None = None,
             auditor: Mapping[str, int] = SESSION, closer: Closer | None = None) -> dict[str, Any]:
-    """The verifier's side of one session over the channel (`f_in`, `f_out`), decided by `lean`, which holds
-    `registration` and `plan` (`hold`; every unit by default), with the books beside it (`Twin`): the prover's
-    request, refused unless it carries the auditor's parameters `auditor` (`params_of`), the registration, each pass
-    asked for in order under `plan`, each window's openings sampled once its roots
-    are final and verified, the session's coins disclosed, its case (`p2_case.case_of`, which `keep` is given too)
-    unless the books vetoed it or no `closer` signs its close, and the answer, sent last and returned, naming the
-    verifier's `host` (this one's name by default). The `closer`'s session id is claimed before the request is read,
-    and the session refused when the claim is. A line out of form or a closed channel rejects the session (its answer
-    says why)."""
-    host = host or socket.gethostname()
-    plan = Plan.whole(registration.blocks) if plan is None else plan
-
-    def refused(why: str) -> dict[str, Any]:
-        return _last(f_out, {"protocol": PROTOCOL, "registration": registration.digest.hex(), "verdict": "refused",
-                             "reason": why, "host": host})
-
-    if closer is not None and (why := closer.claim()) is not None:
-        return refused(why)
-    line = f_in.readline()
-    try:
-        twin = Twin.open(lean, registration, plan, line, coins, clock(), auditor)
-    except _Refused as e:
-        return refused(str(e))
-    W, passes = twin.books.s.params.windows, twin.books.s.params.min_passes
-
-    def opened(t: int) -> None:
-        got = twin.close(t, clock())
-        if "draws" not in got:
-            raise _Ended
-        send(f_out, {"open": {"draws": got["draws"], "t": t}})
-        v = twin.openings(t, f_in.readline())
-        log(f"window {t}: {len(got['draws'])} openings, "
-            f"{'accepted' if 'accepted' in v else 'rejected ' + str(v.get('failure'))}")
-        if v != {"accepted": t}:
-            raise _Ended(twin.books.why)
-
-    reason = None
-    try:
-        send(f_out, {"hold": {"registration": registration_json(registration, plan)}})
-        got, challenge = twin.start(clock())
-        if got != {"released": 0}:
-            raise _Ended("the session's first coin was refused")
-        previous = registration.digest
-        for t in range(W):
-            for i in range(passes):
-                send(f_out, {"run": {"challenge": C.Released.of(challenge).to_json(), "i": i, "previous": previous.hex(),
-                                     "t": t}})
-                if twin.root(t, i, f_in.readline(), clock()) != {"ok": True}:
-                    raise _Ended(twin.books.why)
-                previous = twin.books.s.windows[t].roots[i]
-                log(f"window {t} pass {i}: root {previous.hex()[:16]}")
-                if i == 0 and t > 0:
-                    opened(t - 1)
-            sleep_until(clock, twin.books.s.next_boundary_ns())
-            got, challenge = twin.boundary(clock())
-            if "released" not in got:
-                raise _Ended(f"window {t}'s boundary was refused")
-        sleep_until(clock, twin.books.s.deadline(W - 1) + 1)
-        opened(W - 1)
-    except _Ended as e:
-        reason = e.reason
-    except (OSError, ValueError, KeyError, TypeError, audit.SessionError) as e:
-        reason = f"the prover's side failed: {type(e).__name__}: {e}"
-    if twin.books.s.outcome is None:
-        twin.fail()
-    commitment, openings = twin.books.s.disclose()
-    out = twin.answer(reason) | {"host": host}
-    case = None
-    if twin.disagreement is None and closer is not None:
-        from . import p2_case
-
-        close = p2_case.close_of(closer.signer, closer.session, twin.log)
-        case = p2_case.case_of(registration_json(registration, plan), twin.request, twin.not_before_ns, twin.log,
-                               session=closer.session, trusted=[closer.signer.public_key], close=close)
-        if keep is not None:
-            keep(case)
-    return _last(f_out, out, {"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]}, case)
-
-
-def _last(f_out: BinaryIO, out: dict[str, Any], end: dict[str, Any] | None = None,
-          case: dict[str, Any] | None = None) -> dict[str, Any]:
-    """The session's coins disclosed (`end`, when it has any), its case (when it has one) and the answer, sent if the
-    prover is still there to read them, and the answer returned."""
-    try:
-        if end is not None:
-            send(f_out, {"end": end})
-        if case is not None:
-            send(f_out, {"case": case})
-        send(f_out, {"answer": out})
-    except OSError:
-        pass
-    return out
+    """The verifier's side of one session over the channel (`f_in`, `f_out`), the `Verifier` party on `coins`, `clock`
+    and `sleep_until`, decided by `lean`, which holds `registration` and `plan` (`hold`; every unit by default): the
+    answer it sent last, naming the verifier's `host` (this one's name by default), its case given to `keep`. The
+    `closer`'s session id is claimed before the request is read, and the session refused when the claim is. A line out
+    of form or a closed channel rejects the session (its answer says why)."""
+    capabilities = {"lean": lean, "registration": registration, "plan": plan, "auditor": auditor, "closer": closer,
+                    "log": log, "host": host or socket.gethostname()}
+    done = drive(Verifier(), {}, Identity(VERIFIER, capabilities=capabilities), f_in, f_out, peer=PROVER, clock=clock,
+                 coins=lambda _n: coins, wait=sleep_until)
+    if done.outcome["case"] is not None and keep is not None:
+        keep(done.outcome["case"])
+    return done.outcome["answer"]
 
 
 def case_digest(case: Mapping[str, Any]) -> str:
@@ -824,10 +1014,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["Books", "CASE_DIGESTS", "Closer", "EPS_TERMS", "GAMMA_TERMS", "PROTOCOL", "SESSION", "Twin",
-           "answer", "case_digest", "core_answer", "held_json", "hold", "main", "message", "opening_json", "opening_of",
-           "params_of", "plan_of", "pous_record", "recv", "registration_json", "registration_of",
-           "registration_of_setup", "request_of", "send", "session", "verdict_json"]
+PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
+
+
+__all__ = ["Books", "CASE_DIGESTS", "COIN_BYTES", "Closer", "EPS_TERMS", "GAMMA_TERMS", "ID", "LINES", "Lines",
+           "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "SESSION", "Twin", "VERIFIER", "VERSION", "Verifier",
+           "answer", "broken", "case_digest", "core_answer", "drive", "held_json", "hold", "line_of", "main",
+           "message", "opening_json", "opening_of", "params_of", "plan_of", "pous_record", "recv", "registration_json",
+           "registration_of", "registration_of_setup", "request_of", "send", "session", "verdict_json"]
 
 if __name__ == "__main__":
     sys.exit(main())

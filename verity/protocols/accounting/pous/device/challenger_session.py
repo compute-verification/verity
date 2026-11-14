@@ -31,7 +31,7 @@ A request that names no audit runs under the id the auditor designates from its 
 verifier computes from the audit's binding and what setup published, never from the report; it carries setup's published
 outputs and P2's parameters (`PARAMS`), which `setup_of` reads back. The challenger keeps each session it completes on
 its own host under `SETUPS`, from which PoUB's verifier on the same host builds its registration
-(`verity.protocols.accounting.poub.verifier.p2_party --pous-record`).
+(`verity.protocols.accounting.poub.verifier.p2_parties --pous-record`).
 
 `Side` is the challenger's side as what starts a run hands it over, wherever `period.json` puts it, and
 `command(device)` the argv that starts it on this machine. `salt(side, audit, commitment)` asks it for a salt, and
@@ -151,21 +151,32 @@ def sleep_until(clock: Callable[[], int], at: int) -> None:
 
 def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Codec, *, peer: str,
         clock: Callable[[], int] | None = None, coins: Callable[[int], bytes] | None = None,
-        wait: Callable[[Callable[[], int], int], None] = sleep_until) -> tuple[Finish, list[LogEntry]]:
-    """`party` against `peer` over `f` until it finishes (module docstring): its finish, and what it recorded."""
+        wait: Callable[[Callable[[], int], int], None] = sleep_until,
+        broken: Callable[[OSError], Message] | None = None) -> tuple[Finish, list[LogEntry]]:
+    """`party` against `peer` over `f` until it finishes (module docstring): its finish, and what it recorded. With
+    `broken`, a write to `peer` that raises OSError drops the rest of its step but a `Finish`, and the party is handed
+    `broken(error)` from `peer` next, before any source's answer; without it, the error is the caller's."""
     records: list[LogEntry] = []
     asked: deque[tuple[str, int]] = deque()
+    told: list[Message] = []
 
     def act(actions: list[Any]) -> Finish | None:
         for a in actions:
             if isinstance(a, Finish):
                 return a
+            if told:
+                continue
             if isinstance(a, LogEntry):
                 records.append(a)
             elif isinstance(a, Timer):
                 asked.append(("ClockAlarm", a.at))
             elif isinstance(a, Send) and a.channel == peer:
-                codec.write(f, a.message)
+                try:
+                    codec.write(f, a.message)
+                except OSError as e:
+                    if broken is None:
+                        raise
+                    told.append(broken(e))
             elif isinstance(a, Send) and a.channel == "clock" and a.message.type in ("ClockRead", "ClockAlarm"):
                 asked.append((a.message.type, a.message.fields.get("at", 0)))
             elif isinstance(a, Send) and a.channel == "coins" and a.message.type == "CoinsDraw":
@@ -188,7 +199,10 @@ def run(party: Party, params: Params, identity: Identity, f: BinaryIO, codec: Co
 
     done = act(party.start(params, identity))
     while done is None:
-        r = answer(*asked.popleft()) if asked else Received(peer, codec.read(f))
+        if told:
+            r = Received(peer, told.pop())
+        else:
+            r = answer(*asked.popleft()) if asked else Received(peer, codec.read(f))
         done = act(party.on(r))
     return done, records
 
