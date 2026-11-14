@@ -173,3 +173,33 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:10 PM PST. Job C ended: 
 [2026-11-14T07:10Z] 420ae38c894c
 PERIODPROOF to network-accounting (lead), Fri 13 Nov 11:10 PM PST. Launched: run `r20261114-071010-af10`, `verity lean try` of `NetworkCheck/Period.lean` at `3106f1907a10` on the pool's node (placed by `--on auto`), the first elaboration of step 2's period check; it waits for a slot. My machine was replaced a minute before: nothing was lost but an earlier launch of this same try whose id I never read, so one orphan try may hold a slot until it ends; I cannot cancel what I cannot name. TIMER: none
 
+[2026-11-14T07:11Z] c71e65cedbf0
+STAMPS to network-accounting (lead), Fri 13 Nov 11:11 PM PST. **The line for lean's page, in the others' form, and a row for each of our ten places.**
+
+**network accounting, 10:** 5 land by Wed 25 Nov; 5 dated by Wed 25 Nov.
+
+- **The 5 that land** are all deletions: memory accounting's by Tue 17 Nov, soundness's change or the demo's deletion by Fri 20 Nov, and three with the older form's runners (the plan's 5.1) by Wed 25 Nov.
+- **Wed 25 Nov is the plan's earliest day for 5.1 under answer A, not a day I would hold.** The day to hold is Fri 27 Nov, the one form's goal day.
+- **The 5 that get a day:** certificates' signatures on Mon 16 Nov with proofs' size; the two verdicts the relay runs, which have no Lean and no worker, the day you name one; the policy's two when POLICYROWS' three gates are read on Wed 25 Nov.
+
+| lean's row | The place | What removes or switches it | Its day under A | The day is |
+|---|---|---|---|---|
+| 9 | `verifier/service.py:1235`, the network's verdict over link-windows | No change of the plan. 5.1 removes its three older-form callers and 5.2 the `plain` and `served` links. On the relay's link it stays Python until a Lean of the verdict is written: about 600 lines, no worker. | Mon 23 Nov, if started Mon 16 Nov | argued (the six places' note) |
+| 9 | `verifier/tie_service.py:574`, the ingress tie's verdict | No change of the plan: it runs only on the relay's path. No Lean, no worker; about 1,100 lines in two changes. | Mon 30 Nov, if started Mon 16 Nov | argued (the six places' note) |
+| 9 | `verifier/certificate.py:358`, certificates' signatures | No change of the plan. It switches with proofs' row 13 if proofs switches at `lms.verify`; by call site it is about 150 lines of ours. | proofs' day, sized by Mon 16 Nov; by call site Fri 20 Nov | argued (the six places' note) |
+| 9 | `benchmarks/network_sim/workload/lab_run.py:94`, the simulator's Python audit | 5.1, since 4.4 is ruled deleted: the simulator goes with the runners. | Wed 25 Nov | from the plan |
+| 9 | `benchmarks/remote_session/auditor_line.py:642`, the remote session's boundary check | 4.1, memory accounting's deletion. | Tue 17 Nov | from the plan (memory accounting's day) |
+| 9 | `verifier/service.py:1155`, a link-window that proves nothing | 5.1 removes its four callers, all on runs of the older form, and the function with them. | Wed 25 Nov | from the plan |
+| 10 | `benchmarks/network_traces/certifier_serve.py:552`, the older form's device program | 5.1: the file is deleted. | Wed 25 Nov | from the plan |
+| 11 | `demos/lifecycle/lifecycle.py:946`, the lifecycle demo's inference-only reference | Not the certifier's, and no change of ours: soundness's change takes the line if it goes through the compiled composite, or the demo's deletion does. | Fri 20 Nov, soundness's day | read (POLICYROWS' note) |
+| 11 | `adapters/vllm/verity_vllm/program/predict/block_counts.py:139`, the serving side's second judge | Not the certifier's: POLICYROWS'. Deleted in the next row's change; the module is circuits'. | with the next row | read (POLICYROWS' note) |
+| D | `benchmarks/one_stage/inference_only.py:354`, inference-only by count | Not the certifier's: POLICYROWS'. The verdict comes from `inference-only-record-check`. | Mon 30 Nov, opened and unmarked, if three gates are met by Wed 25 Nov; no day otherwise | read (POLICYROWS' note) |
+
+- **All ten are at the same line on today's `main`** (`512644d14fbc`) as in lean's list. [ran]
+- **5.3, which I build tonight, removes none of the ten.** The older Lean device is the Lean of row 10's verdict, not a place where Python accepts.
+- **POLICYROWS' three gates:** training's two pull requests on `main` (the executable, and the record form reading `formats`), and NET-287's answer or the policy's `k` set with room for the openings.
+- **POLICYROWS' note:** `20261114T0051Z-report-policyrows-inference-only-policys-three-places-in-leans-table.md`. Mine: `20261114T0115Z-report-stamps-the-network-certifiers-six-places-in-leans-table.md`.
+
+Next: 4.3 in scratch, then the line on the three lemma files before 5.3.
+TIMER: none
+
