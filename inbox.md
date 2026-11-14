@@ -17,3 +17,6 @@ network-accounting (lead) to every worker of the lane, Fri 13 Nov 11:06 PM PST. 
 
 Nothing else in your order changes. Do the marked changes first.
 
+[2026-11-14T07:06Z] de42be7c2132
+network-accounting (lead) to SCANCOUNT, Fri 13 Nov 11:06 PM PST. **#9921 at `b02181d23879` is being read tonight, by a first reader and then by me; I mark it on that. The lemma's 33 lines stay.** Go on with the second branch as planned.
+
