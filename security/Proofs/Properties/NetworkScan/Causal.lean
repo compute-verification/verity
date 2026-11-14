@@ -6,12 +6,12 @@ public import Proofs.Properties.NetworkScan.Accept
 /-!
 # The scan is causal, proved
 
-Let `ke` be the egress template's root node, `kl` the later ingress template's, and `S` the gates of `ke`'s members
+Let `ke` be the egress template's root node, `kl` the ingress template's, and `S` the gates of `ke`'s members
 together with the gates of the input nodes `ke`'s arguments read (`InS`). An egress gate resolves into `S`
 (`batch_lands`, from `WalkProof.run_below`). `S` is closed under reads (`closure`): a gate of a member of `ke` reads its
 activation's gates or what its arguments' references resolve to (the walk lemma, `WalkProof.memberReads`), which is an
 input node's gate when the argument is one input node's leaves (`arg_lands`), and an input node's gate reads nothing
-(`gate_input`). So everything an egress gate depends on is in `S` (`depends_closed`). A later bucket's ingress gate is a
+(`gate_input`). So everything an egress gate depends on is in `S` (`depends_closed`). A bucket's ingress gate is a
 gate of the input node `kl`'s row reads (`param_lands`), which is neither `ke`, a composite, nor any input node an
 egress argument reads, and a gate lies in one root node's gates (`DescAgree.node_unique`): `causal_of_facts`, from
 what `scanOf` checks (`Facts`).
@@ -19,7 +19,7 @@ what `scanOf` checks (`Facts`).
 `ScanCausal` is part (3) of `NetTiming.BoundaryGates.Fits` at `scanLayout`: `scanOf` takes each template's row, state
 and egress argument to be one input node's leaves (`NetworkCheck.Period.inputArg`) and no egress argument to be an
 ingress row's input node, so an egress member reads only its activation's gates and its arguments' input gates, and a
-later bucket's ingress gates are its row's input node's, which no egress argument names. The ingress templates' entry
+bucket's ingress gates are its row's input node's, which no egress argument names. The ingress template's entry
 ports, which read the slot entries' input node, are no step's ingress, so the proof doesn't read them. The walk lemma
 reads the Program topological, which `ScanCausal`
 takes as `P.orderViolation = none`; `scanOf` checks it (`Fits.Accepted.topo`), and `Properties.NetworkScan.scanFits`
@@ -227,7 +227,7 @@ theorem batch_lands (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.
     obtain ⟨q, hq⟩ := Option.isSome_iff_exists.1 (hargs _ hmem)
     exact Or.inr ⟨_, hmem, q, hq, arg_lands P hroot hB hL hk hq ht n' a h⟩
 
-/-- **A later bucket's ingress gate is a gate of its row's input node**: parameter 0 of a member of root node `kl`, a
+/-- **A bucket's ingress gate is a gate of its row's input node**: parameter 0 of a member of root node `kl`, a
 batch whose argument 0 is the input node `q`'s leaves, resolves, to a gate of `q`. -/
 theorem param_lands (hok : ∀ i < P.defs.size, BodiesOk.DefOk P.defs i P.defs[i]!)
     (hc : NciCheck.Desc.calleesFirst P = true) (hrp : (P.defs[P.root]!).body.params.size = 0)
@@ -385,11 +385,11 @@ theorem closure {bytes : ByteArray} (hdec : decode bytes = .ok P) (hov : P.order
 
 end
 
-/-- What `scanOf`'s acceptance gives the causal argument, at a window of at least two steps: the egress template's root
-node `ke` (the last template) and the later ingress template's `kl` (the second), each a batch of a composite, of
-`T` and `T - 1` members; the egress template's return, a u16 and the schedule's row; the later ingress template's
-first parameter, the schedule's row, bound to the input node `q'`; the egress template's every argument one input
-node's leaves, none `q'`; and the Program laid out within what resolution walks. -/
+/-- What `scanOf`'s acceptance gives the causal argument: the egress template's root node `ke` (the last template) and
+the ingress template's `kl` (the second, after the start unit's), each a batch of `T` members of a composite; the
+egress template's return, a u16 and the schedule's row; the ingress template's first parameter, the schedule's row,
+bound to the input node `q'`; the egress template's every argument one input node's leaves, none `q'`; and the Program
+laid out within what resolution walks. -/
 structure Facts (P : Prog) (s : Schedule) (kl ke q' : ℕ) : Prop where
   last : (templateNodes P).getLast?.getD 0 = ke
   second : (templateNodes P).getD 1 0 = kl
@@ -399,7 +399,7 @@ structure Facts (P : Prog) (s : Schedule) (kl ke q' : ℕ) : Prop where
   e_comp : (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).prim = false
   l_batch : ((P.defs[P.root]!).body.nodes[kl]!).form = .batch
   e_batch : ((P.defs[P.root]!).body.nodes[ke]!).form = .batch
-  l_n : ((P.defs[P.root]!).body.nodes[kl]!).n = s.window - 1
+  l_n : ((P.defs[P.root]!).body.nodes[kl]!).n = s.window
   e_n : ((P.defs[P.root]!).body.nodes[ke]!).n = s.window
   e_ret : (P.defs[((P.defs[P.root]!).body.nodes[ke]!).fn]!).ret =
     .tuple #[.array outBits (.value 1), .array (s.allocation * s.cellBytes) (.array 8 (.value 1))]
@@ -482,10 +482,9 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
       have := BodiesOk.lt_mul_of σ.val s.allocation (8 * s.cellBytes) b σ.isLt hb
       omega
   -- the ingress gate is a gate of the row's input node `q'`
-  have ht'0 : t' ≠ 0 := by omega
-  simp only [scanLayout, List.mem_map, List.mem_range, ht'0, ↓reduceIte, F.second] at hi
+  simp only [scanLayout, List.mem_map, List.mem_range, F.second] at hi
   obtain ⟨j, hj, rfl⟩ := hi
-  have hm : t' - 1 < ((P.defs[P.root]!).body.nodes[kl]!).members := by
+  have hm : t' < ((P.defs[P.root]!).body.nodes[kl]!).members := by
     rw [Resolve.bs_members _ (Or.inl F.l_batch), F.l_n]; omega
   have hj' : j < ((P.defs[((P.defs[P.root]!).body.nodes[kl]!).fn]!).params[0]!).2.leaves := by
     simp only [F.l_row, BodiesOk.leaves_array, BodiesOk.leaves_value]
@@ -493,7 +492,7 @@ theorem causal_of_facts {bytes : ByteArray} {P : Prog} {s : Schedule} {kl ke q' 
     omega
   obtain ⟨a, ha, h1, h2⟩ := param_lands P hroot hB hL hok hc hpar hz hfuel F.kl_lt F.l_comp F.l_batch hm F.l_p0 hj'
     F.row_in
-  have hia : gateAt P (P.child P.rootScope kl (t' - 1)) ⟨true, 0, j⟩ = a := by
+  have hia : gateAt P (P.child P.rootScope kl t') ⟨true, 0, j⟩ = a := by
     unfold gateAt; rw [ha]; rfl
   rw [hia] at hdep
   obtain ⟨-, hq'K, hq'in⟩ := inputArg_some F.row_in
@@ -525,11 +524,11 @@ theorem templateNodes_mem {P : Prog} {k : ℕ} (h : k ∈ templateNodes P) :
     rw [getElem!_pos P.defs _ hlt, heq]; simpa using hd
   · cases hd
 
-/-- **What `scanOf`'s acceptance gives**, at a window of at least two steps: `Facts`, at the second template's node,
-the last's, and the input node the second's row reads. -/
+/-- **What `scanOf`'s acceptance gives**: `Facts`, at the ingress template's node, the egress template's, and the
+input node the ingress template's row reads. -/
 theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Scan} {c : String} {P : Prog}
-    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hP : decode c.toUTF8 = .ok P)
-    (hT : 2 ≤ s.window) : ∃ kl ke q', Facts P s kl ke q' := by
+    (h : scanOf j program s = .ok sc) (hc : Flock.canon j = .ok c) (hP : decode c.toUTF8 = .ok P) :
+    ∃ kl ke q', Facts P s kl ke q' := by
   unfold scanOf at h
   obtain ⟨c', hc', h⟩ := Fits.bind_ok h
   obtain rfl : c' = c := by rw [hc] at hc'; exact (Except.ok.inj hc').symm
@@ -544,7 +543,7 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   obtain ⟨⟨xe, de⟩, hback, h⟩ := Fits.bind_ok h
   replace hback := Fits.needSome_ok hback
   obtain ⟨_, -, h⟩ := Fits.bind_ok h
-  obtain ⟨⟨⟨xf, df⟩, later⟩, hm, h⟩ := Fits.bind_ok h
+  obtain ⟨⟨⟨xs, ds⟩, ⟨xi, di⟩⟩, hm, h⟩ := Fits.bind_ok h
   obtain ⟨_, hnames, h⟩ := Fits.bind_ok h
   obtain ⟨_, hcount, h⟩ := Fits.bind_ok h
   obtain ⟨_, hrow, h⟩ := Fits.bind_ok h
@@ -567,15 +566,11 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
   replace hargs := Fits.need_ok hargs
   replace hegr := Fits.need_ok hegr
   simp only [Bool.and_eq_true] at hcount
-  obtain ⟨⟨⟨⟨-, -⟩, hlater⟩, heb⟩, hen⟩ := hcount
+  obtain ⟨⟨⟨⟨⟨-, -⟩, hlb⟩, hln⟩, heb⟩, hen⟩ := hcount
   -- the templates: `templateNodes P = [k0, kl, ke]`
-  rcases Fits.ingressTemplates_ok hm with ⟨f, -, hx⟩ | ⟨f, b, hpop, hx⟩
-  · simp only [Prod.mk.injEq] at hx
-    obtain ⟨-, rfl⟩ := hx
-    simp only [beq_iff_eq, Option.some.injEq] at hlater
-    omega
+  obtain ⟨f, b, hpop, hx⟩ := Fits.beforeEgress_ok hm
   simp only [Prod.mk.injEq] at hx
-  obtain ⟨rfl, rfl⟩ := hx
+  obtain ⟨rfl, hb⟩ := hx
   simp only [Array.back?_map, List.back?_toArray, Option.map_eq_some_iff] at hback
   obtain ⟨ke, hke, hge⟩ := hback
   simp only [Array.toList_pop, Array.toList_map] at hpop
@@ -585,41 +580,28 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
     rcases ys with _ | ⟨k0, _ | ⟨kl, _ | ⟨k2, ys⟩⟩⟩ <;> simp at hpop
     exact ⟨_, _, rfl⟩
   simp only [List.map_cons, List.map_nil, List.cons.injEq, and_true] at hpop
-  obtain ⟨hf, rfl⟩ := hpop
-  simp only [Prod.mk.injEq] at hge hf
+  obtain ⟨-, rfl⟩ := hpop
+  simp only [Prod.mk.injEq] at hge hb
   obtain ⟨rfl, rfl⟩ := hge
-  obtain ⟨rfl, rfl⟩ := hf
+  obtain ⟨rfl, rfl⟩ := hb
   simp only [List.cons_append, List.nil_append] at hys
   have hmem_l : kl ∈ templateNodes P := by rw [hys]; simp
   have hmem_e : ke ∈ templateNodes P := by rw [hys]; simp
   obtain ⟨hkl, hlc⟩ := templateNodes_mem hmem_l
   obtain ⟨hke', hec⟩ := templateNodes_mem hmem_e
-  -- the counts
-  dsimp only at hlater
-  split at hlater
-  case isFalse => simp at hlater
-  rename_i hlb
-  simp only [decide_eq_true_eq] at hlb
-  simp only [beq_iff_eq, Option.some.injEq] at hlater hen
-  -- the rows, the arguments and the names
-  simp only [Option.map_some, Option.getD_some, Array.append_singleton, List.push_toArray, List.cons_append,
-    List.nil_append, List.map_toArray, List.map_cons, List.map_nil, List.all_toArray', List.all_cons, List.all_nil,
-    Bool.and_true, Bool.and_eq_true] at hrows
-  obtain ⟨-, hr1⟩ := hrows
-  obtain ⟨q', hq'⟩ := Option.isSome_iff_exists.1 hr1
+  simp only [beq_iff_eq] at hln hen
+  -- the row, the arguments and the names
+  obtain ⟨q', hq'⟩ := Option.isSome_iff_exists.1 hrows
   obtain ⟨a0, ha0, hia⟩ := Option.bind_eq_some_iff.1 hq'
   have hrow_in : inputArg P (((P.defs[P.root]!).body.nodes[kl]!).args[0]!) = some q' := by
     obtain ⟨hlt, heq⟩ := Array.getElem?_eq_some_iff.1 ha0
     rw [getElem!_pos ((P.defs[P.root]!).body.nodes[kl]!).args 0 hlt, heq]; exact hia
   simp only [Bool.and_eq_true, Array.all_eq_true] at hargs
   obtain ⟨-, hae⟩ := hargs
-  simp only [Option.map_some, Option.getD_some, Array.append_singleton, List.push_toArray, List.cons_append,
-    List.nil_append, List.map_toArray, List.map_cons, List.map_nil, Array.contains_eq_mem, List.mem_toArray,
-    List.mem_cons, List.not_mem_nil, or_false, Bool.decide_or, Bool.not_or, Array.all_eq_true, Bool.and_eq_true,
-    Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not] at hegr
-  simp only [Option.all_some, Bool.and_eq_true, beq_iff_eq] at hnames
+  simp only [Array.all_eq_true, bne_iff_ne, ne_eq] at hegr
+  simp only [Bool.and_eq_true, beq_iff_eq] at hnames
   obtain ⟨⟨-, hnl⟩, -⟩ := hnames
-  simp only [Option.all_some, Bool.and_eq_true] at hrow hwalk
+  simp only [Bool.and_eq_true] at hwalk
   refine ⟨kl, ke, q', ?_⟩
   exact {
     last := by rw [hys]; rfl
@@ -628,27 +610,27 @@ theorem scanOf_facts {j : Lean.Json} {program : String} {s : Schedule} {sc : Sca
     ke_lt := hke'
     l_comp := hlc
     e_comp := hec
-    l_batch := form_eq_batch hlb.1
+    l_batch := form_eq_batch hlb
     e_batch := form_eq_batch heb
-    l_n := hlater
+    l_n := hln
     e_n := hen
     e_ret := BodiesOk.ty_beq hret
     l_p0 := by
       have := congrArg Array.size hnl
       rw [Array.size_map] at this
       rw [this]; simp [ingressParams]
-    l_row := BodiesOk.ty_beq hrow.2
+    l_row := BodiesOk.ty_beq hrow
     walk := hwalk.2
     row_in := hrow_in
     e_args := fun b hb => by
       obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hb
-      refine ⟨hae i hi, fun he => (hegr i hi).2 ?_⟩
+      refine ⟨hae i hi, fun he => hegr i hi ?_⟩
       rw [he, hq'] }
 
 /-- **The scan is causal.** -/
 theorem scanCausal : ScanCausal := by
   intro j program s sc c P C h hc hP hov hF t ht t' ht' htt'
-  obtain ⟨kl, ke, q', F⟩ := scanOf_facts h hc hP (by omega)
+  obtain ⟨kl, ke, q', F⟩ := scanOf_facts h hc hP
   exact causal_of_facts hP hov F C hF t ht t' ht' htt'
 
 end Properties.NetworkScan.CausalProof

@@ -1406,6 +1406,10 @@
   "Properties.NetworkPeriod.rowsStateEmpty": {
    "honest": ["Properties.NetworkPeriod.rowsOkHeld_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsStateEmpty_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged": {
+   "honest": ["Properties.NetworkPeriod.rowsStartCharged_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsStartCharged_nontrivial"
   }
  },
  "unwitnessed": {
@@ -6125,6 +6129,15 @@
    },
    "type_hash": "0502e075152ebf47d211770a9e202de0d9cc08f5aecf8ed493fe98f5140d3bad",
    "unfolded_hash": "3251577cd79f945a5c35049ecfa3a73e59648cc0157fc9c1dcebf35bb367ac36"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsStartCharged_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsStateEmpty": {
    "owner": "@network-accounting",
