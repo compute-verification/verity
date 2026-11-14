@@ -730,6 +730,48 @@ def test_rows_of_zeros_whose_signs_differ_are_not_charged(signs, width, monkeypa
     assert full.N == (T - 1) * K * N and w.N == 0
 
 
+def _xzero() -> Program:
+    """u′ = u plus -1 times u, 0 in every word, one row; u′ W^T, u and W carried, each plus z."""
+    neg = const(32, 0xBF800000)
+
+    def step(B, c, z):
+        w, u = c
+        return (_add(B, w, z), _add(B, u, z)), B.call(LIN, _add(B, u, _mul(B, u, B.call(neg))), w)
+
+    return _loop("XZero", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+
+
+def _anti() -> Program:
+    """Two members of x_m W_m^T, a batch whose operands are both per member, x and W carried, each plus z: x′ is x
+    minus x times a stated mask that is 1 in member 0 and 0 in member 1, so x′'s member 0 is 0; W′ the same with the
+    mask's members swapped, so W′'s member 1 is 0. Every MAC reads a zero row, half by each operand."""
+    one, zero = 0x3F800000, 0
+
+    def masked(B, a: Coll, first: bool) -> Coll:
+        n = a.type.leaves
+        m = concat([B.call(const(32, one if (j < n // 2) == first else zero)).refs for j in range(n)])
+        flat = Array(n, F32)
+        am = B.batch(P.F32Mul, Coll(flat, a.refs), Coll(flat, m), axes=(0, 0)).reshape(a.type)
+        return _add(B, a, _mul(B, am, B.call(const(32, 0xBF800000))))
+
+    def step(B, c, z):
+        w, x = c
+        y = B.batch(LIN, masked(B, x, True), masked(B, w, False), axes=(0, 0))
+        return (_add(B, w, z), _add(B, x, z)), y
+
+    return _loop("Anti", (("w", Array(2, W_T)), ("x", Array(2, X_T))), (("z", X_T),), Array(2, Y_T), step)
+
+
+@pytest.mark.parametrize("make,full", [(_xzero, (T - 1) * K * N), (_anti, (T - 1) * 2 * K * N)], ids=["xzero", "anti"])
+def test_every_mac_reading_a_zero_row_is_left_out(make, full, monkeypatch):
+    """A zero operand of one row (``xzero``), which has no pair to compare, and two operands whose zero rows are in
+    different members of a batch both per member (``anti``), so no row of one meets a zero row of the other: every
+    MAC reads a zero row, so none is charged. Without the point the product is charged whole."""
+    w = WK.read(make(), KB)
+    monkeypatch.setattr(PT, "check", lambda *a: PT.Tally(points=0))
+    assert WK.read(make(), KB).N == full and w.N == 0
+
+
 def _swap(order: str, carried: bool) -> Program:
     """prev′ = the PN rows looked up by the iteration's tokens, plus M times M's rows in ``order`` ("swap": the other
     order; "same": its own), M carried and updated by an input (``carried``) or unchanged; and prev W^T."""
