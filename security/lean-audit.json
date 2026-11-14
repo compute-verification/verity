@@ -25928,8 +25928,8 @@
     "  (I : Verity.Sampled.Instance d α) (K₀ : Verity.Sampled.Constructions I.base)",
     "  (reg : (A : Verity.Sampled.Live) → Option Claims.Msg → A.Reg)",
     "  (record : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Verity.Exchange → Option Claims.Msg)",
-    "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg) (hready : I.SessionsReady)",
-    "  (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered Verity.Registration.Composite.onsite)",
+    "  (recordDigest : Verity.Sampled.Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)",
+    "  (hSr : I.SessionRegistered Verity.Registration.Composite.onsite)",
     "  (hW : I.base.PouwSound Verity.Registration.Composite.onsite)",
     "  (hI : I.base.InferenceOnlySound Verity.Registration.Composite.onsite)",
     "  (hP : I.base.PousSound Verity.Registration.Composite.onsite)",
@@ -25944,9 +25944,7 @@
     "assumptions": [],
     "domain": [],
     "open": [
-     "Verity.Sampled.Instance.RegisteredFiles",
      "Verity.Sampled.Instance.SessionRegistered",
-     "Verity.Sampled.Instance.SessionsReady",
      "Verity.Vocab.BandwidthAuditSound",
      "Verity.Vocab.InferenceOnlySound",
      "Verity.Vocab.NetworkCertifierSound",
@@ -25972,36 +25970,33 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "43372cd67f4975341f31de6ba3bbcaafadad1a04fda36a110607d64457b75ca3",
-   "unfolded_hash": "84705513ad87f2872e1b8254c1bfd6add0573d150f4857d776681a235117d8e8"
+   "type_hash": "c2ac0605baab62715f5b4e6ae0bc681ec9c10b064731802a262a3f21762b4a0d",
+   "unfolded_hash": "fa03f3652b482539bc6772d46f9587692694c4467e0cccb00819d56974e0dedf"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_honest": {
    "owner": "@soundness",
    "signature": [
     "Verity.Sampled.onsite_soundness_deployedReady_honest :",
-    "  And (Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionsReady",
-    "    (And (Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).RegisteredFiles",
+    "  And",
+    "    ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
+    "      Verity.Registration.Composite.onsite)",
+    "    (And",
+    "      ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
+    "        Verity.Registration.Composite.onsite)",
     "      (And",
-    "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).SessionRegistered",
+    "        ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
     "          Verity.Registration.Composite.onsite)",
     "        (And",
-    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PouwSound",
+    "          ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PousSound",
     "            Verity.Registration.Composite.onsite)",
     "          (And",
-    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.InferenceOnlySound",
+    "            ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.BandwidthAuditSound",
     "              Verity.Registration.Composite.onsite)",
     "            (And",
-    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.PousSound",
+    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.NetworkCertifierSound",
     "                Verity.Registration.Composite.onsite)",
-    "              (And",
-    "                ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.BandwidthAuditSound",
-    "                  Verity.Registration.Composite.onsite)",
-    "                (And",
-    "                  ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x =>",
-    "                          Option.none).base.NetworkCertifierSound",
-    "                    Verity.Registration.Composite.onsite)",
-    "                  ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.WipeSound",
-    "                    Verity.Registration.Composite.onsite))))))))"
+    "              ((Verity.Sampled.Instance.Honest.inst ENNReal.instTop.top fun x => Option.none).base.WipeSound",
+    "                Verity.Registration.Composite.onsite))))))"
    ],
    "assumptions": [],
    "premises": {
@@ -26023,7 +26018,7 @@
      "Hash.Assumptions.LmsUnforgeable"
     ]
    },
-   "type_hash": "54fa5297c0934bbc381794a8ec9141fd9ece801ca4d8ee72d6b68c89fba301f9"
+   "type_hash": "e162a9c47a9c44cc9dbf29db7b5fc76a3bb18ed32965b7782168eea79196c4e8"
   },
   "Verity.Sampled.onsite_soundness_deployedReady_nontrivial": {
    "owner": "@soundness",
