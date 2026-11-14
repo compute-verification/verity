@@ -98,7 +98,7 @@ finish inside one served window. The parts, in the order they run:
   registration's digest. Until a size class's request Definition lands, the replay block is a stand-in: instances of
   one check template, in the two-stage serve one token-select check for each served id. So the interior holds the
   token selection and not the model's layers.
-- **The stages around it** (`benchmarks/one_stage/two_stage.py`). `first` registers each size class's boundary
+- **The stages around it** (`verity/protocols/proofs/spot/device/two_stage.py`). `first` registers each size class's boundary
   commitment, names the window's advice registration (`--advice`) and samples the class's replay blocks once on the
   challenger's coins. `resume` gives the replay side the same stream for the interior registration and the second
   stage. The verifier refuses every two-stage run at its last check (`FORM` in

@@ -41,7 +41,7 @@ The verifier's check of a window's live coins, from the challenger's own run, is
 `serve.py`, `j10r_time.py` and `step_time.py` are the jobs' programs. `coins.py` (the live coins and their check),
 `commit.py` (the window's tables), `credit.py` (the padded-window credit), `producer.py` (`h1u.cu`'s units kernel),
 `partials.py` and `lane_refs.py` (option A's lane partials) are what they import. Other directories load some of them by
-path: `benchmarks/one_stage/a5_coins.py` reads `coins.py`, `adapters/vllm/tests/protocols/pouw_h1_gpu.py` reads
+path: `verity/protocols/proofs/spot/device/challenger_session.py` reads `coins.py`, `adapters/vllm/tests/protocols/pouw_h1_gpu.py` reads
 `producer.py`, and `benchmarks/hash/dither/` reads `coins.py`, `commit.py`, `credit.py`, `serve.py` and `lane_refs.py`.
 Each of these modules' `__all__` lists the names other files read through it, the tests' included, except underscore
 names; anything else in it may change without notice. Their tests are the `test_served_h1*.py` files,

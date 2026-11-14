@@ -65,7 +65,7 @@ worker_gb = 6
 # `benchmarks/one_stage/interfaces/verity_e2e_demo`: served_verdicts' block record (`block_record`, its schema and the census's
 # reference deployment it reads) and prove_bundle's
 # bundle check (`replay_bundle`, with kernels' commit call `commit_slots/slots.py`), and its bundle and registration
-# fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `demos/vllm/serve_load.py`:
+# fixtures; `verity/protocols/proofs/spot/verifier/one_stage/records_audit.py`: prove_bundle's verifier window. `demos/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`adapters/vllm/verity_vllm`) over a stand-in engine; `demos/vllm/serve.sh`: the
 # demo's endpoint (`test_vllm_example`); `demos/vllm/commit.sh`: the demo's Commit, which `test_commit_records` runs
@@ -74,7 +74,7 @@ worker_gb = 6
 # send a hand-off through.
 # `test_served_pearlplus_lean`: served_pearlplus.sh's Lean step (`served_passes.py lean`) on the pouw suite's toy passes
 # (its `test_pearl_c_vllm` and what that imports by path), with PouwCheck.PearlPlus's `pouw-pearlplus`.
-# `benchmarks/prove_path/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
+# `verity/protocols/proofs/spot/prover/audit/prove_path.py`, its `sources.json` and the checkpoint manifests it reads: inference_only's class
 # circuit under a φ (`prove_path.registered_of_serve`), which refuses a BF16 checkpoint under the int8 serve's.
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
@@ -90,7 +90,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
           "benchmarks/one_stage/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
-          "benchmarks/prove_path/records_audit.py", "demos/vllm/serve_load.py", "demos/vllm/serve.sh",
+          "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py", "demos/vllm/serve_load.py", "demos/vllm/serve.sh",
           "demos/vllm/commit.sh", "demos/vllm/published.sh",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.json",
           "benchmarks/one_stage/interfaces/tests/fixtures/drawn-unit-bundle.bin",
@@ -105,7 +105,7 @@ inputs = ["tools/config/verity_config", "verity/protocols/accounting/pouw/prover
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
           "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
-          "verity/protocols/accounting/poub/device/live_verifier/host.py", "benchmarks/prove_path/prove_path.py", "benchmarks/prove_path/sources.json",
+          "verity/protocols/accounting/poub/device/live_verifier/host.py", "verity/protocols/proofs/spot/prover/audit/prove_path.py", "benchmarks/prove_path/sources.json",
           "adapters/vllm/manifests/checkpoints.json", "adapters/vllm/manifests/checkpoints-int8.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
