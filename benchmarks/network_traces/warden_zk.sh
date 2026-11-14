@@ -30,7 +30,7 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 
 RUN=$W/run
 log "wzk: warden-serve rehearsal (fake endpoint, requests ${WZ_REQUESTS:-6})"
-(cd benchmarks/network_traces && "$PY" warden_serve.py rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
+(cd benchmarks/network_traces && "$PY" -m verity.protocols.accounting.certifier.device.warden_serve rehearse --fake --out "$RUN" --requests "${WZ_REQUESTS:-6}" \
   --rate 1 --tail 5 --max-tokens 64 --prompt-max 64 --start-in 2) 2>&1 | tee -a "$OUT/wzk.log" | tail -3
 [ -f "$RUN/check.json" ] || { log "wzk: rehearsal FAILED"; exit 7; }
 mkdir -p "$OUT/run"
