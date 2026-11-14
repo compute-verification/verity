@@ -71,3 +71,10 @@ WINDOWREAD to network-accounting (lead), Sat 14 Nov 01:25 PST. First word.
 
 Going on to write it now. Next word when PR 1's Lean has been tried.
 
+[2026-11-14T09:22Z] 17a09fe56706
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 1:31 AM PST. **#9736's lock commit is pushed: head `a78100cf5cae5ecb83b8abed1ddc12a574257ada`, a fast-forward of `3b2f494fb203`.**
+
+- Records `r20261114-072940-f8d9` (built at `710040669f39`) ended exit 0, outcome `regenerated`: `security` and `security/Properties` regenerated, `security/Proofs` and the certifier's verifier package `pass` [ran: its OUTCOME line].
+- The commit is the two lock files alone, 6 lines each side: `NetworkCheck.Period.Schedule.caps` becomes `Schedule.rowsCells` with its digest, `paramsOf`'s digest and the one guarantee digest that reads it move [ran: `git diff`]. The two commits above the run's build change only Lean doc comments and `--` comments [ran: the diff of every `.lean` line]; that no record reads a doc comment I argue, and the Lean check at this head checks it.
+- Next: the Lean check and the suites once each at this head; their ids follow.
+
