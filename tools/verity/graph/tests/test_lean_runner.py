@@ -86,12 +86,16 @@ EVIL = "module\n\nprelude\npublic import Init.Prelude\n\npublic theorem q : True
 DEP = {"lakefile.toml": 'name = "dep"\ndefaultTargets = ["Dep"]\n\n[[require]]\nname = "evil"\n'
                         'git = "https://example.invalid/evil"\n\n[[lean_lib]]\nname = "Dep"\n',
        "Dep.lean": "prelude\nimport Evil\n", "lake-manifest.json": manifest("dep", "evil")}
-#: `evil` with a definition whose public part hides its body, which takes 100000 steps of `Nat.rec` to evaluate, and a
+#: the steps of `Nat.rec` `big` takes: on v4.34.0 the replay's kernel stops on a 2048 KB stack from about 3000 steps, and
+#: `lean` itself slows sharply checking `t` with `big`'s body past about 60000 (1.6 s at 40000, 23 s at 80000, 217 s at
+#: 100000)
+STEPS = 40000
+#: `evil` with a definition whose public part hides its body, which takes `STEPS` steps of `Nat.rec` to evaluate, and a
 #: theorem the kernel checks at once where `big` is an axiom, and only by evaluating `big` where it has its body
 DEEP = {"Deep": "module\n\nprelude\npublic import Init.Prelude\n\npublic noncomputable def big : Nat :=\n"
-                "  Nat.rec (motive := fun _ => Nat → Nat) (fun acc => acc) (fun _ r acc => r (Nat.succ acc)) 100000 0\n",
+                f"  Nat.rec (motive := fun _ => Nat → Nat) (fun acc => acc) (fun _ r acc => r (Nat.succ acc)) {STEPS} 0\n",
         "Evil": "module\n\nprelude\npublic import Deep\n\n"
-                "public theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}
+                f"public theorem t (h : Eq big {STEPS}) : Eq (id big) {STEPS} := h\n"}
 
 
 @pytest.fixture(scope="module")
@@ -498,7 +502,7 @@ def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it
     assert res["status"] == "pass" and res["detail"]["rounds"][0]["on_public_imports"] == ["t"], res["detail"]
     res = replay(DEEP | {"Evil": "module\n\nprelude\nimport all Deep\n\n"
                                  "set_option maxRecDepth 100000000 in\nset_option maxHeartbeats 0 in\n"
-                                 "theorem t (h : Eq big 100000) : Eq (id big) 100000 := h\n"}, tmp_path / "all")
+                                 f"theorem t (h : Eq big {STEPS}) : Eq (id big) {STEPS} := h\n"}, tmp_path / "all")
     assert res["status"] == "fail" and res["detail"]["rejected"] == ["Evil"], res["detail"]
 
 
