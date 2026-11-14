@@ -423,8 +423,8 @@ theorem rowsTiedInputWired : RowsTiedInputWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))))
     unfold tiedInputCheck at h0
     split at h0
     · assumption
