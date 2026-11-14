@@ -88,3 +88,27 @@ Branch `cursor/na-clock-form-gone-b51f`, pushed. Two commits, each read with `gi
 
 Next, while those wait: the twin and its difftest (one clock case, refused by both), `leak_bounds.py`'s `clock_terms` and its test, then the docs.
 
+[2026-11-14T09:36Z] 345c55c884f1
+LAYOUTREAD2 to network-accounting (lead), Sat 14 Nov 1:37 AM PST. **The dry carry across both maps in one go: #9998 carries clean; #9741 stops before any move, on an ordinary conflict with what is already on `main`.** (My last message's header said 1:27 AM PST; it was sent at 1:20 AM PST.)
+
+The command [ran]: `python3 tools/move/restack.py lr2-9741 lr2-9998 --main lr2-onego --kept --dry-run --json`, exit 1.
+- `lr2-onego` = `ce662cfcc9c1b7aa0ef4c4e0cc675dce1ebaef6a`: order 1's commits with the same trees (lean's map, our two certified maps, our third map, then our hand commits), with a `Move:` line also on lean's commit (`4574e4a33227`) and on our third step (`950f9b3075a1`), so that one call crosses all four.
+- `lr2-9741` = `a3c4bc623964`, which is #9741's head now. `lr2-9998` = `453d82c8f167`.
+
+**#9998: `clean`** [ran], result `0815805f23c7`.
+- It crossed the four moves in order: lean's map, our term map, `warden_map` and the tokens map. Each ran its script on the branch, then the merge with the moved `main` was clean.
+- The pins step rewrote three Lean digest fixtures (`randomness_lean.json`, `exfiltration_lean.json`, `exfiltration_two_lean.json`), and the Lean build passed.
+- The result's tree equals the chain's tip except for those three fixtures [ran: `git diff --stat`]. That fits #9998 being below the chain already. Those three pins look stale at the chain's tip itself, from lean's map [argued, not checked there].
+
+**#9741: `conflicted` at step `base`** [ran]. The step is its merge of the moves' base, before any map runs. Five files conflict: `certifier_piece.py`, `tests/test_certifier_piece.py`, `warden_serve.py`, `one_stage/warden_replay.py` and the live challenger's `auditor.py`. A plain merge conflicts in the same five.
+- It conflicts with `origin/main` itself, in `certifier_piece.py` [ran: `git merge-tree`].
+- It conflicts with #9902's head in `warden_serve.py` and `auditor.py`.
+- It conflicts with #9998's head in all five.
+- Its owner merges `main` (and #9998, once it lands) into it first. The same command then carries it.
+- It also skipped two of `main`'s layout moves (`pouw_dither_map`, `pouw_clear_map`) that a later base contains. A carry that skips a move ends `clean-skipped`, never `clean`.
+- Who resolves #9741's conflicts, me or its owner? I take its owner (head branch `cursor/na-chain-record-guard-clean-a2d8`). If it is mine, I merge and push it before it is marked.
+
+Both orders on `cursor/lean-names-move-fc8d`: the branch is at `1ae1f40ba857` now [ran: `git ls-remote`]. I rerun them when lean posts its head on NET-100, and send you the two trees in one line.
+
+The runs: #9998's suites (`r20261114-073730-123a`) and the whole run (`r20261114-074759-9e90`) show "running", but their machines refuse ssh from here since about 1:25 AM PST [ran: `research status`]. Their local logs stop at their last sync, 12:11 AM and 1:12 AM PST. I look again before I relaunch anything.
+
