@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci.Assumptions.Baseline
+public import Definitions.Nci.Assumptions.Theta
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 public import Mathlib.Data.FinEnum
 
@@ -11,7 +11,7 @@ The parameters the guarantees are taken at, named: what a run's coverage and a d
 guarantee to apply. Each is checkable on the circuit it reads, and none is about the world.
 
 Every bound through a containment, total or partial (`PartialContainment`), also rests on `ThetaRegistered`
-(`Definitions/Nci/Assumptions/Baseline.lean`), a premise about what the protocol lets the registered
+(`Definitions/Nci/Assumptions/Theta.lean`), a premise about what the protocol lets the registered
 information `θ` hold rather than about any circuit.
 -/
 
