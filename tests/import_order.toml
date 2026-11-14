@@ -29,6 +29,7 @@ order = [
     ["verity/protocols/accounting/pous"],
     ["verity/protocols/accounting/poub"],
     ["verity/protocols/accounting/pouw"],
+    ["verity/protocols/experimental"],
     ["verity/protocols/policy/inference_only"],
     ["verity/protocols/accounting/certifier"],
     ["verity/protocols/compose/verifier"],
@@ -113,13 +114,6 @@ loader = "verity/protocols/compose"
 loaded = "benchmarks"
 files = [
     "verity/protocols/compose/device/live_challenger/auditor.py",
-]
-
-[[against]]
-loader = "adapters"
-loaded = "tools"
-files = [
-    "adapters/vllm/tools/migrate/superseded_quarantine.py",
 ]
 
 [[against]]
@@ -600,6 +594,17 @@ paths = [
     "verity/protocols/compose/verifier",
 ]
 trusted = true
+
+[[place]]
+paths = [
+    "verity/protocols/experimental",
+]
+loads = [
+    "verity/circuits",
+    "verity/circuits/silicon",
+    "verity/commitments",
+    "verity/protocols/accounting/pouw/prover",
+]
 
 [[place]]
 paths = [
