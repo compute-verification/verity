@@ -9,12 +9,13 @@ from pathlib import Path
 import pytest
 
 from tests.observe.test_fold_synthetic import memory, toy_log, toy_profile  # noqa: F401 - fixture
-from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import input_layout
 from verity_vllm.check.match import program_compare as C
 from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.observe.fold.fold import fold
 from verity_vllm.observe.fold.supplied import program_registered_values
-from verity_vllm.pipeline.match import Plan, persist_program
+from verity_vllm.pipeline.match import Plan
+from verity_vllm.pipeline.match_fold import persist_program
 
 
 def _oracle(tmp_path, name, registered):
@@ -40,7 +41,7 @@ def test_a_registered_fold_reads_its_values_by_name_and_its_weights_as_the_const
     R, K = C.load_oracle(reg_dir, "reg"), C.load_oracle(const_dir, "const")
     assert R.supplied_fields == {1: [(0, "eps", 32), (1, "scale_log2_d8", 32)]} and R.supplied_owner == {1: None}
     assert R.input_base == {2: 0} and R.seed_nodes == set()
-    assert bd.weights_input_nodes(R, 1) == {2} and SI.values_nodes(R) == {1}
+    assert input_layout.weights_input_nodes(R, 1) == {2} and SI.values_nodes(R) == {1}
     assert len(R.inst) == len(K.inst)
     supplied = []
     for i, (a, b) in enumerate(zip(R.inst, K.inst)):

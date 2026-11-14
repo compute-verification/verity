@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import ast
 import re
-from functools import lru_cache
+from functools import cache
 
 import pytest
 
@@ -159,7 +159,7 @@ def pin_writes(src: str, rel: str) -> list[str]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out: list[R.Violation] = []
     for p in R.library_files():
@@ -196,7 +196,7 @@ def test_only_engine_env_writes_vllm_pins() -> None:
 
 
 def test_env_owners_only_shrink() -> None:
-    assert ENV_OWNERS <= {"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"}, \
+    assert {"verity_vllm/engine/env.py", "verity_vllm/pipeline/cli.py"} >= ENV_OWNERS, \
         f"use the environment through {SETTINGS_OWNER} (verity_vllm.settings), not a new owner: {sorted(ENV_OWNERS)}"
 
 

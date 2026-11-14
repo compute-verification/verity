@@ -15,7 +15,7 @@ def _functions(path: Path) -> dict[str, str]:
 
 
 def test_the_helpers_are_the_served_kernels_own() -> None:
-    copy, served = _functions(COPY), _functions(SERVED)
+    copy, served = _functions(COPY), {"_" + k: v.replace(f"def {k}(", f"def _{k}(", 1) for k, v in _functions(SERVED).items()}
     assert set(copy) == HELPERS, "exactlin.py holds only the helpers int8_fused keeps private; take the rest from int8_fused"
     for name in sorted(HELPERS):
         assert copy[name] == served[name], f"{name} differs from int8_fused's: copy int8_fused's text into exactlin.py"

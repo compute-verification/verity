@@ -661,3 +661,94 @@ def test_a_run_of_some_parts_is_not_composed(tmp_path, capsys):
     rc = LV.main(["--compose", binary, str(tmp_path), "L3"])
     out = capsys.readouterr().out.splitlines()
     assert rc == 0 and "lean compose: 1 of V*'s 3 parts run, so the recursive statement is not composed" in out
+
+
+def _composition(d: Path) -> dict:
+    """DIR's record of the composition (`LV.RECORD`), which a reader of the step takes the composition from."""
+    return json.loads((d / LV.RECORD).read_text())
+
+
+def _three(d: Path) -> tuple[str, str, dict[str, int]]:
+    """Three honest V* parts of a V* of three statements: the stand-in binary, the rows' digest, each part's index."""
+    binary, h = _composer(d, 3)
+    parts = {"L0": 0, "alg-p0": 1, "L1": 2}
+    for p, j in parts.items():
+        _vpart(d, p, j, h)
+    return binary, h, parts
+
+
+def test_a_composed_and_accepted_run_records_both(tmp_path, capsys):
+    """Lean composed V*'s parts and accepted: the record says both, the one case that is an accepted recursive statement."""
+    binary, h, parts = _three(tmp_path)
+    _record(tmp_path, h, list(parts.items()))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    assert rc == 0 and capsys.readouterr().out.splitlines()[-1] == "lean: 3/3 accepted"
+    assert _composition(tmp_path) == {"composed": True, "accepted": True, "why": ""}
+
+
+def test_a_composed_and_refused_run_records_the_refusal(tmp_path, capsys):
+    """Lean composed V*'s parts and refused (one part opened twice): the record holds its answer and its reason, and the
+    step fails."""
+    binary, h, parts = _three(tmp_path)
+    _record(tmp_path, h, [("L0", 0), ("alg-p0-first", 1), ("alg-p0", 1), ("L1", 2)])
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-1] == "lean: 3/3 accepted: the step fails"
+    record = _composition(tmp_path)
+    assert (record["composed"], record["accepted"]) == (True, False)
+    assert record["why"] and record["why"] == LV.why_of(out[-2].removeprefix("lean compose: ").removesuffix("  <- FAILS"))
+
+
+def test_a_refused_forced_retry_passes_the_step_and_records_a_refusal(tmp_path, capsys):
+    """85's RETRY passes the step when Lean refuses the composition for the retry: the exit is 0 and the record says
+    refused, so the exit is not Lean's acceptance of the recursive statement. The record's reason names the retry, then
+    gives Lean's own."""
+    binary, h, parts = _three(tmp_path)
+    _challenger(tmp_path, [("L0", 0), ("L0-retry", 0), ("alg-p0", 1), ("L1", 2)])
+    (tmp_path / "retried.txt").write_text("L0\n")
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0 and out[-1] == "lean: 3/3 accepted"
+    leans = LV.why_of(next(x for x in out if x.startswith("lean compose (RETRY=L0")).split("): ", 1)[1])
+    record = _composition(tmp_path)
+    assert (record["composed"], record["accepted"]) == (True, False) and "a part is never retried" in leans
+    assert record["why"] == f"a forced retry of L0 (RETRY=L0): {leans}"
+
+
+@pytest.mark.parametrize("ran, why", [
+    (("L0", "alg-p0", "L1"), ("no interactive-run record (rec-run.json, or a ", ": its parts are not shown to be one run")),
+    (("L0",), ("1 of V*'s 3 parts run", "")),
+], ids=["no record of the run", "some of V*'s parts"])
+def test_a_run_not_composed_records_why_and_the_last_line_says_so(tmp_path, capsys, ran, why):
+    """A run without the challenger's record, or of some of V*'s parts, passes on its parts and is not composed: the exit is
+    0, the step's last line says the recursive statement was not composed, and the record says so with the reason, Lean's
+    answer null."""
+    binary, _, _ = _three(tmp_path)
+    rc = LV.main(["--compose", binary, str(tmp_path), *ran])
+    assert rc == 0
+    assert capsys.readouterr().out.splitlines()[-1] == f"lean: {len(ran)}/{len(ran)} accepted, the recursive statement not composed"
+    record = _composition(tmp_path)
+    assert (record["composed"], record["accepted"]) == (False, None)
+    assert record["why"].startswith(why[0]) and record["why"].endswith(why[1])
+
+
+def test_a_composition_without_leans_line_records_no_answer(tmp_path, capsys):
+    """A composer that prints no ``REC-COMPOSE`` line gave no answer: asked, neither accepted nor refused, and the step
+    fails."""
+    binary, h, parts = _three(tmp_path)
+    _record(tmp_path, h, list(parts.items()))
+    Path(binary).write_text("#!/bin/sh\nexit 0\n")
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    assert rc == 1 and capsys.readouterr().out.splitlines()[-1] == "lean: 3/3 accepted: the step fails"
+    record = _composition(tmp_path)
+    assert (record["composed"], record["accepted"]) == (True, None) and record["why"].startswith("exit 0")
+
+
+def test_a_step_not_asked_to_compose_keeps_no_record(tmp_path, capsys):
+    """Without ``--compose`` the step composes nothing: it writes no record and removes an earlier pass's, which is not
+    this pass's composition."""
+    binary, h, parts = _three(tmp_path)
+    _record(tmp_path, h, list(parts.items()))
+    assert LV.main(["--compose", binary, str(tmp_path), *parts]) == 0 and (tmp_path / LV.RECORD).exists()
+    assert LV.main([str(tmp_path), *parts]) == 0 and not (tmp_path / LV.RECORD).exists()
+    assert capsys.readouterr().out.splitlines()[-1] == "lean: 3/3 accepted"

@@ -64,7 +64,7 @@ def _program(topo):
 def _lanes(units, cl, tp, inputs: list[int], made_up=None):
     """Every unit's lanes run in population order on the root's input gates ``inputs``, each reading earlier units' outputs
     as the program wires them (``made_up``: {unit: f(words) -> words}, the parameter leaves a cheating prover gives it); the row
-    identities as the bench's (`universal.lanes`): x one row per instance and layer, the netlist one row per layer."""
+    identities as the bench's (`universal.lanes`): x one row per instance and layer, the circuit description one row per layer."""
     act, uc = units.activation(cl.definition), cl.representative
     leaf_param = []
     for i, (_n, t) in enumerate(act.fn.signature()[0]):
