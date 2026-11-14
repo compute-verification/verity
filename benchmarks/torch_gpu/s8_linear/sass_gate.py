@@ -5,8 +5,7 @@ IGMMA.64xBNx32 on s8 operands at the kernel's BN, in a multiple of 4 (a 128-deep
 Definition's instructions: an s32-to-f32 conversion, FMUL and an F2FP to BF16 present, and no FFMA (a fused multiply-add
 would round once) and no .FTZ anywhere but integer division's (`INT_DIV`).  A reduction kernel (s8mr*_128xBN_rR) may also run
 the reduction's atom, IGMMA.64xRx32 on s8 operands, BN / 8 of them a tile.  Each kernel's record holds its highest register
-(`max_reg`): a consumer warpgroup's budget after setmaxnreg, which ptxas's count doesn't show.  j10r_sm90's job, which ships
-this file without the tree, puts the harness's gate beside it.
+(`max_reg`): a consumer warpgroup's budget after setmaxnreg, which ptxas's count doesn't show.
 
   python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
 """

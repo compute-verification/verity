@@ -15,10 +15,11 @@ back: what `wipe_verdict.py` beside this package sends `streamed-wipe-verdict`. 
 * `schemes`: the ids of the accepted signature schemes, each one this port verifies (`KNOWN_SCHEMES`).
 
 The input is exactly the canonical JSON of what it decodes to (`exactly`), as `to_json` writes it: a field missing or
-extra, a byte string not lowercase hex, a header constant not the protocol's, parameters `WipeParams` refuses, or a scheme
-id this port doesn't verify is refused. Integers are any sign where the Python's dataclasses hold any (a batch record's
-fields, the fill's times, the egress), naturals in the parameters. The output is `{"accepted", "egress_mib", "reasons"}`,
-the reasons the Python's word for word.
+extra, a byte string not lowercase hex, a header constant not the protocol's (so a session of another format version), a
+start mark that is neither empty nor `MARK_BYTES` bytes, parameters `WipeParams` refuses, or a scheme id this port
+doesn't verify is refused. Integers are any sign where the Python's dataclasses hold any (a batch record's
+fields, the fill's times), naturals in the parameters. The output is `{"accepted", "reasons"}`, the reasons the
+Python's word for word.
 -/
 
 @[expose] public section
@@ -47,8 +48,9 @@ def Batch.toJson (r : Batch) : Json :=
     ("receipt_ns", intJ r.receiptNs), ("wrong", intJ r.wrong), ("digest", hexJ r.digest)]
 
 def Signed.toJson (s : Signed) : Json :=
-  Json.mkObj [("commitment", s.commitment.toJson), ("ended", .str s.ended), ("fill_start_ns", intJ s.fillStartNs),
-    ("fill_end_ns", intJ s.fillEndNs), ("batches", .arr (s.batches.map Batch.toJson)), ("egress_bits", intJ s.egressBits),
+  Json.mkObj [("commitment", s.commitment.toJson), ("ended", .str s.ended), ("start_mark", hexJ s.startMark),
+    ("fill_start_ns", intJ s.fillStartNs), ("fill_end_ns", intJ s.fillEndNs),
+    ("batches", .arr (s.batches.map Batch.toJson)),
     ("scheme", .str s.scheme), ("public_key", hexJ s.publicKey), ("signature", hexJ s.signature)]
 
 private def intField (j : Json) (k ctx : String) : V Int := do J.asInt (← J.get j k ctx) s!"{ctx}.{k}"
@@ -73,9 +75,12 @@ def Batch.ofJson (j : Json) : V Batch := do
 
 def Signed.ofJson (j : Json) : V Signed := do
   let ctx := "signed"
-  pure { commitment := ← Commitment.ofJson (← J.get j "commitment" ctx), ended := ← J.str j "ended" ctx,
+  let startMark ← hexField j "start_mark" ctx
+  if startMark.size != 0 && startMark.size != MARK_BYTES then
+    throw s!"{ctx}.start_mark: a start mark is {2 * MARK_BYTES} lowercase hex digits, or empty"
+  pure { commitment := ← Commitment.ofJson (← J.get j "commitment" ctx), ended := ← J.str j "ended" ctx, startMark,
          fillStartNs := ← intField j "fill_start_ns" ctx, fillEndNs := ← intField j "fill_end_ns" ctx,
-         batches := ← objs j "batches" ctx Batch.ofJson, egressBits := ← intField j "egress_bits" ctx,
+         batches := ← objs j "batches" ctx Batch.ofJson,
          scheme := ← J.str j "scheme" ctx, publicKey := ← hexField j "public_key" ctx,
          signature := ← hexField j "signature" ctx }
 
@@ -97,7 +102,7 @@ def JudgeInputs.ofJson (j : Json) : V JudgeInputs := do
          schemes := ← (← J.arr j "schemes" ctx).mapM (J.asStr · s!"{ctx}.schemes") }
 
 def Verdict.toJson (v : Verdict) : Json :=
-  Json.mkObj [("accepted", .bool v.accepted), ("egress_mib", intJ v.egressMib), ("reasons", .arr (v.reasons.map Json.str))]
+  Json.mkObj [("accepted", .bool v.accepted), ("reasons", .arr (v.reasons.map Json.str))]
 
 /-- The verdict on a record. -/
 def judge (r : JudgeInputs) : V Verdict := do
