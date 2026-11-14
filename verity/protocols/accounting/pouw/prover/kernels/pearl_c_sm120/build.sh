@@ -11,7 +11,7 @@
 #   sass.json            registers and tensor-core, copy and local-memory instruction counts per kernel
 #   ptxas.txt, toolchain.txt (nvcc --version and the full nvcc command line)
 # ship.sh adds the check and what the card runs it with.  Needs no uv.
-# Usage: bash benchmarks/pouw/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA names the toolkit, default
+# Usage: bash verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/build.sh [OUT]   (default /tmp/pearl-c-sm120-ship; CUDA names the toolkit, default
 #        /usr/local/cuda-13.0)
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
