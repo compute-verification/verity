@@ -2405,6 +2405,12 @@
         "verity/protocols/accounting/pouw/verifier/dither/": "verity/protocols/experimental/dither/",
         "verity/protocols/accounting/pouw/verifier/tests/test_circuit_dither.py": "verity/protocols/experimental/dither/tests/test_circuit_dither.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
     }
   ]
 }
