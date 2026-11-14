@@ -182,7 +182,7 @@ PUBLIC = {
                                               "benchmarks time and gate",
     "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
                                                    "under its domain (y_domain, commit_y, retain_y) and on its device "
-                                                   "(DeviceTrees), which verify_run opens on each drawn tile",
+                                                   "(DeviceTrees, y_tree), which verify_run opens on each drawn tile",
     "verity_vllm.acquire.sources.served_compiled_source": "I2: the values of a compiled engine at vLLM's serving defaults "
                                                           "(torch.compile and CUDA graphs), acquired with no Python hook inside "
                                                           "graph replay (ServedCompiledSource, linkage), which "
@@ -378,6 +378,7 @@ KNOWN_PRIVATE = frozenset({
     ('verity_vllm.protocols.pouw.pearl_c', '_constant_keys'),
     ('verity_vllm.protocols.pouw.pearl_c', '_constants'),
     ('verity_vllm.protocols.pouw.pearl_c', '_pipeline'),
+    ('verity_vllm.protocols.pouw.pearl_c', '_put'),
     ('verity_vllm.protocols.pouw.pearl_c', '_steps'),
     ('verity_vllm.protocols.pouw.pearl_c', '_write'),
     ('verity_vllm.protocols.pouw.pearl_c', '_zeros'),

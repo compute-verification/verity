@@ -19,7 +19,7 @@ from verity.commitments.merkle import tree_levels
 from verity_vllm.protocols.pouw.pearl_c.host import _bytes, _put, _stream, _write, _zeros
 
 __all__ = ["DeviceTrees", "HM96_Y", "Y_ROWS_TAG", "chunk_rows", "commit_y", "f32_rows", "retain_y", "tree_launches", "y_binding",
-           "y_domain"]
+           "y_domain", "y_tree"]
 
 Y_ROWS_TAG = "verity/pouw/pearl-plus/y-rows/v1"
 #: the hm96 salt stream's nonce of a call's y tree: this plus the call's index (A's trees take the index, below 2^61)
