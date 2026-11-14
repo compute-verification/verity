@@ -48,9 +48,17 @@ cases 410 (requests of 1 + 5 rows; 2460 rows), inside the domain 409, of them 0 
 definition: 11 cases, 264 words compared, 0 differ
 ```
 
-CHECKS_SECTION
+- Checks `r20261113-224512-e9e5` [run], with BASE `af9b13440693`, the commit of `main` the head holds:
+  - `pins.py --stale` printed nothing.
+  - `suites.py --changed af9b13440693 --quick`: `62 suites: 62 passed (11 cached), 0 failed`. Among them, `verity-vllm` 17,221 passed with 479 skipped, `verity-flock` 1,470 passed, the circuit-check suite 383 passed, and `verity/definitions` 1,058 passed.
+  - `repository` whole: 361 passed.
+  - `ratchet_gate.py af9b13440693 HEAD --json`: `"failures": []`.
+
+No pin, catalog id or `_CONF` text moved: circuit-check's clone diff was empty and `pins --stale` named nothing [run]. `_CONF` hashes the same before and after the docstring commits [run]. `evidence.json` gained one record, `sampled_accept_split_rate`, and nothing else of it changed in these commits [read].
 
 ## Runs at earlier heads (superseded)
+
+Also at `e57b2921aa`: two circuit-check runs (`r20261113-224550-71be`, `r20261113-230750-f188`) were cancelled while waiting for a check slot on vy-nebius-cpu-14, so neither check started [run]. `c271` ran on vy-nebius-cpu-9, named with `--on`.
 
 At `9eee018145`:
 - circuit-check `r20261113-212255-cd19` and replay `r20261113-212343-3511` [run]: the same lines and counts.
@@ -69,7 +77,8 @@ At `6ee3b8d3b9` and `0d2d60aba3`, before the carry: circuit-check `r20261113-083
 
 ## What was not run at this head
 
-- The whole `--changed` set without `--quick`: its slow tests, `verity-vllm`'s among them, did not run at this head [inferred from the flag]. They last ran at `f65b556ae5`, before the carry.
+- The `--changed` set's slow tests: the set ran with `--quick` [run]. The slow tests of modules the change reaches ran whole, as the run reports for `test_sampled_accept.py`, `test_topp_stages.py` and `test_boolean_topp_stages.py` [read]. The rest of the slow tests last ran at `f65b556ae5`, before the carry.
+- `main` after #9693 landed (`cfce541acc17`) is not merged: when step 4 was checked, `8e96f9e2a3` was not yet on `main` [run].
 - lean-agreement and the Lean check: this PR changes no Lean and no Flock [read].
 
 ## What I trust least
