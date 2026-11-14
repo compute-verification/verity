@@ -8,6 +8,8 @@ the 18-family partition's rank-0 window at step 16 (`glm53_all_families_tp8_step
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import random
 import sys
 import tempfile
@@ -164,8 +166,9 @@ def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve(
     assert AC.reserve_reason(AC.families(big), big).endswith(f"a live coin layout holds at most {Ch.MAX_COINS} coins")
 
 
-def local(tmp_path: Path, monkeypatch, ranks: list[int], **kw):
-    """`a5_coins.start` on a local challenger session under `tmp_path`, pinned on this tree's commit. Its serve.py runs under
+def local(tmp_path: Path, monkeypatch, ranks: list[int], root: str | None = None, dest: str = "challenger", **kw):
+    """`a5_coins.start` on a local challenger session under `tmp_path` (on `ROOT`, or ``root``; finished into ``dest``),
+    pinned on this tree's commit. Its serve.py runs under
     live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `sampled-proofs-verifier`."""
     A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
@@ -174,7 +177,7 @@ def local(tmp_path: Path, monkeypatch, ranks: list[int], **kw):
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     main = tmp_path / "main.txt"
     main.write_text(AC.on_main([]) + "\n")
-    return AC.start("local", ROOT, ranks, tmp_path / "challenger", main, **kw)
+    return AC.start("local", ROOT if root is None else root, ranks, tmp_path / dest, main, **kw)
 
 
 def nothing_reserved(tmp_path: Path) -> bool:
@@ -185,7 +188,8 @@ def nothing_reserved(tmp_path: Path) -> bool:
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
     """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins:
     the window family's one and 25 in the rank's own). The 18-family sample reads its 24 coins after the rank's
-    commitment, and its coins' evidence holds at the rank's family (`coins.coins_reason`) and at no other."""
+    commitment, and its coins' evidence, which names no key, holds at the rank's family under the key the session's
+    start had (`coins.coins_reason`, `a5_coins.held`), at no other family and under no other key."""
     rule, law, n = FAMILIES_RULE, law_of(FAMILIES_RULE, ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, draws, opener = local(tmp_path, monkeypatch, [0])
     try:
@@ -196,7 +200,7 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
         segment = coins.drawn()
         draws.skip(0)
         opener.join()
-        published = draws.evidence()
+        published, ours = draws.evidence(), AC.held(draws)
     finally:
         manager.shutdown()
     assert "error" not in published, published.get("error")
@@ -206,9 +210,58 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     assert published["trusted"]["released"] == {AC.WINDOW_FAMILY: 1, AC.family(0): 24} and len(coins.read) == 1496
     assert coins.label == segment["label"] == AC.family(0) and segment["start"] == 0
     evidence = AC.evidence(published, segment)
-    assert CC.coins_reason(evidence, ROOT, AC.family(0), AFTER, bytes(coins.read), AC.lms_verify) is None
+    assert sorted(evidence) == ["ledger", "main", "pins", "segment", "session"]
+
+    def reason(label: str, key: Ch.ChallengerKey = ours["key"]) -> str | None:
+        return CC.coins_reason(key, ours["main"], evidence, ROOT, label, AFTER, bytes(coins.read), AC.lms_verify)
+    assert reason(AC.family(0)) is None
     for other in (AC.WINDOW_FAMILY, AC.FAMILY, AC.family(1)):
-        assert "family's" in CC.coins_reason(evidence, ROOT, other, AFTER, bytes(coins.read), AC.lms_verify)
+        assert "family's" in reason(other)
+    other = dataclasses.replace(ours["key"], public=bytes(b ^ 1 for b in ours["key"].public))
+    assert reason(AC.family(0), other) is not None
+
+
+def test_a_kept_local_challenger_serves_a_later_session_under_the_same_key(tmp_path, monkeypatch):
+    """A ``local`` challenger kept in a directory (`start`'s ``host``) is reopened by a later `start` there: the later
+    session, on another root, is the same challenger's, signed under the same key (`held`, and `local_key` of the
+    directory), on a ledger that holds the earlier session's lines first; each session's evidence holds under that
+    key at its own root and at no other. A challenger of a command's own has another key, under which the kept one's
+    evidence is refused, and a directory that holds no challenger has no key to give (`NO_HOST`). The key's leaves
+    are spent across the sessions and never reused: the later session signs at leaves after the earlier's, as many
+    again, within the key's `LOCAL_PARAMS` height."""
+    rule, law, n = SILU_RULE, law_of(SILU_RULE, SILU_MUL), sum(SILU_MUL)
+    host, roots, sessions, spent = tmp_path / "kept", (ROOT, "ef" * 64), [], []
+    with pytest.raises(Ch.CoinError, match="holds no development challenger"):
+        AC.local_key(host)
+    for i, root in enumerate(roots):
+        manager, draws, opener = local(tmp_path, monkeypatch, [0], root, f"challenger-{i}", host=host)
+        try:
+            coins = AC.RankCoins(draws, 0)
+            coins.plan(need_of(rule, SILU_MUL))
+            coins.commit(AFTER)
+            S.select_draw(S.Law(rule), law, n, coins)
+            segment = coins.drawn()
+            draws.skip(0)
+            opener.join()
+            published, ours = draws.evidence(), AC.held(draws)
+        finally:
+            manager.shutdown()
+        assert "error" not in published, published.get("error")
+        sessions.append((AC.evidence(published, segment), ours, bytes(coins.read)))
+        spent.append(json.loads((host / "var" / "key" / "state.json").read_text())["next"])
+    (first, held, _), (later, again, _) = sessions
+    assert held == again and held["key"] == AC.local_key(host)
+    assert later["ledger"][:len(first["ledger"])] == first["ledger"] and len(later["ledger"]) > len(first["ledger"])
+    assert first["session"] != later["session"]
+
+    def reason(k: int, root: str, key: Ch.ChallengerKey = held["key"]) -> str | None:
+        evidence, _, read = sessions[k]
+        return CC.coins_reason(key, held["main"], evidence, root, AC.family(0), AFTER, read, AC.lms_verify)
+    assert [reason(k, root) for k, root in enumerate(roots)] == [None, None]
+    assert reason(0, roots[1]) is not None and reason(1, roots[0]) is not None
+    own = AC.Local(tmp_path / "own", held["main"]).key
+    assert own != held["key"] and all(reason(k, root, own) is not None for k, root in enumerate(roots))
+    assert 0 < spent[0] and spent[1] == 2 * spent[0] <= 2 ** AC.LOCAL_PARAMS[1]
 
 
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):

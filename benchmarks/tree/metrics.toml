@@ -1,0 +1,12 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "top/tree-not-yet-lines"
+title = "Paths main holds outside the layout of record: the lines of tests/tree.toml's not-yet list"
+owner = "top"
+unit = "lines"
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_yet.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
