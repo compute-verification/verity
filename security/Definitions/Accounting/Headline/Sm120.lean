@@ -5,9 +5,9 @@ public import Definitions.Accounting.Headline.Encoding
 /-!
 # sm_120's headline instance: DS-120 and H1 + fx1 (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+file. `Accounting.Guarantees.TS.Sm120SheetHeadline` reads it.
 
 * `classes`: the 122 instruction classes of the DS-120 census, in the order `Fin 122` indexes them. `NOROW` is A2's
   catch-all: every warp instruction no other class names counts there, at its issue slot alone.
@@ -20,8 +20,8 @@ Written by `machine-model lean-headline` from `machine_model`'s data, and checke
   classes and the 64-bit ones (ALU64, CVT64, DMUL, IMADW, MOV64); fx1's fold on lanes (ALU 2 + IMAD 2 lane instructions
   a word) and alone on the uniform datapath (4 a word); A6's floors `q = q_T = ½`, `b_T = 0`; 128 committed words a unit
   of honest work (an IMMA.16832 at L = 32).
-* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word writing), the fold, no filler, and
-  ε_skip's free compute at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
+* `flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no filler, and
+  ε_skip's skippable work at NOROW's price, 0.420701% of ♭'s bound (`eps_budget.design_skip` on DS-120).
 * `piStar`: π*, the facet (DS_issue) the machine model's LP certificate sits on at q* = ½, with 197/3761 moved onto
   DS_smem: the least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least
   the menu's φ*.
@@ -134,13 +134,13 @@ def h1fx1 : DesignData where
 noncomputable def model : Model (Fin 122) (SheetRow Pipe) (Fin 17) Unit Empty (Fin 2) Unit :=
   h1fx1.model 122 17 2 sheet.machine
 
-/-- ♭'s word writing a unit: the MMA and the operand floor. -/
+/-- ♭'s word production a unit: the MMA and the operand floor. -/
 def flatWords : Sparse := [(27, 1, 1), (61, 25641, 1000000)]
 
 /-- ♭'s fold a unit: the lane fold for 128 words. -/
 def flatFold : Sparse := [(0, 8, 1), (24, 8, 1)]
 
-/-- ♭'s free compute a unit, at NOROW's price. -/
+/-- ♭'s skippable work a unit, at NOROW's price. -/
 def flatSkip : Sparse := [(65, 14325412520309335111003, 199158597757329117000000)]
 
 /-- The floor program ♭, labelled. -/
