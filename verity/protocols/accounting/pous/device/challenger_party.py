@@ -1,5 +1,5 @@
 """PoUS's memory challenger as a party of its own, so it runs on a host the developer doesn't control (the challenger host,
-`trusted-host`) while the prover stays on its node.
+`trusted-device`) while the prover stays on its node.
 
 The challenger listens and the prover connects. Each round is one frame each way: the challenger sends `u64be index`
 (reading the send time) and the prover answers with the whole block, `block_bytes` of it (the challenger reads the receipt

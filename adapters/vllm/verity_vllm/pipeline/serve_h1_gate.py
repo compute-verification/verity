@@ -1,6 +1,6 @@
-"""serve-openai's PoUW H1 coins from the auditor host's challenger, one session a window, through infra's gate
+"""serve-openai's PoUW H1 coins from the auditor device's challenger, one session a window, through infra's gate
 (`GateSessions`, `serve_h1`'s ``--challenger-gate``): each window's session and its sampling session reserved, opened on
-the window's roots once the auditor host's ``ssh -R`` listens here (`listening`), and waited for until their end
+the window's roots once the auditor device's ``ssh -R`` listens here (`listening`), and waited for until their end
 entries."""
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def listening(port: int) -> bool:
 
 
 class GateSessions:
-    """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
+    """H1's coins from the auditor device's challenger, one session a window, through infra's gate `gate` (a
     `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
     pouw setting ``gate``) opens it on the window's open root and its sampling session on its sample root, and `ended`
     waits for an end entry. ``held`` is each session reserved, as the gate answered it, under the window it was reserved
@@ -155,7 +155,7 @@ class GateSessions:
     def open(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
         """`pouw_h1_window.Gate`: ``open --session SESSION --root ROOT`` (its commitment from ``status`` when the answer's
         is null; with `withhold`, a withheld sampling session's, which must carry none), answered once the answer's port
-        listens here (the auditor host's ``ssh -R``, looked for every `LISTEN_S` for `POLLS` seconds; ``listen_polls``)."""
+        listens here (the auditor device's ``ssh -R``, looked for every `LISTEN_S` for `POLLS` seconds; ``listen_polls``)."""
         answer = self._open(session, root, withhold=withhold)
         port, polls, looks = answer.get("port"), None, round(POLLS / LISTEN_S)
         if type(port) is int:

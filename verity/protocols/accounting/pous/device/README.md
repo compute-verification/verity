@@ -3,7 +3,7 @@
 The memory challenger is the auditor-trusted device that runs PoUS's timed rounds and the streamed-label wipe's timed
 reads, and signs what it saw. It is the auditor's hardware, on a machine the developer doesn't control at the developer's site
 and reached in-region, never a process on the developer's node. Trust in it and its host is the named assumption
-`trusted-host`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
+`trusted-device`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
 server's memory with labels it derives itself and flips its coins once the fill is complete. It reads each answer's
 receipt time on its own clock and signs the run's records once, under LMS over SHA-512. The verifier checks a signed run
 against the commitment released with it and publishes the verdict, and for a wipe the survivor bound it certifies.
@@ -51,7 +51,7 @@ entry point of `verity/protocols/accounting/pous/verifier/README.md`.
 
 ## Top statements
 
-- `TrustedHost` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which
+- `TrustedDevice` (`security/Definitions/Core/Assumptions.lean`): the device runs its stated code on its host, which
   changes none of what it emits or when, and gives it a monotonic clock.
 - `MemoryChallenger.Properties.VerdictAccepts` (`security/Properties/Pous/MemoryChallenger.lean`): an accepted timed-rounds
   verdict's run is signed under a trusted key and an accepted scheme, its header is the commitment, each round's

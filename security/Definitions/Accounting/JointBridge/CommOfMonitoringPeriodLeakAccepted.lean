@@ -46,8 +46,8 @@ registered as `sw i`, the network certifier recording each window's observations
 transfer gates (its openings `tops s`). The run's claim at `K` is that every window meets `NetTiming.ExecutionPhaseGood`, the
 event whose secrets `MonitoringPeriodLeakAccepted` counts, so `K` is the bits of that count; the audit's own coins, at each
 window, are a run of the sampled verifier against a prover whose tape is the rest of the coins. The run carries the
-deployed network certifier in `MonitoringPeriodLeakAccepted`'s form, and its trust, `trusted-host`
-(`Verity.Assumptions.TrustedHost`), is a field: the per-window bound (`period_le`) is what its records give.
+deployed network certifier in `MonitoringPeriodLeakAccepted`'s form, and its trust, `trusted-device`
+(`Verity.Assumptions.TrustedDevice`), is a field: the per-window bound (`period_le`) is what its records give.
 -/
 
 @[expose] public section
@@ -75,7 +75,7 @@ bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the dep
   its connections `Conn`, cells `Cell` and the server's state `Srv`, whose run (`run`) on a schedule and the server's
   state gives the cells the client receives and its records of the period's windows; its record format (`fmt`) and
   what reaches it from the server on each connection (`arr`);
-* the network certifier runs its code on its host (`trusted`, `trusted-host`);
+* the network certifier runs its code on its host (`trusted`, `trusted-device`);
 * at each window and every value of the other coins, the network audit's own coins are a run of the sampled verifier
   at the window's statement against a prover (`prover`, on a finite tape `Tape`, the rest of the coins), and the
   probability over the audit's own coins that the network certifier accepts while the window fails `ExecutionPhaseGood` is at
@@ -132,10 +132,10 @@ structure RealizesCommOfMonitoringPeriodLeakAccepted {ι : Type} {d : Device ι}
   /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
   records of the period's windows -/
   run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
-  /-- the network certifier runs its code (`recordingCode`) on its host: `trusted-host`, the trust the network audit rests
+  /-- the network certifier runs its code (`recordingCode`) on its host: `trusted-device`, the trust the network audit rests
   on. Its records are what `period_le`'s per-window bound comes from; deriving `period_le` from `MonitoringPeriodLeakAccepted`
   at this deployed period and this premise, not at the period of no windows, is the follow-up. -/
-  trusted : Verity.Assumptions.TrustedHost device run fun p => recordingCode fmt p.1 (arr p.2)
+  trusted : Verity.Assumptions.TrustedDevice device run fun p => recordingCode fmt p.1 (arr p.2)
   /-- the network audit's acceptance with window `i` failing its good event, over the audit's own coins, is at most
   the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
   certifier's records (`trusted`) give. It is a field until it is derived from `MonitoringPeriodLeakAccepted` at the deployed

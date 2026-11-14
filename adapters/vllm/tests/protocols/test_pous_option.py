@@ -267,7 +267,7 @@ def test_its_period_accepts_with_the_challenger_on_its_host_and_states_the_bits_
             got = opt.leg(_period_dir(tmp_path, n), NODE, out, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
             assert got["verdict"] == "accept" and got["protocol"] == TEST_PROTOCOL, got["reason"]
             assert got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
-            assert got["profile"]["placement"]["trusted-host"].startswith(f"holds: the memory challenger ran on {AUDITOR}")
+            assert got["profile"]["placement"]["trusted-device"].startswith(f"holds: the memory challenger ran on {AUDITOR}")
             doc = json.loads((out / "pous.json").read_text())
             assert doc["s_bits"] == 0 and doc["rounds_answered"] == period.K + CS.WARMUPS and doc["setup"]["fresh"] == (n == 0)
             assert (out / "pous.case.json").exists() and (out / "pous-setup.case.json").exists() == (n == 0)

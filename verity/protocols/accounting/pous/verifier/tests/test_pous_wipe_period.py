@@ -12,7 +12,7 @@ whole against a challenger side on a host of its own (`wipe_side.py`), its recor
 (the links leaving the node, the undeclared tiers, the egress, what a joint store's disks leave outside the
 boundary), the reads and the session's window. The verifier trusts the one key its pin names (`wipe.trusted_sha512`): a
 session signed under another is rejected, and a challenger on its own host with no key pinned is refused. The record
-says `trusted-host` holds only for a session signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's
+says `trusted-device` holds only for a session signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's
 host: a run's own pin, or a rehearsal's host name, gives a rehearsal with no bound."""
 
 from __future__ import annotations
@@ -317,7 +317,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     answer = W.leg(period, "n0", out)
     assert answer["verdict"] == "accept", answer
     assert answer["public"]["certified"] is False and answer["public"]["memory_bits"] == M
-    assert answer["profile"]["placement"]["trusted-host"] == ("holds: the session is signed under auditor's pinned key; "
+    assert answer["profile"]["placement"]["trusted-device"] == ("holds: the session is signed under auditor's pinned key; "
                                                               "the memory challenger ran on auditor, not the developer's n0")
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]

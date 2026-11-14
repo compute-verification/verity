@@ -97,7 +97,7 @@ def epoch_of(workload: Workload, roots: dict[int, bytes], coins: SaltCoins, open
              pass_index: int | None = None) -> Epoch:
     """The epoch whose salt is the challenger's salt coin `opening`, opened against `coins` after the weights' root: a
     `CoinOpening` of a `CoinCommitment` through `Epoch.start`, or a live session's `LiveOpening` of its `LiveCommitment`
-    (the auditor host's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
+    (the auditor device's, `pouw_h1_window.open_session`) under the same rules: every weight committed and only those, the
     commitment a Pearl-C salt session's, its salt coin alone (`window.salt_epoch_reason`), and the opening that coin,
     opening against it after the salt epoch's root (`challenger.live_reason`), `salt.epoch_open_root` of the weights' root
     W and `pass_index`, the epoch's number k over W, an integer in [0, 2^64).  Either is refused with `DomainError`; a

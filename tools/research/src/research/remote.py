@@ -88,7 +88,7 @@
                     with custody, RESEARCH_PREFLIGHT_CUSTODY (the staged key's dir).  A declaration that cannot be read refuses the run.
                     `--preflight TOOL` runs TOOL's preflight before a run of anything else (a Lean record regeneration on a check
                     pod), and refuses when the tree declares none.  job.json run.remote.preflight and the launch's answer carry its report.
-    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor host, vy-challenger-1) runs only the commands
+    auditor         a machine with /etc/vy/auditor (deploy.toml installs it on an auditor device, vy-challenger-1) runs only the commands
                     that file lists, one a line, exactly: launch-request refuses any other before anything starts, and the host's
                     vy-auditor-only.timer (slot_only.py --auditor) stops one launched from a tree that predates the refusal.
     tool rules      a shipped research package without a fix the machine requires (pods/nebius/tool_rules.py: one that predates #7656
@@ -106,7 +106,7 @@
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
     adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
-                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor hosts (`restricted`; a pod belongs to
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor devices (`restricted`; a pod belongs to
                     the VM that made it), writes the remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
@@ -193,7 +193,7 @@ RUNS_VIA_SLOT_FILE = "/etc/vy/runs-via-slot"  # present: a run starts only throu
 NODE_SLOT_ONLY_FILE = "/usr/local/lib/vy-monitoring/slot_only.py"
 #: the machine's own tool_rules.py (deploy.toml): what a shipped research package must do before it runs here, judged as above
 NODE_TOOL_RULES_FILE = "/usr/local/lib/vy-monitoring/tool_rules.py"
-AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which runs only the commands it lists (slot_only.auditor_allows)
+AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor device, which runs only the commands it lists (slot_only.auditor_allows)
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
@@ -255,7 +255,7 @@ class CannotStart(Refused):
     """The machine could start no run, whatever the job: it could not start the runner's process (NOT_STARTED) or make the
     launch's log and FIFO, or it has no git (NO_GIT) for a run that needs a checkout.  Nothing started, so `research run --on
     auto` places the job again without the machine.  A refusal that reads the job (its command, its source, its flags, its
-    keys) or the machine's rules and admission (a slot-only or auditor host, memory, an exclusive run, a preflight) is never
+    keys) or the machine's rules and admission (a slot-only or auditor device, memory, an exclusive run, a preflight) is never
     this one: the same job is refused wherever it goes, or the machine does start runs."""
 
 
@@ -294,12 +294,12 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
 #: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
 DEFAULT_ROOT = "/workspace/research"
-#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor hosts
+#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor devices
 DEPLOY_MANIFEST = Path(__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
 
 
 def restricted(machines: dict[str, dict[str, Any]]) -> set[str]:
-    """The auditor hosts among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
+    """The auditor devices among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
     (reached only by an admin login, which is why `research deploy drift` reads one only when --on names it). They refuse lanes'
     keys by design, so a search over every machine (`adopt`, `research doctor`) leaves them out before any ssh rather than leave a
     refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. Without the manifest the entries'
@@ -2195,7 +2195,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
     try:
         m = resolve_machine(machine_name, project)
         if m.get("auditor"):
-            raise Refused(f"machine {machine_name!r} is an auditor host: it takes no research run, from anyone. Its service is "
+            raise Refused(f"machine {machine_name!r} is an auditor device: it takes no research run, from anyone. Its service is "
                           f"reached only through its gate: {m['auditor']}")
         guard_min = guard_idle_min(m)
         custody_pub: dict[str, Any] | None = None
@@ -2398,7 +2398,7 @@ ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
     """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine but the
-    auditor hosts (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
+    auditor devices (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
     fetch its records.  Refused when the id is not a full run id, when no machine holds it (each machine's answer in the reason), or
     when the local dir already exists; with `unique` (a cancel), every machine is asked and an id more than one holds is refused
     rather than taken from the first."""
@@ -2413,7 +2413,7 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
     skipped = [] if on else sorted(restricted(ssh))
     names = [on] if on else sorted(n for n in ssh if n not in skipped)
-    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+    not_asked = (f"; not asked: the auditor devices {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
                  if skipped else "")
     answers: dict[str, str] = {}
     targets = []

@@ -414,7 +414,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     here = write_corpus(tmp_path / "here", roomy, ios, times, serve(roomy, ios, times, seed=1), tick=True)
     there = write_corpus(tmp_path / "there", small, ios, times, serve(small, ios, times, seed=1), tick=True)
     gone = write_corpus(tmp_path / "gone", small, ios, times, serve(small, ios, times, seed=1), tick=True)
-    _name(here, "big", 8, "on the auditor's host")
+    _name(here, "big", 8, "on the auditor's device")
     _name(there, "little", 1, "beside the server")
     _name(gone, "little", 1, "beside the server", engine=False)
     reqs = [json.loads(line) for line in (gone / "requests.jsonl").read_text().splitlines()]
@@ -427,7 +427,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     row, (other, refused) = doc["rows"][0], doc["beside"]
     assert [r["trace"] for r in doc["rows"]] == ["here"] and "error" in refused and "error" not in other
     assert row["serve"] == {"model": "big", "cards": 8, "draft": False, "vllm": "0.9.1rc2.dev3+gabc123",
-                            "certifier": "on the auditor's host"}
+                            "certifier": "on the auditor's device"}
     ev, theirs = row["total"]["events"], other["total"]["events"]
     assert ev["preemptions"] == ev["evicted_blocks"] == ev["admissions_cut"] == 0 < theirs["preemptions"]
     a, b = row["beside"]
@@ -443,7 +443,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert refused["serve"]["vllm"] is None and other["serve"]["vllm"] == row["serve"]["vllm"]
     assert b["differs"]["vLLM"] == ["0.9.1rc2.dev3+gabc123", "not in the server's log"]
     assert a["differs"] == {"model": ["big", "little"], "cards": ["8", "1"],
-                            "where the network certifier ran": ["on the auditor's host", "beside the server"],
+                            "where the network certifier ran": ["on the auditor's device", "beside the server"],
                             "the pool": ["4,096 blocks of 16 tokens", "8 blocks of 16 tokens"]}
     assert set(a["same"]) == {"vLLM", "the draft", "requests a step", "tokens a step", "admission", "the prefix cache",
                               "the registered codebook", "ℓ", "T"}
@@ -458,7 +458,7 @@ def test_a_serve_is_set_beside_the_serve_that_exercised_what_it_did_not(tmp_path
     assert ("- the same in both serves: vLLM: 0.9.1rc2.dev3+gabc123; the draft: off; requests a step: at most 4; tokens a "
             "step: at most 64; admission: under the certified tick") in text
     assert ("- differing: model: big here, little in `there`; cards: 8 here, 1 in `there`; where the network certifier "
-            "ran: on the auditor's host here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
+            "ran: on the auditor's device here, beside the server in `there`; the pool: 4,096 blocks of 16 tokens here, 8 "
             "blocks of 16 tokens in `there`.\n") in text
     assert "Scaled, not measured: at this serve's own rate on its 8 cards, its " in text
     assert "request r5: finish 'abort'" in refused["error"]

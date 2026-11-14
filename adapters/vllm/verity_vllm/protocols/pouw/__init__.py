@@ -3,7 +3,7 @@
 The executor at each linear layer's ``quant_method.apply`` (``EXECUTES``; innermost, `protocol_options.SITES`).  In the
 composition's weight phase, with the model untouched and no coin opened, `commit_weights` finds the linear layers by
 type (vLLM's ``LinearBase``, `linear_types`) and commits every layer's int7 weight rows (`verity.protocols.accounting.pouw.verifier.audit.commit_rows`).
-`install` then asks the execution phase's challenger (the setting ``coins``, or under ``ncp-v2`` and Pearl-C the auditor host's
+`install` then asks the execution phase's challenger (the setting ``coins``, or under ``ncp-v2`` and Pearl-C the auditor device's
 session, ``challenger``: `pouw_h1_window.salt_session`) for its salt coin, opened after those roots' weights root, and
 starts the execution phase from it (`verity.protocols.accounting.pouw.verifier.audit.Epoch.start`, which refuses any other coin; Pearl-C's
 `pouw_pearl_c_host.epoch_of`, a live session's under the same rules), and replaces each ``apply`` through the
@@ -177,7 +177,7 @@ class Settings:
     #: (`pearl_c.passes.hook_steps`), for a caller whose committer patched it before the option's install
     runner: Any = None
     rounds: Any = None
-    #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor host's challenger, ``HOST:PORT``
+    #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor device's challenger, ``HOST:PORT``
     #: (`pouw_h1_challenger`); ``coins`` and ``rounds`` held in this process in its place are for tests, and credit
     #: nothing; ``session`` is the challenger gate's reply for the execution phase: ncp-v2's its open answer for the execution phase's
     #: Commit (`pouw_h1_challenger.session_of`), H1's and Pearl-C's its reserve answer (`pouw_h1_window.reserved_of`),
@@ -656,7 +656,7 @@ def challenged(settings: Mapping[str, Mapping[str, Any]], enabled: Any, epoch: i
     """`settings` (the loaded protocols config) with PoUW's ``coins`` a challenger of `epoch` held in this process
     (`verity.protocols.accounting.pouw.verifier.coins.Challenger`, its coins the Lean verifier's, `pouw.verifier.coins`) when
     `enabled` (the protocol set) has PoUW, for a pipeline that is its run's own auditor (it replays and judges what it
-    served); a config's own ``coins``, or its auditor host's ``challenger`` (the coins' one source), is kept alone. The
+    served); a config's own ``coins``, or its auditor device's ``challenger`` (the coins' one source), is kept alone. The
     lead takes no salt coin (its coins come off its coin link), so under it nothing is added."""
     out = {k: dict(v) for k, v in settings.items()}
     takes_salt = any(str(e).partition(":")[0] == NAME and str(e).partition(":")[2] != PL.SCHEME for e in (enabled or ()))
@@ -718,13 +718,13 @@ def h1_run(entry: str) -> PH.H1Run | None:
 
 def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     """H1 on the int8_exact arm: the execution phase's salt `audit.salt_of` over the weights' root, as every scheme's, from the
-    challenger's salt coin (the auditor host's opened after the execution phase's open root, once round 0 is admitted:
+    challenger's salt coin (the auditor device's opened after the execution phase's open root, once round 0 is admitted:
     `pouw_h1.H1Run.open_window`), and each layer's ``observe`` the arm's own with its call recorded and handed to the run's listeners
     (`pouw_h1_hooks.observer`), in the static layout of the settings' ``rows`` and ``steps``; each layer's ``apply`` runs
     under the credit gate's trace (`pouw_h1_hooks.traced`), and the ``runner``'s ``execute_model`` hands each step's admitted
     requests and its batch order to the run (`pouw_h1_hooks.admitting`), each entry and each served row's request under its
     round's root before the ``rounds`` coin, and the execution phase's sampling coin opens at release after its manifest. With the
-    setting ``challenger`` the salt and round coins are the auditor host's, from the one session infra's gate
+    setting ``challenger`` the salt and round coins are the auditor device's, from the one session infra's gate
     reserved for the execution phase (``session``, the gate's reserve answer) and ``gate`` opened on its execution phase-open root (the
     open answer, which the commitment carries without its secret; `pouw_h1_window.Window`), closed once the execution phase has
     finished, and the sampling coin is ``draw_session``'s, opened withheld on the sample root (`pouw_h1_window.DrawSession`);

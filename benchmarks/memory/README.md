@@ -11,7 +11,7 @@ and never copies.
 **Run:**
 
 ~~~text
-verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor hosts
+verity bench memory PERIOD [--dry-run]        the node run: one session on the whole GPU node, through both auditor devices
 verity bench memory --from RUN [--session K]  the number of a recorded run
 verity bench memory --loopback                both processes on this machine, on the CPU: a test of the command
 ~~~

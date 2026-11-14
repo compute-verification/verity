@@ -232,7 +232,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
    The verifier checks each round's index against its opening under the released root (`verdict`). The challenger is
    bound to its coins by being an auditor-trusted device that runs its stated code (`pous-ring-device`,
-   `trusted-host`), not by an early commitment, so no guarantee reads the coin tree's hiding.
+   `trusted-device`), not by an early commitment, so no guarantee reads the coin tree's hiding.
 
 ## Public outputs
 
@@ -526,7 +526,7 @@ the trusted keys and the accepted schemes' ids as JSON (`to_json`), and which re
 written. `wipe_verdict.VERDICT` is the switch: `lean` (the Lean alone), `both` (the Python's beside it, and a session
 the two differ on in any field rejected as a disagreement) or `python` (no Lean).
 
-**Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-host` for the memory challenger, as `holds`
+**Where it ran.** A wipe's record (`wipe_party.placement`) states `trusted-device` for the memory challenger, as `holds`
 only when the session was signed under the key `wipe_party.AUDITOR_KEYS` pins for the challenger's host. Under any other
 key, a key the run pinned for itself included, it reads `rehearsal: key not the auditor's pinned key, no bound`, and
 the key's custody is among what the bound doesn't cover. The hosts' names give `kind` (`own-host`, `simulated`,
@@ -1061,7 +1061,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 
 - `pous-ring-device` (the model): the deployed server is a `Server`, its state bounded between setup, the session and
   its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its host never restores an
-  earlier copy: `trusted-host`) and the coins flipped
+  earlier copy: `trusted-device`) and the coins flipped
   online;
 - `pous-ring-speed` (the numbers): within `Δ + RTT` no allowed hardware finishes a 16,447th sequential multiplication
   round (`D = 16,446`), more than `2^20` key queries or `2^64` ring operations per answer. It rests on the floor
@@ -1075,7 +1075,7 @@ the `k` boundaries passes with probability at most `(1 − p)^m + k·ε₀`. Its
 Two gaps stood between these statements and the deployed verifier:
 
 - G-1, one session per audit: the check's half is fixed in code; one session per id is the memory challenger's
-  `SessionLog` under its host presumption, which `trusted-host` covers. Every session names its setup: a `SessionCommitment`'s
+  `SessionLog` under its host presumption, which `trusted-device` covers. Every session names its setup: a `SessionCommitment`'s
   `binding` has no default, the `MemoryChallenger` refuses one that is not a 64-byte root, and the harness's memory
   challenger (`benchmarks/pous/memory_challenger/live.py`) binds every session to the root the setup publishes for the
   `C*` its digests describe (`VerifierKey.from_row_digests`). Every session is also its audit's: its id (`session`, in
@@ -1085,7 +1085,7 @@ Two gaps stood between these statements and the deployed verifier:
   so a session that never runs has used its id too. A used id is refused, a log that is missing or unreadable refuses
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
-  `trusted-host` (`verity.claims`): "the auditor's device runs its stated code, timing
+  `trusted-device` (`verity.claims`): "the auditor's device runs its stated code, timing
   included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.

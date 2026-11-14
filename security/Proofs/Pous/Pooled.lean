@@ -18,7 +18,7 @@ coins are flipped independently, window after window, the monitoring-period step
 it, given that each window is fixed before its own capacity coins (`FixedBefore`): window `u`'s joint run, its audit
 and the other audits' coins are functions of the earlier windows' capacity coins, so `PeriodHeld` applies to window `u`,
 at its strategy under the device model and the instantiation (`DeviceModel`, `Instantiates`), whatever the earlier
-windows' coins. `FixedBefore` is a named assumption (`pous-ring-device`, `trusted-host`), which the memory challenger
+windows' coins. `FixedBefore` is a named assumption (`pous-ring-device`, `trusted-device`), which the memory challenger
 enforces by releasing each window's capacity coins only after that window's commitment is in.
 
 * `pooledShort`: at least `M` of the `U` windows are accepted, unbroken and short with a probability `P` with

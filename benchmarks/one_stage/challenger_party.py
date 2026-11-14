@@ -1,12 +1,12 @@
 """The challenger's host on this machine: the ``host`` capability of sampled proofs' challenger party
 (`verity.protocols.proofs.spot.verifier.parties`).
 
-`Host(root, main).start()` makes a development challenger host (`a5_coins.Local`: the auditor host's own reserve, admit
+`Host(root, main).start()` makes a development challenger host (`a5_coins.Local`: the auditor device's own reserve, admit
 and run, then `serve.py`, with no tunnel) under ``root``, which must not exist yet: its LMS key, its signed ledger and its
 pins log, pinned on main's first-parent line ``main`` (`a5_coins.on_main`). It answers on loopback TCP, on a thread of
 this process, until `stop`. Its coins are the challenger's own (`serve.py`), never the verifier's or the prover's, but
 its host is whatever machine runs it, so a run that places it with the prover's parties states its coins as
-``simulated``: `trusted-host` is unmet. Its key is at `a5_coins.LOCAL_PARAMS`, not `Lms.deployed`, so sampled proofs' v2
+``simulated``: `trusted-device` is unmet. Its key is at `a5_coins.LOCAL_PARAMS`, not `Lms.deployed`, so sampled proofs' v2
 refuses a case sampled on its coins (`OneStageZk.KEY_PARAMS`).
 
 Clients (the verifier's audit: `a5_coins.Loopback`, ``records_audit --challenger loopback:HOST:PORT``) connect once a

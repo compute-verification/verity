@@ -71,7 +71,7 @@ theorem asReg_congr {L S : ℕ} (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (
   · rw [h1 g hg hf, h g hg]
   · rw [h1 g hg hf, ← h g hg]
 
-/-- **The secrets of a monitoring period, counted over the windows' accepted sequences.** Under `trusted-host`, on
+/-- **The secrets of a monitoring period, counted over the windows' accepted sequences.** Under `trusted-device`, on
 schedules in `Ss` that the network certifier's record format holds, the secrets a decoder recovers from the cells the
 client receives, whose every window's observations lie in that window's set `A i (runsBefore o i)` at the run's
 observations `o`, number at most `#Ss · ∏_c (cap c + 1) · ∏_i c i`, where each set `A i l`, which reads only the
@@ -81,7 +81,7 @@ windows before `i`, holds at most `c i` sequences: the periods so observed numbe
 theorem encard_periodSeqs_le {L K S n : ℕ} {Conn Cell Srv Dev Z : Type} [Fintype Conn]
     (arr : Srv → Conn → Arrivals Cell) (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
@@ -148,7 +148,7 @@ theorem encard_monitoringPeriodGood_le (H : Msg → Msg) (D : Compiled Coin A) (
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
     (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
     (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
@@ -206,7 +206,7 @@ theorem monitoringPeriodLeak_fixed (h : Guarantees.MonitoringPeriodLeakAccepted)
       {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
       (f : RecordFormat Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
       (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L K S)))
-      (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+      (htrust : Verity.Assumptions.TrustedDevice tap run fun p => recordingCode f p.1 (arr p.2))
       (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (hcap : ∀ s ∈ Ss, ∀ c, s.cells c ≤ cap c)
       (hfit : ∀ s ∈ Ss, f.fits s)
       (Zs : Set Z) (schedOf : Z → CertifierSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)

@@ -262,7 +262,7 @@ def models_json(ckpt, tmp_path) -> Path:
 
 def test_cores_models_json_is_read_as_its_roles_pin_held_to_the_same_checks(ckpt, models_json, tmp_path):
     """`read_pin` reads core's `models.json` as its entry of the role, named the role, its `files` the checkpoint, so
-    the verifier binds to core's pin itself (the auditor host's `--model`); a role the file lacks is refused with the
+    the verifier binds to core's pin itself (the auditor device's `--model`); a role the file lacks is refused with the
     roles it has, and an entry is held to what a pin is."""
     pin = json.loads((ckpt / "pin.json").read_text())
     want = {"name": "SYNTHETIC_BF16", "checkpoint": pin["checkpoint"], "checkpoint_sha512": pin["checkpoint_sha512"]}

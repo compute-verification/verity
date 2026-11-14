@@ -929,8 +929,8 @@ class Options:
     replay_deferred: str | None = option("--replay-deferred", nargs="?", const="full", default=None, choices=("full", "slim"), help="the C2 sampled replay + boundary linkage do not run in this process: each instrumented run writes a replay bundle (verity_vllm.pipeline.replay_bundle, <out>/replay_bundle_p<pair>/) and its verdict stays PENDING until the replay runs on CPU from the bundle; exit 0 when every check this process runs passes.  `slim`: the replay's reads are planned here and only the members they open are sealed, with their Merkle paths (the planning adds to the GPU hold)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="sampled replay: a TARGETED sampler seed, prover-chosen (negatives / reproduction); default = the run root's first 8 bytes (recorded with its source): no coin, so a prover steers the sample by committing again, in about the lesser of 1/p and 2^64 tries -- a measurement")
     replay_challenge: str | None = option("--replay-challenge", default=None, help="sampled replay: a challenge string (hex/string) -- the seed becomes sha256(challenge | run_root)[:8]; who issued the string is not checked, and --challenger-gate refuses this flag (the gate's replay coin reaches the served C2 only); default = the run root alone, no coin (a measurement)")
-    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
-    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers, where its challenger reaches the Commit (its certifier coin link)")
+    challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor device's challenger gate, its command as one string (e.g. 'ssh -i KEY -o IdentitiesOnly=yes research@HOST'): the Commit reserves one session before its engine and opens it on its first run's root of record, and each run's openings and served C2 replay challenge are its coins, opened after that run's root (verity_vllm.pipeline.commit_coins); without it each run's coins are this process's own, a measurement that credits nothing")
+    challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor device's peers, where its challenger reaches the Commit (its certifier coin link)")
     weights_of_record: str | None = option("--weights-of-record", default=None, metavar="JSON", help="the weights of record: per-field digests of the served weights COMPOSED FROM THE PINNED CHECKPOINT SHARDS (verity_vllm.check.weights_of_record, written beside the Build's Program); every live parameter the committer registers is compared with it by name -- a served model that differs from the checkpoint in one element is a named COMMIT FAIL")
     checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="derive the weights of record in-process from this pinned checkpoint snapshot + the Program of record (--program-dir / --programs-root) when --weights-of-record is not given; the record is written to <out>/weights_of_record.json")
     replay_k: int | None = option("--replay-k", type=int, default=None, help="the config run's sampled replay: k units in all (sampled by --replay-draw) in place of the row's per-stratum sample")
@@ -1059,7 +1059,7 @@ def main(args: Options) -> None:
     # (a control-only process has no committer at all: nothing installed, nothing compiled in)
     kinds = [] if args.only_arm == "control" else [k for k in (args.arms.split(",") if args.arms else [args.committer]) if k]
     multi = bool(args.arms)
-    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor host's session, reserved before any root (or None: a measurement)
+    coins = CC.of_options(args, args.pairs * len(kinds))       # the auditor device's session, reserved before any root (or None: a measurement)
     coms: dict[str, Any] = {}
     # the Programs' producer facts for a v2-query manifest (which carries none), derived on the CPU before the engine (and a leased Commit's
     # GPU) and the committer: the members the producer module's body hands down are marked promoted here, so the acquisition observes them
@@ -1568,7 +1568,7 @@ def main(args: Options) -> None:
                 if fault.startswith("retained_flip"):
                     row["fault_retained_flip"] = com.fault_retained_flip(fault)
                     print(f"[delta] VERITY_FAULT retained_flip (negative test): {row['fault_retained_flip']}", flush=True)
-                # the run's coins, flipped once its root of record is fixed (the auditor host's session; without one, this process's own)
+                # the run's coins, flipped once its root of record is fixed (the auditor device's session; without one, this process's own)
                 from verity_vllm.commit.challenge import (
                     challenge_positions,
                     run_root_of,

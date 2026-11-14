@@ -13,7 +13,7 @@ The lead is `tag-blc4a-t64-rot/served/s8/k32/w/l1w/l1a/min` (`Pouw.Lead.lead`). 
   summed over the certifier's entropy values at whose coins the call is accepted, is at least the honest work less
   the gap at each of those values (`|O| · honest − |Ω| · gap`), or one of those values' executions hashed a SHA-512
   collision with the honest commitment. The coins at an entropy value are the ones the certifier releases
-  (`released`), which `CertifierCoins` (`trusted-host`) makes a one-to-one decoding of it. With `O` every value, it
+  (`released`), which `CertifierCoins` (`trusted-device`) makes a one-to-one decoding of it. With `O` every value, it
   is the average over uniform coins: `E_ω[work + β · egress] ≥ honest − gap`. The gap is `gapRegs`, a defined function
   of the layout. Acceptance is what the verifier sees of a call: a call it admits (`Layout.Admits`: an inner dimension
   of at least 1 and at most `2^40` MMA tiles; it refuses every other call), and `A`'s and the words' honest roots
