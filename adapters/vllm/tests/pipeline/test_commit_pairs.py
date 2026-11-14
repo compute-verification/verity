@@ -651,6 +651,32 @@ def test_a_replay_its_bundle_does_not_take_runs_in_this_process_and_the_run_gets
     assert s.handed[-1] == ("seal_all", {}, [0, 0, 1, 1], []) and "replay_deferred" not in ended.doc("verdict.json")
 
 
+def test_a_slim_bundles_plan_is_made_of_its_own_run_with_the_planner_started_before_the_engine(tmp_path, bundles, capsys, monkeypatch):
+    """``--replay-deferred slim``: the deferral is handed a plan to make, and making it at a run's C2 site makes the replay's
+    committed reads of that run (`c2_replay.plan`) with the planner started before the engine (`replay_bundle.prepare`)."""
+    from verity_vllm.pipeline import c2_replay, replay_bundle
+
+    s = bundles
+    planner, planned, made_at = object(), [], []
+    defer = replay_bundle.defer
+
+    def making(out, pair, com, rc, args, *, plan, **kw):
+        made_at.append((pair, plan()))
+        return defer(out, pair, com, rc, args, plan=plan, **kw)
+
+    def plan_of(sources, planner):
+        planned.append((sources.pair, sources.com, planner))
+        return {"reads of pair": sources.pair}
+
+    for owner, name, value in [(replay_bundle, "prepare", lambda args: planner), (replay_bundle, "defer", making), (c2_replay, "plan", plan_of)]:
+        monkeypatch.setattr(owner, name, value)
+    M.MAKE.update(declare=M.CLASSES)
+    ended = kept(tmp_path, capsys, "--replay-deferred", "slim", "--program-dir", str(tmp_path / "program"))
+    [com] = made()
+    assert ended.exit is None and names(s) == [(name, pair) for pair in (0, 1) for name in ("start", "defer")]
+    assert made_at == [(0, {"reads of pair": 0}), (1, {"reads of pair": 1})] and planned == [(0, com, planner), (1, com, planner)]
+
+
 @pytest.mark.parametrize("digest", [W.PROGRAM, "c" * 128], ids=["the-records-program", "another-program"])
 def test_a_program_digest_of_record_is_the_one_each_pairs_weights_pin_is_held_to(tmp_path, pinned, capsys, digest):
     """``--program-digest`` with the weights of record: each pair's pin is handed the digest as the set of Programs the record
@@ -913,6 +939,23 @@ def test_under_a_manifest_the_weights_pin_is_held_to_every_program_digest_the_ma
     assert [kw["program_digests_of_record"] for name, _, kw in pinned.handed if name == "check"] == [{"d" * 128, "1" * 128, W.PROGRAM, "2" * 128}] * 2
     assert [row["commit"]["weights_pin"]["result"] for row in instrumented(ended)] == [True, True]
     assert W.pin_lines(ended) == [W.pin_line(0), W.pin_line(1)]
+
+
+def test_what_each_plans_reader_recorded_before_the_engine_is_the_verdicts_entry_of_that_plan(tmp_path, manifest, capsys, monkeypatch):
+    """``--plan`` and ``--call-boundary-plan``: the record the producer facts' reader made of the first
+    (`commit_plan.producer_facts`) is the verdict's `plan`, and the one the call-boundary plan's reader made of the second
+    (`boundary_plan.use`) its `call_boundary_plan`."""
+    from verity_vllm.pipeline import boundary_plan, commit_plan
+
+    s = manifest
+    s.verdicts = [(True, None)]
+    of_plan = {"path": "plan.json", "used": True, "plan_recomputed": False}
+    of_boundary = {"path": "boundary.json", "used": False, "plan_recomputed": True, "why": "the key is another Commit's"}
+    monkeypatch.setattr(commit_plan, "producer_facts", lambda args, manifest, reqs, sampling, *, tl: ((None, {"members": 0}), of_plan))
+    monkeypatch.setattr(boundary_plan, "use", lambda args, manifest, *, tl: (None, of_boundary))
+    ended = under(tmp_path, capsys, M.MANIFEST, "--plan", "plan.json", "--call-boundary-plan", "boundary.json")
+    verdict = ended.doc("verdict.json")
+    assert ended.exit is None and (verdict["plan"], verdict["call_boundary_plan"]) == (of_plan, of_boundary)
 
 
 SERVED_METHOD = "sampled-exact-replay (the served Build's Program on the committed values; served_check.py) + boundary linkage"
