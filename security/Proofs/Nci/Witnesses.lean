@@ -59,24 +59,24 @@ theorem T1_threaded {k : ℝ} : T1.Threaded 2 k 1 0 := by
   exact fun R hR t => key R hR.1 t
 
 theorem T1_weights_nat : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-    (T1.weightsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by decide
+    (T1.weightsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by decide
 
 theorem T1_weights {k : ℝ} : Assumptions.WeightsIncompressible D T1 2 k (1 / 2) (1 / 2) := by
   intro R hR
   have h := T1_weights_nat R hR.1
   have hs : ∑ t, (T1.threadReads R t).card = (T1.threadReads R (0 : Fin 1)).card := Fin.sum_univ_one _
   rw [Nat.cast_sum, ← Nat.cast_sum, hs]
-  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by exact_mod_cast h
+  have h' : ((T1.weightsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by exact_mod_cast h
   linarith
 
 theorem T1_weightsSlots {k : ℝ} : Assumptions.WeightsIncompressibleSlots D T1 σ1 2 k (1 / 2) (1 / 2) := by
   have key : ∀ R : Finset (Fin 4), R ⊆ C.computed →
-      (σ1.slotsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by decide
+      (σ1.slotsUsed R).card + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by decide
   intro R hR
   have h := key R hR.1
   have hs : ∑ t, (T1.threadReads R t).card = (T1.threadReads R (0 : Fin 1)).card := Fin.sum_univ_one _
   rw [Nat.cast_sum, ← Nat.cast_sum, hs]
-  have h' : ((σ1.slotsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * novelReads D R := by exact_mod_cast h
+  have h' : ((σ1.slotsUsed R).card : ℝ) + (T1.threadReads R (0 : Fin 1)).card ≤ 2 * freshInput D R := by exact_mod_cast h
   linarith
 
 theorem coverage_T1 : Assumptions.Coverage 1 D (2 * T1.M.card) := by

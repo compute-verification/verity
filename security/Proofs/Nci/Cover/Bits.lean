@@ -15,9 +15,9 @@ The block of a set `R` of a declaration's gates (`block`) is the bits of `R` and
 * (T1) the block computes every bit of `R` that reads something (`computed_block`): such a bit reads only bits of its
   gate's reads, which lie in `R ∪ in(R)`;
 * (T2) the bits the block is handed outside the free bits are bits of `in(R) \ θ` (`inputs_block_subset`), so they are
-  at most `novelReads R`: a bit of `R` is handed only when it reads nothing, and then it is free, and a bit of a baseline
+  at most `freshInput R`: a bit of `R` is handed only when it reads nothing, and then it is free, and a bit of a baseline
   gate is free;
-* (T3) the block has `width(R ∪ in(R))` bits (`card_block`), at most `w₀ #R + novelReads R + width(θ)` when every gate is
+* (T3) the block has `width(R ∪ in(R))` bits (`card_block`), at most `w₀ #R + freshInput R + width(θ)` when every gate is
   at most `w₀` bits wide (`card_block_le`).
 
 Every bit that reads something is a real bit of a computed gate (`computed_of_pred`), so the blocks of a division of the
@@ -148,16 +148,16 @@ theorem card_block (R : Finset (Fin d.D.N)) : (block d R).card = d.D.width (R �
   rw [block, card_map, card_bits]
 
 /-- **The translation**: the block of `R` has `width(R ∪ in(R))` bits, computes every bit of `R` that reads something,
-and is handed at most `novelReads R` bits outside the free bits. -/
+and is handed at most `freshInput R` bits outside the free bits. -/
 theorem translation (R : Finset (Fin d.D.N)) (hR : R ⊆ d.D.computed) :
     (block d R).card = d.D.width (R ∪ d.D.into R) ∧
     (∀ x ∈ bits d.D R, ((Circuit.ofDecl d).pred (benc d x)).Nonempty →
       benc d x ∈ (Circuit.ofDecl d).computed (block d R)) ∧
-    ((Circuit.ofDecl d).inputs (block d R) \ (Circuit.ofDecl d).θ).card ≤ novelReads d R := by
+    ((Circuit.ofDecl d).inputs (block d R) \ (Circuit.ofDecl d).θ).card ≤ freshInput d R := by
   refine ⟨card_block R, computed_block R, ?_⟩
   calc ((Circuit.ofDecl d).inputs (block d R) \ (Circuit.ofDecl d).θ).card
       ≤ ((bits d.D (d.D.into R \ d.θ)).map (benc d).toEmbedding).card := card_le_card (inputs_block_subset R hR)
-    _ = novelReads d R := by rw [card_map, card_bits]; rfl
+    _ = freshInput d R := by rw [card_map, card_bits]; rfl
 
 /-- A bit that reads something is a real bit of a computed gate. -/
 theorem real_of_pred {y : Fin (Circuit.ofDecl d).N} (hne : ((Circuit.ofDecl d).pred y).Nonempty) :
@@ -188,9 +188,9 @@ theorem mem_computed_block_of_pred {R : Finset (Fin d.D.N)} {y : Fin (Circuit.of
   exact computed_block R x (mem_bits.2 ⟨hR, hr⟩) hne
 
 /-- **The block's size, bounded**: when every gate is at most `w₀` bits wide, `R`'s block has at most
-`w₀ #R + novelReads R + width(θ)` bits. -/
+`w₀ #R + freshInput R + width(θ)` bits. -/
 theorem card_block_le {w₀ : ℕ} (hw : ∀ g, d.D.w g ≤ w₀) (R : Finset (Fin d.D.N)) :
-    (block d R).card ≤ w₀ * R.card + novelReads d R + d.D.width d.θ := by
+    (block d R).card ≤ w₀ * R.card + freshInput d R + d.D.width d.θ := by
   rw [card_block]
   have hdisj : Disjoint R (d.D.into R) :=
     disjoint_left.2 fun g hg hgi => (mem_filter.1 hgi).2.1 hg
@@ -198,8 +198,8 @@ theorem card_block_le {w₀ : ℕ} (hw : ∀ g, d.D.w g ≤ w₀) (R : Finset (F
     unfold Verity.Circuit.width
     rw [mul_comm, ← smul_eq_mul]
     exact sum_le_card_nsmul R d.D.w w₀ fun g _ => hw g
-  have hI : d.D.width (d.D.into R) ≤ novelReads d R + d.D.width d.θ := by
-    unfold novelReads Verity.Circuit.width
+  have hI : d.D.width (d.D.into R) ≤ freshInput d R + d.D.width d.θ := by
+    unfold freshInput Verity.Circuit.width
     calc ∑ g ∈ d.D.into R, d.D.w g ≤ ∑ g ∈ (d.D.into R \ d.θ) ∪ d.θ, d.D.w g :=
           sum_le_sum_of_subset (by rw [sdiff_union_self_eq_union]; exact subset_union_left)
       _ ≤ ∑ g ∈ d.D.into R \ d.θ, d.D.w g + ∑ g ∈ d.θ, d.D.w g := by
@@ -207,8 +207,8 @@ theorem card_block_le {w₀ : ℕ} (hw : ∀ g, d.D.w g ≤ w₀) (R : Finset (F
   calc d.D.width (R ∪ d.D.into R) = d.D.width R + d.D.width (d.D.into R) := by
         unfold Verity.Circuit.width
         rw [sum_union hdisj]
-    _ ≤ w₀ * R.card + (novelReads d R + d.D.width d.θ) := Nat.add_le_add hR hI
-    _ = w₀ * R.card + novelReads d R + d.D.width d.θ := by rw [Nat.add_assoc]
+    _ ≤ w₀ * R.card + (freshInput d R + d.D.width d.θ) := Nat.add_le_add hR hI
+    _ = w₀ * R.card + freshInput d R + d.D.width d.θ := by rw [Nat.add_assoc]
 
 /-- **Width on word-aligned blocks**: a block made of whole words that is handed any bit of a region made of whole
 words, each at least `f` bits wide, is handed at least `f` of the region's bits. -/

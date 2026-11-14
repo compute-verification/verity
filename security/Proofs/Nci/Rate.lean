@@ -21,8 +21,8 @@ open Verity Finset
 theorem compliesRate_of_complies {c k B : ℕ} {d : RegisteredCircuit} {P : Partition d.D B} (hP : P.IsCK d c k)
     (htile : ∀ u, (P.gates u).card = c) : CompliesRate c ((k : ℝ) / c) d := by
   refine ⟨B, P, fun u => ⟨(htile u).le, ?_⟩⟩
-  have hw : novelReads d (P.gates u) = (d.unregistered (P.gates u)).card := by
-    simp [novelReads, RegisteredCircuit.unregistered, Circuit.width, hP.boolean.one_bit]
+  have hw : freshInput d (P.gates u) = (d.unregistered (P.gates u)).card := by
+    simp [freshInput, RegisteredCircuit.unregistered, Circuit.width, hP.boolean.one_bit]
   rw [hw, show d.D.size (P.gates u) = c from htile u]
   rcases Nat.eq_zero_or_pos c with rfl | hc
   · have h0 : P.gates u = ∅ := Finset.card_eq_zero.1 (htile u)
