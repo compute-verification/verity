@@ -51,7 +51,7 @@ worker_gb = 6
 # `verity/protocols/policy/inference_only/verifier/nci/lean/lakefile.toml`, named on its own too: served_cases' inference-only case goes through
 # that package's `inference-only` check, which its tests `lake build` there, beside one-stage v1's case through
 # `sampled-proofs-one-stage`, v2's through `sampled-proofs-one-stage-zk` and remote's sampled proofs case through
-# `vstar-recursive sampled` (`verity/protocols/proofs/recursion/verifier/recursive`); its slow test builds the 4,32,4 class's
+# `vstar-recursive sampled` (`verity/protocols/proofs/spot_flock/verifier/lean`); its slow test builds the 4,32,4 class's
 # window circuit (`adapters/vllm/verity_vllm`).
 # `verity/protocols/compose/device/live_challenger`: the challenger reserve's tests open a session on its local auditor device (auditor.py), whose
 # serve.py runs under its tests' stub of the Lean verifier's coins (stub_serve.py). `verity_numerical.bench`'s input sets

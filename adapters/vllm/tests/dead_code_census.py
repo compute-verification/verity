@@ -103,7 +103,7 @@ def py_files() -> list[Path]:
             if "__pycache__" in p.parts or p.resolve() == Path(__file__).resolve():
                 continue                                             # this tool names modules in string literals; it is not a consumer
             if p.name.endswith(SIDECAR) or p == DEFINITIONS / "__init__.py":
-                continue                                             # verity.definitions' own __init__ is verity.ml's, not a Definition's
+                continue                                             # verity.definitions' own __init__ is the package's, not a Definition's
             if top == DEFINITIONS and (parts := p.relative_to(top).parts)[0] not in MOVED_OUT and (len(parts) > 1 or parts[0] in CORE_TOPS):
                 continue                                             # core's: neither in the graph nor in the census
             out.append(p)
