@@ -57,7 +57,7 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
             "proofs.spot.verifier.one_stage.registered", "proofs.spot.verifier.service",
         ),
-        "verity_vllm/pipeline/window_law.py": ("proofs.spot.verifier.one_stage.draw",),
+        "verity_vllm/pipeline/window_sampling_design.py": ("proofs.spot.verifier.one_stage.draw",),
         "verity_vllm/program/predict/node_window_values.py": ("proofs.spot.verifier.one_stage.registered",),
         "verity_vllm/program/predict/weights_tie.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.draw",

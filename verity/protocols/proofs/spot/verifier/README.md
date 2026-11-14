@@ -167,7 +167,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `ExecStratified.lean` and `ExecSampleOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
-  `verity/protocols/proofs/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
+  `verity/protocols/proofs/spot/verifier/lean`, its `spot-verifier`) and the Python beside it on every check: R1-R8
   (`check`, with the fan-out its verdict publishes), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
@@ -185,7 +185,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   is a reject whose audit record fails `run`. `Spot/Slots.lean` puts that sample in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`).
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `Spot/OneStageZk.lean`, the executable
-  `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
+  `spot-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters, evidence, refusals
   and check are in the module's docstring; the parameters, one statement's check and a member's statement and files
   are in `Spot/OneStageZkStatement.lean`, which it imports, and the run over the members and the checks in the
   module itself, all in the namespace `Spot.OneStageZk`. It reads the
@@ -280,7 +280,7 @@ Tests: `uv run tools/check/suites.py protocols/spot`.
 ### Verdicts of record
 
 No function here returns a verdict of its own. Each verdict SPOT acts on is the Lean's: `one_stage.verifier` asks
-`sampled-proofs-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
+`spot-verifier` and computes the Python twin beside it, and a disagreement, or no answer from the Lean, is a
 refusal (`DISAGREE`). A verdict whose Lean no interface here reaches yet raises
 `NotImplementedError("proofs/spot-two-stage-sound")` (`verifier.not_written`), and its twin answers the difftest only.
 
@@ -446,7 +446,10 @@ A program's weights, constants and tables are values: committed once, under hidi
   premise `RowsSession.ServedRegistered` of `Flock.Guarantees.ServedRowsLinked`.
 - **The audit record** holds the roots the verifier opened the reads against (`audit.session_registered`, Lean
   `Record.sessionRegistered`) to the docket's own (`Record.ownRegistered`), taking a read named by one of its
-  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other.
+  own ports at that port's root (`audit.less_own_reads`, `Record.lessOwnReads`) and refusing it at any other. It holds
+  a read of a window value its caller names (the parameters' `window_values`, none by default; never a port or a
+  registered value of the verifier's) to the root of that value's entry in the record's `window.activations.values`,
+  refusing it at any other root, under two roots, or with no such entry (`audit.window_reads`, `Record.windowReads`).
 
 Pinned by `tests/test_registered.py`, `tests/test_served.py` and `verity/protocols/proofs/flock/prover/tests/test_lean_registered_reads.py`.
 

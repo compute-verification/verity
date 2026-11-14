@@ -136,7 +136,7 @@ def labels(key: bytes, start: int, count: int) -> bytes:
     return bytes(out)
 
 
-def draw_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: int) -> tuple[int, ...]:
+def sample_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: int) -> tuple[int, ...]:
     """The session's `k` challenges, each uniform in `[0, n)` and independent (with replacement)."""
     key = derive(coin_secret, COIN_DOMAIN, {"server": server, "session": session, "n": n})
     return tuple(key.uniform(n, j) for j in range(k))
@@ -320,6 +320,14 @@ class Verdict:
         return {"accepted": self.accepted}
 
 
+def _verifies(verify: Verify, signed: SignedWipe) -> bool:
+    """Whether the session's signature verifies under its key, by its scheme's `verify`."""
+    try:
+        return bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
+    except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
+        return False
+
+
 def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
             schemes: Mapping[str, Verify] = SCHEMES) -> Verdict:
     """The check of a signed session against the commitment published when it opened.  It fails closed: an unknown
@@ -331,13 +339,8 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
         reasons.append(f"signature scheme {signed.scheme!r} is not accepted")
     elif signed.public_key not in trusted:
         reasons.append("the session is signed by a key that is not a trusted memory challenger's")
-    else:
-        try:
-            ok = bool(verify(signed.public_key, signed.commitment.session, signed.message(), signed.signature))
-        except Exception:  # noqa: BLE001 - a malformed signature verifies nothing
-            ok = False
-        if not ok:
-            reasons.append("the signature does not verify")
+    elif not _verifies(verify, signed):
+        reasons.append("the signature does not verify")
     if signed.commitment != commitment:
         reasons.append("the signed header is not the session's commitment")
     p = commitment.params
@@ -402,5 +405,6 @@ __all__ = ["CLOCK", "COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_
            "EGRESS_UNIT_BITS", "END_TAG", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "MARK_BYTES",
            "PROTOCOL", "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "START_TAG", "WRONG", "BatchRecord",
            "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest",
-           "challenges_for", "draw_indices", "egress_units", "end_message", "label", "labels", "log2_error", "mark_of",
+           "challenges_for", "sample_indices", "egress_units", "end_message", "label", "labels", "log2_error",
+           "mark_of",
            "message", "raw_clock_ns", "records_root", "retained_bits", "start_message", "verdict", "wipe_key"]

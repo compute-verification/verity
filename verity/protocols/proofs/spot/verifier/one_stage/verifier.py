@@ -1,4 +1,4 @@
-"""The one-stage audit's verifier: its Lean port (`sampled-proofs-verifier`, the Lake package
+"""The one-stage audit's verifier: its Lean port (`spot-verifier`, the Lake package
 `verity/protocols/proofs/spot/verifier/lean`, built with `lake` on first use) and this package's Python, the reference, run side by
 side on every check.
 
@@ -61,12 +61,12 @@ from verity.protocols.proofs.spot.verifier.one_stage import audit, caller as C, 
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
-"""Whose verdict is the record's: `"lean"` (`sampled-proofs-verifier`) or `"python"` (this package's, the reference)."""
+"""Whose verdict is the record's: `"lean"` (`spot-verifier`) or `"python"` (this package's, the reference)."""
 
 DISAGREE = "disagree"
 ROOT = Path(__file__).resolve().parents[6]
 PACKAGE = ROOT / "verity/protocols/proofs/spot/verifier/lean"
-EXE = "sampled-proofs-verifier"
+EXE = "spot-verifier"
 #: SPOT's caller's check's Lean (`VStar.Recursive.Caller.check`), which SPOT's package can't load: its own executable
 CALLER_PACKAGE = ROOT / "verity/protocols/proofs/spot_flock/verifier/lean"
 CALLER_EXE = "spot-flock-caller"
@@ -81,7 +81,7 @@ class LeanError(RuntimeError):
 
 @functools.cache
 def executable(exe: str = EXE, package: Path = PACKAGE) -> Path:
-    """`lake build sampled-proofs-verifier` (or `exe` of `package`), once per process, under `BUILD_LOCK`; the
+    """`lake build spot-verifier` (or `exe` of `package`), once per process, under `BUILD_LOCK`; the
     executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
@@ -174,7 +174,7 @@ atexit.register(_caller_server.close)
 
 
 def lean(fn: str, value: Any) -> dict[str, Any]:
-    """The Lean's answer (`spot-flock-caller`'s for ``caller``, else `sampled-proofs-verifier`'s): its output, or
+    """The Lean's answer (`spot-flock-caller`'s for ``caller``, else `spot-verifier`'s): its output, or
     `{"refused": reason}` where it refuses the input. Where it can't be built or run, or answers outside its protocol,
     `{"refused": reason, "answered": False}`: a refusal that is not the Lean's."""
     server = _caller_server if fn == "caller" else _server
@@ -610,15 +610,16 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                  sampling_design: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
                  served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
-                 certified: Sequence[str] = ()) -> dict[str, Any]:
+                 certified: Sequence[str] = (), window_values: Sequence[str] = ()) -> dict[str, Any]:
     """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the docket's
-    values (`audit.session_registered(verdicts, registration)`) less the reads of its own ports at their own roots
-    (`audit.less_own_reads`), and with `certified`, the names of the values the verifier holds certified entries for
+    values less the reads of its own ports at their own roots, with the reads of the window values its caller names
+    (``window_values``) less those at the roots of their entries in the docket's `window.activations.values`
+    (`audit.held_reads`), and with `certified`, the names of the values the verifier holds certified entries for
     (the docket check's `certified`), each held to have a reported read (`Record.certifiedCheck`): the record of
     record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
     certified = sorted(certified)
-    opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
+    opened = audit.held_reads(verdicts, registration, window_values)
     py = audit.audit_record(registration, receipt, draw, sampling_design, list(proved_units), instances, statement, verdicts, delta,
                             sessions, served, session_roots, opened, certified)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
@@ -627,7 +628,8 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
                           "session_roots": None if session_roots is None else dict(session_roots),
-                          **({"certified": certified} if certified else {})})
+                          **({"certified": certified} if certified else {}),
+                          **({"window_values": list(window_values)} if window_values else {})})
     if isinstance(got, str):
         try:
             got = json.loads(got)

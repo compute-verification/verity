@@ -1,0 +1,120 @@
+# The retired word "law" outside the proof system's paths, in the Glossary's words: what `tools/move/rename.py --map
+# tools/move/law_words_map.toml` renames. GLOSSARY.md: "law", "draw law", `law` identifiers, the Lean's `Law` -> the
+# sampling design. A name takes proofs' spelling (`law_lean_map.toml`): its law part becomes `SamplingDesign`,
+# `sampling_design` or `SAMPLING_DESIGN` (`WorkLaw` to `WorkSamplingDesign`); prose takes "sampling design". The
+# adapter's test constants take the `DESIGN` its other tests already hold, so the adapter has one spelling.
+# It renames the names whose definitions are on this side (the PoUW plan's `WorkLaw`, `CountLaw`, `TileLaw` and
+# `window_laws`, the configuration's `default_law`, the adapter's `window_law` module, the served commit's `law_of`,
+# test constants `LAW`), the Lean names proofs' map renamed where Python cites them (`Law.toJson`),
+# and prose that names the sampling design by a possessive or a qualifier.
+# Left by this map:
+# - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, the lane's benchmarks, the
+#   files `law_prose_map.toml` names), and the names defined there (`Law`, `selection_law`, `params_law`, `second_law`,
+#   `core_law`, one-stage's `law_of`, `V3C_LAW`, `FLOCK_DRAW_LAW`): a use here takes proofs' spelling after its map;
+# - the adapter's `law_of`, which proofs' files call as `serving_rows.law_of`: it renames with those callers;
+# - the bare `law` in code and every Lean name, which follow proofs' map and lean's names move;
+# - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the key `law`), reason codes
+#   (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`, and the PoUW window's
+#   refusal message, which its Lean twin (`PouwWindow/Inputs.lean`) throws in the same words;
+# - another sense: a probability law (`noise_law`, `_below_law`), a scaling, power or size law, a law of the courts;
+# - network-accounting's files (the certifier, its benchmarks), which that lane runs this map's spellings over;
+# - records of what was: GLOSSARY.md's table, the retired-terms lint, its allowlists and tests, the move tool's tests.
+
+[words]
+"test_a_profile_drawn_by_strata_reads_its_bounds_off_the_law" = "test_a_profile_drawn_by_strata_reads_its_bounds_off_the_sampling_design"
+"test_a_bernoulli_law_is_the_single_unit_case" = "test_a_bernoulli_sampling_design_is_the_single_unit_case"
+"test_exhaustive_facts_travel_with_the_law" = "test_exhaustive_facts_travel_with_the_sampling_design"
+"test_json_carries_the_law_and_the_exhaustive_facts" = "test_json_carries_the_sampling_design_and_the_exhaustive_facts"
+"test_ill_formed_stratified_laws_are_refused" = "test_ill_formed_stratified_sampling_designs_are_refused"
+"test_stratified_json_is_the_profile_law" = "test_stratified_json_is_the_profile_sampling_design"
+"test_the_count_law_is_mains_stratified_rule" = "test_the_count_sampling_design_is_mains_stratified_rule"
+"test_the_work_law_sizes_tiles_by_work_and_the_rest_at_its_floor" = "test_the_work_sampling_design_sizes_tiles_by_work_and_the_rest_at_its_floor"
+"test_the_work_law_is_roots_rule" = "test_the_work_sampling_design_is_roots_rule"
+"test_the_default_work_law_draws_a_calls_share_of_the_windows_budget" = "test_the_default_work_sampling_design_draws_a_calls_share_of_the_windows_budget"
+"test_the_window_law_is_the_window_pin_s" = "test_the_window_sampling_design_is_the_window_pin_s"
+"test_the_eps_holds_at_the_work_laws_cap" = "test_the_eps_holds_at_the_work_sampling_designs_cap"
+"test_the_work_law_audits_pearl_c4" = "test_the_work_sampling_design_audits_pearl_c4"
+"test_verify_run_accepts_an_honest_pass_as_the_work_law_does" = "test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does"
+"the registration's law" = "the registration's sampling design"
+"the partition file's law" = "the partition file's sampling design"
+"The partition file's law" = "The partition file's sampling design"
+"proof system's law" = "proof system's sampling design"
+"the partition's law" = "the partition's sampling design"
+"the sample's law" = "the sample's sampling design"
+"one-stage audits' law" = "one-stage audits' sampling design"
+"one-stage's law object" = "one-stage's sampling design object"
+"`reusing`'s R's law" = "`reusing`'s R's sampling design"
+"A4 P6's law" = "A4 P6's sampling design"
+"serving rows' window law" = "serving rows' window sampling design"
+"under another law" = "under another sampling design"
+"by another law" = "by another sampling design"
+"any other law" = "any other sampling design"
+"any of its laws" = "any of its sampling designs"
+"`draw.py` laws" = "`draw.py` sampling designs"
+"``work`` law" = "``work`` sampling design"
+"every bernoulli law" = "every bernoulli sampling design"
+"first default law" = "first default sampling design"
+"draw-law seam" = "sampling-design seam"
+"work-law budget" = "work sampling design's budget"
+"window_laws" = "window_sampling_designs"
+"default_law" = "default_sampling_design"
+"law_name" = "sampling_design_name"
+"WorkLaw" = "WorkSamplingDesign"
+"CountLaw" = "CountSamplingDesign"
+"TileLaw" = "TileSamplingDesign"
+"a4_law" = "a4_sampling_design"
+"Law.toJson" = "SamplingDesign.toJson"
+"Flock.Draw.Law.bernoulli" = "Flock.Draw.SamplingDesign.bernoulli"
+"Law.subset_miss" = "SamplingDesign.subset_miss"
+
+[[words_in]]
+files = ["adapters/**"]
+[words_in.words]
+"window_law" = "window_sampling_design"
+
+[[words_in]]
+files = ["benchmarks/pouw/**", "**/served_zk/served_commit.py"]
+[words_in.words]
+"law_of" = "sampling_design_of"
+
+[[words_in]]
+files = ["**/served_table.py"]
+[words_in.words]
+"_law" = "_design"
+
+[[words_in]]
+files = ["verity/commitments/**/tests/test_blocks.py", "verity/commitments/**/tests/test_interface.py",
+         "verity/protocols/compose/**/test_composition_difftest.py"]
+[words_in.words]
+"REUSING_LAW" = "REUSING_SAMPLING_DESIGN"
+"LAW" = "SAMPLING_DESIGN"
+
+[[words_in]]
+files = ["adapters/**/test_tp_wires.py", "adapters/**/served_rope.py", "adapters/**/test_edge_history.py",
+         "adapters/**/served_experts.py", "adapters/**/test_serving_rows_bundle.py",
+         "adapters/**/test_serving_rows_boolean.py", "adapters/**/protocols/spot.py"]
+[words_in.words]
+"LAW" = "DESIGN"
+
+[rewrite]
+exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "**/*.lean", "**/lean-audit.json", "**/lakefile.*", "**/lake-manifest.json",
+           "verity/protocols/proofs/**", "benchmarks/one_stage/**", "benchmarks/remote_session/**",
+           "benchmarks/commitments/**", "benchmarks/dsa_topk/**", "benchmarks/flock_kernels/**",
+           "benchmarks/flock_s8_block/**", "benchmarks/multi_unit/**", "benchmarks/private_circuit/**",
+           "benchmarks/proof_throughput/**", "benchmarks/replay_ladder/**", "benchmarks/route_capture/**",
+           "benchmarks/sampling_plan/**", "benchmarks/serve_tax/**", "benchmarks/spot_figures/**",
+           "benchmarks/spot_proved/**", "benchmarks/two_stage/**", "benchmarks/unit_walk/**",
+           "benchmarks/verifier_cost/**",
+           "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**", "security/*/Spot.lean",
+           "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**",
+           "verity/protocols/accounting/certifier/**", "security/**/Certifier/**", "benchmarks/network_traces/**", "benchmarks/prove_path/**",
+           "benchmarks/certifier_term/**", "benchmarks/network_e2e/**", "benchmarks/network_sim/**",
+           "benchmarks/certifier_timing/**", "benchmarks/scan_cost/**", "benchmarks/datacenter/**",
+           "benchmarks/nci/**", "**/vectors/**", "GLOSSARY.md", "tests/lint/**", "tests/test_retired_terms.py",
+           "tests/test_lean_vocabulary.py", "**/test_move_check.py"]
+
+[keep]
+patterns = ['"[a-z0-9_-]*laws?[a-z0-9_-]*"', "'[a-z0-9_-]*laws?[a-z0-9_-]*'", 'note:[\w./-]+', 'art:[0-9a-f]+',
+            'cursor/[\w./-]+']
+strings = ["the registration's law {law!r} is not subset:K′"]

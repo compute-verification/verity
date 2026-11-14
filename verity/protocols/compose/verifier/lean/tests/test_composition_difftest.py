@@ -215,7 +215,7 @@ def kinds(C) -> list[str]:
         return [k for k in KINDS if k in C.cases]
     if C is R.INFERENCE_ONLY:
         return list(INFERENCE_CASES)
-    if C is R.SAMPLED_PROOFS:
+    if C is R.SPOT:
         return [R.REJECT]
     if C in (R.WIPE, R.COUNTED_WIPE):
         return list(R.WIPE_CASES.KINDS)
@@ -312,7 +312,7 @@ def one_record(product: R.Same, cases: list[dict], windows: bool = False) -> lis
     With ``windows``, every window of the product's PoUW period names that record too (`windows_on`), so that its
     `windows` tie holds; the period then refuses, since a window's Commit record registers its own tables. Without it,
     an honest period's windows name their own records, and the tie refuses."""
-    first = next(c for c in cases if c["id"] == R.SAMPLED_PROOFS.id)
+    first = next(c for c in cases if c["id"] == R.SPOT.id)
     by_id = {C.id: C for C in product.components}
 
     def recommit(c: dict, root: bytes, evidence: bytes) -> dict:
@@ -598,7 +598,7 @@ def test_spot_refuses_one_stage_v1(name, request):
     server = request.getfixturevalue(f"{name}_server")
     want = {"v1": f"params: the parameters name no proofs: {R.V1_REFUSED}",
             "v1-evidence": f"evidence: the evidence names no proofs: {R.V1_REFUSED}"}
-    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    others = [C for C in product.components if C is not R.SPOT]
     seen = collections.Counter()
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
@@ -607,13 +607,13 @@ def test_spot_refuses_one_stage_v1(name, request):
         assert OS.answer(OS._case(_v1(audit)))["verdict"] == R.UNDECIDED
         for br, why in want.items():
             sampled = broken_case(audit, br)
-            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            got = R.SPOT.answer({**sampled, "blobs": BLOBS})
             assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
-            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            by_id = {c["id"]: c for c in (*drawn, as_component(R.SPOT, sampled))}
             case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
             assert product.answer(case)["verdict"] == R.REJECT
             out = server.exchange(case)
-            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            assert out["verdict"] == R.REJECT and f"{R.SPOT.id} reject: {why}" in out["reason"], out
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
@@ -627,7 +627,7 @@ def test_spot_refuses_a_sampling_design_that_is_no_subset(remote_server):
     want = {"stratified": f"params: {OS.subset_only('stratified')}", "work": f"params: {OS.subset_only('work')}",
             "stratified-no-partition": "params: partition is null: the sessions are verified against the verifier's own "
                                        "partition object"}
-    others = [C for C in R.REMOTE.components if C is not R.SAMPLED_PROOFS]
+    others = [C for C in R.REMOTE.components if C is not R.SPOT]
     seen = collections.Counter()
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
@@ -635,13 +635,13 @@ def test_spot_refuses_a_sampling_design_that_is_no_subset(remote_server):
     def check(cases, audit):
         for br, why in want.items():
             sampled = broken_case(audit, br)
-            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            got = R.SPOT.answer({**sampled, "blobs": BLOBS})
             assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
-            by_id = {c["id"]: c for c in (*cases, as_component(R.SAMPLED_PROOFS, sampled))}
+            by_id = {c["id"]: c for c in (*cases, as_component(R.SPOT, sampled))}
             case = product_case(R.REMOTE, one_record(R.REMOTE, [by_id[C.id] for C in R.REMOTE.components]))
             assert R.REMOTE.answer(case)["verdict"] == R.REJECT
             out = remote_server.exchange(case)
-            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            assert out["verdict"] == R.REJECT and f"{R.SPOT.id} reject: {why}" in out["reason"], out
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
@@ -668,20 +668,20 @@ def test_spot_refuses_the_recursive_form(name, request):
         request.getfixturevalue("recorded")
     server = request.getfixturevalue(f"{name}_server")
     why = f"params: {R.RECURSIVE_REFUSED}"
-    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    others = [C for C in product.components if C is not R.SPOT]
     seen = collections.Counter()
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
     @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
     def check(drawn, audit):
         for br, sampled in {"named": _recursive(audit), "unnamed": form_case(audit, "params-recursive")}.items():
-            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            got = R.SPOT.answer({**sampled, "blobs": BLOBS})
             assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
-            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            by_id = {c["id"]: c for c in (*drawn, as_component(R.SPOT, sampled))}
             case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
             assert product.answer(case)["verdict"] == R.REJECT
             out = server.exchange(case)
-            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            assert out["verdict"] == R.REJECT and f"{R.SPOT.id} reject: {why}" in out["reason"], out
             seen[br] += 1
     check()
     assert set(seen) == {"named", "unnamed"}, dict(seen)
@@ -723,7 +723,7 @@ def test_spot_reads_the_two_stage_form(remote_server):
     want = {"params-keys": "params: the keys of the parameters are not ",
             "evidence-keys": "evidence: the keys of the evidence are not ",
             "evidence-other": R.mismatch("one-stage", TWO.T.TWO_STAGE)}
-    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    others = [C for C in product.components if C is not R.SPOT]
     seen = collections.Counter()
 
     @settings(max_examples=2, database=None, deadline=None, suppress_health_check=list(HealthCheck))
@@ -732,29 +732,29 @@ def test_spot_reads_the_two_stage_form(remote_server):
         for br, sampled in _two_stage_cases(audit).items():
             if br == "evidence-other":
                 with pytest.raises(ValueError, match="outside the mirror"):
-                    R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                    R.SPOT.answer({**sampled, "blobs": BLOBS})
                 why = want[br]
-                component = {**as_component(R.SAMPLED_PROOFS, form_case(audit)),
+                component = {**as_component(R.SPOT, form_case(audit)),
                              "evidence": bytes.fromhex(sampled["evidence"])}
             else:
-                got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+                got = R.SPOT.answer({**sampled, "blobs": BLOBS})
                 why = got["reason"]
                 assert got["verdict"] == R.REJECT and why.startswith(want[br]), got
-                component = as_component(R.SAMPLED_PROOFS, sampled)
+                component = as_component(R.SPOT, sampled)
             by_id = {c["id"]: c for c in (*drawn, component)}
             case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
             if br != "evidence-other":
                 assert product.answer(case)["verdict"] == R.REJECT
             out = remote_server.exchange(case)
-            refused = f"{R.SAMPLED_PROOFS.id} reject: {why}"
+            refused = f"{R.SPOT.id} reject: {why}"
             assert out["verdict"] == R.REJECT and refused in out["reason"], f"{br}: {out['verdict']}: {out['reason']}"
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
 
 
-#: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
-REUSING_LAW = {"k": 1, "law": "subset"}
+#: `reusing`'s R's sampling design: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
+REUSING_SAMPLING_DESIGN = {"k": 1, "law": "subset"}
 
 
 def reusing(made: list[dict]):
@@ -774,7 +774,7 @@ def reusing(made: list[dict]):
         s = OS.RegisteredSetup(OS._registered_program("CoreRemoteReuse", 1, params, tuple(n for n, _ in named)),
                                [{n: true[v]["words"] for n, v in named}])
         OS.PROGRAMS[s.sha512] = s.program
-        rec = OS._json(OS.R.record(s.program, s.query, REUSING_LAW, OS.SCHEME,
+        rec = OS._json(OS.R.record(s.program, s.query, REUSING_SAMPLING_DESIGN, OS.SCHEME,
                                    [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports], OS.WINDOW,
                                    registered=[{**true[v], "value": n} for n, v in named], leaf_layer=OS.LEAF,
                                    anchors=[], previous=OS.R.digest(w),
@@ -791,13 +791,13 @@ def reusing_audit(m: dict) -> dict:
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
     file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_SAMPLING_DESIGN, rec, trees=0)
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
         for e in rec["registered"]}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/10",
-              "law": REUSING_LAW, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
+              "law": REUSING_SAMPLING_DESIGN, "leaf_layer": OS.LEAF, "log": [m["w"]], "outputs": m["outputs"],
               "parameters": s.signature, "partition": {"program": s.sha512, "query": s.query}, "ports": s.ports,
               "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
@@ -823,18 +823,18 @@ def test_remote_on_one_record_that_reuses_the_windows_registration(remote_server
     period = as_component(R.POUW_PERIOD, PPC.serve(PPC.credit_cases.period_instance(
         random.Random("remote/reusing"), windows=1, commit=reusing(made), **PPC.COVERED)))
     reused = reusing_audit(made[0])
-    audit = as_component(R.SAMPLED_PROOFS, reused)
+    audit = as_component(R.SPOT, reused)
     policy = policy_on(audit)
     record = OS.R.digest(made[0]["record"])
     assert [x.hex() for x in R.policy_record(policy["root"], policy["evidence"])] == [record]
     assert [x.hex() for x in R.window_records(period["root"], period["evidence"])] == [record]
-    got = R.SAMPLED_PROOFS.answer({**reused, "blobs": BLOBS})
+    got = R.SPOT.answer({**reused, "blobs": BLOBS})
     assert (got["verdict"], got["reason"]) == (R.REJECT, NO_SESSION), got
     case = product_case(R.REMOTE, [policy, period, audit])
     assert R.REMOTE.verdicts(case) == [R.ACCEPT, R.ACCEPT, R.REJECT], R.REMOTE.verdicts(case)
     python, lean = R.REMOTE.answer(case), remote_server.exchange(case)
     assert {k: v for k, v in lean.items() if k != "reason"} == {k: v for k, v in python.items() if k != "reason"}
-    assert python["verdict"] == R.REJECT and lean["reason"] == f"{R.SAMPLED_PROOFS.id} reject: {NO_SESSION}", lean
+    assert python["verdict"] == R.REJECT and lean["reason"] == f"{R.SPOT.id} reject: {NO_SESSION}", lean
 
 
 def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():

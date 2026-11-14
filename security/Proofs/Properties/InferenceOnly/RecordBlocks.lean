@@ -5,7 +5,7 @@ public import Proofs.Properties.InferenceOnly.RecordJson
 /-!
 # The grids the record check reads of a record's inference blocks
 
-`RecordText.gridsOf` reads, per template, the grids its units' slots are read from: the record's inference entries
+`Spot.RecordText.gridsOf` reads, per template, the grids its units' slots are read from: the record's inference entries
 of that template, sorted, tiling its units, neighbours of one row length merged. This module states what that gives
 (`gridsOf_ok`): the class has at least one slot, there is one list of grids a template, in the templates' order,
 and a template's grids are in unit order, each after the one before it, cover its units and no other, and each has a
@@ -22,7 +22,7 @@ at least one (`gridOf_q`) which, times the slot digit's radix, divides the produ
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
 open Lean (Json)
-open InferenceOnlyCheck.RecordText (Grid gridOf merged gridsOf Tmpl)
+open Spot.RecordText (Grid gridOf merged gridsOf Tmpl)
 open Spot.Wires (tiles)
 
 /-- The ranges of a list of grids, as `Spot.Wires.tiles` takes them. -/
@@ -220,7 +220,7 @@ theorem gridOf_period {S : Nat} {e : Json} {tid : String} {g : Grid} (h : gridOf
   simp only [bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   repeat (split at h <;> try cases h)
   rename_i axes _ _ radix _ hlen _ k hk hrk _
-  have hkm : k ∈ List.filter (fun k => RecordText.stringOf? axes[k]! == some "slot") (List.range axes.size) := by
+  have hkm : k ∈ List.filter (fun k => Spot.RecordText.stringOf? axes[k]! == some "slot") (List.range axes.size) := by
     rw [hk]
     exact List.mem_singleton.2 rfl
   have hk' : k < radix.length := by

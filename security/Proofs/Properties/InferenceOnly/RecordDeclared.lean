@@ -31,7 +31,7 @@ With the first walk's disjointness (`inputsOf_decls`) that gives what fills a ro
 
 namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
-open InferenceOnlyCheck.RecordText (Row Tmpl Decl Fill Inputs TableRead Opening inputsOf fillAt rect)
+open Spot.RecordText (Row Tmpl Decl Fill Inputs TableRead Opening inputsOf fillAt rect)
 open InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps (forIn_list_prefix)
 open Lean (Json)
 

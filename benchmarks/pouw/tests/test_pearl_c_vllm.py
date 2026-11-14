@@ -27,7 +27,7 @@ import numpy as np
 import pytest
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_u as PCU
 from verity.protocols.proofs.spot.verifier.one_stage import docket as REG
-from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PH
+from verity_torch.pouw.pearl_c import host as PH
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
@@ -67,6 +67,7 @@ from verity.protocols.accounting.pouw.prover.schemes import pearl_kw as P
 from verity.protocols.accounting.pouw.verifier.serving import SchemeId
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity_torch.pouw.pearl_c import run_device as PPDR
 
 # the work sampling design and the clear audit are a reference tool's (verity/protocols/accounting/pouw/prover/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "clear"))
@@ -137,8 +138,8 @@ def test_screen_decides_the_per_row_rules_as_row_passes():
     words[5, 3] = np.float32(200.0).view(np.uint32)                # one large entry: s over 444·ρ fails the floor only
     x = torch.from_numpy(words.view(np.float32).copy())
     alpha, aux = stats(words)
-    fails, unsure = PPD.screen(x, alpha, aux)
-    got = PPD.excluded(fails, unsure, x)
+    fails, unsure = PPDR.screen(x, alpha, aux)
+    got = PPDR.excluded(fails, unsure, x)
     want = tuple(i for i, row in enumerate(words) if not CW.row_passes([int(v) for v in row]))
     assert got == want and 1 in got and 2 in got and 4 in got and 0 not in got
 
@@ -154,9 +155,9 @@ def test_an_unsure_row_is_decided_exactly():
     row[pos[16]] = np.float32(np.sqrt(thr))                        # exactly at the threshold: dead, and inside the band
     words = (row.view(np.uint32) & 0xFFFF0000)[None]
     x = torch.from_numpy(words.view(np.float32).copy())
-    fails, unsure = PPD.screen(x, *stats(words))
+    fails, unsure = PPDR.screen(x, *stats(words))
     assert bool(unsure[0]) and not bool(fails[0])
-    assert PPD.excluded(fails, unsure, x) == (() if CW.row_passes([int(v) for v in words[0]]) else (0,))
+    assert PPDR.excluded(fails, unsure, x) == (() if CW.row_passes([int(v) for v in words[0]]) else (0,))
 
 
 # ---- the per-call keys --------------------------------------------------------------------------------------------
@@ -170,7 +171,7 @@ def test_call_keys_are_the_fixtures_keys_of(scheme):
     for index, w, m16 in ((0, 0, 32), (5, 1, 8192), (127, 0, 16)):
         mm = Matmul(index, Shape(m16, 1024, 256 if w == 0 else 128), w)
         kk = F.keys_of(s, epoch, mm, C._labelled(epoch.salt + roots[w], "seed-B"))
-        assert PPD.call_keys(epoch.salt, roots[w], index, m16, s.commitment_hash) == kk["dom_a"] + kk["unit"]
+        assert PPDR.call_keys(epoch.salt, roots[w], index, m16, s.commitment_hash) == kk["dom_a"] + kk["unit"]
 
 
 # ---- the run on a recording stand-in for the device ---------------------------------------------------------------
@@ -226,13 +227,13 @@ def device_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
 
     def make(hashing=True, schedule="serial", flag_rows=PPD.FLAG_ROWS, **kw):
-        return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
+        return PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, *coins, hashing=hashing,
                                    capacity=1 << 12, schedule=schedule, flag_rows=flag_rows, salt_key=SALT_KEY, **kw)
     return make, kernel, weights, roots, salt
 
@@ -260,7 +261,7 @@ def test_each_call_runs_the_pipelines_call_steps_at_its_offset_and_keys(device_r
         sh = run.shapes[(32, weights[w].shape[0], 1024)]
         assert by["pd_commit_851"][0][9] == sh.count.data_ptr() and by["pd_commit_851"][1] == (32, 1024, 0, sh.mp)
         index = len(run.cur.matmuls) - 1
-        assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(salt, roots[w], index, 32, run.tree_hash)
+        assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[w], index, 32, run.tree_hash)
         assert bool((sh.xa[m:] == 0).all()) and torch.equal(sh.xa[:m], x.float())
     assert [u.index for u in run.cur.matmuls] == [0, 1, 2] and run.cur.tiles == 4 + 2 + 4
     dev.log.clear()
@@ -383,7 +384,7 @@ def test_a_retained_call_given_its_y_tree_retains_that_tree_and_never_makes_one(
     retained, given = run._retained, {}
 
     def with_tree(cur, mm, m, flags, xa, tree, y=None, y_tree=None):
-        honest = SY.commit_y(PPD._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, SALT_KEY)[1]
+        honest = SY.commit_y(PPDR._bytes(y.contiguous().view(torch.uint8)), y.shape[1], salt, mm.index, SALT_KEY)[1]
         given[mm.index] = bytes([0xA5]) * len(honest) if given else honest
         return retained(cur, mm, m, flags, xa, tree, y=y, y_tree=torch.frombuffer(bytearray(given[mm.index]), dtype=torch.uint8))
     monkeypatch.setattr(run, "_retained", with_tree)
@@ -525,7 +526,7 @@ def _served(monkeypatch, kernel, weights, more=None, **run):
     monkeypatch.setattr(PPD.Kernel, "load", staticmethod(lambda *a: kernel))
     monkeypatch.setattr(PPD, "new_salt_key", lambda scheme: SALT_KEY)
     if run:
-        monkeypatch.setattr(PPD, "PearlCDeviceRun", functools.partial(PPD.PearlCDeviceRun, **run))
+        monkeypatch.setattr(PPDR, "PearlCDeviceRun", functools.partial(PPDR.PearlCDeviceRun, **run))
     model = _Model(weights)
     settings = {"pouw": {"coins": Challenger(0, random.Random(7).randbytes), "device": "cuda", "kernel": "k", **(more or {})}}
     comp = PO.install(model, PO.Context(stage="serve", enabled=(f"pouw:{SCHEME}",), settings=settings))
@@ -541,9 +542,9 @@ def _per_step(engine, end):
     def make(original):
         def step(*a, **kw):
             run, got, served = end(original, a, kw)
-            out.append({**got, "leaves": PPD._bytes(run.leaves[:run.nb * got["tiles"]]),
-                        "roots_a": PPD._bytes(run.roots_buf[:run.nb * got["units"]]),
-                        "flags": PPD._bytes(run.flag_buf[:got.get("screened_rows", 0)].contiguous().view(-1))})
+            out.append({**got, "leaves": PPDR._bytes(run.leaves[:run.nb * got["tiles"]]),
+                        "roots_a": PPDR._bytes(run.roots_buf[:run.nb * got["units"]]),
+                        "flags": PPDR._bytes(run.flag_buf[:got.get("screened_rows", 0)].contiguous().view(-1))})
             return served
         return step
     hooks.wrap(engine, "step", make)
@@ -818,7 +819,7 @@ def test_a_step_completed_behind_it_retains_the_bytes_a_waiting_end_retains(monk
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     steps = [[(0, 200), (1, 200)], [(0, 120), (1, 120)], [(0, 3), (1, 3)]]
-    got, cls = {}, PPD.PearlCDeviceRun
+    got, cls = {}, PPDR.PearlCDeviceRun
     for behind in (False, True):
         monkeypatch.setattr(cls, "retain_behind", behind)
         (runner,) = _runners(monkeypatch)
@@ -866,7 +867,7 @@ def test_a_pass_poisons_again_only_the_shapes_a_call_took_since_the_last_poison(
 def test_the_record_decided_from_the_rows_bytes_is_the_devices(monkeypatch):
     """`screen.excluded_host`, which a device's retained call decides its record by from the bytes its rows' write lands
     (the flags and A's rows as BF16), excludes the rows `screen.excluded` does from the flags and A's FP32 words."""
-    S = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    S = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     rng = np.random.default_rng(31)
     words = bf16_words(rng, 64, 1024).view(np.uint32)
     words[::3, 1::8] = 0x47000000                             # 2^15 off the screen's stride: rows live_row rejects
@@ -962,15 +963,15 @@ def test_the_device_paths_keys_and_tree_hash_are_the_schemes(scheme):
     kernel = PPD.Kernel(R, RecordingDev(), "0" * 64)
     for bad in (None, bytes(31)):
         with pytest.raises(ValueError, match="salt key"):
-            PPD._constants(s, torch.device("cpu"), bad)
-    t = PPD._constants(s, torch.device("cpu"), SALT_KEY)
-    assert PPD._bytes(t) == SALT_KEY.ljust(256, b"\0") + hm96_kernel_constants()
-    assert PPD._constant_keys(t) == {"salt_key": t.data_ptr(), "hm": t.data_ptr() + 256}
+            PPDR._constants(s, torch.device("cpu"), bad)
+    t = PPDR._constants(s, torch.device("cpu"), SALT_KEY)
+    assert PPDR._bytes(t) == SALT_KEY.ljust(256, b"\0") + hm96_kernel_constants()
+    assert PPDR._constant_keys(t) == {"salt_key": t.data_ptr(), "hm": t.data_ptr() + 256}
     rng = np.random.default_rng(1)
     weights = {0: torch.from_numpy(bf16_words(rng, 128, 1024).view(np.float32).copy()).to(torch.bfloat16)}
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
-    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16, salt_key=SALT_KEY)
-    assert run.tree_hash == s.commitment_hash == C.TREE_HASH["h3"] == HM96 and PPD._bytes(run.const) == PPD._bytes(t)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots), capacity=16, salt_key=SALT_KEY)
+    assert run.tree_hash == s.commitment_hash == C.TREE_HASH["h3"] == HM96 and PPDR._bytes(run.const) == PPDR._bytes(t)
 
 
 @pytest.mark.slow
@@ -989,13 +990,13 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16) for w, n in ((0, 256), (1, 128))}
     rows = lambda x: [r.tobytes() for r in x.float().numpy()]  # noqa: E731
     kernel = PPD.Kernel(R, TwinDev(HD.build(tmp_path)), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=key)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=key)
     assert roots == {w: commit_rows(weight_binding(w), -2, rows(t), h, key, HM96_WEIGHTS + w).commitment.root
                      for w, t in weights.items()}
     declared = Workload(tuple(Matmul(w, Shape(16, 1024, t.shape[0]), w) for w, t in weights.items()))
     coins = salt_coin(roots)
     salt = Epoch.start(declared, roots, *coins).salt
-    run = PPD.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, salt_key=key)
+    run = PPDR.PearlCDeviceRun(s, f"pouw:{scheme}", kernel, weights, roots, *coins, capacity=1 << 12, salt_key=key)
     calls = [(0, torch.from_numpy(bf16_words(rng, 20, 1024).view(np.float32).copy()).to(torch.bfloat16)),
              (1, torch.from_numpy(bf16_words(rng, 32, 1024).view(np.float32).copy()).to(torch.bfloat16))]
     for w, x in calls:
@@ -1007,13 +1008,13 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
         mm = Matmul(index, Shape(32, 1024, weights[w].shape[0]), w)
-        ctx = Context(salt, mm, PPD._bytes(run.roots_buf[nb * index:nb * index + nb]), roots[w])
+        ctx = Context(salt, mm, PPDR._bytes(run.roots_buf[nb * index:nb * index + nb]), roots[w])
         want, seed_a = s.row_seeds(ctx, rows(a), range(32)), s.noise(ctx).seed_a
-        assert PPD._bytes(sh.b["rowdig_a"][:64 * 32]) == b"".join(C.row_digest(r) for r in rows(a))
-        assert PPD._bytes(sh.b["seeds_a"][:32 * 32]) == b"".join(want)
-        assert PPD._bytes(sh.b["lkeys_a"][:32 * 32]) == b"".join(C.line_key(z) for z in want)
-        assert PPD._bytes(sh.b["seed_a"][:32]) == seed_a
-        assert PPD._bytes(sh.b["ea_codes"][:32 * sh.mp]) == b"".join(
+        assert PPDR._bytes(sh.b["rowdig_a"][:64 * 32]) == b"".join(C.row_digest(r) for r in rows(a))
+        assert PPDR._bytes(sh.b["seeds_a"][:32 * 32]) == b"".join(want)
+        assert PPDR._bytes(sh.b["lkeys_a"][:32 * 32]) == b"".join(C.line_key(z) for z in want)
+        assert PPDR._bytes(sh.b["seed_a"][:32]) == seed_a
+        assert PPDR._bytes(sh.b["ea_codes"][:32 * sh.mp]) == b"".join(
             bytes(C.sample_line(C.S512Seed(want[t]), 0, 0, 0) if t < 32 else C.sample_line(C.S512Seed(seed_a), 0, 0, t))
             for t in range(sh.mp))
         (commit,) = [(p, i) for n, _, p, i in kernel.dev.log if n == "pd_commit_851"]
@@ -1023,11 +1024,11 @@ def test_every_tree_the_device_path_commits_is_its_hashing_formats(scheme, tmp_p
         a = torch.zeros((32, 1024), dtype=torch.float32)
         a[:x.shape[0]] = x.float()
         want = commit_rows(activation_binding(salt, index), index, rows(a), h, key, index).commitment.root
-        assert PPD._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
+        assert PPDR._bytes(run.roots_buf[nb * index:nb * index + nb]) == want, index
     count = run.cur.tiles
     assert count == 4 + 2
     zero = C.leaf(C.Checked([[0] * 64] * 32, [[0] * 64] * 32), "h3")
-    assert PPD._bytes(run.leaves[:nb * count]) == zero * count
+    assert PPDR._bytes(run.leaves[:nb * count]) == zero * count
     leaves = rng.integers(0, 256, nb * count, dtype=np.uint8).tobytes()      # no GEMM ran: every tile's leaf is the same
     run.leaves[:nb * count] = torch.frombuffer(bytearray(leaves), dtype=torch.uint8)
     kernel.dev.log.clear()
@@ -1137,8 +1138,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
     for w, x in wrows.items():
         d = rows_domain(weight_binding(w), -2, len(x), s.commitment_hash)
         weights[str(w)] = {"n": len(x), "k": k, "root": prover.weight_roots[w].hex(), "excluded_b": list(records[0 if w == 0 else 1].excluded_b),
-                           "rows": PPD._write(tmp_path / "weights" / f"{w}.rows.bf16", bf16_file(rows(x)), digest=False),
-                           "tree": PPD._write(tmp_path / "weights" / f"{w}.tree",
+                           "rows": PPDR._write(tmp_path / "weights" / f"{w}.rows.bf16", bf16_file(rows(x)), digest=False),
+                           "tree": PPDR._write(tmp_path / "weights" / f"{w}.tree",
                                               laid_out(d, [d.leaf(j, j, ROW_SCHEMA, salted(r, HM96_WEIGHTS + w, j))
                                                            for j, r in enumerate(rows(x))]))}
     matmuls = []
@@ -1149,8 +1150,8 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
         y = y[:2 * rec.real_rows * u.shape.n]
         matmuls.append({"index": u.index, "m": u.shape.m, "k": k, "n": u.shape.n, "weight": u.weight, "real_rows": rec.real_rows,
                         "k_kept": rec.k_kept, "excluded_a": list(rec.excluded_a), "root_a": root.hex(),
-                        "rows": PPD._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
-                        "tree": PPD._write(tmp_path / "calls" / f"{u.index}.tree",
+                        "rows": PPDR._write(tmp_path / "calls" / f"{u.index}.rows.bf16", bf16_file(x), digest=False),
+                        "tree": PPDR._write(tmp_path / "calls" / f"{u.index}.tree",
                                            laid_out(d, [d.leaf(i, i, ROW_SCHEMA, salted(r, u.index, i)) for i, r in enumerate(x)])),
                         "y": SY.retain_y(tmp_path, u.index, y, u.shape.n, epoch.salt, prover.salt_key)})
     count = tr.commitment.count
@@ -1162,17 +1163,17 @@ def proved_pass(tmp_path: Path, scheme: str, indices: tuple[int, int] = (0, 1), 
             **({} if live is None else {"pass_index": live}),
             "records_root": PW.records_root(epoch.salt, epoch.weights_root, splits, records).hex(),
             "commitment": {"root": tr.commitment.root.hex(), "count": count},
-            "leaves": PPD._write(tmp_path / "leaves", b"".join(leaves)),
-            "tree_t": PPD._write(tmp_path / "tree_t", laid_out(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
+            "leaves": PPDR._write(tmp_path / "leaves", b"".join(leaves)),
+            "tree_t": PPDR._write(tmp_path / "tree_t", laid_out(dt, [dt.leaf(i, i, TILE_SCHEMA, salted(v, HM96_TRANSCRIPT, i))
                                                                     for i, v in enumerate(leaves)]))}
     head["hm96_salt_key"] = prover.salt_key.hex()
-    path = PPD.write_manifest(tmp_path, head, weights, matmuls)
+    path = PPDR.write_manifest(tmp_path, head, weights, matmuls)
     (tmp_path / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return path, s, epoch, prover, tr, splits, records
 
 
 @pytest.mark.slow
-def test_verify_run_accepts_an_honest_pass_as_the_work_law_does(honest_pass):
+def test_verify_run_accepts_an_honest_pass_as_the_work_sampling_design_does(honest_pass):
     path, s, epoch, prover, tr, splits, records = honest_pass
     source = b"verifier" * 4
     got = VR.verify(path, 3, 1, "test", source, coins=published(path))
@@ -1327,7 +1328,7 @@ def test_a_pass_whose_y_trees_hold_the_poison_is_rejected(tmp_path):
     for u in man["matmuls"]:
         file = path.parent / u["y"]["tree"]["path"]
         poison = bytes([0xA5]) * file.stat().st_size
-        u["y"] = {**u["y"], "root": poison[-64:].hex(), "tree": PPD._write(file, poison)}
+        u["y"] = {**u["y"], "root": poison[-64:].hex(), "tree": PPDR._write(file, poison)}
     path.write_text(json.dumps(man))
     one = VR.verify(path, 3, 1, "test", source, coins=published(path))
     assert not one["accepted"] and "y opening" in one["line"], one["line"]
@@ -1349,8 +1350,8 @@ def short_y(path: Path, pos: int, drop: int) -> None:
     d = SY.y_domain(bytes.fromhex(man["salt"]), u["index"], real)
     tree = laid_out(d, [d.leaf(i, i, ROW_SCHEMA, VR.f32_row(r[:len(r) & ~1], len(r), 0) + hm96_salt(key, SY.HM96_Y + u["index"], i))
                         for i, r in enumerate(rows)])
-    u["y"] = {"root": tree[-64:].hex(), "rows": PPD._write(file, data, digest=False),
-              "tree": PPD._write(path.parent / u["y"]["tree"]["path"], tree)}
+    u["y"] = {"root": tree[-64:].hex(), "rows": PPDR._write(file, data, digest=False),
+              "tree": PPDR._write(path.parent / u["y"]["tree"]["path"], tree)}
     path.write_text(json.dumps(man))
 
 
@@ -2639,7 +2640,7 @@ def record_size_passes(tmp_path: Path, seed: int = 1) -> list[Path]:
                 "commitment": {"root": rng.bytes(64).hex(), "count": count},
                 "leaves": named("leaves", 64 * count), "tree_t": tree("tree_t", count), "hm96_salt_key": SALT_KEY.hex()}
         (d := tmp_path / f"pass-{r:05d}").mkdir(parents=True)
-        paths.append(PPD.write_manifest(d, head, weights, matmuls))
+        paths.append(PPDR.write_manifest(d, head, weights, matmuls))
         (d / "coins.json").write_text(json.dumps(coins[0].to_json()))
     return paths
 
@@ -2948,7 +2949,7 @@ def test_the_device_run_takes_a_live_sessions_salt_opened_after_its_epochs_root(
     r = PS.epoch_open_root(root, 1)
 
     def make(c, o, k=1):
-        return PPD.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
+        return PPDR.PearlCDeviceRun(PPD.scheme_of(SCHEME), f"pouw:{SCHEME}", kernel, weights, roots, c, o,
                                    capacity=1 << 12, salt_key=SALT_KEY, pass_index=k)
     c, o = live_coin(r)
     run = make(c, o)
@@ -3948,10 +3949,10 @@ def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monk
 
 
 def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_back(device_run):
-    from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD2
+    from verity_torch.pouw.pearl_c import run_device as PPD2R
     PF = load("pearl_c_vllm_profile", POUW / "pearl_c_vllm" / "profile_decode.py")
     make, _, weights, *_ = device_run
-    before = (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end)
+    before = (PPD2R._steps, PPD2R.call_keys, PPD2R.PearlCDeviceRun.gemm, PPD2R.PearlCDeviceRun.end)
     prof = PF.Profile()
     undo = PF.instrument(prof)
     try:
@@ -3965,7 +3966,7 @@ def test_the_profile_times_each_calls_sections_and_steps_and_puts_the_module_bac
         prof.end()
     finally:
         undo()
-    assert (PPD2._steps, PPD2.call_keys, PPD2.PearlCDeviceRun.gemm, PPD2.PearlCDeviceRun.end) == before
+    assert (PPD2R._steps, PPD2R.call_keys, PPD2R.PearlCDeviceRun.gemm, PPD2R.PearlCDeviceRun.end) == before
     rep = prof.report()["pearlc-steady"]
     assert rep["prefill"]["forwards"] == 1 and rep["decode"]["forwards"] == 2 and rep["decode"]["pearlc_calls"] == 4
     host = rep["decode"]["host_ms"]
@@ -3982,18 +3983,18 @@ def test_native_keys_are_call_keys_byte_for_byte():
     rng = random.Random(5)
     for _ in range(40):
         salt, root = rng.randbytes(32), rng.randbytes(32)
-        keys = PPD._Keys(salt, tree_hash)
+        keys = PPDR._Keys(salt, tree_hash)
         assert keys.native is not None
         for index, m16 in ((0, 16), (1, 32), (127, 8192), (rng.randrange(1 << 20), 16 * rng.randrange(1, 600)), ((1 << 40) + 3, 48)):
-            assert keys(root, index, m16) == PPD.call_keys(salt, root, index, m16, tree_hash)
+            assert keys(root, index, m16) == PPDR.call_keys(salt, root, index, m16, tree_hash)
     keys.native = None
-    assert keys(root, 9, 64) == PPD.call_keys(salt, root, 9, 64, tree_hash)
+    assert keys(root, 9, 64) == PPDR.call_keys(salt, root, 9, 64, tree_hash)
     with pytest.raises(ValueError, match="don't frame tree hash 'sha256'"):
-        PPD._Keys(salt, "sha256")
+        PPDR._Keys(salt, "sha256")
 
 
 def test_the_upload_ring_writes_each_slot_as_given_through_its_wraparound():
-    ring = PPD._Uploads(torch.device("cpu"), slots=4, width=16)
+    ring = PPDR._Uploads(torch.device("cpu"), slots=4, width=16)
     dst = torch.zeros(16, dtype=torch.uint8)
     for i in range(11):
         data = bytes([i]) * (5 + i % 3)
@@ -4030,8 +4031,8 @@ def test_each_calls_a_root_lands_at_its_position_and_its_keys_take_the_epochs_in
                 tree.copy_((torch.arange(len(tree)) * 7 + 3 * i + step).to(torch.uint8))
             run.gemm(w, torch.randn(8, 1024).to(torch.bfloat16), weights[w], None)
             size = run._pipe(w, sh)[0].size["tree_a"]
-            assert PPD._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPD._bytes(tree[size - 64:size])
-            assert PPD._bytes(sh.keys[:168]) == PPD.call_keys(salt, roots[w], 3 * step + i, 16, run.tree_hash)
+            assert PPDR._bytes(run.roots_buf[64 * i:64 * (i + 1)]) == PPDR._bytes(tree[size - 64:size])
+            assert PPDR._bytes(sh.keys[:168]) == PPDR.call_keys(salt, roots[w], 3 * step + i, 16, run.tree_hash)
         assert [u.index for u in run.cur.matmuls] == [3 * step, 3 * step + 1, 3 * step + 2]
         run.end_pass()
     assert run.cur.base == run.epoch_calls() == 6
@@ -4054,14 +4055,14 @@ def test_the_host_path_commits_what_the_reference_path_commits(device_run, tmp_p
         for w, x in xs:
             run.gemm(w, x, weights[w], None)
             sh = run.shapes[(-(-x.shape[0] // 16) * 16, weights[w].shape[0], 1024)]
-            keys.append(PPD._bytes(sh.keys[:168]))
+            keys.append(PPDR._bytes(sh.keys[:168]))
         out = run.end()
         man = json.loads(Path(out["manifest"]).read_text())
         launches = [(n, i) for n, _, _, i in kernel.dev.log if not n.endswith("_smem")]   # run.py probes once a process
         got[name] = (keys, launches, {k: man[k] for k in ("records_root", "commitment", "salt")},
                      [{k: u[k] for k in ("root_a", "excluded_a", "real_rows")} for u in man["matmuls"]])
     assert got["native"] == got["reference"]
-    assert got["native"][0][0] == PPD.call_keys(make().salt, make().roots[0], 0, 32, HM96)
+    assert got["native"][0][0] == PPDR.call_keys(make().salt, make().roots[0], 0, 32, HM96)
 
 
 def interpreted_triton(monkeypatch) -> None:
@@ -4088,7 +4089,7 @@ def test_the_screen_launches_tritons_compiled_kernel_directly_only_where_triton_
     """After Triton's own launch at a specialization, `launch` calls its compiled kernel with the same arguments; another
     alignment compiles again, and a launch hook (Triton's chains hold none by default) or a CPU tensor takes Triton's path."""
     # the module itself: under the layout move its package re-exports a function named as the module
-    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     enter, exit_ = types.SimpleNamespace(calls=[]), types.SimpleNamespace(calls=[])
     knobs = types.SimpleNamespace(runtime=types.SimpleNamespace(debug=False, add_stages_inspection_hook=None, launch_enter_hook=enter,
                                                                 launch_exit_hook=exit_),
@@ -4128,11 +4129,11 @@ def test_the_fused_screen_decides_the_rows_as_the_torch_screen_and_the_rules(mon
     interpreted_triton(monkeypatch)
     words, x, alpha, aux = edge_rows()
     fused = torch.zeros((12, 2), dtype=torch.uint8)
-    PPD.screen_into(fused, x, alpha, aux, fused=True)
+    PPDR.screen_into(fused, x, alpha, aux, fused=True)
     ref = torch.zeros((12, 2), dtype=torch.uint8)
-    PPD.screen_into(ref, x, alpha, aux, fused=False)
+    PPDR.screen_into(ref, x, alpha, aux, fused=False)
     want = tuple(i for i, row in enumerate(words) if not CW.row_passes([int(v) for v in row]))
-    assert PPD.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPD.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
+    assert PPDR.excluded(fused[:, 0].bool(), fused[:, 1].bool(), x) == PPDR.excluded(ref[:, 0].bool(), ref[:, 1].bool(), x) == want
     assert torch.equal(fused, ref)
 
 
@@ -4143,7 +4144,7 @@ def test_a_graphs_scatter_screens_its_rows_into_the_pass_and_copies_its_leaves_a
     """A graph's last launch under Triton's CPU interpreter: the flags it writes at the slot's flag offset are `screen_into`'s
     for its first `rows` rows, its leaves and A root land at their offsets, and no other byte of the pass's buffers changes."""
     interpreted_triton(monkeypatch)
-    PS = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.pearl_c.screen")
+    PS = importlib.import_module("verity_torch.pouw.pearl_c.screen")
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4160,7 +4161,7 @@ def test_a_grouped_scatter_screens_each_flag_pair_at_its_row_of_the_map(monkeypa
     """A grouped call's scatter under Triton's CPU interpreter, with a row map: flag pair i is `screen_into`'s for row at[i]
     (of x, α and (s, ρ)), at the slot's flag offset, and the leaves and A root land as without one."""
     interpreted_triton(monkeypatch)
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import screen as PS
+    from verity_torch.pouw.pearl_c.run_device import screen as PS
     _, x, alpha, aux = edge_rows()
     flags = torch.zeros((12, 2), dtype=torch.uint8)
     PS.screen_into(flags, x, alpha, aux, fused=True)
@@ -4229,7 +4230,7 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
         keys = []
         for w, x in xs:
             run.gemm(w, x, weights[w], None)
-            keys.append(PPD._bytes(run.shapes[(-(-x.shape[0] // 16) * 16, weights[w].shape[0], 1024)].keys[:168]))
+            keys.append(PPDR._bytes(run.shapes[(-(-x.shape[0] // 16) * 16, weights[w].shape[0], 1024)].keys[:168]))
         out = run.end()
         man = json.loads(Path(out["manifest"]).read_text())
         launches = sorted((n, i) for n, _, _, i in kernel.dev.log if not n.endswith("_smem"))
@@ -4249,7 +4250,7 @@ def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
     run = make()
     fmt = hash_format(run.scheme)
     assert fmt is HASH_FORMATS["h3"] and run.tree_hash == fmt.tree_hash == run.scheme.commitment_hash == HM96
-    assert PPD._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3"}
+    assert PPDR._bytes(run.const[:32]) == SALT_KEY and set(HASH_FORMATS) == {"h0", "h3"}
     assert not hasattr(PPD, "TREE_HASH") and all(SchemeId.parse(n).name == n for n in PPD.SCHEMES)
     assert not hasattr(PPD, "tree_hash") and not hasattr(PPD, "variant")
     assert C.PearlC(forming="v1", hashing="h0").commitment_hash == "sha256"
@@ -4296,11 +4297,11 @@ def sm90_run():
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
     kernel = PPD.Kernel(R90, H100Dev(), "0" * 64)
-    roots = PPD.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, H100_SCHEME, salt_key=SALT_KEY)
     coins = salt_coin(roots)
 
     def make(schedule="deferred-a"):
-        return PPD.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
+        return PPDR.PearlCDeviceRun(PPD.scheme_of(H100_SCHEME), f"pouw:{H100_SCHEME}", kernel, weights, roots, *coins,
                                    capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
     return make, kernel, weights, roots
 
@@ -4326,7 +4327,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     assert PPD.rotated(PPD.schedule_of("deferred", s)) == ("c", "segdig_t", "u") and PPD.rotated(PPD.SERIAL) == ()
     assert PPD.rotated(PPD.SCHEDULES["deferred-a"]) == ("c", "keys", "line_a", "rowdig_a", "seed_a", "segdig_t", "tree_a",
                                                      "u")
-    assert PPD.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
+    assert PPDR.PearlCExecutor(sm90_run[0]()).schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
 
 
 def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm90_run):
@@ -4373,8 +4374,8 @@ def test_deferred_a_builds_as_tree_beside_the_tile_hashing_from_rotating_sets(sm
     assert len({ptr(j, x) for j in (0, 1) for x in PPD.rotated(run.schedule)}) == 16
     for j, index in ((0, 2), (1, 1)):
         keys = sh.keys if j == 0 else sh.sets[j]["keys"]
-        assert PPD._bytes(keys[:168]) == PPD.call_keys(run.salt, roots[0], index, 32, run.tree_hash)
-    assert [set(PPD._bytes(run.roots_buf[nb * c:nb * (c + 1)])) for c in range(3)] == [{0x11}, {0x22}, {0x11}]
+        assert PPDR._bytes(keys[:168]) == PPDR.call_keys(run.salt, roots[0], index, 32, run.tree_hash)
+    assert [set(PPDR._bytes(run.roots_buf[nb * c:nb * (c + 1)])) for c in range(3)] == [{0x11}, {0x22}, {0x11}]
     assert run.end()["schedule"] == "deferred-a"
 
 
@@ -4697,10 +4698,10 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
     kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
               PPD.Kernel(R, TwinDev(pd), "0" * 64))
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
+        run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots,
                                   *salt_coin(roots), capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         lines = []
@@ -4708,7 +4709,7 @@ def test_deferred_a_commits_what_the_serial_one_commits_and_leaves_the_padding_l
             run.gemm(w, x, weights[w], None)
             m16 = -(-x.shape[0] // 16) * 16
             sh = run.shapes[(m16, weights[w].shape[0], 1024)]
-            ea = PPD._bytes(sh.b["ea_codes"])[:sh.size["ea_codes"]]
+            ea = PPDR._bytes(sh.b["ea_codes"])[:sh.size["ea_codes"]]
             lines.append((ea[:32 * m16], ea[32 * m16:]))
         man = json.loads(Path(run.end()["manifest"]).read_text())
         got[schedule] = ({k: man[k] for k in ("records_root", "commitment", "salt")},
@@ -4738,10 +4739,10 @@ def test_deferred_a_at_a_prefills_rows_commits_what_the_serial_one_commits(tmp_p
     scheme = H100_SCHEME if arch == "sm90" else SCHEME
     kernel = (PPD.Kernel(R90, H100TwinDev(pd), "0" * 64) if arch == "sm90" else
               PPD.Kernel(R, TwinDev(pd), "0" * 64))
-    roots = PPD.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
+    roots = PPDR.weight_roots(kernel, weights, scheme, salt_key=SALT_KEY)
     got = {}
     for schedule in ("serial", "deferred-a"):
-        run = PPD.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
+        run = PPDR.PearlCDeviceRun(PPD.scheme_of(scheme), f"pouw:{scheme}", kernel, weights, roots, *salt_coin(roots),
                                   capacity=1 << 12, schedule=schedule, salt_key=SALT_KEY)
         run.begin(retain=str(tmp_path / schedule), run=RUN)
         for w, x in xs:
@@ -4761,7 +4762,7 @@ def test_a_lane_graphs_replay_makes_the_eager_calls_driver_calls_in_its_order(sm
     lane the rest behind the main lane's end, then waits for the tree; below a full tile the call's side lane replays the
     tree, then the rest, with no event between them; the caller waits for the main lane.  A set's first call waits for
     nothing, and its side lane's end becomes the set's event."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity_torch.pouw.pearl_c import host as PPH
     from verity.protocols.accounting.pouw.prover.serving.pearl_c import lanes as PPL
     make, *_ = sm90_run
     run = make()
@@ -4805,7 +4806,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
     waits for stats_a before E' (``form_ep_a``, under FORM_EP) and for the whole fork at its end, so the per-row keying's
     end moves one step (the fork's).  Where A's tree stays on the main lane the scatter copies A's root, so it runs last on
     the lane; without the driver (no graphs) the steps are as they were."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import graphs as PPG
+    from verity_torch.pouw.pearl_c import graphs as PPG
     make, kernel, *_ = sm90_run
     run = make()
     calls = []
@@ -4848,7 +4849,7 @@ def test_a_lane_graphs_main_steps_run_stats_and_the_screen_on_a_fork_beside_the_
 
 
 def test_the_lane_graphs_driver_calls_take_raw_handles_and_raise_with_the_drivers_code():
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import host as PPH
+    from verity_torch.pouw.pearl_c import host as PPH
     got = []
 
     def cu(rc=0):
@@ -4904,7 +4905,7 @@ def test_the_unpromoted_scheme_runs_gpu_1s_unpromoted_kernels(device_run):
     _, kernel, weights, roots, salt = device_run
     s = PPD.scheme_of("pearl-c-sm120-unpromoted-v1-h3")
     assert s.device.name == "sm120-unpromoted" and "pearl-c-sm120-unpromoted-v1-h3" in PPD.SCHEMES
-    run = PPD.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, *salt_coin(roots), capacity=1 << 12,
+    run = PPDR.PearlCDeviceRun(s, "pouw:pearl-c-sm120-unpromoted-v1-h3", kernel, weights, roots, *salt_coin(roots), capacity=1 << 12,
                               salt_key=SALT_KEY)
     kernel.dev.log.clear()
     run.gemm(0, torch.randn(32, 1024).to(torch.bfloat16), weights[0], None)
@@ -5066,7 +5067,7 @@ def test_the_run_behind_the_stack_commits_what_the_run_commits_alone(device_run,
     want = direct.end()
     run = make()
     sites = _stack_sites(weights)
-    stack = Stack(sites, PPD.PearlCExecutor(run))
+    stack = Stack(sites, PPDR.PearlCExecutor(run))
     assert stack.refusals() == [] and stack.executor.schedules == {"serial", "deferred", "deferred-caller", "deferred-a"}
     stack.activate(E2E.arm_of("pearlc", run, types.SimpleNamespace(schedule="serial")))
     with stack.pass_(dataclasses.replace(stack.active.spec, retain=str(tmp_path / "stack"), run_id=RUN)):
@@ -5090,7 +5091,7 @@ def test_the_modes_are_arms_and_the_negative_control_is_a_pass_control(device_ru
     assert (arms["pearlc"].spec.hashing, arms["pearlc-nohash"].spec.hashing) == (True, False)
     assert {a.spec.schedule for m, a in arms.items() if m != "bf16"} == {"deferred"}
     sites = _stack_sites(weights)
-    stack = Stack(sites, PPD.PearlCExecutor(run))
+    stack = Stack(sites, PPDR.PearlCExecutor(run))
     stack.activate(arms["bf16"])
     assert stack.apply(sites[0], _Layer(weights[0]), "x", None, lambda layer, x, bias: ("stock", x)) == ("stock", "x")
     stack.activate(arms["pearlc"])

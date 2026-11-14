@@ -75,7 +75,7 @@ from the decoder's places and the executable's regions:
   committed gate it computes is an output, `computed_committed_output`, since no unit reads a gate another computes,
   `keyProg_reads`);
 * `OutsP`: `Outs` at `Placed.keyProgP` (`OutsOutP`, `outsOfP`, `outsOutP_outsOfP`, `keyProgP_reads`);
-* `Keyed`: `lay` and `rs` at the production program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
+* `Keyed`: `lay` and `rs` at the proving program's places (`keyedLayout`, `keyedRows`, `keyedRowsOfParse`,
   `keyedRowsOuts` at `outs := outsOf`), with `Discharge/Const`'s and `Discharge/Zero`'s constant and zero gates; `rs.Computes`
   there is `Discharge.Hm.keyedRowsOuts_computes`;
 * `Tables`: a population without shared rows (`pop.tables = none`, which `bc_sampled` reads) under any tag

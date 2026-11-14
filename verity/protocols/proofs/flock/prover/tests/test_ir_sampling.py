@@ -245,7 +245,7 @@ def test_a_forged_unit_word_breaks_the_lane_relation(tmp_path):
     assert sum(int((o != w).sum()) for o, w in zip(outs, S.unit_outputs(cuts, V))) == 1
 
 
-def test_a_mutated_netlist_is_caught_by_the_ir_comparison():
+def test_a_mutated_circuit_description_is_caught_by_the_ir_comparison():
     V = 64
     low = S.lane(V)
     rng = random.Random(3)

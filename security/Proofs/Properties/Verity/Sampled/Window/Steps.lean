@@ -69,7 +69,7 @@ theorem sum_rounds {nJ : ℕ} : ∀ l : List (Member nJ), (l.map Member.rounds).
     omega
 
 /-- **A window's rounds are 1026 a member.** -/
-theorem Window.rounds_eq (W : Window) : W.rounds = W.ms.length * 1026 := sum_rounds W.ms
+theorem ExecutionPhase.rounds_eq (W : ExecutionPhase) : W.rounds = W.ms.length * 1026 := sum_rounds W.ms
 
 /-! ## The sessions in the sample's order -/
 
@@ -201,7 +201,7 @@ theorem closeFiles_eq {g : Game Exchange} {σ : Strategy g} {R : ℕ} (filesDec 
 /-! ## What the verdict gives at a window -/
 
 /-- **A window whose members each have one table, named `tb`, with hm96-sha512 rows.** -/
-structure MembersAt (W : Window) (tb : String) : Prop where
+structure MembersAt (W : ExecutionPhase) (tb : String) : Prop where
   count : ∀ m ∈ W.ms, m.I.count = 1
   rows : ∀ m ∈ W.ms, m.I.tags.hm96Rows = true
   table : ∀ m ∈ W.ms, m.I.tags.table = tb
@@ -231,7 +231,7 @@ place `i`, has a session's verdict (`SessionVerdict`) at a statement that is `m`
 `S` as its sample, is the record sent for the session after as many sessions as sampled members come before `m`,
 decodes to what the verifier's read holds the log to at that session, a tree the log opens, and whose proof files
 `filesDec` decodes from the evidence `ev` the session's closing round reveals (`session`). -/
-structure ExecutionPhaseSessions (W : Window) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
+structure ExecutionPhaseSessions (W : ExecutionPhase) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (S : Finset (Fin W.nJ)) (x : Exchange) : Prop where
   specs : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup
   order : OpensLast x.log
@@ -250,7 +250,7 @@ structure ExecutionPhaseSessions (W : Window) (tb : String) (ev : ℕ → Exchan
 
 /-- **A sampled member's session, with the session `--zk` sets up at the member**: `ExecutionPhaseSessions.session` with the
 session's shape at a member of one table (`Member.spec_at`). -/
-theorem ExecutionPhaseSessions.specAt {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
+theorem ExecutionPhaseSessions.specAt {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (hMA : MembersAt W tb) {i : ℕ} {m : Member W.nJ}
     (hm : W.ms[i]? = some m) (hd : (m.part S).Nonempty) :
@@ -275,7 +275,7 @@ theorem ExecutionPhaseSessions.specAt {W : Window} {tb : String} {ev : ℕ → E
 
 /-- **Every tree the log opens is a sampled member's session's**, with its verdict's read: the log opens at most as
 many trees as the sample samples members, and each count below that is the sessions before a sampled member. -/
-theorem ExecutionPhaseSessions.all {W : Window} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
+theorem ExecutionPhaseSessions.all {W : ExecutionPhase} {tb : String} {ev : ℕ → Exchange → Option Claims.Msg}
     {filesDec : Claims.Msg → Array ByteArray} {S : Finset (Fin W.nJ)} {x : Exchange}
     (h : ExecutionPhaseSessions W tb ev filesDec S x) (hMA : MembersAt W tb) :
     ∀ v τ, (openedTrees x.log)[v]? = some τ → ∃ (text : String) (spec : Flock.SessionSpec)
@@ -709,7 +709,7 @@ place `i` and the position `p` its member's session starts at: the walk from `p`
 the releases after the logs `done` answered in the log of the play on `r`'s tape (`Walked`), those being the picks
 of the sessions before the one after as many as members before `i` have a proof block in the sample (`SessDone`,
 `sampledBefore`), and `p` is past the play's start on the coin map's tape. -/
-def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (W : Window)
+def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (W : ExecutionPhase)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) (i : ℕ)
     (p : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) : Prop :=
@@ -730,7 +730,7 @@ stop (`stopOf_rootStop`) with nothing answered; a member with no proof block in 
 sessions before the next place are the same; and a sampled member's step is `session_step` at its session, the one
 after `sampledBefore` others, with the moves its record decodes to (`MemberMovesOf`). -/
 theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
-    (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+    (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (reg : Option Claims.Msg → ByteArray) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray) (record₀ : Exchange → Option Claims.Msg) (recordDigest : Claims.Msg)
     (σ : Strategy (V.game θ F c)) (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds)

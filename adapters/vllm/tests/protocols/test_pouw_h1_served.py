@@ -57,7 +57,7 @@ from verity.protocols.accounting.pouw.prover.serving.h1 import handoff as HO
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
-from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
+from verity_torch.pouw.h1 import registered_device as D
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
 from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
 

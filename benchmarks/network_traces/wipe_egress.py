@@ -116,9 +116,9 @@ def record(files: dict[str, bytes], t0: int, t1: int, pad: int = PAD_NS) -> dict
     if params.digest.hex() != dep["digest"]:
         why.append("the deployment's schedule isn't the one its digest names")
     if windows.start < 0:
-        why.append(f"the window starts at link-window {windows.start}, before the session's origin")
+        why.append(f"the window starts at execution phase {windows.start}, before the session's origin")
     if windows.stop > n:
-        why.append(f"the window ends at link-window {windows.stop}, past the session's {n}")
+        why.append(f"the window ends at execution phase {windows.stop}, past the session's {n}")
     certificates = {}
     for line in files.get(CERTIFICATES, b"").decode().splitlines():
         doc = json.loads(line)

@@ -334,7 +334,7 @@ theorem honestChallengerRun_recorded
 theorem certified_signed
     (hk : PousCheck.Properties.SecurityProofs.Accepts.KeysOk (keyPrefix certifiedSalt))
     (ω : Unit × Unit × ((ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × Streams))
-    {m : ByteArray} (hm : MemoryChallenger.Properties.sessionMessage (certifiedAudit.session ω).signed = some m) :
+    {m : ByteArray} (hm : MemoryChallenger.Properties.challengePhaseMessage (certifiedAudit.session ω).signed = some m) :
     MemoryChallenger.Properties.Signed (certifiedAudit.device ω) certifiedPrivateKey.publicKey m := by
   let run := honestChallengerRun certifiedPublic.root certifiedBlock
   refine ⟨run, ?_, MemoryChallenger.COMPLETE, certifiedRecordMessage, ?_, ?_, ?_⟩

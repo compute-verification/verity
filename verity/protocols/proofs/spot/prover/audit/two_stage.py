@@ -97,8 +97,8 @@ gives its outcome (`prove`, `outcome_of`).
   shows there); ``audit.staging``, the audit's staging before and after the sample; ``interior_commit``, this
   command's clock over the capture's read, the interior's commitment and its files (`replayed`), not its docket
   or its sample; and ``replay``, copied from the replay's own record (``--replay-record``, `replay_cost`), since this
-  command runs no replay. ``--devices`` gives the audit's proof server its cards by nvidia-smi's indices
-  (`a5.proof_server`), and is the only place the command takes cards from: it reads no lease and asks for none.
+  command runs no replay. ``--gpus`` gives the audit's proof server its cards by nvidia-smi's indices
+  (`a5.proof_server`, behind the ZK server or not), and is the only place the command takes cards from: it reads no lease and asks for none.
   Without it the sessions are proved on the CPU.
 
 Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
@@ -115,13 +115,13 @@ Usage::
         [--proof-deadline S] [--stop RULE [--stop-design rate:NUM/DEN]] [--challenger-host HOST]
     two_stage.py second --stage1 OUT/<class>/stage1.json --boundary DIR --capture CAPTURE --challenger local --main FILE \\
         --challenger-host HOST --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out OUT2 [--proofs PARAMS.json] \\
-        [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--devices 0,1] [--replay-record REPLAY.json]
+        [--rids IDS.json] [--zk-server F] [--unlinked] [--stop RULE] [--kept PRIVATE] [--gpus 0,1] [--replay-record REPLAY.json]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window (``second``: one class's, with its private
 files); COUNTS.json each check template's own count in place of one for all, ``{descriptor id: k_t}`` (`counts`);
 FILE.json the interior values, ``[[name, schema], ...]``; VALUES.json the replay block's parameters the interior
 docket registers as values, ``[[name, rows a sampled span, leaf type], ...]`` (`interior_rows.span_values`);
-REGISTRATION.json the window's advice docket, whose ``binding`` the records' windows name; CAPTURE the replay's
+REGISTRATION.json the window's advice registration, whose ``binding`` the records' windows name; CAPTURE the replay's
 capture of the sampled spans; PARAMS.json the auditor's params; IDS.json the capture's request id for a span's engine
 id, where they differ; REPLAY.json the record the replay wrote beside CAPTURE; RULE the stop rule as JSON,
 ``{"ids": [...], "max_model_len": n, "outputs": T}`` (`boundary_stop.Stop.of`); PRIVATE the directory the serve kept
@@ -143,7 +143,7 @@ one file for both commands: each stage's evidence carries the copy of main's his
 the stream holds both to the copy ``second`` is given.
 
 A ``local`` session's challenger reads its coins through
-``sampled-proofs-verifier``, which must be built first (``lake build sampled-proofs-verifier`` in
+``spot-verifier``, which must be built first (``lake build spot-verifier`` in
 ``verity/protocols/proofs/spot/verifier/lean``): building it on first use outlasts the local gate's start.
 ``two_stage_small.sh`` runs both commands on a CPU node at small statics.
 """
@@ -617,7 +617,7 @@ TIED_WHY = ("its reads' verdicts are of the members the adapter's `interior_link
 class Verdict:
     """The verdict of a read of registered tables and the value it reads: template ``template``'s output ``port``
     (`second_stage.OPENING_VERDICT`) reads ``value``, which the verifier fills with 1 at every row
-    (`second_stage.VERDICT_ONE`, `verdict_sources`), ``per`` rows a sampled span, unit j its row ``at[j]``, as the
+    (`second_stage.VERDICT_ONE_LEAF`, `verdict_sources`), ``per`` rows a sampled span, unit j its row ``at[j]``, as the
     template's ``root`` and ``domain`` are placed. Lean's registered reads then open the read's verdict only where it is
     1, so a read that does not open its table at its key is refused there, and not only on the prover's side."""
     template: str
@@ -638,8 +638,8 @@ def verdicts(members: Sequence[CS.Member], links: Sequence[IR.Link], tied: Tied)
 
 def verdict_sources(vs: Sequence[Verdict], q: int) -> dict[str, list[list[dict[str, str]]]]:
     """The challenger's copy of each of ``vs``' values for ``q`` sampled spans (`Stream.register_interiors`'
-    ``supplied``): every row `second_stage.VERDICT_ONE`, the verifier's bytes of 1."""
-    return {v.value: [[{k: n} for k, n in SS.VERDICT_ONE] for _ in range(q * v.per)] for v in vs}
+    ``supplied``): every row `second_stage.VERDICT_ONE_LEAF`, the verdict's 1 as one 16-bit leaf."""
+    return {v.value: [[{k: n} for k, n in SS.VERDICT_ONE_LEAF] for _ in range(q * v.per)] for v in vs}
 
 
 @dataclass(frozen=True)
@@ -1557,9 +1557,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--zk-server", help="Lean's flock-zk-server: every session behind the ZK server; without it each runs "
                                       "prove --zk itself, as SPOT[Flock]'s proof server does")
     g.add_argument("--stop", help=STOP_HELP)
-    g.add_argument("--devices", help="the audit's proof server's cards, their indices comma-separated (0,1): a prover a "
-                                     "card (`flock-circuit prove --zk --gpu`, a device build); without it one CPU prover. "
-                                     "Never with --zk-server, whose sessions prove on the CPU")
+    g.add_argument("--gpus", help="the audit's proof server's cards, their indices comma-separated (0,1), as nvidia-smi "
+                                  "numbers them: a prover a card (`flock-circuit prove --zk --gpu`, a device build), "
+                                  "behind the ZK server or not; without it one CPU prover. CUDA_DEVICE_ORDER is set to "
+                                  "PCI_BUS_ID for the provers, so CUDA numbers the cards as nvidia-smi does")
     g.add_argument("--replay-record", help="the record the replay wrote beside --capture (replay.json): its seconds and "
                                            "cards go in the summary's `replay`, which this command has no clock over")
     g.add_argument("--delta", type=float, default=0.5)
@@ -1585,12 +1586,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     g.add_argument("--out", required=True)
     a = ap.parse_args(argv)
     if a.cmd == "second":
-        if a.devices is not None:
+        if a.gpus is not None:
             a5 = _a5()
             try:
-                a.devices = a5.cards(a.devices)
+                a.gpus = a5.cards(a.gpus)
             except argparse.ArgumentTypeError as e:
-                ap.error(f"--devices: {e}")
+                ap.error(f"--gpus: {e}")
             if why := a5.devices_refusal(a):
                 ap.error(why)
         return _second(a)

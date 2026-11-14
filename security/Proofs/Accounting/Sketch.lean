@@ -1,13 +1,13 @@
 module
 
-public import Proofs.Accounting.Tag.Signs
-public import Proofs.Accounting.Tag.LittlewoodOfford
-public import Proofs.Accounting.Tag.SketchExact
+public import Proofs.Poub.Tag.Signs
+public import Proofs.Poub.Tag.LittlewoodOfford
+public import Proofs.Poub.Tag.SketchExact
 
 /-!
 # The exact ±1 sketch's guarantees
 
-Each statement of `Definitions/Accounting/Guarantees/Sketch.lean`, proved:
+Each statement of `Definitions/Poub/Guarantees/Sketch.lean`, proved:
 
 * `Tag/Signs.lean`: `k` uniform ±1 rows collide on two different integer vectors with probability at most `2^-k`, and
   pass a wrong committed product with probability at most `2^-k`;

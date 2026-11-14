@@ -133,10 +133,10 @@ def init(d: Path, argv: list[str]) -> int:
            "ports": [int(x) for x in a.ports.split("-")], "coins": a.coins, "name": a.name}
     if a.coins == "lean":
         pkg = tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean"
-        b = subprocess.run(["lake", "build", "sampled-proofs-verifier"], cwd=pkg, capture_output=True, text=True)
+        b = subprocess.run(["lake", "build", "spot-verifier"], cwd=pkg, capture_output=True, text=True)
         cfg["lean_build"] = {"rc": b.returncode, "tail": (b.stdout + b.stderr)[-3000:]}
         if b.returncode:
-            cfg["coins"], cfg["coins_why"] = "stub", f"lake build sampled-proofs-verifier exited {b.returncode}"
+            cfg["coins"], cfg["coins_why"] = "stub", f"lake build spot-verifier exited {b.returncode}"
     (d / CONFIG).write_text(json.dumps(cfg, indent=1) + "\n")
     A = _auditor(d, cfg)
     from verity.commitments.crypto import lms

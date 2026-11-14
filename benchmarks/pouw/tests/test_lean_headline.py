@@ -45,7 +45,7 @@ def beaten(name: str) -> list[tuple[float, str, str, str]]:
 
 
 def test_the_committed_instances_are_the_exporters():
-    """security/Definitions/Accounting/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
+    """security/Definitions/Pouw/Headline/Sm120.lean and Sm120Measured.lean are what lean_headline.py writes from
     the data, π* included."""
     assert H.main(["--check"]) == 0
 

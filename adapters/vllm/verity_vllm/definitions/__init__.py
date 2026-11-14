@@ -9,11 +9,16 @@ the package is.  As it loads it also registers its registry with the Boolean-ver
 (`verity.circuits.ops.boolean.versions.catalog_loader`): every module `registry.catalog.load` imports, and the gathers
 and `BitAtx` made on demand (`registry.boolean_gather`), so a lookup made in a process that imported this package scans
 them.
+
+It is public for that import alone: a caller outside the adapter imports it to register the catalog, and needs no name
+from it, so `__all__` is empty.
 """
 import re
 
 from verity.circuits.defs import catalog_package
 from verity.circuits.ops.boolean.versions import catalog_loader
+
+__all__ = []
 
 catalog_package(__name__)
 

@@ -1,6 +1,6 @@
 """Every suite that builds or runs a Lake package is one `check` runs after its Lean steps (`AFTER_LEAN`): Lake builds a
 package's path requirements in their own `.lake`, so a `lake build` from the pytest step writes the verifier's build directory
-while lean-build does (lean-build can find a `Flock` `.olean` gone while a suite builds sampled-proofs-verifier, which
+while lean-build does (lean-build can find a `Flock` `.olean` gone while a suite builds spot-verifier, which
 requires flock, from the pytest step).
 
 What says so is the suite's metadata alone, which every suite may read: no scan of test code tells a suite that builds the Lean

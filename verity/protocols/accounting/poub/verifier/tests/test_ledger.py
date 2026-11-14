@@ -321,7 +321,7 @@ def test_no_delta_the_ledger_renders_comes_without_the_prf_term_it_leaves_out(k1
     assert bare(stripped) == ["declared.gamma.spec.error", f"declared.memory.{ledger.SNAPSHOT}"]
 
 
-def test_the_draws_terms_are_charged_by_name(store) -> None:
+def test_the_samples_terms_are_charged_by_name(store) -> None:
     """`ledger.draw` is `PooledSample`'s terms beyond δ over the record's windows: the rejection Σ_t k_t/2^64 at the
     record's `samples` and the receipts' binding term under `cr/sha-512`, Σ_t √(|L_t|·s)·q_t/2^256.5
     at the session's bounds, not the record's U_t and s'_t: |L_t| the most receipts a window can have (unpaced, fewer
@@ -352,7 +352,7 @@ def test_the_draws_terms_are_charged_by_name(store) -> None:
     assert g.draw == d and g.error == g.ledger.error + g.sketch + d.total
 
 
-def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
+def test_delta_charges_the_samples_a_window_requested_where_it_opens_all_its_receipts(store) -> None:
     """`LineHeld`'s error is E = δs + δ + Σ_t k_t/2^64 + Σ_t hide_t + bind + Σ_t Adv(prf t), k_t the samples window t
     requested: a constant, since a window's U_t is the prover's.  A window of U_t ≤ k_t receipts opens them all, so the
     record's samples there are U_t, and a δ charging them would fall (k_t − U_t)/2^64 short of E less the advantages, far
@@ -402,10 +402,10 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
     """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
-    `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
+    `timing.LINK_BURST_BYTES` when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (
-        timing.CHIP_BYTES, 4.32e9, timing.LINK_WINDOW_BYTES)
+        timing.CHIP_BYTES, 4.32e9, timing.LINK_BURST_BYTES)
     assert (ledger.Node.stated(FIGURES).disk_burst_bytes, ledger.Node.stated(FIGURES).link_burst_bytes) == (0, 0)
     m = ledger.Node.stated(FIGURES, disk_bytes_per_s=4.32e9, disk_burst_bytes=4 << 20, link_burst_bytes=0)
     assert (m.disk_burst_bytes, m.link_burst_bytes) == (4 << 20, 0) and m.to_json()["disk_burst_bytes"] == 4 << 20

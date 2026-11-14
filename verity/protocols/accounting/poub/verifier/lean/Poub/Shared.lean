@@ -5,13 +5,13 @@ public import Poub.Session
 /-!
 # One openings coin over several windows: `audit.Params.groups_per_coin`
 
-At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are sample c, sampled from one openings coin released after the
-last root of the sample's last window: the session's coins are its W challenges, then ⌈W/g⌉ openings coins, coin c at
-W + c. `close` is `Session.close` for a sample: only the sample's last window closes, once its roots are final, which makes
-every window of the sample final; each is rejected `few` in order; and the sample's `s` receipts are sampled over its passes
-in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own share,
-(pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the close
-accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
+At `groups_per_coin` g, windows cg … min((c + 1)g, W) − 1 are sample c, sampled from one openings coin released after
+the last root of the sample's last window: the session's coins are its W challenges, then ⌈W/g⌉ openings coins, coin c
+at W + c. `close` is `Session.close` for a sample: only the sample's last window closes, once its roots are final, which
+makes every window of the sample final; each is rejected `few` in order; and the sample's `s` receipts are sampled over
+its passes in order (`draws`, under the key of window c), numbered across its windows, each window keeping its own
+share, (pass, position) in it, which `Session.verify` checks. A window whose share is none has nothing to open: the
+close accepts it, and `Session.verify` refuses it, as it refuses any window with a verdict.
 
 `step g` and `run g` are `Session.step` and `Session.run` with that close, and at g = 1 they are `Session.step` and
 `Session.run` (`step_one`, `run_one`): the properties of the code stated on `Session.run` are about the
@@ -46,9 +46,9 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
   if let some u := group.find? (s.windows[·]!.roots.size < s.params.minPasses) then return s.fail u .few
   if t + 1 == s.params.windows && s.joined.size < s.appends.size then return s.fail t .coin
   let lengths := group.foldl (fun acc u => acc ++ s.windows[u]!.plans.map (·.length)) #[]
-  let some drawn := receiptSample s.digest (t / g) s.coins[s.params.windows + t / g]! s.params.samples lengths
+  let some sampled := receiptSample s.digest (t / g) s.coins[s.params.windows + t / g]! s.params.samples lengths
     | throw "the openings' draw ran past its reads"
-  let share := fun (base n : Nat) => drawn.filterMap fun (i, p) =>
+  let share := fun (base n : Nat) => sampled.filterMap fun (i, p) =>
     if base ≤ i && i < base + n then some (i - base, p) else none
   let (windows, _) := group.foldl (fun (acc : Array Win × Nat) u =>
       let n := acc.1[u]!.plans.size
@@ -56,7 +56,7 @@ def close (g : Nat) (s : State) (t : Int) (now : Nat) : Except String (Result ×
       (acc.1.modify u (fun w => { w with drawn := some mine, openedNs := some now,
                                          verdict := if mine.isEmpty then some .accept else w.verdict }),
        acc.2 + n)) (s.windows, 0)
-  return (.drew drawn, { s with windows })
+  return (.drew sampled, { s with windows })
 
 def step (g : Nat) (s : State) (e : Event) : Except String (Result × State) :=
   if g ≤ 1 then Session.step s e

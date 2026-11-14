@@ -8,8 +8,8 @@ public import Poub.Receipts
 
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
 plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)
-and its openings coin, samples `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the prover's
-openings of them, in the order sampled. Each opening, in `_check`'s order, fails with the first of:
+and its openings coin, samples `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the
+prover's openings of them, in the order sampled. Each opening, in `_check`'s order, fails with the first of:
 
 1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
    path sibling not 64 bytes, or a payload digest `d_j` present for a registered block or absent for an appended one;
@@ -214,11 +214,11 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
 
 /-- `Session.verify` on sampled receipts: the first opening that fails, with its sample, or accept. -/
 def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
-    (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
-  if openings.size ≠ drawn.size then return .reject .malformed none
+    (sampled : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
+  if openings.size ≠ sampled.size then return .reject .malformed none
   let mut receipters : Std.HashMap Nat Receipter := {}
-  for k in [0:drawn.size] do
-    let (i, p) := drawn[k]!
+  for k in [0:sampled.size] do
+    let (i, p) := sampled[k]!
     let r := match receipters.get? i with
       | some r => r
       | none => receipter reg.receipt (w.seedOf i) reg.rows
@@ -226,29 +226,29 @@ def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Appen
     if let some f := checkOpening reg digest appends w r i p openings[k]! then return .reject f (some (i, p))
   return .accept
 
-/-- `checkWindow` over contiguous chunks of `size` samples, each chunk on a thread of its own: the first chunk's rejection
-in sample order, or accept. A chunk's verdict is `checkWindow`'s on its samples and their openings, so a rejection names
-the sample and failure `checkWindow` on the whole window would (its earlier chunks accept, and its first failing opening
-is the window's first), and an acceptance is every chunk's, each chunk's openings passing `checkOpening` under the
-receipter of their pass's seed (`checkWindow_accept`). -/
+/-- `checkWindow` over contiguous chunks of `size` samples, each chunk on a thread of its own: the first chunk's
+rejection in sample order, or accept. A chunk's verdict is `checkWindow`'s on its samples and their openings, so a
+rejection names the sample and failure `checkWindow` on the whole window would (its earlier chunks accept, and its first
+failing opening is the window's first), and an acceptance is every chunk's, each chunk's openings passing `checkOpening`
+under the receipter of their pass's seed (`checkWindow_accept`). -/
 def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append)
-    (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
-  if openings.size ≠ drawn.size then return .reject .malformed none
+    (w : WindowRecord) (sampled : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
+  if openings.size ≠ sampled.size then return .reject .malformed none
   let size := max 1 size
-  let tasks := (List.range ((drawn.size + size - 1) / size)).map fun c =>
+  let tasks := (List.range ((sampled.size + size - 1) / size)).map fun c =>
     Task.spawn (prio := .dedicated) fun _ =>
-      checkWindow reg digest appends w (drawn.extract (c * size) ((c + 1) * size))
+      checkWindow reg digest appends w (sampled.extract (c * size) ((c + 1) * size))
         (openings.extract (c * size) ((c + 1) * size))
   for t in tasks do
     if t.get ≠ .accept then return t.get
   return .accept
 
-/-- Window t's verdict: its samples from the openings coin, then each opening checked in the order sampled. `none` only if
-the sample runs past its doubled reads, which it does with probability below 2^-256. -/
+/-- Window t's verdict: its samples from the openings coin, then each opening checked in the order sampled. `none` only
+if the sample runs past its doubled reads, which it does with probability below 2^-256. -/
 def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (openingsCoin : ByteArray)
     (samples : Nat) (openings : Array Opening) : Option Verdict := do
   let digest := reg.digest
-  let drawn ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
-  pure (checkWindow reg digest appends w drawn openings)
+  let sampled ← receiptSample digest w.index openingsCoin samples (w.passes.map (·.plan.length))
+  pure (checkWindow reg digest appends w sampled openings)
 
 end Poub

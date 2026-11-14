@@ -42,7 +42,7 @@ def unended(store: audit_prover.Store, registry: audit.Registry) -> Run:
     return r
 
 
-def test_a_second_registration_of_a_live_node_is_refused_and_draws_nothing(monkeypatch) -> None:
+def test_a_second_registration_of_a_live_node_is_refused_and_gets_nothing(monkeypatch) -> None:
     nodes, register = [], audit.register
 
     def counted(*args, **kw):
@@ -88,7 +88,7 @@ def test_a_registration_ends_only_when_closed_with_every_session_counted() -> No
     assert accepted(again, registry).s.commitment.epoch == 0
 
 
-def test_a_session_runs_only_over_its_node_s_live_registration_drawn_by_the_registry() -> None:
+def test_a_session_runs_only_over_its_node_s_live_registration_issued_by_the_registry() -> None:
     registry = audit.Registry()
     st = registered_in(registry)
     elsewhere = registered_in(audit.Registry(), bytes(range(32)))

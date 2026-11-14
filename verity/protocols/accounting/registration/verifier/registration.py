@@ -16,7 +16,7 @@ An entry is one of three kinds:
 * a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit: the day, by its index among
   the monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares
   one circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`),
-  and each window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
+  and each window's program is its day's (`View.declared`; the SPOT registration record's R2).
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys

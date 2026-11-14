@@ -63,7 +63,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     H1Run,
     HM96,
     HM96_WEIGHTS,
-    hook_steps,
     host_array,
     in_process_draw,
     LEAD_BACKEND,
@@ -84,8 +83,6 @@ from verity.protocols.accounting.pouw.prover.serving import (
     pearl_c_schedule,
     pearl_c_scheme,
     PEARL_C_SCHEMES,
-    pearl_c_weight_roots,
-    PearlCDeviceRun,
     PearlCKernel,
     program_salt,
     quantize,
@@ -103,10 +100,12 @@ from verity.protocols.accounting.pouw.prover.serving import (
     Workload,
 )
 
+from verity_torch.pouw import PearlCDeviceRun, hook_steps, pearl_c_weight_roots  # importing it hands PoUW its tensors and H1's device
 from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
+
 
 __all__ = ["challenged", "h1_run"]
 
@@ -157,7 +156,7 @@ class Settings:
     coins: Any = None
     retain_steps: int = 0
     transcript_dir: str | None = None
-    #: ``ncp-v2``'s replay: the execution phase's work-law budget K, each call sampling its share (`plan.window_laws`); None is
+    #: ``ncp-v2``'s replay: the execution phase's work sampling design's budget K, each call sampling its share (`plan.window_sampling_designs`); None is
     #: `RECORD_K`
     draws: int | None = None
     #: ``ncp-v2``'s negative control, None for an honest run: ``tile`` commits and opens word 7 of every tile of the first

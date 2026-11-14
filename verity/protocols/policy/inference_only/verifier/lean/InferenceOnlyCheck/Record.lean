@@ -258,7 +258,7 @@ namespace InferenceOnlyCheck.Record
 open Lean (Json toJson)
 open Flock.Program
 open Flock.Sigma (bits)
-open InferenceOnlyCheck.RecordText
+open Spot.RecordText
 
 /-! ## The instance -/
 

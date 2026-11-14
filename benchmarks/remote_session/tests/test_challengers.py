@@ -573,7 +573,7 @@ LINE_PIECES = ["challenger_head", "challenger_credited", "challenger_pinned", "c
 
 
 def test_the_lines_ledger_and_credit_are_the_leans_and_the_python_alone_credits_none(host, tmp_path, monkeypatch):
-    """`auditor_line` asks the Lean verifier (`sampled-proofs-verifier`) for the ledger's head, each gate session's
+    """`auditor_line` asks the Lean verifier (`spot-verifier`) for the ledger's head, each gate session's
     *credited* and *pinned* checks and its read of the ledger, and acts on its answers: an honest session the Python
     credits is credited where the Lean agrees. Where the Lean refuses the head, or answers it otherwise than the Python,
     the run's line is refused; where it does so for the credit, the pin or the session's read of the ledger, the
@@ -651,7 +651,7 @@ def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
     three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three samples
-    (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
+    (`line.samples_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
     sessions, reg, desc = gate_run(host, out, "honest,skip:0.5", True, groups_per_coin=4)

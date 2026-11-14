@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Bridges
+public import Definitions.Pouw.Guarantees.Bridges
 public import Definitions.Accounting.Guarantees.RegisteredSite
 
 /-!
@@ -85,7 +85,8 @@ def B4Under {L : Type u} {E : Type v} [LinearOrder L] [Fintype L] [Fintype E] (f
           uncertifiedCapacity ends β cert X * (b - a)) : ℕ) : ℕ∞)
 
 /-- **B4 at the places a link may end at, on a registered Site.** For every Site `T`, `B4Under` with the Site's places
-as the leaves, its registered links as the table (`Site.placeEnds`, `Site.linkβ`) and its own link ends
+as the leaves, its registered links as the table (`Site.placeEnds`, and the rates `β`, which are the registered ones
+and exist at every link: `Site.RatedOn`, so a Site with a link that has no rate has no statement here) and its own link ends
 (`Site.linkPlace`, each device and memory leaf to its host through the Site's `host?`). It quantifies over no map of
 leaves: the link ends are a function of the Site, which the registration fixes before any coin, so a strategy, which
 is quantified after the Site, cannot choose where its signals count.
@@ -96,7 +97,8 @@ charged nothing, which is right only because the host is inside the prover's bou
 are asked to hold each leaf with its host, and the host's routing is never trusted. On a Site whose every place is its
 own link end it is `B4` at the Site's places and links (`B4UnderId`). -/
 def B4Via : Prop :=
-  ∀ T : Verity.Site, B4Under.{0, 0, w} T.linkPlace T.placeEnds T.linkβ
+  ∀ (T : Verity.Site) (β : Fin T.links.length → ℕ), T.RatedOn β Set.univ →
+    B4Under.{0, 0, w} T.linkPlace T.placeEnds β
 
 /-- **`B4Under` at `f = id` is `B4`**: on every table, with each leaf its own link end, `B4Under`'s premises and
 conclusion are `B4`'s. -/

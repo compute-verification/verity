@@ -158,7 +158,7 @@ class Recorded:
         raise KeyError(f"{self.id}: no answer recorded for this case")
 
 
-SAMPLED_PROOFS_V1 = "verity/sampled-proofs/v1"
+SPOT_V1 = "verity/sampled-proofs/v1"
 
 
 def _two_stage():
@@ -308,7 +308,7 @@ def _form_params(j: Any) -> dict:
 
 
 def _covered(form_params: Callable[[Any], dict]) -> Callable[[Any], dict]:
-    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli law refused at any p, as
+    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli sampling design refused at any p, as
     `covered_params` refuses it (`service.bernoulli`)."""
     def params(j: Any) -> dict:
         p = form_params(j)
@@ -345,7 +345,7 @@ def spot(case: Any) -> dict:
     (`RECURSIVE_REFUSED`) by name, the two-stage form's refusals of its params (its twin's) and of its evidence's keys,
     and a refusal of any other form, on the cases the mirror decides."""
     blobs = case.get("blobs", []) if isinstance(case, dict) else []
-    return P.answer(SAMPLED_PROOFS_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
+    return P.answer(SPOT_V1, case, params=_form_params, commitment=ONE_STAGE.decode_commitment,
                     evidence=_form_evidence, digest=lambda c: c[1],
                     check=lambda p, c, e: _one_stage_check(p, c, e, blobs))
 
@@ -364,7 +364,7 @@ def _period_answer(case: str) -> str:
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 #: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage v1 and the
 #: recursive audit refused, and the two-stage audit refused last while its switch is off.
-SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
+SPOT = Ported(SPOT_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `Poub.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
 #: Pearl+'s run verdict, remote's work in its composite of record: on the served run a test records for it
@@ -849,12 +849,12 @@ class TiedSame(Same):
 #: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
 #: Pearl+ run naming the policy's record, every window of its development composite's PoUW period and of onsite's naming
 #: it too, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
-REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SAMPLED_PROOFS),
-                     (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (RUN, WINDOW))
-REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
+REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SPOT),
+                     (INFERENCE_ONLY.id, SPOT.id), (RUN, WINDOW))
+REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SPOT), (INFERENCE_ONLY.id, SPOT.id),
                   (WINDOWS,))
-ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
-                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (WINDOWS, STORE))
+ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SPOT, WIPE),
+                  (INFERENCE_ONLY.id, SPOT.id), (WINDOWS, STORE))
 #: `Core.Onsite.counted`: onsite with the count over the wipe's span beside it and the wipe's count held to it.
 ONSITE_COUNTED = TiedSame("verity/onsite/counted/v0", (HOST_SPAN, *ONSITE.components[:-1], COUNTED_WIPE), ONSITE.same,
                           (*ONSITE.ties, WIPE_NODE, *WIPE_COUNT))

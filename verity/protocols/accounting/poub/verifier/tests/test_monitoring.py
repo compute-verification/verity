@@ -210,7 +210,7 @@ def test_an_error_that_is_not_the_sessions_ledgers_is_refused():
         monitoring.table(ALL_SAMPLED, below, 1, 600)
 
 
-def test_the_cli_reads_a_legs_bandwidth_json_and_the_sessions_ledger(tmp_path, capsys):
+def test_the_cli_reads_a_subprotocols_bandwidth_json_and_the_sessions_ledger(tmp_path, capsys):
     f, g = tmp_path / "bandwidth.json", tmp_path / "ledger.json"
     f.write_text(json.dumps({"answer": ALL_SAMPLED, "q_bytes": ALL_SAMPLED["public"]["q_bytes"]}))
     g.write_text(json.dumps({"declared": {"gamma": {"spec": {"error": NO_SKETCH}, "measured": {"error": NO_SKETCH}}}}))

@@ -231,7 +231,7 @@ def setup_check_cmd(a: argparse.Namespace) -> int:
     q = S.P2Params(WIDTH, C0, a.blocks, 1)
     w = os.urandom(q.w_bytes)
     commitment = setup.commit(q, w)
-    salt = setup.draw_salt(os.urandom(32), commitment)
+    salt = setup.sample_salt(os.urandom(32), commitment)
     step = -(-a.blocks // a.workers)
     t0 = time.perf_counter()
     with mp.get_context("spawn").Pool(a.workers) as pool:

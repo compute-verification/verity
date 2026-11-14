@@ -4,7 +4,7 @@ public import CoreComposites
 public import Properties.Composition
 public import Properties.Pouw.PearlPlus
 public import Properties.Flock.Circuit.CircuitOf
-public import Definitions.Accounting.JointLive
+public import Definitions.Compose.JointLive
 public import Definitions.Core.Blocks
 public import Definitions.Core.Game
 public import Definitions.Core.Site
@@ -134,8 +134,9 @@ Each subprotocol's target (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `Pous
 `NetworkCertifierSound`, `WipeSound`) is `Target k a`: at every `θ`, `F`, `c` and strategy, the probability that `a`'s
 verdict at `k` accepts while its claim fails is at most its error there: one function of the subprotocol, so a composite's
 targets are those of the subprotocols it lists. `Verity.SoundnessOf` (`Properties.Verity.Soundness`) composes them at
-any composite, and `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.PlainSoundness` are it at onsite's seven,
-remote's three and the plain sibling's three.
+any composite, and `Verity.Soundness` and `Verity.PlainSoundness` are it at onsite's seven and the plain sibling's three.
+`Verity.RemoteSoundness` composes remote's from SPOT's and PoUW's and, in the policy's place, the two statements that tie
+its clause to the committed files (`Properties.Verity.Committed`).
 
 The names a subprotocol defines are `Vocab`'s fields: `read` (v2's reading of the committed files), `place`,
 `programDigest`, `publicDigest` and `registered`, `families`, `signer` and `coinsRead`, `extract`, the finders and the
@@ -225,10 +226,10 @@ each where `k` lists it. -/
 def tied (k : Verity.Registration.Composite) : List String :=
   [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id].filter (· ∈ k)
 
-/-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.windows`),
+/-- **The ties between subprotocols**: every window of PoUW's period on the policy's record (`Core.Remote.executionPhases`),
 PoUS and PoUB-P2 on one store (`Core.Onsite.store`), Pearl+'s run on the policy's record (`Core.Remote.V1.run`), and
-Pearl+'s window record the one the policy's record is chained after (`Core.Remote.V1.window`). -/
-def allTies : List Composition.Tie := [Remote.windows, Onsite.store, Remote.V1.run, Remote.V1.window]
+Pearl+'s window record the one the policy's record is chained after (`Core.Remote.V1.executionPhase`). -/
+def allTies : List Composition.Tie := [Remote.executionPhases, Onsite.store, Remote.V1.run, Remote.V1.executionPhase]
 
 /-- The ties of composite `k`: each tie between subprotocols `k` lists, so a composite is its list and no tie is
 chosen beside it. Onsite has the first two, remote the last two. -/
@@ -506,7 +507,7 @@ The challenger refuses further frames this device serves (a spec past its other 
 length, a tree's root or key sampled twice), so each of its sessions, a refused frame read as the prover's close, is a
 play here with the same log, and the plays it refuses only add strategies. Each frame it serves
 releases one of the families' coins or writes one of its coin-tree lines, so it serves at most `frames fs`. A withheld
-session, the one a sampled-proofs window's sample reads, answers its hello with the families alone and each coin with its
+session, the one a SPOT window's sample reads, answers its hello with the families alone and each coin with its
 raw bytes, as the device here releases them, and its close with the commitment and every coin's salt and path, which
 the play samples after the last release (`finish`). A nonce the prover leaves to the challenger is sampled apart from
 everything else, so a prover that reads it is a mixture of strategies here.
@@ -888,15 +889,17 @@ each have at most `Γ` gates and read at most `α` fresh input bits per gate, on
 
 v0's clause is proved of the case as sent, at the composites where v0 decides (`Vocab.inferenceOnlySound`), and of
 nothing more: what links that case to the committed files is two checks the verifier lacks, which no code enforces, so
-the clause says nothing of the committed files until both exist. Neither is a premise of the claim.
+the clause says nothing of the committed files until both exist. Neither is a premise of the claim. What each would
+establish is a named `Prop` of `Properties.Verity.Committed`, stated and not proved, which remote's soundness takes as a
+hypothesis.
 
 1. **The case's wires are the committed record's wires.** The circuit the clause speaks of is the Program's own layout.
    SPOT's claim is on the committed files' units, and no check holds the rows a unit commits to the Program's gates or
    a wired row to its writer's row: `Spot.Wires.Summary.drawnOk` states that check on the sampled proof blocks, and no
-   protocol calls it.
+   protocol calls it. The statement on the wired rows is `Vocab.WiresSound`.
 2. **The case's unit is the committed `Γ`'s unit.** `Γ` counts the Program's gates; PoUW's claim counts gates of the
    committed files' circuit (`computed`). No check holds the one unit to the other, or gives how many of those a
-   Program gate is.
+   Program gate is. The statement on the committed side, a row of the file is one gate of that circuit, is `GateARow`.
 
 What else it does not say:
 
@@ -1019,8 +1022,8 @@ def PouwSound (k : Verity.Registration.Composite) : Prop := V.Target k .pouw
 `Properties.Remote.PolicyHeld`, the policy on the Program its compiled check judges, at the policy's own `Γ` and `α`
 (`Holds`, which lists what that leaves unsaid). `Proofs.Properties.Verity.InferenceOnly` proves it of the case as sent,
 for every vocabulary at both composites: the composite's acceptance holds each of its cases to its check's, so the event
-is empty. The link from that case to the committed files is the two checks `Holds` names as missing, so the composites'
-soundness still counts this target in its trust gap. -/
+is empty. The link from that case to the committed files is the two checks `Holds` names as missing: onsite's soundness
+still takes this target as a hypothesis, and remote's takes the two statements those checks would establish. -/
 def InferenceOnlySound (k : Verity.Registration.Composite) : Prop := V.Target k .inferenceOnly
 
 /-- **PoUS's target**: at least `S` bits of device memory held on average. -/

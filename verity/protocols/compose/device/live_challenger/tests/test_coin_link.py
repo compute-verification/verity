@@ -31,7 +31,7 @@ sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 import coin_link as L  # noqa: E402
 
-#: a fast link for a test: 5 ms buckets, link-windows of 20, and a slack no loaded machine reaches, so a late tick never
+#: a fast link for a test: 5 ms buckets, execution phases of 20, and a slack no loaded machine reaches, so a late tick never
 #: faults one
 FAST = ["--bucket-ms", "5", "--window", "20", "--slack-ms", "600000", "--cell-bytes", "1024", "--coin-cells", "2"]
 
@@ -44,7 +44,7 @@ def link(out: Path, port: int, *extra: str) -> subprocess.Popen:
 def test_a_session_through_the_link_exempts_exactly_its_coins_and_counts_the_rest(tmp_path):
     """The client's session (hello, two coins of one family, close) through the link: serve.py ends it closed and the
     verifier takes its out/; the link's record exempts the two openings and nothing else, counts the commitment and
-    the closed frame, every link-window complete, and the client's four frames counted as egress."""
+    the closed frame, every execution phase complete, and the client's four frames counted as egress."""
     auditor = Auditor(tmp_path)
     proc, out, first = start(tmp_path, auditor=auditor)
     relay = link(out, int(first.split(":")[1]))
@@ -77,7 +77,7 @@ def test_a_withheld_release_past_one_frame_passes_the_link_in_frames(tmp_path):
     `remote.MAX_HEAD`, which the link faults malformed, cutting the close; in frames (`remote.release_frames`) the link
     passes each at D7's cell size, the client settles every coin and serve.py ends the session closed. The link's
     record counts the layout, each raw coin and each release frame (`other`), exempts none and cuts nothing, every
-    link-window complete."""
+    execution phase complete."""
     auditor = Auditor(tmp_path)
     families = json.dumps([["positions", RELEASED], ["replay", 1]])
     proc, out, first = start(tmp_path, "out", None, "--withhold", "--families", families, auditor=auditor)

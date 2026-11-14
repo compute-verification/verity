@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual.Threaded
+public import Definitions.Slowdown.Guarantees.Actual.Threaded
 public import Proofs.Accounting.Actual.ServerBlocks
 public import Proofs.Slowdown.Threads
 
@@ -14,7 +14,7 @@ through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divid
 fresh input bits are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.freshInput_pull_le_readsIn`, which needs
 no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`Slowdown.SecurityProofs.ThreadedReads`) bounds each
 piece's counted multiplications by `K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
-Through a partial containment the windows divide only the gates the declaration computes (`InferenceOnly.SecurityProofs.piece`),
+Through a partial containment the windows divide only the gates the declaration computes (`Slowdown.SecurityProofs.piece`),
 each reading novelly at most its window's reads in the image of those gates and the gates they read
 (`InferenceOnly.SecurityProofs.freshInput_piece_le_readsIn`), and every other counted multiplication is a dark gate
 (`ThreadedRuntimeDark`).
@@ -187,18 +187,18 @@ theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots :=
   obtain ⟨P, hP⟩ := serverBlocks_small A ℓ Φ ends β link n X θ hθ t ω Γ R r ((M.S ∪ c.D.into M.S).image M.emb) hω hX hC
     hΦ hL hΓ hr hR
   have hΛ : 0 ≤ T.bound (R + r * ω) b_w d e := le_max_of_le_left (Nat.cast_nonneg _)
-  have hpiece : ∀ u, Small c Γ (R + r * ω) (InferenceOnly.SecurityProofs.piece M P u) := fun u =>
-    ⟨InferenceOnly.SecurityProofs.piece_subset_computed u, (InferenceOnly.SecurityProofs.card_piece_le u).trans (hP u).1,
+  have hpiece : ∀ u, Small c Γ (R + r * ω) (Slowdown.SecurityProofs.piece M P u) := fun u =>
+    ⟨Slowdown.SecurityProofs.piece_subset_computed u, (Slowdown.SecurityProofs.card_piece_le u).trans (hP u).1,
       (Nat.cast_le.2 (InferenceOnly.SecurityProofs.freshInput_piece_le_readsIn M P u)).trans (hP u).2⟩
-  have hM : (T.M ∩ M.S).card = ∑ u, (T.mults (InferenceOnly.SecurityProofs.piece M P u)).card := by
-    have h := InferenceOnly.SecurityProofs.sum_card_filter_piece (M := M) (P := P) T.M fun g => g
+  have hM : (T.M ∩ M.S).card = ∑ u, (T.mults (Slowdown.SecurityProofs.piece M P u)).card := by
+    have h := Slowdown.SecurityProofs.sum_card_filter_piece (M := M) (P := P) T.M fun g => g
     simp only [filter_mem_eq_inter] at h
     exact h.symm
   have hcount : b_a * (T.M ∩ M.S).card ≤
       ((n * ((t + ω - 1) / ω) : ℕ) : ℝ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) :=
-    calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (InferenceOnly.SecurityProofs.piece M P u)).card : ℝ) := by
+    calc b_a * ((T.M ∩ M.S).card : ℝ) = ∑ u, b_a * ((T.mults (Slowdown.SecurityProofs.piece M P u)).card : ℝ) := by
           rw [hM, Nat.cast_sum, mul_sum]
-      _ ≤ ∑ u, (freshInput c (InferenceOnly.SecurityProofs.piece M P u) : ℝ) * T.bound (R + r * ω) b_w d e :=
+      _ ≤ ∑ u, (freshInput c (Slowdown.SecurityProofs.piece M P u) : ℝ) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ =>
             Slowdown.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
       _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
@@ -210,7 +210,7 @@ theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots :=
     rw [le_div_iff₀ hba]
     linarith
   have hs : (T.M.card : ℝ) ≤ M.dark.card + (T.M ∩ M.S).card := by
-    exact_mod_cast InferenceOnly.SecurityProofs.card_le_dark_add_inter M T.M_computed
+    exact_mod_cast Slowdown.SecurityProofs.card_le_dark_add_inter M T.M_computed
   linarith
 
 /-- `ThreadedRuntimeDarkSlots` at one slot per weight gate. -/

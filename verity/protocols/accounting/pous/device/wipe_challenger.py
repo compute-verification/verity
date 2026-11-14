@@ -65,7 +65,7 @@ from verity.protocols.accounting.pous.verifier.streamed_wipe import (
     WipeParams,
     _sha512,
     batch_digest,
-    draw_indices,
+    sample_indices,
     label,
     labels,
     message,
@@ -172,7 +172,7 @@ class WipeMemoryChallenger:
         if self.indices is None:
             secret = self._coin_secret if self._coin_secret is not None else os.urandom(32)
             c = self.commitment
-            self.indices = draw_indices(secret, c.server, c.session, self.params.labels, self.params.k)
+            self.indices = sample_indices(secret, c.server, c.session, self.params.labels, self.params.k)
         b = len(self.batches)
         first = b * self.params.batch
         idx = self.indices[first:first + self.params.batch]
@@ -284,15 +284,15 @@ class MemoryChallengerParty:
         self._then: Callable[[], list[Any]] | None = None
 
     def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
-        caps = identity.capabilities
-        self.signer, self.log = caps["signer"], caps["log"]
+        given = identity.capabilities
+        self.signer, self.log = given["signer"], given["log"]
         if identity.clock not in (None, sw.CLOCK):
             return [Finish({"ended": None, "signed": None, "detail": (
                 f"the wipe's header names {sw.CLOCK}, and this challenger's clock source reads {identity.clock}: the run "
                 f"that starts it gives it sources={{{CHALLENGER!r}: {{'clock': RealClock(streamed_wipe.raw_clock_ns, "
                 "streamed_wipe.CLOCK)}}")}, "clock", kind="private")]
         try:
-            self.request, self.wp = dict(params), WP.params_of(params, caps.get("reads", WP.READS))
+            self.request, self.wp = dict(params), WP.params_of(params, given.get("reads", WP.READS))
         except ValueError:
             return self._finish("schema")
         self.phase = Phase("Coins")

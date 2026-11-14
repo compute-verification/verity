@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The step-indexed scan composed in zero knowledge (scan_zk.py, w63's class or SC_CLASS's) on a CPU machine, on hidden_zk's builds (its
 # job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof) with the ZK server's Lean frame and the
-# sampled-proofs verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
+# SPOT verifier built in the tree. From a clone, in one of the network slots, as a job of at most 180 minutes:
 #   env SC_MEM_GB=128 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_zk.sh
 # env: SC_MEM_GB (what job.sh's stages may take, within the slot's)  SC_CACHE (the build cache, kept across runs where
@@ -38,12 +38,12 @@ source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
 export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "sczk: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "sczk: no ZK server frame"; exit 7; }
 if [ -n "${SC_RSS:-}" ]; then
   cat > "$W/flock-circuit-rss" <<EOF
 #!$PY
