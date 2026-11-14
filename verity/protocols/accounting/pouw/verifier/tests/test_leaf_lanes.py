@@ -15,7 +15,7 @@ from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 from verity.protocols.accounting.pouw.verifier import leaf_lanes as LL
 from verity.protocols.proofs.spot.verifier.one_stage import produced as PR
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 SALT, POSITION, ROOTS = bytes(range(64)), 11, (b"\x01" * 64, b"\x02" * 64)
 

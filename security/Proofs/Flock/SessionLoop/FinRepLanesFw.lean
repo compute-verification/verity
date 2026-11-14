@@ -168,7 +168,7 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     rw [hst, hsch]
     rfl
   have hP := finRepPads_tape L₀ src x w hS hsx j r hRep
-  have hPh : (_root_.Flock.Firewall.Finish.padsOf q.draws).h =
+  have hPh : (_root_.Flock.ZkServer.Finish.padsOf q.draws).h =
       (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j)).h := by
     rw [← hP]
     rfl
@@ -176,10 +176,10 @@ theorem finRepLanes_ret (vs : finS.SwVals)
   have hkey : ∀ k, (Masked.layE x j).zp 64 ≤ k → k < (Masked.layE x j).hab →
       fOf (FlockComplete.LigLock.l0Clear (Masked.ligCoin (finCoins x ops)) (Masked.ligP0 x j r) (Masked.zkTab x j).sch
           tb.g (Masked.ligBasis x (finCoins x ops) w t j r extras) (Masked.layE x j) tb.extra r.val k +
-        (_root_.Flock.Firewall.Finish.padsOf q.draws).h[k]!) =
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[k]!) =
       Composed.msgAt (fun i => (tabAt x ops j).tab.onVals.vals r
           (Masked.wtOf Masked.PE x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j) (randAtT x ops t j).1
-          (randAtT x ops t j).2.1 i + fOf (_root_.Flock.Firewall.Finish.padsOf q.draws).h[i.val]!) k := by
+          (randAtT x ops t j).2.1 i + fOf (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[i.val]!) k := by
     intro k hlo hhi
     have hkE : k < (Masked.tabC Masked.PE x j).z.nE := by
       rw [Masked.nE_eq_hab x j]
@@ -230,10 +230,10 @@ theorem finRepLanes_ret (vs : finS.SwVals)
   -- the request's extra claims are at the views' points
   have hxs := finRepXs L₀ src (realOf src) wk x w hsc hR ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hk extras hex tb hi q f
     hRep
-  have hxsz' : (_root_.Flock.Firewall.Finish.claimsOf q.xs).size = extras.size := by
+  have hxsz' : (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size = extras.size := by
     rw [← hxs]
-    simp [_root_.Flock.Firewall.Finish.claimsOf]
-  have hxsz : (_root_.Flock.Firewall.Finish.claimsOf q.xs).size = spec.points * (Masked.stAt x j).regions.size := by
+    simp [_root_.Flock.ZkServer.Finish.claimsOf]
+  have hxsz : (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size = spec.points * (Masked.stAt x j).regions.size := by
     have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
       intro α β y f b hb
       cases y with
@@ -242,16 +242,16 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     have hq := hRep.2.1
     unfold repInOf at hq
     obtain ⟨⟨lay, ms⟩, -, hq⟩ := bok hq
-    have hqx : q.xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+    have hqx : q.xs = _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
           (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) := by
       cases hq
       rfl
     rw [linkPoints_wordsAt x w hsc hR hF.1 hsx hk m₀ ρ₀, hk2,
       show (Masked.stsOf x)[j.val]! = Masked.stAt x j from getElem!_pos (Masked.stsOf x) j.val hj] at hqx
-    simp only [_root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+    simp only [_root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
     rw [hqx]
-    unfold _root_.Flock.Firewall.Drive.extras
+    unfold _root_.Flock.ZkServer.Drive.extras
     rw [flatMap_size_const _ _ _ fun _ => Array.size_map]
     simp only [viewPoints, Array.size_map, Array.size_range]
     exact Nat.mul_comm _ _
@@ -262,16 +262,16 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     exact (Masked.zkTab x j).hz
   have hP0 : Masked.ligP0 x j r = Masked.repBase x (2 * j.val + r.val) +
       ((Masked.stAt x j).m + (Masked.stAt x j).c.kLog - 6) +
-        (2 + (_root_.Flock.Firewall.Finish.claimsOf q.xs).size + 1) := by
+        (2 + (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size + 1) := by
     show Masked.repSlot x (2 * j.val + r.val) (fun _ => 0) = _
     rw [Masked.repSlot_eq hsx hzq, Masked.stsOf_half, ← Masked.repBase_eq hsx (2 * j.val + r.val)]
     unfold FlockComplete.piopRoundsZk
     rw [hxsz]
     omega
   -- the ZK server's level 0
-  obtain ⟨hO, hMs, hEs⟩ := _root_.Flock.Firewall.Finish.repFwC_l0 (Masked.ligCoin (finCoins x ops)) (refK x)
+  obtain ⟨hO, hMs, hEs⟩ := _root_.Flock.ZkServer.Finish.repFwC_l0 (Masked.ligCoin (finCoins x ops)) (refK x)
     (Masked.ligRespE (finCoins x ops)) (fun k => Masked.coinOf_ligRespE (finCoins x ops) k) tb.st tb.sch tb.tPad _ _
-    tb.g tb.cm0.toC (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws).toC
+    tb.g tb.cm0.toC (_root_.Flock.ZkServer.Finish.claimsOf q.xs) (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC
     ic'.toC q.vals tb.extra tb.lanePad _ hn hk0' (Masked.ligP0 x j r)
     (Masked.ligBasis x (finCoins x ops) w t j r extras)
     (fun zp lp ss T sws t₃ l₃ hpf => by

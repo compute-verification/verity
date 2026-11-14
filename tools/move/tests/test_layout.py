@@ -1066,6 +1066,26 @@ def test_a_workspaces_members_and_a_directory_beside_its_own_parts_follow_the_to
         '[tool.gate]\nkeyed = ["verity/flock", "other"]\nlevels = ["verity/flock/prover", "verity/flock/agreement"]\n')
 
 
+@pytest.mark.parametrize("stays", [{}, {"bench/slots/bench.py": "Y = 1\n"}])
+def test_a_workspace_member_whose_files_move_by_file_rows_follows_its_pyproject(tmp_path, stays):
+    """`bench/slots/`'s files move by rows of their own, with no row for the directory, and its bench may stay: the
+    workspace's `members` names the directory its `pyproject.toml` went to, rather than losing the distribution, and
+    `move_check.py` certifies the commit."""
+    r, p = _run(tmp_path, {
+        **stays, "bench/slots/slots.py": "X = 1\n", "bench/slots/tests/test_slots.py": "def test():\n    pass\n",
+        "bench/slots/pyproject.toml": '[project]\nname = "slots"\n', "other/pyproject.toml": '[project]\nname = "other"\n',
+        "pyproject.toml": ('[project]\nname = "root"\n\n[tool.uv.workspace]\nmembers = ["other", "bench/slots"]\n\n'
+                           '[tool.uv.sources]\nother = { workspace = true }\n'),
+    }, '[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/slots/slots.py" = "lib/cuda/slots/slots.py"\n'
+       '"bench/slots/pyproject.toml" = "lib/cuda/slots/pyproject.toml"\n"bench/slots/tests/" = "lib/cuda/slots/tests/"\n\n'
+       '[modules]\n"bench.slots.slots" = "lib.cuda.slots.slots"\n"bench.slots.tests" = "lib.cuda.slots.tests"\n')
+    assert p.returncode == 0, p.stderr
+    assert 'members = ["other", "lib/cuda/slots"]\n' in (r / "pyproject.toml").read_text()
+    git(r, "add", "-A")
+    cert = _certify(r, git(r, "rev-parse", "HEAD"))
+    assert cert["certified"], cert["refusals"]
+
+
 NAMES = {**BELOW, "tests/test_gate.py": "", "job.sh": "#!/bin/sh\n", "other/x.py": "X = 1\n",
          "suites.py": 'AFTER = ("flock-suite", "lib/flock", "other")\nARGV = ["tool", "--project", "lib/flock"]\nPATHS = ("lib/flock", "other")\n',
          "gates.toml": 'after = ["lib/flock", "flock-suite"]\npaths = ["lib/flock", "a.sh", "lib/gone/x.py"]\n'}

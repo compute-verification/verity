@@ -55,7 +55,7 @@ import pytest
 from verity.commitments import coin_tree as CT
 from verity.protocols.proofs.spot.device import challenger as C
 from verity.protocols.proofs.spot.verifier import service as S
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, docket as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
@@ -66,9 +66,9 @@ HERE = (Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 sys.path.insert(0, str(HERE))
-import a5_coins as AC  # noqa: E402
-import member_trees as MT  # noqa: E402
-import records_audit as RA  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import member_trees as MT  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import records_audit as RA  # noqa: E402
 
 LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
 BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
@@ -325,6 +325,6 @@ def test_a_member_with_one_bit_changed_is_refused(tmp_path, binaries):
 def _answer(out: Path) -> dict:
     """SPOT's answer on the audit under ``out`` (`served_integrity.answer`, as the served run's record and the
     certifier's period read it), its registration the one the audit registered."""
-    import served_integrity as SI  # beside a5, on the path `records_audit` put there
+    from verity.protocols.proofs.spot.verifier.one_stage import served_integrity as SI  # beside a5, on the path `records_audit` put there
 
     return SI.answer(out, json.loads((out / "window" / "registration.json").read_text()))

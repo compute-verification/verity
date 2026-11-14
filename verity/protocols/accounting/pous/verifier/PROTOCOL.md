@@ -236,7 +236,7 @@ are about Lean's `H`, so they do not certify the code's (`DISCREPANCIES.md` P3 i
 
    The challenger's party sends nothing but these rows. The indices and the end frame go on the prover's connection;
    the release goes in the report on the party's stdout, to the node that started it, as do the setup salt's source and
-   a refusal, which names the field and the rule the request breaks and quotes none of its bytes. The auditor host's
+   a refusal, which names the field and the rule the request breaks and quotes none of its bytes. The auditor device's
    gate starts a party only for a caller whose address is a registered node's, and keeps the party's log on the host
    for root alone (`verity/protocols/accounting/poub/device/live_verifier/README.md`), so nothing of a party leaves its
    host but into the node.

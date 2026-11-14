@@ -57,7 +57,7 @@ KERNELS_ELEMENTWISE = ("vectorized_elementwise_kernel", "elementwise_kernel", "u
 
 def _scalar(v: Any) -> float | None:
     """A Python number argument (never a ViewDesc / bool)."""
-    if isinstance(v, bool) or isinstance(v, ViewDesc):
+    if isinstance(v, (bool, ViewDesc)):
         return None
     return as_float(v)
 
@@ -181,7 +181,7 @@ class MeanDimTriton:
         launches = [c for c in node.children if c.is_triton]
         if len(launches) != 1 or len(node.children) != 1 or triton_name(launches[0]) != "mean_kernel":
             return unsupported(node, "mean.dim is not implemented by exactly one mean_kernel launch", children=[c.op for c in node.children])
-        k = launches[0]
+        k: Any = launches[0]   # the one mean_kernel launch, as the log recorded it
         ka = bound_args(k)
         consts = dict(k.enter.constexprs)
         got = {"BLOCK_SIZE": consts.get("BLOCK_SIZE", ka.get("BLOCK_SIZE")), "num_warps": k.enter.num_warps, "M": ka.get("M"), "N": ka.get("N"),

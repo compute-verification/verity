@@ -23,7 +23,7 @@ from verity.protocols.proofs.spot.verifier.one_stage.proofs import EXE
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 
-import a0  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0  # noqa: E402
 import server_rate as SR  # noqa: E402
 
 NAME = "MIMALLOC_PURGE_DELAY"

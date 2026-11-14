@@ -117,7 +117,7 @@ segment S's rows:
   - row t·P + 2(s − 1) + r, for r = 0, 1, is bytes [16,384 r, 16,384 (r + 1)) of tile t's segment-s words;
   - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's output cells 4,096 h to 4,096 h + 4,095.
 - A row's leaf is hm96's leaf over the row's `sha512/row/v2` digest (131,072 bits), salted with `prf_salt(Ks, off + pos)`:
-  192 bytes of commit_gpu's PRF (`benchmarks/pouw/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
+  192 bytes of commit_gpu's PRF (`verity/commitments/cuda/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
   call's salt offset off plus the row's position pos. No coin feeds a salt. frame-v3-sha512's leaf prefix (the domain id
   and the position) is `row_leaf`'s, around the hm96 digest.
 - The tree is binary, one a call (`merkle.tree_levels`). Its domain is `CommitmentDomain(identity_digest_sha512(TAG,

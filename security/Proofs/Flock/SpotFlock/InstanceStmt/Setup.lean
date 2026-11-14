@@ -10,7 +10,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -75,7 +75,7 @@ and partition object, derived from the program: the sampled proof block is an in
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets
+open Flock Flock.ZkServer RecDeploy.VStarNets
 open FlockDeploy.Concrete (shaB hmB bne_self unit_eq plainStr_hexOf)
 open Lean (Json)
 

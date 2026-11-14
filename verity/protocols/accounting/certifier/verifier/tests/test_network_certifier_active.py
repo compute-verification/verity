@@ -43,7 +43,7 @@ from verity.protocols.accounting.certifier.verifier.schedule import (
     handing_buckets,
     run_shaper,
 )
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.service import WindowCommitmentRecord
 
 

@@ -52,7 +52,7 @@ opening that fails (`strat_eval_cons`).
 * **The openings** (`release_eq_abort_of_liveRefine`): after an opening the prover's coin-tree check refuses, the prover
   sends `abort` at every later round, so `LiveRefine` makes the frame's release of a live round there the `abort`
   message. The frame checks no opening; the release reads the transport's check (`LeanRelease.opens`,
-  `flock-firewall coins` at the tape's nonce) and is the stop where it refuses. So `LiveRefine` and `FillRefine` hold
+  `flock-zk-server coins` at the tape's nonce) and is the stop where it refuses. So `LiveRefine` and `FillRefine` hold
   where that check is the session's (`CheckIs`): then the release refuses after any opening the session's check
   refuses, up to the protocol's last coin (`OpeningsRefused`, `openingsRefused_of_checkIs`), with `abort` the stop.
 * **The frame's coin stops read no tape** (`LeanRelease.refusesCoins_tape`): on the histories the transport's check
@@ -90,17 +90,17 @@ opening that fails (`strat_eval_cons`).
 * **At the deployed coin layer** (`Flock.zk_server_lean_coinLayer`, at SHA-512): `S` is `CoinLayer.session nr T`,
   whose `Hello`, opening check and coin reading are `coin-tree/hm96-sha512/v2`'s and whose tables are `T`'s. Its
   premises on the transport are the transport's trusts alone, each a named hypothesis for a stated reason: the
-  server's `Hello` is `flock-firewall hello`'s at the statement's files (`LeanRelease.HelloIs`, which gives
+  server's `Hello` is `flock-zk-server hello`'s at the statement's files (`LeanRelease.HelloIs`, which gives
   `LeanRelease.HelloEq` by `helloEq_of_helloIs`: that command's `Hello` is the coin layer's), the ZK server's own link and
-  `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`; the link's roots are `Flock.Firewall.Link`'s, and at the
+  `Finish` are `T`'s (`LinkRoundEq`, `FinalRoundEq`; the link's roots are `Flock.ZkServer.Link`'s, and at the
   deployed tables `LinkRoundEq` follows from the transport handing it the tape's tables, `LinkRecheck`; the `Finish`'s
-  proof files are the session's Lean finish's, `Flock.Firewall.Finish`), the transport
+  proof files are the session's Lean finish's, `Flock.ZkServer.Finish`), the transport
   requests each opening at the committed schedule's place (`ReqsFollow`, `CoinOpen.Follows`) and hands the frame a rep
   state and coins read from the coins the openings open (`ReadsCoins`: the state, `ProgReads`, the session loop's rep
-  frame's, `Flock.Firewall.Frames`; the
+  frame's, `Flock.ZkServer.Frames`; the
   coins, `CoinsRead`), the `Finish` is one past the
   last coin, and the coin check reads the session's `Hello` with the tape's nonce (`HelloParses`). At the session loop
-  (`flock-firewall session`, `Claims/ZK/SessionLean.lean`) `HelloIs`, `HelloParses`, `ReqsFollow`, `CoinsRead` and the
+  (`flock-zk-server session`, `Claims/ZK/SessionLean.lean`) `HelloIs`, `HelloParses`, `ReqsFollow`, `CoinsRead` and the
   `Finish`'s round are theorems; under `coin_tree::Checked` `ReqsFollow` is a trust, and `HelloParses` follows from `HelloEq` and
   `HelloDParses` (`helloParses_of_helloEq`). From them `CheckIs` is proved (`LeanRelease.checkIs_coinLayer`, by
   `CoinOpen.coinLayer_verdict`), and the
@@ -733,7 +733,7 @@ end Claims.ZKMal
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
-open _root_.Flock.Firewall.Frame (Cfg Masker Draws MaskSlot)
+open _root_.Flock.ZkServer.Frame (Cfg Masker Draws MaskSlot)
 
 /-- **The frame's coin refusal reads its configuration's layout and absorbed order alone**, never its pads or root. -/
 theorem answer_congr {c c' : Cfg} (s : Masker) (cs : Array _root_.Flock.F128) (hl : c.lay = c'.lay)
@@ -932,7 +932,7 @@ theorem stopRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
     next => rfl
 
 /-- **The transport's coin check is the session's** at `x`: after every history past `Hello` of at most the protocol's
-`refK x` openings, the release's check (`opens`: `flock-firewall coins` on the server's `Hello` at the tape's nonce,
+`refK x` openings, the release's check (`opens`: `flock-zk-server coins` on the server's `Hello` at the tape's nonce,
 its answer and the openings) passes exactly where the session's check passes every opening under that nonce. It reads
 the tape's nonce as the session's check does. Proved at the deployed coin layer (`checkIs_coinLayer`). -/
 def CheckIs (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (x : Msg) :
@@ -1103,12 +1103,12 @@ theorem fillRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) 
 
 /-- **The `Hello` is the session's**: at every tape the server's own `Hello` is the session's at its nonce. At the
 deployed coin layer the session's is `CoinLayer.helloD`, the verifier's own canonical `Hello` (what
-`CoinTree.checkHello` compares byte for byte), and this follows from the server's `Hello` being `flock-firewall hello`'s
+`CoinTree.checkHello` compares byte for byte), and this follows from the server's `Hello` being `flock-zk-server hello`'s
 (`LeanRelease.HelloIs`, `helloEq_of_helloIs`). -/
 def HelloEq (S : RefSession) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (x : Msg) : Prop :=
   ∀ (ν : S.Nonce) (t : S.Tape), L.hello x (ν, t) = S.hello x ν
 
-/-- **`HelloEq` at the deployed coin layer from `flock-firewall hello`**: where the server's `Hello` is that command's
+/-- **`HelloEq` at the deployed coin layer from `flock-zk-server hello`**: where the server's `Hello` is that command's
 message (`HelloIs`), it is the session's (`CoinLayer.helloD_eq`). -/
 theorem helloEq_of_helloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))
@@ -1129,9 +1129,9 @@ theorem helloRefine_withStops (S : RefSession) (Rf : (x : Msg) → (Fin (refK x)
 
 /-- **The link is the session's**: after `Hello`'s answer, where the protocol has coins and the frame takes the
 answer's, the ZK server's own link (its recheck's roots) is the session's switched link at the tape. A named hypothesis,
-one of the transport's trusts: the link (`link`) is the recheck's, the level-0 roots `Flock.Firewall.Link` commits from
-the leaves under the salts on the ZK server's tape (`Flock.Firewall.Link.root`), which the session loop's `Level0` runs
-(else the session's Lean finish, at the table's level-0 request) and `Firewall::root` sends (`flock-circuit`). At the deployed tables it follows from the transport handing that command the
+one of the transport's trusts: the link (`link`) is the recheck's, the level-0 roots `Flock.ZkServer.Link` commits from
+the leaves under the salts on the ZK server's tape (`Flock.ZkServer.Link.root`), which the session loop's `Level0` runs
+(else the session's Lean finish, at the table's level-0 request) and `ZkServer::root` sends (`flock-circuit`). At the deployed tables it follows from the transport handing that command the
 tape's tables and framing its roots (`LeanRelease.LinkIs`, `LeanRelease.linkRoundEq_of_linkIs` in `LinkRecheck`). -/
 def LinkRoundEq (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (x : Msg) (w : Flock.Wit) : Prop :=
@@ -1143,7 +1143,7 @@ openings pass, whose last coins the frame takes and whose messages are the defer
 the only histories it meets), `Final.encode` of the record and proof files the ZK server builds
 itself is the session's switched last message at the coins the openings open. A live run's `Finish` is one the
 ZK server's own `Finish` takes (`LeanRelease.finStops_of_live`), so it says nothing where that stops. A named hypothesis,
-one of the transport's trusts: the proof files in `files` are the session's Lean finish's (`Flock.Firewall.Finish`,
+one of the transport's trusts: the proof files in `files` are the session's Lean finish's (`Flock.ZkServer.Finish`,
 `proofFile`, each rep's `repFw` at the values the ZK server passed and every round's coins), which `flock-circuit` sends
 as the session's `Proof`s. That they encode the session's last message is not yet proved about that code: it follows
 from `FrameAdmits` and `FinishIs` (`finalRoundEq_of_finishIs`, `FinishRound`). -/
@@ -1217,7 +1217,7 @@ the histories its check passes: after every history past `Hello` of at most `ref
 check passes at the tape `ρ` (`opens`), the frame state of the rep that released the last round is `pc x` of the coins
 the openings open, and the next round's rep's first-round state `fc x` of them. Past the check's refusal the transport
 hands the frame nothing, so the premise says nothing there. A named hypothesis, one of the transport's trusts: the
-frame's state (`prog`, `fresh`) is what the session loop's requests to the rep's frame make it (`Flock.Firewall.Frames`,
+frame's state (`prog`, `fresh`) is what the session loop's requests to the rep's frame make it (`Flock.ZkServer.Frames`,
 on `Drive.reqs`: the rep's coins and the device and scheduled rounds), which the release takes as given. At the loop's
 own frames it holds by definition (`LeanRelease.ofLoop_progReads`). The coins the frame takes are `CoinsRead`, a
 theorem at the session loop (`LeanRelease.loop_coinsRead`). -/
@@ -1366,7 +1366,7 @@ def HelloParses (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     | .ok hl => hl.nonce = CoinLayer.nb ν
     | .error _ => CoinLayer.slot x 0 = none
 
-/-- **`flock-firewall coins` reads the coin layer's `Hello` with its nonce** at `x`: at every nonce, `Hello.parse`
+/-- **`flock-zk-server coins` reads the coin layer's `Hello` with its nonce** at `x`: at every nonce, `Hello.parse`
 reads `CoinLayer.helloD` (`coinHello`), and the nonce it reads is the nonce's bytes. A statement about Lean functions
 alone, all total (`Hello.parse` reads the JSON through `Flock.JsonParse.parse`, and `CoinLayer.helloD` is itself built
 through it, `CoinLayer.helloJson`). The parser reads `canon`'s output back alike (`FlockComplete.JsonRT.parse_canon`);
@@ -1375,7 +1375,7 @@ it stays a named hypothesis because `Hello.parse` accepting what it reads depend
 (`verity/ml/flock/live/src/coin_open_vectors.json`). -/
 def HelloDParses (x : Msg) : Prop :=
   ∀ ν : CoinLayer.Nonce,
-    ∃ hl : _root_.Flock.Firewall.Coins.Hello, coinHello (CoinLayer.helloD x ν) = .ok hl ∧ hl.nonce = CoinLayer.nb ν
+    ∃ hl : _root_.Flock.ZkServer.Coins.Hello, coinHello (CoinLayer.helloD x ν) = .ok hl ∧ hl.nonce = CoinLayer.nb ν
 
 /-- **`HelloParses` of a transport whose coin check parses the `Hello`'s bytes** (`coinHello`, `coin_tree::Checked`), from
 the server's `Hello` being the coin layer's and `Hello.parse` reading the coin layer's. -/
@@ -1395,16 +1395,16 @@ theorem helloParses_of_helloEq (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableDa
 /-- **The transport requests each opening at the committed schedule's place** at `x` (`CoinOpen.Follows` at
 `CoinLayer.place`): at every tape, where the coin check reads the session's `Hello` as `hl` (`helloChk`), the requests
 (`LeanRelease.req`) of at most the protocol's `refK x` openings name, in order, the places the schedule gives them. The
-session loop's is a theorem (`SessionLean`: its requests are `Flock.Firewall.Session.reqAt`); under `coin_tree::Checked`,
+session loop's is a theorem (`SessionLean`: its requests are `Flock.ZkServer.Session.reqAt`); under `coin_tree::Checked`,
 which asks for the coins of each `Req::Commit` and `Req::Round` by its stream and count, a named trust. -/
 def ReqsFollow (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand)) (x : Msg) :
     Prop :=
-  ∀ (ν : (CoinLayer.session nr T).Nonce) (t : (CoinLayer.session nr T).Tape) (hl : _root_.Flock.Firewall.Coins.Hello),
+  ∀ (ν : (CoinLayer.session nr T).Nonce) (t : (CoinLayer.session nr T).Tape) (hl : _root_.Flock.ZkServer.Coins.Hello),
     L.helloChk x (ν, t) = .ok hl → ∀ ms : List Msg, ms.length ≤ refK x →
       CoinOpen.Follows (CoinLayer.place nr x) hl.spec hl.links 0 [] (reqsFrom (L.req x) 0 ms)
 
-/-- **At the deployed coin layer the transport's check is the session's**, at SHA-512: from `flock-firewall coins`
+/-- **At the deployed coin layer the transport's check is the session's**, at SHA-512: from `flock-zk-server coins`
 reading the server's `Hello` with the tape's nonce and the requests following the schedule, `CheckIs` at
 `CoinLayer.session nr T` (`CoinOpen.coinLayer_verdict`). -/
 theorem checkIs_coinLayer (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
@@ -1525,12 +1525,12 @@ a theorem:
   `CoinLayer.helloD_eq`, so `LeanRelease.HelloEq` follows, `helloEq_of_helloIs`), and the coin check reads the session's
   `Hello` with that nonce (`LeanRelease.HelloParses`);
 * the transport requests each opening at the schedule's place (`LeanRelease.ReqsFollow`);
-* the ZK server's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `Flock.Firewall.Link`'s roots, which
-  `Firewall::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: the session's Lean finish's
-  proof files, `Flock.Firewall.Finish`, from `FrameAdmits` and `FinishIs`);
+* the ZK server's own link and `Finish` are `T`'s (`LeanRelease.LinkRoundEq`: `Flock.ZkServer.Link`'s roots, which
+  `ZkServer::root` sends, from `LeanRelease.LinkIs` at the deployed tables; `FinalRoundEq`: the session's Lean finish's
+  proof files, `Flock.ZkServer.Finish`, from `FrameAdmits` and `FinishIs`);
 * the transport hands the frame rep states and coins that are functions `pc`, `fc`, `cc` of the coins the openings
   open, on the histories its check passes (`LeanRelease.ReadsCoins`: the states, `ProgReads`, are the session loop's
-  rep frames', `Flock.Firewall.Frames`, by definition at `LeanRelease.ofLoop`; the coins,
+  rep frames', `Flock.ZkServer.Frames`, by definition at `LeanRelease.ofLoop`; the coins,
   `CoinsRead`, the session loop's own, `loop_coinsRead`);
 * the `Finish` is one past the last coin (`L.last`, the transport's schedule).
 From them the release's coin check is the session's (`LeanRelease.checkIs_coinLayer`, from `CoinOpen.coinLayer_verdict`,
