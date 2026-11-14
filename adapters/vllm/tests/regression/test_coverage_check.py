@@ -101,6 +101,19 @@ def test_a_candidate_without_its_own_layouts_is_not_checked_against_the_referenc
     assert (coverage.applies(row) or "").startswith("manifest.json not resolvable on the candidate")
 
 
+def test_the_recorded_coverage_is_the_first_treatment_runs_and_no_line_after_it_is_read(tmp_path):
+    """`_recorded_coverage` stops at the first run that is no control and states a coverage: a line after it is not parsed."""
+    runs = tmp_path / "runs.jsonl"
+    control, treatment = {"arm": "control"}, {"committer": "native", "commit": {"binding": {"coverage": {"missing": 0}}}}
+    runs.write_text(json.dumps(control) + "\n\n" + json.dumps(treatment) + "\n{\n")
+    assert coverage._recorded_coverage(runs) == {"missing": 0}
+    runs.write_text(json.dumps(control) + "\n{\n" + json.dumps(treatment) + "\n")
+    with pytest.raises(json.JSONDecodeError):
+        coverage._recorded_coverage(runs)
+    runs.write_text(json.dumps(control) + "\n")
+    assert coverage._recorded_coverage(runs) is None and coverage._recorded_coverage(None) is None
+
+
 def test_without_a_candidate_the_reference_reproduces_itself(tmp_path):
     row = _Row(_tree(tmp_path / "reference", layouts=_layouts()))
     act, exp = coverage.actual(row), coverage.expected(row)
