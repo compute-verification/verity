@@ -6,8 +6,12 @@ Id format (shared with the docs site's assumptions registry): an assumption over
 composing a :data:`PROPERTIES` entry with an :data:`INSTANCES` entry -- ``cr/sha-512`` is collision resistance of SHA-512,
 labelled ``CR · SHA-512``, and an algebraic instance makes it ``algebraic``; every other claim is a bare kebab-case id
 (``logup``, ``live-verifier``) in :data:`ENTRIES`, and never contains ``/``.  This module is the source of the ids a render
-cites.  :func:`get` resolves either.  Only what a render cites is here; a new claim is a new
+cites.  :func:`get` resolves either.  Only what a render or a Lean lock cites is here; a new claim is a new
 entry, and an id, once cited, is never renamed.  Stdlib only; imports no other core module.
+
+:data:`LEAN` is generated from the Lean locks: each lock's ``ids`` gives a premise its claim id, which every named
+assumption and every premise a lock trusts has, and the table gives each id its premises
+(``python3 tools/verity/lean/claim_ids.py --write``).  Every id in it resolves here.
 """
 
 from __future__ import annotations
@@ -15,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-__all__ = ["ENTRIES", "INSTANCES", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
+__all__ = ["ENTRIES", "INSTANCES", "LEAN", "PROPERTIES", "Entry", "Instance", "Property", "assumption", "get"]
 
 Kind = Literal["guarantee", "assumption", "model"]
 # ``conjectured`` is for mathematics only; ``measured``: an assumption about a device, falsified by a measurement
@@ -62,7 +66,7 @@ PROPERTIES: dict[str, Property] = {p.id: p for p in (
     Property("uniform", "Independent uniform output", "Uniform"),
     # A4 there, for verity.commitments.randomness's keyed streams (prf/sha-512): SHA-512's compression function as a PRF keyed by
     # its chaining value (the cascade over prefix-free inputs, Bellare-Canetti-Krawczyk 1996) and as a dual PRF keyed by the
-    # secret bytes in its first message block; its eta is stated there (at most 2^-128 for the chain's tests, for a 32-byte key)
+    # secret bytes in its first message block; its advantage eta is a parameter no model fixes yet
     Property("prf", "Pseudorandom function", "PRF"),
     # of a signature scheme: no forgery on a new message after chosen-message queries, each one-time key used once
     Property("euf-cma", "Existential unforgeability under chosen-message attack", "EUF-CMA"),
@@ -217,15 +221,12 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "pinned-key hiding bound (N * 2^-192) fails: hm96's pinned keys are H(label || u32be i), with H the instance's hash "
           "(SHA-256 for hm96-sha256/v1, SHA-512 for hm96-sha512/v1)", "Hash-derived key", "standard"),
     Entry("honest-verifier", "assumption", "The verifier follows the protocol", "Honest verifier", "standard"),
-    # `Verity.Assumptions.TrustedHost` (security/Definitions/Core/Assumptions.lean) states its part about one run; no
-    # attestation hardware backs it
+    # no attestation hardware backs it
     Entry("trusted-host", "assumption",
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
-    # `Verity.Assumptions.ZkServerOwnUser` (security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
-    # `Verity.Guarantees.RegisteredLeakage` and `Verity.Guarantees.RegisteredStreamLeakage`: a stack is the same function
-    # under every salt key of the ZK server's
+    # a stack is the same function under every salt key of the ZK server's
     Entry("zk-server-own-user", "assumption",
           "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
           "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
@@ -254,8 +255,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "records, the prover's witness) in transit, over the channel's life, is its auditor end, one of the prover's "
           "own machines, or an auditor party under Confined p; per party, its path to the prover carries no observer but "
           "its two endpoints", "Witness path private", "standard"),
-    # `Accounting.Covered` (security/Definitions/Accounting/Physical.lean) is its Lean form: every boundary link of the
-    # location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite protocol; nothing proves it
+    # every boundary link of the location is certified (uncertifiedCapacity = 0). The auditor's placement in the onsite
+    # protocol; nothing proves it
     Entry("certifier-coverage", "assumption",
           "Every uplink of the spatial unit passes through a network certifier the auditor trusts, with its parameters "
           "fixed before the run: every boundary link is certified, and nothing leaves the unit another way",
@@ -324,8 +325,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
-    # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
-    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean)
     Entry("training-cut-hardness", "assumption",
           "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
           "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
@@ -569,8 +569,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
           "coins the worker has received, from the statement, the witness and its tapes", "Worker deterministic",
           "standard"),
-    # `Claims.ZKServer.Loop.Src` (security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
-    # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
+    # its two halves in Lean are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
@@ -579,9 +578,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
           "since zero knowledge protects the developer", "Firewall OS source", "standard"),
-    # the training formalism v2's assumptions (security/Definitions/Assumptions.lean): A1 is
-    # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
-    # `Nci.Formalism.Assumptions.EfficiencyFloor`
+    # the training formalism v2's assumptions (security/Definitions/Assumptions.lean)
     Entry("training-cut-cost", "assumption",
           "A1, cut cost: no inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
           "fewer bits |in(I) \\ θ| than u_I + Σ_T a_T(e_T(I)), over the tokens T it works on, at the values a finite "
@@ -604,7 +601,57 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
           "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "
           "empirical, falsified by a measured run", "A2 efficiency floor", "measured"),
+    # the guarantees that drop the SHA-512 break from their event take it (security/Definitions/Assumptions/Pouw.lean)
+    Entry("pouw-hashless", "model",
+          "PoUW hashless cost model: the cost model's programs hash nothing, so no run breaks SHA-512",
+          "PoUW hashless"),
+    # weight security's bound under SPOT's fault model rests on it (security/Definitions/Assumptions/WeightSecurity.lean);
+    # a claim about the served function, not about Verity
+    Entry("faulted-use-hard", "assumption",
+          "Faulted use hard: setting at most M faults in the served circuit, beside honest queries, hands out the weights "
+          "at most N^(λ - 1) times faster than honest use, N the number of fault pattern sequences of total size at most M "
+          "(so log₂ N is the faults' arbitrary-data capacity)", "Faulted use hard", "conjectured"),
 )}
+
+
+LEAN: dict[str, tuple[str, ...]] = {
+    "certifier-coverage": ("Accounting.Covered", "Accounting.Remote.Held.Assumptions.Covered"),
+    "channel-authentic": ("Verity.Assumptions.ChannelAuthentic",),
+    "confined": ("Accounting.Assumptions.Parties.Confined",),
+    "cr/sha-512": ("Claims.StrictBirthday", "FlockSoundness.Assumptions.SHA512CRStrict"),
+    "ecr/sha-512": ("Claims.ExpectedCR", "FlockSoundness.Assumptions.SHA512CRExpected"),
+    "euf-cma/lms-sha512-n64": ("Hash.Assumptions.LmsUnforgeable",),
+    "faithful": ("Accounting.Assumptions.Parties.Faithful",),
+    "faulted-use-hard": ("WeightSecurity.Assumptions.FaultedUseHard",),
+    "flock-firewall-os-src": ("Claims.ZKServer.Loop.Src",),
+    "hash-derived-key": ("Claims.Hm96Hiding", "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96"),
+    "honest-clock": ("Pouw.Assumptions.HonestClock",),
+    "honest-verifier": (
+        "Verity.Assumptions.ChallengerLogsCoins",
+        "Verity.Assumptions.FlipsAfterRecorded",
+        "Verity.Assumptions.VerifierReadsLog",
+    ),
+    "imprint-path-private": ("Verity.Assumptions.ImprintPathPrivate",),
+    "key-binding": ("Accounting.Assumptions.KeyBinding",),
+    "live-verifier": ("FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",),
+    "pous-ring-instantiation": ("Pous.Period.Instantiates",),
+    "pouw-hashless": ("Pouw.CostModel.Hashless",),
+    "prf/sha-512": ("FlockSoundness.Assumptions.KeyedStreamsUniform", "Hash.Assumptions.Sha512Prf"),
+    "rate-codec-work": ("Accounting.Assumptions.WorkHardness",),
+    "secret": ("Accounting.Assumptions.Parties.Secret",),
+    "training-cut-cost": ("Nci.Formalism.Assumptions.CutCost",),
+    "training-cut-exports": ("Nci.Cut.Assumptions.Exports",),
+    "training-cut-hardness": ("Nci.Cut.Assumptions.Hardness",),
+    "training-efficiency-floor": ("Nci.Formalism.Assumptions.EfficiencyFloor",),
+    "training-token-work": ("Nci.Formalism.Assumptions.TokenWork",),
+    "trusted-host": ("Verity.Assumptions.TrustedHost",),
+    "uniform/io-getrandombytes": (
+        "FlockSoundness.Assumptions.UniformRandomBytes",
+        "FlockSoundness.Assumptions.UniformRandomBytesTest",
+    ),
+    "witness-path-private": ("Accounting.Assumptions.Parties.WitnessPathPrivate",),
+    "zk-server-own-user": ("Verity.Assumptions.ZkServerOwnUser",),
+}
 
 
 def assumption(prop: str, instance: str) -> Entry:

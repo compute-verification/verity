@@ -28456,5 +28456,27 @@
    "Pous.Component.SecurityProofs.runDigest": "an equation between two functions of the commitment's bytes that no check takes part in, so no verifier's decision can falsify it, and its one hypothesis (the bytes decode) is what the composition establishes before it binds a digest",
    "Pous.Component.SecurityProofs.wipeDigest": "the same equation for the wipe's commitment: no check takes part in it"
   }
+ },
+ "ids": {
+  "Accounting.Assumptions.KeyBinding": "key-binding",
+  "Accounting.Assumptions.Parties.Confined": "confined",
+  "Accounting.Assumptions.Parties.Faithful": "faithful",
+  "Accounting.Assumptions.Parties.Secret": "secret",
+  "Accounting.Assumptions.Parties.WitnessPathPrivate": "witness-path-private",
+  "Accounting.Remote.Held.Assumptions.Covered": "certifier-coverage",
+  "Claims.ExpectedCR": "ecr/sha-512",
+  "Claims.StrictBirthday": "cr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
+  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
+  "Hash.Assumptions.LmsUnforgeable": "euf-cma/lms-sha512-n64",
+  "Hash.Assumptions.Sha512Prf": "prf/sha-512",
+  "Pous.Period.Instantiates": "pous-ring-instantiation",
+  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
+  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
+  "Verity.Assumptions.TrustedHost": "trusted-host",
+  "Verity.Assumptions.VerifierReadsLog": "honest-verifier"
  }
 }

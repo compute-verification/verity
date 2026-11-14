@@ -156,8 +156,8 @@ WIDTH = 120
 #: the others keep ours' order, with theirs' new entries after it, unless ours kept the base's order and theirs moved
 #: entries (`reordered`): then theirs' order, with ours' new entries after it.  `--update` writes `shape.inline`'s inner maps
 #: in their statement's order and `trust`, `claims`, `trees`, `upstream` and `deployed` as the lock has them
-SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap", "unwitnessed",
-          "shape[inline]"}
+SORTED = {"assumptions", "domain", "open", "ids", "guarantees", "reads", "dependencies", "compile_time", "trust_gap",
+          "unwitnessed", "shape[inline]"}
 SORTED_NAMES = {"trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
 #: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists

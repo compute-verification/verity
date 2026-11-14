@@ -209,3 +209,13 @@ def test_the_transport_claims() -> None:
         assert (get(id).kind, get(id).standing) == ("assumption", "standard")
     assert "Confined p" in get("witness-path-private").name and "imprint exchange" in get("imprint-path-private").name
     assert "ind-cca/ml-kem-1024" in get("channel-hides").name and "euf-cma/lms-sha512-n64" in get("channel-authentic").name
+
+
+def test_every_claim_id_a_lean_lock_gives_a_premise_resolves() -> None:
+    from verity.claims import LEAN
+
+    missing = sorted(i for i in LEAN if i not in ENTRIES and (i.partition("/")[0] not in PROPERTIES
+                                                             or i.partition("/")[2] not in INSTANCES))
+    assert not missing, (f"LEAN cites {missing}, which verity.claims has no entry for: add each one's Entry (or its "
+                         "property or instance), or fix the lock's `ids` and run `python3 tools/verity/lean/claim_ids.py --write`")
+    assert all(ps and list(ps) == sorted(set(ps)) for ps in LEAN.values()) and list(LEAN) == sorted(LEAN)

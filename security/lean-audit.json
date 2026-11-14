@@ -60566,5 +60566,36 @@
  },
  "four_names_except": {
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; `check.py --lift` lifts it"
+ },
+ "ids": {
+  "Accounting.Assumptions.KeyBinding": "key-binding",
+  "Accounting.Assumptions.WorkHardness": "rate-codec-work",
+  "Accounting.Covered": "certifier-coverage",
+  "Claims.ExpectedCR": "ecr/sha-512",
+  "Claims.Hm96Hiding": "hash-derived-key",
+  "Claims.StrictBirthday": "cr/sha-512",
+  "Claims.ZKServer.Loop.Src": "flock-firewall-os-src",
+  "FlockSoundness.Assumptions.KeyedStreamsUniform": "prf/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRExpected": "ecr/sha-512",
+  "FlockSoundness.Assumptions.SHA512CRStrict": "cr/sha-512",
+  "FlockSoundness.Assumptions.UniformRandomBytes": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": "uniform/io-getrandombytes",
+  "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "hash-derived-key",
+  "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "live-verifier",
+  "Nci.Cut.Assumptions.Exports": "training-cut-exports",
+  "Nci.Cut.Assumptions.Hardness": "training-cut-hardness",
+  "Nci.Formalism.Assumptions.CutCost": "training-cut-cost",
+  "Nci.Formalism.Assumptions.EfficiencyFloor": "training-efficiency-floor",
+  "Nci.Formalism.Assumptions.TokenWork": "training-token-work",
+  "Pouw.Assumptions.HonestClock": "honest-clock",
+  "Pouw.CostModel.Hashless": "pouw-hashless",
+  "Verity.Assumptions.ChallengerLogsCoins": "honest-verifier",
+  "Verity.Assumptions.ChannelAuthentic": "channel-authentic",
+  "Verity.Assumptions.FlipsAfterRecorded": "honest-verifier",
+  "Verity.Assumptions.ImprintPathPrivate": "imprint-path-private",
+  "Verity.Assumptions.TrustedHost": "trusted-host",
+  "Verity.Assumptions.VerifierReadsLog": "honest-verifier",
+  "Verity.Assumptions.ZkServerOwnUser": "zk-server-own-user",
+  "WeightSecurity.Assumptions.FaultedUseHard": "faulted-use-hard"
  }
 }
