@@ -4,17 +4,20 @@ messages `verity.protocols.accounting.pous.verifier.wipe_parties` declares.
 Its machine gives it `store` (`capabilities["store"]`, the prover a `WipeParams` makes: `wipe_store.Prover` unless
 given, `wipe_store.StoreProver` on a node). It finishes with the batches it answered, refused by name when the
 challenger leaves (`closed`) or sends a frame the wire refuses, and refused `schema` on parameters `wipe_party.params_of`
-refuses. `PROTOCOL` declares its one role.
+refuses. `PROTOCOL` declares its one role, and `start` how a deployment starts it on its node.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from pathlib import Path
 from typing import Any
 
 from verity.party import Finish, Identity, Received, Send
-from verity.protocol import ProtocolDef
+from verity.protocol import ProtocolDef, Start
 from verity.channel import Message, Phase, Refused
 from verity.protocols.accounting.pous.verifier import wipe_party as WP
+from verity.protocols.accounting.pous.device.challenger_session import ONSITE_GOAL
 from verity.protocols.accounting.pous.verifier.wipe_parties import CHALLENGER, MANIFEST, PROVER
 
 from . import wipe_store
@@ -53,7 +56,14 @@ class Prover:
         return [Finish({"answered": self.answered})]
 
 
-PROTOCOL = ProtocolDef(MANIFEST, {PROVER: Prover})
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
+    """The prover's start on its node (`ProtocolDef.starts`): the wipe's request (`wipe_parties.deployed_request`), and
+    its store (`capabilities["store"]`), a `wipe_store.StoreProver` over the node's card memory (`wipe_store.Cuda`, or
+    `Joint` over its tiers)."""
+    raise NotImplementedError(ONSITE_GOAL)
 
 
-__all__ = ["PROTOCOL", "Prover"]
+PROTOCOL = ProtocolDef(MANIFEST, {PROVER: Prover}, {PROVER: start})
+
+
+__all__ = ["PROTOCOL", "Prover", "start"]
