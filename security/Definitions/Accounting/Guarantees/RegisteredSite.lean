@@ -95,12 +95,13 @@ a jitter share. `pinned`, `units` above the shared challengers, and `K` are para
 limit a value, and reads no protocol's check or output. -/
 def LeakPartsRegistered : Prop :=
   ∀ (D : Verity.Registration.Digests) (A : Verity.Registration.Auditor) (c : Verity.Registration.Composite)
-    (l : Verity.Registration), Verity.Registration.Valid D A c l →
+    (l : Verity.Registration),
     let S := Verity.Site.ofLog l
     ∀ {Ω : Type*} (pinned units : Finset String) (i : String) (R : Ω → Actual.Run S.Place)
       (ℓ : S.Place → S.Place → ℕ) (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length)
       (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec) (record : S.Place → Set ℕ) (bucket : ℕ → ℕ)
       (jitter a b : ℕ) (K : S.Place → ℕ),
+      Verity.Registration.Valid D A c l →
       units ⊆ S.challengersOf pinned i → S.sharedOf pinned i ⊆ units →
       CausalStrategy R ℓ → DeclaredLinks R S.placeEnds S.linkβ link →
       TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter →

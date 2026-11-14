@@ -168,7 +168,7 @@ theorem EgressRegistered : Guarantees.EgressRegistered := by
   exact ⟨fun A link h a b => S.egress_le_registered i A link h a b, S.egressLimit_le_parts i⟩
 
 theorem LeakPartsRegistered : Guarantees.LeakPartsRegistered := by
-  intro D A c l hv S Ω pinned units i R ℓ link 𝒱 spec record bucket jitter a b K hu hsh hcs hdl hT hsec hK
+  intro D A c l S Ω pinned units i R ℓ link 𝒱 spec record bucket jitter a b K hv hu hsh hcs hdl hT hsec hK
   exact S.leak_le_registered hv.linkKinds
     (fun k hk => ⟨S.mem_places.2 (hv.ends_known k hk).1, S.mem_places.2 (hv.ends_known k hk).2⟩) pinned units i R
     ℓ link 𝒱 spec record bucket jitter a b K hu hsh hcs hdl hT hsec hK
