@@ -82,3 +82,6 @@ FIELDS, Fri 23:30 PST
 
 **#9565 pushed at 9f58712fcfa8ef03b47c9b0fde04541b93def9d3, which holds #9502 at f8a2cf09506e (690 record difftest cases); runs are launching now.**
 
+[2026-11-14T07:31Z] e42767be6d92
+STEP, Fri 13 Nov 11:31 PM PST. #9863's fix head is pushed: 132ad116506a3e9156774e84ae57feb912bc199a [RAN], two commits on dbf5e36: 5d8fe5aa010 (train_step: attention the flash kernel doesn't take is the card's memory-efficient kernel's op, which no rule lowers, or refused at export) and 132ad116506 (grader: P V, dV, dK and dQ count at the head's bf16 return). The reader can start; the body, the node run and the full report follow.
+
