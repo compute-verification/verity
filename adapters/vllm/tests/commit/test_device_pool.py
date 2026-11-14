@@ -59,6 +59,8 @@ def test_the_release_keeps_exactly_the_sampled_leaves_byte_equal_to_host(tmp_pat
     with pytest.raises(ValueError, match="held on the device until their window's draw-gated release"):
         SD.dump(dev, rc, tmp_path / "early")
     rec = DP.release(dev, sampled)
+    assert list(rec) == ["steps", "drawn_leaves", "kept_bytes", "dropped_bytes", "device_freed_bytes", "absorb_wait_s", "gather_s"]
+    assert rec["steps"] == 3 and rec["absorb_wait_s"] == 0.0 and isinstance(rec["gather_s"], float) and rec["gather_s"] >= 0
     assert rec["drawn_leaves"] == 4 and rec["kept_bytes"] == 4 * C == sum(b.retained_bytes for b, _u in dev._gpu_blocks.values())
     assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) - 4 * C
     assert rec["device_freed_bytes"] > 0 and dev.device_pool.held == 0
@@ -202,6 +204,7 @@ def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed():
         raise RuntimeError("worker failed")
     dev.wait_absorbed = failed
     rec = DP.discard(dev, "not sealed: RuntimeError: finalize failed")
+    assert rec["steps"] == 3 and rec["discarded"] == "not sealed: RuntimeError: finalize failed"
     assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) and rec["kept_bytes"] == 0
     assert rec["absorb_error"] == "RuntimeError: worker failed"
     assert dev.device_pool.held == 0 and all(b.retained_bytes == 0 for b, _u in dev._gpu_blocks.values())
