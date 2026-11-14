@@ -28,7 +28,7 @@ import Proofs.Flock.Soundness.Game
   `Flock.SecurityProofs.EndToEndHidden` at the strategy that plays it (`SamplingBlock.accepted_incorrect_le`), with its
   knowledge term at the worst registration.
 * `Flock.SecurityProofs.IntegrityPooled`: a run in which every sampling block is accepted and the incorrect proof blocks total at
-  least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + δ_link,w)` by
+  least `M` either has a sampling block accepted with a sampled proof block incorrect, at most `Σ_w (ε_ks,w + ε_bind,w)` by
   `monitoringPeriod_union` over `Flock.SecurityProofs.EndToEndHiddenSampled` (`SamplingBlock.accepted_drawnIncorrect_le`), or every
   sampling block's sample misses its incorrect proof blocks with at least `M` of them in all, at most `(1 − q)^M` by
   `monitoringPeriod_monitoringPeriod`: sampling block `w`'s sample misses its `|W|` incorrect proof blocks with probability at most

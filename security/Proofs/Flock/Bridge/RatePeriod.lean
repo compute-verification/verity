@@ -51,7 +51,7 @@ theorem samplingBlock_rate (w : SamplingBlock) {num den : ℕ} (hn : 0 < w.n)
 /-- **`IntegrityPooled` at a rate.** Over `T` windows as in `IntegrityPooled`, each with a unit and its design
 `subset kd_t` sampling at least `num/den` of the `n_t` units it registers (`RateOn`, which the count of a
 `rate:NUM/DEN[:T]` rule meets at every `n_t`: `rateOn_subset`), the probability that every window is accepted and the
-incorrect proof blocks total at least `ln(1/δ) · den/num` is at most `δ + Σ_t (ε_ks,t + δ_link,t)`. Its named
+incorrect proof blocks total at least `ln(1/δ) · den/num` is at most `δ + Σ_t (ε_ks,t + ε_bind,t)`. Its named
 assumptions are `IntegrityPooled`'s. -/
 theorem pooledIntegrity_rate (W : ℕ → SamplingBlock) (T num den : ℕ) (δ : ℝ) (hnum : 0 < num) (hden : 0 < den)
     (hδ : 0 < δ) (hn : ∀ t < T, 0 < (W t).n) (hrate : ∀ t < T, RateOn num den (.subset (W t).kd) (W t).n)

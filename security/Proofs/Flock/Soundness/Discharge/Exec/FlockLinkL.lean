@@ -7,7 +7,7 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game
 
 /-!
-# The link theorem: `δ_link` under expected-time collision resistance (DESIGN.md §3)
+# The link theorem: `ε_bind` under expected-time collision resistance (DESIGN.md §3)
 
 The batched audit's binding error (`analysisBEL`) is discharged here for the plurality value layer,
 under expected-time collision resistance of SHA-512 for an explicit finder
@@ -654,7 +654,7 @@ noncomputable def linkBoundCRL (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The link theorem: `δ_link` under expected-time collision resistance, prover by prover.** For the batched audit
+/-- **The link theorem: `ε_bind` under expected-time collision resistance, prover by prover.** For the batched audit
 with the expected-time extractor (`analysisBEL`) and the plurality value layer (`XplurL`), given the binding of wires to
 commit strings (`ValueBinding`): at every prover whose explicit finder of each commit string satisfies A2 (`LinkCRL`),
 $$\delta_{\rm link}\le\frac{Q_s}{1-\rho}\Big(\frac{2t'(1+k)}{2^{256}}+\frac{1}{eM}+\frac{k}{eR_w}\Big),$$
