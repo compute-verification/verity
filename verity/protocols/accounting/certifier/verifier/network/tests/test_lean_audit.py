@@ -1,10 +1,9 @@
 """`lean_audit.Audit`, `audit.Audit` with every verdict the Lean check's (`network-records verdicts`), against `audit.Audit`
 itself: the same verdicts, clock, `accepted` and `violations` on `test_network_records_protocol`'s generated units, raw,
 committed, certified and mixed, with each egress link checked over a prefix of the windows of its own, so the unit's clock
-comes from several links; on `service.py`'s calls; and a refusal, never a Python verdict, outside the Lean's domain. The
-client's certificate refusals (`certificate_refusals`) and a link's signed syncs read through its clock openings
-(`signed_clocks`) are their references' (`audit.certificate_refusals`, `certificate.SignedClocks`) on crafted and
-generated inputs, a disagreement refusing, and outside the Lean's domain each raises."""
+comes from several links; on certified records without a grid; and a refusal, never a Python verdict, outside the Lean's
+domain. The client's certificate refusals (`certificate_refusals`) are their reference's
+(`audit.certificate_refusals`) on crafted and generated inputs, a disagreement refusing, and outside the Lean's domain they raise."""
 
 from __future__ import annotations
 
@@ -27,11 +26,11 @@ import test_network_records_protocol as R
 import verity_difftest as D
 from verity_difftest import protocol as P
 from verity.commitments.crypto import lms
-from verity.protocols.accounting.certifier.verifier import audit, lean_audit, service
-from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedClock, CertifiedRecord, Direction, Issuer, LmsKey,
-                                                        LmsSigner, SignedClocks, clock_commitment, parameters_digest)
+from verity.protocols.accounting.certifier.verifier import audit, lean_audit
+from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, Direction, Issuer, LmsKey,
+                                                        LmsSigner, parameters_digest)
 from verity.protocols.accounting.certifier.verifier.commitment import commit
-from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams, occupancy
+from verity.protocols.accounting.certifier.verifier.grid import Certifier, GridParams
 from verity.protocols.accounting.certifier.verifier.schedule import ClockSync, LogicalFrame, SyncSet, run_shaper
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -167,66 +166,22 @@ SERVICE_FRAMES = [LogicalFrame(bytes([i, i]), 2 * i, 0) for i in range(8)]
 SESSION = bytes(range(lms.SESSION_BYTES))
 
 
-def _service_rounds(tmp_path, W, record=lambda w, r: r, certified=lambda w, e: e):
-    """`service.py`'s rounds on link "responses": each window's (execution phases, stream, opening, sample, syncs), the
-    egress record passed through `record(w, r)`, certified, then through `certified(w, e)`. The link declares the honest
-    egress records' occupancy, and none on ingress."""
+def _certified(tmp_path, W, record=lambda w, r: r):
+    """Link "responses"'s egress records under the shaper, each passed through `record(w, r)` and certified: the
+    records, the declared syncs, the grid, Σ_sync and the certifier's key."""
     g, ss = GridParams(3, 2, 2), SyncSet((0, 1), (Fraction(1),))
     syncs = [ClockSync(w % 2, Fraction(1)) for w in range(W)]
     signer = LmsSigner.create(lms.keygen(lms.Params(8, 8, 4, toy=True), bytes(range(8))), tmp_path / "signer-state.json")
     issuer = Issuer(signer, SESSION)
     egress = run_shaper(SERVICE_FRAMES, [0] * len(SERVICE_FRAMES), syncs, Certifier("responses", g))
-    lw = service.LinkWindows("responses", g, ss, signer.public_key(), "r-lean-audit-test", SESSION, proof_deadline=60.0,
-                             occupancy=(tuple(occupancy(r.grid) for r in egress), None))
-    stream = lw.stream(budget=8, delta=2.0 ** -40, challenger="challenger-test", coins=lambda n: b"\x07" * n,
-                       clock=lambda: 0.0)
-    ingress, ins = Certifier("responses", g), []
-    for _ in range(W):
-        for _ in range(g.buckets):
-            ingress.tick()
-        ins.append(ingress.close_window())
-    previous = None
-    for w in range(W):
-        e = certified(w, issuer.certify(record(w, egress[w]), Direction.EGRESS, g, parameters_digest(g, ss),
-                                        deadline=w != 3))
-        i = issuer.certify(ins[w], Direction.INGRESS, g, parameters_digest(g))
-        opening = lw.commit(w, e, i, salts=tuple(bytes([4 * w + j + 1]) * 192 for j in range(service.LEAVES)))
-        reg = lw.register(stream, lw.registration(opening, previous))
-        previous = reg.digest
-        draw = stream.select(reg)
-        assert stream.deliver(draw, [lw.session(opening, draw)]) is None
-        yield lw, stream, opening, draw, syncs
+    records = [issuer.certify(record(w, egress[w]), Direction.EGRESS, g, parameters_digest(g, ss)) for w in range(W)]
+    return records, syncs, g, ss, signer.public_key()
 
 
-def test_service_verify_is_the_same_under_the_adapter(lean, tmp_path, monkeypatch):
-    """`LinkWindows.clear`, with `service.Audit` the adapter, gives `audit.Audit`'s verdict on six execution phases
-    in order: honest ones, a forged signature, a grid whose frame differs from the Program's at its counts (accepted:
-    N2 holds counts only), a grid with a frame more than the profile's, and an unset deadline bit; the adapter's says
-    `by: lean` and carries the reference's accept bit."""
-    def other_grid(w, r):
-        return dataclasses.replace(r, grid=((bytes([9, 9]), None),) + r.grid[1:]) if w % 3 == 2 else r
-
-    def forged(w, e):
-        return CertifiedRecord(e.head, e.salt, dataclasses.replace(e.certificate, signature=b"")) if w % 3 == 1 else e
-
-    accepted = []
-    for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 6, other_grid, forged):
-        got = {}
-        for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
-            monkeypatch.setattr(service, "Audit", impl)
-            got[name] = lw.clear(opening, draw, syncs)
-        assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
-        accepted.append(got["python"]["accepted"])
-        assert lw.unproved_outcome(stream, draw, opening, syncs).accepted == accepted[-1]
-    assert accepted == [True, False, True, False, False, False]
-
-
-def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
-    """`LinkWindows.clear` compares no egress grid, under the adapter as under `audit.Audit`: a window whose frames
-    differ from the Program's in content alone, at the profile's counts, is accepted by both, where the in-the-clear
-    oracle rejects it, and a forged signature is rejected. The adapter's `check_link(grid=False)` is the Lean's
-    `verdicts-no-grid`: it accepts that window where `verdicts` gives `mismatch`, with the Program's frames or with none,
-    as N2 gives it, and refuses a record that isn't certified, whose grid no head check holds."""
+def test_the_adapters_check_without_a_grid_is_the_leans_verdicts_no_grid(lean, tmp_path):
+    """The adapter's `check_link(grid=False)` is the Lean's `verdicts-no-grid`: it accepts a window whose frames differ
+    from the Program's in content alone, at its counts, where `verdicts` gives `mismatch`, with the Program's frames or
+    with none, and refuses a record that isn't certified, whose grid no head check holds."""
     def content(w, r):
         if w != 1:
             return r
@@ -235,57 +190,36 @@ def test_under_the_adapter_n2_compares_no_grid(lean, tmp_path, monkeypatch):
         slots[b][k] = bytes(x ^ 0xFF for x in slots[b][k])
         return dataclasses.replace(r, grid=tuple(tuple(row) for row in slots))
 
-    def forged(w, e):
-        return CertifiedRecord(e.head, e.salt, dataclasses.replace(e.certificate, signature=b"")) if w == 2 else e
-
-    accepted, stood = [], []
-    for lw, stream, opening, draw, syncs in _service_rounds(tmp_path, 3, content, forged):
-        got = {}
-        for name, impl in (("python", audit.Audit), ("lean", lambda: lean_audit.Audit(server=lean))):
-            monkeypatch.setattr(service, "Audit", impl)
-            got[name] = lw.clear(opening, draw, syncs)
-        assert got["lean"] == got["python"] | {"by": "lean", "reference": {"accepted": got["python"]["accepted"]}}
-        accepted.append(got["python"]["accepted"])
-        stood.append(lw.stand_in(opening, draw, SERVICE_FRAMES, syncs))
-        assert lw.unproved_outcome(stream, draw, opening, syncs).accepted == accepted[-1]
-        if opening.window == 1:
-            egress, args = [opening.records[0]], (SERVICE_FRAMES, syncs[:2], lw.sync_set, lw.params, lw.key, SESSION)
-            assert [v.violation for v in lean_audit.Audit(server=lean).check_link("responses", egress, *args)] == \
-                ["no-verdict", "mismatch"]
-            for frames in (SERVICE_FRAMES, ()):
-                a = lean_audit.Audit(server=lean)
-                assert [v.violation for v in a.check_link("responses", egress, frames, *args[1:], grid=False)] == \
-                    ["no-verdict", None]
-                assert a.lean == a.reference
-            raw = content(1, run_shaper(SERVICE_FRAMES, [0] * 8, syncs, Certifier("responses", lw.params))[1])
-            for records in ([raw], [commit(raw, lw.params)]):
-                with pytest.raises(ValueError, match="only a certified record's grid is held by its head check"):
-                    lean_audit.Audit(server=lean).check_link("responses", records, *args, grid=False)
-    assert accepted == [True, True, False] and stood == [True, False, False]
+    egress, syncs, g, ss, key = _certified(tmp_path, 3, content)
+    args = (SERVICE_FRAMES, syncs[:2], ss, g, key, SESSION)
+    assert [v.violation for v in lean_audit.Audit(server=lean).check_link("responses", [egress[1]], *args)] == \
+        ["no-verdict", "mismatch"]
+    for frames in (SERVICE_FRAMES, ()):
+        a = lean_audit.Audit(server=lean)
+        assert [v.violation for v in a.check_link("responses", [egress[1]], frames, *args[1:], grid=False)] == \
+            ["no-verdict", None]
+        assert a.lean == a.reference
+    raw = content(1, run_shaper(SERVICE_FRAMES, [0] * 8, syncs, Certifier("responses", g))[1])
+    for records in ([raw], [commit(raw, g)]):
+        with pytest.raises(ValueError, match="only a certified record's grid is held by its head check"):
+            lean_audit.Audit(server=lean).check_link("responses", records, *args, grid=False)
 
 
 def test_a_disagreement_with_the_reference_rejects(lean, tmp_path, monkeypatch):
     """With the Python reference made to reject one execution phase the Lean check accepts (and, on ingress, the reverse
     direction of the same flip), that execution phase is a `disagreement`: the audit rejects, `lean` keeps the Lean's
-    verdicts and `reference` the Python's, and `service.py`'s in-the-clear check rejects an honest execution phase while
-    carrying the reference's bit beside `by: lean`. A reference that raises where the Lean answers raises."""
+    verdicts and `reference` the Python's. A reference that raises where the Lean answers raises."""
     real_egress, real_ingress = audit.Audit.check_link, audit.Audit.check_ingress_link
 
     def flip(vs, at):
         return [audit.Verdict(v.link, v.window, "mismatch" if v.accepted else None) if v.window == at else v for v in vs]
 
     monkeypatch.setattr(audit.Audit, "check_link", lambda self, *a, **k: flip(real_egress(self, *a, **k), 0))
-    monkeypatch.setattr(service, "Audit", lambda: lean_audit.Audit(server=lean))
-    lw, stream, opening, draw, syncs = next(_service_rounds(tmp_path, 1))
+    egress, syncs, g, ss, key = _certified(tmp_path, 1)
     a = lean_audit.Audit(server=lean)
-    vs = a.check_link("responses", [opening.records[0]], SERVICE_FRAMES, syncs[:1], lw.sync_set, lw.params, key=lw.key,
-                     session=lw.certifier_session)
+    vs = a.check_link("responses", egress, SERVICE_FRAMES, syncs, ss, g, key=key, session=SESSION)
     assert vs == [audit.Verdict("responses", 0, "disagreement")] and not a.accepted and a.violations == vs
     assert a.lean == [audit.Verdict("responses", 0, None)] and a.reference == [audit.Verdict("responses", 0, "mismatch")]
-    verdict = lw.clear(opening, draw, syncs)
-    assert verdict["accepted"] is False and verdict["public"]["verdict"] == 0
-    assert verdict["by"] == "lean" and verdict["reference"] == {"accepted": False}
-    assert not lw.unproved_outcome(stream, draw, opening, syncs).accepted
 
     monkeypatch.setattr(audit.Audit, "check_link", real_egress)
     monkeypatch.setattr(audit.Audit, "check_ingress_link", lambda self, *a, **k: flip(real_ingress(self, *a, **k), 0))
@@ -506,152 +440,3 @@ def test_certificates_outside_the_domain_are_refused(lean):
         lean_audit.certificate_refusals(LmsKey(key.params, key.public[:-1]), SESSION, "n2", 1, [c["egress"]], [],
                                         server=lean)
 
-
-CLOCK_SYNCS = (ClockSync(0, 1), ClockSync(1, Fraction(1, 2)), ClockSync(2, 1), ClockSync(0, Fraction(3, 2)))
-
-
-@functools.lru_cache(maxsize=None)
-def _openings():
-    """A toy key's salted clock certificates with their openings in `SESSION` (`Issuer.salted_clock`, each salt its
-    own): ``honest``, windows 0 … 3 of "n2" under `CLOCK_SYNCS`, and window 0's in place of its own, named by what is
-    wrong with it: an ingress certificate's, another key's, an altered digest, a sync swapped after signing or past a u64, a
-    forged signature, a certificate relabelled to another window; and beside the honest ones, window 1 signed under
-    window 0's salt (``reused``), a second sync for window 1, window 0's sync again under a salt of its own, and another
-    link's."""
-    key, other = V2._key(4), V2._key(4, seed=1)
-    salts = (hashlib.sha512(b"clock salt %d" % k).digest() for k in range(64))
-    i, o = (Issuer(V2._Signer(k), SESSION, coins=lambda n: next(salts)) for k in (key, other))
-    honest = tuple(i.salted_clock("n2", w, s) for w, s in enumerate(CLOCK_SYNCS))
-    c = honest[0]
-    replace = dataclasses.replace
-    bad = {"egress": CertifiedClock(c.sync, c.salt, i.sign("n2", Direction.INGRESS, 0, c.certificate.digest)),
-           "key": o.salted_clock("n2", 0, CLOCK_SYNCS[0]),
-           "altered": replace(c, certificate=replace(c.certificate, digest=bytes(64))),
-           "swapped": replace(c, sync=CLOCK_SYNCS[1]), "wide": replace(c, sync=ClockSync(1 << 64, 1)),
-           "forged": replace(c, certificate=replace(c.certificate, signature=bytes(len(c.certificate.signature)))),
-           "relabelled": replace(c, certificate=replace(c.certificate, window=9))}
-    beside = {"reused": CertifiedClock(CLOCK_SYNCS[1], c.salt, i.sign("n2", Direction.EGRESS, 1,
-                                                                      clock_commitment(c.salt, CLOCK_SYNCS[1]))),
-              "second": i.salted_clock("n2", 1, CLOCK_SYNCS[2]), "again": i.salted_clock("n2", 0, CLOCK_SYNCS[0]),
-              "link": i.salted_clock("m", 0, CLOCK_SYNCS[0])}
-    return LmsKey(key.params, lms.public_key(key)), honest, bad, beside
-
-
-def _signed(lean, openings, session=SESSION, link="n2"):
-    """The Lean's signed syncs and refusals of `openings`, which must be `certificate.SignedClocks`'s: its syncs and
-    each opening's refusal code."""
-    key = _openings()[0]
-    syncs, refused = lean_audit.signed_clocks(key, session, link, openings, server=lean)
-    ref = SignedClocks(key, session, tuple(openings))
-    assert lean_audit.DISAGREEMENT not in refused
-    assert syncs == ref.syncs(link) and tuple(refused) == ref.codes
-    return syncs, refused
-
-
-def test_the_signed_syncs_are_the_references(lean):
-    """`lean_audit.signed_clocks` (`network-records verdicts`' ``clocks``, `NetworkCheck.Period.signedSyncs`) gives
-    `certificate.SignedClocks`'s syncs, window 0's on up to the first without exactly one signed sync, and refuses each
-    opening it does: not an egress certificate's, another key's, a sync and salt that don't open the signed digest,
-    a signature that doesn't verify (forged, relabelled, or another session's), and both openings sharing a salt. The
-    same opening twice is one, and so is one sync signed twice for a window; two syncs for a window give it none."""
-    _, honest, bad, beside = _openings()
-    h = list(honest)
-    assert _signed(lean, h) == (CLOCK_SYNCS, [None] * 4) and _signed(lean, h[::-1])[0] == CLOCK_SYNCS
-    assert _signed(lean, h + h) == (CLOCK_SYNCS, [None] * 8) and _signed(lean, [])[0] == ()
-    assert _signed(lean, h[1:])[0] == () and _signed(lean, [h[0], *h[2:]])[0] == CLOCK_SYNCS[:1]
-    assert _signed(lean, h, link="m")[0] == () and _signed(lean, h + [beside["link"]], link="m")[0] == CLOCK_SYNCS[:1]
-    assert _signed(lean, h + [beside["again"], beside["link"]]) == (CLOCK_SYNCS, [None] * 6)
-    assert _signed(lean, h + [beside["second"]]) == (CLOCK_SYNCS[:1], [None] * 5)
-    assert _signed(lean, h + [beside["reused"]]) == ((), ["salt", None, None, None, "salt"])
-    want = {"egress": "egress", "key": "key", "altered": "opening", "swapped": "opening", "wide": "opening",
-            "forged": "signature", "relabelled": "signature"}
-    for name, x in bad.items():
-        assert _signed(lean, [x, *h[1:]]) == ((), [want[name], None, None, None]), name
-    assert _signed(lean, h, session=bytes(lms.SESSION_BYTES)) == ((), ["signature"] * 4)
-
-
-def test_on_generated_openings_the_lean_is_the_reference(lean):
-    """On openings sampled from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
-    are `certificate.SignedClocks`', and so are each opening's refusal and the link-windows with two signed syncs,
-    every refusal among them."""
-    _, honest, bad, beside = _openings()
-    pool = [*honest, *bad.values(), *beside.values()]
-    found = set()
-
-    @settings(derandomize=True, database=None, deadline=None, max_examples=200)
-    @given(st.lists(st.sampled_from(pool), max_size=8), st.booleans())
-    def same(openings, other):
-        found.update(_signed(lean, openings, bytes(lms.SESSION_BYTES) if other else SESSION)[1])
-
-    same()
-    assert found == {None, "egress", "key", "opening", "signature", "salt"}, found
-
-
-def test_a_clock_disagreement_gives_no_window_a_sync(lean, monkeypatch):
-    """With the reference made to sign every opening's sync, a forged opening leaves no window a sync and every opening
-    a `disagreement`; on the honest ones the two agree; a reference that raises where the Lean answers raises."""
-    key, honest, bad, _ = _openings()
-
-    class SigningAll:
-        def __init__(self, key, session, openings):
-            self.refused, self.split, self.openings = (), (), openings
-            self.codes = (None,) * len(openings)
-
-        def syncs(self, link):
-            return tuple(o.sync for o in sorted(self.openings, key=lambda o: o.window))
-
-    monkeypatch.setattr(lean_audit, "SignedClocks", SigningAll)
-    forged = [bad["forged"], *honest[1:]]
-    assert lean_audit.signed_clocks(key, SESSION, "n2", forged, server=lean) == ((), ["disagreement"] * 4)
-    assert lean_audit.signed_clocks(key, SESSION, "n2", honest, server=lean) == (CLOCK_SYNCS, [None] * 4)
-
-    def boom(*a, **k):
-        raise ArithmeticError("reference")
-
-    monkeypatch.setattr(lean_audit, "SignedClocks", boom)
-    with pytest.raises(RuntimeError, match="the reference raised where the Lean check answered"):
-        lean_audit.signed_clocks(key, SESSION, "n2", honest, server=lean)
-
-
-def test_clock_refusals_are_compared_by_opening_and_link_window(lean, monkeypatch):
-    """The Lean and the reference agree on which openings are refused and why, and on which link-windows have two
-    signed syncs, not only on how many: a reference refusing another opening, giving another reason, or splitting
-    another link-window, every count kept, is a `disagreement`."""
-    key, honest, bad, beside = _openings()
-    openings = [bad["forged"], *honest[1:], beside["second"]]
-    assert _signed(lean, openings) == ((), ["signature", None, None, None, None])
-    real = SignedClocks
-    assert real(key, SESSION, tuple(openings)).split == (("n2", 1),)
-    for change in ({"codes": ("key", None, None, None, None)}, {"codes": (None, "signature", None, None, None)},
-                   {"split": (("n2", 2),)}, {"split": (("m", 1),)}):
-        def changed(key, session, openings, change=change):
-            ref = real(key, session, openings)
-            for k, v in change.items():
-                object.__setattr__(ref, k, v)
-            return ref
-
-        monkeypatch.setattr(lean_audit, "SignedClocks", changed)
-        assert lean_audit.signed_clocks(key, SESSION, "n2", openings, server=lean) == ((), ["disagreement"] * 5), change
-
-
-def test_clock_openings_outside_the_domain_are_refused(lean):
-    """A key other than an `LmsKey`, an opening that isn't a `CertifiedClock` (its bare certificate) or one of an
-    ill-typed certificate, and an LMS key of another length each raise `ValueError`, with no sync computed in
-    Python."""
-    key, honest, _, _ = _openings()
-
-    class OtherKey:
-        key_id = key.key_id
-
-        def verify(self, message, signature):
-            return True
-
-    with pytest.raises(ValueError, match="not an LmsKey"):
-        lean_audit.signed_clocks(OtherKey(), SESSION, "n2", honest, server=lean)
-    with pytest.raises(ValueError, match="a clock opening of a Certificate"):
-        lean_audit.signed_clocks(key, SESSION, "n2", [honest[0].certificate], server=lean)
-    ill = dataclasses.replace(honest[0], certificate=dataclasses.replace(honest[0].certificate, window=-1))
-    with pytest.raises(ValueError, match="ill-typed fields"):
-        lean_audit.signed_clocks(key, SESSION, "n2", [ill], server=lean)
-    with pytest.raises(ValueError, match="outside the Lean audit's domain: .*an LMS public key is"):
-        lean_audit.signed_clocks(LmsKey(key.params, key.public[:-1]), SESSION, "n2", honest, server=lean)

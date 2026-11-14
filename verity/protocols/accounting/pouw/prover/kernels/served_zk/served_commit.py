@@ -274,7 +274,7 @@ def spec_of(params: dict, ell: int, predates_deadline: bool = False) -> S.Spec:
         raise ValueError(NO_DEADLINE)
     d = template(params["k"])
     return S.Spec(values=(S.Value(PORT, ENTRY_SCHEMA, "serve"), S.Value("W", W_SCHEMA, "epoch")),
-                  selection=S.Law(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
+                  selection=S.SamplingDesign(f"rate:{law_of(params, ell)['k']}/{work_at(params, ell).n}"),
                   check=S.Check(PT.program_sha512(Program(d)), PT.template_instance_query(d),
                                 proof_deadline=params.get("proof_deadline", PROOF_DEADLINE),
                                 registration_deadline=params.get("registration_deadline")),
@@ -1021,7 +1021,7 @@ class Challenger:
         (`caller.check`, `Caller.gate`), and the service's public-items rule over the Stream's Spec, as `Stream.register`
         runs them, each of record.  Raises `Refused`."""
         n = rec["population"]
-        law = S.selection_law(st.spec.selection, n)
+        law = S.selection_sampling_design(st.spec.selection, n)
         prog = PT.population_program(st.unit, n)
         q = st.spec.check.query
         params = OR.registration_params(prog, q, law, S.SCHEME, ports_, list(st.log), self.params["delta"])

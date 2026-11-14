@@ -148,7 +148,7 @@ def cellStratum (sample ns ks : Array ℕ) (z : ℕ × ℕ) : Flock.Draw.WorkStr
 
 /-- **The second stage's sampling design as Flock parses it, stratum by stratum**: the work design at `k = 1`, its
 strata the cells' in order (`cellStratum` over `cellPairs`). -/
-theorem flockLaw_second_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
+theorem flockSamplingDesign_second_strata (sample ns ks : Array ℕ) (m : ℕ) (parsed : Flock.Draw.SamplingDesign)
     (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
       ws.toList = (cellPairs sample.size ns.size).map (cellStratum sample ns ks) := by
@@ -180,7 +180,7 @@ theorem flockSamplingDesign_second (sample ns ks : Array ℕ) (m : ℕ) (parsed 
     (h : Draw.flockSamplingDesign (Select.secondSamplingDesign sample ns ks) m = .ok parsed) :
     ∃ ws : Array Flock.Draw.WorkStratum, parsed = .work 1 ws ∧
       ws.toList.map (fun s => (s.units, s.k)) = (cellPairs sample.size ns.size).map (cellOf sample.size ns ks) := by
-  obtain ⟨ws, rfl, hws⟩ := flockLaw_second_strata sample ns ks m parsed h
+  obtain ⟨ws, rfl, hws⟩ := flockSamplingDesign_second_strata sample ns ks m parsed h
   exact ⟨ws, rfl, by rw [hws, List.map_map]; exact List.map_congr_left fun _ _ => rfl⟩
 
 theorem getD_sample_units (sample ns ks : Array ℕ) (m : ℕ) (units : Array ℕ) :

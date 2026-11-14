@@ -145,9 +145,9 @@ pass, which γ's error and the memory line's δ add once a pass.  Up to 2^30 pas
 WINDOW_NS = 60 * 10**9
 SAMPLES = 33_273
 DELTA = 2.0 ** -101
-"""PoUB's δ, its own: each window's profile δ and the pooled bound's (`RemoteAudit.Protocol.DELTA`), 2^-101, half
+"""PoUB's δ, its own: each window's profile δ and the pooled bound's (`Poub.Protocol.DELTA`), 2^-101, half
 of the audit's error of 2^-100.  SPOT's `WINDOW_DELTA` is another constant, and PoUB-P2's δ is its own
-(`p2_party.DELTA`)."""
+(`p2_parties.DELTA`)."""
 
 FAILURES = ("late", "order", "step", "plan", "lifetime", "append", "coin", "release", "few", "malformed",
             "receipt-path", "codec", "payload-path", "tile", "receipt")
@@ -1253,7 +1253,7 @@ class AuditRun:
         return tuple((first, commitment.count) for first, _, commitment, _ in self._appends)
 
     def scheduled(self, schedule: _schedule.Schedule) -> Scheduled:
-        """The schedule check (`schedule.check`, of record in `lean/RemoteAudit/Schedule.lean`) on this session's own
+        """The schedule check (`schedule.check`, of record in `lean/Poub/Schedule.lean`) on this session's own
         passes, each plan as received and the step it named, and its appends, at the cap its parameters committed
         before its first coin (`Params.schedule_cap`): its verdict, which `ledger` requires before it credits an
         appended block, or `schedule.Refused` and why not.  A session whose parameters commit no cap has none
@@ -1369,7 +1369,7 @@ class Registry:
                  receipt: str = receipts.DEFAULT, **kw) -> Registration:
         """`register`'s registration for a node with none live, which it makes live; refused, and counted, for one
         with.  One that would bind PoUW's tile outputs (`bind`) samples nothing either (ValueError): the verifier's
-        definition, `RemoteAudit.Registry.register`, covers receipts of a block alone and refuses it."""
+        definition, `Poub.Registry.register`, covers receipts of a block alone and refuses it."""
         node = _node(node)
         if node in self._live:
             self.refused[node] = self.refused.get(node, 0) + 1
@@ -1377,7 +1377,7 @@ class Registry:
                                 "second draws no codec seed until the verifier closes the first and counts its sessions")
         if _bind(kw.get("bind", False)):
             raise ValueError("a registration that binds PoUW's tile outputs is not covered: the verifier's definition "
-                             "(RemoteAudit, in Lean) covers receipts of a block alone")
+                             "(Poub, in Lean) covers receipts of a block alone")
         registration = register(source, node, blocks, payload_root, codec, receipt, **kw)
         self._live[node] = _Live(registration.digest, registration, [])
         return registration
@@ -1641,7 +1641,7 @@ def pooled_windows(record: Record) -> tuple[list[tuple[int, int]], Fraction]:
 
 
 def pooled_bound(record: Record) -> _pooled.Bound:
-    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `RemoteAudit.Pooled`)."""
+    """The record's pooled bound in exact rationals (`pooled.bound`, the Lean's `Poub.Pooled`)."""
     return _pooled.bound(*pooled_windows(record))
 
 
@@ -1675,7 +1675,7 @@ def pooled(record: Record) -> tuple[float, float]:
     + the receipts' binding term (`Accounting.Guarantees.Remote.PooledSample`, `ledger.draw`).
 
     Both are `pooled_bound`'s exact values rounded up: d̄·S from above by a certified rational (`pooled.budget`), and
-    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.RemoteAudit.PooledCovers` proves at least
+    `wrong` the greedy over the windows by U_t/s_t falling, which `Properties.Poub.PooledCovers` proves at least
     the bound `PooledSample` reads."""
     b = pooled_bound(record)
     return _up(b.wrong), _up(b.floor)

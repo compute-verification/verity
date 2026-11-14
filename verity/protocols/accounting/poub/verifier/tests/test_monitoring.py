@@ -1,6 +1,6 @@
 """The monitoring period's pooled step (`monitoring`): the count is the least within δ of the count bound's C(T, M)·p^M, the
 reference year at 10⁻⁶ leaves one session uncovered where the union T·eps doesn't reach δ, the per-window figure is the
-session's openings bound at δ/T, its error charging each session's draw term at its `samples`, and a rejected session
+session's openings bound at δ/T, its error charging each session's sample term at its `samples`, and a rejected session
 pools nothing."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ EPS = Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64)
 ALL_DRAWN = {"verdict": "accept", "reason": None, "public": {"eps": str(EPS), "q_bytes": 34 * codec.BLOCK_BYTES},
              "profile": {"delta": str(Fraction(1, 2 ** 40)), "gaps": [], "receipts": 34, "windows": [[17, 17], [17, 17]],
                          "wrong": "0"}}
-"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one drawn, at the eps `certify`
+"""An accepted run of the subprotocol at 64 KiB: two windows of 17 receipts, every one sampled, at the eps `certify`
 publishes for it, its two openings coins at `samples` each."""
 
 
@@ -89,7 +89,7 @@ def test_the_per_window_figure_is_the_openings_bound_at_delta_over_t():
 
 def test_the_per_window_error_charges_each_sessions_draw_term_at_its_samples():
     """`ALL_DRAWN` drew 34 receipts, but its eps charges its two openings coins at `samples` each, and the per-window
-    figure's error charges that term once a session, not the draws made (2.4·10⁻⁶ over the year, not 1.2·10⁻⁹)."""
+    figure's error charges that term once a session, not the samples made (2.4·10⁻⁶ over the year, not 1.2·10⁻⁹)."""
     year = monitoring.table(ALL_DRAWN, 12_500, 600)["periods"]["year"]
     t = year["sessions"]
     for d in monitoring.DELTAS:

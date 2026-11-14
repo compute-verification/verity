@@ -55,6 +55,7 @@ from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.policy.inference_only.verifier import parties as IO
 from verity.protocols.accounting.poub.verifier import p2_parties as P2
 from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.registration.verifier import registration as RL
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
 from verity.protocols.accounting.pous.verifier import wipe_parties as WP
@@ -86,7 +87,7 @@ RECORD_NAMES = {"integrity": "sampled-proofs", "work": "pouw", "inference-only":
 # --- what each component and the workload declare -------------------------------------------------------------------
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
-    """The served window's rule is a rate, which its audit states to its stream (`service.Law`): a fixed count is refused
+    """The served window's rule is a rate, which its audit states to its stream (`service.SamplingDesign`): a fixed count is refused
     by name, with the rate to state in its place, and so is a work rate, for which the window's class has no work table."""
     strata = parse_strata_rate(law)
     if parse_rate(law) is None and (strata is None or strata[0]):
@@ -406,13 +407,19 @@ POUB = Session(("verity.protocols.accounting.poub.verifier.p2_parties:PROTOCOLS"
 #: what the certifier's front asks of serve-openai: its id-form requests answered in the id form, an id event the
 #: 503-byte payload of the front's 512-byte cells; every other request is answered as before
 ID_FORM = "--protocol ids --id-payload 503"
+#: the certifier's scan class (`certifier_piece.V3C_SCAN_CLASS`, w63k4) as served_verdicts.sh's SLOTS,PROMPT,OUTPUTS,
+#: LANES,EVERY, V3c's class, so the period check's compute audit is V3c's of the served window; CLASSES holds it beside
+#: served_verdicts.sh's default class
+SCAN_CLASS = "8,32,4,4,16"
 
 
 def _certifier_piece(cfg, params, bound):
     py = ".venv/bin/python"
     return {"SERVE_ARGS": ID_FORM,
             "CERTIFIER_FRONT": f'{py} {CERTIFIER_PIECE} front "$1" "$2" "$3" --gate {shlex.quote(bound["gate"])}',
-            "CERTIFIER_CMD": f'{py} {CERTIFIER_PIECE} piece "$1" "$2" "$3"'}
+            "CERTIFIER_CHAIN_CMD": f'{py} {CERTIFIER_PIECE} chain "$@"',
+            "CERTIFIER_PERIOD_CMD": f'{py} {CERTIFIER_PIECE} period "$@"',
+            "V3C_CLASS": SCAN_CLASS, "CLASSES": f"4,32,4 {SCAN_CLASS}"}
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
@@ -462,8 +469,9 @@ PARTIES: dict[str, dict[str, Piece]] = {
     },
     "certifier": {
         WORKERS: Piece("certifier", WORKERS, SERVED_WINDOW, "the certifier's developer side: its front before the "
-                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece, the chain and the "
-                       "period check on the kept warden run", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
+                       "requests (CERTIFIER_FRONT, which the served window runs), and its piece split around V3c: the "
+                       "chain on V3c's committed window (CERTIFIER_CHAIN_CMD), then the period check on V3c's "
+                       "period.json (CERTIFIER_PERIOD_CMD)", scripts=(CERTIFIER_PIECE,), reaches=NETWORK_CERTIFIER,
                        binds=("gate",), hooks=_certifier_piece),
         NETWORK_CERTIFIER: Piece("certifier", NETWORK_CERTIFIER, GATE, "the network certifier behind the gate: its "
                                  "warden in front of serve-openai before the requests"),
@@ -536,11 +544,21 @@ def deployment(cfg: Mapping[str, Any], piece: Piece, protocol: ProtocolDef, addr
                        **({"listen": address} if c == s.listener else {})} for c, r in sorted(s.roles.items())]}
 
 
+def request_bound(protocol: ProtocolDef, params: Mapping[str, Any]) -> None:
+    """That the two sides of ``protocol``'s run start on one request, ``params`` this side's: each side's start computes
+    the request on its own machine, and the run's handshake compares only the configuration's hash, the onsite
+    configuration's that the deployment states (`deployment`) so that a signed session names it. The two sides would
+    compare SHA-512 of the request's canonical JSON at the session's start; the runtime's ``Hello``
+    (`verity/runtime/handshake.py`) has no field for it, and neither side's messages carry it, so a run raises here
+    (`NOT_YET`) until one does."""
+    raise NotImplementedError(NOT_YET)
+
+
 def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], piece: Piece) -> Callable[[], Any]:
     """``piece``'s party run through the runtime (`verity.runtime.runner.run`), ready to start: its `ProtocolDef`, its
     protocol's start (`ProtocolDef.starts`: its request and capabilities, from the configuration, the piece's bindings and
-    its state directory ``state/runs/<component>/<party>``), what this machine hands it (`held`), its clock, and the
-    listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
+    its state directory ``state/runs/<component>/<party>``), the two sides' request bound (`request_bound`), what this
+    machine hands it (`held`), its clock, and the listener's address, which it listens at or dials. Refused ``no-piece`` while a half of its protocol isn't in this
     tree; a party its protocol declares no start for raises `NOT_YET`."""
     s = piece.session
     if absent := s.absent():
@@ -553,6 +571,7 @@ def prepare(cfg: Mapping[str, Any], state: Path, bindings: Mapping[str, Any], pi
     bound = {**piece._bindings(bindings),
              **{k: str(state / "runs" / c / p) for k, (c, p) in s.reads.get(piece.party, {}).items()}}
     begun = protocol.starts[role.name](cfg, bound, here)
+    request_bound(protocol, begun.params)
     h = held(piece, role)
     address, listener = bound["address"], s.roles[s.listener]
     sources = {role.name: {"clock": RealClock(*s.clocks[role.name])}} if "clock" in role.needs else None
@@ -632,7 +651,8 @@ def onsite_check(cfg: Mapping[str, Any], state: Path) -> dict[str, Any]:
             "verdict": "undecided" if verdict == "accept" and absent else verdict}
 
 
-#: what an unwritten registration raises with: the goal that brings it
+#: what a registration raises with once its configuration item is written, while no run's log holds the item: the goal
+#: that brings it
 REGISTRATION_GOAL = "memory-accounting/architecture-on-branch"
 
 
@@ -641,15 +661,17 @@ def registration(cfg: Mapping[str, Any], state: Path) -> str:
     registers the configuration's hash (the item ``{"kind": "configuration", "digest": K.digest(cfg)}``), before any
     party starts and so before any coin: `live` calls it after it has prepared the parties here and before it starts
     one. The hash is ``state``'s ``run.json``'s ``configuration``, which `verity run` writes first; a ``run.json`` under
-    another hash, or none, is refused (``registration``). The log's items are θ and the builder alone
-    (`verity.protocols.accounting.registration.verifier.registration.item_of`, `Core.Registration`): no item names a
-    configuration yet, so it raises `NotImplementedError` (`REGISTRATION_GOAL`), and the line's ``registration`` is
-    ``None``."""
+    another hash, or none, is refused (``registration``). The item is the registration log's own
+    (`verity.protocols.accounting.registration.verifier.registration.configuration`), whose writer raises
+    `NotImplementedError` (``proofs/architecture-on-branch``) while the log has no coin to order it before; once it
+    returns, the run's log holding it beside θ and the builder isn't written either (`REGISTRATION_GOAL`). Until then
+    the line's ``registration`` is ``None``."""
     f, digest = state / "run.json", K.digest(cfg)
     run = json.loads(f.read_text()) if f.is_file() else {}
     if run.get("configuration") != digest:
         raise Refused("registration", f"{f} names configuration {str(run.get('configuration'))[:16]}…, not this "
                                       f"configuration's {digest[:16]}…: the registration names the run's own hash")
+    RL.configuration(digest)
     raise NotImplementedError(REGISTRATION_GOAL)
 
 
@@ -664,7 +686,8 @@ def coins_of(cfg: Mapping[str, Any]) -> str:
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
     """The pieces of the parties ``here`` (module docstring): each runtime party's run, the wipe's before the served
     window and the others' beside it; the served window when the workload's party is here; a gate's side as started by
-    the gate; and the onsite check when the verifier is here. Refused by name (``unbound``) while a listed piece's
+    the gate; and the onsite check when the verifier is here, its line with each memory challenger's `trusted-device`
+    premise as `placement` read it from the challenger's outcome here (``trusted-device``: component -> premise). Refused by name (``unbound``) while a listed piece's
     binding is missing, and raised while a runtime party's `held` does, before anything starts."""
     bindings = bindings_of(state)
     runtime = [x for p in here for x in pieces(cfg, p) if x.runs == RUNTIME]
@@ -706,8 +729,10 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
             out[p] = {"outcome": {"started": f"by the auditor's gate, for {', '.join(x.component for x in mine)}"},
                       "refused": None}
     if VERIFIER in here:
+        devices = {c: where[mc.PREMISE] for x in out.values() for c, where in x.get("placement", {}).items()}
         try:
-            out[VERIFIER] = {"outcome": {"verdicts": [onsite_check(cfg, state)]}, "refused": None}
+            out[VERIFIER] = {"outcome": {"verdicts": [{**onsite_check(cfg, state), mc.PREMISE: devices}]},
+                             "refused": None}
         except Refused as e:
             out[VERIFIER] = {"outcome": {"error": e.detail}, "refused": e.name}
     return Result(out)
@@ -715,4 +740,4 @@ def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str]) -> Result:
 
 __all__ = ["DEMOS", "HEADERS", "MANIFESTS", "NOT_YET", "ORDER", "PARTIES", "PROTOCOLS", "REGISTRATION_GOAL", "SERVED",
            "WORKLOADS", "Held", "Piece", "Result", "Session", "held", "live", "onsite_check", "pieces", "placement",
-           "prepare", "registration", "served_window", "unbound", "variables"]
+           "prepare", "registration", "request_bound", "served_window", "unbound", "variables"]

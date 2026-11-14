@@ -22,7 +22,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Units
 public import Proofs.Properties.Verity.Sampled.MemberForm.Registered
 public import Proofs.Properties.Verity.Sampled.MemberForm.Apart
 public import Proofs.Properties.Verity.Sampled.MemberForm.Laid
-public import Proofs.Properties.Verity.Sampled.MemberForm.WindowPasses
+public import Proofs.Properties.Verity.Sampled.MemberForm.ExecutionPhasePasses
 public import Proofs.Properties.Verity.Sampled.MemberForm.Sent
 public import Proofs.Properties.Verity.Sampled.MemberForm.Reads
 public import Proofs.Properties.Verity.Sampled.MemberForm.OpensOwn
@@ -55,12 +55,12 @@ by) give of the bytes and the release log they accept, each stated at the code's
 * `MemberForm.Run`: the form's run where every session accepted (`membersRun_ok`): the statements members' in order,
   one session each, at the statement read for its member (`statementAt_files`), the sessions' verdicts in order.
 * `MemberForm.SetsUp`: what the instance of a window sets up at the form's parameters (`MembersSetUp`: the window the
-  parameters' members on the registered files, `WindowOn`, laid out, each member's files passing, `FilesPass`),
+  parameters' members on the registered files, `ExecutionPhaseOn`, laid out, each member's files passing, `FilesPass`),
   and how v2 reads the members' files (`membersRead`).
 * `MemberForm.States`: the statement the form read for a member is its window's member's (`statesMember`), so a
   session's verdict at it is verity-verify-proof `--zk`'s at the window's member.
 * `MemberForm.Passes`: a member whose files the form's run held has its files pass at the window's member
-  (`filesPass_of_held`, `WindowOn.passes`), and a member whose files pass has roots that fix their domains
+  (`filesPass_of_held`, `ExecutionPhaseOn.passes`), and a member whose files pass has roots that fix their domains
   (`FilesPass.rootsFix`).
 * `MemberForm.Named`: the structure's parts (`membersStructure_ok`), what it names each session
   (`membersTreesHeld_ok`) and a member's record at its tree less the closing round (`memberTreeReason_none`,
@@ -85,7 +85,7 @@ by) give of the bytes and the release log they accept, each stated at the code's
   place of a member a filter keeps (`filter_at`).
 * `MemberForm.Sample`: the sample a session's record holds at its member's statement, and the units it proved
   (`session_sample`): the subset print of slots ascending below the member's count, the units the member's first
-  unit plus each slot. The window's population is the one the registration names (`WindowOn.population`).
+  unit plus each slot. The window's population is the one the registration names (`ExecutionPhaseOn.population`).
 * `MemberForm.Units`: the units the form's sessions proved, member by member (`run_over`), and the session of a
   member the sample holds (`member_session`): its statement's place among the statements, its verdict at the
   member's own statement, and its record's sample the sample file of the member's part of the window's sample.
@@ -95,19 +95,19 @@ by) give of the bytes and the release log they accept, each stated at the code's
 * `MemberForm.Apart`: no unit is in two members' ranges at parameters the form's parse accepts (`membersOf_apart`,
   `membersParamsOfJson_apart`), and what the proofs read of that at an accept (`FormApart`, proved of the check
   by `formApart`).
-* `MemberForm.Laid`: the window the parameters' members are on is laid out (`WindowOn.laid`): its members' units'
-  counts sum to its units (`WindowOn.total`), and each member's units lie one after another from where the members
+* `MemberForm.Laid`: the window the parameters' members are on is laid out (`ExecutionPhaseOn.laid`): its members' units'
+  counts sum to its units (`ExecutionPhaseOn.total`), and each member's units lie one after another from where the members
   before it end.
 * `MemberForm.Sent`: each session of the form in what the prover sent: the evidence sent for the `u`-th session
   (`sentEvidenceAt`), the `j`-th statement's one session as the evidence's `j`-th, named at place `j` (`named_at`),
   its record and evidence among what was sent (`sentRecordAt_session`, `sentEvidenceAt_session`), its one table and
   that table's coin tree (`ownRootBTables_one`, `Member.spec_coinTree`).
 * `MemberForm.Reads`: at a play the form accepts, every release of the sample's family precedes every opening and
-  the play has the sessions of the window's sample (`windowRead_members`).
-* `MemberForm.WindowPasses`: what a window's instance takes of the form's acceptance. At each play the form
-  accepts, the window the verifier sets up is laid out and each member's files pass (`windowPasses_members`), so
+  the play has the sessions of the window's sample (`executionPhaseRead_members`).
+* `MemberForm.ExecutionPhasePasses`: what a window's instance takes of the form's acceptance. At each play the form
+  accepts, the window the verifier sets up is laid out and each member's files pass (`executionPhasePasses_members`), so
   the verifier sets the deployment's window up at every accepted play (`executionPhaseAt_form`), and each play has the
-  window's read (`windowReads_members`).
+  window's read (`executionPhaseReads_members`).
 * `MemberForm.OpensOwn`: a checked member whose files are ready for its commitment's openings opens only at its own
   files' places (`opensOwn_of_ready`), and files that pass the files check are ready for them (`FilesPass.ready`),
   so at a window the verifier sets up the vocabulary's openings hold wherever each member's deployed commitment

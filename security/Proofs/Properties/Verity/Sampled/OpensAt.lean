@@ -367,7 +367,7 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
 
 /-- **The window's committed files' place for a gate is the session's at its claims position**, wherever v2 reads
 the session's files as a window of one member (`placeOfFiles`, there the member's `placeOfRead`). -/
-theorem placeOfFiles_eq {R : Verity.WindowFiles} (hr : R = Verity.WindowFiles.one A.fileRead)
+theorem placeOfFiles_eq {R : Verity.ExecutionPhaseFiles} (hr : R = Verity.ExecutionPhaseFiles.one A.fileRead)
     (hN : R.circuit.N = A.Cc.N) (g : Fin R.circuit.N) :
     placeOfFiles R g = A.placeAt (Flock.Bridge.posOf A.Cc (Fin.cast hN g)) := by
   subst hr
@@ -435,7 +435,7 @@ theorem opensAt_of (I : Instance d α)
   have hplace := h θ F A hs
   obtain ⟨p, hp, o, hacc, hrow⟩ := Live.opens_rowLeaf hready hop
   have hw : (I.base.read θ F).circuit.w g = 1 :=
-    w_ofAudit ((congrArg Verity.WindowFiles.circuit hsu.read).trans
+    w_ofAudit ((congrArg Verity.ExecutionPhaseFiles.circuit hsu.read).trans
       (A.circuit_eq.trans (Flock.Bridge.circuitOf_eq A.D A.hU A.n))) g
   unfold Vocab.Opens
   rw [hconst]

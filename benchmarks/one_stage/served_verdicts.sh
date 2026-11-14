@@ -67,7 +67,7 @@
 #     pins: at each class of CLASSES (default 4,32,4, V2's), each within WC_TIMEOUT (default 30m), all of which the run needs
 #     (the class of record is counted only where CLASSES names `record`, and gates like any other); then the window
 #     audited from its records alone
-#     (`prove_path/run.sh` with PP_RECORDS=1, `records_audit.py`): Flock `--zk` on the sampled proof blocks behind the Lean
+#     (`prove_path.sh` with PP_RECORDS=1, `records_audit.py`): Flock `--zk` on the sampled proof blocks behind the Lean
 #     firewall, and the Lean verifier's verdict. Those proof blocks are the sealed window's step units (PP_PARTITION, default
 #     layer 0's SiluMul_v2 at step 1, or at step 0 with MAX_TOKENS 1, whose window has no step 1), not the window circuit's.
 #     Every unit of a template the served model's compiler of record lists as a transfer gate (prove_path.GATES_OF_RECORD)
@@ -124,7 +124,24 @@
 #     docket's members by its rule V3C_LAW, a rate (records_audit.py refuses a fixed count): by default the rate that
 #     samples one proof block of class 4,32,4's window, under H1_TIE one of each template's, on V3C_CHALLENGER's coins
 #     (below, Coins; pinned on main's first-parent line: MAIN_FILE's, kept as $OUT/v3c-audit/main.txt, else MAIN_SHA's)
-#     and proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`); then
+#     and proves them, its composes made before it with V3C_WARM_JOBS (at `v3c_audit`), its sessions one at a time and
+#     Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a time, default 1 on every path, each started
+#     only while its memory estimate fits: on a node it shares, with the running session's estimate
+#     (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`) within V3C_AUDIT_MEM_GB; in a follow-on, which passes the flag only where
+#     V3C_LEAN_WORKERS is set and else leaves a5's own default (`a5.LEAN_WORKERS`, 1), with that estimate within the
+#     V3C_AUDIT_MEM_GB its command sets, else what its node has free (`a5.LeanPool`). The estimates admit a start
+#     and limit nothing that runs: no limit is set on a check, and one over the budget runs alone. What the audit reads as free (`a5.available_memory`) is the least of two: its
+#     node's MemAvailable, and under each cgroup memory limit over it (the lesser of memory.high and memory.max) the
+#     limit less what the cgroup holds that the kernel can't give back at once. A cgroup's file cache (memory.stat's
+#     inactive_file and active_file, less file_dirty, file_writeback and file_mapped) is counted free, as MemAvailable
+#     counts the node's; its anonymous memory and its shared memory are not. So a follow-on inside a memory scope is
+#     held to the scope's room, read low rather than high. A set V3C_AUDIT_MEM_GB is the audit's memory in place of
+#     that reading; unset, the reading is taken as the sessions start and again as the negatives' workers and the
+#     registered reads' pool are made. Each check and worker still starts only while its estimate is free by it.
+#     Each pool prints the two terms and which binds as it starts, and once what held a start back. Its negatives
+#     after the audit record run one after another, or with
+#     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only
+#     while its memory estimate, read then, fits that memory (`a5.NegativeWorkers`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the docket, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -237,7 +254,7 @@
 # window's close, once it is sealed and before its sample coin, serve-openai's `--h1-window-commit` runs
 # `served_verdicts.sh tie` on the served node, under the serve's lease (LEASE_MIN then defaults to 150 and LEASE_MEM_GB to
 # 160, the serve's 128 and window-commit's peak): the window's advice, the one step 3 then reads, and `prove_path.py window-commit --window-registration W --h1-key
-# PROVER/key --law V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose docket R, chained right after
+# PROVER/key --sampling-design V3C_LAW` within V3C_TIMEOUT (then default 60m, at most 90m), whose docket R, chained right after
 # H1's W, H1 names as the window's Commit record (`serve_tie`). Its output stays in the serve dir's h1/w<k>/. H1's sessions
 # are reserved for the gate's default 120 minutes, the window's sample session at the serve's start, and the sample coin
 # waits for R. window-commit makes each Program's Build itself (`own_builds`), since step 3's compile writes the row dir's
@@ -337,7 +354,7 @@
 # before the first request and the WEIGHTS and DEPLOYMENT-REGISTRATION lines name: the developer's own record, whose
 # digest no auditor holds), so the log before R is that record and W, and runs `served_verdicts.sh pearl-tie`
 # (PEARLPLUS_TIE_CMD) before its coin: the window's
-# advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --law V3C_LAW`, the circuit cut at
+# advice and `prove_path.py window-commit --window-registration W --pearl-passes DIR --sampling-design V3C_LAW`, the circuit cut at
 # Pearl+'s linears and R chained right after W, in the serve dir's pearlplus/w<k>/; then `verify --tie W --class
 # V3C_CLASS` (PEARLPLUS_CLASS), which refuses passes that aren't the class's fixed load and publishes the work in its
 # grid form (the class's structural credit less the give-up on H1's window grid, the exact credit held). V3c then runs
@@ -572,7 +589,7 @@ if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=$
 elif [ -n "${H1_TIE:-}$PEARLPLUS_TIE" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
 V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
-V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
+V3C_AUDIT_MEM_GIVEN=${V3C_AUDIT_MEM_GB:+1} V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
@@ -623,7 +640,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   # path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/one_stage/window_commit.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --law "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
+    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --sampling-design "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?
   if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
   elif [ "$rc" != 0 ]; then echo "refused (exit $rc): $(grep -v '^ ' "$err" | tail -2 | cut -c1-800)"; fi
@@ -777,7 +794,7 @@ EOF
 # circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
-    "$TREE/.venv/bin/python" verity/protocols/proofs/spot/prover/audit/records_audit.py warm --window "$VW/window" --law "$V3C_LAW" \
+    "$TREE/.venv/bin/python" verity/protocols/proofs/spot/prover/audit/records_audit.py warm --window "$VW/window" --sampling-design "$V3C_LAW" \
     --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
   local rc=$? why
   if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
@@ -813,6 +830,9 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     v3c_warm
     cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
   fi
+  local pool=(${V3C_LEAN_WORKERS:+--lean-workers "$V3C_LEAN_WORKERS"} ${V3C_AUDIT_MEM_GIVEN:+--audit-mem-gb "$V3C_AUDIT_MEM_GB"})
+  [ -n "$FOLLOW" ] || pool=(--lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB")
+  pool+=(${V3C_NEGATIVE_WORKERS:+--negative-workers "$V3C_NEGATIVE_WORKERS"})
   if v3c_live; then  # the gate opens the run root once, ever, and a reserve joins the lane's open period: neither, first
     gl=$("$PY" "$SV" gate --gate "$(v3c_gate)" --lane "${H1_LANE:-vllm}" --main "$main" --root "$run" 2>&1); rc=$?
     say "V3C-$(tail -1 <<< "$gl" | cut -c1-1200) (checked $(date -u +%Y-%m-%dT%H:%M:%SZ))"
@@ -821,8 +841,9 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
   fi
   V3C_AUDITED=$(hostname -s)
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
-    "$TREE/.venv/bin/python" verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window "$VW/window" --law "$V3C_LAW" \
+    "$TREE/.venv/bin/python" verity/protocols/proofs/spot/prover/audit/records_audit.py audit --window "$VW/window" --sampling-design "$V3C_LAW" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${day[@]}" "${cache[@]}" \
+    "${pool[@]}" \
     "${ch[@]}" --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/verity-verify-proof" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
   rc=$?
@@ -1645,6 +1666,10 @@ if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   grep -q -- '"warm"' "$TREE/verity/protocols/proofs/spot/prover/audit/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
 fi
+if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by side
+  [[ $V3C_NEGATIVE_WORKERS =~ ^[1-9][0-9]*$ ]] \
+    || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }
+fi
 case $DEVELOPMENT in '' | 1) ;; *) say "PREFLIGHT: DEVELOPMENT is 1, a development run, or unset, not $DEVELOPMENT"; exit 3 ;; esac
 if [ -n "$V3C" ] && [ -z "$COMPOSE" ]; then  # V3c's audit's coins: the live challenger's, or a development run's
   case $V3C_CHALLENGER in
@@ -1735,7 +1760,7 @@ if [ -n "${DAY:-}" ] && [ -z "$FOLLOW$COMPOSE" ]; then  # the day's one circuit 
   [ -f "$TREE/adapters/vllm/verity_vllm/pipeline/serve_day.py" ] && grep -q -- '"--day"' "$TREE/verity/protocols/proofs/spot/prover/audit/records_audit.py" \
     || { say "PREFLIGHT: DAY needs serve-openai's --day and records_audit's --day, which this tree hasn't"; exit 3; }
 fi
-if [ -z "$FOLLOW$COMPOSE" ] && [ "${1:-}" != v3c ]; then  # step 3's law draws every unit of the served compiler's transfer gates
+if [ -z "$FOLLOW$COMPOSE" ] && [ "${1:-}" != v3c ]; then  # step 3's sampling design draws every unit of the served compiler's transfer gates
   why=$(cd "$TREE" && "$SAY_PY" - verity/protocols/proofs/spot/prover/audit/prove_path.py "$REPO" "$PP_PARTITION" 2>&1 <<'EOF'
 import ast, json, sys
 src, model, part = sys.argv[1:]
@@ -1774,7 +1799,7 @@ if [ -z "$FOLLOW$COMPOSE" ] && { [ -n "$H1_GATE" ] || [[ " ${SERVE_ARGS:-} " == 
     || { tail -20 "$OUT/h1-lean.log"; say "PREFLIGHT: H1's Lean verifier (pouw-check-difftest) didn't build"; exit 3; }
 fi
 
-build() {  # what prove_path/run.sh builds, here while the endpoint serves; run.sh's own builds then find them done
+build() {  # what prove_path.sh builds, here while the endpoint serves; prove_path.sh's own builds then find them done
   command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
   command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none
   uv sync --all-packages --extra torch-cpu || return 5

@@ -159,13 +159,13 @@ end Weaken
 section WeakenMember
 
 variable {g : Game Exchange} {σ : Strategy g} {Ω Reg : Type} {R nJ : ℕ} {D : ℕ → PosDecoders g σ R Reg}
-  {M : WindowCoinMap g σ Ω R} {BL : WindowLinkHold} {B : WindowRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
+  {M : ExecutionPhaseCoinMap g σ Ω R} {BL : ExecutionPhaseLinkHold} {B : ExecutionPhaseRoundHold} {S : Finset (Fin nJ)} {Rg : Reg}
 
 /-- **A member's session's trace off `BL` and `B` is one off `BL'` and `B'`** wherever its link points, the trace's
 end a later position than its first stop with them written in and consumed, are off `BL'` there, and each stop the
 trace answers at a position `Q` holds of is off `B'`, `Q` holding past the first stop and of each answered stop's
 next position. -/
-theorem MemberReach.weaken {BL' : WindowLinkHold} {B' : WindowRoundHold} {i : ℕ}
+theorem MemberReach.weaken {BL' : ExecutionPhaseLinkHold} {B' : ExecutionPhaseRoundHold} {i : ℕ}
     {m : Flock.Guarantees.MemberV5 Reg nJ} {p q : Pos g σ Claims.Msg (Fin R)}
     {out : LiveOutJ (memberTabs S Rg m) (memberPts m)} (Q : Pos g σ Claims.Msg (Fin R) → Prop)
     (hstep : ∀ q (φ : CoinTape q.toStop.g' q.toStop.s' → CoinTape q.toStop.g' q.toStop.s'), Q q →
@@ -345,7 +345,7 @@ the frame's count to the record's round's (`SessionRead.roundCount`), `tailCount
 theorem session_stop_count {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {R : ℕ}
     {tb : String} (per : ℕ) (ev : ℕ → Exchange → Option Claims.Msg) (record₀ : Exchange → Option Claims.Msg)
     (recordDigest : Claims.Msg) {rd : Reading R}
-    (hrd : rd = windowReadingAt #[tb] per (sessionReveal #[tb] ev) record₀ recordDigest)
+    (hrd : rd = executionPhaseReadingAt #[tb] per (sessionReveal #[tb] ev) record₀ recordDigest)
     {σ : Strategy (V.game θ F c)} {q : Pos (V.game θ F c) σ Claims.Msg (Fin R)}
     (hq : q.Inv (roundCuts V θ F c rd)) {z : CoinTape (V.game θ F c) σ} (hz : ∃ y, z = q.back y)
     (hn : NoMiss V θ F c rd σ z) {j : Fin R} {u : ℕ} {ρ : Fin 2} {k : ℕ}

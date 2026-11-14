@@ -40,7 +40,7 @@ untraced = [
 # memory challenger's verdict (`verity/protocols/accounting/pous/device/timed_audit.py`), and drives its strict audit
 # against the harness's responder.
 # `test_run.py` holds `PousCheck.Run` to `run.py`: `lake` builds the memory challenger's Lean package and LMS's through the
-# path requires, and the test draws its sessions with that package's `tests/mc_cases.py`, which signs with the PoUS tests'
+# path requires, and the test samples its sessions with that package's `tests/mc_cases.py`, which signs with the PoUS tests'
 # test signer, read by path. `test_run_protocol.py` holds `PousCheck.RunProtocol` (onsite's PoUS component) to `run.py`
 # and the period hook (`period.py`) on the same sessions and on the hook's own periods; `test_signed_run.py` holds
 # `PousCheck.SignedRun` to `run.check_signed_at` and `period.answer_signed` on a period's sessions with the memory

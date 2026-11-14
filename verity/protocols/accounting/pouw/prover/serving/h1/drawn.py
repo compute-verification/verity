@@ -1,8 +1,9 @@
 """A served H1 window's sampled proof blocks staged as Flock statements (a J10-R K's a statement a call, a lanes-form K's each
 unit's lanes and combine), and the statements file core's credit verifies
 (``--statements``, `credit.STATEMENT_KEYS`), from the serve dir and the prover's own state. ``benchmarks/pouw/h1_prove/drawn.py``
-is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``) and binds
-``check`` to credit's own verification (``verified``), running `run` on its arguments.
+is its CLI, which reads ``--checkpoint`` with the live challenger's model registry (``checkpoint_weights``), binds
+``check`` to credit's own verification (``verified``) and ``stage`` to the stagers on Flock's Python (``recomposed``,
+``file_stager``: ``h1_prove/stagers.py``), running `run` on its arguments.
 
     sampled stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
@@ -33,10 +34,10 @@ records), or ``--prover``. DIR is `pouw_h1_circuits`' output, whose manifest bin
    prover's key. Each must have credit's root and domain, else the stage is refused; ``pub@<c>`` and ``ok`` are credit's
    own (`credit.public_table`, `credit.ok_table`).
 4. Each call is staged as a shared-row statement (`statement_tables`) on --circuits' ``k<K>`` file, whose SHA-512 must be
-   the manifest's (the one the period-open committed), read and never composed (`FileStager`: the K 2048 J10-R
+   the manifest's (the one the period-open committed), read and never composed (`stagers.FileStager`: the K 2048 J10-R
    composition takes hundreds of GB), each unit's outputs J10-R's word reference's (`h1zy.reference`), its ok 1 and both
    outputs the rows the window registered (`outputs_held`), o0 opened at receipt@<c> as ok is at ``ok``.
-   ``--recompose`` builds K's flat statement (`stager`, bound to the manifest's bind) instead, its lowered outputs held to
+   ``--recompose`` builds K's flat statement (`stagers.stager`, bound to the manifest's bind) instead, its lowered outputs held to
    the word reference's and to those rows. W/c<call>/ gets inst.bin, pub.bin, pin.txt and circuit.txt, and program.json
    and partition.json, the window Program and `credit.partition_of`'s object credit verifies it under (`bind_files`);
    W/plan.json lists them.
@@ -81,8 +82,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from types import SimpleNamespace
-from typing import Any
+from typing import Any, Protocol
 
 import numpy as np
 from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
@@ -138,6 +138,27 @@ CheckpointWeights = Callable[[Path, Sequence[tuple[str, int, int]], int], list[t
 Verified = Callable[[Any, dict, dict, list[int], Path], tuple[Any, tuple[str, str] | None]]
 
 
+class Stager(Protocol):
+    """A statement staged on a circuit, which ``stage`` takes from its caller (``benchmarks/pouw/h1_prove/stagers.py``'s,
+    on Flock's Python, which verity does not import): the circuit's ports, those the rows fill, its pin (SHA-512), each
+    instance's outputs (None: the lowering's), and `stage`, which writes a set's inst.bin and pub.bin to `out_dir`."""
+    ports: Sequence[Any]
+    row_ports: list[str]
+    pin: str
+    outs: dict[str, np.ndarray] | None
+
+    def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
+              tables: dict, refs: dict, registered: dict) -> dict: ...
+
+
+#: ``--recompose``'s stager: (K, the tile, slot m, the circuit file it writes, the manifest's bind) -> K's flat statement
+#: built once (`stagers.stager`)
+Recomposed = Callable[[int, Sequence[int], int, Path, dict], Stager]
+#: a committed circuit file's stager: (the file, its Definition id, in_rows, out_rows, the statement's name) -> its
+#: statement read and never composed (`stagers.FileStager`)
+FileStagerOf = Callable[[Path, str, Sequence[tuple], Sequence[tuple], str], Stager]
+
+
 # -- J10-R's statement ---------------------------------------------------------------------------------------------------
 
 def template(k: int, tile: Sequence[int], m: int) -> Any:
@@ -146,15 +167,6 @@ def template(k: int, tile: Sequence[int], m: int) -> Any:
     r, c = tile
     program = HW.program([("j10r", k, c)], [("j10r", 0)], m, (r, c), unit=lambda kk: HW.tile_unit(kk, (r, c), HT.PouwH1Tile5))
     return dict(program.fn.bindings["TILES"])[k]
-
-
-def stager(k: int, tile: Sequence[int], m: int, circuit: Path, bind: dict) -> Any:
-    """K's flat statement's `UnitStager` (the form the Lean verifier accepts) on `h1window.statement_rows`, its circuit
-    built once and written to `circuit`, bound to `bind` (``{"partition", "program"}``), as `pouw_h1_circuits` builds K's
-    file."""
-    from verity_flock import class_statement as CS
-    t = template(k, tile, m)
-    return CS.UnitStager(t, NAME, HW.statement_rows(t), HW.STATEMENT_OUT_ROWS, circuit=circuit, bind=bind)
 
 
 def _table(positions: Sequence[int]) -> tuple[list[int], list[int], list[int]]:
@@ -449,57 +461,14 @@ def receipt_table(win: dict, key: bytes, k: int, call: int, reg: dict, values: d
                      keep_rows=True, window=win["root"])
 
 
-class FileStager:
-    """`UnitStager`'s ``stage`` on the committed circuit file `path` of the statement of Definition id `definition` over
-    the rows `in_rows` and `out_rows` (`UnitStager`'s), read and never composed (the K 2048 J10-R composition takes some
-    hundreds of GB): its META (its second line), its pin and class digest (`circuit.digest`, `circuit.class_digest`)
-    streamed from the file, and each instance's outputs the word reference's, which ``outs`` gives. `circuit.write` reads
-    only these of a circuit; the files it writes are the recomposed stager's byte for byte. J10-R's statement's rows are
-    `h1window.statement_rows` of its `template`; a lanes-form leaf's are `leaf_rows`' over its file's template (the
-    manifest's ``templates``)."""
-
-    def __init__(self, path: Path, definition: str, in_rows: Sequence[tuple], out_rows: Sequence[tuple],
-                 name: str = NAME) -> None:
-        from verity_flock import circuit as FC
-        with open(path, "rb") as f:
-            first, second = f.readline(), f.readline()
-            meta = json.loads(second[5:])
-            head = {k: v for k, v in meta.items() if k not in FC.BINDING_KEYS}
-            h_pin = hashlib.sha512(first + second)
-            h_cls = hashlib.sha512(first + b"META " + "".join(FC._COMPACT.iterencode(head)).encode() + b"\n")
-            while b := f.read(1 << 26):
-                h_pin.update(b)
-                h_cls.update(b)
-        self.meta, self.pin, self.class_sha512 = meta, h_pin.hexdigest(), h_cls.hexdigest()
-        self.ports = FC._meta_ports(meta)
-        self.row_ports = [r for r, *_ in in_rows]
-        def port(nm: str) -> SimpleNamespace:
-            return SimpleNamespace(name=nm, dtype="u16")
-        content = json.dumps([definition, [list(r[:3]) + [list(r[3])] for r in in_rows],
-                              [[s, list(ps)] for s, ps in out_rows]]).encode()
-        outs = sorted({p for _s, ps in out_rows for p in ps})
-        self.sub = SimpleNamespace(id=name, template=SimpleNamespace(id="unit-class"), inputs=[port(r) for r in self.row_ports],
-                                   outputs=[port(f"o{j}") for j in outs])
-        self.iset = SimpleNamespace(subcircuit=self.sub, name=name.replace("/", "-"),
-                                    content_digest=hashlib.sha256(content).hexdigest())
-        self.outs: dict[str, np.ndarray] | None = None
-
-    def stage(self, rows: dict, out_dir: Path, salt_key: bytes, salts: dict, indices: Sequence[int], set_name: str,
-              tables: dict, refs: dict, registered: dict) -> dict:
-        from verity_flock import circuit as FC
-        iset = SimpleNamespace(**{**vars(self.iset), "name": set_name})
-        n = len(rows[self.row_ports[0]])
-        for r in self.row_ports:
-            if not np.array_equal(np.asarray(tables[r], np.uint16)[np.asarray(refs[r])], np.asarray(rows[r], np.uint16)):
-                raise ValueError(f"port {r}'s table rows at the instances' refs are not their rows")
-        table_rows = {p.name: len(tables[p.name]) if p.name in tables else n for p in self.ports}
-        salts = {**FC.stage_salts(iset, 0, n, self.ports, salt_key, table_rows), **salts}
-        out_dir.mkdir(parents=True, exist_ok=True)
-        FC.write("", iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
-                 rows={r: np.asarray(rows[r], np.uint16) for r in self.row_ports}, outs=self.outs, salts=salts,
-                 public_words={}, digests=(self.pin, self.class_sha512), indices=[int(u) for u in indices],
-                 share_rows=True, tables=tables, refs=refs, registered=registered, meta=self.meta)
-        return {"meta": self.meta, "outs": self.outs, "salts": salts, "circuit_sha512": self.pin}
+def given(a: Any, name: str) -> Any:
+    """`a`'s stager constructor `name` (``recomposed``, `Recomposed`, or ``file_stager``, `FileStagerOf`), which
+    ``benchmarks/pouw/h1_prove/drawn.py`` binds: refused when the caller gave none."""
+    made = getattr(a, name, None)
+    if made is None:
+        raise Refused(f"stage's {name} is built on Flock's Python, which verity does not import: "
+                      "benchmarks/pouw/h1_prove/drawn.py binds it; run that CLI")
+    return made
 
 
 def bind_files(d: Path, program: bytes, partition: dict) -> None:
@@ -511,8 +480,9 @@ def bind_files(d: Path, program: bytes, partition: dict) -> None:
 
 # -- the lanes form ---------------------------------------------------------------------------------------------------------
 
-def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict) -> dict[str, tuple[FileStager, Path, str]]:
-    """Each of K's leaf statements' `FileStager` on --circuits' committed ``<kind><K>`` file, its path and its leaf
+def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict, file_stager: FileStagerOf
+                 ) -> dict[str, tuple[Stager, Path, str]]:
+    """Each of K's leaf statements' stager (`file_stager`) on --circuits' committed ``<kind><K>`` file, its path and its leaf
     Program's descriptor (hex): each file's SHA-512 the manifest's ``files`` and each descriptor's its ``leaf_programs``
     (what the period-open committed), its Definition id the manifest's ``templates``."""
     files, out = manifest.get("files", {}), {}
@@ -527,7 +497,7 @@ def leaf_stagers(k: int, tile: Sequence[int], circuits: Path, manifest: dict) ->
         raw = desc.read_bytes()
         if hashlib.sha512(raw).hexdigest() != files.get(CR.LEAF_PROGRAMS, {}).get(name):
             raise Refused(f"--circuits' {desc.name} is not the leaf Program the manifest commits ({CR.LEAF_PROGRAMS} {name})")
-        st = FileStager(path, tid, leaf_rows(kind, k, tile), LEAF_OUT_ROWS, LEAF_NAMES[kind])
+        st = file_stager(path, tid, leaf_rows(kind, k, tile), LEAF_OUT_ROWS, LEAF_NAMES[kind])
         if st.pin != files[name]:
             raise Refused(f"{name}'s circuit (SHA-512 {st.pin[:16]}...) is not --circuits' {name} file "
                           f"({files[name][:16]}...), the one the period-open committed")
@@ -549,7 +519,7 @@ def stage_leaves(a: Any, win: dict, k: int, units: list[int], values: dict[str, 
     draw_root = draw.get("root")
     if not isinstance(draw_root, str):
         raise Refused("the window's record names no draw root, under which a leaf's partials are committed")
-    stagers = leaf_stagers(k, lay["tile"], circuits, manifest)
+    stagers = leaf_stagers(k, lay["tile"], circuits, manifest, given(a, "file_stager"))
     plan["leaf_programs"].update({f"{kind}{k}": desc for kind, (_s, _p, desc) in stagers.items()})
     trees = []
     for u in units:
@@ -636,12 +606,12 @@ def stage(a: Any) -> int:
         circuit = (Path(a.circuits) / f"k{k}.circuit.txt").resolve()
         if a.recompose:
             built = work / f"k{k}.circuit.txt"
-            st = stager(k, lay["tile"], lay["m"], built, manifest["bind"])
+            st = given(a, "recomposed")(k, lay["tile"], lay["m"], built, manifest["bind"])
             got = PF.file_sha512(built)
             built.unlink()
         else:
             t = template(k, lay["tile"], lay["m"])
-            st = FileStager(circuit, t.id, HW.statement_rows(t), HW.STATEMENT_OUT_ROWS)
+            st = given(a, "file_stager")(circuit, t.id, HW.statement_rows(t), HW.STATEMENT_OUT_ROWS, NAME)
             got = st.pin
         if got != manifest["files"][f"k{k}"]:
             raise Refused(f"K = {k}'s statement circuit (SHA-512 {got[:16]}...) is not --circuits' k{k} file "
@@ -757,7 +727,8 @@ def check(a: Any) -> int:
 
 def run(cmd: str, a: Any) -> int:
     """``stage``, ``statements`` or ``check`` on `a` (the CLI's arguments, with ``checkpoint_weights`` ``--checkpoint``'s
-    reader and ``verified`` ``check``'s verifier, each None when not given): 0, or 1 with the refusal on stderr."""
+    reader, ``verified`` ``check``'s verifier and ``recomposed`` and ``file_stager`` ``stage``'s stagers, each None when
+    not given): 0, or 1 with the refusal on stderr."""
     try:
         return {"stage": stage, "statements": statements, "check": check}[cmd](a)
     except Refused as e:
@@ -765,4 +736,4 @@ def run(cmd: str, a: Any) -> int:
         return 1
 
 
-__all__ = ["CheckpointWeights", "MANIFEST", "PLAN", "Refused", "Verified", "run"]
+__all__ = ["CheckpointWeights", "FileStagerOf", "MANIFEST", "PLAN", "Recomposed", "Refused", "Stager", "Verified", "run"]

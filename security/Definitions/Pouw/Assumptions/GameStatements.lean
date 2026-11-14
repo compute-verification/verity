@@ -59,7 +59,7 @@ def MilestoneExhaustion : Prop :=
     ∀ U : Workload, U.InDomain D1.m1Domain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary CM, A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (D1.M1Q → D1.M1R) × Salt × (Fin t → Ticket (Wref U.layout) U.layout.N) =>
-          AuditAccepts (correctSet (D1.m1 Wref).toProtocol U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AuditAccepts (correctSet (D1.m1 Wref).toProtocol U x.1 x.2.1 (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - reductionGap Params.gap0 Ωmax) * (1 - εs) * totalWref (D1.m1 Wref).toProtocol U.layout ∧
           ¬ A.Breaks U x.1 x.2.1)
         ≤ (1 - εs) ^ t + δ q U.layout.N
@@ -76,9 +76,9 @@ def Usefulness : Prop :=
     mm k (A + mm r EL ER) (B + mm r FL FR) - mm r (mm k A FL) FR - mm r EL (mm k ER (B + mm r FL FR))
       = mm k A B
 
-/-- **(e2) int32 exactness of the transcript**: with noised operands in `[−127, 126]` (int7 plus noise in
+/-- **(e2) int32 exactness of the trace**: with noised operands in `[−127, 126]` (int7 plus noise in
 `[−63, 63]`) and `k ≤ 133144`, the int32 accumulator equals the exact partial sum, which lies in int32. -/
-def Int32Transcript : Prop :=
+def Int32Trace : Prop :=
   ∀ (k : ℕ) (A B : Mat) (i j : ℕ), k ≤ 133144 →
     (∀ l < k, -127 ≤ A i l ∧ A i l ≤ 126) → (∀ l < k, -127 ≤ B l j ∧ B l j ≤ 126) →
     mmW k A B i j = mm k A B i j ∧ InInt32 (mm k A B i j)
@@ -109,7 +109,7 @@ def Int32Decode : Prop :=
       - mmW r EL (mmW k ER (fun l j' => wrap32 (B l j' + mmW r FL FR l j'))) i j) = mm k A B i j
 
 /-- **(e5) D1's honest reference is complete** on the §3.2 default domain when the factor distribution keeps noise
-in `[−63, 63]`: its int32 checked values equal the exact transcript, and its int32 decode equals `A·B`. -/
+in `[−63, 63]`: its int32 checked values equal the exact trace, and its int32 decode equals `A·B`. -/
 def D1Complete : Prop :=
   ∀ (Q R S : Type) (P : D1.Params Q R S), P.NoiseRange → P.toProtocol.Complete (Layout.ShapesIn Shape.InDefaultDomain)
 
@@ -146,12 +146,12 @@ def MilestoneWref : Prop :=
   D1.m1Omega ≤ 199 / 198 ∧ reductionGap Params.gap0 D1.m1Omega = 14017 / 1644225
 
 /-- **The honest reference is complete and does not win**: for a complete protocol, every unit of the honest
-transcript is correct, and at budget `T = W` the honest reference does not win for `0 ≤ g < 1`. -/
+trace is correct, and at budget `T = W` the honest reference does not win for `0 ≤ g < 1`. -/
 def HonestComplete : Prop :=
   ∀ (Q R S : Type) (P : Protocol Q R S) (D : Layout → Prop) (U : Workload) (H : Q → R) (s : S) (act : ℕ → Mat),
     P.Complete D → U.InDomain D → (∀ u < U.layout.N, ActOK (U.layout.shape u) (act u)) →
-    correctSet P U H s (honestTranscript P H s U act) = range U.layout.N ∧
-    ∀ g : ℝ, 0 ≤ g → g < 1 → ¬ Wins P U g (totalWref P U.layout) (honestTranscript P H s U act) H s
+    correctSet P U H s (honestTrace P H s U act) = range U.layout.N ∧
+    ∀ g : ℝ, 0 ≤ g → g < 1 → ¬ Wins P U g (totalWref P U.layout) (honestTrace P H s U act) H s
 
 /-- **The game can be lost** (non-vacuity in the other direction), for every D1 instance with noise in `[−63, 63]`
 and at most `c` queries per unit on the milestone domain, with `W_ref ≥ Ω·W_mm` for some `Ω ≥ 1`: in the free model

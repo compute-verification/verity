@@ -38,7 +38,7 @@ from verity.protocols.accounting.poub.verifier.session import challengers  # noq
 from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
 from verity.protocols.accounting.poub.verifier.remote_session import verifier_process as VP  # noqa: E402
 from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
-from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
+from test_poub import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 import lean_stands_in  # noqa: E402
 from verity.protocols.accounting.poub.verifier import coins  # noqa: E402
@@ -56,7 +56,7 @@ CIRCUIT = hashlib.sha512(b"verity/remote-bandwidth/v0").hexdigest()
 PINS = [pin_line("d" * 40, "e" * 40, "2026-10-20T08:00:00Z"), pin_line(PIN, "f" * 40, "2026-10-21T00:30:00Z")]
 #: the auditor's first-parent list of main, newest first: both pins on it
 MAIN = ["f" * 40, PIN, "e" * 40, "d" * 40]
-#: the model the store is bound to (`remote_bandwidth.store`'s pin)
+#: the model the store is bound to (`poub.store`'s pin)
 MODEL = {"name": "synthetic-bf16", "checkpoint_sha512": "ab" * 64}
 #: the commit the verifier ran at (`--commit`): main's head
 VERIFIER = MAIN[0]
@@ -496,8 +496,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
     assert not other["credit"]["credited_sessions"] and zero(other)[0][0] == "not credited"
     assert "the one period p-1 committed" in other["sessions"][0]["credit"]["credited"]["reason"]
     for bound, model, why in (
-            (None, MODEL, "the verifier bound the store to no model (verifier.py --model ROLE --checkpoint DIR --pin "
-                          "FILE), so its payload root is the prover's choice"),
+            (None, MODEL, "the verifier holds no checkpoint, so the store's payload root is the developer's choice"),
             (None, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one"),
             (MODEL, None, "no model to bind the store to: the audit's period signs none and no --model-pin names one")):
         unbound = analysed(out, host, sessions, reg, desc, bound=bound, model=model)
@@ -538,8 +537,8 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 
 def test_an_unbound_sessions_line_credits_it_conditional_on_the_developers_store_and_exits_0(host, tmp_path,
                                                                                            monkeypatch, capsys):
-    """A gate run under `BIND=0` (`gate.sh`): its period signs no model (`period-open` without `--model`) and its
-    verifier bound the store to none. `auditor_line.py` prints a line that credits the session on its four checks,
+    """A gate run (`gate.sh`): its period signs no model (`period-open` without `--model`) and its verifier holds no
+    checkpoint. `auditor_line.py` prints a line that credits the session on its four checks,
     conditional on DeveloperStore, printing that the verifier held no checkpoint, so the store's bytes are the
     developer's choice, and why (no model is there to bind the store to), with `"model": null, "bound": false,
     "store": "the developer's choice"` in its JSON, and exits 0."""
@@ -651,7 +650,7 @@ def test_a_session_sampled_four_windows_a_coin_is_credited_by_the_line_of_record
     session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
-    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
+    three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three samples
     (`line.draws_of`), and the Lean verifier's line is line.py's; the skipper, rejected at a receipt, earns none."""
     host.seal(monkeypatch, PINS)
     out = tmp_path / "run"
@@ -998,7 +997,7 @@ def test_the_lines_error_is_the_ledgers_delta_on_gate_runs_8_and_9(run, k):
     sample's rejection it didn't charge: 2^-40 of profile δ, AuditRO's 2^-41 a pass (`UNRECORDED_SLACK_LOG2`, the slack they were charged at),
     which dominates (2^-29.95 over a 60 s session's 2118 passes, 2^-34.39 over a 1 s session's 96), δs, the rest,
     which is the sketch the record charged, n·2^-191 over its n = P windows, and Σ_t k_t/2^64 at the session's samples,
-    which every window drew (2118·48 = 101,664 draws, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
+    which every window drew (2118·48 = 101,664 samples, 2^-47.37; 96·232 = 22,272, 2^-49.56). A record that states its
     slack is split at it: at 140 bits the total is 2^-39.991 over 60 s and 2^-39.998 over 1 s, where it was 2^-39.9995
     and 2^-40.0000 before the rejection."""
     passes, delta, sketch_log2, drawn = GATE_RUNS[run, k]

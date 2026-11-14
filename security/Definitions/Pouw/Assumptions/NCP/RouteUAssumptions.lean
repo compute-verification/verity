@@ -20,7 +20,7 @@ open Finset
 
 variable {Q R S : Type}
 
-/-- **Assumption TT_NCP_U(g₀), tight stacked transcript on route U**, for a bias `β`, a cost model `CM`, NCP's
+/-- **Assumption TT_NCP_U(g₀), tight stacked trace on route U**, for a bias `β`, a cost model `CM`, NCP's
 parameters `P` (the named assumption is its instance at `β = 128`, `CM = M_4090` and `P` with `IsLead`), a domain
 `D`, a target `g₀` and an error `δ(q, N)`: `TTNCP` of route U's protocol `P.toProtocolU β` at `P.d`, with every
 checked-correct unit credited `3·m·k·n`, the work of the stacked product, and no break (`Adversary.Breaks`). Like `TTNCP`, it is claimed only on a domain
@@ -31,7 +31,7 @@ def TTNCP_U (β : ℤ) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM :
   CM.Queries ∧
   ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - g₀) < ∑ u ∈ checkedSet (P.toProtocolU β) U x.1 x.2 (A.transcript U x.1 x.2),
+      T / (1 - g₀) < ∑ u ∈ checkedSet (P.toProtocolU β) U x.1 x.2 (A.trace U x.1 x.2),
         3 * ((U.layout.shape u).Wmm : ℝ) ∧ ¬ A.Breaks U x.1 x.2)
       ≤ δ q U.layout.N
 

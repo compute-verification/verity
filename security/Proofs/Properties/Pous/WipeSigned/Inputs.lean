@@ -9,7 +9,7 @@ import Proofs.Properties.Pous.MemoryChallenger.Inputs
 # What the wipe's hashes read
 
 The wipe's `message` and `recordsRoot` unfolded to the SHA-512 inputs they hash (`message_ok`, `recordsRoot_ok`), the
-session input split back into its header and records root (`session_split`), a batch's value into its batch
+session input split back into its header and records root (`signedWipe_split`), a batch's value into its batch
 (`value_inj`, `batches_inj`), and the wipe's session input told apart from PoUS's by their tags (`tags_differ`).
 -/
 
@@ -144,7 +144,7 @@ theorem message_ok {c : StreamedWipe.Commitment} {e : String} {sm : ByteArray} {
     exact ⟨root, rfl, h.symm⟩
 
 /-- The wipe's session input, with records roots of one width, determines the header and the root. -/
-theorem session_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
+theorem signedWipe_split {h h' r r' : ByteArray} (hr : r.size = r'.size)
     (e : StreamedWipe.SESSION_TAG ++ be64 h.size.toUInt64 ++ h ++ r =
       StreamedWipe.SESSION_TAG ++ be64 h'.size.toUInt64 ++ h' ++ r') :
     h = h' ∧ r = r' := by
