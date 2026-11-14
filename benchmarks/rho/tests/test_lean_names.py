@@ -16,16 +16,15 @@ from importlib import import_module
 from pathlib import Path
 
 import rho
-from rho import lean
+from rho import lean, min_cut
 
 CALCULATOR = Path(rho.__file__).resolve().parents[1]
 #: a dotted name, each part starting with a capital, as a Lean declaration reads
 NAME = re.compile(r"(?:[A-Z][A-Za-z0-9_']*\.)+[A-Z][A-Za-z0-9_']*")
 #: {a cited Lean name no lock lists: why}
 ALLOWED = {
-    "Nci.Cut.Guarantees.HECharged": "stated (security/Definitions/Nci/Guarantees/Cut.lean) and frozen unstated in the "
-                                    "lock's shape: no theorem proves it until the count over a set of blocks it "
-                                    "follows from is proved",
+    min_cut.HE_CHARGED: "stated beside HE and frozen unstated in the lock's shape: no theorem proves it until the count "
+                        "over a set of blocks it follows from is proved",
 }
 
 
@@ -100,9 +99,10 @@ def test_allowed_only_shrinks():
 def test_a_name_no_lock_lists_is_found():
     """The check isn't vacuous: a literal and a composed name no lock lists are found, a listed name, a namespace and
     a dotted string outside the locks' namespaces are not."""
-    names = {"Nci.Cut.Guarantees.HE", "Nci.Assumptions.ThetaRegistered"}
-    src = {"rho/x.py": "A = 'Nci.Guarantees.Nowhere'\nB = 'Nci.Cut.Guarantees.HE'\nC = 'Nci.Cut'\nD = 'Foo.Bar'\n"}
-    got = cited(src, {"rho.x.E": ("Nci.Cut.Guarantees.Composed", "draft:x")}, names)
-    assert got == {"Nci.Guarantees.Nowhere": "rho/x.py:1", "Nci.Cut.Guarantees.HE": "rho/x.py:2",
-                   "Nci.Cut.Guarantees.Composed": "rho.x.E"}
-    assert {n for n in got if n not in names} == {"Nci.Guarantees.Nowhere", "Nci.Cut.Guarantees.Composed"}
+    names = {"Area.Part.Guarantees.Stated", "Area.Assumptions.Named"}
+    src = {"rho/x.py": "A = 'Area.Guarantees.Nowhere'\nB = 'Area.Part.Guarantees.Stated'\nC = 'Area.Part'\n"
+                       "D = 'Other.Name'\n"}
+    got = cited(src, {"rho.x.E": ("Area.Part.Guarantees.Composed", "draft:x")}, names)
+    assert got == {"Area.Guarantees.Nowhere": "rho/x.py:1", "Area.Part.Guarantees.Stated": "rho/x.py:2",
+                   "Area.Part.Guarantees.Composed": "rho.x.E"}
+    assert {n for n in got if n not in names} == {"Area.Guarantees.Nowhere", "Area.Part.Guarantees.Composed"}
