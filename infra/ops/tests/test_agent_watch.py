@@ -3252,6 +3252,8 @@ def test_a_worker_idle_before_its_run_ended_rings_its_coordinator_then_is_relaun
             continue
         ((path, body),) = launch_api.posts
         assert launch_api.keys == [KEY] and path == "/v1/agents" and body["env"] == {"type": "cloud", "name": W.ENV_NAME}
+        assert body["model"] == {"id": "claude-opus-5-5", "params": [{"id": "effort", "value": "high"}]}, \
+            "a worker runs Opus 5.5 at high effort: only leads run Fable 5.2"
         text = body["prompt"]["text"]
         assert "cursor/zk-w1-c7a9" in text and "20261018T1950Z-report-w1.md" in text
         assert body["name"] == "vllm worker ZKS10 (relaunch of 1111)", "a worker's name, never a coordinator's `verity: LANE`"
