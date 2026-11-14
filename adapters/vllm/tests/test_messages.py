@@ -139,3 +139,12 @@ def test_registered_weights_reading_unchanged(tmp_path):
     (tmp_path / "weights_registration.json").write_text(json.dumps(reg, indent=1))
     path = tmp_path / "weights_registration.json"
     assert json.loads(M.read(path, "RegisteredWeights")) == json.loads(path.read_text()) == reg
+
+
+def test_request_program_bytes_unchanged(tmp_path):
+    docs = {"compiled.json": {"refused": "the advice's carry is refused: é"},
+            "manifest.json": {"programs": [{"request": "e0", "descriptor": "descriptor.json.gz"}]}}
+    for name, doc in docs.items():
+        (tmp_path / f"before-{name}").write_text(json.dumps(doc, indent=1) + "\n")
+        M.write(tmp_path / f"after-{name}", "RequestProgram", (json.dumps(doc, indent=1) + "\n").encode())
+        assert (tmp_path / f"after-{name}").read_bytes() == (tmp_path / f"before-{name}").read_bytes()

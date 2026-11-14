@@ -174,7 +174,7 @@ def main() -> int:
         try:
             carry = carry_of(run, a.window, data)
         except ValueError as e:
-            (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+            M.write(out / "compiled.json", "RequestProgram", (json.dumps({"refused": str(e)}, indent=1) + "\n").encode())
             print(f"[advice-compile] the advice's carry is refused: {e}", flush=True)
             return 2
     else:
@@ -202,18 +202,18 @@ def main() -> int:
     try:
         seed = registered_seed(meta)
     except ValueError as e:
-        (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        M.write(out / "compiled.json", "RequestProgram", (json.dumps({"refused": str(e)}, indent=1) + "\n").encode())
         print(f"[advice-compile] the run's default seed is refused: {e}", flush=True)
         return 2
     reg = Registered.of(phi, default_seed=seed, cap_bits=cap)
     try:
         compiled = compile_steps(reg, data, ingress, salt=bytes.fromhex(coin["coin"]) if coin else None, partial=a.partial)
     except Unexpressible as e:
-        (out / "compiled.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        M.write(out / "compiled.json", "RequestProgram", (json.dumps({"refused": str(e)}, indent=1) + "\n").encode())
         print(f"[advice-compile] compile_steps refuses the advice: {e}", flush=True)
         return 2
     summary = compiled.summary()
-    (out / "compiled.json").write_text(json.dumps(summary, indent=1) + "\n")
+    M.write(out / "compiled.json", "RequestProgram", (json.dumps(summary, indent=1) + "\n").encode())
     traces = out if a.window is not None else out / "traces"
     cmds = trace_commands(summary, reg, str(traces), max_model_len=a.max_model_len)
     print(f"[advice-compile] {len(summary['programs'])} request Programs over {sum(u is not None for u in summary['requests'])} "
@@ -235,7 +235,7 @@ def main() -> int:
                "component_digests": sorted(summary["programs"]), "refused": summary.get("refused") or {},
                "carry": {**carry, "idle": [advice.requests[i].id for i in summary["carry"]["idle"]]},
                "comparison": {k: cmp[k] for k in ("equal", "different", "no_trace", "mismatches") if k in cmp}}
-        (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
+        M.write(out / "manifest.json", "RequestProgram", (json.dumps(man, indent=1) + "\n").encode())
         print(f"[advice-compile] {out / 'manifest.json'}: {len(man['requests'])} request Programs", flush=True)
     return 0 if cmp["mismatches"] == 0 else 1
 
