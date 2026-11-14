@@ -527,7 +527,8 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
     (by default ``out``'s sibling ``bandwidth``) and ``bw_private``, then PoUS's on its case, written with
     ``pous.json`` to ``out`` and returned. ``schemes`` and ``protocol`` are the signatures the verifier accepts and the
     id it answers under (a test signer's in tests), ``trusted_sha512`` the challenger key it trusts, ``case_exe`` the
-    run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict. What the sessions kept
+    run protocol's Lean (``pous-run-protocol``), whose answer on the case is then the verdict; without it the Python's
+    reject or undecided stands and its accept is undecided (`period.unjudged`). What the sessions kept
     only for this (`STORE`, `HELD`, the P2 case not yet answered) is removed last, once both answers are written and
     each Lean asked for has answered its case: a call that ended before then, or whose Lean didn't answer or agree,
     can be made again over the same sessions. The session's id is derived again here, from the window's binding
@@ -578,6 +579,8 @@ def answers(serve_dir: Path, window: int, out: Path, *, trusted_sha512: str = TR
         # ru_maxrss is the largest of every child so far, in KiB: the Lean's only where it grew over this call
         lean = {"lean_s": round(time.monotonic() - t, 3), "lean_peak_rss_kib": peak if peak > rss else None}
         _stamp(out, "PoUS's answer by the Lean done")
+    else:
+        inner = period.unjudged(inner)
     row = bytes.fromhex(inner["commitment"])
     hidden = advice.commit([row], 8 * len(row), bind)
     opening = hidden.open(0)

@@ -53,6 +53,8 @@ def _listing(d: Path) -> dict[str, bytes]:
 
 
 def _pous(s, **kw):
+    """`pous_piece` over ``s``, asking `SPT.JUDGE`, the stand-in `SPT._run` serves, unless ``kw`` names an ``exe``."""
+    kw.setdefault("exe", SPT.JUDGE)
     return SC.pous_piece(s.out, schemes=ts.SCHEMES, hf_home=s.hf, device="cpu", pins=[s.pins], **kw)
 
 
@@ -98,6 +100,19 @@ def test_pous_case_is_the_composites_piece_and_its_answer_the_runs(served, tmp_p
     assert _mode(private) == 0o700 and _mode(private / "case.json") == _mode(private / "answer.json") == 0o600
     for secret in (run["published"]["salt"], run["published"]["root"], got["commitment"], case["evidence"][:64]):
         assert secret not in "".join(p.decode() for p in public.values())
+
+
+def test_a_run_with_no_lean_is_undecided_until_the_builders_lean_answers_its_case(served, tmp_path, monkeypatch):
+    """A run with no ``case_exe`` keeps the Python's accept as undecided (`period.NO_JUDGE`); the builder with no ``exe``
+    writes that again, and with a Lean (`SPT.JUDGE`, which answers as the Python) writes the Lean's accept."""
+    answer, _ = SPT._run(served, tmp_path, monkeypatch, case_exe=None)
+    assert answer["verdict"] == "undecided" and answer["reason"] == SC.period.NO_JUDGE
+    SPT._judge(monkeypatch, {})
+    _, got = _pous(served, exe=None)
+    assert got == json.loads((served.private / "run.json").read_text())["answer"] and got["verdict"] == "undecided"
+    _, got = _pous(served)
+    assert got["verdict"] == "accept" and got["public"] == {"certified": False, "eps": "0", "s_bits": 0}
+    assert json.loads((served.private / "answer.json").read_text()) == got
 
 
 @pytest.mark.parametrize("form", ["served", "served_bf16"])

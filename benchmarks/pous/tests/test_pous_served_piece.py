@@ -53,6 +53,8 @@ SOURCE = hashlib.sha512(b"the served piece's salt source").digest()
 ENCODED: dict[tuple[bytes, int, bytes], tuple[bytes, dict]] = {}
 TEST_PROTOCOL = mc.TEST_PREFIX + period.PROTOCOL
 RUN_EXE = "pous-run-protocol"
+#: the PoUS Lean `_run` and `_parts` ask unless a test names its own (`_judge`)
+JUDGE = "pous-run-protocol-stand-in"
 HIDDEN, FFN, LAYERS = 16, 32, 2
 SHAPES = {"self_attn.q_proj": (HIDDEN, HIDDEN), "self_attn.k_proj": (8, HIDDEN), "self_attn.v_proj": (8, HIDDEN),
           "self_attn.o_proj": (HIDDEN, HIDDEN), "mlp.gate_proj": (FFN, HIDDEN), "mlp.up_proj": (FFN, HIDDEN),
@@ -215,8 +217,20 @@ class Auditor:
         return report | {"session_id": sid.hex()}
 
 
+def _judge(monkeypatch, kw: dict) -> None:
+    """``kw`` asking `JUDGE` for PoUS's answer unless it names its own ``case_exe`` (``None``: no Lean), with
+    `period.serve` answering for `JUDGE` as the Lean does of a case the Python decides: the Python's answer."""
+    if "case_exe" in kw:
+        return
+    kw["case_exe"], serve = JUDGE, period.serve
+    monkeypatch.setattr(period, "serve", lambda exe, cases: [
+        SP.SC.pous_answer(c, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL) for c in cases] if exe == JUDGE
+        else serve(exe, cases))
+
+
 def _run(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, host: str = AUDITOR, **kw):
     auditor = auditor or Auditor(tmp_path)
+    _judge(monkeypatch, kw)
     monkeypatch.setattr(CS, "salt", auditor.salt)
     monkeypatch.setattr(CS, "session", auditor.session)
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
@@ -240,6 +254,7 @@ def _parts(s: Served, tmp_path, monkeypatch, auditor: Auditor | None = None, bet
     monkeypatch.setattr(CP, "serve", functools.partial(CP.serve, salts=auditor.salts))
     trusted = kw.pop("trusted_sha512", hashlib.sha512(auditor.signer.public_key).hexdigest())
     card = {k: kw.pop(k) for k in ("rounds", "bw_party", "bw_host", "bw_request") if k in kw}
+    _judge(monkeypatch, kw)
     early = SP.sessions(s.serve, 3, s.out, hf_home=s.hf, device="cpu", node=NODE,
                         party=Side(AUDITOR, ("ssh", AUDITOR, "challenger_party"), ("192.0.2.36", 47610)),
                         private=s.private, pins=[s.pins], protocol=TEST_PROTOCOL, **card)
@@ -265,6 +280,18 @@ def _stamps(out: Path) -> list[str]:
 
 def _public_text(s: Served) -> str:
     return "".join(p.read_text() for p in sorted(s.out.iterdir()))
+
+
+def test_with_no_lean_an_honest_store_is_undecided_and_the_python_is_named(served, tmp_path, monkeypatch):
+    """`answers` with no ``case_exe``: the Python accepts the honest store, and that decides nothing alone, so the
+    answer is undecided with `period.NO_JUDGE`, no public outputs and no profile, the summary naming the Python."""
+    answer, _ = _run(served, tmp_path, monkeypatch, case_exe=None)
+    assert answer["verdict"] == "undecided" and answer["reason"] == period.NO_JUDGE
+    assert answer["public"] is None and answer["profile"] is None
+    assert json.loads((served.private / "run.json").read_text())["answer"]["verdict"] == "undecided"
+    doc = json.loads((served.out / "pous.json").read_text())
+    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
+    assert SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
 
 
 def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served, tmp_path, monkeypatch):
@@ -299,7 +326,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and doc["key_pin"] == "run" and doc["setup"] == CS.SETUP
     assert not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
-    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
+    assert doc["decided_by"] == {"program": JUDGE, "host": socket.gethostname()} and doc["lean_s"] >= 0
     run = json.loads((served.private / "run.json").read_text())
     assert doc["key_sha512"] == hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
     assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
@@ -847,7 +874,8 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
     assert not any((d / f).exists() for d, f in ((private, SP.HB.HELD), (s.private, SP.STORE), (s.private, SP.HELD)))
     assert _stamps(s.out) == [
         "the weights loaded", "setup done", "PoUS's session done", "PoUB's session start", "PoUB's session done",
-        "PoUB's answer done", "PoUS's answer by the Python done", "PoUS's case written"]
+        "PoUB's answer done", "PoUS's answer by the Python done", "PoUS's answer by the Lean done",
+        "PoUS's case written"]
 
     text = "".join(p.read_text() for d in (public, s.out) for p in sorted(d.iterdir()))
     digests = (s.private / "digests.bin").read_bytes()
