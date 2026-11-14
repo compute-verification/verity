@@ -666,7 +666,8 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         from benchmarks.network_traces import warden_serve  # by name, so that the spawned process finds its functions
 
         ws.cs.load_key(key, height)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0)
+        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0,
+                                                  ordinal=0)
         hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
                  "lengths": publisher.lengths}
         public, start = publisher.key, publisher.start
@@ -676,7 +677,7 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
         publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
         hooks, public = {"publish": publisher, "withhold": publisher.withhold,
                          "lengths": ws.crr.Keeper(out, issuer, params, ws.LINK).keep}, signer.public_key()
-        start = ws.start_json(ws.certify_start(issuer, 0, params))
+        start = ws.start_json(ws.certify_start(issuer, 0, 0, params))
     answers = iter(responses)
 
     async def connect():

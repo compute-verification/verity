@@ -311,16 +311,19 @@ entry to it. The start shown is its session's certified start: under the entry's
 period's schedule's parameters digest. And an entry starts as many execution phases after its key's first listed entry
 as its session's signed base is after that entry's session's on the key's life, an execution phase being
 `window · bucket_ms` milliseconds. So a key may be listed there in several sessions. A key's first listed entry is
-held to no other entry: its `start` is the auditor's pin. A signed start says where a session starts on its key's
-life, not where the session before it stopped: a session that ends early loses the rest of its span, and no period
-runs across that hole on one numbering. The clock form's certifier signs no start, so the clock form reads none, and a
+held to no other entry: its `start` is the auditor's pin. A later entry of a key runs the session right after its key's
+entry listed before it: its signed ordinal is that entry's plus one. The key's device state gives each session it
+starts the next ordinal and moves the key's life on by the session's whole span, so a session of the key that no entry
+lists, run between two listed ones, is refused by name, and each of a key's entries before its last has its session's
+whole span as its stretch. A session that ends early has no certificates past where it stopped, and the period's
+execution phases there are refused. The clock form's certifier signs no start, so the clock form reads none, and a
 key's restart there is a new entry under a new key.
 
 Refused by name: no entry; entries out of order; two entries with one start, whose stretches would overlap; one key
 identifier (a key's first 16 bytes) and one session twice; two keys with one key identifier, and in the clock form two
 entries with one; a period that starts before the first entry's stretch; parameters that still name `"key"`,
-`"session"` or `"sessions"`; in the rows form, an entry whose start is not the one its session signed, a shown start
-its session did not certify, and evidence that does not show one start for each listed entry, and in the clock form
+`"session"` or `"sessions"`; in the rows form, an entry whose start is not the one its session signed, an entry whose
+session is not the one after its key's entry listed before it, a shown start its session did not certify, and evidence that does not show one start for each listed entry, and in the clock form
 evidence that shows any; and, at an execution phase, a signer that is a listed key outside its stretch or is not
 listed. `certifierEntries` and `certifierLink` read the entries and the link off the parameters through the period's
 own decoder, for a composition that pins them. The period check reads the inference-only policy's layout check.
@@ -2274,6 +2277,8 @@ prompt ids and a size of ids released, each a power of two.
     length in bytes are the schedule's whatever the load.
   - **The work under form 2** of laying and committing an execution phase's tables follows its counts, and so may
     the time its head is signed and published. Nothing here charges the counts or that time to a bound.
+  - **A run keeps the registration on its private side** under either form, and the auditor's gate publishes its
+    certificate alone.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. So do the request words, where a schedule has them: one without them
@@ -2373,13 +2378,14 @@ key (`certificate.DeviceState`): the key's life so far, in milliseconds on the n
 of the sessions started under it.
 - A run holds the state's lock from before its first tick until its publisher has closed, so a key has one run at a
   time; a second is refused.
-- A session's base is the key's life when it starts. The state is moved on by the session's whole span, its
-  execution phases of T ticks each, and written through to disk before the base is signed, so a crash loses that
-  time and no later session reuses it. A session id already started is refused.
+- A session's base is the key's life when it starts, and its ordinal the number of sessions started under the key
+  before it. The state is moved on by the session's whole span, its execution phases of T ticks each, and written
+  through to disk before the base is signed, so a crash loses that time and no later session reuses it or its
+  ordinal. A session id already started is refused.
 - The network certifier then signs the start's certificate (`certificate.CertifiedStart`): a certificate of the
-  link's start name (`<link>-origin`), egress, window 0, over a tagged digest of the base and the schedule's
-  parameters digest. It is signed before the origin is set and is public (`deployment.json`'s `start`).
-- The start's tag says which clock the session's ticks are read on: `verity-network-certifier/start/v1` means the
+  link's start name (`<link>-origin`), egress, window 0, over a tagged digest of the base, the ordinal and the
+  schedule's parameters digest. It is signed before the origin is set and is public (`deployment.json`'s `start`).
+- The start's tag says which clock the session's ticks are read on: `verity-network-certifier/start/v2` means the
   host's raw clock, and a device whose ticks read any other clock signs its starts under another tag. The digest
   names no clock, and that a device's ticks read the clock its tag means rests on `trusted-host`. A device that
   signs no start is refused by a check that requires the session's certified start.
@@ -2510,7 +2516,8 @@ signer (`Issuer.sign`: the certifier message for the key, the session and the ex
 record's own certificate of that execution phase signs its salted record digest, so neither verifies as the other.
 
 **The registration** (`registration`, `verity-network-warden/registration/v2`) is the head, the rows' format and order
-(`layout`: T, S, r and the first bucket w·T) and the certificate, as one public JSON object. `check_registration` is
+(`layout`: T, S, r and the first bucket w·T) and the certificate, as one JSON object. A run keeps it on its private
+side: the auditor's gate publishes its certificate alone, and the wiring is private. `check_registration` is
 the verifier's read of it: every field but the wiring's digest and the root is the one the schedule and the
 execution phase give, and the certificate verifies over the head under the network certifier's key in the session.
 
