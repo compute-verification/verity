@@ -21,10 +21,6 @@ CODES = {
 }
 
 
-class DeadGateWarning(UserWarning):
-    """Authoring-mode warning: the exported program has gates no gate or root output consumes (§8.6)."""
-
-
 class FrontendError(Exception):
     def __init__(self, code: str, message: str, where: str | None = None) -> None:
         assert code in CODES, code
@@ -32,4 +28,4 @@ class FrontendError(Exception):
         super().__init__(f"{code}{' @ ' + where if where else ''}: {message}")
 
 
-__all__ = ["CODES", "DeadGateWarning", "FrontendError"]
+__all__ = ["CODES", "FrontendError"]

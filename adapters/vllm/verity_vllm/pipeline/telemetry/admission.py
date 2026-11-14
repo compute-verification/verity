@@ -32,9 +32,12 @@ from verity_vllm.engine.profiles.admission_calibration import (
     MODELS,
     uncalibrated_model_note,
 )
+from verity_vllm.records.schema_ids import ADMISSION_PLAN_SCHEMA
+
+__all__ = ["CALIBRATION", "predict", "request_prompt_len", "row_config_from_workload"]
 
 MiB = 1 << 20
-SCHEMA = "verity/admission-plan/v1"
+SCHEMA = ADMISSION_PLAN_SCHEMA
 
 
 #: the value families `--retain-exclude hidden_m1` names (native_collect.retain_exclude_families): the attention launch's

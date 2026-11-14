@@ -91,7 +91,7 @@ name = "Properties"
 roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "Properties.Pouw.LiveSalt",
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
-  "Properties.Pouw.Credit", "Properties.Pouw.Lead.Commit", "Properties.Pouw.Lead.V2", "Properties.Pouw.PearlPlus",
+  "Properties.Pouw.Credit", "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlusDraw", "Properties.Pouw.PearlPlus.Witnesses", "Properties.Nci", "Properties.Nci.Threads",
   "Properties.NetworkCertifier.Device", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
