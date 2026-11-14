@@ -12,6 +12,7 @@ network-certifier -> verifier   out-record {link, window}, the output value's re
                                 registration {link, window}, the link-window's rows' registration its body
                                 load {}, the load's signed registrations its body
                                 deployment {}, the run's key, session, schedule and origin its body (structure)
+                                groups {}, a grouped run's requests and execution phases its body (structure)
 ~~~
 
 - **The network certifier** (`NETWORK_CERTIFIER`) is the auditor's device on a server's link, one a link. Its machine
@@ -47,6 +48,8 @@ The device's run hands out the rest, each a message of its kind on the same two 
 - ``deployment`` carries ``deployment.json`` as the check reads it: the device's public key and session, the schedule's
   parameters and their digest, the windows, the origin and the run id. It is protocol structure, so public. It holds no
   address: where the device listened and what it relayed to are a local file beside it, which no party is handed.
+- ``groups`` carries a ``--window-per-group`` run's ``groups.json``: each group's request indices and its execution
+  phases, which the schedule and the requests' public counts fix. Protocol structure, so public.
 - ``records`` carries one of a link-window's three records (``record``: ``requests``, ``responses`` or ``fails``), packed
   as the device keeps it, and ``cells-salts`` the link-window's rows' salts and the wiring's (`warden_rows.read_witness`).
   Both are the prover's witness: private.
@@ -71,7 +74,7 @@ VERSION = 1
 NETWORK_CERTIFIER, WORKERS, VERIFIER = "network-certifier", SP.WORKERS, SP.VERIFIER
 OUT_OPENING, OUT_RECORD = "out-opening", "out-record"
 CERTIFICATE, REGISTRATION, LOAD, RECORDS, CELLS_SALTS = "certificate", "registration", "load", "records", "cells-salts"
-DEPLOYMENT = "deployment"
+DEPLOYMENT, GROUPS = "deployment", "groups"
 #: a link-window's three records, by the name its ``records`` message's head gives
 RECORD_NAMES = ("requests", "responses", "fails")
 #: a frame's largest body (`channel.HEADER`: a u32 length) in whole salts: the most rows one opening carries
@@ -91,7 +94,7 @@ MANIFEST = Manifest(
     parties=(Role(NETWORK_CERTIFIER, "auditor", per="link", needs=("clock", "coins", "signing-key")),
              SP.MANIFEST.role(WORKERS), SP.MANIFEST.role(VERIFIER)),
     channels=(Channel(NETWORK_CERTIFIER, WORKERS, (OUT_OPENING, RECORDS, CELLS_SALTS)),
-              Channel(NETWORK_CERTIFIER, VERIFIER, (OUT_RECORD, CERTIFICATE, REGISTRATION, LOAD, DEPLOYMENT))),
+              Channel(NETWORK_CERTIFIER, VERIFIER, (OUT_RECORD, CERTIFICATE, REGISTRATION, LOAD, DEPLOYMENT, GROUPS))),
     messages=(Schema(OUT_OPENING, 1, "private", _HEAD, Body(max=MAX_OPENING, unit=O.SALT_BYTES)),
               Schema(OUT_RECORD, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
               Schema(RECORDS, 1, "private", _HEAD | {"record": Str(9, "|".join(RECORD_NAMES))}, Body(max=MAX_PACKED)),
@@ -99,8 +102,9 @@ MANIFEST = Manifest(
               Schema(CERTIFICATE, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
               Schema(REGISTRATION, 1, "commitment", _HEAD, Body(max=MAX_RECORD)),
               Schema(LOAD, 1, "commitment", {}, Body(max=MAX_LOAD)),
-              Schema(DEPLOYMENT, 1, "structure", {}, Body(max=MAX_RECORD))))
+              Schema(DEPLOYMENT, 1, "structure", {}, Body(max=MAX_RECORD)),
+              Schema(GROUPS, 1, "structure", {}, Body(max=MAX_RECORD))))
 
-__all__ = ["CELLS_SALTS", "CERTIFICATE", "DEPLOYMENT", "ID", "LOAD", "MANIFEST", "MAX_LOAD", "MAX_OPENING", "MAX_PACKED",
+__all__ = ["CELLS_SALTS", "CERTIFICATE", "DEPLOYMENT", "GROUPS", "ID", "LOAD", "MANIFEST", "MAX_LOAD", "MAX_OPENING", "MAX_PACKED",
            "MAX_RECORD", "MAX_SALTS", "NETWORK_CERTIFIER", "OUT_OPENING", "OUT_RECORD", "RECORDS", "RECORD_NAMES", "REGISTRATION",
            "VERIFIER", "VERSION", "WORKERS"]
