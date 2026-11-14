@@ -1,4 +1,4 @@
-# rho: the slowdown's lower bound on training
+# The slowdown calculator: the slowdown's lower bound on training
 
 This package computes, for each scenario and monitoring period, a lower bound on the **slowdown** a training run pays
 under the regime: `overhead(𝒢, 𝒜′, η)` (`GLOSSARY.md`, Notation), the training cost over the admissible set
