@@ -45,7 +45,7 @@ from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
-from verity.commitments.windows import interface as I
+from verity.commitments.periods import interface as I
 from verity.definitions.registry import dead_free as DF
 
 from verity_vllm.pipeline.tp import grain as G

@@ -33,7 +33,7 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.circuits.refs import Strided, runs
 from verity.commitments import randomness as RND
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 
 from .node_window import PEERS, STAND_IN, WEIGHTS, NodeWindow, _family
 from .node_window_join import Joined
@@ -289,7 +289,7 @@ class Tables:
             return got
         from verity.protocols.proofs.spot.verifier.one_stage import registered as G
         from verity_vllm.pipeline import expert_rows as XR
-        from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
+        from verity.protocols.accounting.pouw.prover.serving import registered_commit
 
         t = self.by[name]
         m = _TABLE.match(t.param)
@@ -312,7 +312,7 @@ class Tables:
                 rows = XR.table_words(stack.view("<u4"), "ws", E, A, Bd, 1, 0, b)
         if rows.shape != (t.rows, t.words):
             raise ValueError(f"table {name}: {rows.shape} words, not ({t.rows}, {t.words})")
-        got = self.held[name] = H1R.commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
+        got = self.held[name] = registered_commit(self.program, t.param, rows, self.key, len(self.held), keep_rows=True,
                                            schema=G.SCHEMA_SEG)
         return got
 

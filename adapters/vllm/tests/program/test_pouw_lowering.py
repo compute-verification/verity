@@ -29,7 +29,7 @@ from verity.definitions.numerics.serve3_reference import materialize
 from verity.definitions.registry import b1, pouw_rows
 
 from verity_vllm.check.replay import pouw_circuit as RC
-from verity_vllm.program.frontend.derive import derive_report
+from verity_torch.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,

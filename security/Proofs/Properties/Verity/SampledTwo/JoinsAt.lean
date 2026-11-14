@@ -92,6 +92,9 @@ accepted play on two windows shows its sessions' order (`firstReads`, `orderShow
   held copies of the case kept on the plays with no such collision (`heldOfAt_goodCase`); with them it gives the parts
   at each such play's replay sample (`partsHeldAt_of_accepts`).
 * **The instance's** (`wiring`, `caseIsSent`, `caseCommits`, `stmtX`, `signer`).
+* **Round 2's check is the one the join reads** (`sampledNone`): no accepted play's run has a statement of only its
+  part's sampled proof blocks, so the run's `SecondStage.checkAny` is `SecondStage.check` (`checkAny_eq_check`). The
+  theorems over the form's accept take it as an instance (`Fact (SampledNoneAt C)`), which `joinedOfLaw` makes of it.
 
 Every field is over the form's accept, so the theorem says nothing about a run of record until the form accepts a
 play. `CoinStages.lean` is COINMAP's, read here at the head the join holds. At the deployed
@@ -137,6 +140,12 @@ theorem accepts_of_form {C : CaseOf} (hC : CaseIsSent C) {o : Verity.Exchange} (
 theorem caseIsSent_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h : CaseIsSent C) :
     CaseIsSent (goodCase C G) :=
   fun o k p cm e hk hd => h o k p cm e (goodCase_some hk).2 hd
+
+/-- `SampledNoneAt` at the case kept on the plays `G` holds of, from it at the case. -/
+theorem sampledNoneAt_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (h : SampledNoneAt C) :
+    SampledNoneAt (goodCase C G) :=
+  fun o i it ha hi hit =>
+    h o i it (formAccepts_goodCase.1 ha).1 ((inputOn_goodCase (formAccepts_goodCase.1 ha).2).symm.trans hi) hit
 
 /-- **The cut reads a log of every play the form accepts the kept case on**, where `G` says it read one. -/
 theorem cutReads_goodCase {C : CaseOf} {G : Verity.Exchange → Prop} (hG : ∀ o, G o → LogRead o) :
@@ -293,6 +302,10 @@ structure JoinsAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live
   stmtX : stmtOf c = some x
   /-- The vocabulary's signer is the deployment's. -/
   signer : V.signer θ = P.signer fs₁ fs₂ cut θ
+  /-- No accepted play's run has a statement of only its part's sampled proof blocks (`SampledNoneAt`), so round 2's
+  check the run makes (`SecondStage.checkAny`) is the `SecondStage.check` the join reads (`checkAny_eq_check`). Taken
+  as a hypothesis until the join's pieces read `checkAny`'s own pass (`checkAny_ok`). -/
+  sampledNone : SampledNoneAt C
 
 /-- **The projection's bound at the form's accept, from the coin map's distribution**: `joined` at the form's acceptance,
 `JoinGood` with no collision of the play's blobs with the registered files, and the run's locator, at the cut's terms
@@ -311,6 +324,7 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
         joinMiss V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg q +
         (terms V (Sessions.devOf P fs₁ fs₂ cut) θ F c σ +
           ENNReal.ofReal ((blobFinder V θ F c σ (V.registered θ)).Pr Verity.sha512Msg))) := by
+  haveI : Fact (SampledNoneAt C) := ⟨h.sampledNone⟩
   have hG : ∀ o, JoinGood o → LogIsDevice o ∧ CoinMap.FreshWide o.log := fun o hg => ⟨hg.1.2, hg.2⟩
   have hLs : ∀ pre i s c' b, CoinMap.stageLocate ℓ₁ ℓ₂ pre (.opening i s c') b = none :=
     fun _ _ _ _ _ => rfl
@@ -388,6 +402,8 @@ theorem joinedOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     cutBound_avoid (V.registered θ) hCut₀
   -- The run of record's accept, at the case kept on the plays whose blobs don't collide with the registered files.
   have hHeld : HeldOfAt A (goodCase C (NoCollide (V.registered θ))) := heldOfAt_goodCase h.heldOfAt
+  haveI : Fact (SampledNoneAt (goodCase C (NoCollide (V.registered θ)))) :=
+    ⟨sampledNoneAt_goodCase h.sampledNone⟩
   have hParts : PartsHeldAt A (goodCase C (NoCollide (V.registered θ))) :=
     partsHeldAt_of_accepts hHeld (partsSizedAt_of_formAccepts hHeld)
   have hReached : ReachedAccepts A x

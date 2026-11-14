@@ -38,7 +38,7 @@ from tests.pipeline.test_build_ir_record import _write
 from tests.pipeline.test_vu_export import _world
 from verity_vllm import gc_tuning
 from verity_vllm.check.replay import driver as SR
-from verity_vllm.correspondence.runtime import NAMESPACE as CORRESPONDENCE
+from verity_torch.correspondence.runtime import NAMESPACE as CORRESPONDENCE
 from verity_vllm.pipeline import build as B
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import global_program as GP

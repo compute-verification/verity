@@ -6,23 +6,25 @@ one, '<mixed>' when the layers disagree (both are mismatches against a declarati
 """
 from __future__ import annotations
 
+from typing import Any
+
 #: the arm an exact-int8 linear method or attention impl reports (`int8_arm`): steps.py's plain int8 linear, the LUT-softmax attention
 INT8_ARM = "plain"
 
 
-def fp8_block_gemm_kernel_of(model) -> str | None:
+def fp8_block_gemm_kernel_of(model: Any) -> str | None:
     """The block-scaled FP8 linear kernel class the instantiated model carries: the class name of
     `<layer>.quant_method.fp8_linear` (vLLM `Fp8LinearMethod`), one value over all FP8 linear layers."""
     return _one_name({type(k).__name__ for k in _quant_attrs(model, "fp8_linear")})
 
 
-def moe_experts_class_of(model) -> str | None:
+def moe_experts_class_of(model: Any) -> str | None:
     """The experts class of every fused-MoE layer: `<layer>.quant_method.experts_cls` (vLLM's `Fp8MoEMethod` and
     `UnquantizedFusedMoEMethod`), one name over all layers."""
     return _one_name({getattr(c, "__name__", repr(c)) for c in _quant_attrs(model, "experts_cls")})
 
 
-def int8_exact_of(model) -> str | None:
+def int8_exact_of(model: Any) -> str | None:
     """The int8 scope the layers run (`TargetProfile.INT8_EXACT_SCOPES`): which of the linears (`quant_method.int8_arm` of every
     module whose quant_method is a vLLM linear method or fused-MoE method, a class named `LinearMethodBase` or
     `FusedMoEMethodBase` in its MRO, but the MoE routers, `routers`, and the linears the checkpoint keeps bf16, `kept`) and the
@@ -38,7 +40,7 @@ def int8_exact_of(model) -> str | None:
     return {("linears",): "linears", ("attention",): "attention", ("linears", "attention"): "all"}.get(tuple(parts))
 
 
-def int8_k_scales_of(model) -> dict[str, list[int]]:
+def int8_k_scales_of(model: Any) -> dict[str, list[int]]:
     """{layer_name: the K scales as float32 bit patterns, one per KV head} of every attention layer whose impl carries them
     (`engine.int8_attention_vllm.Int8AttentionImpl.k_scale_bits`)."""
     out = {}
@@ -50,11 +52,11 @@ def int8_k_scales_of(model) -> dict[str, list[int]]:
     return out
 
 
-def is_attention_impl(obj) -> bool:
+def is_attention_impl(obj: Any) -> bool:
     return obj is not None and any(c.__name__ == "AttentionImpl" for c in type(obj).__mro__)
 
 
-def applied_kernels(profile, model) -> dict:
+def applied_kernels(profile: Any, model: Any) -> dict:
     """The kernel read-backs `profile_mismatches` judges: the FP8 linears' always, the experts class under a declared `moe_backend`,
     the int8 scope under a declared `int8_exact`."""
     out = {"fp8_block_gemm_kernel": fp8_block_gemm_kernel_of(model)}
@@ -65,7 +67,7 @@ def applied_kernels(profile, model) -> dict:
     return out
 
 
-def routers(model) -> set[int]:
+def routers(model: Any) -> set[int]:
     """The ids of the MoE routers: each linear module (a quant method with a class named `LinearMethodBase` in its MRO) built
     with no quantization config (``quant_config`` None) whose ``output_size`` is the expert count of a MoE layer (a module
     with ``routed_experts``) it sits beside (a child of the same module) or that the layer holds as its ``gate``.  A router
@@ -87,7 +89,7 @@ def routers(model) -> set[int]:
 FUSED_UNPACKED = {"wk_weights_proj": ["wk", "weights_proj"]}
 
 
-def kept(model) -> set[int]:
+def kept(model: Any) -> set[int]:
     """The ids of the linears the checkpoint's ``modules_to_not_convert`` keeps bf16: each module whose linear method says
     so (``int8_kept``, `engine.int8_vllm.Int8KeptLinearMethod`), and each linear the model builds with no quantization config
     (``quant_config`` None, so no quantization method reaches it: vLLM's ``DeepseekV32Indexer.wk_weights_proj``) whose every
