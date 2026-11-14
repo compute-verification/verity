@@ -338,6 +338,27 @@ def memory_gb(root: Path = Path("/")) -> int:
     return max(0, min(left)) >> 30 if left else 0
 
 
+def slice_gib(root: Path = Path("/")) -> int | None:
+    """The least cgroup v2 memory.max over this process's cgroup and those over it (the limits `memory_gb` counts down from:
+    the user slice's on a VM), in whole GiB rounded down; None where none sets one. A check whose ask is over it never finds
+    that much free here (`blocked`), so check.py places no such shard on the machine."""
+    try:
+        own = [ln[3:].strip("/") for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::")]
+    except OSError:
+        own = []
+    top, limits = root / "sys/fs/cgroup", []
+    if own:
+        d = top / own[0]
+        for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
+            try:
+                m = (c / "memory.max").read_text().strip()
+            except OSError:
+                continue
+            if m.isdigit():
+                limits.append(int(m))
+    return min(limits) >> 30 if limits else None
+
+
 #: the run states that end a research.mem reservation (research.mem's TERMINAL)
 ENDED = ("done", "failed", "cancelled")
 
