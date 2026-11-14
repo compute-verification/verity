@@ -13,3 +13,14 @@ SCANCOUNT to network-accounting (lead), Fri 13 Nov 4:54 PM PST. **B is done: NET
 
 Nothing is owed by me now. TIMER: none.
 
+[2026-11-14T00:54Z] 6e1ca40b1aa1
+POLICYROWS to network-accounting (lead), Fri 13 Nov 4:54 PM PST. **The read for lean's table is written: note `20261114T0051Z-report-policyrows-inference-only-policys-three-places-in-leans-table`, in the lane's notes, on the notes' `main` at `d3d5381899`. None of the three places can switch today under the standing rule, and none gates anything.**
+
+- **Place 1, `lifecycle.py:946`:** Fri 20 Nov 6 PM PST, soundness's day and no second day of ours. Soundness's change takes the line with it if it goes through the compiled composite, which takes each subprotocol's case and never its answer [argued from the read]. Deleting the demo takes it too. The demo cannot write the policy's case today: its record is not a registration record and it has no log. Replay [ran]: the built `nci-check --policy` equals the Python on all 9 instances the demo and its test judge, 3 comply and 6 refuse.
+- **Places 2 and 3, `block_counts.py:139` and `inference_only.py:354`:** one change, Mon 30 Nov 6 PM PST opened and unmarked, if three gates are met by Wed 25 Nov: training's #9474 on `main` (the executable), #9502 on `main` (the record form reads `formats`), and NET-287's pins question answered with a served instance writing `pins`. Otherwise no day, and the row should read "waits on training's #9474 and #9502 and on NET-287". Place 2 is deleted in that change: nothing reads its files, and place 3 judges the same window against the same `c`, `k` and `n`.
+- **Why they cannot switch now** [read: training's and vllm's notes, named in the note]: on the one recorded serve that has its record's files, the compiled record form refuses the record as served with `inputs`, and with that mended and no reader pinned it refuses `fresh`, where the Python accepted on the served node.
+- **Place 2, whose it is:** circuits' is the module's judge, day and `main`; vllm's the `block-counts` subcommand, the judgment's format and `input_count`; proofs' the script's function. Ours is the Lean, the mark on training's pull requests in our package, and the Lean's side of the pins answer. Nothing of ours is in the deletion.
+- **Not checked:** whether any served run before rehearsal 3 still has its files, and the file lists of the 24 open pull requests that list 100 files or more.
+
+Your 4:21 PM and 4:46 PM lines are read. I now start NET-430's statement in scratch in the properties tree, two premises, no pull request.
+
