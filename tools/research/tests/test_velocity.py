@@ -37,6 +37,68 @@ def offline(monkeypatch, tmp_path):
     monkeypatch.setattr(V, "pod", no_pod)
     monkeypatch.setattr(V, "landing", no_landing)
     monkeypatch.setattr(V, "read_asks", lambda now: pytest.fail("a window that ended is not read from Linear"))
+    monkeypatch.delenv("STORE_PRIVATE_READER_URL", raising=False)
+
+
+def machine(monkeypatch, tmp_path: Path, name: str) -> Path:
+    """`name`'s own store, on the one bucket every machine pushes to: what `open_store()` opens from here on."""
+    cfg = tmp_path / "store.toml"
+    cfg.write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "bucket"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(cfg))
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / name))
+    return tmp_path / name
+
+
+def build_index(tmp_path: Path, store: Path) -> None:
+    """`research data index` of the bucket, built where `store`'s machine reads it (`bucket_index.default_path`)."""
+    from research.store import bucket_index as BI
+    from research.store.remote import FsRemote
+
+    assert BI.index(FsRemote(tmp_path / "bucket"), BI.default_path(store), now=NOW)["errors"] == []
+
+
+def test_every_dump_in_the_store_is_known_from_its_index_whatever_machine_saved_it(offline, monkeypatch, tmp_path, capsys):
+    machine(monkeypatch, tmp_path, "pod")
+    art, why = V.save(goals(A), NOW - timedelta(hours=6))
+    assert art and why == ""
+    here = machine(monkeypatch, tmp_path, "vm")                 # another machine: its own store has never held the dump
+    build_index(tmp_path, here)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW - timedelta(hours=6): art}
+    assert [n for n in notes if "index" in n] == [f"the store's dumps were found from its index ({here / 'index.sqlite'}, "
+                                                  "complete as of 2026-11-10T02:00:00Z) and this machine's store"]
+    assert V.main(["--since", "2026-11-09T12:00-08:00", "--to", str(B), "--json"], now=NOW) == 0
+    r = json.loads(capsys.readouterr().out)
+    assert r["dumps"]["earlier"]["source"] == art and r["goals"]["hand"]["window"]["finished"] == 1
+
+
+def test_without_the_index_the_dumps_are_this_machines_stores_and_the_reading_says_so(offline, monkeypatch, tmp_path):
+    machine(monkeypatch, tmp_path, "pod")
+    elsewhere, _ = V.save(goals(A), NOW - timedelta(hours=6))
+    machine(monkeypatch, tmp_path, "vm")
+    mine, _ = V.save(goals(B), NOW)
+    notes: list[str] = []
+    assert V.known_dumps(notes) == {NOW: mine} and elsewhere != mine
+    assert [n for n in notes if "index" in n] == ["the store's index not read: $STORE_PRIVATE_READER_URL is unset and this machine "
+                                                  "has no `research data index` build: the store's dumps are this machine's "
+                                                  "store's alone"]
+
+
+def test_two_saves_of_one_copy_are_one_dump_in_the_store_and_one_known_dump(offline, monkeypatch, tmp_path):
+    from research.store import bucket_index as BI
+
+    here = machine(monkeypatch, tmp_path, "pod")
+    taken = NOW - timedelta(hours=6)
+    first = V.save(goals(A), taken)                                  # the hourly sweep's save of its copy
+    again = V.save(goals(A), taken + timedelta(seconds=40))          # a person's save of that copy, read within the minute
+    assert first == again and first[1] == ""
+    build_index(tmp_path, here)
+    idx = BI.reader(here)
+    try:
+        assert [i for i, _ in BI.select_artifacts(idx, kind=V.KIND)] == [first[0]]
+    finally:
+        idx.close()
+    assert V.known_dumps([]) == {taken: first[0]}
 
 
 def test_what_finished_and_what_moved_between_two_dumps_by_scope():

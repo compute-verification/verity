@@ -27,9 +27,11 @@ with its source:
 A DUMP is a file or an `art:` id. The later one is the page as it is now, which the command puts in the store (a
 `goals-dump/v1`, preserved) and names, so the next reading compares with a preserved copy; --to gives another, and with
 --until, a past time, it is the newest known dump at or before then. The earlier one is the newest known dump at or before
---since (--from gives another, and the window then starts when it was taken). A known dump is one this machine's store
-holds, one the hourly sweep saved on the control pod (infra/control/top_watch.py), or one `velocity.json` names; that file
-names the baseline too. A dump taken up to SLACK_S after a time stands for it. --no-save puts nothing in the store.
+--since (--from gives another, and the window then starts when it was taken). A known dump is one the store's index lists
+(whatever machine put it in the store: the hourly sweep on the control pod, infra/control/top_watch.py, puts each hour's),
+one this machine's store holds, one the sweep saved on the pod, or one `velocity.json` names; that file names the baseline
+too. Where the index can't be asked, the store's dumps are this machine's store's, and a note says so. A dump taken up to
+SLACK_S after a time stands for it. --no-save puts nothing in the store.
 --line prints the reading as one line for a chat, --json all of it.
 """
 from __future__ import annotations
@@ -229,25 +231,55 @@ def load(spec: str) -> dict:
     return {"goals": goals, "taken": taken, "source": spec}
 
 
+def open_index():
+    """The store's index (`bucket_index.reader`), or Unread saying why it can't be asked from here."""
+    from .store import bucket_index as BI
+
+    if (idx := BI.reader(open_store().root)) is None:
+        raise Unread(f"${BI.READER_ENV} is unset and this machine has no `research data index` build")
+    return idx
+
+
+def indexed_dumps(notes: list[str]) -> dict[datetime, str]:
+    """Every dump in the store, from its index, which lists the bucket whatever machine put each one there."""
+    from .store import bucket_index as BI
+
+    idx = open_index()
+    try:
+        got = {when(d["meta"]["taken"]): i for i, d in BI.select_artifacts(idx, kind=KIND)}
+        notes.append(f"the store's dumps were found from its index ({idx.describe()}, complete as of "
+                     f"{BI.as_of(idx) or 'never listed'}) and this machine's store")
+    finally:
+        idx.close()
+    return got
+
+
 def known_dumps(notes: list[str]) -> dict[datetime, str]:
-    """Each known dump by when it was taken: the ones `velocity.json` names, the ones this machine's store holds, and the
-    ones the hourly sweep saved. A source that can't be read is named in `notes`."""
-    out = {when(taken): art for art, taken in json.loads(DATA.read_text())["dumps"].items()}
-    for what, read in (("this machine's store", lambda: {when(a["manifest"]["meta"]["taken"]): a["id"]
-                                                         for a in open_store().index.select_artifacts(kind=KIND)}),
-                       ("the sweep's dumps", lambda: {when(m[1]): f"sweep:{m[0]}" for name in
+    """Each known dump by when it was taken, one a minute: the ones the hourly sweep saved on the control pod, the ones
+    `velocity.json` names, the store's (its index's, and this machine's store's, which holds what the index hasn't listed
+    yet, and alone answers when the index can't be asked), a dump in the store taking a minute's place over a file on the
+    pod. Which sources answered, and why one didn't, is said in `notes`."""
+    out: dict[datetime, str] = {}
+    for what, read in (("the sweep's dumps", lambda: {when(m[1]): f"sweep:{m[0]}" for name in
                                                       pod(f"ls {SWEEP_GOALS} 2>/dev/null; true").split()
-                                                      if (m := DUMP_NAME.fullmatch(name))})):
+                                                      if (m := DUMP_NAME.fullmatch(name))}),
+                       ("velocity.json", lambda: {when(taken): art for art, taken in json.loads(DATA.read_text())["dumps"].items()}),
+                       ("the store's index", lambda: indexed_dumps(notes)),
+                       ("this machine's store", lambda: {when(a["manifest"]["meta"]["taken"]): a["id"]
+                                                         for a in open_store().index.select_artifacts(kind=KIND)})):
         got = row(read)
         if "not_read" in got:
-            notes.append(f"{what} not read: {got['not_read']}")
+            notes.append(f"{what} not read: {got['not_read']}" + (": the store's dumps are this machine's store's alone"
+                                                                  if what == "the store's index" else ""))
         else:
             out.update(got)
     return out
 
 
 def save(goals: list[dict], taken: datetime) -> tuple[str | None, str]:
-    """The dump put in the store and pushed to its remote: its `art:` id, and why it isn't preserved there ('' when it is)."""
+    """The dump put in the store and pushed to its remote: its `art:` id, and why it isn't preserved there ('' when it is).
+    The artifact is a function of `goals` and `taken`'s minute alone (its file's bytes and name, and meta naming no caller), so
+    every save of one copy, the hourly sweep's and a person's, is the one `art:` id."""
     from .store.local import StoreError
 
     stamp = f"{taken.astimezone(UTC):{STAMP}}"
