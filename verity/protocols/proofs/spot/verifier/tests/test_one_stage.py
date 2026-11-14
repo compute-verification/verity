@@ -439,7 +439,7 @@ def test_the_record_states_the_one_profile_in_its_recorded_bytes():
     d = {"law": "subset", "population": 6, "k": 2, "units": [1, 4]}
     r = audit.audit_record(rec, R.receipt(rec, "verifier-test"), d, LAW, [1, 4], 2, {}, {"lean": lean}, 0.25)
     assert json.dumps([r["profile"], r["wrong_units"]]) == json.dumps(list(_v0(rec, d, 0.25)))
-    prog, q, rule, srec = _stratified_registration()
+    prog, q, rule, srec = _stratified_docket()
     design = D.derive(prog, q, rule)
     sd = {"law": "stratified", "population": 6, "k": 4, "strata": design["strata"], "units": [1, 3, 4, 5]}
     r = audit.audit_record(srec, R.receipt(srec, "verifier-test"), sd, design, [1, 3, 4, 5], 4, {}, {"lean": lean}, 0.25)
@@ -607,7 +607,7 @@ def test_derive_expands_the_rule_over_the_verifiers_program():
         D.derive(prog, P.template_instance_query(PAIR.id), law)
 
 
-def _stratified_registration():
+def _stratified_docket():
     prog = P.mixed_population_program([(XOR3, 2), (PAIR, 3), (XOR3, 1)])
     q = P.template_instances_query([PAIR.id, XOR3.id])
     ports = _ports(prog, q, 6)
@@ -617,7 +617,7 @@ def _stratified_registration():
 
 
 def test_r1_holds_the_registered_strata_to_the_verifiers_own():
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     assert rec["law"]["law"] == "stratified" and [s["k"] for s in rec["law"]["strata"]] == [2, 2]
     assert _check(rec, prog, q, law=rule).ok and _check(rec, prog, q, law=rec["law"]).ok
     strata = rec["law"]["strata"]
@@ -638,7 +638,7 @@ def test_r1_holds_the_registered_strata_to_the_verifiers_own():
 
 
 def test_stratified_draw_checks():
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     assert D.check_draw(good, rec, law).ok and D.law_of(good) == law
@@ -664,7 +664,7 @@ def test_stratified_draw_checks():
 def test_one_stratified_draw_splits_over_several_tables():
     """A session of J tables splits one sample (Lean `Draw.tablesWhy`): a stratified sample whose sum of k_s is a positive
     multiple of J, as a subset sample's k must be; a Bernoulli or work sampling design never, whatever its count."""
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)                                          # k_s = 2, 2
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     assert D.fixed_count(law) == 4
@@ -682,7 +682,7 @@ def test_audit_record_under_the_stratified_law():
     """The bound is core's exact count_bound over the strata, each template's own bound is reported, and the integrity
     profile carries the whole sampling design."""
     from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-    prog, q, rule, rec = _stratified_registration()
+    prog, q, rule, rec = _stratified_docket()
     law = D.derive(prog, q, rule)
     d = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
@@ -963,7 +963,7 @@ def test_derive_expands_the_work_rule_over_the_verifiers_table():
             D.parse_design(bad)
 
 
-def _work_registration():
+def _work_docket():
     prog, q = _work_program()
     ports = _ports(prog, q, 6)
     roots = [{"port": p, "root": ROOTS[p], **ports[p]} for p in ports]
@@ -972,7 +972,7 @@ def _work_registration():
 
 
 def test_r1_holds_a_work_law_to_the_verifiers_own_table():
-    prog, q, rule, table, rec = _work_registration()
+    prog, q, rule, table, rec = _work_docket()
     assert rec["law"]["law"] == "work" and [s["k"] for s in rec["law"]["strata"]] == [1, 3]
     assert _check(rec, prog, q, law=rule, work_table=table).ok
     assert _check(rec, prog, q, law=rule, work_table={PAIR.id: 10, XOR3.id: 5}).codes == ("R1-law",)
@@ -981,7 +981,7 @@ def test_r1_holds_a_work_law_to_the_verifiers_own_table():
 
 
 def test_work_draw_checks_and_closures():
-    prog, q, rule, table, rec = _work_registration()
+    prog, q, rule, table, rec = _work_docket()
     law = D.derive(prog, q, rule, table)
     good = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [2, 3, 4, 5]}
     assert D.check_draw(good, rec, law).ok and D.law_of(good) == law and D.proved(good) == [2, 3, 4, 5]
@@ -1009,7 +1009,7 @@ def test_audit_record_under_the_work_law():
     """The work sampling design is the stratified sampling design at its sizes, so the profile is core's `Stratified` over the same strata at the
     work sizes; the zero-work stratum is bounded by its floor sample."""
     from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
-    prog, q, rule, table, rec = _work_registration()
+    prog, q, rule, table, rec = _work_docket()
     law = D.derive(prog, q, rule, table)
     d = {"law": "work", "population": 6, "k": 4, "strata": law["strata"], "units": [0, 2, 3, 4]}
     lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}

@@ -17,7 +17,7 @@ at a time, in four records:
    return field, a leading unit axis, each element its bits as an unsigned integer, `evaluation.evaluate_batch`'s
    convention), committed as ``hm96-sha512/row/v2`` rows in ``frame-v3-sha512`` trees, one tree per port under the
    window-domain rule (`verity.commitments.window`; `Window.close`, `rows.commit`), and registered before any coin (`Window.write`: `rows.write`'s files,
-   the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.registration``).
+   the registration core's record made by the ``registrar`` the caller passes, core's ``one_stage.docket``).
 4. **On a sample, the openings**: a sampled member's private rows and salts as Flock's prover reads them
    (`flock_inputs.flock_input_files`), for the prover behind the ZK server.
 
@@ -2810,7 +2810,7 @@ class Window:
               kind: str = "served", index_salt: bytes | None = None, previous: str | None = None) -> dict[str, Any]:
         """The window's files (`rows.write`, its prover-only ``index.json`` the labels, bound by their hiding leaf under
         ``index_salt``) and ``circuit.json``, the registration core's record made by ``registrar`` (core's
-        ``one_stage.registration``), chained after ``previous`` (the digest of the prover's last record; None for its
+        ``one_stage.docket``), chained after ``previous`` (the digest of the prover's last record; None for its
         first), its window naming ``provenance``, the circuit record's SHA-512, the advice binding and
         each registered value's root by parameter (``registered_roots``, which `input_count` holds to the verifier's pins);
         with the circuit's values (`Registered.values`), a ``verity/registration/v2`` record registering each by its

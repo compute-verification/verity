@@ -1121,7 +1121,7 @@ def step_digest(reg: Mapping[str, Any]) -> str:
     return identity_digest_sha512(STEP_FORMAT, dict(reg)).hex()
 
 
-def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
+def step_docket(com: Commitment, weights: Mapping[str, REG.Registered], law: Mapping[str, Any], *, run: str,
                       program: str, block: int, step: int, read_steps: bool = False) -> dict[str, Any]:
     """The docket of step ``(block, step)`` of ``com`` (the prover's records) under ``law``, naming the registered
     values ``weights`` its blocks read; ``read_steps``: and the root of every step of ``block`` up to ``step`` (`STEPS_KEY`),

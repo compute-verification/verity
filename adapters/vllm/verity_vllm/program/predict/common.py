@@ -23,7 +23,7 @@ class Unexpressible(Exception):
     """φ asks for a structure the vocabulary cannot express.  The message names the fact precisely."""
 
 
-def kind(role: str, **statics):
+def kind(role: str, **statics: Any) -> Any:
     """The vocabulary's kind for `role` at `statics` (the object the rules' `ctx.kind` returns), or `Unexpressible` naming why not."""
     from verity_vllm.program.frontend import targets as TG
     from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3 as VOC
@@ -64,7 +64,7 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def with_checks(model, out: Coll, B=None, stop: dict | None = None, sampled: Sequence | None = None) -> tuple[Coll, dict | None]:
+def with_checks(model: Any, out: Coll, B: Any = None, stop: dict | None = None, sampled: Sequence | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
     verifier requires to be 1), a stochastic request's seed rule follows them (`sampled`: its sampler's seed, then its
     `seed_rule.PARAMS` Inputs; `seed_rule.check`'s Calls next on the Builder `B`) and its length rule last (`stop`:
@@ -141,7 +141,7 @@ def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, 
     return resumed, chunks, passes, [False] * max(len(chunks) - 1, 0) + [True] * (len(passes) - max(len(chunks) - 1, 0))
 
 
-def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
+def drive(model: Any, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
           batch: list | None, C: int = 0, chunks: tuple[int, ...] = (), last: Coll | None = None) -> list[Coll]:
     """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
     positions C..LP+T-1 after a history of C: its prefill of rows C..LP-1 (in `chunks`, one forward a chunk, each its own launch)

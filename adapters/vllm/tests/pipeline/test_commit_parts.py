@@ -87,9 +87,10 @@ def test_an_engine_row_s_request_is_the_workload_s_by_its_id_or_the_id_vllm_suff
 
 @pytest.fixture
 def environ(monkeypatch: pytest.MonkeyPatch) -> Callable[[], dict[str, str | None]]:
-    """The names `staging_environ` writes, absent now; what each holds when called."""
+    """The names `staging_environ` writes, absent now and again at the test's end; what each holds when called."""
     for name in ENVIRON:
-        monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv(name, "")
+        monkeypatch.delenv(name)
     return lambda: {name: settings.raw(name) for name in ENVIRON}
 
 
