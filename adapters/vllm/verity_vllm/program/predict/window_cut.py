@@ -75,7 +75,7 @@ def linears(fn: Any, words: int, rows: int, provable: bool = True) -> Linears:
         calls.append((K, N, W))
     if bad := sorted({(K, N) for K, N, W in calls if N % W}):
         raise Unexpressible(f"{fn.id}: linears (K, N) {bad}, whose y no rows of Pearl+'s {words} words doubled hand on in "
-                            f"one unit within {rows} rows" + (" that C-Flock proves" if provable else ""))
+                            f"one unit within {rows} rows" + (" that Flock proves" if provable else ""))
     return Linears(heads, tuple(calls))
 
 
