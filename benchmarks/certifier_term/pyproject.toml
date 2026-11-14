@@ -40,7 +40,7 @@ inputs = [
     "verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
     "verity/hardware/__init__.py",
     "verity/hardware/record.py",
-    "verity/hardware/registration.py",
+    "verity/protocols/accounting/registration/verifier/registration.py",
     "verity/device.py",
     "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py",
     "verity/protocol.py",
