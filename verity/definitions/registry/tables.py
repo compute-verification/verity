@@ -22,7 +22,7 @@ Flock's piece computes it (`verity_flock.tail_pieces.tanh_rn`); its 2^28 words a
 (`verity.circuits.evaluation.RegisteredTable`, `tanh_rn_table`), never flattened.  No rule binds either: the Boolean versions
 of `TanhF32Rn_v1` and `GeluTanhMul_v1` compute both tables' entries by arithmetic (`registry.boolean_tanh`: `TanhF32Rn_v3`,
 `GeluTanhMul_v4`), so a Program on bits reads neither.  They stay as the Lean evaluator's examples of a table named in the
-request (`verity/definitions/evaluate`'s difftest).
+request (`verity/circuits/evaluate`'s difftest).
 """
 from __future__ import annotations
 
