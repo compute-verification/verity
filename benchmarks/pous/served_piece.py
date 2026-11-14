@@ -47,7 +47,8 @@ same sessions, which no second session replaces. With neither, one process does 
    ``C*``, not the rounds. With ``--case-exe``
    (``pous-run-protocol``, which `served_piece.sh` builds) the Lean answers the same case, and its answer is the
    verdict, refused unless it is the Python's but for the reason (`served_case.judged`): a Lean that answers
-   otherwise, or doesn't answer, leaves the window undecided, saying so, and no case is written.
+   otherwise, or doesn't answer, leaves the window undecided, saying so, and no case is written. Without it the
+   Python's reject or undecided stands and its accept is undecided (`period.unjudged`): the Python accepts nothing.
 5. **Zero knowledge**: the answer's commitment is a hiding one, one ``hm96-sha512/row/v2`` row in a ``frame-v3-sha512``
    tree (`verity.commitments.advice`) holding the run's commitment (the SHA-512 of what setup published) under
    `binding`, so the record fixes the run and reveals nothing of ``W``'s digest, the salt or ``C*``'s root. Its opening,
@@ -70,7 +71,8 @@ same sessions, which no second session replaces. With neither, one process does 
    0700), held to PoUS's run case as one store (`p2_case.same_store`); its public answer, under a hiding commitment to the
    case's digest, to ``--bw-out`` (by default ``DIR``'s sibling ``bandwidth``, where the composed run reads the bandwidth
    piece's, `served_bandwidth.py collect`). With ``--bw-case-exe`` (``remote-audit-p2-protocol``) the Lean answers the
-   case, and its answer is the one written. ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
+   case, and its answer is the one written; without it the session's accept is undecided (`p2_case.unjudged`).
+   ``--bw-windows``, ``--bw-passes``, ``--bw-samples``, ``--bw-window-s`` and
    ``--bw-deadline-s`` are the session's request, by default the auditor's (`p2_party.SESSION`: two minutes), which
    its party holds every request to: it refuses one with another value before its first coin, naming each, and the
    bandwidth answer is then undecided. ``--no-bandwidth`` runs none.
@@ -669,7 +671,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--challenger-command", help="the argv that starts the challenger's side, one shell-split line")
     ap.add_argument("--trusted-sha512", default=TRUSTED_SHA512, help="the SHA-512 of the challenger key the verifier trusts")
     ap.add_argument("--case-exe", help="pous-run-protocol, whose answer on the case is the verdict and must agree with "
-                                       "period.answer (else period.answer alone)")
+                                       "period.answer (else period.answer's accept is undecided)")
     part = ap.add_mutually_exclusive_group()
     part.add_argument("--sessions", action="store_true", help="only the part on the card: the sessions, kept for "
                                                               "--answers (exit 0), or the answer they leave already")
@@ -687,7 +689,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     bw.add_argument("--bw-deadline-s", type=float, default=HB.DEADLINE_S)
     bw.add_argument("--bw-out", type=Path, help="the bandwidth piece's directory (default: DIR's sibling bandwidth)")
     bw.add_argument("--bw-private", type=Path, help="its private directory (default SERVE_DIR/private/bandwidth)")
-    bw.add_argument("--bw-case-exe", help="remote-audit-p2-protocol, which answers the case (else p2_case.answer)")
+    bw.add_argument("--bw-case-exe", help="remote-audit-p2-protocol, which answers the case (else "
+                                          "p2_case.answer's accept is undecided)")
     bw.add_argument("--no-bandwidth", action="store_true", help="no bandwidth session")
     a = ap.parse_args(argv)
     command = tuple(shlex.split(a.challenger_command)) if a.challenger_command else CHALLENGER_COMMAND
