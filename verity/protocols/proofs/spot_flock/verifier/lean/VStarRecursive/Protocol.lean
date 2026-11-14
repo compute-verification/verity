@@ -1,4 +1,18 @@
-/-
+module
+
+public import CoreProtocol.Blobs
+public import Spot.ChallengerInnerTrees
+public import Flock
+public import Flock.RecLinkPart
+public import Spot.OneStageZk
+import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+meta import CoreProtocol.Blobs
+meta import Spot.ChallengerInnerTrees
+meta import Flock
+meta import Spot.OneStageZk
+
+/-!
 Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
 (`Spot.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
 verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
@@ -43,19 +57,6 @@ statement at the inner shape, in order. Any other form is refused, as are a part
 
 Without blobs (`toProtocol`) every check rejects: no blob holds the inner circuit file.
 -/
-module
-
-public import CoreProtocol.Blobs
-public import Spot.ChallengerInnerTrees
-public import Flock
-public import Flock.RecLinkPart
-public import Spot.OneStageZk
-import all Init.Data.Ord.String
-import all Lean.Data.Json.Basic
-meta import CoreProtocol.Blobs
-meta import Spot.ChallengerInnerTrees
-meta import Flock
-meta import Spot.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true
