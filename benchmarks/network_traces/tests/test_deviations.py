@@ -111,6 +111,7 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
     signer = ws.cs.signer(key, 4)
     public = signer.public_key()
     publisher = ws.Publisher(out, Issuer(signer, SESSION), params, WR.Cells.of)
+    start = ws.start_json(ws.certify_start(publisher.issuer, 0, params))
     servers: list[_Side] = []
     streams: list[_Side] = []
 
@@ -157,7 +158,8 @@ def _relay_run(out: Path, key: Path, params: WardenParams, requests: Sequence[by
         publisher.close()
         signer.close()
     deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=1, listen=("127.0.0.1", 1),
-                                      upstream=("127.0.0.1", 2), slack=warden.slack, run_id=warden.run_id)
+                                      upstream=("127.0.0.1", 2), slack=warden.slack, run_id=warden.run_id, start=start,
+                                      origin_raw=0.0)
     (out / "deployment.json").write_text(json.dumps(deployment))
     log = []
     for index, (request, client) in enumerate(zip(requests, clients)):

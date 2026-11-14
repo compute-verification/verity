@@ -305,7 +305,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     reads = WR.reads_file({port: WR.port(at.head, at.opening.wiring, at.params, at.units, sg.base),
                            other: value_port(value, sg.base)})
-    (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
+    (out / "registered.json").write_text(WR.reads_text(reads))
     return {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
             "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
             "salts": got["salts"], "ports": st.ports, "port": port, "committed": {other: value}, "rows": mr.rows,

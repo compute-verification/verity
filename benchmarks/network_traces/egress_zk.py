@@ -256,7 +256,7 @@ def stage(M, sg: SimpleNamespace, at: SimpleNamespace, name: str) -> dict:
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
     reads = registered_file(sg.program_sha512, at, state, sg.base)
-    (out / "registered.json").write_text(json.dumps(reads, sort_keys=True))
+    (out / "registered.json").write_text(WR.reads_text(reads))
     m = {"tag": name, "name": name, "dir": out, "meta": st.meta, "pin": st.pin, "class": st.class_sha512,
          "set": set_name, "n": n, "base": sg.base, "defn": sg.defn, "ands": got["ands"], "unit_nnz": got["unit_nnz"],
          "salts": got["salts"], "ports": st.ports, "port": "o1", "committed": {"state": state}, "rows": mr.rows,
