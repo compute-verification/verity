@@ -495,23 +495,23 @@ class PearlC:
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"
         if device == H100:
-            hardware = (f"TT_OUT({rho}) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 "
-                        f"program outputs correct C̃ and U words for less than {honest} of their honest cost (research store "
-                        "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting",
+            hardware = ((f"TT_OUT({rho}) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 "
+                         f"program outputs correct C̃ and U words for less than {honest} of their honest cost (research store "
+                         "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting"),
                         "the H100's FP8 wgmma and BF16 wgmma are reproduced exactly (HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16)")
         else:
             promotion = f"promotion every {device.g} atoms" if device.g else "no promotion"
-            hardware = (f"TT_OUT({rho}) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
-                        f"k <= {device.k_max}): no {device.name} W1 program outputs correct C̃ and U words for less than "
-                        f"{honest} of their honest cost; a conjecture stated for the H100 (research store "
-                        "docs/pouw/cheap-binding.md §1), not yet re-derived on this device's atom",
-                        f"the {device.name} FP8 and BF16 mma steps are reproduced exactly ({device.atom.name}, "
-                        f"{device.peel.name})",
+            hardware = ((f"TT_OUT({rho}) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
+                         f"k <= {device.k_max}): no {device.name} W1 program outputs correct C̃ and U words for less than "
+                         f"{honest} of their honest cost; a conjecture stated for the H100 (research store "
+                         "docs/pouw/cheap-binding.md §1), not yet re-derived on this device's atom"),
+                        (f"the {device.name} FP8 and BF16 mma steps are reproduced exactly ({device.atom.name}, "
+                         f"{device.peel.name})"),
                         *(f"stand-in: {s}" for s in device.standins))
         if self.census_ks:
-            hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
-                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's inert work within ρr of its cells' credit and the "
-                         f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
+            hardware += ((f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
+                          f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's inert work within ρr of its cells' credit and the "
+                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)"),)
         self.certificate = Certificate(
             conjecture="tt-out",
             gap0=None,
