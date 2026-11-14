@@ -56,9 +56,8 @@ from pathlib import Path
 import numpy as np
 
 from verity.circuits.codec import canonical_json, encode_program
-from verity.protocols.accounting.pouw.prover.lowering.live import (R, check_openings, claimed, files, form, live_stager,
-                                                                   piece_opening, piece_rows, program_of, stage,
-                                                                   verifier_pub)
+from verity.protocols.accounting.pouw.prover.lowering.live import (check_openings, claimed, files, form, live_stager,
+                                                                   piece_opening, piece_rows, program_of, stage, verifier_pub)
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 
 EXPECT = {"honest": "ACCEPT", "m-other": "REJECT", "m-claimed": "REJECT", "other-round": "REJECT", "other-piece": "REJECT"}
@@ -242,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     return {"prepare": cmd_prepare, "summarize": cmd_summarize, "evidence": cmd_evidence}[a.cmd](a)
 
 
-__all__ = ["R", "check_openings", "evidence", "files", "form", "live_stager", "main", "piece_opening", "program_of"]
+__all__ = ["check_openings", "evidence", "files", "form", "live_stager", "main", "piece_opening", "program_of"]
 
 if __name__ == "__main__":
     raise SystemExit(main())
