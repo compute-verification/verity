@@ -1,0 +1,4 @@
+order = 131
+path = "`pearlplus_lean/`"
+runs_on = "CPU, with the Lean toolchain"
+what = "Tests only, a suite of its own: Pearl+'s run verdict in Lean (`pouw-pearlplus`, `verity/protocols/accounting/pouw/verifier/lean/pearlplus/`) held to the Python's (`pearl_c_vllm/verify_run.py`'s `verify_passes`) on passes its tests prove on the CPU, and on a recorded H200 run's retained passes where `POUW_PEARLPLUS_RECORDED` names them"

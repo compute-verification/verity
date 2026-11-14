@@ -487,7 +487,7 @@ class WorkerPeakOption(Protocol):
 
 
 def worker_peak(o: WorkerPeakOption) -> int:
-    from verity_vllm.pipeline.telemetry.admission import CALIBRATION
+    from verity_vllm.engine.profiles.admission_calibration import CALIBRATION
 
     return int(o.worker_peak_gb * 2**30) if o.worker_peak_gb else int(CALIBRATION["commit.c2.replay_workers.small_vu"]["value"])
 

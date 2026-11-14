@@ -88,8 +88,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.circuits.targets.target import FIRST, TARGETS, Target
 from verity.circuits.silicon.instructions import INSTRUCTIONS
+from verity.circuits.targets.target import FIRST, TARGETS, Target
 from verity_numerical.bench import census
 
 __all__ = [

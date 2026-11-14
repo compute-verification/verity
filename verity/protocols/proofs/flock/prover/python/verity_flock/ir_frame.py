@@ -16,7 +16,7 @@ prover-committed public; the verifier chains a chunk's runs through them, folds 
 natively and checks the digests and the output words against the frame-v3 roots it recomputes.
 
 A cut template's cut words (``ir_lower.cut_words``) follow in the file: public words of the units that read or compute them,
-each unit's cut ports a region claim; the verifier evaluates the netlist's pinned tail on them before any session.
+each unit's cut ports a region claim; the verifier evaluates the circuit description's pinned tail on them before any session.
 """
 from __future__ import annotations
 

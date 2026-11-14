@@ -12,7 +12,7 @@ every = "1d"
 
 [[metric]]
 id = "lean/deployed-gap-zero"
-title = "Deployed Lean guarantees whose trust gap is zero: they rest on the trust base alone"
+title = "Deployed Lean guarantees whose trust gap is zero: they rest only on the trust base and on what a ruling lets them rest on (`trust.extra`)"
 owner = "lean"
 unit = "guarantees"
 better = "higher"
@@ -21,7 +21,7 @@ every = "1d"
 
 [[metric]]
 id = "lean/trust-gap"
-title = "A deployed Lean guarantee's trust gap: the premises it rests on beyond the trust base, one value a guarantee"
+title = "A deployed Lean guarantee's trust gap: the premises it rests on beyond the trust base and `trust.extra`, one value a guarantee"
 owner = "lean"
 unit = "premises"
 better = "lower"

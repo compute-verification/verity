@@ -83,7 +83,7 @@ uv run pytest                            # all tests
 
 research run [--project P] [--stage S] [--timeout T] [--expect K=V] [--require-result] [--env K=V] [--cwd DIR] [harness flags] -- CMD...
 research run [--tool NAME|module:NAME] [--scratch NAME]... [--campaign C] [...] -- CMD...      # evidence store, below
-research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait [--wait-max S]] [...] -- CMD...
+research run --on MACHINE --project P [--source GITDIR] [--send FILE] [--env K=V] [--env-host MACHINE] [--exclusive] [--mem-gb N [--mem-wait S]] [--preflight TOOL] [--wait [--wait-max S]] [...] -- CMD...
                                          # --wait: 20 min at most, then exit 79 (research/waitcap.py)
 research run --on MACHINE [--custody-ttl 6h] ...    # the default: the machine puts the attempt + every run file on the store's remote (store README §10.1)
 research run --on MACHINE --no-custody-r2 ...       # opt out: the records stay on the machine until `research fetch --all`
@@ -100,7 +100,8 @@ research data SUBCOMMAND ...             # the store: put/show/fetch/select/... 
 research pods SUBCOMMAND ...             # the machines: registry, ssh, sync, leases, the budgets guard (src/research/pods/README.md)
 research tele SUBCOMMAND ...             # the harness's own surface (below)
 research jobs add|list|show|cancel|events ...   # the Job queue (below)
-research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page (goals.py)
+research goals show|set|confirm|done|remove|replace|priority|audit|blockers ...   # the Goals page (goals.py); blockers ranks
+                                         # the open blockers by what waits on each (goals_blockers.py)
 research velocity [--line|--json]  # the velocity score from records, never a gate (velocity.py)
 research compare ORIGINAL... REPLAY [--expect E] [--json]   # a replay's verdict against the runs it replays (compare.py)
 research digest --as LANE   # what changed for a lane since its last digest (digest.py)
@@ -171,16 +172,15 @@ the loop certifies. The mark's preflight refuses a lock merge dropping an entry 
 (`lock_drops`). `research queue status` says what each PR waits for.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
-`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local
-workload runs in its run directory unless `--cwd` says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative
-`result.json` lands there and never in the checkout; `--env K=V` is set for the
-workload only and recorded as the attempt's `params.env` (values of
-secret-named keys redacted). Every job also starts with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16`
-(`result.env_defaults`, in `params.env` too) unless its `--env`, its command or the runner's environment names it:
-oneDNN's AMX kernel returns a preempted bf16 product wrong now and then. Four facts
-stay separate in `inspect`: exited, result well-formed, validation reported
-passed, preserved. `--require-result` makes exit 0 without a valid result
-exit 65.
+`$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local workload runs in its run directory unless `--cwd`
+says otherwise (`--cwd source` = the invoking directory, `clone` = a clone of it), so a relative `result.json` lands there and
+never in the checkout; `--env K=V` is set for the workload only and recorded as the attempt's `params.env`, the values of
+secret-named keys, of keys ending in `_HOST` and of `FLEET_JUMP` redacted. A brief names a machine, never its address:
+`--env-host vy-challenger-1` gives a job `VY_CHALLENGER_1_HOST` from the register, `eval "$(research pods env vy-challenger-1)"` a shell.
+Every job also starts with `ONEDNN_MAX_CPU_ISA=AVX512_CORE_BF16` (`result.env_defaults`, in `params.env` too) unless its
+`--env`, its command or the runner's environment names it: oneDNN's AMX kernel returns a preempted bf16 product wrong now and
+then. Four facts stay separate in `inspect`: exited, result well-formed, validation reported passed, preserved.
+`--require-result` makes exit 0 without a valid result exit 65.
 
 ### Remote runs
 
@@ -359,6 +359,14 @@ records the end. `cancel.py` writes a cancel's intent before its signal and its 
 by their cgroup scope (what `research cancel` and a timeout stop), `pyspy.py` dumps a stalled run's Python stacks, and
 `source_identity.py` records which source tree each imported package resolves to. Outside `research`, `infra/ops` reads
 `telemetry.job`'s secret-name pattern, and the vLLM integration's tests import `source_identity`.
+
+`telemetry/fixtures/run_fixtures.sh` checks the classifier against the real kernel, which `tests/test_telemetry.py` feeds
+synthetic evidence: each case (`oom_own`, `timeout`, `guardian`, `bystander`, `forkshare`, `writer`, `sampler_killed`,
+`sampler_denied`, `truncated`, `spans`) runs a workload under `tele run`, the memory hog, shared mapping, buffered writer and
+span emitter beside it (`hog.py`, `forkshare.py`, `writer.py`, `spans.py`), and writes what `failure.json` concluded beside the
+case's expectation to `OUT/SUMMARY.txt`. Nothing starts it. Run it by hand after a change to how an attempt's end is classified
+or its cgroup read (`classify.py`, `cgroup.py`, `sample.py`), as root in a Linux pod of its own whose cgroup (v2) has a memory
+limit, since its cases drive that cgroup to an OOM kill: `bash src/research/telemetry/fixtures/run_fixtures.sh OUT [CASE...]`.
 
 ### The Job queue: `research jobs`
 

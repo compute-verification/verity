@@ -24,6 +24,8 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import UsageError
 
+__all__ = ["main", "parse"]
+
 PROG = "verity-vllm"
 
 #: command -> (module, one-line help).  Modules are imported only when their command runs.
@@ -33,7 +35,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "block-counts": ("verity_vllm.program.predict.block_counts", "a day's (c, k)-inference blocks from its served windows' circuit records, judged against its declared n: the judgment public, the counts private"),
     "boundary-plan": ("verity_vllm.pipeline.boundary_plan", "a row's call-boundary check over its Commit's Programs, and the Commit's call-boundary plan, keyed"),
     "build": ("verity_vllm.pipeline.build", "derive one request wrapper's Program (Build step)"),
-    "census": ("verity_vllm.properties.census", "kernel census of a bare run"),
     "commit": ("verity_vllm.pipeline.commit", "Commit stage: pairs protocol, commitment root and overhead"),
     "commit-arb": ("verity_vllm.pipeline.commit_arb", "the served Commit under seeded varied traffic, each request's record held to its streamed ids"),
     "commit-plan": ("verity_vllm.pipeline.commit_plan", "a Commit's plan, derived before the GPU: its producer facts, keyed"),
@@ -53,8 +54,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "global-match": ("verity_vllm.check.match.global_match", "global Match of a batched execution"),
     "global-program": ("verity_vllm.pipeline.global_program", "workload Program from the derived request Programs"),
     "glue": ("verity_vllm.glue", "per model, the code its `__models__` markers tie to it and the hours from staged checkpoint to record"),
-    "golden": ("verity_vllm.properties.golden", "golden corpus check"),
-    "holdout": ("verity_vllm.properties.holdout", "holdout workload generator and assembler"),
     "ids-front": ("verity_vllm.pipeline.ids_front", "the network certifier's id form in front of vLLM's own OpenAI server"),
     "launch-context": ("verity_vllm.pipeline.launch_context", "launch context of a workload's request shapes"),
     "m1-capture": ("verity_vllm.pipeline.m1_capture", "capture the observation log under the observer"),
@@ -64,7 +63,6 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "meta-inventory": ("verity_vllm.engine.meta_inventory", "a checkpoint's modules on the meta device, from its config.json alone"),
     "mla-capture": ("verity_vllm.program.mla_capture", "MLA kernel captures (produce), against their numpy models (check) and Booleans (check-bits)"),
     "neutrality": ("verity_vllm.pipeline.neutrality", "rebuild the rows of record's Programs; fail if a Program digest moved"),
-    "noninterference": ("verity_vllm.properties.noninterference", "observer non-interference check"),
     "norm-tap-build": ("verity_vllm.acquire.norm_tap_src.build_ext", "build or check the norm-scale tap's CUDA op"),
     "predict": ("verity_vllm.program.predict.cli", "ahead-of-time Program prediction from φ, compared with the traced Builds; a switched row's Build"),
     "program-graph": ("verity_vllm.pipeline.program_graph", "a served row's Program as a graph (modules, Calls, dataflow, hashes)"),
@@ -74,8 +72,9 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "program-compare": ("verity_vllm.check.match.program_compare", "structural comparison of two Programs"),
     "program-dag": ("verity_vllm.check.match.program_dag", "a derived Program and a fold: live-cone DAG multisets equal"),
     "properties-admission": ("verity_vllm.properties.admission", "quarantine admission differential tests"),
-    "records": ("verity_vllm.pipeline.circuit_db", "the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
-                            "switch), and a checkpoint's staging (staged)"),
+    "records": ("verity_vllm.pipeline.circuit_db",
+                ("the circuit database: a row's record and its Programs, by row id (publish, pull, capture, show, programs, fetch, "
+                 "switch), and a checkpoint's staging (staged)")),
     "release-json": ("verity_vllm.pipeline.release_json", "RELEASE.json writer, reader and release line"),
     "router-tap-build": ("verity_vllm.acquire.router_tap_src.build_ext", "build or check the router-softmax tap's CUDA op"),
     "research-outputs": ("verity_vllm.pipeline.research_outputs", "typed outputs of a sweep stage"),
@@ -87,7 +86,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "source-identity": ("verity_vllm.pipeline.source_identity", "source identity and precheck"),
     "stoch-recompute": ("verity_vllm.check.replay.stoch_recompute", "value check of a stochastic row"),
     "target-family": ("verity_vllm.target_family", "target-family preflight"),
-    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (mark, report, collect)"),
+    "timeline": ("verity_vllm.pipeline.timeline", "stage telemetry (report)"),
     "topp-pin-check": ("verity_vllm.pipeline.topp_pin_check", "the top-p split pin on the GPU: the kernel pinned and not, requests together and alone"),
     "topp-split-probe": ("verity_vllm.pipeline.topp_split_probe", "top-p split fixture"),
     "tp-capture": ("verity_vllm.pipeline.tp.capture", "tensor-parallel M1 capture"),
@@ -232,7 +231,7 @@ def process_settings(environ: MutableMapping[str, str]) -> None:
 
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
-    argv = sys.argv[1:] if process else list(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(usage(), file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2

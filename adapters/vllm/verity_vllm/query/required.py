@@ -484,7 +484,7 @@ class Population:
         families: dict[tuple[int, str, str, str], set[str]] = defaultdict(set)
         for cid, ports in self._ports().items():
             c = self.P.call(cid)
-            if c.family in SAMPLING_EVENTS or cid in self.collectives or cid in self.norm_site:
+            if c.family in SAMPLING_EVENTS or cid in self.collectives:
                 continue
             n = self.corr.name(cid)
             for p in ports:

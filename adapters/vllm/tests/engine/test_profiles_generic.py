@@ -101,7 +101,7 @@ def test_profile_module_for_case_is_derived_not_looked_up():
 
 
 def test_derived_b0_is_the_protected_base_profile_behind_the_tuned_gemm():
-    """The golden corpus's profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
+    """The protected base profile (`vllm_d9105ea80_sm89_eager`) is what the generic constructor derives from SmolLM2's config.json: the
     same C up to the identity fields and unset keys, the same pattern list after the target's tuned-GEMM specialization."""
     derived = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B0").PROFILE
 

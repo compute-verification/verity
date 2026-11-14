@@ -91,7 +91,7 @@ tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
 
 # A row with 1024 input tokens or batch 32+ runs 20-120 min on node 1 (gemma2-9b B8 67-76, qwen3-30b-a3b 44-54, qwen3-14b
 # TP2 B8 ~45), and a stop at max_min reruns it from the top, so VY_N2_COMMIT_MAX_MIN (sized for node 2's 30-min gaps) would kill
-# it every time. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's cap for a Commit guest, FILL_COMMIT_MAX_MIN), which
+# it every time. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's limit for a Commit guest, FILL_COMMIT_MAX_MIN), which
 # it starts only where no booked window is that close.
 commit_max_min() {  # commit_max_min ROW
   local b=0
@@ -468,7 +468,7 @@ EOF
 }
 
 # a passed replay's bundle goes only with its complete slim keep, as config-run.yaml's replay task checks it (the same lines); a
-# bundle kept goes home to node 1 with the row, where release.py counts it against the bundle cap
+# bundle kept goes home to node 1 with the row, where release.py counts it against the bundle limit
 discard_kept_bundles() {  # discard_kept_bundles ROW_DIR
   python3 - "$1" << 'EOF' || echo "$(date -u +%FT%TZ) replay bundles kept: the keep check failed" | tee -a "$1/row.log" || true
 import glob, hashlib, json, os, re, shutil, sys, time

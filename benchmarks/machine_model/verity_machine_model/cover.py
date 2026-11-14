@@ -1,5 +1,5 @@
 """The opcode table (data/cover/): the evidence for the card assumption, that every instruction a
-card executes is dominated by an ACCEL op (envelope.toml: `Accel.Op`, its pipes and formats, and the entries it
+card executes is dominated by an ACCEL op (envelope.toml: `Accel.Opcode`, its pipes and formats, and the entries it
 proposes; each card's numbers are its card file's, `hardware/cards/`) at no fewer units of the same resource,
 one row per opcode (rows.toml) on the H200 (sm_90) and the RTX PRO 6000 (sm_120).
 
@@ -9,7 +9,7 @@ one the machine model's census measured (data/census/*.csv for sm_120, data/devi
 every way the table fails that: an opcode, a form or a kind with no row; a row naming an op, pipe, format, store or θ key
 that doesn't exist; a lane or collective reading or writing more words than its op allows; and a covered or coarse row
 whose rate, in its op's units (`demands`), exceeds its resource's ρ. A row whose op, pipe or format is proposed rests on
-it (`rests_on`), and `counts(..., proposed=False)` counts those rows as holes: the table on `Accel.Op` alone.
+it (`rests_on`), and `counts(..., proposed=False)` counts those rows as holes: the table on `Accel.Opcode` alone.
 """
 from __future__ import annotations
 

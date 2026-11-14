@@ -294,7 +294,7 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
     replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
     from verity_vllm.check.replay import driver as SR
-    from verity_vllm.check.replay import replay_codes as RC
+    from verity_vllm.records import replay_codes as RC
 
     _seed_chal = None
     if getattr(args, "replay_seed", None) is not None:
