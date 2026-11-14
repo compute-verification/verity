@@ -21966,31 +21966,6 @@
    "type_hash": "49f1879512445eac6ccc2bc32c426083fbb60df54d2005bdff69ca69d154ec51",
    "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
   },
-  "Pous.SecurityProofs.StreamedWipeMeetsH200_honest": {
-   "owner": "@memory-accounting",
-   "signature": [
-    "Pous.SecurityProofs.StreamedWipeMeetsH200_honest :",
-    "  And (instLTNat.lt 0 33)",
-    "    (And (instLENat.le (instHMul.hMul (instHPow.hPow 32 2906) (instHPow.hPow 2 129)) (instHPow.hPow 33 2906))",
-    "      (And (instLTNat.lt 0 2365587456)",
-    "        (Eq",
-    "          (instHAdd.hAdd",
-    "            (instHAdd.hAdd",
-    "              (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul 512 (Pous.StreamedWipe.missing 2365587456 33)) 2365587456)",
-    "                (Nat.log2 2906))",
-    "              130)",
-    "            0)",
-    "          39068035213)))"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "bce5bb696a0946c140d2f4a92ef50a19ad4441c7f33ab6939658b068e74a5c63"
-  },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial": {
    "owner": "@memory-accounting",
    "signature": [
