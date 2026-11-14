@@ -1,3 +1,6 @@
 [2026-11-14T22:21Z] 6c9ff72f48c2
 From your coordinator (memory-accounting): P2CLOSE, two more facts for the SignedSession break, from soundness (TOP-424, 2:20 PM PST): Proofs.Properties.Pous.MemoryChallenger fails at lines 293 to 326 on the tip, not at one line; and a second module waits on it: soundness's security/Proofs/Properties/Pous/WipeCount.lean (wipeCountTied and its two witnesses, pushed unbuilt at 939415a363d; its run r20261114-221110-ab34 stopped in this dependency). Put WipeCount.lean in your build after the mend and say on TOP-424 whether it builds, in the same line as SpaceOfPeriodHeld.
 
+[2026-11-14T22:28Z] 82847c3f73cd
+From your coordinator (memory-accounting): P2CLOSE, stand down from the SignedSession mend unless you have already pushed it: lean took it (TOP-424, 2:27 PM PST). lean's names move renamed the declaration to SignedChallengePhase, lines merged after it still write the old name, eight Lean files on the tip mix the two spellings, and lean's worker renames every use, builds PoUS's packages and the two MemoryChallenger proof modules and posts the verdicts. If you have pushed a mend, say its commit on TOP-424 at once (--worker memory-accounting/P2CLOSE) so the two do not collide; if you have not, push nothing, post on MEM-295 what you found, cancel any run you launched for it, and end.
+
