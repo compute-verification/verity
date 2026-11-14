@@ -441,6 +441,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
         if not rep.ok:
+            assert rep.unsupported is not None
             res["unsupported"] = rep.unsupported.to_json()
             res["rules_applied_before_refusal"] = rep.provenance.get("rules_applied_before_refusal")
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
@@ -451,14 +452,14 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             # the root is recorded as DATA so no reader spells the wrapper prefix
             model_root = next((n for n, m in mod.named_modules() if m is model), None) if tp > 1 else None
             write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
-            pre = copy.deepcopy(res) if emit is not None else None      # rank r's `res` before its writer: the template's, at rank r
+            pre = copy.deepcopy(res) if emit is not None else {}        # rank r's `res` before its writer: the template's, at rank r
             write(out, res, rep, rank=rank)
             if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
                 from verity_vllm.program.frontend.export_ops import (
                     rank_embedding_shards,
                 )
-                rep = None                                                 # the template's descriptor and correspondence: freed
+                del rep                                                    # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
                                 post=derived if target.ir == "boolean" else None, write=write)

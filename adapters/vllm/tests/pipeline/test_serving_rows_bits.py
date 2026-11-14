@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
+from verity.circuits.defs import SpecializedDefinition, bind
 from verity.commitments.gates.embedding import read
 from verity.commitments.windows import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
@@ -43,7 +43,7 @@ BIND = {"partition": "0" * 128, "program": "0" * 128}
 VERIFY = PF.PACKAGE / ".lake" / "build" / "bin" / PF.EXE
 
 
-def _templates(t) -> dict[str, object]:
+def _templates(t) -> dict[str, SpecializedDefinition]:
     """The long row ``t``'s templates but its read, by id, in body order."""
     return {descriptor_id(d): d for _k, d in LR.units(t) if spec_base(descriptor_id(d)) != "EmbeddingRead_v1"}
 

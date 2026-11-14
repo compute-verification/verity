@@ -349,7 +349,8 @@ def test_each_classs_commitment_waits_for_its_tables_and_lists_them_beside_its_v
     alone names and places every table, and both verifiers accept the registration against it, which lists every root
     before any coin. The class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines)
     try:
         finish(sched)
@@ -385,7 +386,8 @@ def test_a_serve_of_verdicts_commits_its_blocks_return_beside_its_tables(tmp_pat
     block's return under the block's id, a verdict an output, then its tables; both verifiers accept the registration
     against the challenger's copy of the layout, and the class's files reopen to the same roots."""
     _runner, hook, _hooks = serve()
-    make, _tables, lines = *built(), []
+    make, _tables = built()
+    lines: list[dict] = []
     bw, sched, hooks = windows(tmp_path, hook.latents, make, lines, check=SAME, verdicts=True)
     try:
         finish(sched)
@@ -477,7 +479,8 @@ def modes(root) -> set[tuple[str, int]]:
 def kept_window(tmp_path) -> tuple[BT.Kept, list]:
     """`finish`'s window served with rank 0 keeping its tables under ``tmp_path``/node: the kept files and the tables."""
     _runner, hook, _hooks = serve()
-    make, tables, lines = *built(), []
+    make, tables = built()
+    lines: list[dict] = []
     kept = BT.Kept(tmp_path / "node" / "tables")
     bw, sched, hooks = windows(tmp_path / "out", hook.latents, make, lines, kept)
     try:

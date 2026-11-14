@@ -126,8 +126,9 @@ def build(monkeypatch, proj: str = "w13", rank: int = 0, n: int = N) -> SimpleNa
     pr, pi, nb = ids(proj, n), Index(proj, n), -(-n // G)
     w, ws = _e4m3(rng, E * n * K), _f32(rng, 1e-4, 1e-2, E * nb * KG)
     ops = {json.dumps([["p", 0, 0, w.size]]): w, json.dumps([["p", 0, w.size, w.size + ws.size]]): ws}
-    words = {"topk_weights": [], "topk_ids": [], "out": []}
-    routers, pairs, experts = [], [], []
+    words: dict[str, list[int]] = {"topk_weights": [], "topk_ids": [], "out": []}
+    routers, experts = [], []
+    pairs: list[tuple] = []
     bias = (rng.standard_normal(E) * 1e-2).astype(np.float32).view(np.uint32)
     ops[json.dumps([["x", 90, 0, E]])] = bias
     for t in range(T):

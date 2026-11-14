@@ -420,7 +420,8 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
     """Three requests: at the first schedule a window's length after it opened, window 0 closes with the two finished,
     by class, and carries the third; the third's finish, the only one running, closes window 1; each class's files
     reopen to the roots its sink line holds; and an abort finishes a request."""
-    now, lines = [0.0], []
+    now = [0.0]
+    lines: list[dict] = []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows")
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: now[0], serve="s").install(sched, hooks)
     try:
@@ -488,7 +489,8 @@ def test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts(tmp
         assert bw.verdicts is want
     got = {}
     for name, check, verdicts in (("on", SAME, True), ("off", SAME, False), ("refused", PAIR, True)):
-        lines, sched, hooks = [], Scheduler(), Hooks(tag=f"test-boundary-verdicts-{name}")
+        lines: list[dict] = []
+        sched, hooks = Scheduler(), Hooks(tag=f"test-boundary-verdicts-{name}")
         bw = BW.BoundaryWindows(tmp_path / name, check, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                                 verdicts=verdicts).install(sched, hooks)
         try:
