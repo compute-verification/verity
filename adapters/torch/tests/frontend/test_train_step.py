@@ -40,7 +40,7 @@ from verity_vllm.definitions.registry import moe as MOE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry import ref_prims as R
 
-from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
+from tests.frontend.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity_torch.frontend.boolean import derived
 from verity_torch.frontend.derive_graph import derive_graph
 from verity_torch.frontend.errors import FrontendError
