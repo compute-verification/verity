@@ -7,6 +7,7 @@ public import Spot.Slots
 public import Spot.PopOrder
 public import Spot.FilePart
 public import Spot.CircuitKept
+public import Spot.Wires
 public import Flock
 public import Flock.JsonParse
 public import Std.Data.HashMap
@@ -95,11 +96,13 @@ structure Member where
   own : Own
 
 /-- The parameters: v1's, the verifier's own inputs, and in the per-member form (module docstring, **per member**)
-its members, `own` then holding the program and the partition every member's statement reads and no file. -/
+its members, `own` then holding the program and the partition every member's statement reads and no file, and the
+members' wiring where the parameters name one, with SPOT's summary of it (`wiringOf`). -/
 structure Params where
   base : OneStage.Params
   own : Own
   members : Option (Array Member)
+  wiring : Option (Spot.Wires.Wiring × Spot.Wires.Summary) := none
 
 structure RunFiles where
   name : String
@@ -810,27 +813,53 @@ def statementsOf (pr : Json) : V (Array StatementFiles) := do
 /-- A digest in the place of a file's the per-member form's parameters name none of (`membersParamsOfJson`). -/
 private def NO_FILE : String := "".pushn '0' 128
 
-/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` (`membersOf`, on the program and the
-partition every member's statement reads), and everything else as the one statement's parameters hold it
-(`paramsParsed`, read at `proofs` of no file, so under any sampling design v1 parses and not the one statement's `subset` alone):
-`own` is that program and partition, with no file. The registration's check reads the members, each its units and its
-circuit's units a proof block (`Registration.Verifier.members`), so v1's check refuses a registration under which a
-sample that ends misses a member, or a member's sampled proof blocks give two counts of link points (`link-points`,
+/-- **The members' wiring**: SPOT's wiring (`Spot.Wires.Wiring.ofJson`: `templates`, `cuts`, `wires` and optionally
+`order`, the `wires` piece's), each template a template descriptor id of the verifier's partition, and SPOT's
+summary of it, a refusal where SPOT's check refuses it (`Spot.Wires.check`). It is a parameter, so it is fixed before
+any coin, and the check reads it alone. -/
+def wiringOf (j : Json) : V (Spot.Wires.Wiring × Spot.Wires.Summary) := do
+  let W ← (Spot.Wires.Wiring.ofJson j).mapError (s!"proofs: wiring: {·}")
+  match Spot.Wires.check W with
+  | .ok S => pure (W, S)
+  | .error r =>
+    throw s!"proofs: wiring: SPOT's check refuses it ({r.code.name}{(r.wire.map (s!", wire {·}")).getD ""})"
+
+/-- The keys of the per-member form's `proofs`: its members, and its members' wiring where it names one. -/
+def MEMBERS_KEYS : List (Array String) := [#["members"], #["members", "wiring"]]
+
+/-- `proofs`' keys are the per-member form's (`MEMBERS_KEYS`), else a refusal. -/
+def membersKeysHeld (pr : Json) : V Unit :=
+  if MEMBERS_KEYS.any (keys? pr == some ·) then pure () else throw "the keys of proofs are not members, or members and wiring"
+
+/-- The members' wiring `proofs` names (`wiringOf`), or none. -/
+def membersWiringOf (pr : Json) : V (Option (Spot.Wires.Wiring × Spot.Wires.Summary)) :=
+  match field? pr "wiring" with
+  | some w => some <$> wiringOf w
+  | none => pure none
+
+/-- **The per-member form's parameters**: `proofs` exactly `{"members"}` or `{"members", "wiring"}`
+(`membersKeysHeld`; `membersOf`, on the program and the partition every member's statement reads; `membersWiringOf`),
+and everything else as the one statement's parameters hold it (`paramsParsed`, read at `proofs` of no file, so under
+any sampling design v1 parses and not the one statement's `subset` alone): `own` is that program and partition, with
+no file. The registration's check reads the members, each its units and its circuit's units a proof block
+(`Registration.Verifier.members`), so v1's check refuses a registration under which a sample that ends misses a
+member, or a member's sampled proof blocks give two counts of link points (`link-points`,
 `Registration.linkRefused`). -/
 def membersParamsOfJson (j : Json) : V Params := do
   let some pr := field? j "proofs" | throw "the parameters name no proofs (the members and their statements' files)"
-  exactly pr #["members"] "proofs"
+  membersKeysHeld pr
   let one := Json.mkObj [("circuit", Json.str NO_FILE), ("public", Json.str NO_FILE), ("registered", Json.null)]
   let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
   let own := { p.own with circuit := "", pub := "" }
   let ms ← membersOf own (getD pr "members")
+  let wiring ← membersWiringOf pr
   pure { p with base := { p.base with verifier := { p.base.verifier with members := ms.map fun m => (m.units, m.g) } },
-                own, members := some ms }
+                own, members := some ms, wiring }
 
-/-- **The parameters in either form**: the per-member form's where `proofs` is exactly `{"members"}`, else the one
-statement's. `protocol` reads its parameters by it. -/
+/-- **The parameters in either form**: the per-member form's where `proofs`' keys are its (`MEMBERS_KEYS`), else the
+one statement's. `protocol` reads its parameters by it. -/
 def paramsEitherOfJson (j : Json) : V Params :=
-  if (field? j "proofs").bind keys? == some #["members"] then membersParamsOfJson j else paramsOfJson j
+  if MEMBERS_KEYS.any (((field? j "proofs").bind keys?) == some ·) then membersParamsOfJson j else paramsOfJson j
 
 /-- **The per-member form's evidence**: `proofs` exactly `{"statements"}` (`statementsOf`), and everything else as the
 one statement's evidence holds it (`evidenceOf`, read at `proofs` of the statements' sessions in order); its

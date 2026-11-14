@@ -9,7 +9,7 @@ an instance of (its stratum's name under the check's query), its public file's h
 ``unit_draw``, and the registered reads it was verified against (``--registered``), None for none. Round 2 takes it only
 where an accepted verdict of record names its header, its registered reads and its sample (``second-verified``,
 `verified_of`): ``public_header_sha512`` and ``registered_sha512``, the SHA-512 of the header's and the
-``--registered`` file's canonical JSON, and ``unit_draw``, which `flock-verify verify` writes of the session it checked;
+``--registered`` file's canonical JSON, and ``unit_draw``, which `verity-verify-proof verify` writes of the session it checked;
 and only where every one that does checked its session as one table (``session_tables``, ``second-tables``): a session
 split across Flock tables is refused, as one split across statements is (``second-template``).
 
@@ -152,6 +152,9 @@ OWN_SOURCES = ("bytes",)
 #: The row of a value that holds a read's verdict to 1: the verifier's bytes of the number 1
 #: (`SecondStage.VERDICT_ONE`).
 VERDICT_ONE = (("bytes", "00000001"),)
+#: `VERDICT_ONE` as one 16-bit leaf, the width of the verdict value's row: the bytes of 1 as one 16-bit half
+#: (`registered.half_leaves`; `SecondStage.VERDICT_ONE_LEAF`). `_opened_row` doesn't read it until `half_leaves` is written.
+VERDICT_ONE_LEAF = (("bytes", "0001"),)
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The most leaves a tree a session reads may have: its positions are 64-bit (`SecondStage.MAX_LEAVES`).
 MAX_LEAVES = 2 ** 64

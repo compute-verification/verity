@@ -499,8 +499,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
     Entry("accounting-ts-accepted-live", "assumption",
-          "A proof is credited only after flock-verify --zk --registered accepts its session. Every served path today "
-          "verifies with plain flock-verify --zk and binds its served values through the public file (served_zk's Lean "
+          "A proof is credited only after verity-verify-proof --zk --registered accepts its session. Every served path today "
+          "verifies with plain verity-verify-proof --zk and binds its served values through the public file (served_zk's Lean "
           "checks, served_commit's verdict, h1_prove); of the audit's runners only one_stage/a0.py passes --registered. "
           "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
           "binding is stated", "TS accepted live", "standard"),
@@ -518,10 +518,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
     Entry("accounting-ts-served-checks", "assumption",
           "A proof's relation (its served Definition's check) holds at its Flock session's extracted value layer "
-          "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
+          "wherever verity-verify-proof accepts the session and every drawn unit is right at its own owned reads; under a "
           "sampled draw, only for a relation that reads the drawn units alone", "TS served checks", "conjectured"),
     Entry("accounting-ts-served-roots-linked", "assumption",
-          "Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "Flock's rows link covers the served roots: outside δ_s, where verity-verify-proof accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-leaf-checks", "assumption",
@@ -529,7 +529,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "tile's K) computes its Definition at its decoded port rows, registered or not: on every wire assignment its "
           "circuit's evaluation agrees with, an ok word of 1 means the lane's partials row is the honest one and its "
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
-          "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
+          "is registered and opens at its registered root is proved from verity-verify-proof's complete check, not assumed",
           "TS leaf checks", "conjectured"),
     Entry("accounting-ts-group-realizes", "assumption",
           "A leaf's group of statements (its lanes, each in n chunks along K, and its combine) realizes the leaf's "
@@ -550,7 +550,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A PouwH1TileZy_v1 session's circuit computes its Definition at its decoded registered ports: on any wire "
           "assignment the key program's evaluation agrees with at a unit, whose ok wires carry the ok row (the word "
           "1), every cell of the unit's decoded view has z = A·Bᵀ and y = dq(z). It holds of the circuit only if "
-          "every input its ok reads is a registered port, which flock-verify's complete check establishes",
+          "every input its ok reads is a registered port, which verity-verify-proof's complete check establishes",
           "TS tile checks", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "

@@ -21,10 +21,10 @@ before the sample (`a5_tp.sh` with `A5_WINDOWS=bundles`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/a5.py --bundle DIR --row-dir DIR --window DIR \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --out DIR [--delta 0.5]
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --workload F --windows DIR [--ranks 0,1,...] [--jobs N] \\
-        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+        --partition F --template-sets DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --out DIR [--delta 0.5]
       python benchmarks/one_stage/a5.py --tp-commit DIR --build-root DIR --advice-opening F \\
         [--other-advice-opening F --other-windows DIR] --windows DIR --challenger local --main FILE ...
@@ -85,7 +85,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
   trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
 * **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
-  verifier's Lean `flock-verify draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
+  verifier's Lean `verity-verify-proof draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
@@ -1066,10 +1066,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if plain(a):
             flags = ("--coins", "tree", "--stratified", str(drawn_law["k"]))
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
-                                        "tool": f"flock-verify verify {' '.join(flags)} --archive"}
+                                        "tool": f"verity-verify-proof verify {' '.join(flags)} --archive"}
         else:
             lv = s.get("lean_verify") or a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True, members=kept)
-            got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
+            got[f"lean-verify/m{k}"] = {**lv, "tool": "verity-verify-proof verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
@@ -1571,7 +1571,7 @@ def streamed(a: argparse.Namespace) -> bool:
 FIREWALL_HELP = ("the core protocols' path, Lean's flock-firewall: every session's prover runs behind the ZK server's send check "
                  "(FC_FIREWALL=1, live PROTOCOL.md §10.4); without it each runs prove --zk itself, as SPOT[Flock]'s proof server "
                  "does (a0.DIRECT, zk_cost's dev arm)")
-#: the ZK server's Lean session loop's executable, beside Lean's flock-verify in its package
+#: the ZK server's Lean session loop's executable, beside Lean's verity-verify-proof in its package
 ZK_SERVER_LOOP = "flock-firewall"
 #: the file an audit keeps a sample in: the window's (``out``) and each session's (``session-m<k>/``)
 SAMPLE_FILE = "draw.json"

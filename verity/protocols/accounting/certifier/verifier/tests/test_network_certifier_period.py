@@ -182,7 +182,7 @@ def test_lean_draw_runs_flock_verify_draw_on_the_coins(tmp_path, monkeypatch):
     isn't JSON is a refusal, and so is a Lean that can't be built."""
     monkeypatch.undo()
     seen = tmp_path / "seen.json"
-    fake = tmp_path / "flock-verify"
+    fake = tmp_path / "verity-verify-proof"
     answer = json.dumps({"law": "subset", "population": 5, "k": 2, "units": [1, 4]})
     fake.write_text(f"#!{sys.executable}\n"
                     "import json, os, sys\n"

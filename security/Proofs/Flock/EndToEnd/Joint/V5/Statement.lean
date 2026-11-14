@@ -123,7 +123,7 @@ def part (S : Finset (Fin nJ)) : Finset (Fin m.n) := Finset.univ.filter fun u =>
 `kd` proof blocks. -/
 def OneClass (L : Law m.n) : Prop := ∀ ω, mPtsOf m.D.unroll.g (L.draw ω).card = mPtsOf m.D.unroll.g (m.kd / nTab m.I)
 
-/-- The member's flock-verify session on its part `S` at the registration `R`. -/
+/-- The member's verity-verify-proof session on its part `S` at the registration `R`. -/
 noncomputable def live (S : Finset (Fin m.n)) (R : Reg) : Game Discharge.Exec.Transcript :=
   liveOfZJ m.dg (planZHJP m.dj m.y₀) m.N m.wr S R
 

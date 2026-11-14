@@ -4,29 +4,29 @@ import json
 from verity_proof_throughput import cli
 from verity_proof_throughput import profile as PF
 
-SCRIPT = """    flock-verify 
+SCRIPT = """    verity-verify-proof 
 \t    7f01 l_Flock_Sha512_compress
 \t    7f02 l_Flock_MerkleScheme_climb
 \t    7f03 l_Flock_ligerito___lambda__2
 \t    7f04 main
 
-flock-verify
+verity-verify-proof
 \t    7f05 l_Flock_F128_mul
 \t    7f06 l_Array_foldlMUnsafe_fold___at___Flock_bindAndZerocheck_spec__3
 \t    7f04 main
 
-flock-verify
+verity-verify-proof
 \t    7f07 lean_dec_ref_cold
 \t    7f08 l_Lean_Json_Parser_anyCore
 \t    7f09 l_Flock_Circuit_parse
 \t    7f04 main
 
-flock-verify
+verity-verify-proof
 \t    7f0a l_Flock_F128_mul
 \t    7f0b l_Flock_queryLevel
 \t    7f03 l_Flock_ligerito___lambda__2
 
-flock-verify
+verity-verify-proof
 \t    7f0c [unknown]
 """
 

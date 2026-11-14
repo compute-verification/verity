@@ -33,6 +33,7 @@ public import Spot.SecondStage
 public import Spot.Returned
 public import Spot.SecondStageExamples
 public import Spot.SecondWires
+public import Spot.BoundaryWritten
 public import Spot.Run
 public import Spot.Stream
 public import Spot.Fleet

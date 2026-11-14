@@ -43,6 +43,9 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
+* **The members' wiring** (the parameters' ``proofs.wiring``, `OneStageZk.wiringOf`, held by `wiresHeld` after the
+  sessions): parameters naming one raise `Outside`. This reads no circuit's ports or public file's rows, which that
+  check compares.
 * **A registered file's own form** (`Flock.Registered.ofJson`, which `classHeld` and each statement read it through).
   This reads a member's registered file by the fields `classHeld` compares, `Outside` where one is not a registered
   port's; the file's other refusals are the Flock verifier's, at the member's session, and are not answered here for a
@@ -212,6 +215,8 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
     they are not in that form."""
     form = Outside("the parameters and the evidence are not in the per-member form as its parsers read it "
                    "(`OneStageZk.membersParamsOfJson`, `membersEvidenceOf`)")
+    if isinstance(params.get("proofs"), dict) and "wiring" in params["proofs"]:
+        raise Outside("the parameters name the members' wiring, whose check (`OneStageZk.wiresHeld`) this does not run")
     try:
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)

@@ -34,7 +34,7 @@ TREE=$PWD TPY=$PWD/.venv/bin/python
 Q=$SD/private/pouw ST=$SD/private/pouw/drawn/statements.json LE=$SD/private/pouw/live/out/live/live-evidence.json
 (umask 077; mkdir -p "$Q") || exit 1
 export HZ_CACHE=${HZ_CACHE:-/workspace/research/cache/pouw-hidden-zk}
-LEAN=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify
+LEAN=$TREE/verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof
 [ -n "${FLOCK_VERIFY:-}" ] || { [ -x "$LEAN" ] && export FLOCK_VERIFY=$LEAN; }
 say() { echo "POUW $*"; }
 took() { echo "$(( ($(date +%s) - $1) / 60 )) min"; }

@@ -41,7 +41,7 @@ untraced = [
 # builds them before this suite (`AFTER_LEAN`). Its flock-circuit is `verity/protocols/proofs/flock/prover/check_build.sh bin`'s,
 # from the live crate and the patches under `verity`, on the Flock checkout check's flock-circuit-build step leaves on a
 # machine: the test skips on a machine without one, since its build fetches nothing.
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify",
+artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/verity-verify-proof",
              "verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-firewall"]
 # What the suite's test process may reach with the processes it starts, past the runner's default for one:
 # `test_audit_two_members`' audit holds a session's prover and verifier and the ZK server's Lean at once.

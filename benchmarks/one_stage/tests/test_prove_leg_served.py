@@ -180,4 +180,4 @@ def test_a_structural_leg_stages_struct_lowers_template_else_flat_saying_why(mon
     st, got = L._stager(inline, tmp_path, bound, None)
     assert (len(calls), got, st.get("layout"), st["reads"]) == (1, None, None, "inline")
     with pytest.raises(ValueError, match="come together"):
-        L.Tools("flock-circuit", "flock-verify", structural="iv/hybrid/4")
+        L.Tools("flock-circuit", "verity-verify-proof", structural="iv/hybrid/4")

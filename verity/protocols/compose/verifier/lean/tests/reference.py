@@ -236,7 +236,7 @@ def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]
     release (`_coins_of`), the evidence's one session (`oneSession`: the sampled proof blocks are proved in one session), its
     record on the blobs and held to the coin trees that release log shows (`challenger.sessions_tree_reason`). So every
     case the mirror decides is refused: a session on a tree the challenger logged goes on to the population, the public
-    file and `flock-verify`, outside the mirror."""
+    file and `verity-verify-proof`, outside the mirror."""
     try:
         if ONE_STAGE._coins_of(p, c, e) is None:
             return REJECT, "coins: no challenger"

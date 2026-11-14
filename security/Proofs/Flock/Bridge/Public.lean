@@ -38,7 +38,7 @@ import Proofs.Flock.Bridge.KSLive
 /-!
 # `SampledKSLiveV2` with a public error
 
-`SampledKSLiveV2` bounds `Pr[flock-verify accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run:
+`SampledKSLiveV2` bounds `Pr[verity-verify-proof accepts ∧ ¬ RelS]` by three terms, two of which read the prover's run:
 `ksAvgStrictZ (planZHJ dj y₀) L k q_F q_S (reg σ)`, at the prover's registration, and
 `Q_s = Σ_c |Ω_c|/|Ω|` (`ΩcZ`), at its binding. Neither depends on the prover in value, and each is at most a number read
 off the public parameters:
@@ -86,7 +86,7 @@ noncomputable def _root_.Flock.Bridge.deltaPub (n kd K₀ k : ℕ) (qF qS t' : �
 open Classical in
 /-- **The sampled audit's knowledge soundness, live, with a public error.** `SampledKSLiveV2`'s setting and named
 assumptions, at a rate cap `ρ < 1` with `2^23/(ek) ≤ ρ` (`rateM1`): for every live prover,
-$$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
+$$\Pr[\text{verity-verify-proof accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
   \mathrm{deltaPub}(n, k_d, K_0, k, 2(t' + v), t' + v, t' + v, M, R_w, W, \rho),$$
 `W = Σ_u |io u|` over the circuit's partition (`Bridge.ioSum`), `t'` the prover's per-run time and `v` one opening's
 verification. -/
