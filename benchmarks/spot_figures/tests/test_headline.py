@@ -816,3 +816,42 @@ def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
     assert got["bound_bits"] < base["bound_bits"]
     with pytest.raises(ValueError, match="1 steady-state rows price no block of this line: `Head_v1.NVIS=64.`"):
         H.run(H.spec_of("(i) honest", "world year", 0.4, steady=H.steady(rows, None, P), partition=H.WHOLE), P=P)
+
+
+def test_a_row_is_a_case_under_a_plan():
+    """Every case comes under every plan, the planner's own under the case's bare name; a plan's keywords are the
+    planner's, and a held κ is one of its grid."""
+    from verity.protocols.proofs.spot.prover.optimize import KAPPAS
+
+    assert set(H.ROWS) == {case + more for case in H.CASES for more in H.PLANS}
+    for case in H.CASES:
+        assert H.spec_of(case, "world year", 0.4)["plan"] == {}
+    spec = H.spec_of("(iii) honest, margin 1/8, kappa 2^-4", "world year", 0.4)
+    assert spec["plan"] == {"margin": H.MARGIN, "kappas": (2.0 ** -4,)}
+    assert (spec["case"], spec["scale"]) == (H.CASES["(iii) honest"]["case"], H.CASES["(iii) honest"]["scale"])
+    for plan in H.PLANS.values():
+        assert set(plan) <= {"margin", "kappas"} and set(plan.get("kappas", ())) <= set(KAPPAS)
+
+
+@pytest.mark.slow
+def test_a_row_s_design_is_held_to_its_plan():
+    """Three rows on the planner (a few seconds): a margin row's design is the planner's by template with the margin
+    named, never worse than its case's own, and its plan block by block is over those strata; a held κ is the design's,
+    and it proves fewer proof blocks a sampled replay block. Catches a driver that names a plan and designs by another,
+    which the plain dicts above can't."""
+    P = H.planner()
+    own, _ = H.run(H.spec_of("(i) honest", "world year", 0.4), P=P)
+    spec = H.spec_of("(i) honest, margin 1/8", "world year", 0.4)
+    row, reads = H.evaluate(spec, P)
+    design = reads["design"]
+    assert design["row"]["merged"] == "template" and design["kw"]["margin"] == H.MARGIN
+    p = H.plan(spec, row, reads, {}, P)
+    wide = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    e = -8 if wide["kappa"] > 2.0 ** -8 else -4
+    held, _ = H.run(H.spec_of(f"(i) honest, margin 1/8, kappa 2^{e}", "world year", 0.4), P=P)
+    assert (own["plan"], wide["plan"], held["plan"]["kappas"]) == ({}, H.PLANS[", margin 1/8"], (2.0 ** e,))
+    assert wide["bound_bits"] <= own["bound_bits"]
+    assert held["kappa"] == 2.0 ** e != wide["kappa"] and held["bound_bits"] >= wide["bound_bits"]
+    assert isclose(wide["k_sum"], sum(design["row"]["k"].values()))
+    assert (held["k_sum"] < wide["k_sum"]) == (held["kappa"] < wide["kappa"])
+    assert isclose(wide["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
