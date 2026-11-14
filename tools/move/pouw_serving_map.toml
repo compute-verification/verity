@@ -1,0 +1,97 @@
+# PoUW's serving code out of the vLLM adapter into PoUW's prover: what `tools/move/layout.py --map
+# tools/move/pouw_serving_map.toml` moves and rewrites (ARCHITECTURE.md, "Code that has to be written": PoUW's serving code
+# in one package under `protocols/accounting/pouw/`, reached by one call).
+#
+# The adapter's `protocols/pouw/` package, one directory per scheme below it as before (`h1/`, `pearl_c/`, `lead/`), becomes
+# `verity/protocols/accounting/pouw/prover/serving/`, with the lead's commitment (`commit/lead_rows.py`), the Pearl+ served
+# document's schema (`records/pearl_served.py`) and H1's sample and gate sessions (`pipeline/serve_h1_draw.py`,
+# `serve_h1_gate.py`). What stays in the adapter is its side of the call: the option module (`protocols/pouw/__init__.py`,
+# which the selector loads by name), and H1's three modules that reach into vLLM, flattened beside it (`h1_hooks.py`, the
+# model's linears and their hooks; `h1_ranks.py`, the TP worker extension; `h1_settings.py`, the settings read from a built
+# engine). The unit tests of the moved code that read nothing else of the adapter go to PoUW's prover tests; the tests that
+# drive vLLM or the adapter's engine stay with the adapter.
+#
+# What stays: the layout of record (`tests/tree.toml`), every Lean file's bytes and every kernel source's ([rewrite]
+# exclude). No root moves ([roots] old == new). No file is split or deleted. The format is `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"adapters/vllm/verity_vllm/protocols/pouw/circuit.py" = "verity/protocols/accounting/pouw/prover/serving/circuit.py"
+"adapters/vllm/verity_vllm/protocols/pouw/credit_gate.py" = "verity/protocols/accounting/pouw/prover/serving/credit_gate.py"
+"adapters/vllm/verity_vllm/protocols/pouw/device.py" = "verity/protocols/accounting/pouw/prover/serving/device.py"
+"adapters/vllm/verity_vllm/protocols/pouw/native.py" = "verity/protocols/accounting/pouw/prover/serving/native.py"
+"adapters/vllm/verity_vllm/protocols/pouw/operands.py" = "verity/protocols/accounting/pouw/prover/serving/operands.py"
+"adapters/vllm/verity_vllm/protocols/pouw/lead/" = "verity/protocols/accounting/pouw/prover/serving/lead/"
+"adapters/vllm/verity_vllm/protocols/pouw/pearl_c/" = "verity/protocols/accounting/pouw/prover/serving/pearl_c/"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/README.md" = "verity/protocols/accounting/pouw/prover/serving/h1/README.md"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/__init__.py" = "verity/protocols/accounting/pouw/prover/serving/h1/__init__.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/answers.py" = "verity/protocols/accounting/pouw/prover/serving/h1/answers.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py" = "verity/protocols/accounting/pouw/prover/serving/h1/challenger.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/commit.py" = "verity/protocols/accounting/pouw/prover/serving/h1/commit.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/draw.py" = "verity/protocols/accounting/pouw/prover/serving/h1/draw.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py" = "verity/protocols/accounting/pouw/prover/serving/h1/drawn.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/drawn_rows.py" = "verity/protocols/accounting/pouw/prover/serving/h1/drawn_rows.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/handoff.py" = "verity/protocols/accounting/pouw/prover/serving/h1/handoff.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/hooks.py" = "adapters/vllm/verity_vllm/protocols/pouw/h1_hooks.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/kept.py" = "verity/protocols/accounting/pouw/prover/serving/h1/kept.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/live.py" = "verity/protocols/accounting/pouw/prover/serving/h1/live.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/model_key.py" = "verity/protocols/accounting/pouw/prover/serving/h1/model_key.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/names.py" = "verity/protocols/accounting/pouw/prover/serving/h1/names.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/nodes.py" = "verity/protocols/accounting/pouw/prover/serving/h1/nodes.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/prover.py" = "verity/protocols/accounting/pouw/prover/serving/h1/prover.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/public_rows.py" = "verity/protocols/accounting/pouw/prover/serving/h1/public_rows.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/ranks.py" = "adapters/vllm/verity_vllm/protocols/pouw/h1_ranks.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/receipts.py" = "verity/protocols/accounting/pouw/prover/serving/h1/receipts.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/records.py" = "verity/protocols/accounting/pouw/prover/serving/h1/records.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/registered.py" = "verity/protocols/accounting/pouw/prover/serving/h1/registered.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/registered_device.py" = "verity/protocols/accounting/pouw/prover/serving/h1/registered_device.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/requests.py" = "verity/protocols/accounting/pouw/prover/serving/h1/requests.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/served.py" = "verity/protocols/accounting/pouw/prover/serving/h1/served.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/served_files.py" = "verity/protocols/accounting/pouw/prover/serving/h1/served_files.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/served_program.py" = "verity/protocols/accounting/pouw/prover/serving/h1/served_program.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/settings.py" = "adapters/vllm/verity_vllm/protocols/pouw/h1_settings.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/static.py" = "verity/protocols/accounting/pouw/prover/serving/h1/static.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/tables_device.py" = "verity/protocols/accounting/pouw/prover/serving/h1/tables_device.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/window.py" = "verity/protocols/accounting/pouw/prover/serving/h1/window.py"
+"adapters/vllm/verity_vllm/protocols/pouw/h1/words.py" = "verity/protocols/accounting/pouw/prover/serving/h1/words.py"
+"adapters/vllm/verity_vllm/commit/lead_rows.py" = "verity/protocols/accounting/pouw/prover/serving/lead/rows.py"
+"adapters/vllm/verity_vllm/records/pearl_served.py" = "verity/protocols/accounting/pouw/prover/serving/pearl_c/served_record.py"
+"adapters/vllm/verity_vllm/pipeline/serve_h1_draw.py" = "verity/protocols/accounting/pouw/prover/serving/h1/serve_draw.py"
+"adapters/vllm/verity_vllm/pipeline/serve_h1_gate.py" = "verity/protocols/accounting/pouw/prover/serving/h1/serve_gate.py"
+"adapters/vllm/tests/protocols/test_credit_gate_outside.py" = "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_outside.py"
+"adapters/vllm/tests/protocols/test_credit_gate_writes.py" = "verity/protocols/accounting/pouw/prover/tests/test_credit_gate_writes.py"
+"adapters/vllm/tests/protocols/test_pouw_device.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_device.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_answers.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_answers.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_device_lib.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_device_lib.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_nodes.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_nodes.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_prover.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_prover.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_receipts.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_receipts.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_records.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_records_device.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_records_device.py"
+"adapters/vllm/tests/protocols/test_pouw_h1_weight_roots.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_h1_weight_roots.py"
+"adapters/vllm/tests/protocols/test_pouw_lead_feed.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_feed.py"
+"adapters/vllm/tests/protocols/test_pouw_lead_record.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_lead_record.py"
+"adapters/vllm/tests/protocols/test_pouw_native.py" = "verity/protocols/accounting/pouw/prover/tests/test_pouw_native.py"
+"adapters/vllm/tests/commit/test_lead_rows.py" = "verity/protocols/accounting/pouw/prover/tests/test_lead_rows.py"
+
+[retired]
+# the directories this map empties
+paths = ["adapters/vllm/verity_vllm/protocols/pouw/h1/", "adapters/vllm/verity_vllm/protocols/pouw/lead/",
+         "adapters/vllm/verity_vllm/protocols/pouw/pearl_c/"]
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), files
+# whose bytes a digest pins, every Lean file, every kernel source, and the layout of record.
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "verity/circuits/silicon/captures/**",
+           "verity/circuits/silicon/hawkeye/**", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml",
+           "**/*.cu", "**/*.cuh", "**/*.cpp", "**/*.h", "**/*.c"]
+include = ["**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
+           "adapters/vllm/manifests/definitions.json"]
