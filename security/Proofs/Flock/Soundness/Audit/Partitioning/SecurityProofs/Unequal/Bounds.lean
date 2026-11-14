@@ -1,8 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
-import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.SamplingDesigns
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 
 /-!
 # Achievability, the granularity optimum and unequal units: the proofs
@@ -57,12 +57,12 @@ theorem unitCost_mono {f o x y : ℝ} (ho : 0 ≤ o) (h : x ≤ y) : unitCost f 
   unfold unitCost
   nlinarith
 
-theorem cost_const {n : ℕ} (L : Law n) (c : ℝ) : cost L (fun _ => c) = meanSamples L * c := by
+theorem cost_const {n : ℕ} (L : SamplingDesign n) (c : ℝ) : cost L (fun _ => c) = meanSamples L * c := by
   unfold cost meanSamples
   rw [Finset.sum_mul]
 
 /-- A sampling design under which every set of at least `K` units escapes with at most `δ` misses `K` units with at most `δ`. -/
-theorem miss_toReal_le_of {n : ℕ} {L : Law n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
+theorem miss_toReal_le_of {n : ℕ} {L : SamplingDesign n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
     (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.escape B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
     (ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (L.escape_le_one B)) hδ).2 (h B hB)
@@ -99,7 +99,7 @@ theorem achievability : Guarantees.Achievability := by
       calc (num u : ℝ) < q u * den + 1 := h1
         _ = (q u + (den : ℝ)⁻¹) * den := by field_simp
     linarith
-  refine ⟨Law.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
+  refine ⟨SamplingDesign.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
   · rw [bern_escape_toReal hnum]
     calc ∏ u ∈ B, (1 - (num u : ℝ) / den) ≤ ∏ u ∈ B, Real.exp (-(Λ / C * w u)) := by
           refine Finset.prod_le_prod₀ (fun u _ => ?_) (fun u _ => ?_)
@@ -328,7 +328,7 @@ theorem class_arith {m t A C : ℝ} {K : ℕ} (ht : 0 < t) (hC : 0 < C) (hm : 0 
 /-- **One class's samples.** A set `S` of units each doing work at least `t`, with `t ≤ A` when `S` has a unit, is sampled
 `Λ (1 − AΛ/(2C)) (|S|·t/C·(1 − A/C) − 1)` times in expectation, by `ConverseAsymptotic` on `L` restricted to `S` at
 `K = ⌈C/t⌉`. -/
-theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Law n) (w : Fin n → ℝ) {A C δ t : ℝ}
+theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : SamplingDesign n) (w : Fin n → ℝ) {A C δ t : ℝ}
     (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1) (hAΛ : A * Real.log δ⁻¹ ≤ C) (hL : MeetsTarget L w C δ)
     (S : Finset (Fin n)) (ht : 0 < t) (htS : ∀ u ∈ S, t ≤ w u) (htA : S.Nonempty → t ≤ A) :
     Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) * (S.card * t / C * (1 - A / C) - 1) ≤
@@ -462,7 +462,7 @@ theorem mul_unitCost_le {f o ρ t x : ℝ} (hf : 0 ≤ f) (ho : 0 ≤ o) (hρ : 
 is false (`unequalCost_needs_le`). -/
 theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : Fin n → ℝ) {ρ a A C δ f o : ℝ}
     (hρ : 1 < ρ) (ha : 0 < a) (haA : a ≤ A) (hw : ∀ u, a ≤ w u ∧ w u ≤ A) (hC : 0 < C) (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
-    (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : Law n) (hL : MeetsTarget L w C δ) :
+    (hf : 0 ≤ f) (ho : 0 ≤ o) (hAΛ : A * Real.log δ⁻¹ ≤ C) (L : SamplingDesign n) (hL : MeetsTarget L w C δ) :
     Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
         ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
           (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u) := by
@@ -557,12 +557,12 @@ theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : F
 `0`. -/
 theorem unequalCost_needs_le : ¬ ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a →
     (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C →
-      ∀ L : Law n, MeetsTarget L w C δ →
+      ∀ L : SamplingDesign n, MeetsTarget L w C δ →
         Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
             ((∑ u, w u * unitCost f o (w u)) / (ρ ^ 2 * C) * (1 - A / C) -
               (⌊Real.logb ρ (A / a)⌋₊ + 1) * unitCost f o A) ≤ cost L fun u => unitCost f o (w u) := by
   intro h
-  have hmeets : MeetsTarget (Law.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
+  have hmeets : MeetsTarget (SamplingDesign.subset 0 0 le_rfl) (Fin.elim0 : Fin 0 → ℝ) 1 (1 / 2) := fun B hB => by
     rw [Finset.eq_empty_of_isEmpty B, Finset.sum_empty] at hB
     norm_num at hB
   have hΛ : Real.log (1 / 2 : ℝ)⁻¹ = Real.log 2 := by norm_num

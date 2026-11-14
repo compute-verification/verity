@@ -50,7 +50,7 @@ readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "weights_of_record|weights-of-record" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "--weights-of-record \"\\$WREG\"|--registration \"\\$WREG\"|--registered \"\\$WREG\"|--pins \"\\$WREG\"" },
     { lane = "proofs", file = "verity/protocols/proofs/spot/prover/audit/prove_path.py", find = "\"--registration\"" },
-    { lane = "proofs", file = "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py", find = "\"--registered\"|\"--pins\"" },
+    { lane = "proofs", file = "verity/protocols/proofs/spot/prover/audit/records_audit.py", find = "\"--registered\"|\"--pins\"" },
     { lane = "memory-accounting", file = "benchmarks/pous/served_piece.py", find = "weights_registration\\.json" },
 ]
 
@@ -243,7 +243,7 @@ writers = [
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "prove_path\\.py window-commit --serve-run" },
 ]
 readers = [
-    { lane = "proofs", file = "verity/protocols/proofs/spot/verifier/one_stage/records_audit.py", find = "window / \"registration\\.json\"|window / \"circuit\\.json\"|IF\\.of_records\\(window_dir" },
+    { lane = "proofs", file = "verity/protocols/proofs/spot/prover/audit/records_audit.py", find = "window / \"registration\\.json\"|window / \"circuit\\.json\"|IF\\.of_records\\(window_dir" },
     { lane = "proofs", file = "benchmarks/one_stage/served_verdicts.sh", find = "records_audit\\.py (warm|audit|period) --window \"\\$VW/window\"" },
     { lane = "network-accounting", file = "benchmarks/network_traces/certifier_piece.py", find = "v3c / \"period\\.json\"" },
 ]

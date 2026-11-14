@@ -17,16 +17,14 @@ from __future__ import annotations
 import argparse
 import json
 import subprocess
-import sys
 import time
 from pathlib import Path
 from typing import Any
 
 import torch
+import torch_engine as T
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "sha512_rows"))
-
-import engine as E
+from verity.commitments.cuda.sha512_rows import engine as E
 from verity.commitments.identity import identity_digest_sha512
 
 UNIT_BYTES = 32768
@@ -212,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
     if any(k < 1 or LAYERS % k for k in a.layers_per_call):
         ap.error(f"--layers-per-call divides {LAYERS}")
     a.out.mkdir(parents=True, exist_ok=True)
-    engine = E.Engine()
+    engine = T.Engine("cuda")
     exact = None
     if a.check is not None:
         c = json.loads(a.check.read_text()) if a.check.exists() else {}

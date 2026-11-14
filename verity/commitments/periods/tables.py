@@ -1,7 +1,7 @@
-"""A window's row tables on the verifier's side (`serving_rows.RowTable`): its linked members' public strings tied to the tables'
+"""A period's row tables on the verifier's side (`serving_rows.RowTable`): its linked members' public strings tied to the tables'
 roots, the segments' roots and the registered ``row-table`` root (`check_row_tables`); each linked member's ``--registered`` file
 for the Lean verifier (`registered_reads`); and the audit record's account of what each sampled member's verdict reported
-reading (`reported_reads`).  Everything here reads the window, the members' public bodies and the roots, never what a table's
+reading (`reported_reads`).  Everything here reads the period, the members' public bodies and the roots, never what a table's
 names or row keys mean.
 """
 from __future__ import annotations
@@ -57,7 +57,7 @@ def registered_reads(window: CS.Binding, publics: Mapping[str, bytes], *, regist
     """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, in the format of ``registered``,
     core's ``one_stage.registered``, by member key): its ``x`` port reads its one row table, under the table's root recomputed
     from the members' public strings (the root ``check_row_tables`` ties to the registration and the segment roots, so call it
-    after that passes) and its domain under the window's context, and unit ``m.base + i`` reads the table row its ``i``-th unit
+    after that passes) and its domain under the period's context, and unit ``m.base + i`` reads the table row its ``i``-th unit
     links; a member linking rows of two tables is refused, whatever built it.  The header's ``registered`` entry
     (``serving_rows.registered_entry``) must give each of the member's ``x`` rows a path to that root at that position."""
     strings, bad = _linked_strings(window, publics)

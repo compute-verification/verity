@@ -20,7 +20,7 @@ import grader as G
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import fa2_train as FT
 from verity.definitions.registry import fa2_train_bwd as FTB
-from verity_vllm.program.frontend.train_step import AdamW, export_step, primitives, step_report
+from verity_torch.frontend.train_step import AdamW, export_step, primitives, step_report
 
 LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
 #: the step's batch and the structure Program's, as rows of tokens: the structure's attention at a T of 32 (its tokens less

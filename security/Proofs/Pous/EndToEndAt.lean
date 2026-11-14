@@ -47,8 +47,8 @@ open scoped ENNReal
 theorem ofFin_eq_toUInt8 (a : Fin 256) : UInt8.ofFin a = a.val.toUInt8 :=
   UInt8.toNat_inj.1 (by rw [UInt8.toNat_ofFin, Nat.toUInt8_eq, UInt8.toNat_ofNat_of_lt' a.isLt])
 
-theorem streamOf_eq_bytesOf {n : ℕ} (x : Bytes n) : FlockSoundness.Audit.Law.streamOf x = bytesOf x := by
-  simp only [FlockSoundness.Audit.Law.streamOf, bytesOf, ofFin_eq_toUInt8]
+theorem streamOf_eq_bytesOf {n : ℕ} (x : Bytes n) : FlockSoundness.Audit.SamplingDesign.streamOf x = bytesOf x := by
+  simp only [FlockSoundness.Audit.SamplingDesign.streamOf, bytesOf, ofFin_eq_toUInt8]
 
 /-- **One stream**: `uniformOn N` returns `i` on at most a `1/N` share of the streams. -/
 theorem card_draw_le (N : ℕ) (hN : 0 < N) (i : ℕ) :

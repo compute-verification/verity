@@ -39,8 +39,9 @@ from verity.protocols.accounting.pouw.verifier import verifier as V
 REPO = Path(__file__).resolve().parents[7]
 POUW = REPO / "verity/protocols/accounting/pouw/verifier/lean/check"
 PIECES = REPO / "verity/protocols/proofs/spot/verifier/lean"
+CALLER = REPO / "verity/protocols/proofs/spot_flock/verifier/lean"
 DISAGREE = "lean-python-disagree"
-CHECKS = ("registered", "registration", "public", "pass", "draw", "opening", "prelude", "answer")
+CHECKS = ("registered", "registration", "caller", "public", "pass", "draw", "opening", "prelude", "answer")
 
 
 class Disagree(Exception):
@@ -153,7 +154,8 @@ def py_draw(x: dict) -> dict | None:
 class Record:
     """Both verdicts of each check, Lean's of record. `lean` False runs the references alone; by default it is whether
     `verifier.RECORD_VERDICT` is ``"lean"``. The servers start at their first check and build their executables (`lake
-    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``)."""
+    build`) then, unless `exes` names them (``pouw-check``, ``pouw-check-difftest``, ``sampled-proofs-difftest``,
+    ``spot-flock-caller``)."""
 
     def __init__(self, lean: bool | None = None, exes: Mapping[str, str | Path] | None = None) -> None:
         self.lean = V.RECORD_VERDICT == "lean" if lean is None else lean
@@ -199,6 +201,13 @@ class Record:
         out = self._piece("registration", "sampled-proofs-difftest", PIECES, "registration",
                           {"params": params, "record": record}, lambda _: registration_answer(python()))
         return out.get("codes", ["registration"])
+
+    def caller(self, params: dict, record: Any, python: Callable[[], Any]) -> list[str]:
+        """The caller's codes (`VStar.Recursive.Caller.check`) for `record` against `params`, the registration's;
+        `python` is the reference's call (`caller.check`), its `Verdict`."""
+        out = self._piece("caller", "spot-flock-caller", CALLER, "caller", {"params": params, "record": record},
+                          lambda _: {"codes": list(python().codes)})
+        return out.get("codes", ["caller"])
 
     def public(self, x: dict, python: Callable[[], dict]) -> dict:
         """The service's public-items rule's ``{"ok", "codes", "detail"}`` on `x` (`public_params`), or ``{"refused"}``

@@ -7,7 +7,7 @@ public import Spot.Select
 
 The population a selection rule samples is the registration's, which the prover sizes. A fixed count `K` of `N` units
 samples each unit with `K/N`, which falls as the prover pads `N`. So `Select.Rule.ofJson` parses a rule only when its
-design text is a rate (`Select.rate?`, `Select.replayLaw?`) and refuses a fixed count (`Select.FIXED`), and
+design text is a rate (`Select.rate?`, `Select.replaySamplingDesign?`) and refuses a fixed count (`Select.FIXED`), and
 `Select.Rule.over` turns the rate into a count once the population is known. `RuleAtRate` says what that gives, against
 those functions, and takes no premise. It is about the count a rule names, not the sample made from it. It has three
 parts:
@@ -92,7 +92,7 @@ def TextAtRate (t t' : String) (n : Nat) (sizes : List Nat) : Prop :=
 def AtRate (rule r : Select.Rule) (n : Nat) (sizes : List Nat) : Prop :=
   match rule with
   | .all => r = .all
-  | .law t => ∃ t', r = .law t' ∧ TextAtRate t t' n sizes
+  | .samplingDesign t => ∃ t', r = .samplingDesign t' ∧ TextAtRate t t' n sizes
   | .twoStage g t k => ∃ t', r = .twoStage g t' k ∧ SubsetAtRate t t' n
 
 /-- The units of a stratum's ranges `[lo, hi)`, as `Select.Rule.tableOver` and `Select.strataSizes` count them. -/
@@ -118,7 +118,7 @@ def TableAtRate (t : String) (p : Program) (query : Json) (out : Option Json) : 
       ∀ s ∈ strata.toList, ∀ K total, num * rangeUnits s.2 ≤
         den * Flock.Draw.workK K (work s.1) (rangeUnits s.2) total (Rate.floor num den (rangeUnits s.2) (floor s.1))
 
-/-- A rule object as a Spec writes it under the design text `t`: `{rule: law, law: t}`. -/
+/-- A rule object as a Spec writes it under the design text `t`: `{rule: samplingDesign, samplingDesign: t}`. -/
 def ruleOfText (t : String) : Json := Json.mkObj [("rule", "law"), ("law", Json.str t)]
 
 /-- **The count a parsed rule names is at least its rate, over whatever the prover registers.** For every rule object
@@ -128,14 +128,14 @@ the count it names is at least the rate's share of `n`. Under a stratified rate 
 least the rate's share of the stratum, and of its `K` only `1 ≤ K ≤ n` is said. Under a work rate design only
 `1 ≤ K ≤ n` is said: the rate is within the table's floors. Of `all` and of a Bernoulli text only that each stays
 itself. For every design text, program, query and work table, where `Rule.tableOver` gives a table under the rule
-`law t`, that table is `TableAtRate`'s: the floor under each stratum's template is at the rate. And a fixed count is
+`samplingDesign t`, that table is `TableAtRate`'s: the floor under each stratum's template is at the rate. And a fixed count is
 refused: at every `K`, the rule object whose design text is `subset:K`, and likewise `stratified:K` and `work:K`, is
 refused with `FIXED`. -/
 def RuleAtRate : Prop :=
   (∀ (j : Json) (rule : Select.Rule) (n : Nat) (sizes : List Nat) (r : Select.Rule),
     Select.Rule.ofJson j = .ok rule → rule.over n sizes = some r → AtRate rule r n sizes) ∧
   (∀ (t : String) (p : Program) (query : Json) (table out : Option Json),
-    (Select.Rule.law t).tableOver p query table = .ok out → TableAtRate t p query out) ∧
+    (Select.Rule.samplingDesign t).tableOver p query table = .ok out → TableAtRate t p query out) ∧
   (∀ K : Nat, Select.Rule.ofJson (ruleOfText s!"subset:{K}") = .error (Select.FIXED s!"subset:{K}")) ∧
   (∀ K : Nat, Select.Rule.ofJson (ruleOfText s!"stratified:{K}") = .error (Select.FIXED s!"stratified:{K}")) ∧
   ∀ K : Nat, Select.Rule.ofJson (ruleOfText s!"work:{K}") = .error (Select.FIXED s!"work:{K}")

@@ -3,13 +3,13 @@ module
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
-import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.SamplingDesign
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
 
 /-!
 # The partitioning guarantees are not vacuous
 
-For each guarantee, an instance whose hypotheses all hold and whose bound is positive. `Law.subset n n` samples every unit,
+For each guarantee, an instance whose hypotheses all hold and whose bound is positive. `SamplingDesign.subset n n` samples every unit,
 so it meets every target. Two more show that `RiskConcave`'s hypotheses can't be dropped.
 
 * `converse`: the uniform 2-subset of 4 units has `miss 2 = 1/6`, and at `δ = 1/6` both converse bounds are positive,
@@ -39,11 +39,11 @@ namespace FlockSoundness.Audit.Partitioning.Witness
 open Finset
 
 theorem converse :
-    ((Law.subset 4 2 (by norm_num)).miss 2).toReal ≤ 1 / 6 ∧
+    ((SamplingDesign.subset 4 2 (by norm_num)).miss 2).toReal ≤ 1 / 6 ∧
     1 < ((4 : ℝ) - 2 + 1) * (1 - (1 / 6 : ℝ) ^ ((2 : ℝ)⁻¹)) ∧
     0 < ((4 : ℝ) - 2 + 1) / 2 * Real.log (1 / 6 : ℝ)⁻¹ * (1 - Real.log (1 / 6 : ℝ)⁻¹ / (2 * 2)) := by
   refine ⟨?_, ?_, ?_⟩
-  · rw [Law.subset_miss _ (by norm_num), ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
+  · rw [SamplingDesign.subset_miss _ (by norm_num), ENNReal.toReal_div, ENNReal.toReal_natCast, ENNReal.toReal_natCast]
     norm_num [Nat.choose]
   · have h : (1 / 6 : ℝ) ^ ((2 : ℝ)⁻¹) < 2 / 3 := by
       have := Real.rpow_lt_rpow (by norm_num : (0 : ℝ) ≤ 1 / 6) (by norm_num : (1 / 6 : ℝ) < (2 / 3) ^ 2)
@@ -65,24 +65,24 @@ theorem achievability : min 1 (Real.log (1 / 2 : ℝ)⁻¹ / 2 * 1) + 1 / 4 < 1 
   SecurityProofs.Unequal.achievability_witness
 
 theorem granularity :
-    MeetsTarget (Law.subset 1000 1000 le_rfl) (fun _ => 1) 10 (1 / 2) ∧
-    MeetsTarget (Law.subset 500 500 le_rfl) (fun _ => 2) 10 (1 / 2) ∧
+    MeetsTarget (SamplingDesign.subset 1000 1000 le_rfl) (fun _ => 1) 10 (1 / 2) ∧
+    MeetsTarget (SamplingDesign.subset 500 500 le_rfl) (fun _ => 2) 10 (1 / 2) ∧
     0 < 1 - 1 / 10 - 10 / (1000 * 1) - 1 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) ∧
     0 < 1 - 2 / 10 - 10 / (500 * 2) - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10) :=
   SecurityProofs.Unequal.granularity_witness
 
-theorem heavyUnit : MeetsTarget (Law.subset 1 1 le_rfl) (fun _ => 1) 1 (1 / 2) := by
+theorem heavyUnit : MeetsTarget (SamplingDesign.subset 1 1 le_rfl) (fun _ => 1) 1 (1 / 2) := by
   intro B hB
   have h1 : (1 : ℝ) ≤ B.card := by simpa using hB
   have h2 : B.card ≤ 1 := by simpa using Finset.card_le_univ B
   have h3 : 1 ≤ B.card := by exact_mod_cast h1
-  rw [Law.subset_escape, show B.card = 1 by omega]
+  rw [SamplingDesign.subset_escape, show B.card = 1 by omega]
   norm_num
 
 theorem unequal :
     (∀ u : Fin 100, 1 ≤ (if u.val < 50 then (1 : ℝ) else 2) ∧ (if u.val < 50 then (1 : ℝ) else 2) ≤ 2) ∧
     2 * Real.log (1 / 2 : ℝ)⁻¹ ≤ 10 ∧
-    MeetsTarget (Law.subset 100 100 le_rfl) (fun u => if u.val < 50 then 1 else 2) 10 (1 / 2) ∧
+    MeetsTarget (SamplingDesign.subset 100 100 le_rfl) (fun u => if u.val < 50 then 1 else 2) 10 (1 / 2) ∧
     0 < Real.log (1 / 2 : ℝ)⁻¹ * (1 - 2 * Real.log (1 / 2 : ℝ)⁻¹ / (2 * 10)) *
       ((∑ u : Fin 100, if u.val < 50 then (1 : ℝ) else 2) / (2 * 10) * (1 - 2 / 10) -
         (⌊Real.logb 2 (2 / 1)⌋₊ + 1)) ∧
@@ -93,7 +93,7 @@ theorem unequal :
 
 theorem exfiltration :
     (1 : ℝ) * 1 + locBits 4 1 ≤ 4 ∧ (4 : ℝ) < 1 * (1 + 1) + locBits 4 (1 + 1) ∧
-    CertifiesLeak (Law.subset 4 4 le_rfl) (fun _ => 1) (1 / 2) 4 ∧
+    CertifiesLeak (SamplingDesign.subset 4 4 le_rfl) (fun _ => 1) (1 / 2) 4 ∧
     0 < ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) ∧
     ((4 : ℝ) - 1) * (1 - (1 / 2 : ℝ) ^ ((1 + 1 : ℝ)⁻¹)) < 4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1) :=
   SecurityProofs.Exfil.witness_exfiltration
@@ -101,7 +101,7 @@ theorem exfiltration :
 theorem refinement :
     2 * (1 + 1) ≤ 4 ∧ (16 : ℝ) * 1 + locBits 4 1 ≤ 20 ∧ (20 : ℝ) < 16 * (1 + 1) + locBits 4 (1 + 1) ∧
     (16 : ℝ) + Real.logb 2 (1 + 2) / (1 + 1) ≤ 16 + Real.logb 2 2 ∧
-    CertifiesLeak (Law.subset (2 * 4) (2 * 4) le_rfl) (fun _ => 16) (1 / 2) 20 ∧
+    CertifiesLeak (SamplingDesign.subset (2 * 4) (2 * 4) le_rfl) (fun _ => 16) (1 / 2) 20 ∧
     0 < (1 - 1 / 4) * (1 - Real.log (1 / 2 : ℝ)⁻¹ / (2 * (1 + 1))) *
       (unitCost 0 1 1 * (4 * Real.log (1 / 2 : ℝ)⁻¹ / (1 + 1))) :=
   SecurityProofs.Exfil.witness_refinement

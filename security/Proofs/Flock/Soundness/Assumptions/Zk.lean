@@ -57,15 +57,15 @@ either fact:
 * `RecordsLiveZK I dj wr`: the record `verify --zk` reads is the one the challenger wrote for the live
   session. At every transcript it accepts, its sample is `dj S`, its proofs are the prover's, and its root, link points
   and rounds are the live outcome's.
-* `SampleFileZK dj law pop`: the sample file is the one `verity-verify-proof draw` printed for the verifier's own sample. Every sample
-  file `dj S` that `UnitSample.ofJson` decodes decodes to `drawOf law pop S`, the sample of `S` under `law` over
+* `SampleFileZK dj samplingDesign pop`: the sample file is the one `verity-verify-proof draw` printed for the verifier's own sample. Every sample
+  file `dj S` that `UnitSample.ofJson` decodes decodes to `drawOf samplingDesign pop S`, the sample of `S` under `samplingDesign` over
   `[0, pop)`.
 
 Both are stated at what verity-verify-proof parses, so the record's serialization is outside them. -/
 def RecordCustodyZK {n mPts : ℕ} {Reg : Type} (I : Discharge.Exec.Inputs) (dj : Finset (Fin n) → Lean.Json)
-    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (law : Flock.Draw.Law) (pop : ℕ) :
+    (wr : Finset (Fin n) → Reg → Refine.LiveOut mPts → Discharge.Exec.Transcript) (samplingDesign : Flock.Draw.SamplingDesign) (pop : ℕ) :
     Prop :=
-  Discharge.ZkLink.RecordsLiveZK I dj wr ∧ Discharge.ZkLink.SampleFileZK dj law pop
+  Discharge.ZkLink.RecordsLiveZK I dj wr ∧ Discharge.ZkLink.SampleFileZK dj samplingDesign pop
 
 /-- **The record is the live session's, at `J` tables, under a stratified sample** (`live-verifier`, as
 `RecordCustodyZKJ`): the record `verify --zk --session-tables J` reads is the one the challenger wrote for the live
