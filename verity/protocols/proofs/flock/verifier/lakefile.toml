@@ -68,3 +68,8 @@ root = "FlockRecLinks"
 [[lean_exe]]
 name = "flock-read-tmpl"
 root = "FlockReadTmpl"
+
+# scratch, never for landing: times the setup at the sample of no unit
+[[lean_exe]]
+name = "flock-setup-probe"
+root = "FlockSetupProbe"
