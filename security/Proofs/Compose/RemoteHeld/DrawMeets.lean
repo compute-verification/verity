@@ -97,7 +97,7 @@ theorem openings_zero_subset {m U k : ℕ} (b : Blocks m) (hk : k ≤ U) :
     openings U k b (fun _ => 0) ⊆ range U := by
   intro q hq
   obtain ⟨p, hp, rfl⟩ := mem_image.1 hq
-  exact mem_range.2 (Draw.arrange_lt hk (offsets_zero_lt b hk) p (by have := mem_range.1 hp; omega))
+  exact mem_range.2 (Sample.arrange_lt hk (offsets_zero_lt b hk) p (by have := mem_range.1 hp; omega))
 
 variable {n m : ℕ} {k : Fin n → ℕ} {κ : ℕ} {X : Type}
 
@@ -111,7 +111,7 @@ theorem honest_meets [Fintype X] (U : Fin n → Fin (m + 1)) (prf : Fin n → Po
     fun ω _ t _ hp => Or.inl (openings_zero_subset (U := (U t : ℕ)) (k := min (k t) (U t : ℕ)) (prf t (ω.2 t))
       (min_le_right _ _) hp),
     fun ω ha => (hT ω ha).trans_le (Nat.zero_le _),
-    fun δ t => Draw.prfAdvantage_honest (honest k κ X U) (fun _ _ => subset_rfl) prf δ t⟩
+    fun δ t => Sample.prfAdvantage_honest (honest k κ X U) (fun _ _ => subset_rfl) prf δ t⟩
 
 /-- `Instances.burst` on a session's coins. -/
 abbrev burstOn (n κ : ℕ) (X : Type) (N D t₁ Br Bd Bl : ℕ) : Trace (SampleCoins n κ X) := burst N D t₁ Br Bd Bl
@@ -263,7 +263,7 @@ theorem wordIndex_one_isSome {w : ℕ} (u : Pous.Bits w) : (Accounting.Actual.wo
 theorem pick_one_isSome (b : Pous.Bits 512) : (pick 1 b).isSome = true := by
   unfold pick
   rw [List.findSome?_isSome_iff]
-  exact ⟨0, List.mem_range.2 (lt_of_lt_of_le (by norm_num) (Draw.four_le_words (N := 1) (by norm_num))),
+  exact ⟨0, List.mem_range.2 (lt_of_lt_of_le (by norm_num) (Sample.four_le_words (N := 1) (by norm_num))),
     wordIndex_one_isSome _⟩
 
 theorem accepted_one {m : ℕ} (b : Blocks m) : accepted 1 1 b := fun i hi => by

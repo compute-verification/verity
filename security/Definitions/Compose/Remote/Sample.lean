@@ -248,7 +248,7 @@ def incorrect (ω : SampleCoins n κ X) : ℕ := ∑ t, ((D.size t ω : ℕ) - D
 
 /-- The session's pooled bound at `δ`, at the sizes and sample counts of outcome `ω`. -/
 noncomputable def pooled (δ : ℝ) (ω : SampleCoins n κ X) : ℝ :=
-  Draw.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
+  Sample.pooled n (fun t => D.size t ω) (fun t => D.samples t ω) δ
 
 end Run
 
