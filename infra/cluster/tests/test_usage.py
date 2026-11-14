@@ -240,6 +240,9 @@ def test_wasters_ranks_one_days_holdings_and_finds_a_day_with_no_hours(tmp_path,
     assert [(w["node"], w["owner"], w["idle_s"]) for w in rep["wasters"]] == [("vy-nebius-2", "memory-accounting", 900)]
     rc, out = run(capsys, "wasters", "--day", "2026-10-01", "--file", f)
     assert rc == 1 and "finding: no hours of 2026-10-01" in out
+    assert "not measured: no hour of that day was read" in out and "no holding held a GPU idle" not in out
+    rc, out = run(capsys, "wasters", "--day", "2026-10-03", "--top", "1", "--file", record_file(tmp_path, day_of_free_time()))
+    assert rc == 0 and "no holding held a GPU idle that day" in out
 
 
 def test_wasters_say_the_hours_they_cover_and_a_day_short_of_the_hours_that_ended_is_a_finding(tmp_path, capsys, monkeypatch):
@@ -285,3 +288,13 @@ def test_without_file_it_reads_vy_nebius_1s_record_with_one_tail_or_grep(capsys,
     assert sent == [f"tail -c {5 * 256 * 1024} {usage.RECORD}", f"grep -F '\"hour\": \"2026-10-03T' {usage.RECORD} || test $? -eq 1"]
     assert '"hour": "2026-10-03T' in json.dumps(r)        # the grep's pattern is the record's own format
     assert json.loads(capsys.readouterr().out.split("\n}\n")[0] + "\n}")["source"] == f"vy-nebius-1:{usage.RECORD}"
+
+
+def test_without_node_1s_address_in_the_environment_the_record_is_unread_and_the_finding_names_the_variable(capsys, monkeypatch):
+    monkeypatch.setattr(usage, "clock", lambda: epoch("2026-10-03T10:20:00Z"))
+    monkeypatch.delenv("VY_NEBIUS_1_HOST", raising=False)
+    a = argparse.Namespace(ucmd="hourly", node="nebius-1", hours=2, json=True, file=None)
+    assert usage.main(a) == 1
+    assert json.loads(capsys.readouterr().out)["findings"][0] == (
+        f"could not read vy-nebius-1:{usage.RECORD}: ReadError: VY_NEBIUS_1_HOST is unset: vy-nebius-1's address, which "
+        "machines.d/vy-nebius-1.toml registers as host")

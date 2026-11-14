@@ -3,13 +3,17 @@ and the directory holds nothing but data (nothing imports it; it can move to its
 
 from __future__ import annotations
 
+import ast
+import collections
 import json
+import operator
+import pathlib
 import re
 
 import pytest
 
-from verity.definitions.silicon.instructions import INSTRUCTIONS
-from verity.definitions.circuits.targets.target import FP8_HOPPER_WGMMA, TARGETS
+from verity.circuits.silicon.instructions import INSTRUCTIONS
+from verity.circuits.targets.target import FP8_HOPPER_WGMMA, TARGETS
 from verity_numerical.bench import census, contract
 
 jsonschema = pytest.importorskip("jsonschema")
@@ -125,7 +129,7 @@ def test_every_target_resolves_its_census_line_and_every_line_serves_a_target_or
         assert h.device == t.anchor_device and h.dtype == INSTRUCTIONS[t.instruction].a_dtype and h is contract.native_reference(name)
     used = {h.id for h in lines.values()} | {w.serving.hardware for w in census.WORKLOADS.values()}
     # the L40S FP8 line serves no row yet; the RTX PRO 6000 lines serve the POUS bench's --hardware and the GemmCoordinate
-    # hillclimbs (verity/protocols/flock/pod/gemm_hill.py)
+    # hillclimbs (verity/protocols/proofs/flock/prover/pod/gemm_hill.py)
     rtx_pro = {f"rtx-pro-6000-server/{d}" for d in ("bf16", "e4m3", "e2m1")}
     assert used <= set(census.HARDWARE) and set(census.HARDWARE) - used <= {"l40s-48gb/e4m3"} | rtx_pro
     sets = [s.target for s in census.INPUT_SETS.values()]
@@ -148,9 +152,9 @@ def test_every_target_is_a_subcircuit_bound_to_its_exact_instruction() -> None:
     assert census.subcircuit_of(FP8_HOPPER_WGMMA.name).id == "gemm-coordinate/k1536/sm90-wgmma-e4m3"
     notes = {s.id: [n.note for n in s.fidelity_notes] for s in census.SUBCIRCUITS.values()}
     assert notes["gemm-coordinate/k1536/sm90-mma-bf16"] == [
-        "H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). "
-        "On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the "
-        "name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs"]
+        ("H100 BF16 models mma (sm90.mma.m16n8k16.bf16); vLLM's H100 BF16 GEMMs run wgmma (sm90.wgmma.m64n8k16.bf16). "
+         "On the H100 the two write the same words on every captured input, NaN and infinities included, so the gap is in the "
+         "name only; gemm-coordinate/k1536/sm90-wgmma-bf16 names the instruction production runs")]
     assert {i.id: i.provenance for i in census.INPUT_SETS.values()} == {
         "bench-instances-v1": "captured", "bench-instances-fp8-ada-v1": "synthetic", "bench-instances-bf16-hopper-v1": "synthetic",
         "bench-instances-fp8-hopper-v1": "synthetic", "bench-instances-nvfp4-sm120-v1": "synthetic"}
@@ -196,9 +200,6 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     """Each workload is a served vLLM configuration with its template mix: the proof blocks per family and bound
     parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
     to those expectations, and only families the census has a template for name one."""
-    import collections
-    import pathlib
-
     repo = pathlib.Path(census.ROOT).parents[1]
     assert census.WORKLOADS, "no workloads"
     for w in census.WORKLOADS.values():
@@ -226,15 +227,15 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     assert (r101.vus, gemm, r101.model.name, r101.serving.hardware_class) == (46558, 18400, "Llama-3.2-1B", "l40s")
 
 
-#: bench-spine's input-set generator keys on these template ids (`verity_flock.subcircuit_templates`); the census must
+#: The input-set generator keys on these template ids (`verity_flock.subcircuit_templates`); the census must
 #: name them alike.
-BENCH_SPINE_TEMPLATES = {"gemm-coordinate", "attention-head", "rope-head", "rmsnorm-fused-cuda", "rmsnorm-triton", "silu-mul",
-                         "gumbel-top-p-token-select"}
+GENERATOR_TEMPLATES = {"gemm-coordinate", "attention-head", "rope-head", "rmsnorm-fused-cuda", "rmsnorm-triton", "silu-mul",
+                       "gumbel-top-p-token-select"}
 
 
 def test_subcircuit_templates_cover_every_mixed_family_with_ir_definitions() -> None:
     templates = census.SUBCIRCUIT_TEMPLATES
-    assert BENCH_SPINE_TEMPLATES <= set(templates)
+    assert GENERATOR_TEMPLATES <= set(templates)
     for t in templates.values():
         assert re.fullmatch(r"[a-z0-9]+(-[a-z0-9]+)*", t.id) and t.ir_definitions and t.description and vars(t.parameters)
         assert all(p.type in ("integer", "string", "number") for p in vars(t.parameters).values())
@@ -249,7 +250,7 @@ def test_the_l40s_line_is_the_datasheets_dense_peak() -> None:
     assert "accumulate" in bf16.methodology and bf16.name == "L40S"
 
 
-#: Bound subcircuit ids as bench-spine's generator writes them (`verity_flock.subcircuit_templates`: GEMM, FA2 head, RoPE, the row templates with
+#: Bound subcircuit ids as the input-set generator writes them (`verity_flock.subcircuit_templates`: GEMM, FA2 head, RoPE, the row templates with
 #: a float EPS slug) and as the other census templates bind: every one must validate.
 BOUND_ID_EXAMPLES = (
     "gemm-coordinate/k1536/sm90-wgmma-e4m3", "gemm-coordinate/k2048/sm80-mma-bf16", "gemm-coordinate/k2560/sm90-wgmma-bf16",
@@ -276,9 +277,6 @@ def test_every_templates_bound_ids_validate() -> None:
 
 def _ops(expr: str, env: dict) -> int:
     """An integer work-model expression (+ - * // and parentheses over names) evaluated without eval."""
-    import ast
-    import operator
-
     ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
 
     def ev(n: ast.AST) -> int:
@@ -317,7 +315,7 @@ def test_every_template_carries_a_work_model() -> None:
 
 
 def test_memory_bound_templates_carry_a_bandwidth_work_model_and_the_h100_its_bandwidth() -> None:
-    """The four non-GEMM templates Flock has cells on: bytes per input over their ports (bench-spine's templates), evaluated at
+    """The four non-GEMM templates Flock has cells on: bytes per input over their ports (the input-set generator's templates), evaluated at
     their row 101 bindings; the H100's HBM3 bandwidth is the denominator."""
     want = {"rope-head/d64/neox-bf16": 6 * 64, "silu-mul/i8192/bf16": 6 * 8192, "rmsnorm-fused-cuda/n2048-eps1e-05/bf16": 10 * 2048,
             "rmsnorm-triton/n2048-eps1e-05/bf16": 6 * 2048}

@@ -4,7 +4,7 @@
 The stand-in is GLM-5.3's registered config (`CONFIG`) cut to its first `LAYERS` layers and `EXPERTS` routed experts, with
 its MTP layer, served tensor-parallel 1 on one card from vLLM's dummy weights (``load_format="dummy"``), without a tokenizer.
 ``--weights dummy`` keeps vLLM's values, under which a token depends on little but the token before it; ``--weights scaled``
-redraws every weight at `STD` after the load (`rescale`), so a token depends on its whole context and one differing bit shows.
+resamples every weight at `STD` after the load (`rescale`), so a token depends on its whole context and one differing bit shows.
 
 Each arm of `ARMS` is one speculative config (``off`` has none). Each phase is a process of its own:
 
@@ -112,7 +112,7 @@ def engine(model: Path, cfg: dict[str, Any], eager: bool) -> Any:
 
 
 def rescale(eng: Any) -> dict[str, int]:
-    """Redraw the target's and the draft's weights from one seeded generator, in the modules' own order: a norm's gain 1, a
+    """Resample the target's and the draft's weights from one seeded generator, in the modules' own order: a norm's gain 1, a
     quantization scale `FP8_SCALE`, an FP8 weight uniform on [-1, 1], every other float weight normal at `STD`."""
     import torch
 
@@ -163,12 +163,18 @@ def arrivals(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 def drive(eng: Any, trace: Any, phase: str, due: list[dict[str, Any]], add: Callable[[str], None]) -> dict[str, Any]:
     """Step ``eng``, whose scheduler ``trace`` is installed on, until every request of ``due`` has arrived (``add``) and
-    finished. On the serve a request arrives before the engine iteration its entry names, or at once where the engine is
-    idle. On the replay it goes back where the trace says (`arrivals`), before the first schedule at its step: one that came
-    after a schedule that scheduled nothing waits for such a schedule, or for the engine to be idle, so the step in flight
-    has finished its requests and cached their blocks as it had when the request was served. What came out: the trace's
-    steps, each request's tokens, the draft tokens each step scheduled for each request, and how many schedules scheduled
-    nothing."""
+    finished and every step the scheduler scheduled has its record. On the serve a request arrives before the engine
+    iteration its entry names, or at once where the engine is idle. On the replay it goes back where the trace says
+    (`arrivals`), before the first schedule at its step: one that came after a schedule that scheduled nothing waits for
+    such a schedule, or for the engine to be idle, so the step in flight has finished its requests and cached their blocks
+    as it had when the request was served. What came out: the trace's steps, each request's tokens, the draft tokens each
+    step scheduled for each request, and how many schedules scheduled nothing.
+
+    A step gets its record when its output is processed. Under a draft the scheduler schedules a request's next row before
+    the output that ends it is back, so the engine can hold a step when no request is unfinished; vLLM's own loop steps
+    while its batch queue holds one, and so does this, until the trace has a record for every step scheduled. An engine
+    that processes no output for a scheduled step is refused at the second engine step in a row that processes none,
+    instead of being stepped forever."""
     from verity_vllm.engine.hooks import Hooks
 
     due = list(due)
@@ -198,22 +204,27 @@ def drive(eng: Any, trace: Any, phase: str, due: list[dict[str, Any]], add: Call
 
     hooks = Hooks(tag="specdec-replay")
     hooks.wrap(trace.sched, "schedule", schedule)
-    iteration = 0
-    while due or eng.has_unfinished_requests():
+    iteration = unprocessed = 0
+    while due or eng.has_unfinished_requests() or trace.executed < trace.scheduled:
         if phase == "serve":
             idle = not eng.has_unfinished_requests()
             while due and (due[0]["iteration"] <= iteration or idle):
                 add(due.pop(0)["id"])
                 idle = False
-        elif not eng.has_unfinished_requests():
+        elif due and not eng.has_unfinished_requests():
             put_back(idle=True)
             if not eng.has_unfinished_requests():
                 raise SystemExit(f"specdec-replay: the replay is idle at step {trace.scheduled} with {due[0]['id']} due before "
                                  f"step {due[0]['before_step']}")
+        owed = trace.executed if not due and not eng.has_unfinished_requests() else None
         for o in eng.step():
             if o.finished:
                 tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
         iteration += 1
+        unprocessed = unprocessed + 1 if owed == trace.executed else 0
+        if unprocessed > 1:
+            raise SystemExit(f"specdec-replay: step {owed} was scheduled and two engine steps with no request left processed no "
+                             f"output for it")
     hooks.uninstall()
     return {"steps": [r for r in trace.records if r["kind"] == "step"], "drafted": {str(s): d for s, d in sorted(drafted.items())},
             "tokens": tokens, "empty_schedules": empty,

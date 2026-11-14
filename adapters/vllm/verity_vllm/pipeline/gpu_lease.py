@@ -49,8 +49,12 @@ import sys
 import threading
 import time
 import traceback
-from typing import Any, Callable, MutableMapping
+from collections.abc import Callable, MutableMapping
+from typing import Any
 
+from verity_vllm.records.schema_ids import GPU_LEASE_SCHEMA
+
+SCHEMA = GPU_LEASE_SCHEMA
 RECORD = "gpu_lease.json"
 MATCH_LEG_KEPT = "a Match stage holds its GPUs to its exit: its engine is its last work"
 HEARTBEAT_S = 60
@@ -177,11 +181,9 @@ def acquire(tl: Any = None, environ: MutableMapping[str, str] | None = None, wai
     """Take the leased Commit's GPUs now (``VERITY_LEASE_STARTED`` set in ``environ``, default the CLI's; else nothing): wait for the
     lease and for any other process to leave its GPUs (`_foreign`), then see only its devices. Nothing before this call may initialise
     CUDA (the process sees no device until it returns). The lease's locks are this process's from here to its ``release`` or its exit;
-    the holder ending first (the lease tool's --max-min) kills this process. A process that holds its lease already keeps it."""
+    the holder ending first (the lease tool's --max-min) kills this process."""
     environ = environ if environ is not None else (_ENVIRON[0] if _ENVIRON else None)
     if environ is None or not environ.get(STARTED) or not leased(environ):
-        return
-    if _HELD:
         return
     if cuda_initialised():
         raise SystemExit("GPU lease: CUDA was initialised before the lease (with no device visible); nothing may touch CUDA before "
@@ -563,7 +565,7 @@ def run(row_dir: str, log: str, cmd: list[str], timeout_s: int, environ: dict[st
     t1 = clock()
     rel = _read(_released(started))
     t_rel = float(rel["t"]) if rel.get("released") else t1
-    rec: dict[str, Any] = {"schema": "verity-vllm/gpu-lease/v1", "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
+    rec: dict[str, Any] = {"schema": SCHEMA, "tool": environ["GPU_LEASE"], "max_min": max_min(timeout_s),
                            "process_started": _utc(t0), "requested": None, "released": _utc(t_rel),
                            "released_at": rel.get("released_at") or "process.end", "process_ended": _utc(t1),
                            "kept": rel.get("kept") or (None if rel.get("released") else kept or "the Commit ended before its release (its last "

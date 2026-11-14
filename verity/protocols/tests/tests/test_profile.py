@@ -19,9 +19,9 @@ import pytest
 from verity.circuits import Program, bind
 from verity.circuits import query_ast as G
 from verity.circuits.partition import Level, validate_partition
-from verity.definitions.ops import gemm
-from verity.protocols.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
-                                                    Stratum, Subset, neg_log_escape)
+from verity.circuits.ops import gemm
+from verity.protocols.proofs.spot.verifier.profile import (ESCAPE_TERMS, HARM_MARGIN, MARGIN, Bernoulli, IntegrityProfile, Stratified,
+                                                    Stratum, Subset, Work, WorkStratum, neg_log_escape, work_k)
 
 
 def two_level(n_r, n_v, p, k, delta, **facts) -> IntegrityProfile:
@@ -667,7 +667,7 @@ AT_ONCE = [[(3348 * 10 ** 18, 6_974_586, 262_144.0)], [(10 ** 19, 300, 3.0), (10
 def test_the_last_blocks_taken_at_once_are_the_blocks_one_by_one(rows, monkeypatch):
     """With `HARM_WHOLE` out of reach every block left is taken by itself: the same bound to the floats' resolution
     (one by one, a block under half the sum's last place adds nothing to it, so at once is never the smaller)."""
-    from verity.protocols.spot.verifier import profile
+    from verity.protocols.proofs.spot.verifier import profile
 
     law = Stratified(tuple(Stratum(f"s{i}", n, k) for i, (n, k, _) in enumerate(rows)))
     harm = {f"s{i}": v for i, (_, _, v) in enumerate(rows)}
@@ -770,3 +770,36 @@ def test_stratified_json_is_the_profile_law():
     assert SMALL[0].to_json() == {"law": "stratified", "strata": [{"name": "a", "size": 4, "k": 2},
                                                                   {"name": "b", "size": 3, "k": 1},
                                                                   {"name": "c", "size": 3, "k": 0}]}
+
+
+#: `work:3` over a (4 units, work 3) and b (6 units, work 1): W = 18, so k_a = ⌈3·3·4/18⌉ = 2 and k_b = ⌈3·1·6/18⌉ = 1.
+WORK = Work(3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1)))
+
+
+def test_a_work_design_is_the_stratified_one_at_its_k():
+    """A `Work` sample of the checked level reads its bounds off the stratified design at its k_s, and writes the profile's
+    `work` case (Lean `Core.SamplingDesign.work`), its existing cases unchanged."""
+    a = IntegrityProfile((Level("unit", "q"),), (10,), {"unit": WORK}, 0.1, drawn={"unit": 3})
+    law = Stratified((Stratum("a", 4, 2), Stratum("b", 6, 1)))
+    assert WORK.stratified == law and a.strata() == law and a.bound() == law.count_bound(0.1)
+    assert a.stratum_bounds() == {s.name: law.stratum_bound(s.name, 0.1) for s in law.strata}
+    assert a.to_json()["levels"][0]["draw"] == {"law": "work", "k": 3, "strata": [
+        {"name": "a", "size": 4, "k": 2, "work": 3, "floor": 1}, {"name": "b", "size": 6, "k": 1, "work": 1, "floor": 1}]}
+    assert [work_k(3, w, n, 18, 1) for w, n in ((3, 4), (1, 6))] == [2, 1]
+    with pytest.raises(ValueError):
+        IntegrityProfile((Level("unit", "q"),), (9,), {"unit": WORK}, 0.1)
+
+
+@pytest.mark.parametrize("k, strata", [
+    (3, ()),                                                                             # no strata
+    (0, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("b", 6, 1, 1, 1))),                   # k < 1
+    (11, (WorkStratum("a", 4, 4, 3, 1), WorkStratum("b", 6, 6, 1, 1))),                  # k > population
+    (3, (WorkStratum("a", 4, 1, 0, 1),)),                                                # no work
+    (3, (WorkStratum("a", 4, 2, 3, 1), WorkStratum("a", 6, 1, 1, 1))),                   # a name twice
+    (3, (WorkStratum("a", 4, 2, 3, 0), WorkStratum("b", 6, 1, 1, 1))),                   # a floor of 0
+    (3, (WorkStratum("a", 4, 1, 3, 1), WorkStratum("b", 6, 1, 1, 1))),                   # a k not the rule's
+    (3, (Stratum("a", 4, 2),)),                                                          # not a work stratum
+])
+def test_ill_formed_work_designs_are_refused(k, strata):
+    with pytest.raises(ValueError):
+        Work(k, strata)

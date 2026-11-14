@@ -1,0 +1,178 @@
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Ratio
+public import RemoteAudit.Difftest
+meta import CoreProtocol.Cli
+meta import CoreProtocol.Ratio
+meta import RemoteAudit.Difftest
+
+/-!
+# A remote bandwidth session as a core protocol
+
+The verifier's session (`Shared.run g`, which `audit.Session` is held to) behind the core interface (`Core.Protocol`),
+the bandwidth component of onsite Verity (`verity/core/protocols/onsite`). Its bytes are canonical JSON, in the forms
+the difftest's `session` reads (`Difftest.sessionFn`):
+
+* params `{"not_before_ns": n, "params": {...}}`: the session's parameters (`Difftest.sessionOf`'s, its windows a
+  draw's openings coin `groups_per_coin` g among them) and the verifier's clock floor. The check refuses what no
+  property of the code covers (`sessionOf`): a session at one window in flight (the pace's `in_flight` 1, `Flight`), so
+  what it replays is `Shared.run g` (`Session.run` at g = 1), which `Properties.RemoteAudit.Shared` and the memory line
+  are stated on;
+* the commitment: the registration (`Difftest.registrationOf`: node, blocks, payload root, codec seed, codec, receipt
+  kind, `bind`, layout, rows), which the prover's payload root fixed before any coin; its digest `Registration.digest`;
+* the evidence `{"append_coins": [hex, …], "coins": [hex, …], "events": [...]}`: the verifier's log of the session, its
+  coins (W challenges and W openings coins, then the append coins in the order sampled) and every event it took with
+  its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
+* the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
+  when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
+  states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at the
+  session's parameters and g.
+
+On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
+session's receipts U less the wrong ones its openings leave, W rounded up (`Pooled.pooled` of each draw's receipts and
+draws at `DELTA`), each a read of one `BLOCK_BYTES` block, at ε = δ + ⌈W/g⌉·s/2^64 (`eps`), the session's `⌈W/g⌉`
+openings coins at its `samples` s each (the per-draw term of `Accounting.Guarantees.Remote.PooledSample`; its PRF
+advantages are a named assumption, not a number, and it has no hiding term, since the prover is sent the coin
+commitment only at the session's end): the draw term of the bound `Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`
+proves at `Node.delta = DELTA` (`PublishedEps`). It is a constant of the parameters, not the draws a session made
+(`min(s, U_c)`, U_c the prover's), which can be fewer. The ledger's γ terms, which need the node's measured rates, are
+not taken off: `q_bytes` is the reads the session's openings certify. When the pooled bound refuses the windows,
+`q_bytes` and `eps` are 0 and the profile says why.
+-/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
+
+namespace RemoteAudit.Protocol
+
+open Lean (Json JsonNumber)
+open Flock
+
+def ID : String := "verity/remote-bandwidth/v0"
+
+/-- `audit.DELTA`: the pooled bound's δ, `2^-40`. -/
+def DELTA : Rat := 1 / (2 ^ 40 : Nat)
+
+private def natJ (n : Nat) : Json := .num (JsonNumber.fromNat n)
+
+/-- `j` is an object with exactly the keys `want`, in sorted order. -/
+private def keys (j : Json) (want : List String) (ctx : String) : V Unit :=
+  match j with
+  | .obj kvs => if kvs.keys == want then pure () else throw s!"{ctx}: the keys must be {want}, not {kvs.keys}"
+  | _ => throw s!"{ctx}: not an object"
+
+structure Params where
+  notBeforeNs : Json
+  params : Json
+
+def decodeParams (j : Json) : V Params := do
+  keys j ["not_before_ns", "params"] "params"
+  pure ⟨← J.get j "not_before_ns" "params", ← J.get j "params" "params"⟩
+
+def decodeCommitment (b : ByteArray) : V Registration := do Difftest.registrationOf (← Core.canonicalJson b)
+
+structure Evidence where
+  appendCoins : Json
+  coins : Json
+  events : Array Json
+
+def decodeEvidence (b : ByteArray) : V Evidence := do
+  let j ← Core.canonicalJson b
+  keys j ["append_coins", "coins", "events"] "evidence"
+  pure ⟨← J.get j "append_coins" "evidence", ← J.get j "coins" "evidence", ← J.arr j "events" "evidence"⟩
+
+/-- The session the log replays: its parameters, its windows a draw's openings coin (`groups_per_coin` g,
+`Difftest.perCoinOf`), its coins, append coins and clock floor as `Difftest.sessionOf` reads them, and its events as
+`Difftest.eventOf` reads them. It refuses the one form no property of the code covers, one window in flight (the pace's
+`in_flight` 1, `Flight`), the one where `Flight.run f g` is not `Shared.run g` (`Flight.run_two`). -/
+def sessionOf (p : Params) (e : Evidence) :
+    V (Session.Params × Nat × Array ByteArray × Array ByteArray × Nat × Array Session.Event) := do
+  let j := Json.mkObj [("append_coins", e.appendCoins), ("coins", e.coins), ("not_before_ns", p.notBeforeNs),
+    ("params", p.params)]
+  let (params, coins, appendCoins, notBeforeNs) ← Difftest.sessionOf j
+  let g ← Difftest.perCoinOf j
+  if (← Difftest.flightOf j) != 2 then throw "in_flight is 2: no property covers one window in flight"
+  let events ← e.events.mapM Difftest.eventOf
+  pure (params, g, coins, appendCoins, notBeforeNs, events)
+
+/-- The session after the log's events through the Lean verifier (`Shared.run g` from `State.init`, `Session.run` at
+g = 1), its parameters and its windows a draw. -/
+def replay (p : Params) (reg : Registration) (e : Evidence) : V (Session.State × Session.Params × Nat) := do
+  let (params, g, coins, appendCoins, notBeforeNs, events) ← sessionOf p e
+  let (_, s) ← Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events
+  pure (s, params, g)
+
+/-- Each draw's receipts and draws, a draw being `g` consecutive windows (`audit.pooled_windows`). -/
+def windowsOf (sm : Session.Summary) (g : Nat) : Array (Nat × Nat) :=
+  let ws := sm.windows
+  (Array.range ((ws.size + g - 1) / g)).map fun a =>
+    let grp := ws.extract (a * g) (a * g + g)
+    (grp.foldl (· + Line.receipts ·) 0, grp.foldl (· + ·.drawn) 0)
+
+def ratio (q : Rat) : Core.Ratio := ⟨q.num.toNat, q.den⟩
+
+/-- The public outputs: the error and the reads certified, in bytes. -/
+structure Public where
+  eps : Core.Ratio
+  qBytes : Nat
+
+def Public.toJson (p : Public) : Json := Json.mkObj [("eps", .str p.eps.toString), ("q_bytes", natJ p.qBytes)]
+
+/-- `⌈W/g⌉`: the openings coins of a session of `params.windows` windows sampled `g` a coin (`coins.openings_coins`), one
+a window at g ≤ 1, as `Properties.RemoteAudit.Line.Node.samples`. -/
+def openingsCoins (params : Session.Params) (g : Nat) : Nat :=
+  if g ≤ 1 then params.windows else (params.windows + g - 1) / g
+
+/-- The error an accepted session's reads are certified at: `DELTA + ⌈W/g⌉·s/2^64`, the pooled bound's δ and the
+draw's rejection at the session's `samples` s a draw. -/
+def eps (params : Session.Params) (g : Nat) : Rat :=
+  DELTA + ((openingsCoins params g * params.samples : Nat) : Rat) / (2 ^ 64 : Nat)
+
+/-- What an accepted session certifies (module docstring), with its profile. -/
+def certify (params : Session.Params) (g : Nat) (sm : Session.Summary) : Public × Json :=
+  let ws := windowsOf sm g
+  let receipts := (ws.map (·.1)).toList.sum
+  let base := [("delta", Json.str (ratio DELTA).toString), ("receipts", natJ receipts),
+    ("windows", .arr (ws.map fun (u, s) => .arr #[natJ u, natJ s]))]
+  match Pooled.pooled ws DELTA with
+  | .ok b =>
+    let wrong := (b.wrong.num.toNat + b.wrong.den - 1) / b.wrong.den
+    (⟨ratio (eps params g), (receipts - wrong) * Codec.BLOCK_BYTES⟩,
+     Json.mkObj (base ++ [("gaps", .arr #[]), ("wrong", .str (ratio b.wrong).toString)]))
+  | .error why => (⟨⟨0, 1⟩, 0⟩, Json.mkObj (base ++ [("gaps", .arr #[.str why]), ("wrong", .null)]))
+
+def check (p : Params) (reg : Registration) (e : Evidence) : Core.Outcome Public Json :=
+  match replay p reg e with
+  | .error why => .reject why
+  | .ok (s, params, g) =>
+    match s.outcome, s.summary with
+    | some "accepted", some sm => let (pub, prof) := certify params g sm; .accept pub prof
+    | some failure, _ => .reject s!"the session was rejected: {failure}"
+    | none, _ => .undecided "the session has a window not yet verified"
+
+def protocol : Core.Protocol where
+  id := ID
+  Params := Params
+  Commitment := Registration
+  Evidence := Evidence
+  Public := Public
+  Profile := Json
+  params := decodeParams
+  commitment := decodeCommitment
+  evidence := decodeEvidence
+  digest := Registration.digest
+  check := check
+  publicJson := Public.toJson
+  profileJson := id
+
+#guard (protocol.answer "{}".toUTF8 ByteArray.empty ByteArray.empty).reason ==
+  some "params: params: the keys must be [not_before_ns, params], not []"
+#guard (ratio DELTA).toString == "1/1099511627776"
+private def three : Session.Params :=
+  { deadlineNs := 0, windows := 3, samples := 5, minPasses := 1, windowNs := 0, lifetime := 1 }
+#guard (ratio (eps three 2)).toString == "8388613/9223372036854775808"
+
+end RemoteAudit.Protocol

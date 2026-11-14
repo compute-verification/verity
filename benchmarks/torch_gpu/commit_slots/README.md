@@ -54,8 +54,8 @@ block's public strings, its root's path in the slot tree and the slot root's pat
 
 ## Layouts
 
-`S.edge_layout()` is a small layout over SHA-512's chunk edges, the fixture's. `S.h200_layout()` is the H200 example's
-model's (`archive/examples/h200/`): every op's per-token output committed, one group a layer, each output cut into one-row proof
+`S.edge_layout()` is a small layout over SHA-512's chunk edges, the fixture's. `S.h200_layout()` is the H200 demo's
+frozen decoder's: every op's per-token output committed, one group a layer, each output cut into one-row proof
 blocks.
 
 ## Files
@@ -64,13 +64,9 @@ blocks.
 - `slots_gpu.py`: `Plan`, `StepCommitter`, `commit` and `regroup` on the engine (`../sha512_rows/engine.py`).
 - `check.py`: the GPU's roots against the reference's. `bench.py`: the call's throughput at the H200 example's layout,
   alone and beside the layer's int8 GEMMs. `step.py`: one streamed step at a layout file, timed by phase (`time`), and a
-  layout's compressions a row-slot on the host twin (`count`). `launches.py`: an nsys report's enqueue calls a step.
+  layout's compressions a row-slot on the host twin (`count`).
   `gpu.sh`: these, with the tests, under one GPU lease (`OUT=DIR bash gpu.sh` from the tree's root; its header has the
   options).
-- `overlap.py`: the commit beside `archive/examples/h200/`'s served step on one GPU, alone, in the serving loop and overlapped,
-  each overlapped step's roots held to the serving loop's; `overlap.sh` runs it under one GPU lease on an H200 (its header
-  has the command). `green_probe.py`: the commit on a green context of N SMs beside int8 GEMMs on the other SMs (no
-  model).
 
 ## Tests
 

@@ -5,15 +5,12 @@ from __future__ import annotations
 
 import copy
 import json
-import sys
 from pathlib import Path
 
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
 import summarize as S
-from verity.hardware import cards
+
+from verity.device import load_card
 
 BOUND = 132 * 4096 * 1830e6
 SECS = 1.2
@@ -38,9 +35,9 @@ def run(tmp_path: Path, *pts: dict, name: str = "out") -> tuple[int, dict]:
 
 def test_the_bound_is_the_cards_tensor_rate_and_follows_its_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     assert S.readings() == (BOUND, 132 * 4096 * 1980e6, 132 * 4096 * 1e6)
-    card = copy.deepcopy(cards.load(S.SKU))
+    card = copy.deepcopy(load_card(S.SKU))
     card["clock"]["tensor"]["value"] = 1900
-    monkeypatch.setattr(S, "load", lambda sku: card)
+    monkeypatch.setattr(S, "load_card", lambda sku: card)
     assert S.readings()[0] == 132 * 4096 * 1900e6
 
 
@@ -85,6 +82,19 @@ def test_nvidia_smi_lines_are_read_and_the_rest_counted(tmp_path: Path) -> None:
     assert (v["verdict"], v["smi_unread"]) == ("PASS", 1)
     smi, unread = S.samples(out)
     assert [s[1:] for s in smi] == [(1830.0, 690.5, 0)] and len(unread) == 1
+
+
+def test_the_fills_table_gives_a_fill_and_bursts_highest_rate_and_mean_clocks() -> None:
+    """A fill and burst's row is over its points at duties 90 to 99: the highest rate among them and the mean of each
+    clock. A point at duty 100 is not in it."""
+    pts = [point(0.5, duty=95, clock64_mhz=1800.0, tensor_mhz=1810.0, fill_mhz=1700.0, warm=False),
+           point(0.25, duty=90, clock64_mhz=1820.0, tensor_mhz=1830.0, fill_mhz=1720.0, warm=False),
+           point(0.75, warm=False)]
+    _, lines, _ = S.report(pts)
+    assert lines[lines.index("| --- | ---: | ---: | ---: | ---: | ---: |") + 1:] == [
+        f"| idle | 65536 | {0.5 * BOUND * 1e-12:.2f} | 1810.0 | 1820.0 | 1710.0 |"]
+    assert lines[0].startswith(f"**PASS**: of 3 points, 0 exceed the card's tensor rate, 132 x 4096 x clock.tensor = "
+                               f"{BOUND:.4e} MACs a second")
 
 
 def test_no_points_is_no_verdict(tmp_path: Path) -> None:

@@ -440,6 +440,10 @@ def at_ (n : Nat) (d : Nat := 1) : Auditor := { auditor with tolerance := fig n 
 #guard refusal .onsite entries == none
 #guard ((check auditor .onsite (chain .onsite entries)).toOption.map (·.view.value? "weights")) == some (some weights)
 #guard (chain .onsite entries).all fun e => match Entry.ofJson e.toJson with | .ok e' => e' == e | .error _ => false
+-- a Site decodes from exactly what it encodes to, and from nothing with another key
+#guard (Site.ofJson (⟨[sheet], locs, links⟩ : Site).toJson).toOption == some ⟨[sheet], locs, links⟩
+#guard (Site.ofJson (Json.mkObj [("links", .arr #[]), ("locs", .arr #[]), ("sheets", .arr #[]), ("tick", .null)])
+  ).toOption == none
 #guard head .onsite (chain .onsite entries) != head .remote (chain .remote entries)
 -- a log of site entries alone is the Site's log, with the Site's head
 #guard head .onsite (chain .onsite [site ⟨[sheet], locs, links⟩]) ==

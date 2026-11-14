@@ -8,7 +8,7 @@ census and rho's reference.  The output carries them all beside every plotted se
 the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
-a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`reporting.PERIODS`), serving at
+a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`verity.protocol`'s `MONITORING_PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
 proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
@@ -85,16 +85,16 @@ from pathlib import Path
 from typing import Callable, Iterator, Sequence
 
 import cards as spot_cards
-from verity.protocols.reporting import PERIODS
-from verity.protocols.spot import plancheck
-from verity.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.protocol import MONITORING_PERIODS
+from verity.protocols.proofs.spot.prover import plancheck
+from verity.protocols.proofs.spot.prover.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design, two_stage_strata)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[2]
 ADVERSARY, DEPLOYMENTS, HARDWARE = ("benchmarks/census/adversary.json", "benchmarks/census/deployments.json",
                                     "benchmarks/census/hardware.json")
-RHO, RHO_HARDWARE = "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml"
+RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml"
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
@@ -392,7 +392,7 @@ def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
     rate = c.get("serving_rate")
     out = []
     for who in ("world", "datacenter"):
-        for period, seconds in PERIODS:
+        for period, seconds in MONITORING_PERIODS:
             gs = c[f"{who}_gpus"].value * seconds
             requests = (gs * rate.value / c["tokens_per_request"].value if rate is not None
                         else gs * c["mfu_serve"].value * c["peak_flops"].value / flop_request)
@@ -433,7 +433,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
 
     cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
                        fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
-                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
+                       commit_bytes=x.get("commit_bytes", x["out_bits"] / 8), table=x.get("table_blocks", inf))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)
     return Model(s, dot(part.macs_by_count), dot(part.macs_by_work),
@@ -452,10 +452,10 @@ def reading(sc: dict, c: dict[str, InputCard], part: TokenBlocks) -> dict:
             "assumed_tokens_per_gpu_second": c["mfu_serve"].value * c["peak_flops"].value / (2 * part.served_macs)}
 
 
-#: where a bound priced at a sampling rate holds, said in every caption that prints a bound beside the measured rate
-REGISTRATION_NOTE = ("A bound priced at a sampling rate q holds at a registration of 1/q requests: the plan counts q·n "
-                     "sampled of a registration's n, and the first stage draws at least ⌈q·n⌉, never fewer than one. "
-                     "No bound here is what serving costs at a smaller registration.")
+#: the verification phase a two-stage bound holds at, said in every caption that prints a bound beside the measured rate
+REGISTRATION_NOTE = ("A two-stage bound holds at its verification phase's size: the first stage samples a whole "
+                     "number of the phase's requests, never fewer than one, and the plan is priced and bounded at "
+                     "that count. No bound here is what serving costs at a smaller verification phase.")
 
 
 def outdir(out: Path, serving: str) -> Path:
@@ -466,7 +466,7 @@ def outdir(out: Path, serving: str) -> Path:
 
 def reading_note(serving: dict) -> str:
     """What every caption at the measured reading carries: the rate the figure was planned at, whether it is a floor
-    (and that its bounds then are), what it stands in place of, and the registration its bounds hold at
+    (and that its bounds then are), what it stands in place of, and the verification phase its bounds hold at
     (`REGISTRATION_NOTE`)."""
     rate, assumed = serving["tokens_per_gpu_second"], serving["assumed_tokens_per_gpu_second"]
     what = ("above which the engine computed no more" if serving["saturated"]
@@ -609,7 +609,7 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
     return out
 
 
-def split_cells(cells: Sequence[Cell], merged: int | None) -> list[Cell]:
+def split_cells(cells: Sequence[Cell], merged: int | str | None) -> list[Cell]:
     """The cells in the strata of a two-stage design whose row's `merged` is this (`optimize.two_stage_strata`)."""
     return two_stage_strata(cells, merged)
 
@@ -679,10 +679,13 @@ PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay"
 def _plan(row: dict) -> dict:
     """A point's planner row as the series carry it: a two-stage design's k by stratum, a wide stratum by its size
     class's bits and the merged one by the widest class it holds (`all` when it is the only one); where each width is
-    a stratum (`merged` None), by `w` and the width's place among the widths."""
+    a stratum (`merged` None), by `w` and the width's place among the widths; a by-template design's (`merged`
+    "template"), by each cell's position."""
     out = {k: row[k] for k in PLAN if k in row}
     if isinstance(k := out.get("k"), dict):
-        if "merged" in row and row["merged"] is None:
+        if row.get("merged") == "template":
+            out["k"] = {str(t): v for t, v in k.items()}
+        elif "merged" in row and row["merged"] is None:
             out["k"] = {f"w{t}": v for t, v in k.items()}
         else:
             out["k"] = {str(t) if t else "all" if len(k) == 1 else f"<={row['merged']}": v for t, v in k.items()}
@@ -774,7 +777,7 @@ def infiltration_ratio(infiltration: dict, exfiltration: list[dict], scope: str,
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis has no place for: drawn along its floor and named in its
+    """Each panel's lines at 0 in `scope`, which a log axis has no place for: sampled along its floor and named in its
     caption."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}

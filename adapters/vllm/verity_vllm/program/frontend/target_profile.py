@@ -64,7 +64,7 @@ class TargetProfile:
                            2 on cc 9.x = the labelled "forced FA2 on Hopper" execution (`execution_label` -> `bi-eager-fa2`).
                            The builder reads the instantiated layers' version back and refuses on a mismatch; the eager Match
                            resolver and the collector receive the same object (run header `profile.target`).
-    vllm_revision       -> must be a prefix-match of the running `vllm.__version__` (`+g<rev>`), else refused
+    vllm_revision       -> the running vLLM's version with its commit in it (`config.vllm_revision`) must carry `+g<rev>`, else refused
     numerics_profile    -> the derive vocabulary (`--profile`); already part of the Program's `SRC` static
     compilation         -> the EXECUTION the profile declares (`execution_label` -> `bi-compiled`): None = eager
                            (`enforce_eager=True`, every module forward launches its own kernels); `"piecewise"` = vLLM torch.compile
@@ -401,7 +401,7 @@ class TargetProfile:
 
     @property
     def int8_parts(self) -> tuple[str, ...]:
-        return self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
+        return () if self.int8_exact is None else self.INT8_EXACT_SCOPES.get(self.int8_exact, ())
 
     @property
     def execution_label(self) -> str:
@@ -455,15 +455,15 @@ class TargetProfile:
                     "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
                     "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
-                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
+                "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact ("
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
-                                       "compilation facts + kernel_set digest (DECISIONS-2 §7 S1)" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
+                                       "compilation facts + kernel_set digest" if not self.COMPILATIONS[self.compilation]["emulate_precision_casts"]
                                        else "eager module-forward trace (the emulation performs the eager roundings inside the fused kernels)"),
                 "claim": ("P_compiled kernel-level conformance: every non-weight buffer of every kernel launch is committed under graph replay "
-                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes "
-                          "(S2: 4016/4016 launches on the B1 row); the eager Program is NOT a model of this execution (P_compiled != P_eager: "
+                          "(wrapper-level hooks, kernels untouched) and the kernel relations are replayed bit-for-bit from the committed bytes; "
+                          "the eager Program is NOT a model of this execution (P_compiled != P_eager: "
                           "roundings elided, residual recomputed unrounded, other reduction orders; tokens diverge from eager). Attention = eager "
-                          "FA2 splitting op; lm_head eager (DECISIONS-2 §7, ruling M-0380)")}
+                          "FA2 splitting op; lm_head eager")}
 
     # -- serialisation ---------------------------------------------------------------------------------------------------
     def to_json(self) -> dict:
@@ -508,7 +508,7 @@ class TargetProfile:
         return None if self.moe_backend is None else self.MOE_BACKEND_KERNELS[self.moe_backend]
 
     @classmethod
-    def from_json(cls, d: dict) -> "TargetProfile":
+    def from_json(cls, d: dict) -> TargetProfile:
         unknown = set(d) - set(cls.__dataclass_fields__)
         if unknown:
             raise ValueError(f"unknown TargetProfile fields: {sorted(unknown)}")
@@ -520,14 +520,16 @@ class TargetProfile:
     def digest(self) -> str:
         return sha256_hex(self.canonical())
 
-    def with_overrides(self, **kw: Any) -> "TargetProfile":
+    def with_overrides(self, **kw: Any) -> TargetProfile:
         return replace(self, **kw)
 
     # -- derived GEMM target facts (one source: this profile's capability -> verity_vllm.program.frontend.gemm_targets) ----------------
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
+        from verity_vllm.program.frontend.gemm_targets import (
+            vllm_tuned_gemm_arch_family,  # lazy: keeps this module light
+        )
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:
@@ -539,12 +541,12 @@ class TargetProfile:
         return gemm_target_for(self.compute_capability, arch_family)
 
     @classmethod
-    def default(cls) -> "TargetProfile":
+    def default(cls) -> TargetProfile:
         """The admitted record's target (profile `vllm_d9105ea80_sm89_eager`: sm_89 / 128 SMs / batch-invariant / FA2 by selector)."""
         return cls()
 
     @classmethod
-    def from_device(cls, device: int = 0) -> "TargetProfile":
+    def from_device(cls, device: int = 0) -> TargetProfile:
         """[X-01] The target = THIS host's GPU, queried ONCE through `torch.cuda.get_device_properties(device)`: `multi_processor_count`
         is `num_sms` (vLLM's `num_compute_units()`, the persistent-GEMM grid) and `(major, minor)` the compute capability.  The one
         source of the SM count for a construction on a GPU host: the builder applies it (shim), pins it (GEMM rule), and the artifact
@@ -553,9 +555,8 @@ class TargetProfile:
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
 
-
     @classmethod
-    def from_gpu_document(cls, doc: Any) -> "TargetProfile | None":
+    def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
         """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.engine.engine_profile.gpu_info`,
         or `versions.gpu` of a bench run): `multi_processor_count` (or `sms`) and `compute_capability` (`[8, 9]` or `"8.9"`, or `cc`).
         The eager Match resolver reads the target from here — the record's own host, not a literal.  None when the document carries no
@@ -578,7 +579,7 @@ class TargetProfile:
         return cls.default().with_overrides(**over)
 
     @classmethod
-    def from_run_profile(cls, profile_doc: Any) -> "TargetProfile | None":
+    def from_run_profile(cls, profile_doc: Any) -> TargetProfile | None:
         """The target of a captured record, from its run header's profile document: the DECLARED profile the engine was
         built with when the capture recorded one (`profile["target"]`, written by `vllm_adapter.build_engine(target=...)` — exact,
         including `flash_attn_version`), else the X-01 device document (`from_gpu_document`) with the FA version the runner's attention
@@ -595,11 +596,11 @@ class TargetProfile:
         tp = cls.from_gpu_document(profile_doc.get("gpu"))
         if tp is None:
             return None
-        fav = ((profile_doc.get("backends") or {}).get("attention_flash_attn_version"))
+        backends = profile_doc.get("backends")
+        fav = backends.get("attention_flash_attn_version") if backends else None
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
-
 
     @property
     def capability_str(self) -> str:
@@ -678,7 +679,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
     return bad
 
 
-
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------
 
 
@@ -700,7 +700,7 @@ class ArtifactIdentity:
         return h.hexdigest()
 
     @classmethod
-    def build(cls, construction_version: dict, target_profile: TargetProfile, applicability: dict, program_digest: str) -> "ArtifactIdentity":
+    def build(cls, construction_version: dict, target_profile: TargetProfile, applicability: dict, program_digest: str) -> ArtifactIdentity:
         tp = target_profile.to_json()
         return cls(construction_version=construction_version, target_profile=tp, applicability=applicability, program_digest=program_digest,
                    identity=cls.compute(construction_version, tp, applicability, program_digest))
@@ -711,7 +711,7 @@ class ArtifactIdentity:
                 "identity_definition": "sha256(len8||canonical(construction_version) || len8||canonical(target_profile) || len8||canonical(applicability) || len8||program_digest)"}
 
     @classmethod
-    def from_json(cls, d: dict) -> "ArtifactIdentity":
+    def from_json(cls, d: dict) -> ArtifactIdentity:
         if d.get("schema") != SCHEMA:
             raise ValueError(f"artifact schema {d.get('schema')!r} is not {SCHEMA!r}")
         return cls(construction_version=d["construction_version"], target_profile=d["target_profile"], applicability=d["applicability"],
@@ -767,7 +767,7 @@ def load_artifact(path: str, profile: TargetProfile, applicability_now: dict | N
     return check_reuse(art, profile, applicability_now, construction_version_now)
 
 
-def parse_target_arg(s: str | None, *, base: "TargetProfile | None" = None) -> TargetProfile:
+def parse_target_arg(s: str | None, *, base: TargetProfile | None = None) -> TargetProfile:
     """CLI helper: None -> default; a JSON object -> overrides laid over `base` (`{"compute_capability": [9, 0]}`); a path to a JSON
     file -> the whole profile.  `base` defaults to THIS host's device profile when CUDA is available, else `default()` -- the same
     layering `vllm_adapter.target_of_workload` gives the workload's `target` block, so a row that declares only a knob
@@ -788,12 +788,12 @@ def parse_target_arg(s: str | None, *, base: "TargetProfile | None" = None) -> T
             base = TargetProfile.from_device() if torch.cuda.is_available() else TargetProfile.default()
         except Exception:                                   # no torch on this host: the documented default
             base = TargetProfile.default()
-    base = base.to_json()
+    doc = base.to_json()
     unknown = set(d) - set(TargetProfile.__dataclass_fields__)   # the fields, not the serialised keys (`compilation` / `fp8_block_gemm` are omitted when None)
     if unknown:
         raise ValueError(f"unknown TargetProfile fields: {sorted(unknown)}")
-    base.update(d)
-    return TargetProfile.from_json(base)
+    doc.update(d)
+    return TargetProfile.from_json(doc)
 
 
 __all__ = ["TargetProfile", "DEFAULT_TARGET", "ArtifactIdentity", "ApplicabilityError", "canonical_bytes", "sha256_hex", "profile_mismatches",

@@ -28,7 +28,7 @@ stochastic. It renders no tables.
 - `hash_prof.py` and `hash_prof.sh`: one step's rows-sha512 hashing as the windowed worker calls it, at T tokens a step, in
   the worker's form (held leaves folded many windows at once, levels copied on a copy stream) and the per-window form before
   it, with the kernels' knobs, under nsys and ncu.
-- The specs: the served arm's, `benchmarks/specs/*-rtx-served-arm*.toml` (one RTX PRO 6000 each, on the width sweep).
+- The specs: the served arm's, `benchmarks/harness/specs/*-rtx-served-arm*.toml` (one RTX PRO 6000 each, on the width sweep).
   `run.sh` and `prof.sh` take any served spec as `SPEC`, with its arms, sweep and reps unless their arguments name others.
 
 The engines are vLLM's serving defaults (`serving_defaults`: torch.compile, full and piecewise CUDA graphs, no batch
@@ -42,5 +42,5 @@ graphs is `adapters/vllm/verity_vllm/acquire/sources/served_compiled_source.py`.
 - **Loaded by:** the harness, through the specs that name `served_commit.served_arm`'s arms, and `benchmarks/moe_align`,
   which imports `tp_decode`.
 - **Loads:** the vLLM integration's `commit`, `pipeline`, `engine`, `acquire`, `correspondence`, `query` and `protocols`
-  packages; `verity.circuits`, `verity.definitions`, `verity.commitments` and `verity.definitions.kernels`;
+  packages; `verity.circuits`, `verity.definitions`, `verity.commitments` and `verity.circuits.kernels`;
   `benchmarks/harness` (`verity_bench`); torch and vLLM.

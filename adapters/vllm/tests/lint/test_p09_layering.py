@@ -28,7 +28,7 @@ Checked today, against ``allowlists/p09_layering.json``:
 from __future__ import annotations
 
 import ast
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 from . import _imports as I
@@ -223,7 +223,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
                 tgt = node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else None
                 emit("repo-path", node, symbol, tgt.id if isinstance(tgt, ast.Name) else type(node).__name__.lower())
         # runtime patches
-        targets: list[ast.AST] = []
+        targets: list[ast.expr] = []
         value = None
         if isinstance(node, ast.Assign):
             targets, value = list(node.targets), node.value
@@ -263,7 +263,7 @@ def file_violations(src: str, rel: str, module: str = "", is_package: bool = Fal
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     out = layer_violations() + cycle_violations()
     for p in R.library_files():

@@ -5,11 +5,16 @@ runs on a pod (`/workspace/venv-cu129/bin/python -m pytest tests/engine/test_exe
 refusal is exercised WITHOUT a GPU: the mismatch is raised before LLM() (monkeypatched to fail loudly if reached).
 """
 from __future__ import annotations
+
 import json
+
 import pytest
+
+from tests import fake_vllm
 
 pytest.importorskip("verity_vllm.pipeline.match")
 from verity_vllm.pipeline import match as rc
+from verity_vllm.pipeline import match_workload
 
 EAGER_ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 COMPILED_ROW = "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-compiled"
@@ -56,10 +61,15 @@ def test_adapter_execution_of_workload_and_labels():
     assert va.execution_of_workload({"execution": "bi-compiled", "sweep": {"row_id": EAGER_ROW}}) == "bi-compiled"
     assert va.execution_of_workload({"requests": []}) is None
     assert va.execution_of_workload(None) is None
+    # the row id's own grammar: a top-level id is read as the sweep's is, the sweep's first; an id of one field names no execution
+    assert va.execution_of_workload({"row_id": COMPILED_ROW}) == "bi-compiled"
+    assert va.execution_of_workload({"row_id": COMPILED_ROW, "sweep": {"row_id": EAGER_ROW}}) == "bi-eager"
+    assert va.execution_of_workload({"sweep": {"row_id": "one-field"}}) is None
+    assert va.execution_of_workload({"sweep": {"row_id": 7}}) is None
     assert va.execution_label_of(True) == "bi-eager" and va.execution_label_of(False) == "bi-compiled" and va.execution_label_of(None) is None
     assert va.execution_label_of(True, False) == "eager" and va.execution_label_of(False, False) == "compiled"
     assert va.execution_label_of(False, None) is None
-    assert va.EXECUTION_ENFORCE_EAGER is rc.ENFORCE_EAGER          # the laptop's table is the pod's
+    assert va.EXECUTION_ENFORCE_EAGER is match_workload.ENFORCE_EAGER          # the laptop's table is the pod's
 
 
 def test_load_workload_carries_row_id_and_execution(tmp_path):
@@ -72,14 +82,11 @@ def test_load_workload_carries_row_id_and_execution(tmp_path):
 def _no_llm(monkeypatch):
     """LLM() must never be reached by the refusal paths: make the vllm import site explode if it is."""
     _va()
-    import types, sys
-    fake = types.ModuleType("vllm")
 
     class LLM:
         def __init__(self, **kw):
             raise AssertionError("LLM() was reached: the execution check did not fail closed")
-    fake.LLM = LLM
-    monkeypatch.setitem(sys.modules, "vllm", fake)
+    fake_vllm.install(monkeypatch).set("vllm:LLM", LLM)
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")             # build_engine applies the label's; the test's process gets its own back
     from verity_vllm.engine import engine_profile as prof
     monkeypatch.setattr(prof, "apply_env", lambda: {})

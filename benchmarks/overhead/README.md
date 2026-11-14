@@ -15,6 +15,11 @@ verity bench overhead run --record RUN                        label RUN a run of
 verity bench overhead table [--json]                          γ per scheme, point and card, from runs of record alone
 ```
 
+Under a research run, `table` also writes the numbers `metrics.toml` holds it to into the run's result: Pearl+'s γ of
+record at the H200's C and L (`run.py`'s `METRICS`, `overhead_records.record`), each with the scheme gate as its target.
+Today's run of record times no commitment of the output (each layer's output hash isn't counted, the note below), so
+their titles say so until a run of record whose arm commits y is labelled.
+
 A run takes one GPU of its node through the node's `gpu-lease`, which waits for it and holds it for the run's bound
 (`research run --on NODE -- gpu-lease 1 --wait --max-min M -- bash benchmarks/harness/overhead_node.sh ...`; `research run
 --gpus` is refused on a node whose GPUs gpu-lease doesn't hand out). The H200's node is `vy-dc-h200`. Its outputs are `out/points.json` or `out/overhead.json` and `out/busy.json`, beside each
@@ -23,9 +28,11 @@ A run takes one GPU of its node through the node's `gpu-lease`, which waits for 
 ## The operating points
 
 A card's points belong to it, a model and a precision (`overhead.MODELS`: Llama-3.1-70B's four linears for the kernel
-points). Each is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs (on the
-H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the graph replays'
-wall time, summed. A sweep or a timed run in which one of the card's libraries didn't load is refused.
+points). Every figure of the door is over those four linears of one layer and leaves the LM head out
+(`overhead.LEFT_OUT`), though serving computes it: `table` says so in its coverage line (`overhead.covers`, the JSON's
+`covers`). Each point is a summed layer: at each m, every linear's fastest stock kernel over every library the card runs
+(on the H200 cuBLASLt, vLLM's CUTLASS and DeepGEMM) and every scaling (per-tensor, rowwise and 128-block FP8), by the
+graph replays' wall time, summed. A sweep or a timed run in which one of the card's libraries didn't load is refused.
 
 - **C**: the smallest m at which the layer's throughput reaches 90% of the best sampled, and every m sampled above it does.
 - **L**: the largest m whose time, and every sampled time below it, stays within 10% of the time at m = 1.
@@ -75,13 +82,13 @@ that nothing supersedes, ran the arm's cubin from the `art:` id it was sent (the
 gate passed; a cubin built in the run is development only), and its point passed every rule: each linear timed, at least
 20 paired reps, a 95% interval within ±5% of the ratio, the cross-check, and the arm's reference verifier accepting every
 row (`verify.py --every-row`). Runs of record are chosen by label, as `served-table`'s are. `table` refuses every other figure
-and says why. A reader of γ outside `benchmarks/` takes it from `table --json`, whose rows carry `of_record` and `why`;
-inside, `overhead_records.gamma_of_record` raises on a γ without one.
+and says why. A reader of γ takes it from `table --json`, whose rows carry `of_record` and `why`. The row carries its
+`note` (A scheme's arm, below), and a γ quoted from it keeps the note.
 
 `table` presents each γ of record per window and per monitoring period of a week, a month and a year, over all compute:
 the census's datacenter (`dc-12500-machines-600s`: the GPU-hours spent proving at the share γ/(1+γ), and their FLOP at the
 card's datasheet rate and gates) beside the world's inference compute (`world-inference-2027`: the FLOP and gates proving
-adds, γ times it). Gates are FLOP at `verity/protocols/inference_only/rho/data/hardware.toml`'s one conversion. γ is measured on one card;
+adds, γ times it). Gates are FLOP at `benchmarks/rho/data/hardware.toml`'s one conversion. γ is measured on one card;
 every total is scaled from it, not proved.
 
 ## A scheme's arm
@@ -98,6 +105,15 @@ exists. The arm keeps the harness's arm contract (`benchmarks/pouw/harness/arm.p
   development only;
 - its build record's `verifier`: its reference verifier's declaration (`arm.check_verifier`), whose commands `verify.py`
   runs on the run's own transcripts, `ACCEPT` or `REJECT` naming each transcript's sha256.
+
+A scheme's entry also says whether its arm's timed call commits y, the call's output (y's tree): `commits_y`, false unless
+the entry states it. A timed run records it beside its arm (`overhead.json`'s `arm.commits_y`), and `table` reads each
+row's own run, a record without the field counting as false. A row whose run committed no y carries the note `without y's
+commitment (y tree not timed)` in the last column of both tables and in `--json` (`commits_y` and `note`): where the
+served call commits y, its γ leaves y's tree out and is understated by it. Pearl+'s arm commits A's root, the tile
+leaves and the screen's flags and no y, so its C and L rows carry the note until an arm that commits y is timed at them;
+`stock` has no arm, so its rows carry none. The entry's `commits_y` becomes true in the change that makes the arm's call
+hash y's rows, never before (the arm's test holds the entry to `work`'s hashed bytes).
 
 `overhead.json` keeps the cubin's art and sha256, the binaries the gate passed and the verifier beside γ.
 `epsilon(m, n, k, card)` returns `{"epsilon", "delta", "basis"}` at one linear of the layer, and `overhead.json` records it

@@ -54,7 +54,7 @@ def linear_shapes(config: dict, tp: int = 1) -> dict[str, tuple[int, int]]:
     H, NH = int(config["hidden_size"]), int(config["num_attention_heads"])
     KVH = int(config.get("num_key_value_heads") or NH)
     D = int(config.get("head_dim") or H // NH)
-    if tp < 1 or NH % tp or (KVH >= tp and KVH % tp):
+    if tp < 1 or NH % tp or (tp <= KVH and KVH % tp):
         raise UsageError(f"{NH} attention heads / {KVH} KV heads do not split over tp={tp}")
     V = -(-int(config["vocab_size"]) // VOCAB_PADDING) * VOCAB_PADDING
     shapes = {"qkv_proj": (H, (NH // tp + 2 * max(1, KVH // tp)) * D), "o_proj": (NH // tp * D, H)}
@@ -154,7 +154,9 @@ def launched_kernels(torch, fn) -> tuple[Any, list[str]]:
 
 def device_facts(torch, bi) -> dict[str, Any]:
     import vllm
-    from vllm.model_executor.determinism.batch_invariant_configs import _get_tuned_matmul_arch_family
+    from vllm.model_executor.determinism.batch_invariant_configs import (
+        _get_tuned_matmul_arch_family,
+    )
     from vllm.platforms import current_platform
     props = torch.cuda.get_device_properties(0)
     return {"device": props.name, "compute_capability": [int(props.major), int(props.minor)],
@@ -244,9 +246,10 @@ def capture(a: CaptureOptions) -> int:
 
 def step_model(dot: str):
     """``(the registered step primitive, a cpu_model TCModel with its parameters)`` for a ``GemmTarget.dot`` name."""
-    from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16
-    from verity.definitions.silicon.total import HOPPER_BF16_WGMMA_K16
     from verity.definitions.numerics.mma import TCModel
+    from verity.circuits.silicon.models import AMPERE_BF16_M16N8K16
+    from verity.circuits.silicon.total import HOPPER_BF16_WGMMA_K16
+
     from verity_vllm.program.frontend.targets import DOTS
 
     groupsum = {"AmpereBF16TcDot16": AMPERE_BF16_M16N8K16, "HopperBF16WgmmaDot16": HOPPER_BF16_WGMMA_K16}.get(dot)
@@ -287,13 +290,14 @@ def check_case(case: dict, d, wd, model, spec_of) -> dict[str, Any]:
             i, j = np.argwhere(out != gpu)[0]
             first = {"epilogue": name, "row": int(rows[i]), "col": int(cols[j]), "gpu_bf16": f"{int(gpu[i, j]):04x}",
                      "model_bf16": f"{int(out[i, j]):04x}", "mismatching_coordinates": int(gpu.size - by_epilogue[name])}
-    best = max(by_epilogue, key=by_epilogue.get)
+    best = max(by_epilogue, key=lambda name: by_epilogue[name])
     return {"attempted": int(gpu.size), "exact": by_epilogue[best], "epilogue": best, "exact_by_epilogue": by_epilogue,
             "first_mismatch": None if by_epilogue[best] == gpu.size else first}
 
 
 def check(a: CheckOptions) -> int:
     from verity.definitions.numerics import cpu_model as CM
+
     from verity_vllm.program.frontend.gemm_targets import gemm_target_for
 
     root = Path(a.case_dir)
@@ -306,7 +310,8 @@ def check(a: CheckOptions) -> int:
         return CM.GemmModelSpec(model.name, bias_mode=mode, note=f"{gt.kind}: one ascending k16 chain from zero")
 
     CM.build()
-    results, t0, wcache = [], time.time(), {}
+    results, t0 = [], time.time()
+    wcache: dict = {}
     for case in meta["cases"]:
         if case["w_file"] not in wcache:
             wcache.clear()

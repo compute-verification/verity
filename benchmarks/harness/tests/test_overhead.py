@@ -4,6 +4,7 @@ side's versioned points and source check on a real store with a directory remote
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import math
@@ -11,10 +12,10 @@ import re
 import runpy
 import sqlite3
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-
 from verity_bench import kit, nsys, overhead_node
 from verity_bench import overhead as O
 from verity_bench import overhead_records as R
@@ -284,11 +285,11 @@ def test_the_sweep_finds_the_rules_points_over_every_m_it_could_sample(tmp_path)
             times[m] = sum(min(roof_ms(f, c, m, n, k) for f in O.FP8 for c in ("cublaslt", "cutlass-vllm"))
                            for n, k in LINEARS.values())
     got, want = O.final(times), brute_force()
-    assert (got.c, got.l) == (want.c, want.l) and got.c % O.GRID == 0 and got.l % O.GRID == 0
-    assert 16 < got.l < got.c < O.M_MAX and len(times) < 60
+    assert (got.c, got.lat) == (want.c, want.lat) and got.c % O.GRID == 0 and got.lat % O.GRID == 0
+    assert 16 < got.lat < got.c < O.M_MAX and len(times) < 60
     flops = {m: O.layer_flop(O.KERNEL_MODEL, m) / t for m, t in times.items()}
     assert all(flops[m] >= O.C_SHARE * got.best_flop_per_ms for m in times if m >= got.c)
-    assert all(times[m] <= (1 + O.L_SLACK) * times[1] for m in times if m <= got.l)
+    assert all(times[m] <= (1 + O.L_SLACK) * times[1] for m in times if m <= got.lat)
 
 
 def test_c_needs_every_m_above_it_and_l_every_m_below_it():
@@ -301,7 +302,7 @@ def test_c_needs_every_m_above_it_and_l_every_m_below_it():
     p = O.rule(times)
     assert p.best_flop_per_ms == pytest.approx(best)
     assert p.c == 8192 and p.c_bracket == (4096, 8192)
-    assert p.l == 16 and p.l_bracket == (16, 32)
+    assert p.lat == 16 and p.l_bracket == (16, 32)
     del times[4096]
     assert O.rule(times).c == 2048
     with pytest.raises(ValueError, match="sample m = 1"):
@@ -414,9 +415,9 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     node = Node(tmp_path)
     points = json.loads(node_points(tmp_path, node).read_text())
     want = brute_force()
-    assert (points["c"], points["l"]) == (want.c, want.l) and points["error"] is None
+    assert (points["c"], points["l"]) == (want.c, want.lat) and points["error"] is None
     assert points["schema"] == O.POINTS_SCHEMA and points["families"] == list(O.FP8)
-    assert set(map(int, points["times_ms"])) >= set(O.powers()) | {want.c, want.l}
+    assert set(map(int, points["times_ms"])) >= set(O.powers()) | {want.c, want.lat}
     for argv in node.calls:
         assert argv[1] == str(overhead_node.HARNESS / "bench.py") and "--bridge" in argv
         assert between(argv, "--expect-uuid") == [UUID] and between(argv, "--families") == list(O.FP8)
@@ -424,10 +425,11 @@ def test_the_node_sweeps_for_the_points_in_rounds_of_bench_py(tmp_path):
     assert len(points["rounds"]) == len(node.calls)
     result = json.loads((tmp_path / "r20261104-020000-0001" / "result.json").read_text())
     assert result["validation"]["status"] == "passed" and result["validation"]["evidence"] == ["out/points.json"]
-    assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.l}
+    assert {m["name"]: m["value"] for m in result["measurements"]} == {"C": want.c, "L": want.lat}
     for m in result["measurements"]:
         assert (m["unit"], m["run"], m["commit"], m["host"]) == ("m", "r20261104-020000-0001", SHA, STAMP)
-        assert m["inputs"] == ["out/points.json"] and m["ci95"] is None and m["verdict"] is None
+        assert m["inputs"] == ["measured", "out/points.json"] and m["mark"] == "measured"
+        assert m["ci95"] is None and m["verdict"] is None
 
 
 def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(tmp_path):
@@ -437,8 +439,8 @@ def test_the_node_refuses_a_sweep_without_every_library_the_card_chooses_among(t
                              "--run-id", "r1"], run=node)
     assert rc == 1 and len(node.calls) == 1 and "--bridge" in node.calls[0]
     assert json.loads((out / "points.json").read_text())["error"] == "the H200's deepgemm didn't load (ImportError: no DeepGEMM)"
-    assert O.libraries_why(H200, {}) == "bench.py ran without --bridge: the H200's cublaslt, cutlass, deepgemm are the stock " \
-                                       "kernel's libraries"
+    assert O.libraries_why(H200, {}) == ("bench.py ran without --bridge: the H200's cublaslt, cutlass, deepgemm are the "
+                                        "stock kernel's libraries")
     assert O.libraries_why(O.CARDS["rtx-pro-6000"], {}) is None
 
 
@@ -465,7 +467,7 @@ def test_the_result_holds_a_callers_whole_entries_as_given_and_its_own_through_t
                                measured=[{"name": "C", "value": 512, "unit": "m"}])
     held, own = json.loads((run_dir / "result.json").read_text())["measurements"]
     assert held == whole and (own["name"], own["value"], own["run"], own["host"]) == ("C", 512, "r1", STAMP)
-    assert own["inputs"] == ["out/record.json"]
+    assert (own["mark"], own["inputs"]) == ("measured", ["measured", "out/record.json"])
 
 
 def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_with_its_controls(tmp_path, scheme):
@@ -491,13 +493,14 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
         assert {v["stock_least_sm"]["kernel"] for v in p["linears"].values()} == {"k_lean"}
         assert all(v["accepted"] for v in p["verified"].values()) and len(p["verified"]) == len(LINEARS)
         assert p["epsilon"]["gate_up"] == {"epsilon": 2.0 ** -40 * 7, "delta": 1e-9, "basis": "stand-in"}
-        assert p["gate"] == {"cap": O.GAMMA_CAP, "passes": True} and p["perplexity"]["value"] is None
+        assert p["gate"] == {"gamma_max": O.GAMMA_MAX, "passes": True} and p["perplexity"]["value"] is None
         fast = p["linears"]["o"]["stock_fastest"]
         assert fast["sm_s"] == pytest.approx(pts[name.lower()] * 8192 * 8192 * 1e-12 * 1.02, rel=1e-3)
         assert fast["cpu_sm_s"] == pytest.approx(HOST * fast["sm_s"], rel=1e-3)
     sent, sha = str(run_dir / "inputs" / "arm.cubin"), hashlib.sha256(CUBIN).hexdigest()
     assert doc["arm"] == {"name": ARM, "cubin_art": CUBIN_ART, "cubin_sha256": sha, "binaries": [sent],
-                          "verifier": "verify.py", "gated": [{"path": sent, "sha256": sha, "ok": True}]}
+                          "verifier": "verify.py", "gated": [{"path": sent, "sha256": sha, "ok": True}],
+                          "commits_y": False}
     prof, *exports, verify = node.calls
     assert prof[:2] == ["env", f"{overhead_node.CUBIN_ENV}={sent}"]
     prof = prof[2:]
@@ -520,7 +523,8 @@ def test_a_timed_run_gives_gamma_over_the_fastest_and_the_least_sm_stock_kernel_
     for name, p in doc["points"].items():
         m = written[f"gamma_{name}"]
         assert (m["value"], m["ci95"], m["unit"]) == (p["gamma"]["gamma"], p["gamma"]["ci95"], "ratio")
-        assert (m["target"], m["verdict"], m["inputs"]) == (None, None, ["out/overhead.json"])
+        assert (m["target"], m["verdict"], m["mark"]) == (None, None, "measured")
+        assert m["inputs"] == ["measured", "out/overhead.json"]
         assert (m["run"], m["commit"], m["host"]) == (run_dir.name, SHA, STAMP)
 
 
@@ -553,8 +557,8 @@ def test_a_timed_run_says_why_each_point_isnt_of_record(tmp_path, scheme):
         "the run was sent no cubin art (`run --cubin ART`): a cubin built in the run is development only"]
     rc, run_dir = node_run(tmp_path, Node(tmp_path, loads=False), points, "pearl-plus", run="r20261104-030000-0005")
     assert json.loads((run_dir / "out" / "overhead.json").read_text())["whys"] == [
-        f"no binary the SASS gate passed is the cubin the run was sent ({CUBIN_ART}): the arm must load "
-        "$VERITY_BENCH_CUBIN and list it in its binaries"]
+        (f"no binary the SASS gate passed is the cubin the run was sent ({CUBIN_ART}): the arm must load "
+         "$VERITY_BENCH_CUBIN and list it in its binaries")]
 
 
 def test_a_timed_run_refuses_a_capture_range_that_opened_after_its_items(tmp_path, scheme):
@@ -565,8 +569,8 @@ def test_a_timed_run_refuses_a_capture_range_that_opened_after_its_items(tmp_pat
     rc, run_dir = node_run(tmp_path, Node(tmp_path, late=True), points, "pearl-plus")
     doc = json.loads((run_dir / "out" / "overhead.json").read_text())
     assert rc == 1 and doc["whys"] == [
-        f"prof.2.nsys-rep traced {STRAY} kernels outside its 100 traced items, more than a flush each: its capture range "
-        "ran past the traced pass, so a timed pass may have run traced",
+        (f"prof.2.nsys-rep traced {STRAY} kernels outside its 100 traced items, more than a flush each: its capture range "
+         "ran past the traced pass, so a timed pass may have run traced"),
         "nsys recorded 700 of the 800 traced items (item 0 the first missing): a capture range opened after its items"]
 
 
@@ -634,12 +638,19 @@ def stored_points(tmp: Path, s: Store, run: str) -> str:
 
 
 def timed(tmp: Path, s: Store, art: str, scheme: str, run: str, node: Node | None = None, cubin: bytes = CUBIN,
-          cubin_art: str | None = None) -> str:
+          cubin_art: str | None = None, edit: Callable[[dict], None] | None = None) -> str:
+    """A timed run of the door in the store; `edit` changes its `overhead.json` first, for a made-up record."""
+
     points = tmp / f"{run}-points.json"
     points.write_bytes(Path(s.store.fetch(art)).read_bytes())
     rc, run_dir = node_run(tmp, node or Node(tmp), points, scheme, art, run=run, cubin=cubin,
                            cubin_art=cubin_art or s.cubin)
     assert rc == 0
+    if edit is not None:
+        record = run_dir / "out" / "overhead.json"
+        doc = json.loads(record.read_text())
+        edit(doc)
+        record.write_text(json.dumps(doc))
     s.ran(run, run_dir)
     return run
 
@@ -650,7 +661,7 @@ def test_points_are_stored_versioned_and_the_newest_supersedes_the_last(tmp_path
     assert R.current_points(s.store, "h200") == first
     meta = s.store.get_manifest(first).meta
     assert meta["version"] == 1 and meta["supersedes"] is None and (meta["c"], meta["l"]) == (brute_force().c,
-                                                                                             brute_force().l)
+                                                                                             brute_force().lat)
     second = stored_points(tmp_path, s, "r20261104-020000-0002")
     assert second != first
     fresh = s.fresh()
@@ -716,7 +727,7 @@ def test_only_a_run_of_the_door_s_own_job_can_be_stored_or_recorded(tmp_path):
 def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_why(tmp_path, scheme):
     """The source check: a γ stands only from a labelled run of the door, timed at the points of record. A run that
     doesn't stand as a whole can't be labelled; a point that fails the door's rules stays in the table, refused; points
-    superseded after the run refuse its γ; and a reader asking for a γ with no labelled run is told so."""
+    superseded after the run refuse its γ; and with no labelled run the table holds no γ."""
 
     s = Store(tmp_path)
     art = stored_points(tmp_path, s, "r20261104-020000-0001")
@@ -724,13 +735,12 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
     stock = timed(tmp_path, s, art, "stock", "r20261104-030000-0003")
     noisy = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0004", Node(tmp_path, reps=12))
 
-    with pytest.raises(ValueError, match="no labelled run"):
-        R.gamma_of_record(s.store, "pearl-plus", "h200", "C")
+    assert R.gamma_rows(s.store) == []
     assert R.record_run(s.store, run) == [] and R.record_run(s.store, stock) == []
     rows = {(r["scheme"], r["point"]): r for r in R.gamma_rows(s.store)}
     assert set(rows) == {("pearl-plus", "C"), ("pearl-plus", "L"), ("stock", "C"), ("stock", "L")}
     assert all(r["of_record"] and r["why"] is None for r in rows.values())
-    got = R.gamma_of_record(s.store, "pearl-plus", "h200", "L")
+    got = rows["pearl-plus", "L"]
     assert got["gamma"]["gamma"] == pytest.approx(0.55, rel=1e-4) and got["run"] == run and got["points_art"] == art
 
     # a fresh machine renders the table from the store's remote alone, each period beside the window
@@ -744,8 +754,8 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
 
     # a labelled run whose points fail the door's rules: shown refused with why, never as a figure
     assert all("fewer than 20" in w for w in R.record_run(s.store, noisy))
-    with pytest.raises(ValueError, match="fewer than 20"):
-        R.gamma_of_record(s.store, "pearl-plus", "h200", "C")
+    noisy_c = {(r["scheme"], r["point"]): r for r in R.gamma_rows(s.store)}["pearl-plus", "C"]
+    assert not noisy_c["of_record"] and "fewer than 20" in noisy_c["why"]
     text = R.render(R.build(s.fresh("second"), root=REPO))
     assert "Refused (not of record):" in text and "fewer than 20" in text and "| pearl-plus | h200 | L |" not in text
 
@@ -772,8 +782,70 @@ def test_the_table_shows_only_labelled_runs_of_record_and_refuses_the_rest_with_
     later = R.build(third, root=REPO)
     assert not any(r["of_record"] for r in later["rows"])
     assert all("superseded" in r["why"] for r in later["rows"])
-    with pytest.raises(ValueError, match="superseded"):
-        R.gamma_of_record(third, "stock", "h200", "L")
+
+
+def test_a_row_carries_the_note_of_its_own_run_and_the_same_numbers_with_it_or_without(tmp_path, scheme, monkeypatch, capsys):
+    """Made-up records of one stand-in arm under three entries. The fixture's pearl-plus entry states no `commits_y`, so its
+    C and L rows carry
+    `WITHOUT_Y` in both rendered tables and the JSON. A made-up scheme whose entry commits y carries no note, and every
+    number of its rows is pearl-plus's. A run recorded before the field (its `arm` record without `commits_y`) carries the
+    note whatever today's entry says: the note is the run's, not the entry's. stock, with no arm, carries none. The
+    table's coverage line names the layer's linears and what the model's entry leaves out."""
+
+    with_y = dataclasses.replace(scheme, id="pearl-plus-y", commits_y=True)
+    before = dataclasses.replace(with_y, id="pearl-plus-before")
+    for sch in (with_y, before):
+        monkeypatch.setitem(O.SCHEMES, sch.id, sch)
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    runs = {"pearl-plus": timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002"),
+            with_y.id: timed(tmp_path, s, art, with_y.id, "r20261104-030000-0003"),
+            before.id: timed(tmp_path, s, art, before.id, "r20261104-030000-0004",
+                             edit=lambda doc: doc["arm"].pop("commits_y")),
+            "stock": timed(tmp_path, s, art, "stock", "r20261104-030000-0005")}
+    assert all(R.record_run(s.store, run) == [] for run in runs.values())
+
+    table = R.build(s.fresh(), root=REPO)
+    by = {(r["scheme"], r["point"]): r for r in table["rows"]}
+    assert set(by) == {(name, point) for name in runs for point in O.POINTS} and all(r["of_record"] for r in by.values())
+    ours = {"scheme", "run", "commits_y", "note"}
+    for point in O.POINTS:
+        without, committed, old, stock = (by[name, point] for name in runs)
+        assert (without["commits_y"], without["note"]) == (False, O.WITHOUT_Y) == (old["commits_y"], old["note"])
+        assert (committed["commits_y"], committed["note"]) == (True, None)
+        assert (stock["commits_y"], stock["note"]) == (None, None)
+        numbers = {k: v for k, v in without.items() if k not in ours}
+        assert numbers["gamma"]["gamma"] == pytest.approx(0.55, rel=1e-4) and numbers["periods"]["share"] > 0
+        assert all({k: v for k, v in r.items() if k not in ours} == numbers for r in (committed, old))
+
+    lines = R.render(table).splitlines()
+    rows = {name: [ln for ln in lines if ln.startswith(f"| {name} | ")] for name in runs}
+    # a row of the γ table at each point and, for a scheme with an arm, a row a period (and the window) at each point
+    assert [len(rows[name]) for name in runs] == [2 * (2 + len(O.PERIODS_H))] * 3 + [2]
+    for name in ("pearl-plus", before.id):
+        assert all(ln.endswith(f" | {O.WITHOUT_Y} |") for ln in rows[name])
+    for name in (with_y.id, "stock"):
+        assert all(ln.endswith(" |  |") and O.WITHOUT_Y not in ln for ln in rows[name])
+
+    def bare(name: str, note: str) -> list[str]:
+        """A scheme's rows without their note, under pearl-plus's name and no run id."""
+
+        return [ln.removesuffix(f" {note} |").replace(f"| {name} |", "| pearl-plus |").replace(runs[name], "RUN")
+                for ln in rows[name]]
+
+    assert bare("pearl-plus", O.WITHOUT_Y) == bare(with_y.id, "") == bare(before.id, O.WITHOUT_Y)
+
+    assert O.WITHOUT_Y == "without y's commitment (y tree not timed)"
+    assert table["covers"] == O.covers() == ("Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, "
+                                             "down) and leaves the LM head out.")
+    assert lines.count(table["covers"]) == 1
+    monkeypatch.setenv("COLUMNS", "400")
+    with pytest.raises(SystemExit):
+        main(["overhead", "table", "--help"])
+    said = capsys.readouterr().out
+    assert table["covers"] in said and O.WITHOUT_Y in said
+    monkeypatch.setitem(O.LEFT_OUT, O.KERNEL_MODEL, ())
+    assert O.covers() == "Each γ is over the 4 linears of one llama3.1-70b layer (qkv, o, gate_up, down)."
 
 
 # ---- the command ------------------------------------------------------------------------------------------------------------------
@@ -841,6 +913,7 @@ def test_the_command_launches_each_step_as_a_research_run_on_one_gpu_and_ships_t
 def test_verity_bench_overhead_is_the_door_s_runner(tmp_path, monkeypatch, capsys):
     """`verity bench overhead` runs benchmarks/overhead/run.py, which is `verity-bench overhead`."""
 
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "empty"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path).config))
     monkeypatch.setattr(sys, "argv", ["run.py", "table", "--json", "--local-only"])
@@ -849,3 +922,62 @@ def test_verity_bench_overhead_is_the_door_s_runner(tmp_path, monkeypatch, capsy
     assert done.value.code == 0
     table = json.loads(capsys.readouterr().out)
     assert table["rows"] == [] and table["census"]["world_flop_per_year"] == 9.36e30
+
+
+def test_under_a_research_run_the_table_records_its_metrics_and_prints_the_same(tmp_path, monkeypatch, capsys, scheme):
+    """Under a research run, `verity bench overhead table` writes run.py's metrics into the run's result through the kit:
+    each the γ of record of its row, measured, with its interval, the scheme gate as its target, its run and points' art,
+    and its note; with no γ of record, no value and why, and a failed validation naming it. What it prints is the same in
+    a run as outside one, where it writes nothing."""
+
+    s = Store(tmp_path)
+    art = stored_points(tmp_path, s, "r20261104-020000-0001")
+    run = timed(tmp_path, s, art, "pearl-plus", "r20261104-030000-0002")
+    capsys.readouterr()
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "producer"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261114-000000-0000")
+    runner = REPO / "benchmarks" / "overhead" / "run.py"
+    metrics = runpy.run_path(str(runner))["METRICS"]
+    assert metrics == {"benchmarks/pearl-plus-gamma-c-h200": "pearl-plus/h200/C",
+                       "benchmarks/pearl-plus-gamma-l-h200": "pearl-plus/h200/L"}
+
+    def table(within: Path | None = None) -> str:
+        if within is None:
+            monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+        else:
+            monkeypatch.setenv("RESEARCH_RUN_DIR", str(within))
+        monkeypatch.setattr(sys, "argv", ["run.py", "table", "--local-only"])
+        with pytest.raises(SystemExit) as done:
+            runpy.run_path(str(runner), run_name="__main__")
+        assert done.value.code == 0
+        return capsys.readouterr().out
+
+    def result(within: Path) -> dict:
+        return json.loads((within / kit.RESULT).read_text())
+
+    before = tmp_path / "run-1"
+    assert table(before) == table()
+    got = result(before)
+    assert [m["name"] for m in got["measurements"]] == list(metrics)
+    for m, point in zip(got["measurements"], O.POINTS):
+        assert m["value"] is None and m["mark"] == "measured" and m["target"] == O.GAMMA_MAX and m["verdict"] is None
+        assert m["why"] == f"no γ of record: no labelled run times pearl-plus at h200's {point} (`run_of_record=overhead`)"
+    assert got["validation"]["status"] == "failed" and got["validation"]["evidence"] == [R.TABLE]
+    assert got["validation"]["detail"].startswith("0 of 2 metrics have a γ of record")
+
+    assert R.record_run(s.store, run) == []
+    after = tmp_path / "run-2"
+    printed = table(after)
+    assert printed == table() and "| pearl-plus | h200 | C |" in printed
+    got, kept = result(after), json.loads((after / R.TABLE).read_text())
+    rows = {r["point"]: r for r in kept["rows"]}
+    assert got["workload_fingerprint"]["runs"] == [run] and got["measurement_files"] == [R.TABLE]
+    for m, point in zip(got["measurements"], O.POINTS):
+        g = rows[point]["gamma"]
+        assert (m["value"], m["ci95"], m["unit"], m["mark"]) == (g["gamma"], g["ci95"], R.GAMMA_UNIT, "measured")
+        assert m["verdict"] == "within target" and m["inputs"] == ["measured", run, art] and "why" not in m
+        assert m["note"] == O.WITHOUT_Y and m["covers"] == O.covers()
+    assert got["validation"] == {"status": "passed", "checker": "verity_bench.overhead_records.of_record",
+                                 "detail": "2 of 2 metrics have a γ of record (the source check, `of_record`)",
+                                 "evidence": [R.TABLE]}

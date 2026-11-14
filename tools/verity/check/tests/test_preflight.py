@@ -34,16 +34,16 @@ def _tree(tmp_path: Path, *, rustflags: str = "-C target-cpu=x86-64-v3", pinned:
     t = tmp_path / "tree"
     for d in ("check", "lean"):
         (t / "tools" / "verity" / d).mkdir(parents=True)
-    (t / "verity" / "protocols" / "flock" / "agreement").mkdir(parents=True)
+    (t / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement").mkdir(parents=True)
     (t / "tools" / "verity" / "check" / "pod_setup.sh").write_text("set -e\nUV_VERSION=${UV_VERSION:-0.12.20}\n")
-    for pkg, deps in (("verity/protocols/flock/verifier", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
+    for pkg, deps in (("verity/protocols/proofs/flock/verifier", []), ("pkg/a", [{"type": "git", "name": "mathlib", "rev": "r1"}])):
         d = t / pkg
         d.mkdir(parents=True)
         (d / "lakefile.toml").write_text("")
         (d / "lean-toolchain").write_text(TOOLCHAIN + "\n")
         (d / "lean-audit.json").write_text("{}")
         (d / "lake-manifest.json").write_text(json.dumps({"packages": deps}))
-    (t / "verity" / "protocols" / "flock" / "agreement" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
+    (t / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "upstream.json").write_text(json.dumps({"upstream": {"sha256": _sha(UPSTREAM), "rustflags": rustflags}}))
     deps = {PF.LA.deps_key(t / "pkg" / "a"): {"package": "pkg/a", "sha256": _sha(BUNDLE), "bytes": len(BUNDLE), "run": "r1"}} if pinned else {}
     (t / "tools" / "verity" / "lean" / "lean-deps.json").write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": deps}))
     for args in (["init", "-q"], ["add", "."], ["commit", "-q", "-m", "tree"]):         # not this machine's git config (a signing helper)
@@ -228,7 +228,7 @@ def test_avx512f_is_required_only_when_the_run_carries_a_build_that_needs_it(tmp
 
 
 def test_too_little_disk_is_refused(tmp_path, path):
-    """TO3's check ran out of space on a pod that started with 36 GB free."""
+    """A check runs out of space on a pod that starts with 36 GB free."""
     _, fails = _run(tmp_path, _tree(tmp_path), inputs=_inputs(tmp_path), custody=_custody(tmp_path, BUNDLE), free_gb=36)
     assert len(fails) == 1 and fails[0].startswith("disk: 36 GB free") and "needs 45 GB" in fails[0] and "larger pod" in fails[0]
 

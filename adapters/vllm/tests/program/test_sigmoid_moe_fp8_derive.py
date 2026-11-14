@@ -23,22 +23,28 @@ import numpy as np
 import pytest
 import torch
 import torch.nn as nn
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.derived_rows import fp8_group_quant_row
+from verity.definitions.numerics.fp8_moe_rows import (
+    moe_expert_fp8_block_row,
+    silu_mul_fp8_block_quant_rows,
+)
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.definitions.registry import fp8_moe
+from verity.definitions.registry import moe as MOE
+
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import triton_iface as _ti  # noqa: F401  (defines verity_cba::triton_launch)
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_iface as _vi  # noqa: F401  (defines the vllm_iface stand-ins)
+from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_moe import MOE_GEMM_PINS
 from verity_vllm.program.frontend.rules.vllm_moe_fp8 import MOE_FP8_CONSTEXPRS
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity_vllm.program.frontend.targets import wgmma_tile
-from verity.definitions.numerics.fp8_moe_rows import moe_expert_fp8_block_row, silu_mul_fp8_block_quant_rows
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import fp8_moe
-from verity.definitions.registry import moe as MOE
 
 F8 = torch.float8_e4m3fn
 PROF = dict(mode="profile", profile="b1-eager-v3")
@@ -47,7 +53,7 @@ DOT = "HopperE4m3QgmmaDot32_v1"
 MMAV2_DOT = "HopperE4m3MmaV2Dot32_v1"
 #: GLM-5.3's tuned H200 tile from M = 8 (BLOCK_SIZE_M 16 under SWAP_AB) and its block-FP8 numeric constexprs
 TUNED = {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128, "GROUP_SIZE_M": 32}
-E, M, TOPK, H, I, G, RSF = 8, 2, 2, 128, 128, 128, 2.5
+E, M, TOPK, H, INTER, G, RSF = 8, 2, 2, 128, 128, 128, 2.5
 NV = M * TOPK
 
 
@@ -155,14 +161,12 @@ def test_each_router_pin_refuses_by_name(call, needle, on_target):
 
 class _LaunchedRouter(_Router):
     def forward(self, logits):
-        from verity_vllm.program.frontend.rules.vllm_bindings import observations as OB
         with OB.launch_region(0, "tokens"):
             return super().forward(logits)
 
 
 def test_the_router_kernel_is_the_launchs_not_the_requests(on_target):
     """vLLM launches `grouped_topk` over the step's tokens: a request's 2 rows in a step of 1,100 run the warp kernel at 256 experts."""
-    from verity_vllm.program.frontend import targets as TG
     on_target(H200)
     VB.observe_launch_context(TG.parse_launch_context({"batch": [[[M, 0], [1100 - M, 7]]]}))
     with torch.fx.traceback.preserve_node_meta():
@@ -191,12 +195,12 @@ class _ActQuant(nn.Module):
 @pytest.mark.slow
 def test_silu_and_mul_per_block_quant_derives_one_row_form_per_row_equal_to_the_twin(on_target):
     on_target(H200)
-    gu = _bf16(np.random.default_rng(4), NV, 2 * I)
+    gu = _bf16(np.random.default_rng(4), NV, 2 * INTER)
     rep = _derive(_ActQuant(), (gu,))
     assert rep.program is not None, rep.unsupported
-    assert _ids(rep) == [f"SiluMulFp8BlockQuant_v1{{I={I},G={G}}}"] * NV
+    assert _ids(rep) == [f"SiluMulFp8BlockQuant_v1{{I={INTER},G={G}}}"] * NV
     got = _run(rep, _ActQuant(), (gu,))
-    q, s = silu_mul_fp8_block_quant_rows(np.array(_words(gu), dtype=np.uint16).reshape(NV, 2 * I), G=G)
+    q, s = silu_mul_fp8_block_quant_rows(np.array(_words(gu), dtype=np.uint16).reshape(NV, 2 * INTER), G=G)
     assert got == q.reshape(-1).tolist() + s.reshape(-1).tolist()
 
 
@@ -207,7 +211,7 @@ def test_silu_and_mul_per_block_quant_derives_one_row_form_per_row_equal_to_the_
 ], ids=lambda v: v if isinstance(v, str) else "-".join(v))
 def test_each_activation_pin_refuses_by_name(kw, needle, on_target):
     on_target(H200)
-    hint = _hint(_derive(_ActQuant(**kw), (_bf16(np.random.default_rng(4), NV, 2 * I),)))
+    hint = _hint(_derive(_ActQuant(**kw), (_bf16(np.random.default_rng(4), NV, 2 * INTER),)))
     assert "SiluAndMulPerBlockQuant[vllm-moe]_v1" in hint and needle in hint, hint
 
 
@@ -233,7 +237,6 @@ class _InputQuant(nn.Module):
 @pytest.mark.parametrize("ue8m0,family", [(False, "Fp8GroupQuant_v1"), (True, "Fp8GroupQuantUe8m0_v1")])
 def test_per_token_group_fp8_quant_derives_one_row_form_per_row_equal_to_the_twin(ue8m0, family, on_target):
     from verity.definitions.numerics.deepgemm_twins import ue8m0_group_quant_row
-    from verity.definitions.numerics.derived_rows import fp8_group_quant_row
 
     on_target(H200)
     x = _bf16(np.random.default_rng(6), M, 2 * G)
@@ -284,11 +287,11 @@ class _Up(nn.Module):
 
     def __init__(self, tiles: dict = TUNED, **over) -> None:
         super().__init__()
-        self.w13, self.w13_s = _expert_stack(np.random.default_rng(5), 2 * I, H)
-        self.meta = _meta(False, H, 2 * I, tiles, **over)
+        self.w13, self.w13_s = _expert_stack(np.random.default_rng(5), 2 * INTER, H)
+        self.meta = _meta(False, H, 2 * INTER, tiles, **over)
 
     def forward(self, xq, sx, ids):
-        c = torch.empty(M, TOPK, 2 * I, dtype=torch.bfloat16)
+        c = torch.empty(M, TOPK, 2 * INTER, dtype=torch.bfloat16)
         torch.ops.verity_cba.triton_launch(MOE_GEMM_PINS["kernel"], [xq, self.w13, c, sx, self.w13_s, ids], self.meta)
         return c
 
@@ -301,17 +304,17 @@ class _Experts(nn.Module):
         super().__init__()
         rng = np.random.default_rng(5)
         self.bias = nn.Parameter(torch.from_numpy(rng.normal(0.0, 0.05, E).astype(np.float32)), requires_grad=False)
-        self.w13, self.w13_s = _expert_stack(rng, 2 * I, H)
-        self.w2, self.w2_s = _expert_stack(rng, H, I)
-        self.up, self.down = _meta(False, H, 2 * I, tiles), _meta(True, I, H, tiles)
+        self.w13, self.w13_s = _expert_stack(rng, 2 * INTER, H)
+        self.w2, self.w2_s = _expert_stack(rng, H, INTER)
+        self.up, self.down = _meta(False, H, 2 * INTER, tiles), _meta(True, INTER, H, tiles)
 
     def forward(self, logits, xq, sx):
         g, ids = torch.ops.vllm_iface.grouped_topk(logits, 1, 1, TOPK, True, RSF, self.bias, 1)
-        c1 = torch.empty(M, TOPK, 2 * I, dtype=torch.bfloat16)
+        c1 = torch.empty(M, TOPK, 2 * INTER, dtype=torch.bfloat16)
         torch.ops.verity_cba.triton_launch(MOE_GEMM_PINS["kernel"], [xq, self.w13, c1, sx, self.w13_s, ids], self.up)
-        q = torch.empty(NV, I, dtype=F8)
-        s = torch.empty(NV, I // G, dtype=torch.float32)
-        torch.ops.vllm_iface.silu_and_mul_per_block_quant(q, c1.view(-1, 2 * I), s, G, None, False)
+        q = torch.empty(NV, INTER, dtype=F8)
+        s = torch.empty(NV, INTER // G, dtype=torch.float32)
+        torch.ops.vllm_iface.silu_and_mul_per_block_quant(q, c1.view(-1, 2 * INTER), s, G, None, False)
         c3 = torch.empty(M, TOPK, H, dtype=torch.bfloat16)
         torch.ops.verity_cba.triton_launch(MOE_GEMM_PINS["kernel"], [q, self.w2, c3, s, self.w2_s, ids, g], self.down)
         return c3
@@ -334,7 +337,7 @@ def test_a_tuned_hopper_launch_binds_its_tile_and_the_hopper_step(on_target):
     m = _Up()
     rep = _derive(m, (xq, sx, ids))
     assert rep.program is not None, rep.unsupported
-    assert _ids(rep) == [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
+    assert _ids(rep) == [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
     got = [w & 0xFFFF for w in _run(rep, m, (xq, sx, ids))]
     w, ws = _np(m.w13), _np(m.w13_s)
     want = []
@@ -368,8 +371,9 @@ def test_a_tuned_launch_off_hopper_refuses_by_name(on_target):
 def test_the_wgmma_tile_rule_matches_the_tuned_h200_entries():
     """GLM-5.3's TP8 shard on the H200: the 8x32 and 8x64 tiles are MMAv2; the entries from 16x64 onward are wgmma."""
     entries = {1: (8, 32), 2: (8, 32), 4: (8, 64), 8: (16, 64), 16: (16, 128), 512: (16, 128), 1024: (64, 128), 4096: (64, 128)}
-    got = {m: wgmma_tile({"BLOCK_SIZE_M": bm, "BLOCK_SIZE_N": bn, "num_warps": 4}, bm < 64 and bn >= 64) for m, (bm, bn) in entries.items()}
-    assert got == {1: False, 2: False, 4: False, 8: True, 16: True, 512: True, 1024: True, 4096: True}
+    got = {m: fp8_moe.sm90_dot(bm, bn, 4, bm < 64 and bn >= 64) for m, (bm, bn) in entries.items()}
+    mmav2, wgmma = HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+    assert got == {1: mmav2, 2: mmav2, 4: mmav2, 8: wgmma, 16: wgmma, 512: wgmma, 1024: wgmma, 4096: wgmma}
 
 
 H200_EXPERT_CONFIG = {
@@ -439,9 +443,9 @@ def test_the_default_experts_chain_with_the_ue8m0_input_quant_derives_in_one_pro
     assert rep.program is not None, rep.unsupported
     router = bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL="warp")
     assert _ids(rep) == ([f"Fp8GroupQuantUe8m0_v1{{K={H},G={G}}}"] * M + [router.id] * M
-                         + [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
-                         + [f"SiluMulFp8BlockQuant_v1{{I={I},G={G}}}"] * NV
-                         + [f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV)
+                         + [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
+                         + [f"SiluMulFp8BlockQuant_v1{{I={INTER},G={G}}}"] * NV
+                         + [f"MoeExpertFp8GemmW_v1{{E={E},K={INTER},N={H},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV)
     got = [w & 0xFFFF for w in _run(rep, m, (logits, x))]
     me = m.experts
     bias = _words(me.bias)
@@ -470,9 +474,9 @@ def test_the_routed_experts_chain_derives_in_one_program_equal_to_the_twins(on_t
     rep = _derive(m, (x, xq, sx))
     assert rep.program is not None, rep.unsupported
     router = bind(MOE.MoeRouterSigmoidBias, E=E, TOPK=TOPK, SCALE=RSF, KERNEL="warp")
-    assert _ids(rep) == ([router.id] * M + [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
-                         + [f"SiluMulFp8BlockQuant_v1{{I={I},G={G}}}"] * NV
-                         + [f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV)
+    assert _ids(rep) == ([router.id] * M + [f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV
+                         + [f"SiluMulFp8BlockQuant_v1{{I={INTER},G={G}}}"] * NV
+                         + [f"MoeExpertFp8GemmW_v1{{E={E},K={INTER},N={H},G={G},KB=128,SWAP=True,DOT={DOT}}}"] * NV)
     got = [w & 0xFFFF for w in _run(rep, m, (x, xq, sx))]
     bias = _words(m.bias)
     routes = [list(evaluate(router, _words(x[r]), bias)) for r in range(M)]

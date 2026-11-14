@@ -11,20 +11,19 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.boolean import trace as TR
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.definitions.registry import b1
 from verity.definitions.registry import boolean_dense as BD
 from verity.definitions.registry import dense as D
+from verity.circuits.silicon import fp
 
 #: id -> (And, Xor, Not gates, standalone program digest)
 PINS = {
@@ -98,7 +97,7 @@ _F32 = [0x00000000, 0x00000001, 0x00000002, 0x00400000, 0x007FFFFF, 0x00800000, 
         0x33800000, 0x358637BD, 0x3D088889, 0x3F000000, 0x3F7FFFFF, 0x3F800000, 0x3F800001, 0x41F00000, 0x5F800000, 0x7E800000,
         0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FBFFFFF, 0x7FC00000, 0x7FFFFFFF]
 F32_SPECIALS = np.array([m | s for m in _F32 for s in (0, 0x80000000)], np.uint32)
-EVERY = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
+EVERY: np.ndarray = np.arange(1 << 16, dtype=np.uint32).astype(np.uint16)
 
 
 def _f32_words(rng, exp: np.ndarray) -> np.ndarray:
@@ -119,7 +118,7 @@ def _operands(rng, kinds: str) -> list[np.ndarray]:
     bf16 word against 8 specials of the other operand (when one is bf16), 100,000 random tuples, 20,000 whose product lands at
     f32's subnormal or overflow end and, for two operands, 20,000 that cancel to a few ulps."""
     spec = {"h": SPECIALS, "f": F32_SPECIALS}
-    cols = [[] for _ in kinds]
+    cols: list = [[] for _ in kinds]
     for g in itertools.product(*[range(len(spec[k])) for k in kinds]):
         for c, k, i in zip(cols, kinds, g):
             c.append(spec[k][i])
@@ -127,7 +126,7 @@ def _operands(rng, kinds: str) -> list[np.ndarray]:
     if "h" in kinds and len(kinds) == 2:
         h = kinds.index("h")
         other = spec[kinds[1 - h]][rng.integers(0, len(spec[kinds[1 - h]]), 8)]
-        pair = [None, None]
+        pair: list = [None, None]
         pair[h], pair[1 - h] = np.repeat(EVERY, len(other)), np.tile(other, len(EVERY))
         cols = [np.concatenate([c, p]) for c, p in zip(cols, pair)]
     rand = [rng.integers(0, 1 << (16 if k == "h" else 32), 100_000, dtype=np.uint64).astype(np.uint16 if k == "h" else np.uint32)

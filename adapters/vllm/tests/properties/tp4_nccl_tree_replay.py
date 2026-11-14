@@ -10,7 +10,7 @@ for the call at those facts, three ways: the Boolean Definition (`AllReduceNcclT
 `AllReduceNcclTree_v2` is one of it per element), the word Definition `AllReduceNcclTree_v1` at the call's SIZE (``--no-word`` skips
 it, and the record is then NO-GO), and `tp_allreduce_check.nccl_tree_rows`. Two other orders are counted beside it, the chain reversed and the f32 sum of the four
 rounded once, so the record shows the capture tells them apart. It writes ``<out>/calls.jsonl`` (one line per call) and the property
-record ``<out>/properties/tp4_nccl_tree_capture.json`` (`properties.record`), and prints ``TP4-NCCL-TREE GO`` or ``NO-GO``:
+record ``<out>/properties/tp4_nccl_tree_capture.json`` (`records.property_record`), and prints ``TP4-NCCL-TREE GO`` or ``NO-GO``:
 
     python tests/properties/tp4_nccl_tree_replay.py replay --capture DIR --out DIR [--jobs N] [--no-word]
 
@@ -36,10 +36,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import bits as BS
 from verity.definitions.numerics import derived_rows as DR
+from verity.definitions.registry import boolean_tp_allreduce as BA
 from verity.definitions.registry import tp_allreduce as T
 from verity.definitions.registry import tp_allreduce_check as K
+
+from verity_vllm.records.property_record import DIR, seal
 
 SCHEMA = "verity-vllm/tp4-nccl-tree-capture/v1"
 RECORD = "tp4_nccl_tree_capture.json"
@@ -128,19 +133,14 @@ def route_for(facts: dict[str, Any], M: int, N: int):
     device = facts["device"]
     c = T.covered(s, N, route, M, world=facts["world"], device=device, transport=settings["nccl_transport"]) if s else None
     if c is None:
-        return None, f"no CAPTURED entry for setting={s!r} N={N} route={route!r} M={M} world={facts['world']} device={device!r} " \
-                     f"transport={settings['nccl_transport']!r}"
+        return None, (f"no CAPTURED entry for setting={s!r} N={N} route={route!r} M={M} world={facts['world']} device={device!r} "
+                      f"transport={settings['nccl_transport']!r}")
     return c, T.route_binding(c, facts["world"], M, N)[1]
 
 
 def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
     """One step's calls `items` ([(k, rows, statics)]): every rank's words against each order."""
     import torch
-
-    from verity.circuits import evaluation as E
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import bits as BS
-    from verity.definitions.registry import boolean_tp_allreduce as BA
 
     dumps = [torch.load(Path(capture) / f"coll.rank{r}.step{step}.pt", map_location="cpu", mmap=True, weights_only=True)
              for r in range(WORLD)]
@@ -168,8 +168,6 @@ def _replay(capture: str, step: int, items: list, word: bool) -> list[dict]:
 
 
 def replay(a: argparse.Namespace) -> dict[str, Any]:
-    from verity_vllm.properties.record import DIR, seal
-
     capture, outdir = Path(a.capture), Path(a.out)
     (outdir / DIR).mkdir(parents=True, exist_ok=True)
     facts = capture_facts(capture)
@@ -256,7 +254,9 @@ def probe_cases() -> list[tuple[str, np.ndarray]]:
 def _probe_rank(rank: int, port: int, out: str, chain: tuple[int, ...]) -> None:
     os.environ.update(NCCL_P2P_DISABLE="1", NCCL_DEBUG="INFO", NCCL_DEBUG_SUBSYS="INIT,GRAPH,TUNING,ENV",
                       NCCL_DEBUG_FILE=str(Path(out) / f"nccl.rank{rank}.log"))
-    from vllm.model_executor.determinism.batch_invariant import override_envs_for_invariance
+    from vllm.model_executor.determinism.batch_invariant import (
+        override_envs_for_invariance,
+    )
 
     override_envs_for_invariance()
     import torch

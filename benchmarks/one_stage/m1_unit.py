@@ -30,7 +30,7 @@ population Program of its one Definition at ``--n`` instances and that Program's
 as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
 Program it refuses every session once its checks pass.
 
-    PYTHONPATH=<tree>:<tree>/verity/protocols/flock/prover/python:<tree>/adapters/vllm \\
+    PYTHONPATH=<tree>:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
@@ -416,8 +416,8 @@ def main() -> int:
     ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
                     help="a flat unit's MUFU table reads: inline rows of the unit, or Flock lookup slots (read_slots)")
     ap.add_argument("--stage-ands", type=lambda v: v if v in ("auto", "none") else int(v), default="auto", metavar="N|auto|none",
-                    help="with --reads slots: at most N ANDs a net, the caps whose nets take the fewest cells (auto), or no cap "
-                         "(read_slots.split's stage_ands)")
+                    help="with --reads slots: at most N ANDs a net, the caps whose statement takes the smallest block, then "
+                         "whose nets take the fewest cells (auto), or no cap (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
@@ -461,7 +461,7 @@ def main() -> int:
     t = time.time()
     held, bind, base = {}, {}, 0
     if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
-        from verity.protocols.spot.verifier.one_stage import partition as P
+        from verity.protocols.proofs.spot.verifier.one_stage import partition as P
         from verity.circuits.codec import canonical_json, encode_program
 
         program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])

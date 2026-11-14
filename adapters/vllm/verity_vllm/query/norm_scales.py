@@ -16,10 +16,13 @@ no value for it, so form (B) does not compare it (`check.oracle_compare`, by tha
 """
 from __future__ import annotations
 
-import hashlib
 from collections import Counter
-from functools import lru_cache
-from typing import Any, Callable, Mapping
+from collections.abc import Callable, Mapping
+from functools import cache
+from typing import Any
+
+from verity_vllm.query import units
+from verity_vllm.query.manifest.format import identity_rows, query_id_digest
 
 FAMILY = "norm_scales"
 MEMBER = "norm_scale"
@@ -46,9 +49,9 @@ def scale_calls(P: Any, literals: frozenset[int] = frozenset()) -> list[Any]:
     return [c for c in P.calls if c.family in CALL_SCALES and c.id not in literals and int(c.statics.get("N", 0)) == 1]
 
 
-@lru_cache(maxsize=None)
+@cache
 def _population_class() -> type:
-    from verity_vllm.query.units import Policy, RequiredValues, ValueRef
+    # inside the function: importing this module loads neither numpy nor the core `verity`
     from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
 
     class NormScalePopulation(Population):
@@ -57,11 +60,11 @@ def _population_class() -> type:
         def __init__(self, P: Any, corr: Any, **kw: Any) -> None:
             super().__init__(P, corr, **kw)
             base = self.required.values - self.interior
-            extra = frozenset(ValueRef(c.id, p.name) for c in scale_calls(P, self.literals) for p in c.port_table) - base
+            extra = frozenset(units.ValueRef(c.id, p.name) for c in scale_calls(P, self.literals) for p in c.port_table) - base
             self.norm_scale_values = extra
             self.interior = self.interior - extra
-            self.policy = Policy(prescribed_inputs=self.policy.prescribed_inputs, protocol_required=self.policy.protocol_required | extra)
-            self.required = RequiredValues(self.B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
+            self.policy = units.Policy(prescribed_inputs=self.policy.prescribed_inputs, protocol_required=self.policy.protocol_required | extra)
+            self.required = units.RequiredValues(self.B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
             self._ports_of = None
 
         def member(self, v: Any) -> Any:
@@ -106,7 +109,7 @@ def header(q: dict[str, Any], stats: Mapping[str, Any] | None) -> dict[str, Any]
     if stats is None:
         return q
     text = f"{q['query_text']}; {POLICY_TEXT}"
-    out = dict(q, query_text=text, query_id_digest=hashlib.sha256(text.encode()).hexdigest(),
+    out = dict(q, query_text=text, query_id_digest=query_id_digest(text),
                required_families=[*q.get("required_families", []), FAMILY])
     out["norm_scales"] = {"family": FAMILY, "member": MEMBER, "kernel_scales": dict(KERNEL_SCALES), "call_scales": dict(CALL_SCALES), **stats}
     return out
@@ -132,7 +135,7 @@ def policy_of(manifest: Mapping[str, Any] | None) -> bool:
 def manifest_modules(manifest: Mapping[str, Any] | None) -> dict[str, str]:
     """op_path -> the norm Definition family of every `norm_scales` identity of a manifest; a module named under two families is refused."""
     out: dict[str, str] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if r.get("family") != FAMILY:
             continue
         op, fam = str(r["op_path"]), str(r.get("spec") or "").split("{", 1)[0]
@@ -147,7 +150,7 @@ def words_per_token(manifest: Mapping[str, Any] | None) -> int:
     """The most scale words any step of the manifest commits per token row (q/k norms commit one per head): the source's arena bound."""
     tokens: Counter = Counter()
     words: Counter = Counter()
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         key = (str(r.get("request_id")), str(r.get("engine_step", r.get("step"))))
         if r.get("family") == "input_token_ids":
             tokens[key] = max(tokens[key], int(r.get("rows") or 0))

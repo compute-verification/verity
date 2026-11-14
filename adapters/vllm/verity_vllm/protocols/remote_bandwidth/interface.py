@@ -10,7 +10,7 @@ codec       a region's encoding: payload words in, stored words out, `encode(pay
 receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`; `z` is the input a receipt bound to the
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
-            registration is a record in the log, and `Registration.root` commits the log
+            registration is a record in the store's chain, and `ChainHead.root` commits the chain
 window      the interval of one challenge chal_t: `begin_window(chal_t)` ... `end_window()`, which the verifier's
             boundary message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
@@ -29,11 +29,13 @@ opening     for a sampled (pass, position): the block's bytes as read, its recei
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from verity.commitments.merkle import Opening
+
+__all__ = ["PageLayout"]
 
 TIERS = ("hbm", "host")
 KINDS = ("weights", "kv", "filler", "activations")
@@ -66,11 +68,17 @@ class Codec(Protocol):
 class Receipt(Protocol):
     """A receipt construction (the driver's receipt kinds, with the optional bound input ``z``).  ``binds`` names what a
     receipt reads beside the block: ``()`` for sketch-then-hash, ``("z",)`` for one bound to the prior tile's output.
-    The driver's leaves are of 64-byte receipts."""
+    The driver's leaves are of 64-byte receipts.  The three attributes are read and never set, so a frozen dataclass
+    is a receipt."""
 
-    name: str
-    receipt_bytes: int
-    binds: tuple[str, ...]
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def receipt_bytes(self) -> int: ...
+
+    @property
+    def binds(self) -> tuple[str, ...]: ...
 
     def keyed(self, seed: bytes) -> Keyed: ...
 
@@ -151,9 +159,9 @@ class Layout:
 
 
 @dataclass(frozen=True)
-class Registration:
-    """The registration log so far: ``count`` records and ``root``, the hash chain over them (one link per registration
-    event: a region, a page's written blocks, a page's return to filler)."""
+class ChainHead:
+    """The head of the store's chain: ``count`` records and ``root``, the hash chain over them (one link per event: a
+    region, a page's written blocks, a page's return to filler)."""
 
     count: int
     root: bytes
@@ -240,7 +248,7 @@ class StoreView(Protocol):
 
     def layout(self) -> Layout: ...
 
-    def registration(self) -> Registration: ...
+    def registration(self) -> ChainHead: ...
 
     def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None: ...
 
@@ -274,9 +282,7 @@ class Lifecycle(Protocol):
                  receipt: Receipt, source: str, encode: bool = True) -> RegionInfo: ...
 
     def register_kv_pool(self, name: str, layers: Sequence[Backing], layout: PageLayout, *, block_bytes: int,
-                         codec: Codec, receipt: Receipt, tier: str = "hbm",
-                         filler: Callable[[int, int], bytes] | None = None, filler_name: str = "as-allocated",
-                         encode: bool = True) -> tuple[RegionInfo, ...]: ...
+                         codec: Codec, receipt: Receipt, encode: bool = True) -> tuple[RegionInfo, ...]: ...
 
     def kv_alloc(self, pages: Sequence[int]) -> None: ...
 

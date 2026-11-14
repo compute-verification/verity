@@ -20,15 +20,15 @@ from pathlib import Path
 
 import pytest
 import torch
-
 from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.definitions.registry import b1
+
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
 from verity_vllm.records import workload as WL
-from verity.definitions.registry import b1
 
 VLLM_DIR = Path(__file__).resolve().parents[2]
 
@@ -53,12 +53,12 @@ def _write_request(rep, d: Path, LP: int, STEPS: int, S: int) -> None:
     with gzip.open(d / "instances.json.gz", "wt") as f:
         json.dump({"params": [[n, repr(t)] for n, t in rep.flat_definition.signature()[0]], "rows": []}, f)
     sampling = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": S}
-    json.dump({"program": {"digest": program_digest(desc)}, "sampling": sampling,
-               "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": "stochastic",
-                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}, open(d / "result.json", "w"))
-    json.dump({"structural_inputs": {"LP": LP, "T": STEPS, "sampling": sampling}}, open(d / "construction_manifest.json", "w"))
-    json.dump({"provenance": {"source": {"example_inputs": [["torch.int32", [LP]], ["torch.int64", [1]]]},
-                              "weights": rep.provenance.get("weights", [])}}, open(d / "derive-report.json", "w"))
+    (d / "result.json").write_text(json.dumps({"program": {"digest": program_digest(desc)}, "sampling": sampling,
+                                               "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": "stochastic",
+                                                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}))
+    (d / "construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": LP, "T": STEPS, "sampling": sampling}}))
+    (d / "derive-report.json").write_text(json.dumps({"provenance": {"source": {"example_inputs": [["torch.int32", [LP]], ["torch.int64", [1]]]},
+                                                                     "weights": rep.provenance.get("weights", [])}}))
 
 
 def _compose(workload: Path, derived: Path, out: Path, eos: int) -> dict:
@@ -90,9 +90,9 @@ def test_a_single_request_stochastic_workload_composes_as_the_build_does(tmp_pat
     assert any(n.fn.id == f"GumbelTopPTokenSelect_v2{{V={V},S={S}}}" for n in rep.flat_definition.body.nodes)
     _write_request(rep, tmp_path / "build_request", LP, STEPS, S)
     wl = tmp_path / "workload.json"
-    json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
-               "requests": [{"request_id": "r-0", "prompt_token_ids": list(range(1, LP + 1)), "max_tokens": STEPS + 1, "arrive_step": 0}],
-               "sampling": {"variant": "stoch-t0.8-p0.95", "seed": 7}, "sweep": {"execution": "bi-eager"}}, open(wl, "w"))
+    Path(wl).write_text(json.dumps({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"stoch-t0.8-p0.95": {"temperature": 0.8, "top_p": 0.95, "top_k": 0}},
+                                    "requests": [{"request_id": "r-0", "prompt_token_ids": list(range(1, LP + 1)), "max_tokens": STEPS + 1, "arrive_step": 0}],
+                                    "sampling": {"variant": "stoch-t0.8-p0.95", "seed": 7}, "sweep": {"execution": "bi-eager"}}))
     r = _compose(wl, tmp_path / "build_request", tmp_path / "build_workload", eos=0)
     assert r["requests"] == 1
     assert _decode_cold(tmp_path / "build_workload" / "descriptor.json.gz") == r["gates"]
@@ -103,15 +103,16 @@ def _run(code: str, *args: str) -> subprocess.CompletedProcess:
 
 
 def test_every_consumers_registry_holds_every_registered_definition():
-    """The global Program (`pipeline.global_program`) and the word Definitions look Definitions up through entry points of their own,
-    beside the `catalog.load` the Match, the query views and the descriptor equivalence read: in a fresh interpreter each one's
-    registry holds every Definition and primitive the registry package registers."""
+    """The global Program (`pipeline.global_program`) and the word check's Definitions (`program_view.specialization`) look Definitions up
+    through entry points of their own, beside the `catalog.load` the Match, the query views and the descriptor equivalence read: in
+    a fresh interpreter each one's registry holds every Definition and primitive the registry package registers."""
     want = _run("from verity.definitions.registry.catalog import load\nprint(len(load()[0].defs))")
     assert want.returncode == 0, want.stderr[-2000:]
     n = int(want.stdout.split()[-1])
     for setup in ("import verity_vllm.pipeline.global_program as m; from verity.circuits.defs import REGISTRY as R",
-                  "from verity.definitions import word as W; W.specialization('GumbelTopPTokenSelect_v2', {'V': 16, 'S': 4}); "
-                  "from verity.circuits.defs import REGISTRY as R"):
+                  ("from verity_vllm.query.program_view import specialization; specialization('GumbelTopPTokenSelect_v2', "
+                   "{'V': 16, 'S': 4}); "
+                   "from verity.circuits.defs import REGISTRY as R")):
         p = _run(setup + "\nfor k in ('GumbelTopPTokenSelect_v2', 'TopPMask_v2', 'TopPKeepWord_v1', 'NvLogf_v1', 'TopPNumkeep_v1'):\n"
                  "    assert k in R.defs, k\nprint(len(R.defs))")
         assert p.returncode == 0, (setup, p.stderr[-2000:])

@@ -62,6 +62,8 @@ systemctl daemon-reload
 systemctl enable vy-drop-ipv4-options.service
 systemctl restart vy-drop-ipv4-options.service
 sysctl -q -p /etc/sysctl.d/90-vy-mptcp-off.conf
+# cloud-init writes it after systemd-sysctl has run, on the nodes deploy.toml gives it (launch.sh)
+[ ! -e /etc/sysctl.d/61-vy-userns.conf ] || sysctl -q -e -p /etc/sysctl.d/61-vy-userns.conf || log "61-vy-userns.conf not applied"
 sshd -t && { systemctl reload ssh || systemctl reload sshd || true; }
 
 for _ in $(seq 60); do [ -e "$DEV" ] && break; sleep 2; done
@@ -225,7 +227,7 @@ WantedBy=timers.target
 EOF
 
 # Fixed clocks node-wide at every boot, so timings repeat: 2,100 MHz graphics held under full bf16 load at ~555 W, where unlocked
-# GPUs ride the 600 W cap and drift (2,190 -> 2,167 MHz); the RTX PRO 6000 has one memory clock.  Only root can change them.
+# GPUs ride the 600 W power limit and drift (2,190 -> 2,167 MHz); the RTX PRO 6000 has one memory clock.  Only root can change them.
 cat > /etc/systemd/system/vy-clocks.service <<EOF
 [Unit]
 Description=lock every GPU's clocks (graphics ${VY_GPU_CLOCK_MHZ:-2100} MHz, memory ${VY_MEM_CLOCK_MHZ:-12481} MHz)

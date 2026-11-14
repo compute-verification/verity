@@ -146,7 +146,7 @@ coins.
     loop), not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger samples each
     session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
-    (`verity/protocols/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
+    (`verity/protocols/proofs/spot/verifier/lean/Spot/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
     nothing about another. A hybrid swaps the unopened leaves for commitments to independent coins (openings resampled
     consistently); each leaf moves it by at most
@@ -255,7 +255,7 @@ NOT, one generic Boolean-semantics lemma can state it for every template.
 **Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
 prover's message. The circuit prover's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
 (`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
-log). The benches run it so by default (`verity/protocols/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
+log). The benches run it so by default (`verity/protocols/proofs/flock/prover/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
 and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
 through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`). That rests on
 `prf/sha-512` and the seed commitment's hiding, and the headline takes neither, so the Lean verifier refuses such a
@@ -297,7 +297,7 @@ prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.
 vector and T1 on every pre-final leaf), and elsewhere Lemma B.
 Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
 a verifier that chooses its coins only because the challenger commits every coin at `Hello`, before the prover's first
-message (`verity/protocols/flock/prover/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
+message (`verity/protocols/proofs/flock/prover/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the
 malicious-verifier claim rests on beyond the theorems.
@@ -314,9 +314,9 @@ malicious-verifier claim rests on beyond the theorems.
   (`Randomness.stream`), the streams pass `E` with at most the probability that independent uniform streams do, plus
   `η`. `Randomness.lean` is the Lean spec of `verity.commitments.randomness` v2 (on `Flock.Sha512.hash`): it reproduces
   `verity/commitments/randomness/tests/vectors.json`, and Python matches its vectors
-  (`verity/protocols/flock/prover/tests/test_randomness_spec.py`).
+  (`verity/protocols/proofs/flock/prover/tests/test_randomness_spec.py`).
 - **Per test, as `SHA512CRExpected` is per finder.** For every test the statement would be refutable, since `2^(8S)` sources give at
-  most that many stream tuples. `keyedWindow_escape_le` takes A4 for one test per set `B` (`windowTest`: the window sample
+  most that many stream tuples. `keyedExecutionPhase_escape_le` takes A4 for one test per set `B` (`executionPhaseTest`: the window sample
   misses `B`), and `η` enters its bound.
 - **What it assumes of SHA-512.** Its compression function `f`, on a 1024-bit message block and a 512-bit chaining
   value, is a pseudorandom function in two ways.
@@ -339,7 +339,7 @@ malicious-verifier claim rests on beyond the theorems.
 **A5. The PoUW window's secret is `S` uniform bytes, fresh for the window** (`uniform/python-secrets`).
 
 - **Statement.** A source is a finite probability space and, on each outcome, the secret. `UniformSecret sec` says every
-  event about the secret has the probability it has for `S` uniform bytes. `keyedWindow` samples over the real secret
+  event about the secret has the probability it has for `S` uniform bytes. `keyedExecutionPhase` samples over the real secret
   source, and its theorems take A5 as `hsec`. It is satisfiable: the identity source satisfies it
   (`Law.uniformSecret_id`, `KeyedDraw.lean`).
 - **What A5 assumes of the verifier.** Its window secret is `secrets.token_bytes(32)` from the operating system's CSPRNG,
@@ -361,12 +361,12 @@ malicious-verifier claim rests on beyond the theorems.
   byte's zero fill bits and SHA-512's padding, in a block with row bytes or in a block of its own); and a unit's leaf bit
   past `ℓ`, read from its slot's forced-zero row. That these constants are SHA-512's padding of `P(ℓ)` and the row's
   bytes is part of what it assumes. `HmRows.v2` takes `enc_inj` from `FlockLevel3.RowV2.enc_inj`.
-- **What it gives, and `δ_tree`:** `assumption-notes/hm-row-computes.md`.
+- **What it gives, and `δ_tree`:** `README.md` §1.3 (The value binding); What is restated over the two forms, above.
 - **Discharged only by fixed readers.** `HmRowComputes` and `decode_row` count as discharged only for readers of the
   witness at fixed addresses, as `Layout.row`, `Layout.salt` (`rowAt`, `saltAt`) and `HmRows.bcAt` are; a reader that
   chooses its values discharges nothing.
 - **Proved so far** for `sha512/row/v1` rows: `row_bc_setupH` (untyped, given `hv1` and `ho`), `keyedRowsOuts_computes`
-  (the keyed layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis); `assumption-notes/hm-row-computes.md`.
+  (the keyed layout's sampled proof blocks) and `row_bc_setupH_typed` (typed, no hypothesis).
 - **Upstream:** watch entry `hm-row-computes`.
 
 A1, Reed–Solomon mutual correlated agreement up to the Johnson bound, is proved: `mcaError_le_bchks25`, from DKT26 in
@@ -437,8 +437,10 @@ before the session's first coin, not bounds state by state.
 - **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
   before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
   tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
-- **`seed` coins** (`coin-commit/sha256/v1`; the circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
-  add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
+- **`seed` coins** (the circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`; earlier,
+  `coin-commit/sha256/v1`) add two assumptions: the seed commitment hides the seed, and the derivation's hash in counter
+  mode is a PRF: SHA-512 (`prf/sha-512`; `live/src/coin_seed.rs`), SHA-256 in the earlier recorded sessions
+  (`coinDerivation`, `Flock/Tags.lean`). No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins), and the Lean verifier refuses it once every
   check has passed (`ProvedScope.SEED_COINS`).
 - **`tree` coins** (`--zk`, `--coins tree`; `coin-tree/hm96-sha512/v2`): the `--zk` headlines' coins, and a plain

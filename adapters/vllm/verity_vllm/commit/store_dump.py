@@ -18,6 +18,9 @@ nodes those reads opened: `steps[i].ranges` the touched ranges, and `steps[i].no
 their openings carried.  It writes the salts of the leaves those ranges cover (`salts/s<step>.bin`, the leaf ranges `steps[i].salted`
 back to back) and never a key, so no other leaf's salt can be derived from it.  A read outside them fails by name, as a
 byte the committer no longer retains does.
+
+A window its draw-gated release left (`device_pool.release`: every step's block holds only its sampled leaves) dumps slim to them
+(`drawn`) with no recorded reads: no other leaf can be opened, so the rest of its tree would be written for nothing.
 """
 from __future__ import annotations
 
@@ -35,9 +38,14 @@ from typing import Any
 from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
+from verity_vllm.commit.opened import meta_by_name
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
+from verity_vllm.records.schema_ids import COMMITTED_STORE_SCHEMA
 
-SCHEMA = "verity-vllm/committed-store/v1"
+__all__ = ["Touched", "as_bytes", "dump", "dump_files", "held_of", "load", "nbytes", "not_retained", "not_retained_of", "touch",
+           "touched", "write_doc"]
+
+SCHEMA = COMMITTED_STORE_SCHEMA
 NODE = step_rows.ROOT_BYTES                                     # a tree node
 #: bytes written between flushes: the dirty pages of a dump are charged to the writer's memory cgroup, beside a pinned store
 FLUSH = 1 << 30
@@ -131,13 +139,29 @@ def touched(com: Any) -> Iterator[Touched]:
         com._gpu_blocks, com._gpu_levels = blocks, levels
 
 
+def drawn(com: Any) -> Touched | None:
+    """What a window's draw-gated release kept of `com`, as a slim dump's `Touched`: each step's sampled byte ranges, and on every tree
+    level the nodes from one before a sampled leaf run's first to one past its last, which hold every sibling an opening of leaves inside
+    the run reads (`native_ranges.open_range_levels`).  None unless every step's block is a released one (``dropped``)."""
+    if not com._gpu_blocks or not all(getattr(b, "dropped", False) for b, _u in com._gpu_blocks.values()):
+        return None
+    t = Touched(chunk=int(com.chunk))
+    for s, (blk, _u) in com._gpu_blocks.items():
+        t.ranges[s] = [(int(lo), int(hi)) for lo, hi, _ in _ranges(blk)]
+        nodes = t.nodes.setdefault(s, set())
+        for d, lv in enumerate(com._gpu_levels.get(s, ())):
+            w = _width(lv)
+            for a, b in t.leaves(s):
+                nodes.update((d, i) for i in range(max(0, (a >> d) - 1), min(w, ((b - 1) >> d) + 2)))
+    return t
+
+
 def touch(com: Any, reads: Iterable[tuple[int, str, int, int]]) -> None:
     """Opens, without verifying, the leaves of every read (step, member name, byte lo, byte hi) as `OpenedReader` would: under `touched`
     the ranges and tree nodes a verified read of the same bytes opens are recorded, and no leaf is hashed."""
-    from verity_vllm.commit.opened import meta_by_name
-
     for step, name, lo, hi in reads:
-        m = meta_by_name(com._layouts.get(step) or [], name)
+        layout = com._layouts.get(step)   # the step's committed members; a step the committer holds no layout for has none to open
+        m = meta_by_name(layout if layout else [], name)   # the name is parsed whether or not the step has a layout
         lo, hi = max(0, int(lo)), min(int(hi), int(m.nbytes)) if m is not None else 0
         if m is not None and hi > lo:
             com.open_range(step, *com.leaf_span(step, m, lo, hi)[:2])
@@ -150,20 +174,24 @@ def _slim_ranges(blk: Any, want: list[tuple[int, int]]) -> list[tuple[int, int, 
         for lo, hi in want:
             a, b = max(lo, rlo), min(hi, rhi)
             if a < b:
-                out.append((a, b, _as_bytes(hv)[a - rlo:b - rlo]))
+                out.append((a, b, as_bytes(hv)[a - rlo:b - rlo]))
     return sorted(out, key=lambda x: x[0])
 
 
 def _nodes(lvs: list[Any], nodes: list[tuple[int, int]]) -> Iterator[memoryview]:
     for d, i in nodes:
-        yield _as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
+        yield as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
 
 
-def _as_bytes(t: Any) -> memoryview:
+def as_bytes(t: Any) -> memoryview:
+    """A tensor's or an array's bytes, from the host: a device tensor is copied there first."""
     if getattr(t, "is_cuda", False):
         t = t.cpu()
     a = t.numpy() if hasattr(t, "numpy") else t
     return memoryview(a.reshape(-1) if hasattr(a, "reshape") else a).cast("B")
+
+
+_as_bytes = as_bytes  # the name `pipeline.replay_bundle` still reads
 
 
 def _refusal(com: Any) -> str | None:
@@ -208,8 +236,8 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     rs = _ranges(blk) if t is None else _slim_ranges(blk, t.merged(s))
     lvs = list(com._gpu_levels[s])
     nodes = None if t is None else sorted(t.nodes.get(s, ()))
-    lv_bytes = (_as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
-    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
+    lv_bytes = (as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
+    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
                f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", lv_bytes)}
     salted = None
     if t is not None:
@@ -256,7 +284,10 @@ def held_of(com: Any) -> dict[int, tuple[list[tuple[int, int]], int]]:
 def not_retained_of(fams: set[str], C: int, held: dict[int, tuple[list[tuple[int, int]], int]],
                     layouts: dict[int, Any]) -> dict[str, Any]:
     """`not_retained` over the blocks' retained ranges (`held_of`) and the steps' metas."""
-    from verity_vllm.commit.committer.host_retention import _excluded_chunk_ranges, outside
+    from verity_vllm.commit.committer.host_retention import (  # it imports torch, which this module imports without
+        _excluded_chunk_ranges,
+        outside,
+    )
 
     by, committed, retained, stray = dict.fromkeys(sorted(fams), 0), 0, 0, []
     for s, (ranges, used) in sorted(held.items()):
@@ -292,8 +323,11 @@ def write_doc(d: str | os.PathLike, doc: dict[str, Any], layouts: dict[int, Any]
 
 def dump_files(com: Any, rc: Any, d: str | os.PathLike, *, threads: int = 8, digests: dict[str, str] | None = None,
                touched: Touched | None = None) -> dict[str, Any]:
-    """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it)."""
+    """`dump`'s step files under `d`, and its `store.json` document without the steps' metas (`write_doc` adds them and writes it).
+    With no ``touched``, a released window dumps slim to its sampled leaves (`drawn`)."""
     why = _refusal(com)
+    if not why and touched is None:
+        touched = drawn(com)
     keys = getattr(com, "row_keys", None) or {}
     if not why and touched is None and any(int(sc.step) not in keys for sc in rc.steps):
         why = f"{step_rows.NAME} steps without their salt keys (a slim dumped store): no full dump"
@@ -412,7 +446,7 @@ class DumpedStore(NativeRangeOpenings):
 
     name = "dumped-store"
     retain = "host"
-    layout_digest = staticmethod(NativeHostCommitter.layout_digest)
+    layout_digest = NativeHostCommitter.layout_digest
     _block_holds = staticmethod(NativeHostCommitter._block_holds)
     _ctx_digest = NativeHostCommitter._ctx_digest
 
@@ -429,7 +463,7 @@ class DumpedStore(NativeRangeOpenings):
         self._salted: dict[int, tuple[list[tuple[int, int, int]], memoryview]] = {}
         self._layouts: dict[int, list[TensorMeta]] = {}
         self._gpu_blocks: dict[int, tuple[_Block, int]] = {}
-        self._gpu_levels: dict[int, list[_Level]] = {}
+        self._gpu_levels: dict[int, list[_Level] | list[_SparseLevel]] = {}
         self._maps: list[mmap.mmap] = []
         for st in doc["steps"]:
             s = int(st["step"])

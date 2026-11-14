@@ -1,4 +1,4 @@
-"""live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through sampled proofs, the
+"""live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through SPOT, the
 verifier's side and the prover's staging; `live.sh` proves them by Flock --zk and has Lean verify them.
 
     python live.py prepare --live DIR --work W
@@ -53,20 +53,26 @@ import hashlib
 import json
 import os
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from verity.circuits.program import Program
+    from verity_flock.class_statement import UnitStager
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import h1unit as U  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.protocols.pouw.verifier import core_check as CC  # noqa: E402
-from verity.protocols.pouw.prover.circuit import live as L  # noqa: E402
-from verity.protocols.pouw.verifier import live_reads as LR  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import partition as P  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import registered as G  # noqa: E402
+from verity.protocols.accounting.pouw.prover.circuit import live as L  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import core_check as CC  # noqa: E402
+from verity.protocols.accounting.pouw.verifier import live_reads as LR  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G  # noqa: E402
 
 NAME = "unit/pouw-live"
 #: the rows of a piece, past which a round's live check is cut by rows
@@ -181,7 +187,7 @@ def claimed(z: dict, pub: dict, u: int, m: int) -> dict:
             "p_m": np.array([r.path(i).hex()])}
 
 
-def live_reference(T: int, r: int | None = None):
+def live_reference(T: int, r: int | None = None) -> Callable[[dict, dict], None]:
     """`UnitStager.reference_check`: the staged ok is `live.live_ok_v2` of the instance's slot leaves, headers, m, round s
     and caps, or with `r` rows a piece `live.rows_ok` of its r rows, headers and caps, m, s and base."""
     def check(rows: dict, outs: dict) -> None:
@@ -200,7 +206,7 @@ def live_reference(T: int, r: int | None = None):
     return check
 
 
-def stage(stager, z: dict, out: Path, u: int) -> dict:
+def stage(stager: UnitStager, z: dict, out: Path, u: int) -> dict:
     """One unit's statement on the prover's rows ``z`` (`window.py open`'s form), instance unit u."""
     st = U.statement_tables(z, stager.row_ports, [p.name for p in stager.ports if p.name not in stager.row_ports])
     out.mkdir(parents=True, exist_ok=True)
@@ -209,7 +215,7 @@ def stage(stager, z: dict, out: Path, u: int) -> dict:
     return {"ok": int(got["outs"]["o0"][0][0]), "ands": got["ands"]}
 
 
-def program_of(pub: dict):
+def program_of(pub: dict) -> tuple[Program, dict[str, Any]]:
     """The window's live Program and its partition query: v2's (`live.program_v2`), or the pieced one past `R` rows."""
     T, S = pub["T"], pub["S"]
     r, p = form(pub)
@@ -218,7 +224,7 @@ def program_of(pub: dict):
     return L.program_rows(T, S, pub["prefix"], r), L.query_rows(T, r)
 
 
-def cmd_prepare(a) -> int:
+def cmd_prepare(a: argparse.Namespace) -> int:
     live, work = Path(a.live), Path(a.work)
     pub = json.loads((live / "window.json").read_text())
     T, S, served = pub["T"], pub["S"], pub["served"]
@@ -303,8 +309,8 @@ def cmd_prepare(a) -> int:
     return 1 if problems else 0
 
 
-def live_stager(T: int, circuit: Path, part: dict, r: int | None = None):
-    """C-Flock's stager of `live.template_v2(T)`, or with `r` rows a piece `live.template_rows(T, r)`, bound to the live
+def live_stager(T: int, circuit: Path, part: dict, r: int | None = None) -> UnitStager:
+    """Flock's stager of `live.template_v2(T)`, or with `r` rows a piece `live.template_rows(T, r)`, bound to the live
     Program's partition, its circuit written once."""
     from verity_flock import class_statement as CS
     tmpl, rows = (L.template_v2(T), LR.statement_rows(T, v2=True)) if r is None else \
@@ -323,7 +329,7 @@ def _verdict(p: Path) -> dict | None:
             "why": next((x.get("why", "") for x in v if not x.get("accepted")), "")} if v else None
 
 
-def cmd_summarize(a) -> int:
+def cmd_summarize(a: argparse.Namespace) -> int:
     work, out = Path(a.work), Path(a.out)
     record = json.loads((work / "record.json").read_text())
     checks = []
@@ -373,7 +379,7 @@ def evidence(work: Path) -> dict:
     return {"descriptor": raw.hex(), "statements": out}
 
 
-def cmd_evidence(a) -> int:
+def cmd_evidence(a: argparse.Namespace) -> int:
     try:
         doc = evidence(Path(a.work))
     except (OSError, ValueError, KeyError) as e:
@@ -384,7 +390,7 @@ def cmd_evidence(a) -> int:
     return 0
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("evidence")
@@ -401,6 +407,9 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     return {"prepare": cmd_prepare, "summarize": cmd_summarize, "evidence": cmd_evidence}[a.cmd](a)
 
+
+__all__ = ["R", "U", "check_openings", "evidence", "files", "form", "live_stager", "main", "piece_opening",
+           "program_of"]
 
 if __name__ == "__main__":
     raise SystemExit(main())

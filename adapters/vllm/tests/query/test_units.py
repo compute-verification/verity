@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 import pytest
 
-from verity_vllm.query.units import (PartitionError, Policy, ValueRef, VerificationUnit, admissibility, boundary, boundary_values,
-                                       partition_by, required_values, unit_boundary)
+from verity_vllm.query.units import (
+    PartitionError,
+    Policy,
+    ValueRef,
+    VerificationUnit,
+    boundary,
+    boundary_values,
+    partition_by,
+    required_values,
+)
 
 
 @dataclass(frozen=True)
@@ -42,19 +50,13 @@ def by_module(P_):
 
 
 def test_one_unit_boundary_is_x_and_y():
-    Pr = chain(("m", "m"))
-    assert boundary_values(Pr, by_module) == {X, Y}
-    (unit,) = by_module(Pr)
-    ins, outs = unit_boundary(Pr, unit)
-    assert (ins, outs) == ({X}, {Y})
+    b = boundary(chain(("m", "m")), by_module)
+    assert b.values == {X, Y} and b.produced_in == {X: None, Y: "m"} and b.read_by == {X: ("m",), Y: ()}
 
 
 def test_two_units_boundary_is_x_u_y():
-    Pr = chain(("a", "b"))
-    assert boundary_values(Pr, by_module) == {X, U, Y}
-    ua, ub = by_module(Pr)
-    assert unit_boundary(Pr, ua) == ({X}, {U})
-    assert unit_boundary(Pr, ub) == ({U}, {Y})
+    b = boundary(chain(("a", "b")), by_module)
+    assert b.values == {X, U, Y} and b.produced_in == {X: None, U: "a", Y: "b"} and b.read_by == {X: ("a",), U: ("b",), Y: ()}
 
 
 def test_interior_value_read_by_two_calls_of_one_unit_is_not_a_boundary_value():
@@ -91,6 +93,27 @@ def test_units_must_partition_the_calls():
         VerificationUnit("empty", frozenset())
 
 
+def test_a_program_whose_ids_clash_and_units_that_name_no_call_are_refused_by_name():
+    twice = P((C(0, "A", ("out",), (X,), "m"), C(0, "B", ("out",), (X,), "m")), inputs=(X,))
+    for read in (lambda: boundary(twice, by_module), lambda: required_values(twice, by_module, Policy())):
+        with pytest.raises(ValueError) as e:
+            read()
+        assert str(e.value) == "Program: Call ids are not unique" and not isinstance(e.value, PartitionError)
+    Pr = chain()
+    an_input_with_a_calls_id = P(Pr.calls, inputs=(X, ValueRef(1, "w"), ValueRef(0, "w")), outputs=Pr.outputs)
+    with pytest.raises(ValueError) as e:
+        boundary(an_input_with_a_calls_id, by_module)
+    assert str(e.value) == "Program: input ids [0, 1] are also Call ids" and not isinstance(e.value, PartitionError)
+
+    def two_ids_more(P_):
+        first, *rest = by_module(P_)
+        return (replace(first, calls=first.calls | {9, 7}), *rest)
+
+    with pytest.raises(PartitionError) as e:
+        boundary(Pr, two_ids_more)
+    assert str(e.value) == "units name 2 id(s) that are not Calls (first: [7, 9])"
+
+
 def test_required_values_keeps_the_three_sources_apart():
     Pr = chain(("a", "b"))
     W = ValueRef(-2, "w")
@@ -99,7 +122,7 @@ def test_required_values_keeps_the_three_sources_apart():
     assert rv.boundary == {X, U, Y}
     assert rv.prescribed == {W} and rv.protocol == {U}
     assert rv.values == {X, U, Y, W} and len(rv) == 4 and W in rv
-    assert required_values(Pr, by_module, Policy.none()).values == {X, U, Y}
+    assert required_values(Pr, by_module, Policy()).values == {X, U, Y}
 
 
 def test_policy_naming_an_unknown_value_is_an_error():
@@ -110,14 +133,6 @@ def test_policy_naming_an_unknown_value_is_an_error():
         required_values(Pr, by_module, Policy(protocol_required=frozenset({ValueRef(0, "nope")})))
     with pytest.raises(ValueError):
         required_values(Pr, by_module, Policy(protocol_required=frozenset({ValueRef(7, "out")})))
-
-
-def test_admissibility_is_a_pure_table_lookup():
-    req = {X, U, Y}
-    assert admissibility(req, {X, Y}) == [U]
-    assert admissibility(req, {X: True, U: False, Y: True}) == [U]
-    assert admissibility(req, lambda v: v.port == "out") == []
-    assert admissibility(req, set()) == sorted(req)
 
 
 def test_partition_by_orders_units_when_asked():

@@ -1,5 +1,6 @@
 """`verity bench inference_only`: the served policy's file against the tree, a policy's number against the bound's own
-count, the divisions on a small record, and the report of a refused policy."""
+count, the divisions on a small record, the report of a refused policy, and the served class under the value tie, which
+prints only at a typed share and under its label."""
 from __future__ import annotations
 
 import dataclasses
@@ -10,7 +11,8 @@ import built as B
 import policy as P
 import pytest
 import report
-from rho import min_cut
+import tied as T
+from rho import lean, min_cut
 from verity_vllm.check.weights_of_record import PARAM
 from verity_vllm.program.predict import block_counts as BC
 
@@ -41,9 +43,11 @@ def small() -> IF.Circuit:
 
 @pytest.fixture(autouse=True)
 def no_out(monkeypatch) -> None:
-    """The command writes its JSON to `$OUT` by default; a test names its own directory or none."""
-    monkeypatch.delenv("OUT", raising=False)
-    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    """The command writes its JSON to `$OUT` by default and its result into `$RESEARCH_RUN_DIR`; a test names its own
+    directory or none. The result's host stamp is a fixed one, since the kit's asks nvidia-smi and git."""
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(report.kit, "host_stamp", lambda: {"commit": None})
 
 
 def reference(inst: dict) -> dict:
@@ -142,6 +146,9 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
     out = capsys.readouterr().out
     lines = out.splitlines()
     assert json.loads(lines[-1]) == doc == json.loads((tmp_path / "inference_only.json").read_text())
+    result = json.loads((tmp_path / "result.json").read_text())
+    assert [(m["name"], m["value"], m["unit"], m["mark"]) for m in result["measurements"]] == [
+        (report.METRIC, doc["value"], doc["unit"], "modeled")]
     assert lines[2] == "AS SERVED: 1" and "outside the circuit" in lines[4] and "Not checked here" in lines[6]
     assert out.index("AS SERVED: 1") < out.index("The class this tree builds: NOT SERVED")
     assert B.EXECUTABLE[1:] == ("--count", "--detail") and B.RULE.endswith(".Count: CompliesAtMost c k n")
@@ -172,12 +179,19 @@ def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(cap
         assert word in out
 
 
-def test_stated_only_builds_nothing_and_another_division_is_the_built_number(capsys) -> None:
+def test_stated_only_builds_nothing_and_another_division_is_the_built_number(capsys, tmp_path) -> None:
+    """A stated policy other than the served one is priced and written to its JSON, and nothing is written under the
+    metric's id, which is the served policy's."""
     def never(*_a, **_k):
         raise AssertionError("built")
 
     doc = report.main(["--stated-only"], check=never, commit=lambda: None)
     assert len(doc["policies"]) == 1 and doc["divisions"] == [] and "NOT SERVED" not in capsys.readouterr().out
+    (tmp_path / "stated.toml").write_text(P.SERVED.read_text())
+    doc = report.main(["--stated-only", "--policy", str(tmp_path / "stated.toml"), "--out", str(tmp_path)], check=never,
+                      commit=lambda: None)
+    assert doc["policies"][0]["label"] == "stated" and (tmp_path / "inference_only.json").is_file()
+    assert not (tmp_path / "result.json").exists()
     doc = report.main(["--class", ",".join(map(str, CLASS)), "--division", "proof block"], check=reference,
                       circuit=small(), commit=lambda: None)
     assert doc["policies"][1] == doc["divisions"][2] and doc["policies"][1]["division"] == "proof block"
@@ -198,3 +212,142 @@ def test_a_class_the_integration_refuses_is_an_error_that_says_why(monkeypatch, 
     out, err = capsys.readouterr()
     assert e.value.code == 2 and "AS SERVED: 1" in out and "NOT SERVED" not in out
     assert "the integration lowers no circuit of class 2,8,2" in err and "a template the composer wouldn't prove" in err
+
+
+#: the execution phases of one phase, a week, a month of 30 days and a year of 365, at the tied policy's 600 s a phase
+PHASES = {T.PHASE: 1, "week": 1_008, "month": 4_320, "year": 52_560}
+#: the tied class's figures at a fleet's rate, by span: one β_x with the best threshold, one β_x at the top budget
+#: with no block charged, and a β_x a block. The periods' are what the calculator's own test holds `bound_charged` to;
+#: one phase's, where a block has the most untied words, is the weakest
+FLEET = {T.PHASE: (2.05, 1.0, 1.0), "week": (1_614.1, 52.8, 53.2), "month": (4_787.8, 202.2, 209.6),
+         "year": (20_422.0, 1_336.6, 1_844.3)}
+
+
+def test_the_tied_file_is_the_served_class_reading_its_scan_state_row_and_a_salt(tmp_path) -> None:
+    """The tied policy is the served one in everything but `k`, which is the scan state row and the salt with nothing
+    left over and no linear outside the circuit. A file whose `k` leaves bits unexplained, or whose `[untied]` table
+    misses a key, is refused."""
+    t, served = P.tied(), P.stated()
+    p = t.policy
+    assert (p.label, p.model, p.cls, p.c, p.n, p.work) == ("tied", served.model, served.cls, served.c, served.n, served.work)
+    assert p.k == P.scan_state_bits(p.cls) + 512 == 146_080 and (p.unexplained, p.outside) == (0, 0)
+    assert [bits for _, bits, _ in p.parts] == [145_568, 512] and p.k < served.k
+    assert (t.words, t.blocks, t.phase_seconds, t.macs_a_word, t.word_bits) == (671_369, 4, 600, 2_048, 32)
+    # a node's bound is one phase's: its words a block of a phase, over the phases the period has
+    assert t.untied(4, 600) == 671_369 and t.untied(8, 600) == 2 * 671_369 and t.untied(8, 1_200) == 671_369
+    assert T.output_words(p, P.shape(p.model)) == 13_189_120
+    text = P.TIED.read_text()
+    (tmp_path / "k.toml").write_text(text.replace("k = 146080\n", "k = 146081\n"))
+    with pytest.raises(ValueError, match="1 of its k = 146,081 bits are unexplained"):
+        P.tied(tmp_path / "k.toml")
+    (tmp_path / "u.toml").write_text(text.replace("word_bits = 32\n", ""))
+    with pytest.raises(ValueError, match=r"\[untied\] states words, blocks, phase_seconds, macs_a_word, word_bits"):
+        P.tied(tmp_path / "u.toml")
+    assert text != text.replace("k = 146080\n", "") != text.replace("word_bits = 32\n", "") != text
+
+
+def test_with_no_share_no_figure_of_the_tied_policy_prints(capsys) -> None:
+    """`--uncredited-share` has no default: without it the command prints the served policy as before and says why the
+    tied policy's figures are absent, and its number is nowhere in the print or the JSON."""
+    doc = report.main(["--stated-only"], commit=lambda: None)
+    out = capsys.readouterr().out
+    assert doc["tied"] is None and doc["value"] == 1 and out.splitlines()[2] == "AS SERVED: 1"
+    assert "no figure printed" in out and "--uncredited-share S" in out and "has no default" in out
+    assert report.TIED_LABEL not in out and "limit at s" not in out and "37,653" not in out
+    assert P.WORK_IS in out and doc["work_is"] == P.WORK_IS and "embedding table outside the registered weights" in out
+
+
+def test_the_tied_policy_is_never_priced_as_a_stated_policy(capsys) -> None:
+    """`--policy tied.toml` would print the tied policy's number as a headline with no share beside it: refused,
+    with what to type instead."""
+    with pytest.raises(SystemExit) as e:
+        report.main(["--policy", str(P.TIED), "--stated-only"], commit=lambda: None)
+    out, err = capsys.readouterr()
+    assert e.value.code == 2 and "--uncredited-share S" in err and "never printed alone" in err and "37,653" not in out
+
+
+@pytest.mark.parametrize("text", ["2", "-0.1", "101%", "a tenth", "", "nan", "inf"])
+def test_a_share_is_a_number_from_zero_to_one_or_a_percentage(text, capsys) -> None:
+    assert report._share("0.2315%") == pytest.approx(report._share("0.002315")) and report._share("0") == 0
+    with pytest.raises(SystemExit) as e:
+        report.main(["--stated-only", "--uncredited-share", text], commit=lambda: None)
+    assert e.value.code == 2 and "a share of a block's work" in capsys.readouterr().err
+
+
+def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_limit(capsys) -> None:
+    """The command at a typed share. The served policy's 1 is still first and still the JSON's value. The tied section
+    opens with its label, says the share was typed and which work the figures are for, and prints each of the
+    calculator's fleets over one execution phase and over each period under four readings, each row the function's own
+    figure at the inputs the file states (`min_cut.bound_charged`, recomputed here), its limit at the share
+    (`min_cut.capped`) and the pooled total in gates at that limit. No number of the tied policy is printed without
+    its limit. The fourth reading counts the uncredited words as fresh input, so it is never above the first."""
+    s = 0.002315
+    doc = report.main(["--stated-only", "--uncredited-share", "0.2315%"], commit=lambda: None)
+    out = capsys.readouterr().out
+    lines = out.splitlines()
+    assert json.loads(lines[-1]) == doc and doc["value"] == 1 and lines[2] == "AS SERVED: 1"
+    assert out.index("AS SERVED: 1") < out.index("Over a monitoring period") < out.index(report.TIED_LABEL)
+    assert "RESTS ON NO PoUW VERDICT" in report.TIED_LABEL and "NOT SERVED" in report.TIED_LABEL
+    assert "s = 0.2315% of a block's work was typed on the command line (--uncredited-share)" in out
+    assert f"  work      the figures are for {P.WORK_IS}" in out and "bf16" in P.WORK_IS
+    tied = doc["tied"]
+    assert tied["uncredited"]["share"] == pytest.approx(s) and tied["uncredited"]["pouw_verdict"] is None
+    assert (tied["label"], tied["k"], tied["work_is"]) == ("tied", 146_080, P.WORK_IS)
+    p, sh = P.tied().policy, P.shape(P.tied().policy.model)
+    N = p.work[P.TOTAL]
+    work = {"N": N, "O": N * sh.outputs * 16 / sh.macs, "size": p.c}
+    # one block: the count with every word tied, beside its limit, on one line
+    one = min_cut.bound(p.c, p.k, **work).slowdown
+    assert tied["block"]["number"] == one == pytest.approx(37_653.4, abs=0.05)
+    assert tied["block"]["limit"] == min_cut.capped(one, tied["uncredited"]["share"]) == pytest.approx(427.1, abs=0.05)
+    assert "every word tied, k = 146,080: number 37,653.4, limit at s 427.1" in out
+    alone = [line for line in lines[:-1] if "37,653" in line]
+    assert len(alone) == 1 and "limit at s" in alone[0]
+    # the uncredited words: at most the share's MACs over the least fan-in, 32 fresh bits each
+    words = tied["uncredited"]["words_a_block"]
+    assert words == pytest.approx(s * N / 2_048) and tied["uncredited"]["least_fan_in"] == 2_048
+    k_words = tied["block"]["with_words"]["k"]
+    assert k_words == pytest.approx(146_080 + 32 * words)
+    assert tied["block"]["with_words"]["number"] == min_cut.bound(p.c, k_words, **work).slowdown < one
+    rows = tied["periods"]
+    assert len(rows) == 2 * 4 * 4 and {r["where"] for r in rows} == {"one datacenter", "the world"}
+    assert [r["period"] for r in rows[:16:4]] == [T.PHASE, "week", "month", "year"]
+    # a fleet's phase is its week's blocks over the week's phases, and its untied words are the week's
+    assert rows[0]["blocks"] == pytest.approx(rows[4]["blocks"] / 1_008) and rows[0]["untied"] == pytest.approx(rows[4]["untied"])
+    for i in range(0, len(rows), 4):
+        best, top, each, in_k = rows[i:i + 4]
+        blocks, phases = best["blocks"], PHASES[best["period"]]
+        assert len({(r["where"], r["period"], r["blocks"], r["untied"]) for r in rows[i:i + 4]}) == 1
+        untied = 671_369 / 4 * blocks / phases
+        assert best["untied"] == pytest.approx(untied, rel=1e-12) and best["untied_a_block"] == pytest.approx(untied / blocks)
+        terms = {"blocks": blocks, "untied": best["untied"], "untied_macs": 2_048 * best["untied"], "most": 13_189_120,
+                 **work}
+        w = min_cut.best_w(p.c, p.k, **terms)
+        want = (min_cut.bound_charged(p.c, p.k, w=w, **terms), min_cut.bound_charged(p.c, p.k, **terms),
+                min_cut.bound_charged(p.c, p.k, rows=True, **terms),
+                min_cut.bound_charged(p.c, k_words, w=min_cut.best_w(p.c, k_words, **terms), **terms))
+        for r, got, pinned in zip((best, top, each, in_k), want, (*FLEET[best["period"]], None)):
+            assert (r["number"], r["charged"], r["statement"], r["rests_on"]) == (
+                got.slowdown, got.charged, got.statement, got.rests_on)
+            assert pinned is None or r["number"] == pytest.approx(pinned, abs=0.05)
+            assert r["limit"] == min_cut.capped(got.slowdown, tied["uncredited"]["share"]) < 1 / s
+            assert r["gates"]["blocks"] == blocks * p.c and r["gates"]["training_by_the_count"] == got.gates
+            assert r["gates"]["training_at_the_limit"] == pytest.approx(blocks * p.c / r["limit"])
+            assert r["share"] == pytest.approx(1 / r["limit"]) and r["share"] >= s
+            row = next(line for line in lines if line.split()[:1] == r["where"].split()[:1] and r["reading"] + "  " in line
+                       and f"  {r['period']} " in line)
+            assert f"{r['number']:,.1f}" in row and f"{r['limit']:,.1f}" in row
+            assert report._g(r["gates"]["training_at_the_limit"]) in row
+        assert (best["reading"], best["w"]) == (f"one β_x, with the threshold w = {w:.6g}", w)
+        assert (top["reading"], top["w"]) == ("one β_x at the top budget, no block charged", None)
+        assert (each["reading"], each["statement"]) == ("a β_x a block, no threshold", min_cut.HE_ROWS)
+        assert in_k["reading"].endswith(f", {T.IN_K}") and in_k["uncredited_words_in_k"] and in_k["k"] == k_words
+        assert in_k["number"] < best["number"] and in_k["limit"] < best["limit"]
+        assert best["statement"] == top["statement"] == in_k["statement"] == min_cut.HE_CHARGED
+    # each statement prints with the standing the locks give it, and no limit is called proved
+    standing = {x: report.STANDING[lean.status(x)] for x in (min_cut.HE, min_cut.HE_CHARGED, min_cut.HE_ROWS)}
+    assert standing[min_cut.HE] == "proved in the lock" and standing[min_cut.HE_ROWS] == "no Lean statement"
+    for word in ("  proved    ", "  premise   ", "  scaled    ", *(f"{x} ({y})" for x, y in standing.items()),
+                 "No limit is proved", min_cut.UNTIED_WORDS, min_cut.WORD_BITS,
+                 "the uncredited share is taken as every block's"):
+        assert word in out[out.index(report.TIED_LABEL):]

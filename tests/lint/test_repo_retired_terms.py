@@ -16,18 +16,25 @@ What a row retires:
 * each identifier written in backticks in a clause that says ``until renamed``, when it is one only code spells
   (``Flock.Firewall``, ``FC_FIREWALL*``, ``DrawIsCoin``: a dot, an underscore, a hyphen, an inner capital or a ``*``,
   which matches any identifier characters); a plain word there (``window``), a path, and a name that owns the next
-  (``machine_model``'s ``cover``) are not.
+  (``machine_model``'s ``cover``) are not.  A ``*`` name's site isn't one where the identifier around it already says
+  the row's term: its words before a parenthesis, ``;`` or ``,``, joined as ``MonitoringPeriod`` or lowerCamel
+  ``monitoringPeriod`` (as spelled otherwise) or ``monitoring_period`` (in any case), so ``MonitoringPeriodChecked``
+  and ``liveAt_monitoringPeriod`` say ``monitoring period`` and aren't ``*Period*`` sites.  The identifier is taken
+  whole, so one holding an old name beside the term (``ledgerPeriod_le_monitoringPeriod``) passes the glob, and a name
+  that is itself a row's old name (``ComposePeriod``) still counts through its own term.
 
 The lint reads the whole text of what the lane-text lint reads (``test_repo_lane_text.py``: code, Lean, shell and
 config, and Markdown), identifiers, strings and prose alike, outside what ``SKIP`` names, with each reason, and outside
 what the word maps of ``tools/move/`` keep: a domain tag or format id (``verity/flock-netlist/v1``), and ``note:``,
-``art:``, branch and lane names.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power
-law, nvidia-smi's ``power.draw``, ``AUDIT_CAP``), by the code around it (hypothesis's ``draw``) and by the file's place
-(``OWN_CAPS``: PoUS's and PoUB's own caps).  Sites are counted per file: an entry ``{"file", "count"}`` allows
-``count`` sites in its file, a file with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate
-(``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, grows this list, or
-leaves a renamed file's entry behind; it loads this module alone from the change's base, so the module imports only the
-standard library and reads ``GLOSSARY.md`` from the tree it runs in.
+``art:``, branch and lane names.  A goal's id is a name too, kept as written where a TOML file gives it as a ``goal``
+key's value (``goal = "vllm/serving-cost-benchmark"``, ``GOAL``); the tree holds no list of goal ids, so the same id
+elsewhere still counts.  A word's other senses aren't counted: by the words about it (``OTHER_SENSES``: a power law,
+nvidia-smi's ``power.draw``, ``AUDIT_CAP``, ``cap_bits``), by the code around it (hypothesis's ``draw``) and by the
+file's place (``OWN_CAPS``: PoUS's and PoUB's own caps, a row table's size, the live proof block's caps, a PoUW
+session's cap).  Sites are counted per file: an entry ``{"file", "count"}`` allows ``count`` sites in its file, a file
+with more fails, and ``--prune`` lowers what the tree no longer holds.  The ratchet gate (``adapters/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file
+it touches, grows this list, or leaves a renamed file's entry behind; it loads this module alone from the change's
+base, so the module imports only the standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 
     python3 tests/lint/test_repo_retired_terms.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_retired_terms.py --prune          # delete and lower what this tree no longer holds
@@ -35,10 +42,12 @@ standard library and reads ``GLOSSARY.md`` from the tree it runs in.
 """
 from __future__ import annotations
 
+import io
 import json
 import re
 import subprocess
 import sys
+import tokenize
 from collections import Counter
 from functools import lru_cache
 from pathlib import Path
@@ -47,8 +56,8 @@ NAME = "repo_retired_terms"
 ROOT = Path(__file__).resolve().parents[2]
 LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 GLOSSARY = "GLOSSARY.md"
-#: the archive isn't developed
-LEFT_OUT = ("archive/",)
+#: path prefixes this lint leaves to others (the ratchet gate reads it): none
+LEFT_OUT = ()
 #: what isn't read, by path prefix (or a whole path), each with its reason
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
@@ -79,22 +88,46 @@ LIVE = {
     "IR": "an acronym the code uses for other things (an alias, a cut); \"Verity IR\" and \"IR evaluator\" are retired",
     "reference run": "a run whose output another is compared with is live; the training-cost reference is retired",
 }
-#: other senses of an enforced word, never counted: nvidia-smi's field among them, and the names of PoUS's cap on an audit's
-#: duration and PoUB's lifetime cap, which aren't Pearl's
+#: other senses of an enforced word, never counted: nvidia-smi's fields (``power.draw``, ``compute_cap``) among them, the
+#: names of PoUS's cap on an audit's duration and PoUB's lifetime cap, the stacking property's caps as its Lean names
+#: them (``Gates.Caps``, ``FoolingCap``), a kernel's bound on its launch grid (``grid_cap``), the public length ℓ a
+#: registered compiler carries (``cap_bits``, ``CAP_BITS``, "the cap ℓ"), nvidia-smi's software power cap
+#: (``sw_power_cap``), a logit soft cap (``soft_cap``, ``logits_soft_cap``), cuBLASLt's algorithm capabilities
+#: (``cublasLtMatmulAlgoCapGetAttribute``, ``CUBLASLT_ALGO_CAP_*``) and the harness's readers of them (``cap_get``,
+#: ``cap_list``), Linux capabilities (``CAP_SYS_PTRACE``) and the hardness theory's ISA capability bound (``ISA-CAP``,
+#: ``isa_cap``), none of them Pearl's
 OTHER_SENSES = re.compile(r"(?i:power[- ]laws?|laws? of large numbers|(?:Amdahl|Moore|Little|Zipf|Kerckhoffs)'s laws?"
                           r"|power[ ._-]draws?)|(?<![^\W_])(?:audit_cap|AUDIT_CAP|auditCap|cap_ns|CAP_NS"
-                          r"|schedule_cap|SCHEDULE_CAP)(?![^\W_])")
-#: the files whose "cap" is their protocol's own, by path prefix, with each reason; Pearl's spellings still count there
+                          r"|schedule_cap|SCHEDULE_CAP|cap_bits|CAP_BITS)(?![^\W_])"
+                          r"|(?<!\w)(?:R_cap(?:_phase|_node(?:_by_class_peak)?)?|caps\.total|FoolingCap|compute_cap"
+                          r"|grid_cap|cap ℓ)(?!\w)"
+                          r"|(?<![^\W_])(?:sw_power_cap|soft_cap|isa_cap(?:_check)?|cap_(?:get|list))(?![^\W_])|(?<!\w)ISA-CAP"
+                          r"|cublasLt\w*Cap\w*|CUBLASLT_\w*CAP\w*"
+                          r"|(?i:(?<!\w)cap_(?:sys_ptrace|sys_admin|dac_read_search|dac_override|chown|fowner|ipc_lock)(?!\w))")
+#: the live proof block's files, which name no Pearl term: each request's cap, its public ``max_tokens``, in the table
+#: ``caps`` with ports ``cap_<i>``, and in capitals the table's role ``CAPS`` and the request's index ``CAP``; and the
+#: tests of a PoUW session's cap, which name none either, with their vectors' cap ``CAP``
+LIVE_CAPS = ("verity/protocols/accounting/pouw/prover/circuit/live.py",
+             "verity/protocols/accounting/pouw/verifier/live_reads.py",
+             "verity/protocols/accounting/pouw/verifier/tests/test_circuit_live.py",
+             "verity/protocols/accounting/pouw/verifier/tests/test_pouw_window.py",
+             "verity/protocols/accounting/pouw/verifier/tests/window_vectors.py")
+#: the files whose "cap" is their own, by path prefix, with each reason; Pearl's spellings still count there, and
+#: ``PEARL_CAP`` too outside ``LIVE_CAPS``
 OWN_CAPS = {
-    "verity/protocols/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
-    "verity/protocols/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/accounting/pous/": "PoUS's caps (an audit's duration, its schemes' bounds); Pearl's is PoUW's",
+    "verity/protocols/accounting/poub/": "PoUB's lifetime cap on a schedule's bits; Pearl's is PoUW's",
+    "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table": "a row table's `cap` counts its leaves",
+    "verity/protocols/accounting/pouw/verifier/window.py": "a session's cap, the most tile instances one session holds",
+    "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
+    **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
 }
 #: Pearl's `CAP`, which the table spells as a word, so no longer term holds it ("over-cap", "cap check", `capOK` and
 #: `Device.cap` are terms of their own)
 PEARL_CAP = re.compile(r"(?<!\w)CAPS?(?!\w)")
 #: hypothesis's own ``draw`` in a module importing it: a composite strategy's first parameter, through its body, and the
-#: data object's ``data.draw(``; a longer name, an attribute (``challenger.draw``), a string (a ``"draw"`` key) and the
-#: other forms (``draws``, ``drawn``) aren't
+#: data object's ``data.draw(``, as code where the file is Python; a comment or a string there, a ``"draw"`` key anywhere, a
+#: longer name, an attribute (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
 HYPOTHESIS = re.compile(r"^[ \t]*(?:from|import)[ \t]+hypothesis\b", re.M)
 COMPOSITE = re.compile(r"^([ \t]*)@(?:\w+\.)*composite\b.*\n(?:\1@.*\n)*\1(?:async[ \t]+)?def[ \t]+\w+[ \t]*\(\s*draw\b",
                        re.M)
@@ -104,8 +137,12 @@ DATA_DRAW = re.compile(r"(?<![\w.])data\.draw\(")
 LINE = re.compile(r"^([ \t]*)[^\s#)\]}]", re.M)
 #: what the word maps keep: a domain tag or format id, a note, an artifact, a branch, a lane
 KEEP = re.compile(r"[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b|note:[\w./-]+|art:[0-9a-f]+|cursor/[\w./-]+|lanes/[\w.-]+")
+#: a goal's id (``GROUP/slug``) as a TOML line's ``goal`` key gives it: the value is a name, kept as written
+GOAL = re.compile(r'[ \t]*goal[ \t]*=[ \t]*"(?P<id>[\w-]+/[\w-]+)"[ \t]*(?:#.*)?')
 #: a character of what ``KEEP`` keeps
 ID = re.compile(r"[\w./:-]")
+#: a character of one identifier
+IDENT = re.compile(r"\w")
 FIX = (f"Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) "
        f"stays only where it already stands. If the file moved, move its entry in the same change: `python3 "
        f"tests/lint/test_{NAME}.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).")
@@ -152,6 +189,18 @@ class Term:
         self.anchors = frozenset(w.lower() + s for w in [max(WORDS.findall(old) or [old], key=len)]
                                  for s in INFLECT["verb"])
         self.code = code
+        self.says = self._says(new) if code and "*" in old else None
+
+    @staticmethod
+    def _says(new: str) -> re.Pattern | None:
+        """An identifier that says the term ``new`` gives (its words before a parenthesis, ``;`` or ``,``): those words
+        in CamelCase as spelled but for the first letter's case, or in snake_case in any case; None when they aren't
+        plain words."""
+        words = re.split(r"[(;,]", new, maxsplit=1)[0].split()
+        if not words or not all(re.fullmatch(r"[A-Za-z0-9]+", w) for w in words):
+            return None
+        camel = "".join(w[0].upper() + w[1:] for w in words)
+        return re.compile(f"[{camel[0]}{camel[0].lower()}]{re.escape(camel[1:])}|(?i:{re.escape('_'.join(words))})")
 
     @staticmethod
     def _part(p: str) -> str:
@@ -252,10 +301,10 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
     if len(low) != len(text):                           # a character whose lower case is longer: lower it alone
         low = "".join(c if len(c.lower()) != 1 else c.lower() for c in text)
     hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)), key=lambda h: (h[0], -h[1]))
-    draws, caps = hypothesis_draws(text), path.startswith(tuple(OWN_CAPS))
+    draws, caps, toml = hypothesis_draws(text, path), path.startswith(tuple(OWN_CAPS)), path.endswith(".toml")
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
-        if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps):
+        if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps, toml, path in LIVE_CAPS, t.says):
             continue
         end = e
         line, at = line + text.count("\n", at, s), s
@@ -263,10 +312,12 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
     return out
 
 
-def kept(text: str, s: int, e: int, own_caps: bool = False) -> bool:
+def kept(text: str, s: int, e: int, own_caps: bool = False, toml: bool = False, live: bool = False,
+         says: re.Pattern | None = None) -> bool:
     """Whether the site ``text[s:e]`` stands in what ``KEEP`` keeps or in ``OTHER_SENSES``, read from the run of id
-    characters around it and the few words about it, or is a "cap" other than ``PEARL_CAP`` in a file ``OWN_CAPS`` names
-    (``own_caps``)."""
+    characters around it and the few words about it, in a goal's id on a TOML file's ``GOAL`` line (``toml``), or is a
+    "cap" in a file ``OWN_CAPS`` names (``own_caps``), other than ``PEARL_CAP`` outside ``LIVE_CAPS`` (``live``), or
+    stands in an identifier that already says its row's term (``says``, a ``*`` name's ``Term.says``)."""
     a, b = s, e
     while a and ID.match(text, a - 1):
         a -= 1
@@ -274,15 +325,31 @@ def kept(text: str, s: int, e: int, own_caps: bool = False) -> bool:
         b += 1
     if any(m.start() <= s - a < m.end() for m in KEEP.finditer(text[a:b])):
         return True
-    if own_caps and text[s:e].lower() in ("cap", "caps") and not PEARL_CAP.match(text, s):
+    if says:
+        i, j = s, e
+        while i and IDENT.match(text, i - 1):
+            i -= 1
+        while j < len(text) and IDENT.match(text, j):
+            j += 1
+        if says.search(text, i, j):
+            return True
+    if toml:
+        start = text.rfind("\n", 0, s) + 1
+        stop = text.find("\n", e)
+        goal = GOAL.fullmatch(text, start, len(text) if stop < 0 else stop)
+        if goal and goal.start("id") <= s and e <= goal.end("id"):
+            return True
+    if own_caps and text[s:e].lower() in ("cap", "caps") and (live or not PEARL_CAP.match(text, s)):
         return True
     a = max(0, s - 40)
     return any(m.start() <= s - a < m.end() for m in OTHER_SENSES.finditer(text[a:e + 40]))
 
 
-def hypothesis_draws(text: str) -> frozenset[int]:
-    """Where ``text`` says hypothesis's own ``draw`` (``HYPOTHESIS``): the start of each.  A composite's body runs to the
-    first line after its header, not blank, a comment or a closing bracket, indented no deeper than its decorator."""
+def hypothesis_draws(text: str, path: str = "") -> frozenset[int]:
+    """Where ``text``, at ``path``, says hypothesis's own ``draw`` (``HYPOTHESIS``): the start of each.  A composite's body
+    runs to the first line after its header, not blank, a comment or a closing bracket, indented no deeper than its
+    decorator.  In a Python file only code counts; any other file's text has no code to tell from prose, so every bare
+    ``draw`` in the body counts."""
     if "draw" not in text or not HYPOTHESIS.search(text):
         return frozenset()
     out = {m.end() - len("draw(") for m in DATA_DRAW.finditer(text)}
@@ -290,7 +357,23 @@ def hypothesis_draws(text: str) -> frozenset[int]:
         after = text.find("\n", m.end()) + 1 or len(text)
         end = next((n.start() for n in LINE.finditer(text, after) if len(n.group(1)) <= len(m.group(1))), len(text))
         out |= {d.start() for d in BARE_DRAW.finditer(text, m.end() - len("draw"), end)}
-    return frozenset(out)
+    if not out or not path.endswith(PY):
+        return frozenset(out)
+    return frozenset(out) & code_names(text, "draw", path)
+
+
+def code_names(text: str, name: str, path: str) -> frozenset[int]:
+    """Where ``text``, the Python file ``path``, says ``name`` as code, outside comments and strings: the start of each.
+    Raises ``ValueError`` naming ``path`` where the text doesn't tokenize."""
+    starts = [0]
+    for line in text.split("\n"):
+        starts.append(starts[-1] + len(line) + 1)
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, SyntaxError) as e:
+        raise ValueError(f"{path}: doesn't tokenize as Python ({e}), so the retired-terms lint can't tell hypothesis's "
+                         f"`draw` from prose in it. Fix the file's syntax.") from e
+    return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokens if t.type == tokenize.NAME and t.string == name)
 
 
 def sites(text: str, path: str) -> list[tuple[int, str]]:
@@ -401,11 +484,13 @@ SENSES_EXAMPLE = """# Glossary
 |---|---|
 | "draw" (noun, verb), "drawn unit"; `DrawIsCoin`, `--draw`, until renamed | the sample |
 | Pearl's "debit" and "cap": "cap", "cap check", "over-cap" tile; `capOK`, `Device.cap`, `CAP`, until renamed | the bound |
+| "production" | serving, or proving, by sense |
 """
 
 
 def said(text: str, path: str = "") -> list[tuple[int, str]]:
-    """(line, the old name) of each site of ``SENSES_EXAMPLE``'s terms in ``text``, at ``path``."""
+    """(line, the old name) of each site of ``SENSES_EXAMPLE``'s terms in ``text``, at ``path``; the default path isn't a
+    Python file's, so hypothesis's ``draw`` is found by the rule for text that isn't Python."""
     by: dict[str, list[Term]] = {}
     for t in terms_of(SENSES_EXAMPLE):
         for a in t.anchors:
@@ -453,16 +538,168 @@ def test_hypothesis_s_draw_is_another_sense_and_the_sample_beside_it_is_not() ->
         sample + [(5, "draw"), (6, "draw"), (7, "draw"), (17, "draw")])
 
 
+def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample() -> None:
+    """In a Python file only code is hypothesis's: the word in a comment or a docstring inside a composite's body is
+    prose."""
+    text = ('from hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n'
+            '    """Each unit we draw, one by one."""\n'
+            '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
+            '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
+    assert said(text, "verity/protocols/proofs/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
+
+
+def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> None:
+    """A file that isn't Python is never read as Python, so an example in Markdown with prose after it (an apostrophe,
+    which doesn't tokenize) doesn't stop the scan. In its body every bare ``draw`` is kept, the comment's too: this is the
+    rule before the code-only one, on purpose, since such a text has no code to tell from prose."""
+    text = ("# Units\n\n```python\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n"
+            "    k = draw(st.integers(0, 3))  # draw the count\n    return [draw(st.just(i)) for i in range(k)]\n```\n\n"
+            "It's the sample that counts past the example: one draw.\n")
+    assert said(text, "verity/protocols/proofs/spot/README.md") == [(13, "draw")]
+
+
+def test_a_python_file_that_doesn_t_tokenize_stops_the_scan_naming_itself() -> None:
+    path = "verity/protocols/proofs/spot/tests/test_broken.py"
+    text = 'from hypothesis import given, strategies as st\n\n\n@given(st.data())\ndef test_it(data):\n    data.draw(st.just("x))\n'
+    try:
+        said(text, path)
+    except ValueError as e:
+        assert path in str(e) and "Fix the file's syntax" in str(e), e
+    else:
+        raise AssertionError(f"{path} doesn't tokenize, and the scan read it anyway")
+
+
+def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_senses_and_a_cap_beside_them_is_not() -> None:
+    """The stacking property's caps by the names its Lean gives them, and nvidia-smi's field, anywhere; a "cap" beside
+    them, and a longer name built on one, still count, in their directories too."""
+    theirs = ("R_cap, R_cap_phase, R_cap_node, R_cap_node_by_class_peak, caps.total, `Gates.FoolingCap`; "
+              'nvidia-smi --query-gpu=name,compute_cap; {"compute_cap": "12.0"}')
+    assert said(theirs, "benchmarks/stacked_share/share.py") == []
+    assert said("R_cap is the cap; R_capRows, caps.totals, FoolingCaps, a compute cap, compute_cap_max and its cap",
+                "benchmarks/stacked_share/beta.py") == [(1, "cap"), (1, "cap"), (1, "caps"), (1, "Caps"), (1, "cap"),
+                                                         (1, "cap"), (1, "cap")]
+
+
+def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
+    """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
+    count in the same file."""
+    path = "benchmarks/pouw/masked_gemm/sgemm.cu"
+    theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
+    assert said(theirs, path) == []
+    assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [
+        (3, "cap"), (3, "CAP"), (3, "capOK"), (3, "capOK"), (3, "cap_check")]
+
+
+def test_a_registered_compiler_s_cap_bits_and_cap_l_are_another_sense_and_a_cap_beside_them_is_not() -> None:
+    """The public length ℓ a registered compiler carries, as ``cap_bits``, ``CAP_BITS`` and "the cap ℓ"; a plain "cap"
+    beside them, and another spelling of the name, still count in the same file."""
+    path = "adapters/vllm/verity_vllm/pipeline/advice.py"
+    theirs = 'CAP_BITS = 4096\nassert len(bits) <= spec.cap_bits, "over the cap ℓ"  # cap_bits=CAP_BITS\n'
+    assert said(theirs, path) == []
+    assert said(theirs + "# the cap, Pearl's CAP and capBits beside cap_bits\n", path) == [
+        (3, "cap"), (3, "CAP"), (3, "cap")]
+
+
+def test_a_goal_s_id_as_a_toml_goal_key_is_a_name_and_the_title_beside_it_is_not() -> None:
+    """A goal's id is a name, kept as written where a TOML line's ``goal`` key gives it. The word in the title beside
+    it, in a comment on the goal's line, in another key's value, and in the same line outside a TOML file still
+    counts."""
+    path = "benchmarks/prod_repro/metrics.toml"
+    goal = 'goal = "vllm/production-vllm-reproducible"\n'
+    row = '[[metric]]\nid = "vllm/prod-cost"\ntitle = "the production path, reproduced"\n' + goal
+    assert said(goal, path) == []
+    assert said(row, path) == [(3, "production")]
+    assert said(goal.replace("\n", "  # the production path\n"), path) == [(1, "production")]
+    assert said(goal.replace("goal", "note"), path) == [(1, "production")]
+    assert said(goal, "benchmarks/prod_repro/metrics.py") == [(1, "production")]
+
+
 def test_a_cap_of_pous_or_poub_is_another_sense_and_pearl_s_beside_it_is_not() -> None:
     """PoUS's and PoUB's caps by their names anywhere, and any "cap" in their protocols' files; Pearl's spellings
     everywhere, in those files too, against the real table as well."""
     theirs = "the cap: `Params.schedule_cap`, SCHEDULE_CAP, `RTT_ALLOWANCE_CAP_NS`, cap_ns, `AUDIT_CAP`, `auditCap`; v.cap, caps"
     pearls = "\nPearl's: capOK, Device.cap, CAP, an over-cap tile, the cap check"
     pearl = [(2, "capOK"), (2, "Device.cap"), (2, "CAP"), (2, "over-cap"), (2, "cap check")]
-    for path in ("verity/protocols/pous/verifier/audit.py", "verity/protocols/poub/verifier/audit.py"):
+    for path in ("verity/protocols/accounting/pous/verifier/audit.py", "verity/protocols/accounting/poub/verifier/audit.py"):
         assert said(theirs + pearls, path) == pearl
-    assert said(theirs + pearls, "verity/protocols/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
-    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/poub/verifier/audit.py")] == [o for _, o in pearl]
+    assert said(theirs + pearls, "verity/protocols/accounting/pouw/verifier/pearl.py") == [(1, "cap"), (1, "cap"), (1, "caps"), *pearl]
+    assert [w.split("'")[1] for _, w in sites(pearls, "verity/protocols/accounting/poub/verifier/audit.py")] == [o for _, o in pearl]
+
+
+def test_a_row_table_s_cap_is_its_number_of_leaves_and_pearl_s_beside_it_is_not() -> None:
+    """A row table's ``cap`` in its kernel's three files; Pearl's spellings there too, and the same word in a kernel
+    beside them."""
+    table = "uint64_t cap;  // its leaves\nif (p < t->cap) return 2 * cap;"
+    pearls = "\n// Pearl's: capOK, CAP, an over-cap tile"
+    pearl = [(3, "capOK"), (3, "CAP"), (3, "over-cap")]
+    for path in ("verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cu",
+                 "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table.cuh",
+                 "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/row_table_host.cpp"):
+        assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of OWN_CAPS with it"
+        assert said(table + pearls, path) == pearl
+    beside = "verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/pearl_tile.cu"
+    assert said(table + pearls, beside) == [(1, "cap"), (2, "cap"), (2, "cap"), *pearl]
+
+
+def test_vendor_kernel_and_isa_names_are_other_senses_and_pearl_s_cap_in_their_shape_is_not() -> None:
+    """Each name as the vendor, kernel or theory spells it is kept; Pearl's spellings in the same shape, beside it, are
+    counted."""
+    cases = {
+        "nvidia-smi's software power cap": (
+            "BAD_THROTTLE = {0x4: \"sw_power_cap\"}; $HELD.sw_power_cap", "power_cap, hw_power_cap", ["cap", "cap"]),
+        "a logit soft cap": (
+            "Attention(logits_soft_cap=30.0); LogitsProcessor(soft_cap=30); attn_logits_soft_cap", "soft_capOK, hard_cap",
+            ["capOK", "cap"]),
+        "cuBLASLt's algorithm capabilities": (
+            "cap_list<uint32_t>(&base, CUBLASLT_ALGO_CAP_TILE_IDS); cap_get<int32_t>(&a, CUBLASLT_ALGO_CAP_SPLITK_SUPPORT); "
+            "cublasLtMatmulAlgoCapGetAttribute(a, attr); cublasLtMatmulAlgoCapAttributes_t attr",
+            "cap_set(&a, ALGO_CAP_TILE_IDS); MatmulAlgoCapOK; cap_getter", ["cap", "CAP", "Cap", "cap"]),
+        "Linux capabilities": (
+            "CapabilityBoundingSet=CAP_CHOWN CAP_FOWNER CAP_DAC_OVERRIDE CAP_DAC_READ_SEARCH CAP_IPC_LOCK CAP_SYS_ADMIN; "
+            "setcap cap_sys_ptrace+ep; needs CAP_SYS_PTRACE", "CAP_CHECK, CAP_TILE, cap_sys", ["CAP_CHECK", "CAP", "cap"]),
+        "the ISA capability bound": (
+            "ISA-CAP (<= 32/7) in isa_cap.c, checked by isa_cap_check.py", "ISA CAP, isa_capOK, the cap check",
+            ["CAP", "capOK", "cap check"]),
+    }
+    for sense, (theirs, pearls, pearl) in cases.items():
+        assert said(theirs, "benchmarks/pouw/harness/native/lt.cu") == [], sense
+        assert said(f"{theirs}\n{pearls}\n", "benchmarks/pouw/harness/native/lt.cu") == [(2, o) for o in pearl], sense
+
+
+def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spellings_there_are_not() -> None:
+    """Every "cap" in the live proof block's three files, its table's role ``CAPS`` and its request's index ``CAP``
+    among them; Pearl's other spellings there still count, and so does every "cap" of the same text in ``credit.py``,
+    which names the table among Pearl's lines."""
+    live = ('CAPS = "caps"\nINDEX, ROUND, SLOT, CAP, PROMPT = 0, 1, 2, 3, 4\n'
+            'ports |= {f"cap_{i}": known(table(prefix, CAPS)) for i in range(T)}  # each public cap\n')
+    pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
+    pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
+    for path in LIVE_CAPS:
+        assert Path(ROOT, path).is_file(), f"{path} is gone: move its line of LIVE_CAPS with it"
+        assert said(live + pearls, path) == pearl
+    credit = "verity/protocols/accounting/pouw/verifier/credit.py"
+    assert said(live + pearls, credit) == [(1, "CAPS"), (1, "caps"), (2, "CAP"), (3, "cap"), (3, "CAPS"), (3, "cap"),
+                                           *pearl]
+
+
+def test_a_session_s_cap_is_its_own_and_pearl_s_other_spellings_there_are_not() -> None:
+    """A PoUW session's cap, the most tile instances one session holds, in ``window.py`` and its Lean port, and ``CAP``
+    too in its two tests, which name no Pearl term; Pearl's other spellings there still count, a ``CAP`` outside those
+    tests does, and so does every "cap" of the same text in ``credit.py``."""
+    session = ("def sessions(k: int, cap: int) -> int:  # S sessions of `cap` instances: session_cap, sessionCap?\n"
+               "CAP = 2\nWd.public_inputs(reg, SAMPLED, s, V.CAP, domain_h3)\n")
+    pearls = "# Pearl's: capOK, Device.cap, an over-cap tile, the cap check\n"
+    pearl = [(4, "capOK"), (4, "Device.cap"), (4, "over-cap"), (4, "cap check")]
+    window = "verity/protocols/accounting/pouw/verifier/"
+    for path in ("tests/test_pouw_window.py", "tests/window_vectors.py"):
+        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of LIVE_CAPS with it"
+        assert said(session + pearls, window + path) == pearl
+    for path in ("window.py", "lean/window/PouwWindow/Inputs.lean", "lean/window/PouwWindow/Difftest.lean",
+                 "lean/window/README.md", "lean/window/tests/test_difftest.py"):
+        assert Path(ROOT, window, path).is_file(), f"{window}{path} is gone: move its line of OWN_CAPS with it"
+        assert said(session + pearls, window + path) == [(2, "CAP"), (3, "CAP"), *pearl]
+    assert said(session + pearls, window + "credit.py") == [(1, "cap"), (1, "cap"), (1, "cap"), (1, "Cap"), (2, "CAP"),
+                                                            (3, "CAP"), *pearl]
 
 
 def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
@@ -506,9 +743,51 @@ def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in
     assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
 
 
+PERIOD_EXAMPLE = """# Glossary
+## Older names
+
+| Old name, where it stays | Term |
+|---|---|
+| "horizon"; the Lean's `*Horizon*` and `*Period*` names (`ComposePeriod`, `CircuitWorkPeriod`), until renamed | monitoring period (`horizon` is its pooled reading) |
+| `Dampener*`, `*RemotePeriod`, until renamed | the slowdown |
+| the Lean's `*Epoch*` names, until renamed | (`MonitoringEpoch` once renamed) |
+"""
+
+
+def period_sites(text: str) -> list[str]:
+    by: dict[str, list[Term]] = {}
+    for t in terms_of(PERIOD_EXAMPLE):
+        for a in t.anchors:
+            by.setdefault(a, []).append(t)
+    return [w.split(" is retired")[0].strip("'\"") for _, w in sites_of(text, by)]
+
+
+def test_a_name_that_already_says_the_row_s_term_is_not_a_site_of_its_glob() -> None:
+    """A ``*`` name's site in an identifier that says the row's term (its words before the parenthesis, in CamelCase,
+    lowerCamel or snake_case) isn't one; the old names, a name in a dotted path beside one that says the term, another
+    row's glob, and a glob whose row gives no plain term still count.  The identifier is read whole, so one holding an old
+    name beside the term passes."""
+    got = {t.old: t for t in terms_of(PERIOD_EXAMPLE)}
+    assert got["*Period*"].says.pattern == "[Mm]onitoringPeriod|(?i:monitoring_period)"
+    assert not got["*Period*"].says.search("MONITORINGPeriod monitoringperiod")
+    assert got["*Epoch*"].says is None and got["ComposePeriod"].says is None and got["horizon"].says is None
+    assert period_sites("MonitoringPeriodChecked, MonitoringPeriod, monitoring_period_checked, MONITORING_PERIOD") == []
+    assert period_sites("monitoringPeriodG, monitoringPeriod_every, liveAt_monitoringPeriod") == []
+    assert period_sites("ledgerPeriod_le_monitoringPeriod") == []
+    assert period_sites("ComposePeriod, CircuitWorkPeriod, DampenerRemotePeriod, MONITORINGPeriod, "
+                        "Accounting.MonitoringPeriod.LedgerPeriod, composePeriod, ledgerPeriod") == [
+        "ComposePeriod", "CircuitWorkPeriod", "DampenerRemotePeriod", "MONITORINGPeriod", "LedgerPeriod",
+        "composePeriod", "ledgerPeriod"]
+    assert period_sites("ComposeHorizon, PooledHorizonBound, the horizon") == [
+        "ComposeHorizon", "PooledHorizonBound", "horizon"]
+    assert period_sites("DampenerMonitoringPeriod, MonitoringPeriodRemotePeriod") == [
+        "DampenerMonitoringPeriod", "MonitoringPeriodRemotePeriod"]
+    assert period_sites("ComposeEpoch, MonitoringEpoch") == ["ComposeEpoch", "MonitoringEpoch"]
+
+
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
-    assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
+    assert not holds("x.json") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")
     assert not holds("a/tests/fixtures/b.py") and not holds("a/CHANGELOG.md") and not holds(f"tests/lint/test_{NAME}.py")
     assert sites("C-Flock", "x.json") == []
 

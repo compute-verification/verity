@@ -28,7 +28,7 @@ Parts:
 - D. The collapses: one-sided, P2 = T_last at P = 0; KSW's four products equal at the zero instance; per-product
   independent noise admits no recovering combination; CO at zero serves the random 0/1 product c·b.
 - E. Priced strategies, each verified word for word against the honest words: int8 MAC = 1, FP4 (E2M1) MAC = ½, one
-  product per int8 limb, additions free. The ε table at production k, and Llama-3.1 8B/70B linears MAC-weighted. Under
+  product per int8 limb, additions free. The ε table at the served k, and Llama-3.1 8B/70B linears MAC-weighted. Under
   co32c the cheater at the zero and the structured instance pays k + m·r products a cell, as honest does.
 - F. Served error: exact mean and variance of O − PV over the coins (Fractions, every coin point), against Dither's.
 - G. Theorem N's bound ε ≥ (1 − θ)/(q − 1 + θ) for schemes whose q checked products are recovered by a per-coordinate
@@ -59,7 +59,9 @@ block's SAT case: 12 products, model checked, and 11 under a conflict budget, wh
 from __future__ import annotations
 
 import itertools
+import json
 import sys
+from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 import numpy as np
@@ -68,6 +70,10 @@ from pysat.solvers import Solver
 from exact_kit import f2
 from exact_kit.checks import Checks
 from exact_kit.sat import SOLVER, Cnf
+
+__all__ = ["CellGrid", "co32c_words", "cross_ranks", "digits", "honest_words", "instance", "main", "MASK", "n_digits",
+           "o_routes", "pv_routes", "pv_served", "pv_words", "PVBlock", "s32", "ts_best", "TS_FACETS", "ts_pv",
+           "TS_SHAPES", "ts_time", "W_RE", "word_routes"]
 
 M32 = np.uint32
 MASK = (1 << 32) - 1
@@ -79,9 +85,15 @@ DESIGNS = {"dither": (False, ("T",)), "checked1": (False, ("T", "O")), "co": (Tr
 #: co32c (committed digits) has the same bits plus its carry coins z on the served side; it is checked apart from
 #: DESIGNS because its same-side blocks vanish only mod 2 (a carry makes a (b, b) pair −64·ΔΔ⌊Y/128⌋ over Z/2³²).
 ALL_DESIGNS = {**DESIGNS, "co32c": (True, ("T", "D", "Op"))}
+#: A tile's (MMAs, other warp instructions), or a route's change to them.
+Tile = tuple[float, float]
+#: A word's alternating form mod 2, the pairs u < v it holds.
+Form = set[tuple[int, int]]
+#: `sat_products`' program: each product's ℓ and m, and each word's combination γ.
+Program = tuple[list[list[bool]], list[list[bool]], list[list[bool]]]
 
 
-def s32(x):
+def s32(x: np.ndarray | int) -> np.ndarray:
     return (np.asarray(x, dtype=np.int64) & MASK).astype(M32)
 
 
@@ -89,7 +101,7 @@ class CellGrid:
     """A grid of n rows and n′ columns of cells of one design, with its bit layout: U's planes, then c, then b, then
     (co32c) the carry coins z, m − 1 digits by r by n′."""
 
-    def __init__(self, design, n, k, n2, r, L, w=W_RE):
+    def __init__(self, design: str, n: int, k: int, n2: int, r: int, L: int, w: np.ndarray = W_RE) -> None:
         assert k % L == 0 and k % r == 0
         self.design, self.n, self.k, self.n2, self.r, self.L, self.w = design, n, k, n2, r, L, np.asarray(w)
         self.two, self.kinds = ALL_DESIGNS[design]
@@ -105,10 +117,10 @@ class CellGrid:
         self.T = k // L
         self.per_cell = self.T * ("T" in self.kinds) + sum(x != "T" for x in self.kinds) + (self.m - 2) * ("D" in self.kinds)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.design} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, {self.L})"
 
-    def fields(self, Z):
+    def fields(self, Z: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         N = Z.shape[0]
         Z = Z.astype(np.int64)
         beta = Z[:, :self.nU].reshape(N, self.n, self.r, self.np)
@@ -119,7 +131,7 @@ class CellGrid:
         z = Z[:, self.nU + self.nc + self.nb:].reshape(N, self.m - 1, self.r, self.n2).transpose(1, 0, 2, 3)
         return U, c, b, z
 
-    def words(self, P, V, Z):
+    def words(self, P: np.ndarray, V: np.ndarray, Z: np.ndarray) -> np.ndarray:
         """Every committed word of every cell at the bit points Z (N × nbits), over Z/2³² (as int64 mod 2³²)."""
         U, c, b, z = self.fields(Z)
         Ph = P[None] + c
@@ -139,14 +151,14 @@ class CellGrid:
             D = [np.einsum("nir,nrl->nil", U, a) for a in A[1:]]
             one["Op"] = Ts[-1] - np.einsum("nir,nrl->nil", U, A[0])
         for i in range(self.n):
-            for l in range(self.n2):
+            for j in range(self.n2):
                 for kind in self.kinds:
                     if kind == "T":
-                        out.extend(T[:, i, l] for T in Ts)
+                        out.extend(T[:, i, j] for T in Ts)
                     elif kind == "D":
-                        out.extend(d[:, i, l] for d in D)
+                        out.extend(d[:, i, j] for d in D)
                     else:
-                        out.append(one[kind][:, i, l])
+                        out.append(one[kind][:, i, j])
         return np.stack(out, axis=1) & MASK
 
 
@@ -157,7 +169,8 @@ class PVBlock(CellGrid):
     redundant base-128 digits are committed with carry coins z. The diagonal block's noise U·X goes into O′. `two`
     False drops c (P clean, as adopted). Bits: U's planes, c, b, z."""
 
-    def __init__(self, n, k, n2, r, L, w=W_RE, two=True, q=None):
+    def __init__(self, n: int, k: int, n2: int, r: int, L: int, w: np.ndarray = W_RE, two: bool = True,
+                 q: Sequence[int] | None = None) -> None:
         assert k % L == 0 and L % r == 0 and n <= L
         self.design, self.n, self.k, self.n2, self.r, self.L, self.w = "pv", n, k, n2, r, L, np.asarray(w)
         self.two, self.kinds = two, ("T", "D", "Op")
@@ -175,27 +188,28 @@ class PVBlock(CellGrid):
         self.right = list(range(self.nU + self.nc, self.nbits))
         self.T = k // L
 
-    def __str__(self):
-        return f"pv{'' if self.two else ' without c'} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, " \
-               f"{self.L}), q = {self.q.tolist()}"
+    def __str__(self) -> str:
+        return (f"pv{'' if self.two else ' without c'} (n, k, n', r, L) = ({self.n}, {self.k}, {self.n2}, {self.r}, "
+                f"{self.L}), q = {self.q.tolist()}")
 
-    def mask(self):
+    def mask(self) -> np.ndarray:
         return (np.arange(self.k)[None, :] <= self.q[:, None]).astype(np.int64)
 
-    def words(self, P, V, Z):
+    def words(self, P: np.ndarray, V: np.ndarray, Z: np.ndarray) -> np.ndarray:
         U, c, b, z = self.fields(Z)
         out = pv_words(P, V, U, c, b, z, self.r, self.L, self.m, self.mask())
         T, D, Op = out
         cells = []
         for i in range(self.n):
-            for l in range(self.n2):
-                cells.extend(t[:, i, l] for t in T)
-                cells.extend(d[:, i, l] for d in D)
-                cells.append(Op[:, i, l])
+            for j in range(self.n2):
+                cells.extend(t[:, i, j] for t in T)
+                cells.extend(d[:, i, j] for d in D)
+                cells.append(Op[:, i, j])
         return np.stack(cells, axis=1) & MASK
 
 
-def pv_words(P, V, U, c, b, z, r, L, m, M, tally=None):
+def pv_words(P: np.ndarray, V: np.ndarray, U: np.ndarray, c: np.ndarray, b: np.ndarray, z: np.ndarray, r: int, L: int, m: int, M: np.ndarray,
+             tally: Tally | None = None) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
     """P·V's words, batched over a leading axis (or none): T_t (masked P̃X), D_d = U·A_d(Ycum) (1 ≤ d < m) and
     O′ = T_last − U·A_0(Ycum) − W, W = Σ_{diagonal κ ≤ q} U(·, κ mod r) X(κ). With a tally (unbatched), every product
     is priced as computed, masked entries included (an IMMA computes them)."""
@@ -220,7 +234,7 @@ def pv_words(P, V, U, c, b, z, r, L, m, M, tally=None):
     return T, D, Op
 
 
-def pv_served(Op, D, X, M):
+def pv_served(Op: np.ndarray, D: list[np.ndarray], X: np.ndarray, M: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """(O, S, 2·served): O = O′ − Σ 128^d D_d = Σ_κ M P̂ X (Lean coordinates, s32), S = Σ_{κ ≤ q} X, and the served
     output doubled, 2(O + 64 S) − S = Σ M (2 P_prob + 2c − 1) X, exact (the bench's (P_prob + c − ½)·X)."""
     O = Op.astype(np.int64) - sum(d.astype(np.int64) << (7 * (j + 1)) for j, d in enumerate(D))
@@ -228,7 +242,7 @@ def pv_served(Op, D, X, M):
     return O, S, 2 * (O + 64 * S) - S
 
 
-def instance(B: CellGrid, kind, rng, vbits=8):
+def instance(B: CellGrid, kind: str, rng: np.random.Generator, vbits: int = 8) -> tuple[np.ndarray, np.ndarray]:
     if isinstance(B, PVBlock):
         V = rng.integers(-128, 127, (B.k, B.n2))
         if kind == "zero":
@@ -266,7 +280,7 @@ def instance(B: CellGrid, kind, rng, vbits=8):
     raise ValueError(kind)
 
 
-def unit(nbits, idx):
+def unit(nbits: int, idx: Sequence[Sequence[int]]) -> np.ndarray:
     Z = np.zeros((len(idx), nbits), np.uint8)
     for row, ii in enumerate(idx):
         for j in ii:
@@ -274,7 +288,7 @@ def unit(nbits, idx):
     return Z
 
 
-def pair_diffs(B: CellGrid, P, V, pairs, chunk=8192):
+def pair_diffs(B: CellGrid, P: np.ndarray, V: np.ndarray, pairs: list[tuple[int, int]], chunk: int = 8192) -> np.ndarray:
     """pairDiff of every word at every pair (x, y), x ≠ y: W(e_x + e_y) − W(e_x) − W(e_y) + W(0), mod 2³²."""
     W0 = B.words(P, V, np.zeros((1, B.nbits), np.uint8))[0]
     W1 = B.words(P, V, np.eye(B.nbits, dtype=np.uint8))
@@ -288,7 +302,7 @@ def pair_diffs(B: CellGrid, P, V, pairs, chunk=8192):
     return out
 
 
-def cross_ranks(B: CellGrid, P, V, mod=MASK):
+def cross_ranks(B: CellGrid, P: np.ndarray, V: np.ndarray, mod: int = MASK) -> tuple[int, int, int]:
     """(rank of rows (word, peeled bit) × served coins, rank of rows (word, served coin) × peeled bits, the number of
     same-side pair differences nonzero mod `mod` + 1: over Z/2³², or with mod = 1 over F₂), for a one-cell block."""
     pairs = [(x, y) for x in B.left for y in B.right]
@@ -305,7 +319,7 @@ def cross_ranks(B: CellGrid, P, V, mod=MASK):
 # ---------------------------------------------------------------- C: SAT tensor rank over F2
 
 
-def f2_targets(B: CellGrid, rng):
+def f2_targets(B: CellGrid, rng: np.random.Generator) -> list[Form]:
     """Each word's alternating form mod 2 (a set of pairs u < v), from pair differences at a random instance."""
     P, V = instance(B, "random", rng)
     pairs = list(itertools.combinations(range(B.nbits), 2))
@@ -313,7 +327,8 @@ def f2_targets(B: CellGrid, rng):
     return [{pairs[q] for q in np.flatnonzero(D[:, w])} for w in range(D.shape[1])]
 
 
-def sat_products(targets, nb, S, budget=None):
+def sat_products(targets: list[Form], nb: int, S: int,
+                 budget: int | None = None) -> tuple[bool | None, Program | None]:
     """Is there a program of S products of F₂-affine operands (any bits on either side) whose linear combinations
     have exactly the target alternating forms? Returns (True, (ℓ, m, γ)), (False, None) or (None, None) on budget."""
     cnf = Cnf()
@@ -339,7 +354,10 @@ def sat_products(targets, nb, S, budget=None):
         if not res:
             return False, None
         mod = {abs(x): x > 0 for x in sv.get_model()}
-    val = lambda lit: mod.get(abs(lit), False) == (lit > 0)
+
+    def val(lit):
+        return mod.get(abs(lit), False) == (lit > 0)
+
     L_ = [[val(x) for x in ell[s]] for s in range(S)]
     M_ = [[val(x) for x in m[s]] for s in range(S)]
     G_ = [[val(g[w][s]) for s in range(S)] for w in range(len(targets))]
@@ -366,7 +384,7 @@ def _lex_le(cnf: Cnf, a, b):
         eq = cnf.and_(eq, -cnf.xor(x, y))
 
 
-def check_program(targets, nb, prog):
+def check_program(targets: list[Form], nb: int, prog: Program) -> bool:
     L_, M_, G_ = prog
     for w, tw in enumerate(targets):
         for u, v in itertools.combinations(range(nb), 2):
@@ -382,7 +400,7 @@ def check_program(targets, nb, prog):
 # ---------------------------------------------------------------- E: priced strategies
 
 
-def limbs(lo, hi):
+def limbs(lo: int, hi: int) -> int:
     """int8 limbs an operand with values in [lo, hi] needs: 1 if it is s8 or u8, else the signed 8m-bit width."""
     if (-128 <= lo and hi <= 127) or (0 <= lo and hi <= 255):
         return 1
@@ -395,10 +413,10 @@ def limbs(lo, hi):
 class Tally:
     """A strategy's products, priced per cell (MACs per output cell times the unit's price)."""
 
-    def __init__(self):
-        self.items = []
+    def __init__(self) -> None:
+        self.items: list[tuple[str, int, Fraction]] = []
 
-    def int8(self, A, B, what):
+    def int8(self, A: np.ndarray, B: np.ndarray, what: str) -> np.ndarray:
         A, B = np.asarray(A), np.asarray(B)
         for M in (A, B):
             if not ((M.min() >= -128 and M.max() <= 127) or (M.min() >= 0 and M.max() <= 255)):
@@ -406,7 +424,7 @@ class Tally:
         self.items.append((what, A.shape[-1], Fraction(1)))
         return A.astype(np.int64) @ B.astype(np.int64)
 
-    def fp4(self, A, B, what):
+    def fp4(self, A: np.ndarray, B: np.ndarray, what: str) -> np.ndarray:
         A, B = np.asarray(A), np.asarray(B)
         if not (set(np.unique(A).tolist()) <= FP4 and set(np.unique(B).tolist()) <= FP4):
             raise ValueError(f"{what}: an operand is not E2M1")
@@ -416,7 +434,7 @@ class Tally:
         self.items.append((what, A.shape[-1], Fraction(1, 2)))
         return out.astype(np.int64)
 
-    def limbed(self, A, Y, what):
+    def limbed(self, A: np.ndarray, Y: np.ndarray, what: str) -> np.ndarray:
         """A·Y with Y split into int8 limbs (low limbs u8, the top one s8)."""
         lo, hi = int(Y.min()), int(Y.max())
         n = limbs(lo, hi)
@@ -430,11 +448,11 @@ class Tally:
             rest = rest >> 8
         return acc
 
-    def price(self):
+    def price(self) -> Fraction | int:
         return sum(K * p for _, K, p in self.items)
 
 
-def n_digits(lo, hi):
+def n_digits(lo: int, hi: int) -> int:
     """Base-128 digits `digits` needs for values in [lo, hi]: the least m with −128^m ≤ lo and ⌊hi/128^{m−1}⌋ ≤ 127."""
     m = 1
     while not (lo >= -(128 ** m) and hi // 128 ** (m - 1) <= 127):
@@ -442,7 +460,7 @@ def n_digits(lo, hi):
     return m
 
 
-def digits(Y, z, m):
+def digits(Y: np.ndarray, z: np.ndarray | Sequence[np.ndarray], m: int) -> list[np.ndarray]:
     """Y = Σ_d 128^d A_d with m int8 digits: A_d = (R_d mod 128) − 128 z_d for d < m − 1 and A_{m−1} = R_{m−1}, where
     R_0 = Y and R_{d+1} = ⌊R_d/128⌋ + z_d. Each fresh coin z_d (one an entry) picks one of the digit's two int8
     representatives; the last is taken as 0 where ⌊R/128⌋ = 127, so that the top digit stays int8."""
@@ -456,7 +474,8 @@ def digits(Y, z, m):
     return A
 
 
-def co32c_words(P, V, U, c, b, z, r, L, m, tally=None):
+def co32c_words(P: np.ndarray, V: np.ndarray, U: np.ndarray, c: np.ndarray, b: np.ndarray, z: np.ndarray | Sequence[np.ndarray], r: int, L: int, m: int,
+                tally: Tally | None = None) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray]:
     """CO with committed digits: T_t, D_d = U·A_d (1 ≤ d < m) and O′ = T_last − U·A_0, for Y's digits A_d; the
     served output is O = O′ − Σ_d 128^d D_d. With a tally, every product is priced as computed."""
     k = P.shape[1]
@@ -474,7 +493,7 @@ def co32c_words(P, V, U, c, b, z, r, L, m, tally=None):
     return [s32(x) for x in T], [s32(x) for x in D], s32(Op)
 
 
-def honest_words(P, V, U, c, b, r, L):
+def honest_words(P: np.ndarray, V: np.ndarray, U: np.ndarray, c: np.ndarray, b: np.ndarray, r: int, L: int) -> tuple[list[np.ndarray], np.ndarray]:
     k = P.shape[1]
     Ph = P + c
     Pt = Ph + U[:, np.arange(k) % r]
@@ -484,7 +503,8 @@ def honest_words(P, V, U, c, b, r, L):
     return [s32(x) for x in T], s32(O)
 
 
-def strategy(name, P, V, U, c, b, r, L):
+def strategy(name: str, P: np.ndarray, V: np.ndarray, U: np.ndarray, c: np.ndarray, b: np.ndarray, r: int,
+             L: int) -> tuple[list[np.ndarray], np.ndarray, Tally]:
     """Run one strategy; return its words and its tally."""
     k = P.shape[1]
     tally = Tally()
@@ -508,7 +528,7 @@ def strategy(name, P, V, U, c, b, r, L):
     return [s32(x) for x in T], s32(O), tally
 
 
-def draw(rng, n, k, n2, r, two=True):
+def sample(rng: np.random.Generator, n: int, k: int, n2: int, r: int, two: bool = True) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     beta = rng.integers(0, 2, (n, r, 7))
     U = -64 + beta @ W_RE
     c = rng.integers(0, 2, (n, k)) if two else np.zeros((n, k), np.int64)
@@ -519,7 +539,7 @@ def draw(rng, n, k, n2, r, two=True):
 # ---------------------------------------------------------------- F: served error moments
 
 
-def error_moments(P, V, two):
+def error_moments(P: Sequence[int], V: Sequence[int], two: bool) -> tuple[Fraction, Fraction]:
     """Exact mean and variance of Σ_κ ((P + c)(V + b) − PV) over uniform coins, at every coin point."""
     k = len(P)
     vals = []
@@ -533,14 +553,14 @@ def error_moments(P, V, two):
     return mean, var
 
 
-def theorem_n(q, theta):
+def theorem_n(q: int, theta: float) -> float:
     return (1 - theta) / (q - 1 + theta)
 
 
 # ---------------------------------------------------------------- H: the tensor–scalar model
 
 #: (row, MMA coefficient, coefficient of every other vector-pipe warp instruction) in SMSP-cycles:
-#: `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv on main.
+#: `M` (the tensor pipe) and JI3e_0..2, benchmarks/machine_model/data/rows.csv on main.
 TS_FACETS = [("M", 16.0, 0.0), ("JI3e_0", 8.115, 1.0), ("JI3e_1", 15.030, 0.317), ("JI3e_2", 15.539, 0.172)]
 #: Llama-3.1 linears as served by vLLM (q, k, v fused; gate, up fused): (name, k, n).
 TS_SHAPES = {"Llama-3.1-8B": [("qkv", 4096, 6144), ("o", 4096, 4096), ("gate_up", 4096, 28672), ("down", 14336, 4096)],
@@ -548,15 +568,15 @@ TS_SHAPES = {"Llama-3.1-8B": [("qkv", 4096, 6144), ("o", 4096, 4096), ("gate_up"
                                ("down", 28672, 8192)]}
 
 
-def ts_time(M, O):
-    return max(a * M + b * O for _, a, b in TS_FACETS)
+def ts_time(mmas: float, others: float) -> float:
+    return max(a * mmas + b * others for _, a, b in TS_FACETS)
 
 
-def ts_binding(M, O):
-    return max(TS_FACETS, key=lambda f: f[1] * M + f[2] * O)[0]
+def ts_binding(mmas: float, others: float) -> str:
+    return max(TS_FACETS, key=lambda f: f[1] * mmas + f[2] * others)[0]
 
 
-def ts_tile(design, k, n, fold):
+def ts_tile(design: str, k: int, n: int, fold: float) -> tuple[Tile, Tile]:
     """((MMAs, other warp instructions) of honest, of the cheapest cheater found) for one m16n8 tile of 128 cells at
     depth k, n rows sharing the served side's residue sums. A word group (128 words) is folded at `fold` instructions a
     word, 4·fold warp instructions (4 words a lane). Honest's residue sums are one add an X entry, k·n′ adds for n·n′
@@ -586,7 +606,7 @@ def ts_tile(design, k, n, fold):
 B1_EMULATED = 193.0
 
 
-def ts_mix(design, k, n, fold, dM, dO):
+def ts_mix(design: str, k: int, n: int, fold: float, dM: float, dO: float) -> tuple[float, float]:
     """(honest's time, the best cheater's) at A = B = 0 when the cheater may move any fraction φ of its cells' O off
     its strip, changing a tile's (MMAs, other instructions) by φ·(dM, dO). The time is convex and piecewise linear in
     φ, so its minimum is at φ ∈ {0, 1} or where two facets meet."""
@@ -601,7 +621,7 @@ def ts_mix(design, k, n, fold, dM, dO):
     return ts_time(*hon), min(ts_time(Mc + p * dM, Oc + p * dO) for p in cands)
 
 
-def o_routes(design, k):
+def o_routes(design: str, k: int) -> dict[str, Tile | Callable[[float], Tile]]:
     """At A = B = 0, O = c·b is a depth-k binary product with no commit inside. Each route replaces the cheater's
     strip (1 IMMA at r = 32, k/64 at r = k/2) by: `scalar(x)`, bit-sliced on the CUDA cores at x warp instructions per
     32 × 128 bit products; `b1_emulated`, sm_120's b1 MMAs priced as issue; `b1_native`, b1 MMAs at an IMMA's cost
@@ -612,7 +632,7 @@ def o_routes(design, k):
             "b1_native": (-strip + k / 256, 0.0), "fp4": (-strip + k / 64, 4.0)}
 
 
-def word_routes(design, k, x):
+def word_routes(design: str, k: int, x: float) -> list[Tile]:
     """At A = B = 0 the other committed words are narrow products too, each a k32 IMMA honest pays: a T_t increment is
     Σ (c + U)·b, 8 binary products (c and U's 7 planes; Σb is shared by the rows), and co32c's D_d = U·A_d is U's 7
     planes against fresh carry bits. Bit-sliced at x per binary product: [(dM, dO)] for all the T words, then all the
@@ -642,7 +662,7 @@ APV_SERVE_OPS = 4.4
 APV_TAIL_OPS = 15.5
 
 
-def ts_pv(k, fold, rep):
+def ts_pv(k: int, fold: float, rep: int) -> tuple[Tile, Tile, float, int]:
     """(honest, cheater, served-output part) as (MMAs, other warp instructions) for one P·V tile, 16 queries of a
     32-query block by 8 channels, at depth k keys (the diagonal block included), with `rep` query heads sharing a KV
     head and so its Ycum, digits and prefix sums. Honest: k/32 T IMMAs, m − 1 D IMMAs, U·A_0 and the diagonal block's
@@ -658,7 +678,7 @@ def ts_pv(k, fold, rep):
     return (mmas, folds + serve + sums), (mmas, folds), serve, m
 
 
-def ts_pv_adopted(k, fold, rep):
+def ts_pv_adopted(k: int, fold: float, rep: int) -> tuple[Tile, Tile, Tile]:
     """(honest, cheater with the served output free, cheater with it checked downstream) for adopted P·V's tile in the
     same units: T's k/32 IMMAs, the tail stage (the peel's strip U·Ycum on two int8 limbs and its diagonal triangle, 3
     IMMAs, its other instructions, and the 4th IMMA, 64·S_diag, for f), folds of T and the checked O (k/32 + 1 words),
@@ -671,7 +691,7 @@ def ts_pv_adopted(k, fold, rep):
     return honest, (k // 32, folds), (k // 32 + 1, folds + APV_SERVE_OPS)
 
 
-def pv_routes(k, x):
+def pv_routes(k: int, x: float) -> list[Tile]:
     """P·V's zero-instance routes (P_prob = 0, V = 0): T increments (c + U)·b at 8x an IMMA, D_d = U·z at 7x, W = U·b
     at 7x, and O′ through O = c·b at x·k/32 in place of U·A_0 and W."""
     g = k // 32 - 1
@@ -682,7 +702,8 @@ def pv_routes(k, x):
     return routes
 
 
-def ts_best(design, k, n, fold, routes, tile=None):
+def ts_best(design: str | None, k: int, n: int, fold: float, routes: list[Tile],
+            tile: tuple[Tile, Tile] | None = None) -> tuple[float, float]:
     """(honest's time, the best cheater's) when the cheater moves any fraction φ_j ∈ [0, 1] of each route's work off
     its tile, changing (MMAs, other instructions) by Σ φ_j (dM_j, dO_j). Minimising the max of the facets over the box
     is a linear program in (φ, t); its optimum is a vertex, where len(routes) + 1 of the facet and box constraints
@@ -705,7 +726,7 @@ def ts_best(design, k, n, fold, routes, tile=None):
     return ts_time(*hon), best
 
 
-def main():
+def main() -> None:
     checks = Checks()
     rng = np.random.default_rng(20261017)
     out = {}
@@ -714,7 +735,7 @@ def main():
     n, k, n2, r, L = 4, 256, 4, 32, 32
     for two in (False, True):
         P, V = rng.integers(-63, 63, (n, k)), rng.integers(-128, 127, (k, n2))
-        U, c, b = draw(rng, n, k, n2, r, two)
+        U, c, b = sample(rng, n, k, n2, r, two)
         T, O = honest_words(P, V, U, c, b, r, L)
         Y = (V + b).reshape(k // r, r, n2).sum(0)
         P2 = s32(U @ Y)
@@ -745,7 +766,7 @@ def main():
                  lt[(128, 64, 7)] == (1, 1) and lt[(4096, 2048, 7)] == (1, 1) and lt[(128, 64, 8)] == (2, 1))
     B = CellGrid("co", 1, k, n2, r, L)
     Pb, Vb = instance(B, "balanced", rng)
-    _, _, bb = draw(rng, 1, k, n2, r)
+    _, _, bb = sample(rng, 1, k, n2, r)
     Yb = (Vb + bb).reshape(k // r, r, n2).sum(0)
     checks.check("A5 structured instance (Y(V) = 0): Y = residue sums of b, in [0, k/r], 1 limb",
                  np.array_equal(Yb, bb.reshape(k // r, r, n2).sum(0)) and limbs(int(Yb.min()), int(Yb.max())) == 1)
@@ -767,13 +788,16 @@ def main():
                  dig_ok and dig == {256: 2, 4096: 2, 8192: 3, 14336: 3, 28672: 3}, f"digits {dig}")
     nz, k6, r6 = 16, 256, 32
     m6 = n_digits((k6 // r6) * -128, (k6 // r6) * 127)
-    U6, c6, b6 = draw(rng, nz, k6, nz, r6)
+    U6, c6, b6 = sample(rng, nz, k6, nz, r6)
     z6 = rng.integers(0, 2, (m6 - 1, r6, nz))
     Z6 = np.zeros((nz, k6), np.int64), np.zeros((k6, nz), np.int64)
     T6, D6, Op6 = co32c_words(*Z6, U6, c6, b6, z6, r6, L, m6)
     Pr, Vr = rng.integers(-63, 63, (nz, k6)), rng.integers(-128, 127, (k6, nz))
     Tr, Dr, Opr = co32c_words(Pr, Vr, U6, c6, b6, z6, r6, L, m6)
-    served = lambda Op, D: s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+
+    def served(Op, D):
+        return s32(Op.astype(np.int64) - sum(Dd.astype(np.int64) << (7 * (d + 1)) for d, Dd in enumerate(D)))
+
     checks.check("A7 committed digits: the served output O = O′ − Σ 128^d D_d in s32 (random and zero instance); at "
                  "A = B = 0 D_1 = U·z_0 (Y < 128 there), a fresh word, nonzero in ≥ 95% of 256 cells",
                  np.array_equal(served(Opr, Dr), s32((Pr + c6) @ (Vr + b6))) and np.array_equal(served(Op6, D6),
@@ -781,7 +805,9 @@ def main():
                  f"m = {m6}, D_1 nonzero in {np.count_nonzero(D6[0])} of {nz * nz} cells")
 
     # ------------------------------------------------------------ B
-    one = lambda k, r, L: ((k // L) * min(r, L), r)
+    def one(k, r, L):
+        return ((k // L) * min(r, L), r)
+
     want = {"dither": one, "checked1": one, "co": lambda k, r, L: (k, k + r), "co_p2": lambda k, r, L: (k, k + r)}
     rank_tab = {}
     for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
@@ -845,7 +871,7 @@ def main():
     # ------------------------------------------------------------ D
     P0 = np.zeros((n, k), np.int64)
     V = rng.integers(-128, 127, (k, n2))
-    U, c, b = draw(rng, n, k, n2, r, two=False)
+    U, c, b = sample(rng, n, k, n2, r, two=False)
     T, O = honest_words(P0, V, U, c, b, r, L)
     Y = (V + b).reshape(k // r, r, n2).sum(0)
     checks.check("D1 one-sided at P = 0: O = 0 and P2 = T_last (the checked strip is free)",
@@ -875,7 +901,7 @@ def main():
                  "Σλ = 1 cancels them (a recovery needs unchecked strips)",
                  np.linalg.matrix_rank(np.stack(forms).astype(float)) == q)
     Pz, Vz = np.zeros((n, k), np.int64), np.zeros((k, n2), np.int64)
-    U, c, b = draw(rng, n, k, n2, r)
+    U, c, b = sample(rng, n, k, n2, r)
     T, O = honest_words(Pz, Vz, U, c, b, r, L)
     checks.check("D5 CO at the zero instance: O = c·b (the random 0/1 product) = T_last − U·Y(b)",
                  np.array_equal(O, s32(c @ b)) and np.array_equal(O, s32(T[-1].astype(np.int64)
@@ -895,7 +921,7 @@ def main():
                 P, V = instance(Bc, inst, rng, vbits=vb)
             if inst == "random":
                 V = np.where(rng.random((k, n2)) < 0.5, vlo, vhi)
-            U, c, b = draw(rng, n, k, n2, rr)
+            U, c, b = sample(rng, n, k, n2, rr)
             Th, Oh = honest_words(P, V, U, c, b, rr, L)
             Ts, Os, tally = strategy(strat, P, V, U, c, b, rr, L)
             ok = all(np.array_equal(x, y) for x, y in zip(Th, Ts)) and np.array_equal(Oh, Os)
@@ -913,7 +939,7 @@ def main():
                          hon == k + k // 2 and adv == k + k // 2, f"{hon} vs {adv}")
     out["prices_test"] = price
     m = n_digits((k // 32) * -128, (k // 32) * 127)
-    U, c, b = draw(rng, n, k, n2, 32)
+    U, c, b = sample(rng, n, k, n2, 32)
     z = rng.integers(0, 2, (m - 1, 32, n2))
     cprice = {}
     for inst in ("random", "zero", "balanced"):
@@ -983,7 +1009,6 @@ def main():
                  "Dither mean ½ΣP, variance ΣP²/4", bad == 0, f"{bad} mismatches over 6 instances (every coin point)")
     EV2 = Fraction(sum(v * v for v in range(-128, 127)), 255)
     EP2 = Fraction(sum(p * p for p in range(-63, 63)), 126)
-    EV2_7 = Fraction(sum(v * v for v in range(-64, 63)), 127)
     ratios = {"uniform entries, 8-bit served": float((EV2 + EP2 + Fraction(3, 4)) / EP2),
               "same rms in LSBs on both sides": 2.0,
               "served rms half the peeled rms (outlier-heavy activations)": 1.25}
@@ -1060,10 +1085,11 @@ def main():
     for design in ("co32", "co32c", "cohalf"):
         for mname in TS_SHAPES:
             for x in (8, 12, 16, 24):
-                zero[f"{design} {mname} scalar x={x}"] = weighted(design, lambda kk: o_routes(design, kk)["scalar"](x),
-                                                                  mname)
+                zero[f"{design} {mname} scalar x={x}"] = weighted(
+                    design, lambda kk, design=design, x=x: o_routes(design, kk)["scalar"](x), mname)
             for route in ("b1_emulated", "b1_native", "fp4"):
-                zero[f"{design} {mname} {route}"] = weighted(design, lambda kk: o_routes(design, kk)[route], mname)
+                zero[f"{design} {mname} {route}"] = weighted(
+                    design, lambda kk, design=design, route=route: o_routes(design, kk)[route], mname)
             zero[f"{design} {mname} breakeven x"] = max(breakeven(design, kk, nn) for _, kk, nn in TS_SHAPES[mname])
         for x in (8, 12, 16, 24):
             th, tb = ts_mix(design, 128, 4096, 3, *o_routes(design, 128)["scalar"](x))
@@ -1178,7 +1204,7 @@ def main():
     pv_ok, fresh = {}, {}
     for inst in ("random", "zero", "p0", "onehot", "balanced"):
         P, V = instance(Bp, inst, rng)
-        U, c, b = draw(rng, n, k, n2, r)
+        U, c, b = sample(rng, n, k, n2, r)
         z = rng.integers(0, 2, (m - 1, r, n2))
         T, D, Op = pv_words(P, V, U, c, b, z, r, L, m, M)
         X = V + b
@@ -1207,7 +1233,7 @@ def main():
     checks.check("P3 Ycum's digits at full context (keys − 32 terms over 32 residues, 8-bit X): m = 2 at 2K, 3 at 8K, "
                  "32K and 128K", pv_m == {2048: 2, 8192: 3, 32768: 3, 131072: 3}, str(pv_m))
     P, V = instance(Bp, "onehot", rng)
-    U, c, b = draw(rng, n, k, n2, r)
+    U, c, b = sample(rng, n, k, n2, r)
     z = rng.integers(0, 2, (m - 1, r, n2))
     cut = {}
     for two in (False, True):
@@ -1276,7 +1302,10 @@ def main():
                 pv_ts[f"{key} eps adopted P·V at a one-hot P, its served output checked"] = acc[6] / acc[8] - 1
                 pv_ts[f"{key} gamma adopted P·V over plain int8"] = acc[6] / acc[3]
     out["ts_pv"] = {k_: (f"{v:.4%}" if " eps " in k_ else f"{v:.4f}") for k_, v in pv_ts.items()}
-    sel = lambda tail: [v for k_, v in pv_ts.items() if k_.endswith(tail)]
+
+    def sel(tail):
+        return [v for k_, v in pv_ts.items() if k_.endswith(tail)]
+
     checks.check("P7 TS model, P·V prefill (Llama-3.1 8B and 70B, 2K–32K; past 8K every 8th query block, weighted) at "
                  "the measured digit and epilogue costs: with the sums, digits and served output given to the cheater "
                  "free ε < 4.5% (< 1.4% from 8K), with the served output checked downstream < 2.3% (< 0.75% from 8K); "
@@ -1295,7 +1324,6 @@ def main():
                  and all(v <= 1.41 if "fold=3 " in k_ else v <= 1.22 for k_, v in pv_ts.items()
                          if k_.endswith("gamma over plain int8")), str(out["ts_pv"]))
 
-    import json
     print("\nRESULTS " + json.dumps(out, default=str, sort_keys=True))
     sys.exit(checks.finish())
 

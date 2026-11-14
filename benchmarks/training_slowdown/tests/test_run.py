@@ -1,6 +1,8 @@
+import contextlib
 import copy
 import hashlib
 import json
+import math
 import os
 import signal
 import sys
@@ -12,12 +14,13 @@ import torch
 import torch.nn.functional as F
 from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
-from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
+from training_slowdown import VERSION, config, flops, formalism, gates, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
-from training_slowdown.data import Stream
+from training_slowdown.data import Data, Stream
 from training_slowdown.evaluate import Evaluator
 from training_slowdown.flops import gather_macs
 from training_slowdown.model import LM
@@ -91,6 +94,62 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     # tied table's lookup (58 multiplexers per word), w1 and the head
     floor = 32 * (V * D + D * D) / (58 * D + D * D + V * D)
     assert all(b > floor for b in fam["beta"].values()), fam["beta"]
+
+
+def test_a_record_states_torchs_tf32_switch_as_it_stands_when_it_is_written(tmp_path, theta):
+    """A record states torch's switch for TF32 matrix products, read when the record is written: off as torch
+    starts, and on however a job's code set it, by `fp32_precision` (torch's own or its global one), whose reading
+    the record states (the older two readings can raise once a job set it so), or by `allow_tf32` or
+    `set_float32_matmul_precision`. From a torch without `fp32_precision` it states the older two. The record of a
+    job that set it names its float32 products float32, as torch does, which `gates.exact_under_tf32` lists and the
+    grade refuses."""
+    matmul = torch.backends.cuda.matmul
+
+    def reset():
+        torch.backends.fp32_precision = "none"
+        matmul.fp32_precision = "none"
+
+    def switched(how):
+        def body(te):
+            how()
+            sgd(te)
+        return body
+
+    ways = {"fp32_precision": lambda: setattr(matmul, "fp32_precision", "tf32"),
+            "allow_tf32": lambda: setattr(matmul, "allow_tf32", True)}
+    others = {"the global fp32_precision": lambda: setattr(torch.backends, "fp32_precision", "tf32"),
+              "set_float32_matmul_precision": lambda: torch.set_float32_matmul_precision("high")}
+    try:
+        reset()
+        off = counted(tmp_path / "off", theta, sgd)
+        assert off["tf32"] == {"cuda_matmul_fp32_precision": "none"} == run.tf32()
+        assert gates.tf32_on(off) is False and gates.exact_under_tf32(off) == []
+        for name, how in ways.items():
+            on = counted(tmp_path / name, theta, switched(how))
+            reset()
+            assert on["tf32"] == {"cuda_matmul_fp32_precision": "tf32"} and gates.tf32_on(on) is True, name
+            assert gates.exact_under_tf32(on) == ["bwd mm", "fwd mm"] and on["invalid"] == [], name
+        for name, how in others.items():
+            how()
+            assert run.tf32() == {"cuda_matmul_fp32_precision": "tf32"}, name
+            reset()
+        assert gates.tf32_on({"tf32": {"cuda_matmul_fp32_precision": "ieee"}}) is False
+        legacy = {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"}
+        assert gates.tf32_on({"tf32": legacy}) is False
+        assert gates.tf32_on({"tf32": legacy | {"cuda_matmul_allow_tf32": True}}) is True
+        assert gates.tf32_on({"tf32": legacy | {"float32_matmul_precision": "medium"}}) is True
+        assert gates.tf32_on({}) is None and gates.exact_under_tf32(off | {"tf32": None}) == []
+    finally:
+        reset()
+
+
+def test_a_record_from_a_torch_without_fp32_precision_states_the_older_two_readings(monkeypatch):
+    """Where torch has no `fp32_precision`, the record states `allow_tf32` and `get_float32_matmul_precision()`."""
+    older = SimpleNamespace(allow_tf32=True)
+    monkeypatch.setattr(torch.backends.cuda, "matmul", older)
+    monkeypatch.setattr(torch, "get_float32_matmul_precision", lambda: "highest")
+    assert run.tf32() == {"cuda_matmul_allow_tf32": True, "float32_matmul_precision": "highest"}
+    assert gates.tf32_on({"tf32": run.tf32()}) is True
 
 
 EPS, LR = 1e-3, 1e-2
@@ -317,6 +376,44 @@ def test_a_record_whose_checkpoints_arent_the_states_scored_is_invalid():
                                   f"outputs, one for one"]
 
 
+def test_a_score_of_other_blocks_than_the_record_states_its_output_has_is_refused_by_name():
+    """The evaluator states the blocks it scored a state at; where the scores join the record, a state of other blocks
+    than the record states its output has (its `origin`'s, else its start's) makes the record invalid, unscored."""
+    def unscored(origin=None):
+        return {"invalid": [], "start": {"shape": {"n_layer": 2}}, "checkpoints": [
+            {"step": 0, "bpb": None, "score": None, "output_sha256": "a"}]} | ({"origin": origin} if origin else {})
+    assert run.with_scores(unscored(), [("a", {"bpb": 1.5, "blocks": 2})])["invalid"] == []
+    assert run.with_scores(unscored({"blocks": 3}), [("a", {"bpb": 1.5, "blocks": 3})])["invalid"] == []
+    for rec, blocks, stated in ((unscored(), 3, 2), (unscored({"blocks": 3}), 2, 3)):
+        rec = run.with_scores(rec, [("a", {"bpb": 1.5, "blocks": blocks})])
+        assert rec["invalid"] == [f"the evaluator scored states of [{blocks}] blocks, and the record states its output "
+                                  f"has {stated}"] and rec["checkpoints"][0]["score"] is None
+
+
+def test_a_routes_origin_builds_its_start_from_theta_and_refuses_a_map_that_doesnt_cover_both_by_name():
+    """`start_state`: each tensor of the route's model as θ's tensor the map names, zeros where it names None, θ's of
+    its own name where it names none; the copies are θ's tensors bit for bit. Refused by name: a map that names a
+    tensor the model lacks or maps from one θ lacks, a model tensor neither θ's nor mapped, a θ tensor that is neither
+    in the model nor mapped from, and a tensor whose source is of another shape."""
+    theta = {"a": torch.randn(2, 3), "b": torch.randn(3)}
+    state = {"a": torch.empty(2, 3), "b": torch.empty(3), "c": torch.empty(2, 3), "d": torch.empty(2, 3, dtype=torch.bfloat16)}
+    got = run.start_state(theta, state, {"c": "a", "d": None})
+    assert got["a"] is theta["a"] and got["b"] is theta["b"] and torch.equal(got["c"], theta["a"])
+    assert not got["d"].any() and got["d"].dtype == torch.bfloat16 and got["d"].shape == (2, 3)
+    where = "training_slowdown: the route's origin"
+    for origin, state_, why in (
+            ({"c": "a", "d": None, "e": "a"}, state, rf"{where} maps \['e'\], which the route's model lacks"),
+            ({"c": "z", "d": None}, state, rf"{where} maps from \['z'\], which θ lacks"),
+            ({"c": "a"}, state, rf"{where} leaves \['d'\] of the route's model unmapped"),
+            ({"c": "a", "d": None}, {k: v for k, v in state.items() if k != "b"},
+             rf"{where}: θ's \['b'\] are in neither the route's model nor the map"),
+            ({"c": "b", "d": None}, state, rf"{where} starts c, of shape \(2, 3\), as θ's b, of shape \(3,\)")):
+        with pytest.raises(SystemExit, match=why):
+            run.start_state(theta, state_, origin)
+    moved = {"a2": torch.empty(2, 3), "b": torch.empty(3)}
+    assert run.start_state(theta, moved, {"a2": "a"})["a2"] is theta["a"], "a tensor of θ's mapped from is covered"
+
+
 def test_a_job_keeps_no_weights_but_its_last_e(ran, tmp_path, theta, monkeypatch):
     """By default a job's output is its record and its last checkpoint's E, which rebuilds that checkpoint's output
     from θ bit for bit; an E at or over the size a job keeps stays out too."""
@@ -351,7 +448,8 @@ def test_a_job_keeps_its_last_checkpoints_whole_state_only_when_asked(tmp_path):
     assert not any("path" in cp for cp in rec["checkpoints"][:-1])
 
 
-RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "affected", "widths", "self", "gathered", "rates"}
+RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "attention", "affected", "widths", "self", "gathered",
+       "rates"}
 
 
 def test_the_job_traces_its_routes_step(ran):
@@ -369,21 +467,29 @@ def test_the_job_traces_its_routes_step(ran):
     assert sorted(map(int, tr["at"])) == sorted(set(products.DIAL_K) - {int(tr["k"])})
     for block in (tr, *tr["at"].values()):
         assert block["rows"] and all(set(r) == RAW for r in block["rows"])
-    # the three trained matrices of block 0's MLP: each one's forward product reads it, and their MACs a token add up
-    trained = [u for u in tr["updated"] if u[2:] == [u[2], tr["tokens"], 32]]
-    assert len(tr["updated"]) == len(trained) >= 3
-    priced = [products.priced(r) for r in tr["rows"]]
+    # the forward's ops that read the update, each over the step's tokens: block 0's MLP reads its three trained
+    # matrices in products at the 16 bits the route's autocast runs them in, on this CPU as on a GPU, and the norms
+    # above it, which autocast runs in fp32, read what it wrote at 32. Attention's products (`bmm`) are traced in
+    # fp32, as torch's math path computes them from upcast operands, and every other product in bf16; the rows state
+    # the bf16 the calls were made in, which is their price
+    assert all(u[2:4] == [u[2], tr["tokens"]] for u in tr["updated"])
+    assert sorted({u[4] for u in tr["updated"]}) == [16, 32] and len([u for u in tr["updated"] if u[4] == 16]) >= 3
+    assert {(r["op"] == "bmm", tuple(r["dtypes"]), r["attention"]) for r in tr["rows"]} == {
+        (False, ("bfloat16", "bfloat16"), None), (True, ("float32", "float32"), "bfloat16")}
+    priced = [products.priced(r, tr["capture"]) for r in tr["rows"]]
+    assert len({r["gates_per_mac"] for r in priced if r["phase"] != "optimizer"}) == 1
     assert sum(r["count"] * r["macs"] for r in priced if r["phase"] == "forward" and all(r["affected"])) > 0
     assert all(r["gates_per_mac"] > 0 and "dtypes" not in r for r in priced)
     # the step's circuit, raw: the gradient's cut and a token group's partial are the trained matrices' dW at the
-    # accumulator's 32 bits, the carried state no token op reads AdamW's two moments, and a window's tokens are read
-    # at its inputs and its last target
+    # accumulator's 32 bits, the update the forward reads those matrices at the 16 bits autocast casts them to, the
+    # carried state no token op reads AdamW's two moments, and a window's tokens are read at its inputs and its last
+    # target
     weights = sum(p.numel() for p in config.route(cfg.route).build(cfg.start.shape, cfg.dials)[0].parameters()
                   if p.requires_grad)
     c = tr["circuit"]
     assert {*formalism.TRACED_STRUCTURE, "tau_ids", "tau_other_bits", "a_bits", "u_in", "u1_bits", "tail_share"} < set(c)
     assert not {"parts", "labels", "u", "trace", *formalism.READ_BACKS} & set(c)
-    assert c["grad_cut_bits"] == c["partial_cut_bits"] == c["u1_bits"] == 32 * weights > 0
+    assert c["grad_cut_bits"] == c["partial_cut_bits"] == 32 * weights > 0 and c["u1_bits"] == 16 * weights
     assert c["state_bits"] == 2 * 32 * weights and c["delta_grad_bits"] == 3 * 32 * weights
     assert (c["region"], c["tokens"], c["token_factor"], c["tau_ids"]) == (1, tr["tokens"], 1, 1025 / 1024)
     assert 0 < c["affected_share"] < c["sigma"] < 1
@@ -406,7 +512,7 @@ def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_tra
         was = side[kind].get(key, (0, 0))
         side[kind][key] = (was[0] + count, was[1] + macs)
 
-    for _, kind, op, shapes, count, macs in log:
+    for _, kind, op, shapes, count, macs, *_ in log:
         if kind in counted and op in ("mm", "addmm"):
             (m, k), (_, n) = json.loads(shapes)[-2:]
             add(counted, kind, (op, m, k, n), count, macs)
@@ -414,7 +520,7 @@ def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_tra
         if r["phase"] == "forward" and r["token_dims"] == ["m"]:
             d = r["dims"]
             add(traced, "updated" if r["affected"][1] else "theta", (r["op"], d["m"], d["k"], d["n"]), r["count"],
-                r["count"] * products.priced(r)["macs"])
+                r["count"] * products.priced(r, tr["capture"])["macs"])
     assert counted == traced and counted["updated"] and counted["theta"]
     assert step["by"]["fwd/updated"] == sum(macs for _, macs in counted["updated"].values())
     assert {row[1] for row in log if row[2] != "mm"} <= {"theta", "act"}
@@ -462,19 +568,32 @@ def test_what_a_routes_output_computes_is_traced_and_charged_with_its_step(tmp_p
     assert traced["circuit"]["gates"] > bare["circuit"]["gates"]
 
 
-@pytest.mark.parametrize("steps, width", [(3, 16), (5, 32)])
-def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps(tmp_path, steps, width):
-    """Muon casts its update to 16 bits on its way into a 32-bit weight. A run of three steps is traced at its
-    second, whose weight is θ plus that update: a block makes it from the update alone, so the operand is passed at
-    16 bits. A longer run is traced mid-run, where the weight the update is added to is the run's own: the operand is
-    passed at its 32 bits."""
+def in_float32(step):
+    """A route's `step` with its forward in float32: torch's autocast is a no-op while it runs."""
+    def stepped(*args):
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(torch, "autocast", lambda *a, **k: contextlib.nullcontext())
+            return step(*args)
+
+    return stepped
+
+
+@pytest.mark.parametrize("steps, cast, widths", [(3, False, [32, 16]), (5, False, [32, 32]),
+                                                 (3, True, [16, 16]), (5, True, [16, 16])])
+def test_a_weight_is_passed_at_the_updates_width_only_among_the_runs_first_steps(tmp_path, steps, cast, widths):
+    """Muon casts its update to 16 bits on its way into a 32-bit weight. With the forward in float32 (the route's
+    autocast off), a run of three steps is traced at its second, whose weight is θ plus that update: a block makes
+    it from the update alone, so the operand is passed at 16 bits; a longer run is traced mid-run, where the weight
+    the update is added to is the run's own, and the operand is passed at its 32 bits. Under the route's bf16
+    autocast the forward reads every weight at 16 bits, so the operand is passed at 16 either way."""
     cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": steps, "batch": 2},
                                    dials={"trainable": "blocks.0.w_*", "lr": 1e-2, "opt": "muon"}),
                       starts.registry(tiny_registry(tmp_path / "reg")))
     route = config.route(cfg.route)
-    tr = trace_step(cfg, route, *route.build(cfg.start.shape, cfg.dials), "cpu")
+    stepped = SimpleNamespace(step=route.step if cast else in_float32(route.step))
+    tr = trace_step(cfg, stepped, *route.build(cfg.start.shape, cfg.dials), "cpu")
     read = [r["widths"] for r in tr["rows"] if r["phase"] == "forward" and r["affected"][1]]   # each reads a weight
-    assert read and all(w == [32, width] for w in read)
+    assert read and all(w == widths for w in read)
 
 
 COUNTS = ("tokens", "matmul_macs", "elementwise_macs", "macs")
@@ -487,33 +606,102 @@ def counted_and_traced(root: Path, steps: int, **over):
     return rec, *traced_step(cfg, route, model, optimizers, "cpu"), model
 
 
-@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
+#: the dtype a job's optimizer computes its products in, and their kind: Muon casts its Newton-Schulz to bf16, and
+#: Shampoo's factors and roots stay in the weights' f32
+OPTIMIZER_PRODUCTS = {"muon": ("bfloat16", "gemm/bf16"), "shampoo": ("float32", "gemm/f32")}
+#: attention's ops, as the counter writes them for a fused kernel (`flops.Counter._attention`), and the dtype each
+#: side computes them in under the routes' bf16 autocast: a fused kernel in its operands', and torch's math kernel,
+#: which a trace is taken under, from operands it casts to float32
+ATTENTION = {"bmm": "its products", "mul": "its scalings"}
+FUSED, MATH = "bfloat16", "float32"
+
+
+@contextlib.contextmanager
+def attention_rows():
+    """What the counter writes for a fused attention kernel while this is entered, the rows it names attention's ops
+    by: {step: {(phase, kind, op, shapes, dtype): [count, MACs]}}, what each call of `flops.Counter._attention` adds
+    to its step's log."""
+    added, inner = {}, flops.Counter._attention
+
+    def spy(self, func, *rest):
+        before = {key: list(n) for key, n in self.cur.log.items()}
+        out = inner(self, func, *rest)
+        into = added.setdefault(self.cur.index, {})
+        for key, n in self.cur.log.items():
+            was = before.get(key, [0, 0])
+            if n != was:
+                into[key] = [a + b - c for a, b, c in zip(into.get(key, [0, 0]), n, was)]
+        return out
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(flops.Counter, "_attention", spy)
+        yield added
+
+
+def in_dtype(log: list, rows: dict, dtype: str) -> list:
+    """A step's op log with the rows of `rows` (`attention_rows`' of that step) named `dtype`."""
+    out: dict = {}
+    for *key, count, macs, was in log:
+        moved = rows.get((*key, was), [0, 0])
+        for name, n in ((dtype, moved), (was, [count - moved[0], macs - moved[1]])):
+            if any(n):
+                out[*key, name] = [a + b for a, b in zip(out.get((*key, name), [0, 0]), n)]
+    return sorted([*key, *n, name] for (*key, name), n in out.items())
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 2),
+                                        ("shampoo", 3), ("grow", 3)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`traced.traced_step`: the capture's graph of it, from shapes alone) against
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
     MACs and all its MACs are equal; the trace's rows, which the slowdown's products are read from, hold exactly the
     GEMMs' MACs; the forward's GEMMs are equal apart; and every shape the rows run is one the counter's op log ran
     (`formalism.other_program`). At a step that reads the step before's update, and for the whole model at a run's
-    only step, which reads none: there the trained embedding is θ's and its lookup counts nothing, and from the next
+    only step, which reads none: there a trained embedding is θ's and its lookup counts nothing, and from the next
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
-    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
+    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work. A grown model
+    (`grow`) is counted against the θ′ its map builds, and is held to this as it is.
 
-    As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
-    attention by (`flops.Counter._attention`), the ones the trace holds.
+    In gates: the counted step's, each op at the price of the dtype its row names with no assumption made
+    (`gates.of_log`), is the traced circuit's, whose nodes are priced by the same rule, to the last digit: both are
+    compared as they are, with no tolerance, since at this shape every sum of gates is a whole number of eighths a
+    float holds exactly. Attention's ops too: a job on a GPU runs them under a fused kernel, in its operands' bf16,
+    and its rows name that (`ATTENTION`); the trace runs them under the math kernel, which casts those operands to
+    float32, and counts each op of a call at the dtype the call computes in (`capture.structure._counted_dtype`). A
+    job on a CPU runs the math kernel (`run.cpu_attention`), so its rows name those ops float32, above the circuit
+    (`test_grade`'s record that names dtypes). An optimizer's products are in the dtype it ran them in, whatever the
+    forward's: Muon's in bf16, Shampoo's in f32, with its roots.
+
+    As a job runs on a GPU: under torch's fused attention kernel, which the counter counts as the ops the math kernel
+    computes attention by (`flops.Counter._attention`), the ones the trace holds.
 
     The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
     cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
-    rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
+    with attention_rows() as kernel:
+        rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
     assert rec["invalid"] == [] and tr["step"] == min(1, steps - 1)
     step = rec["steps"][tr["step"]]
     assert [step[k] for k in COUNTS] == [g.tokens, g.macs, g.elementwise_macs, g.c_macs]
+    log, attention = rec["structures"][step["struct"]]["log"], kernel[step["step"]]
+    ops = {gates.op_key(r): r[4:6] for r in log}
+    counted = gates.of_log({"by": step["by"], "ops": ops})
+    assert {(key[2], key[4]) for key in attention} == {(op, FUSED) for op in ATTENTION}
+    assert all(ops[gates.op_key([*key[:4], *n, key[4]])] == n for key, n in attention.items())
+    assert counted["assumed"] == {} and counted["gates"] == tr["circuit"]["gates"]
+    if job in OPTIMIZER_PRODUCTS:
+        dtype, kind = OPTIMIZER_PRODUCTS[job]
+        products = {k: v for k, v in ops.items() if k.startswith("other param mm ")}
+        macs = sum(m for _, m in products.values())
+        assert macs and {gates.split_key(k)[4] for k in products} == {dtype}
+        assert gates.of_log({"ops": products})["kinds"] == {kind: {"macs": macs, "gates": macs * gates.per_mac(kind)}}
+        assert (step["approx_macs"] > 0) == (job == "shampoo")
     rows = work.priced(tr)["rows"]
     assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
     log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
     forward = sum(r["count"] * r["macs"] for r in rows if r["phase"] == "forward" and r["token_dims"])
     assert sum(r[5] for r in log if gemm_like(r[2])) == forward > 0
     lookup = gather_macs("embedding", tuple(model.embed.shape), None, step["tokens"] * model.embed.shape[1])
-    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if job == "whole" and tr["step"] else [])
+    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if model.embed.requires_grad and tr["step"] else [])
     assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
         r[5] for r in log if not gemm_like(r[2]))
     assert formalism.other_program(rows, grade.macs_log(rec, None)) is None
@@ -521,9 +709,13 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
 
 @pytest.mark.parametrize("job", JOBS)
 def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job):
-    """A job's steps under the fused attention kernel it runs against the same job's under the math kernel, the one
-    its trace is taken under: every step's counts, its op log, its updated nodes and the weights it read, the setup's
-    and the tail's too. The fused kernel does run: the model's attention reaches the counter as one op."""
+    """A job's steps under the fused attention kernel it runs on a GPU against the same job's under the math kernel,
+    the one its trace is taken under and a job runs on a CPU (`run.cpu_attention`): every step's counts, its op log,
+    its updated nodes and the weights it read, the setup's and the tail's too, but for the dtype the log names for
+    attention's ops (`ATTENTION`). The fused kernel computes them in its operands' bf16, and the math kernel casts
+    those operands to float32 first, so each record names what its kernel ran: the rows the counter writes for the
+    fused kernel, named float32, are the math kernel's rows. The fused kernel does run: the model's attention
+    reaches the counter as one op."""
     seen = []
     inner = flops.Counter._attention
 
@@ -531,19 +723,56 @@ def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job
         seen.append(str(func.overloadpacket))
         return inner(self, func, *rest)
 
-    def steps_of(rec):
+    def steps_of(rec, rows=None):
         keep = ("step", "tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "shapes", "device_macs")
-        return [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
-                for s in (rec["setup"], *rec["steps"], rec["tail"])]
+        out = [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
+               for s in (rec["setup"], *rec["steps"], rec["tail"])]
+        return [s | {"log": in_dtype(s["log"], (rows or {}).get(s["step"], {}), MATH)} for s in out]
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(flops.Counter, "_attention", spy)
-        fused = steps_of(job_counted(tmp_path / "fused", 3, **JOBS[job])[0])
+        with attention_rows() as kernel:
+            ran = job_counted(tmp_path / "fused", 3, **JOBS[job])[0]
         kernels, seen[:] = set(seen), []
         math = steps_of(job_counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
     assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
                        "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
-    assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+    fused = steps_of(ran)
+    assert steps_of(ran, kernel) == math != fused and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+    named = [{(row[2], row[6]) for row in s["log"] if (*row[:4], row[6]) in kernel.get(s["step"], {})} for s in fused]
+    assert named[2] == {(op, FUSED) for op in ATTENTION} and all(n in (set(), named[2]) for n in named)
+
+
+@pytest.mark.parametrize("job", ["whole", "lora"])
+def test_a_jobs_count_and_its_trace_agree_in_gates_at_attention(tmp_path, job):
+    """On the path a job runs, a fused attention kernel under the route's bf16 autocast, the counter counts each
+    call as the math kernel's ops in the kernel's operands' dtype (`flops.Counter._attention`), and the trace, which
+    is taken under the math kernel and holds those ops in float32, counts them in the dtype the call computes in
+    (`capture.structure._counted_dtype`). So at attention the traced step's gates are the counted step's: the ops
+    the counter writes for the kernel in that step, each at the price of the dtype its row names, against the gates
+    the traced circuit holds at the nodes of its calls. At float32's price the same ops are more, which is what the
+    circuit held before it read the call's dtype."""
+    import numpy as np
+
+    from training_slowdown.capture.structure import _attention
+
+    with attention_rows() as added:
+        rec, tr, g, _ = counted_and_traced(tmp_path, 3, **JOBS[job])
+    assert rec["invalid"] == []
+    kernel, calls = added[rec["steps"][tr["step"]]["step"]], _attention(g.graph)
+    assert {key[4] for key in kernel} == set(calls.values()) == {FUSED}
+    assert {key[2] for key in kernel} == set(ATTENTION)
+
+    def counted(dtype: str | None = None) -> float:
+        return sum(macs * gates.per_mac(gates.kind_of(*key[:3], dtype or key[4])[0])
+                   for key, (_, macs) in kernel.items())
+
+    at = [i for i, n in enumerate(g.graph.graph.nodes) if n in calls]
+    traced = float(g.circuit.gates[np.isin(g.circuit.node, at)].sum())
+    assert traced == counted() > 0 and counted(MATH) > traced
+    assert {r["attention"] for r in tr["rows"] if r["op"] == "bmm"} == {FUSED}
+    assert sum(r["count"] * math.prod(r["dims"].values()) for r in tr["rows"] if r["attention"]) == sum(
+        macs for key, (_, macs) in kernel.items() if key[2] == "bmm")
 
 
 def test_a_routes_output_is_the_traces_step_and_the_counters_next_step_or_tail(tmp_path):
@@ -755,6 +984,79 @@ def test_a_job_on_a_cpu_limits_onednn_in_each_of_its_processes_before_inside_or_
             assert run.main([*job, "--device", device, *process]) == 0
             said, held = entered.pop()
             assert (said, held) == (({name: limit}, before | {name: limit}) if device == "cpu" else (None, before))
+
+
+def test_each_of_a_jobs_processes_holds_its_thread_count_before_inside_or_outside_is_entered(tmp_path, monkeypatch):
+    """Each of a job's processes holds torch at the job's CPU thread count, `--threads` or `run.THREADS` (held at
+    one here, by the suite's fixture), before `inside` or `outside` is entered; a process in which torch then holds
+    another count is refused."""
+    entered = []
+    monkeypatch.setattr(run, "inside", lambda a: entered.append((a.threads, torch.get_num_threads())) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: entered.append((a.threads, torch.get_num_threads())) or 0)
+    job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
+    for threads, more in ((run.THREADS, []), (3, ["--threads", 3])):
+        for process in ([], ["--inside", tmp_path]):
+            torch.set_num_threads(2)
+            assert run.main([*job, *more, *process]) == 0 and entered.pop() == (threads, threads)
+    assert run.set_threads(2) == 2 == torch.get_num_threads()
+    monkeypatch.setattr(run.torch, "set_num_threads", lambda n: None)
+    with pytest.raises(SystemExit, match="this process is to hold 3 CPU threads, and torch holds 2"):
+        run.set_threads(3)
+
+
+def attention_kernels() -> tuple[bool, ...]:
+    """Which of torch's attention kernels this process may run: flash, memory-efficient, math and cuDNN."""
+    b = torch.backends.cuda
+    return b.flash_sdp_enabled(), b.mem_efficient_sdp_enabled(), b.math_sdp_enabled(), b.cudnn_sdp_enabled()
+
+
+def test_a_job_on_a_cpu_holds_attention_at_the_math_kernel_in_each_of_its_processes(ran, tmp_path, monkeypatch):
+    """The record of a job on a CPU names the attention kernel its route's process held, the math kernel. Each of
+    the job's processes holds it before `inside` or `outside` is entered, and lets it go when they return; on a GPU
+    neither holds anything, and the record's field is null."""
+    assert ran[0]["cpu_attention"] == run.CPU_ATTENTION == "math"
+    entered, before = [], attention_kernels()
+    monkeypatch.setattr(run, "inside", lambda a: entered.append((a.cpu_attention, attention_kernels())) or 0)
+    monkeypatch.setattr(run, "outside", lambda a, argv: entered.append((a.cpu_attention, attention_kernels())) or 0)
+    job = ["--config", tmp_path / "a.toml", "--seed", 0, "--split", "search", "--out", tmp_path / "out"]
+    for device in ("cpu", "cuda"):
+        for process in ([], ["--inside", tmp_path]):
+            assert run.main([*job, "--device", device, *process]) == 0
+            assert entered.pop() == (("math", (False, False, True, False)) if device == "cpu" else (None, before))
+            assert attention_kernels() == before
+
+
+def test_a_route_that_runs_the_fused_cpu_attention_kernel_at_two_threads_is_invalid(tmp_path, monkeypatch):
+    """A job on a CPU at two threads whose route's step turns the fused attention kernel back on, inside the job's
+    hold on the math kernel, is invalid, and the reason names the fix; the same job left to the job's kernel is
+    valid. The job's steps run through the harness's own loop (`run.train` under `run.Harness`)."""
+    reg = tiny_registry(tmp_path / "reg")
+    registry = starts.registry(reg)
+    cfg = config.load(write_config(tmp_path / "a.toml", budget={"steps": 2, "batch": 2}), registry)
+    route = config.route(cfg.route)
+    own = route.step
+
+    def fused(*args, **kwargs):
+        with sdpa_kernel([SDPBackend.FLASH_ATTENTION]):
+            return own(*args, **kwargs)
+
+    def invalid(out: Path) -> list[str]:
+        te = run.Harness(starts.load(cfg.start, reg.parent / "starts"), out, start=cfg.start.entry(),
+                         clock=lambda: 0.0)
+        torch.manual_seed(0)
+        with run.cpu_attention("cpu"), te.counter:
+            model, optimizers = route.build(cfg.start.shape, cfg.dials)
+            stream = Stream(Data.of(cfg.start.data, registry), 0, ctx=int(cfg.start.shape["ctx"]))
+            run.train(te, cfg, route, stream, model, optimizers)
+        return te.finish({})["invalid"]
+
+    torch.set_num_threads(2)
+    assert invalid(tmp_path / "math") == []
+    monkeypatch.setattr(route, "step", fused)
+    [why] = invalid(tmp_path / "fused")
+    assert why.startswith("torch's fused CPU attention kernel ran at more than one thread, where a call can return "
+                          "a wrong tile: ['aten._scaled_dot_product_flash_attention_for_cpu.default at 2 threads'")
+    assert why.endswith("(no `sdpa_kernel` in the route), or run the job at `--threads 1`")
 
 
 #: the route's process's interpreter: the job's own, started without the limit and with oneDNN's log on

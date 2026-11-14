@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import ast
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 
 from . import _ratchet as R
 
@@ -50,6 +50,7 @@ LAYER = {
     "verity_vllm.engine.hooks": "core",                        # the patch owner; imports nothing from verity_vllm
     "verity_vllm.engine.env": "core",                          # the vLLM env pins; imports nothing from verity_vllm
     "verity_vllm.settings": "core",                            # the environment's registry; imports nothing from verity_vllm
+    "verity_vllm.gc_tuning": "core",                           # the offline processes' GC thresholds; imports only settings
     "verity_vllm.log": "core",                                 # the logger; imports nothing from verity_vllm
     "verity_vllm.commit.challenge": "core",                    # -> verity.commitments.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
@@ -70,11 +71,12 @@ PROPERTY_MODULES = ("verity_vllm.properties",)
 
 #: The replay drivers (check/replay/) and the determinism value checks.
 VALUE_CHECK_MODULES = tuple(f"verity_vllm.{m}" for m in (
-    "check.replay", "check.value_check", "check.oracle_compare"))
+    "check.replay", "check.value_check", "check.oracle_compare", "check.match_oracle", "check.producers"))
 
 #: The verdict and the rules it decides from (the per-run rules, the C2 rules, the Build gates).
 VERDICT_MODULES = ("verity_vllm.check.verdict", "verity_vllm.check.verdict_names", "verity_vllm.check.commit_pass", "verity_vllm.check.commit_rules",
-                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates")
+                   "verity_vllm.check.c2_rules", "verity_vllm.check.gates", "verity_vllm.check.gate_base",
+                   "verity_vllm.check.gate_rules")
 
 
 def layer_of(module: str) -> str:
@@ -99,13 +101,13 @@ class Edge:
     symbol: str
 
 
-@lru_cache(maxsize=None)
+@cache
 def modules() -> dict[str, str]:
     """module name -> file (relative to adapters/vllm) for every library module."""
     return {R.module_name(p): R.rel(p) for p in R.library_files()}
 
 
-@lru_cache(maxsize=None)
+@cache
 def core_packages() -> tuple[str, ...]:
     """The packages of ``R.DEFINITIONS`` that aren't the library's (``R.in_library``): core's, so an import of one is no edge."""
     return tuple(R.module_name(init) for d in sorted(R.DEFINITIONS.iterdir())
@@ -121,7 +123,7 @@ def _resolve(target: str, known: dict[str, str]) -> str | None:
     return None
 
 
-@lru_cache(maxsize=None)
+@cache
 def edges() -> tuple[Edge, ...]:
     known = modules()
     out: list[Edge] = []
@@ -150,6 +152,7 @@ def edges() -> tuple[Edge, ...]:
                     continue
                 dst = _resolve(t, known)
                 if dst and dst != mod:
+                    assert isinstance(node, (ast.stmt, ast.expr)), "an edge is read from an import or a call"
                     out.append(Edge(mod, dst, f, node.lineno, symbol))
     return tuple(out)
 

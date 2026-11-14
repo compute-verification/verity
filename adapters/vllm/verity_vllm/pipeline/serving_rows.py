@@ -130,8 +130,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier import service as SV
-from verity.protocols.spot.verifier.one_stage import partition as P, registration as R
+from verity.protocols.proofs.spot.verifier import service as SV
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R
 from verity.circuits import partition_object as PO
 from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -146,7 +146,7 @@ from verity_vllm.pipeline import stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, FINAL, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
                                                     SLICES, STAGES, WIDE_COORDS, Template, _bind, col_span, coord_width,
-                                                    final_hits, part, template, unit_templates)
+                                                    chain_ways, final_hits, part, template, unit_templates)
 from verity_vllm.pipeline.window_law import law_of, work_table_of
 from verity_vllm.program.compact import runs_from_file_items
 
@@ -260,6 +260,9 @@ def row_units(t: str, d: Mapping[str, Any]) -> int:
     tp = template(t)
     if tp.layout in ("row", "part"):
         return 1
+    if tp.layout == "bits":
+        raise ValueError(f"{t}: a bits template's rows are its ports' bits (chunk_rows.unit_rows), which no reader of a served "
+                         f"row gives: its units are a replay block's, staged from the replay")
     S = d["statics"]
     if tp.layout in READERS:
         return int(READERS[tp.layout][0](tp, S))
@@ -347,24 +350,6 @@ def members(tmpls: Sequence[str], rows: Sequence[list[Row]], counts: Sequence[in
     return out
 
 
-def _one_table_chunks(first: CS.Member, segs: Sequence[tuple[int, int, int, int]]) -> list[CS.Member]:
-    """A template's linked chunks over its units ``segs`` (each token row's units ``[a, b)``, its row table and rank, in
-    unit order), from its first chunk ``first``: at most ``first.n`` units each, every one reading one row table."""
-    chunks: list[tuple[int, list[tuple[int, int]], list[int]]] = []
-    for a, b, k, rank in segs:
-        at = a
-        while at < b:
-            if not chunks or chunks[-1][1][-1][0] != k or sum(chunks[-1][2]) == first.n:
-                chunks.append((at, [], []))
-            take = min(b - at, first.n - sum(chunks[-1][2]))
-            chunks[-1][1].append((k, rank))
-            chunks[-1][2].append(take)
-            at += take
-    return [replace(first, name=f"{first.template}/c{j}", base=base, n=sum(units), tables=((CS.LINKED, len(links)), ("w", sum(units))),
-                    links=tuple(links), link_units=tuple(units))
-            for j, (base, links, units) in enumerate(chunks)]
-
-
 def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequence[list[Row]],
                     arrivals: Mapping[str, int] | None = None) -> tuple[list[CS.Member], tuple[CS.RowTable, ...]]:
     """The row-table layout of ``members``' ``ScaledMmS8Coordinate`` chunks: one row table per (engine step, op_path) of their
@@ -398,7 +383,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
         if m.template not in segs:
             out.append(m)
         elif m.base == next(x.base for x in ms if x.template == m.template):
-            out += _one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
+            out += S8.one_table_chunks(m, [(a, b, new_k[k], new_rank[k][rank]) for a, b, k, rank in segs[m.template]])
     made = tuple(RTB.row_table(specs[k][0], specs[k][1], specs[k][2], specs[k][3], [specs[k][4][j] for j in ranks[k]])
                  for k in order)
     RTB.check_order(made)
@@ -691,13 +676,14 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                       list[dict[str, Any]], dict[str, Any], dict[str, str], dict[str, bytes], dict[str, bytes], list[list[list[Any]]],
                       IF.Registered | None]:
     """What `after_commit` commits of ``window``'s members (``rows`` its templates', `population`'s): their words (`read_all`)
-    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, the per-expert cut's
+    with each registered read given by reference (`weight_rows.by_reference`) to ``weight_values``, each port a chain unit
+    holds in its writer's tree given as its writer's (`chain_rows.held_rows`), the per-expert cut's
     ``tables`` (`expert_rows.commit_tables`) and, in a window of history tables (``on``: its partition file's
     ``"histories": true``), the committer's ``histories`` (`commit.history_tables.Histories`), which it appends the
     window's latent rows to, each table from its edge, before it reads the history reads against them. -> (the data, the
     header entries, the registered roots, ``salts_of`` and ``strings_of`` (`rows.commit`'s: a history writer's rows its
     table's), each member's index entries and the history tables' declarations (`history_rows.declarations`))."""
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
     if on != (histories is not None):
         raise ValueError("a window commits history tables exactly when its partition file says \"histories\": true, into the "
@@ -726,6 +712,7 @@ def window_values(window: CS.Binding, rows: Sequence[list[Row]], store: Any, wei
                                                       weights, arrivals, values, histories))
         got = [read[m.key] for m in ms]
     data, entries, roots, salts_of = WT.by_reference(window, reg, [g[0] for g in got], values)
+    data = CH.held_rows(window, data)
     strings_of: dict[str, bytes] = {}
     if histories is not None:
         hs, strings_of = HR.strings_of(hp, ms, histories, at)

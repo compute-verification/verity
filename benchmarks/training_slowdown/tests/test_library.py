@@ -1,10 +1,12 @@
 import json
+import tomllib
 
 import pytest
 from conftest import calculators_count
 from synthetic import SHAPE, VOCAB, tiny_registry, write_config
 
-from training_slowdown import calculator, config, gates, library, starts
+from training_slowdown import calculator, config, gates, library, starts, work
+from training_slowdown.capture import products
 
 
 def raw(phase: str, td: list, m: int, k: int, n: int, count: int = 1, affected: bool = True) -> dict:
@@ -62,16 +64,20 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
     assert library.main([str(adapted), str(coded), "--starts", str(reg), "--out", str(tmp_path / "out")]) == 0
     out = capsys.readouterr().out
     head, first, second, under = out.splitlines()[:4]
-    assert head.split() == ["entry", "route", "trains", "slowdown", "what", "binds"] and under == library.TRAINS
+    assert head.split() == ["entry", "route", "trains", "priced", "in", "slowdown", "what", "binds"]
+    assert (under, out.splitlines()[4]) == (library.TRAINS, library.PRICED_IN)
     got = json.loads((tmp_path / "out" / "library.json").read_text())
     assert got["schema"] == library.SCHEMA
     assert list(got["parts"]) == ["traced", "approximated", "proved", "premise", "scaled"]
+    assert "(H) and (E)" in got["parts"]["premise"] and work.P_BATCH in got["parts"]["premise"]
     a, b = got["rows"]
     # the adapters of the start's seven matrices, rank 2, over the start's own parameters
     adapters = 2 * (4 * (16 + 16) + 3 * (16 + 32))
     assert a["trains"] == {"parameters": adapters, "of": SHAPE["parameters"], "share": adapters / SHAPE["parameters"]}
-    assert first.split()[:4] == ["adapted", "lora", f"{100 * a['trains']['share']:.3g}%", "1"]
-    assert second.split()[:4] == ["coded", "subset", "-", "-"] and "trains" not in b and "step" not in b
+    cells = library.line(a)
+    assert first.split()[:3] == ["adapted", "lora", f"{100 * a['trains']['share']:.3g}%"] == cells[:3]
+    assert cells[3] != "-" and first.split()[3:4 + len(cells[3].split())] == [*cells[3].split(), "1"]
+    assert second.split()[:5] == ["coded", "subset", "-", "-", "-"] and "trains" not in b and "step" not in b
     assert a["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0} and "approximated: " not in first
     assert a["step"]["tokens"] == 2 * 1024 and a["policy"]["name"] == "console" and a["dials"]["rank"] == 2
     assert (b["slowdown"], b["binds"], b["periods"]) == (None, library.CODED, None)
@@ -102,6 +108,15 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     assert whole["trains"] == {"parameters": SHAPE["parameters"], "of": SHAPE["parameters"], "share": 1.0}
     assert part["trains"]["parameters"] == SHAPE["parameters"] - VOCAB * 16 and part["trains"]["share"] < 1
     assert whole["step"]["approximated"] == {"macs": 0, "gates": 0.0, "share": 0.0}
+    # the table's trace is the job's program, bf16 under autocast on this CPU. Attention's products, which the
+    # capture traces in float32 as torch's math path computes them, are priced in the bf16 their calls were made in,
+    # so AdamW's step prints one dtype. Shampoo's own products are float32, as it runs them, and its step prints two
+    # with their shares, the larger first
+    assert whole["step"]["priced_in"] == {"bfloat16": 1.0} and library.line(whole)[3] == "bfloat16"
+    dtypes = part["step"]["priced_in"]
+    assert set(dtypes) == {"bfloat16", "float32"} and sum(dtypes.values()) == pytest.approx(1)
+    assert list(dtypes.values()) == sorted(dtypes.values(), reverse=True)
+    assert library.line(part)[3] == ", ".join(f"{d} {s:.2%}" for d, s in dtypes.items())
     approx = part["step"]["approximated"]
     # each of the seven matrices' two factors, an eigendecomposition each, at its side cubed
     assert approx["macs"] == 4 * 2 * 16 ** 3 + 3 * (16 ** 3 + 32 ** 3)
@@ -115,6 +130,60 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     assert beside["step"]["gates"] > part["step"]["gates"] and library.line(beside)[2] == "100%"
 
 
+def test_a_row_prints_the_dtypes_the_steps_products_are_priced_in():
+    """The cell is the trace's own: the dtype each product is priced in (its own as traced, an attention call's at
+    the dtype the call computes in), with its share of the products' MACs where the step has more than one, the
+    largest first."""
+    wide = raw("optimizer", [], 1024, 1024, 1024) | {"dtypes": ["float32", "float32"]}
+    assert library.priced_in(trace()) == {"bfloat16": 1.0}
+    assert library.priced_in(trace([*STEP, wide])) == {"bfloat16": 6 / 7, "float32": 1 / 7}
+    # a 16-bit attention call's products, which the capture traces in float32 and prices at the call's width
+    called = raw("forward", ["m"], 1024, 1024, 1024) | {"dtypes": ["float32", "float32"]}
+    new = {"capture": products.CAPTURE}
+    assert library.priced_in(trace([*STEP, called | {"attention": "bfloat16"}]) | new) == {"bfloat16": 1.0}
+    assert library.priced_in(trace([*STEP, called | {"attention": "float32"}]) | new) == {
+        "bfloat16": 6 / 7, "float32": 1 / 7}
+    assert library.PRICED_IN.endswith(f"on the premise that {products.ATTENTION_PREMISE}.")
+    assert f"that {products.ATTENTION_PREMISE}, on which" in library.PARTS["premise"]
+    assert "sm_120's BF16 pipeline" in gates.__doc__ and "on sm_120," in products.ATTENTION_PREMISE
+    # the count holds six of the card's seven products a call, so the premise names the six and the table reads high
+    assert "the six matrix products the count holds" in products.ATTENTION_PREMISE
+    assert "a product this count leaves out, so each slowdown reads high" in library.PARTS["premise"]
+    row = {"entry": "e", "route": "r", "slowdown": 2.0, "binds": "b", "trains": {"share": 1.0}}
+    assert library.line(row | {"step": {"priced_in": {"bfloat16": 1.0}}})[3] == "bfloat16"
+    assert library.line(row | {"step": {"priced_in": {"bfloat16": 6 / 7, "float32": 1 / 7}}})[3] == (
+        "bfloat16 85.71%, float32 14.29%")
+    assert library.line({"entry": "e", "route": "r", "slowdown": None, "binds": library.CODED})[3] == "-"
+
+
+def test_a_trace_whose_products_and_circuit_differ_in_price_has_no_slowdown_over_its_circuit():
+    """One slowdown has one price. A trace of a capture before `capture.products.PRICED_AS_TRACED_FROM` holds
+    attention's products in float32; that capture's rule prices them in bf16, and the trace's own circuit counts
+    them in float32. Over that circuit there is no slowdown, and the reason names the product and the fix. Over a
+    run's own gates the same trace is read as it was, and a trace of this capture is priced as its circuit counts
+    it on both sides, a call's products too."""
+    c, pol = GATES / 100, {"c_gates": GATES / 100, "k_bits": K}
+    wide = raw("forward", ["m"], 1024, 1024, 1024, 2) | {"dtypes": ["float32", "float32"]}
+    rows = [wide, *STEP[1:]]
+    stored, new = trace(rows) | {"capture": "4.12.9"}, trace(rows) | {"capture": products.CAPTURE}
+    assert [r["count"] for r in work.repriced(stored)] == [2] and work.repriced(new) == work.repriced(trace()) == []
+    assert work.repriced(trace([wide | {"attention": "bfloat16"}, *STEP[1:]]) | {"capture": products.CAPTURE}) == []
+    got = library.bound(stored, c, K)
+    assert got == {"slowdown": None, "binds": (
+        "unmeasured: 2 of the traced step's matrix products are priced in another dtype than its circuit counts "
+        "them in (the largest: 2 forward mm of 1024×1024 by 1024×1024, counted in float32 and priced in bfloat16), "
+        f"and one slowdown has one price; retrace the record with training's slowdown code {products.CAPTURE} or "
+        "later, which prices each product as its circuit counts it")}
+    assert calculator.slowdown(pol, stored)["read"] == {"capture": "4.12.9"}
+    # the same trace over a run's count of |C|, as the grade reads a stored record: its products at bf16, as before
+    over_run = calculator.slowdown(pol, stored, {"gates": GATES})
+    assert over_run["slowdown"] == calculator.slowdown(pol, trace(), {"gates": GATES})["slowdown"] > 1
+    # this capture's trace: the float32 products at float32 in the work, as its circuit holds them
+    assert work.priced(new)["rows"][0]["gates_per_mac"] == gates.per_mac("gemm/f32")
+    assert work.priced(stored)["rows"][0]["gates_per_mac"] == gates.per_mac("gemm/bf16")
+    assert library.bound(new, c, K)["slowdown"] is not None
+
+
 def test_the_library_names_its_entries_and_refuses_one_it_lacks():
     names = [p.stem for p in library.entries()]
     assert names == sorted(names) and "s-t20-1.1x-ref-optim" in names
@@ -123,3 +192,23 @@ def test_the_library_names_its_entries_and_refuses_one_it_lacks():
         library.entries(["nope"])
     for path in library.entries():
         config.load(path, starts.registry())
+
+
+#: an entry that runs another's step, by name: the other, and the keys it writes otherwise. One that keeps the budget
+#: keeps the other's digest too, so its jobs are the other's under the same labels.
+SOURCES = {
+    "l16-t20-1.1x-ref-optim-fullmuon-fe-wsd-102": ("l16-t20-1.1x-ref-optim-fullmuon-fe-wsd", ("seeds",)),
+    "l16-t20-2x-fullmuon-fe-wsd-40326": ("l16-t20-1.1x-fullmuon-fe-wsd-5383", ("budget", "target")),
+    "xl-t20-1.1x-ref-optim-fullmuon-fe-wsd-3884": ("xl-t20-1.1x-ref-optim-fullmuon-fe-wsd", ("budget",)),
+}
+
+
+@pytest.mark.parametrize("name", sorted(SOURCES))
+def test_an_entry_that_runs_anothers_step_differs_from_it_only_in_the_keys_it_names(name):
+    source, keys = SOURCES[name]
+    mine, theirs = (tomllib.loads((library.ENTRIES / f"{n}.toml").read_text()) for n in (name, source))
+    assert {k: v for k, v in mine.items() if k not in keys} == {k: v for k, v in theirs.items() if k not in keys}
+    assert mine["budget"]["batch"] == theirs["budget"]["batch"]
+    if "budget" not in keys:
+        assert config.load(library.ENTRIES / f"{name}.toml", starts.registry()).digest == \
+            config.load(library.ENTRIES / f"{source}.toml", starts.registry()).digest

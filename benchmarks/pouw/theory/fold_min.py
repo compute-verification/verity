@@ -1,7 +1,7 @@
-"""FOLD-MIN: the cheapest bit-exact receipt fold at each device's certificate, sm_120 (fx1), the H200 (li) and the B200
-(li heavy), and whether FOLD-OPT's stated cost holds there.
+"""The cheapest bit-exact receipt fold at each device's certificate, sm_120 (fx1), the H200 (li) and the B200
+(li heavy), and whether `FoldOpt`'s stated cost holds there.
 
-`fold_routes.py` takes the six candidate routes one and two instructions deep. What decides FOLD-OPT is how a
+`fold_routes.py` takes the six candidate routes one and two instructions deep. What decides `FoldOpt` is how a
 certificate prices the pipes. Every certificate but one prices an ALU, an IMAD, an FFMA and a SHFL instruction alike on
 its binding rows: DS-120 and DS-90 on DS_issue, VF3r-16 on JI3s_0, DC-90-ri on JI90_0 and JI90_1, DC-100-ri on issue.
 There a cheaper fold needs fewer instructions, and none has them (`fold_routes.py`'s superoptimizer, `fold_opt_fx.py`).
@@ -21,7 +21,7 @@ That is 1 + 2|B| IMAD-pipe instructions and no ALU one: 25 to 41 at li's keys (L
 coefficient in a register (the key-oblivious form). The XORs of two words (li's own, the checkpoint's) have no such
 program that pays: the bit-serial one is 6 instructions a bit.
 
-At π* the IMAD-pipe round costs 25 × 0.0246 = 0.61 against the LOP3 round's 2.0, so FOLD-OPT as instantiated (the
+At π* the IMAD-pipe round costs 25 × 0.0246 = 0.61 against the LOP3 round's 2.0, so `FoldOpt` as instantiated (the
 design's single `[fold]` mix) is false at the B200 sheet's certificate. The cheater LP, re-solved with that route open
 (`eps.fastest` with the fold blended at the best fraction x of keyed rounds and the uniform route kept on the honest
 fold), moves well under 1% of the rounds, since issue binds again beside the ALU at once. The headline's rise depends
@@ -41,13 +41,14 @@ import random
 import sys
 from dataclasses import replace
 from math import comb
+from pathlib import Path
 
 from exact_kit.checks import Checks
 from verity_machine_model import eps as E
 from verity_machine_model.model import device
 
 from fold_routes import keyed_round, u32
-from verity.protocols.pouw.prover.circuit import segment as SG
+from verity.protocols.accounting.pouw.prover.circuit import segment as SG
 
 SEED = 0xF01D
 Q = 0.5                  # the sheet reading's q*
@@ -115,7 +116,7 @@ def xor2_program(x: int, w: int) -> tuple[int, int]:
 
 # ---- the certificates and the B200 re-solve --------------------------------------------------------------------------
 
-def certificate(dev: str, vector: str):
+def certificate(dev: str, vector: str) -> tuple[Path, E.Design, E.Machine, E.Setup, E.Mix]:
     data = device(dev)
     d = E.design(HEADLINE[dev][0], data)
     pi = E.machine(vector, data)
@@ -124,11 +125,11 @@ def certificate(dev: str, vector: str):
     return data, d, pi, s, s.cheat(q)
 
 
-def class_price(pi, lam: dict[str, float], k: str) -> float:
+def class_price(pi: E.Machine, lam: dict[str, float], k: str) -> float:
     return sum(w * pi.c[k].get(r, 0.0) for r, w in lam.items())
 
 
-def blend(d, moves: list[tuple[float, int]], split: bool = False):
+def blend(d: E.Design, moves: list[tuple[float, int]], split: bool = False) -> E.Design:
     """li heavy with the fraction x of its keyed rounds on the k-instruction IMAD-pipe route, for each (x, k): each such
     round's LOP3 + IMAD becomes k IMAD-pipe instructions ((k − 1)/2 of them IMAD.HI, class IMADHI when `split`)."""
     f = dict(d.fold)
@@ -142,7 +143,8 @@ def blend(d, moves: list[tuple[float, int]], split: bool = False):
     return replace(d, name=f"{d.name}+imadxor", fold=f)
 
 
-def resolve(s, menu, split: bool = False, luck: bool = False, hi: float = 0.02, steps: int = 48):
+def resolve(s: E.Setup, menu: list[tuple[int, float]], split: bool = False, luck: bool = False, hi: float = 0.02,
+            steps: int = 48) -> tuple[float, E.Mix]:
     """The cheater's least T over the share X of keyed rounds moved, filled cheapest key first from `menu` (k, share
     of rounds), the uniform route kept on the honest fold; `luck`, the lucky cheater's (Theorem S's shortfall open).
     Returns (X, the Mix)."""
@@ -263,17 +265,18 @@ def main() -> int:
     ck.check("the rise is small, under 0.03 pp at LK's cheapest key: issue binds beside the ALU at once",
              0 < m25 - e0.machine_eps < 3e-4 and rows["LK's cheapest key (k 25)"][3].binding == ("DS_issue", "DS_alu"),
              f"+{(m25 - e0.machine_eps) * 100:.4f} pp")
-    ck.check("pricing IMAD.HI at 4 on DS_imad (DC r4 measured 4.19 SMSP-cycles) leaves it unchanged: DS_imad has slack",
+    ck.check("pricing IMAD.HI at 4 on DS_imad (measured at 4.19 SMSP-cycles) leaves it unchanged: DS_imad has slack",
              abs((1 - T4 / T_base) - m25) < 1e-9, f"x {X4:.5f}, ε_machine {1 - T4 / T_base:.4%}")
     ck.check("the credited floor program ♭ is the honest fold's (the baseline binds DS_issue alone), so the bound moves "
              "only through the cheater", s100.baseline.pi == {"DS_issue": 1.0}, s100.baseline.pi)
     count_only = replace(s100, design=replace(s100.design, fold={"FFMA": s100.design.fold_cost()})).cheat(Q)
-    cap = 1 - count_only.T / T_base
+    ceiling = 1 - count_only.T / T_base
     _, s_ri, c_ri, _ = cert[("sm100", "DC-100-ri")]
-    ck.check("the cap: with the fold priced at its instruction count alone (any pipe; DS-100's FFMA is issue only), the "
-             "cheater is at its issue floor, the most any pipe move can reach, over every key model's re-solve",
-             count_only.binding == ("DS_issue",) and all(m < cap for _, m, _, _ in rows.values()),
-             f"ε_machine {cap:.4%}, headline {rest + cap:.3%}; the measured reading's ε_machine "
+    ck.check("the ceiling: with the fold priced at its instruction count alone (any pipe; DS-100's FFMA is issue "
+             "only), the cheater is at its issue floor, the most any pipe move can reach, over every key model's "
+             "re-solve",
+             count_only.binding == ("DS_issue",) and all(m < ceiling for _, m, _, _ in rows.values()),
+             f"ε_machine {ceiling:.4%}, headline {rest + ceiling:.3%}; the measured reading's ε_machine "
              f"{1 - c_ri.T / s_ri.baseline.T:.4%}")
     ck.check("the B200 measured reading (DC-100-ri, π* issue) is unchanged: every IMAD-pipe round has more instructions",
              c_ri.pi == {"issue": 1.0} and kmin > 2)
@@ -282,7 +285,8 @@ def main() -> int:
     print(f"  design: ε_machine {e0.machine_eps:.4%}, headline {e0.core():.3%}")
     for n, line in lines.items():
         print(f"  {n}: {line}")
-    print(f"  cap, the fold at its instruction count on any pipe: ε_machine {cap:.4%}, headline {rest + cap:.3%}")
+    print(f"  ceiling, the fold at its instruction count on any pipe: ε_machine {ceiling:.4%}, "
+          f"headline {rest + ceiling:.3%}")
 
     if ck.mutations:
         p = keyed_program(0x0F0F0F0F, 5, 7)

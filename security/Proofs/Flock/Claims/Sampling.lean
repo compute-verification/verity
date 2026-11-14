@@ -18,8 +18,6 @@ public import Proofs.Flock.Claims.Sampling.Leaf
 public import Proofs.Flock.Claims.Sampling.Path
 public import Proofs.Flock.Claims.KS.Refit
 public import Proofs.Flock.Claims.Sampling.Prefix
-public import Proofs.Flock.Claims.Sampling.Reference
-public import Proofs.Flock.Claims.Sampling.Select
 public import Proofs.Flock.Claims.Sampling.Select.SecondCount
 public import Proofs.Flock.Claims.Sampling.Select.SecondStrata
 public import Proofs.Flock.Claims.Sampling.Seq
@@ -30,6 +28,11 @@ public import Proofs.Flock.Claims.Sampling.Tables
 public import Proofs.Flock.Claims.Sampling.Universal
 public import Proofs.Flock.Claims.Sampling.Wait
 public import Proofs.Flock.Claims.Sampling.ZK
+public import Proofs.Flock.Claims.Sampling.Select.Code
+public import Proofs.Flock.Claims.Sampling.Select.OS
+public import Proofs.Flock.Claims.Sampling.Select.Refusals
+public import Proofs.Flock.Claims.Sampling.Reference
+public import Proofs.Flock.Claims.Sampling.Select
 
 /-! The sampling compiler's lemmas: each registered sampling design's miss bound in `Claims.Pr` (`Sampling.Draws`), the
 executable Bernoulli sample's bound (`Sampling.ExecBernoulli`); each design's acceptance probability as its model sample's

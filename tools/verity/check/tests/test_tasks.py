@@ -160,7 +160,7 @@ def test_a_kept_steps_key_is_its_inputs_not_the_slot_or_the_toolchain_it_is_list
     """A job run whole whose pass check keeps (`check.STEP_KEYS`) lists one key on every slot and host: keyed by its step key,
     which reads the slot's test cache, the kernel release and `rustc -vV`, `flock-rust-tests` passed on a worker's slot under
     another key than the lister's, so its verdict was never labelled."""
-    flock = tree / "verity" / "protocols" / "flock" / "prover"
+    flock = tree / "verity" / "protocols" / "proofs" / "flock" / "prover"
     (flock / "live").mkdir(parents=True)
     (flock / "check_build.sh").write_text("RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.0.0}\n")
     (flock / "live" / "lib.rs").write_text("pub fn f() {}\n")
@@ -193,7 +193,6 @@ def test_changed_keeps_the_tasks_whose_inputs_the_change_touches(tree):
     assert doc["changed"]["files"] == 1
     assert "pytest:b" in ids and "pytest:a" not in ids and "lean-audit:lean/P" not in ids
     assert "ratchet-gate" in ids, "a job that declares no inputs reads the whole tree, so every change touches it"
-    assert "lean-changed" not in {t["id"] for t in _graph(tree)[0]["tasks"]}, "no shard runs it, so no task does"
     every = {t["id"]: t for t in _graph(tree)[0]["tasks"]}
     assert all(set(every[i]["deps"]) <= ids for i in ids), "a kept task's deps are kept"
 

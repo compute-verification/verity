@@ -184,7 +184,7 @@ def test_a_job_off_the_merge_gate_is_planned_and_required_of_no_check(P, tmp_pat
     by = {p["part"]: p for p in doc["parts"]}
     assert by["circuit-check:t"]["state"] == "must-run" and by["circuit-check:t"]["required"] is False
     assert by["ratchet-gate"]["required"] is False
-    off = ("circuit-check:t", "ratchet-gate", "lean-changed", "lean-agreement")
+    off = ("circuit-check:t", "ratchet-gate", "lean-agreement")
     assert all(p.get("required", True) for n, p in by.items() if n not in off)
     _cited, why = _judged(doc, {})
     assert why and "circuit-check" not in why and "ratchet-gate" not in why
@@ -194,14 +194,14 @@ def test_lean_agreement_is_required_for_a_change_its_merge_requires_covers_in_th
     root = tmp_path / "repo"
     (root / "tools" / "verity" / "check").mkdir(parents=True)
     (root / "tools" / "verity" / "check" / "ci.toml").write_text(
-        '[[job]]\nname = "lean-agreement"\nmerge_requires = ["verity/protocols/flock/prover/", "!README.md"]\n')
+        '[[job]]\nname = "lean-agreement"\nmerge_requires = ["verity/protocols/proofs/flock/prover/", "!README.md"]\n')
     _git(root, "init", "-q")
     base = _commit(root, "rule")
-    (root / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "prover" / "README.md").write_text("x\n")
+    (root / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "prover" / "README.md").write_text("x\n")
     prose = _commit(root, "prose")
     assert not P.required_agreement(prose, base, root)
-    (root / "verity" / "protocols" / "flock" / "prover" / "x.py").write_text("x = 1\n")
+    (root / "verity" / "protocols" / "proofs" / "flock" / "prover" / "x.py").write_text("x = 1\n")
     code = _commit(root, "code")
     assert P.required_agreement(code, base, root) and P.required_agreement(code, prose, root)
     assert not P.required_agreement(code, None, root)

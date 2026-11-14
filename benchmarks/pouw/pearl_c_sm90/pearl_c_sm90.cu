@@ -1,4 +1,4 @@
-// Pearl-C on the H100 and H200 (sm_90a): the kernels of `pearl-c-h100-v1-h3` (verity/protocols/pouw/prover/schemes/
+// Pearl-C on the H100 and H200 (sm_90a): the kernels of `pearl-c-h100-v1-h3` (verity/protocols/accounting/pouw/prover/schemes/
 // pearl_c.py on pearl_c_device.H100, hashing -h3) and the plain FP8 GEMMs, for run.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  The products are warpgroup MMAs (wgmma m64nNk32 E4M3 for every FP8 atom, m64nNk16 BF16
 // for the peel) on operands in shared memory that TMA fills, within 227 KB of shared memory per block.
@@ -16,6 +16,8 @@
 
 #include "../pearl_c/hash_h3.cuh"
 #include "../pearl_c_sm120/hash_fast.cuh"
+// rows past hash_fast.cuh's 128 segments (run.py's `row_digests`): y's rows of n words
+#include "../pearl_c/hash_wide.cuh"
 // decode's A commitment and tile leaves (run.py's PD_SERVED): the variants the decode shapes take, then their PD_STAMP twins
 // (run.py's PD_STAMPED, the profile's stamps); PD_PDL: pd_commit waits at its entry for the launch before it and lets the
 // call's forming launch behind it (pdl_entry); PD_SM90: hash_decode.cuh's PD_SM90_FORMS

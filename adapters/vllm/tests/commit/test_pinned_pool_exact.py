@@ -9,6 +9,10 @@ from __future__ import annotations
 
 import ctypes
 import errno
+import logging
+import os
+import subprocess
+import sys
 import threading
 
 import pytest
@@ -26,6 +30,20 @@ def _rss_bytes() -> int:
         if line.startswith("VmRSS:"):
             return int(line.split()[1]) * 1024
     raise RuntimeError("no VmRSS")
+
+
+@pytest.mark.parametrize(("value", "exact"), [(None, True), ("", True), ("1", True), ("0", False), (" 0", True), ("0 ", True),
+                                              ("00", True), ("false", True), ("no", True), ("OFF", True), ("x", True)])
+def test_exact_mode_is_off_at_zero_alone_and_no_value_is_refused_at_import(value, exact):
+    """`VERITY_PINNED_EXACT` is read when the module is imported, so in a fresh interpreter a value: "0" is off, every other string
+    is on, and a string that is no flag is no exception in the module and in the ones that import it."""
+    env = {k: v for k, v in os.environ.items() if k != "VERITY_PINNED_EXACT"}
+    if value is not None:
+        env["VERITY_PINNED_EXACT"] = value
+    code = "from verity_vllm.commit.committer import pinned_pool; print(pinned_pool.PINNED_EXACT)"
+    child = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=False, env=env)
+    assert child.returncode == 0, child.stderr
+    assert child.stdout.strip() == str(exact)
 
 
 @pytest.mark.skipif(not GPU, reason="needs CUDA (cudaHostRegister)")
@@ -60,7 +78,7 @@ def test_exact_pool_rss_equals_its_accounting_and_is_released():
 
 def _cgroup_anon_shmem() -> tuple[int, int] | None:
     try:
-        st = {l.split()[0]: int(l.split()[1]) for l in open("/sys/fs/cgroup/memory.stat")}
+        st = {stat_line.split()[0]: int(stat_line.split()[1]) for stat_line in open("/sys/fs/cgroup/memory.stat")}
         return st["anon"], st["shmem"]
     except Exception:  # noqa: BLE001
         return None
@@ -89,7 +107,7 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
             os.close(sampled_w)
             mv = memoryview(v.numpy())
             s = sum(mv[::4096])
-            st = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/self/status") if l.startswith(("RssAnon", "RssShmem"))}
+            st = {status_line.split(":")[0]: int(status_line.split()[1]) for status_line in open("/proc/self/status") if status_line.startswith(("RssAnon", "RssShmem"))}
             os.write(w, f"{s} {st['RssAnon']} {st['RssShmem']}".encode())
             os.read(sampled_r, 1)                 # stay alive until the parent has sampled the cgroup and closed its end
         finally:
@@ -122,7 +140,7 @@ def test_pool_accounting_without_cuda_uses_torch_pinned_or_skips():
     if GPU:
         pytest.skip("covered above")
     pool = PinnedPool(exact=True)
-    with pytest.raises(Exception):
+    with pytest.raises(RuntimeError):
         pool.take(1 << 16)                        # pin_memory without CUDA raises in torch; the mode is never claimed
     assert pool.mode is None
 
@@ -211,6 +229,41 @@ def test_a_kernel_without_populate_write_leaves_the_faults_to_the_registration(f
     assert [e[2:4] for e in _of(events, "register")] == [(3 * MiB, 0), (2 * MiB, 0)], "both blocks still registered"
 
 
+def test_a_collected_pool_unregisters_its_blocks(fake_cuda, monkeypatch, caplog):
+    unregistered: list[int] = []
+
+    def unregister(self, ptr: int) -> int:
+        unregistered.append(ptr)
+        return 0
+
+    monkeypatch.setattr(_FakeCudart, "cudaHostUnregister", unregister)
+    caplog.set_level(logging.WARNING, logger="verity_vllm")
+    pool = PinnedPool(block_bytes=MiB, exact=True, populate_threads=0)
+    ptr = pool.take(MiB).data_ptr()
+    pool.__del__()
+    assert unregistered == [ptr] and pool.mode is None and pool.bytes_total == 0
+    assert not caplog.records
+
+
+def test_a_release_that_fails_at_collection_is_logged_with_its_traceback(fake_cuda, monkeypatch, caplog):
+    _events, pools = fake_cuda
+    pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=0))
+    pool.take(MiB)
+
+    def refuse(self, ptr: int) -> int:
+        raise RuntimeError("cudaHostUnregister failed: 1")
+
+    caplog.set_level(logging.WARNING, logger="verity_vllm")
+    with monkeypatch.context() as broken:
+        broken.setattr(_FakeCudart, "cudaHostUnregister", refuse)
+        pool.__del__()
+    (record,) = caplog.records
+    assert record.name == "verity_vllm.commit.committer.pinned_pool" and record.levelname == "WARNING"
+    assert record.getMessage() == "pinned pool: the release at collection failed; its blocks stay registered"
+    assert record.exc_info is not None and record.exc_info[0] is RuntimeError
+    assert pool.mode == "exact-registered-shared" and pool.bytes_total == MiB, "the pool still holds its block: the fixture releases it"
+
+
 def _warm(pool: PinnedPool) -> None:
     """The state a priming finds: free blocks of mixed sizes and a partly used current block."""
     for n in (3 * MiB, MiB, 5 * MiB):
@@ -243,7 +296,12 @@ def test_reserve_makes_exactly_the_blocks_the_takes_after_it_allocate(fake_cuda,
 
     calls: list[int] = []
     real = pp._pinned_block
-    monkeypatch.setattr(pp, "_pinned_block", lambda *a, **k: calls.append(a[0]) or real(*a, **k))
+
+    def counted(*a, **k):
+        calls.append(a[0])
+        return real(*a, **k)
+
+    monkeypatch.setattr(pp, "_pinned_block", counted)
     views = [reserved.take(n) for n in SIZES]
     assert calls == [], "the takes find every block ready"
     assert [int(b.numel()) for b in reserved.in_use] == [int(b.numel()) for b in plain.in_use]
@@ -268,18 +326,6 @@ def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda):
     assert PinnedPool(exact=False).reserve([MiB]) == 0
     pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=0))
     assert pool.reserve([MiB]) == 0 and pool.all == []
-
-
-@pytest.mark.parametrize("j", [0, 1, 3, 7, 12])
-def test_the_primed_level_sizes_are_begin_trees(j):
-    from verity_vllm.commit.native_ranges import level_sizes
-
-    for n_total in [1, 2, 3, 5, 8, 127, 128, 129, 4097, 1 << 15]:
-        height, m = 0, n_total
-        while m > 1:
-            m = (m + 1) // 2
-            height += 1
-        assert level_sizes(n_total, j) == [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
 
 
 def test_the_helper_threads_are_the_commit_commands_option_and_a_fresh_pool_keeps_them():

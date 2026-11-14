@@ -12,14 +12,14 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from tests.properties import glm53_fused_rmsnorm_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import dsa_norm_rows as NR
 from verity.definitions.registry import dsa_norm as DN
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import glm53_fused_rmsnorm_capture_gpu as X
+from verity_vllm.records.property_record import REGISTRY, digest_of
 
 WIDTHS = [N for _, N, _, _ in X.NORMS]
 FAKE_PTX = (".version 8.7\n.target sm_90a\n.visible .entry _fused_norm_rope_kernel(\n)\n.reqntid 128\n{\n"

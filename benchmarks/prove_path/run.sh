@@ -3,19 +3,21 @@
 # advice, each rank's window registered with the compiler's digest (its cap ℓ in it) and the root of the advice's hiding
 # commitment, sampled through a5's per-rank service.Stream on a challenger's coins, proved by M0 --zk behind the Lean ZK server
 # and verified by Lean, the advice's root then held to the registration the sample followed; then one forged run, a unit whose
-# committed value is changed (committed consistently, the prover's self-check skipped), which Lean must refuse. M0's
-# flock-circuit and Lean's flock-verify are built from this tree, in scratch.
+# committed value is changed (committed consistently, the prover's self-check skipped), which the audit must reject with
+# the ZK server releasing no proof of it (with PP_PLAIN=1, which has no ZK server, with Lean refusing the proof it reads).
+# M0's flock-circuit and Lean's flock-verify are built from this tree, in scratch.
 #   PP_TP=DIR: a deferred TP Commit's row dir (DIR/commit with its sealed bundles, DIR/build/rank<r>), as GLM-5.3 B1's Commit
 #     (/workspace/cp/circuits/glm-v2/rows/$ROW). Its advice is the declared run's,
 #     from adapters/vllm/workloads/$ROW.json. The honest partition is PP_PARTITION (default a5's step-16 SiluMul_v2,
-#     stratified:4); the forged one SiluMul_v2{I=1536} at step 16, all 3 units sampled, on ranks PP_FORGED_RANKS (default 0).
+#     stratified-rate:4/678); the forged one SiluMul_v2{I=1536} at step 16, all 3 units sampled (rate:3/3), on ranks
+#     PP_FORGED_RANKS (default 0).
 #   PP_LLAMA=DIR: a single-GPU (TP1) Commit's row dir on this node: Llama-3.2-1B's Commit ($LROW, the sealed bundle
 #     commit/replay_bundle_p0 and the Build's build_request_LP*). Its compiler is I2's compile_steps; its advice the declared
 #     run's. The bundle's context records the Commit's absolute node paths, and none is read: the prover's Programs are read from
 #     --row-dir, the verifier's from its own compile of each, and the Build manifest falls back to
 #     <row dir>/manifest.json (sha256-checked against the record). The honest partition is
-#     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, subset:2); the forged one layer 0's at step 24, the
-#     one unit only r0 decodes there, sampled (subset:1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
+#     PP_PARTITION (default layer 0's SiluMul_v2{I=8192} at step 1, 4 units, rate:2/4); the forged one layer 0's at step 24, the
+#     one unit only r0 decodes there, sampled (rate:1/1), forged at PP_FORGE (default 0:0). With PP_SERVE_STANDIN=1, the same
 #     Commit laid out as a serve-openai run (prove_path.py serve-standin) and audited as a served window.
 #   PP_SERVE_RUN=DIR PP_WINDOW=K PP_SERVE_ROWS=DIR: a serve-openai run's closed Commit window K (default 0), its
 #     advice, requests and engine from the run dir, its Commit from the window's sealed row dir; PP_TARGET=F the
@@ -31,17 +33,41 @@
 #   PP_VLLM_PYTHON=PY: ignored (prove_path.py audit's and circuit's --vllm-python): a TP1 or served window's verifier writes its
 #     own Build of each Program I2 compiles from its compile, with no vLLM, since the rows' names, the parameters' names and
 #     types, supplied, the correspondence and prefix_cache.json are no Program digest's and never read from the row dir.
-#   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256}:
-#     honest subset:4, forged subset:8 (every unit sampled); with PP_PLAIN=1, stratified:4 and stratified:8.
+#   PP_WEIGHTS_TIE=1: the checkpoint tie of vLLM's weights registration at TINY (verity_vllm.program.predict.weights_tie;
+#     its inputs tests/program/predict/weights_tie_fixture): the committer registers checkpoint X's weights and records
+#     its tie window, one SHA-512 chain a shard over the registered rows (the embedding table's row-seg rows a chain of
+#     their own), ending at the verifier's own digest; the verifier makes its tie of X from X's public bytes (the circuit's
+#     SHA-512, the run root, the registered entries and its supplied values), audits the window against it under the
+#     tie's own design, work:N over its N units in members of PP_TIE_CAP units (default 16), which the audit's rule
+#     samples at the rate N/N, so every unit is proved and no output class is passed, and pins the roots only on an
+#     accepting audit whose sample holds every unit. Two refused arms, each audited as holding what it forges and passing
+#     on that one refusal, never on the other's. weights-tie-other: a committer serving checkpoint Y's words as X's, whose
+#     units are their Definition's and whose last units' digest reads open no root (records_audit.py's --forged-read): it
+#     passes on the Lean verifier refusing a session at setup on a row of such a read, its proofs free to leave.
+#     weights-tie-forged: the same with those digests forged to X's, so those units aren't their Definition's (--forged):
+#     it passes on the ZK server releasing no proof of a false member. Each must be refused, and pin nothing.
+#   The stand-in (no PP_TP, no PP_LLAMA): the CPU TP Commit tests/pipeline/served_tp --deferred, world 2, SiluMul_v2{I=256},
+#     8 units a rank: honest rate:1/2 (4 of them sampled), forged rate:1/1 (every unit sampled); with PP_PLAIN=1,
+#     stratified-rate:1/2 and stratified-rate:1/1.
 #   PP_PLAIN=1: plain Flock sessions, not --zk (prove_path.py audit --plain, a5's --plain): one table under a stratified
-#     sample, until multi-table coverage lands, so each partition's law must be stratified:K over a window of one member.
+#     sample, until multi-table coverage lands, so each partition's rule must be a stratified rate over a window of one member.
+#   Which arms pass the rule check: a stream's rule is a rate (service.Law: rate:NUM/DEN, stratified-rate:NUM/DEN or
+#     work-rate:NUM/DEN), and each audit states its partition file's text as the rule: prove_path.py audit, and with
+#     PP_RECORDS=1 records_audit.py, which takes the window's sampling design to be the one that rate names over the window's
+#     own proof blocks. The stand-in states rates, and so does each arm's default partition above (PP_TP, PP_LLAMA, PP_SERVE_RUN
+#     and PP_SERVE_STANDIN), each the rate that samples its window as its text reads at the proof blocks its scope has under
+#     the declared run's advice; a window of more is sampled in proportion. A PP_PARTITION or PP_FORGED_PARTITION that still
+#     states a fixed design (subset:K, stratified:K or work:K) is refused at the rule check, before any session opens, by
+#     either audit, by name. benchmarks/prove_path/tests/test_run_rules.py holds the stand-in's rules to what a stream takes
+#     and lists the partition files, this benchmark's and the one-stage audit's, that still state a fixed design: among them
+#     the transfer-gate example's forged partition below.
 #   PP_KEEP_WINDOWS=DIR: each run's committed windows copied whole to DIR/<name>-windows (the prover's files with them, so
 #   DIR stays on the node, under `research keep`), for a later job such as recursion_e2e/stage.sh WINDOW=DIR/served-windows/rank0.
 #   PP_JOBS=N ranks at once (a GLM-5.3 rank: its bundle window ~2.5 min and ~11 GB, its audit ~10 GB); PP_RANKS=0,3 those ranks
 #   only; PP_FORGE=MEMBER:UNIT the forged unit (default 0:1); PP_ONLY=honest|forged that run alone; PP_FLOCK_WORK=DIR keeps M0's
 #   build across runs. The Llama honest audit peaks at ~20 GB (one process), its forged one well under.
 #   PP_TRANSFER_GATES="T ..." the templates the registered compiler lists as holding transfer gates (--transfer-gate, both
-#   sides), every unit of theirs proved beside the partition's work:K of the rest; PP_SETS="SPEC ..." more input sets, a
+#   sides), every unit of theirs proved beside the partition's work rate's sample of the rest; PP_SETS="SPEC ..." more input sets, a
 #   subcircuit spec each (rope-head/d64/bf16); PP_FORGED_PARTITION the forged run's partition. E.g. Llama TP1 with layer 0's
 #   160 RoPE heads at step 1 as the stand-in transfer gates: PP_PARTITION=benchmarks/prove_path/llama32_1b_tg_l0_step1.json
 #   PP_TRANSFER_GATES='RoPEHead_v1{D=64}' PP_SETS=rope-head/d64/bf16, its forged run PP_FORGED_PARTITION=benchmarks/prove_path/
@@ -66,22 +92,22 @@ REPO=$(pwd); O=${OUT:-$RESEARCH_RUN_DIR/out}; W=$(mktemp -d); trap 'rm -rf "$W"'
 ROW=glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager
 LROW=llama32-1b__bf16__rtxpro6000__tp1__b4__i256__o32__mixed__greedy__bi-eager
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
-{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/flock; } | tee $O/machine.txt
+{ nproc; free -g | head -2; git rev-parse HEAD HEAD:verity/protocols/proofs/flock; } | tee $O/machine.txt
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > $O/sync.log 2>&1 || { tail -20 $O/sync.log; exit 5; }
 PY=$REPO/.venv/bin/python
 
-(cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
+(cd verity/protocols/proofs/flock/verifier && lake build flock-verify flock-firewall) > $O/build-lean.log 2>&1 &
 LP=$!
 mkdir -p $O/m0-build
 FW=${PP_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/proofs/flock/prover/pod/60-circuit.sh > $O/m0-build/build.log 2>&1 \
   || { tail -40 $O/m0-build/build.log; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
-LEAN=$REPO/verity/protocols/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
-(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
+LEAN=$REPO/verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
+(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 PP_CHALLENGER=${PP_CHALLENGER:-local}   # the sample's coins are a challenger's: a local development session unless named
 
@@ -108,8 +134,8 @@ if [ -n "${PP_CHALLENGER:-}" ]; then
     CH+=(--peer $PP_PEER --challenger-key $PP_CHALLENGER_KEY ${PP_GATE_KEY:+--gate-key $PP_GATE_KEY});;
   esac
 fi
-PLAIN=(); LAW=subset; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified
-M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/flock/prover/python:$REPO/adapters/vllm
+PLAIN=(); LAW=rate; [ -n "${PP_PLAIN:-}" ] && PLAIN=(--plain) LAW=stratified-rate
+M0PATH=$REPO:$REPO/benchmarks/numerical/python:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
 # node; its own worker and verifier threads take 64 MiB
@@ -122,6 +148,15 @@ keep() {  # NAME: $W/NAME's records into $O/NAME, among them the circuit each dr
   (cd $W/$1 && find . -type f \( ! -name circuit.txt -o -path './window/m*/circuit.txt' \) ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -path './*/archive/*' \
     ! -path './builds/*' ! -path './proof-edits/*/sessions/*' ! -path './proof-edits/mutants/*/*' ! -path './proof-edits/*/member/*' -print0 \
     | xargs -0 -r -I{} cp --parents {} $O/$1/)
+  # a case's blobs name its files in $W, which the EXIT trap removes: name the kept copies instead
+  (cd $O/$1 && find . -name '*.json' -print0 | xargs -0 -r grep -lZ '"blobs"' \
+    | xargs -0 -r $PY -c 'import json,sys
+w, o = sys.argv[1:3]
+for f in sys.argv[3:]:
+    c = json.load(open(f))
+    if isinstance(c, dict) and isinstance(c.get("blobs"), list):
+        c["blobs"] = [o + b[len(w):] if isinstance(b, str) and b.startswith(w) else b for b in c["blobs"]]
+        open(f, "w").write(json.dumps(c, sort_keys=True))' "$W/$1/" "$(cd $O/$1 && pwd)/")
 }
 run() {  # NAME RUN ADVICE PARTITION RANKS [--forge M:U]: the prover's windows, then the verifier's audit; RUN is the committed
          # run's arguments (--tp-commit DIR --build-root DIR, --bundle DIR --row-dir DIR --workload F, or --serve-run DIR
@@ -215,13 +250,57 @@ elif [ -n "${PP_LLAMA:-}${PP_SERVE_RUN:-}" ]; then
       run llama-forged "$LLAMA" $W/advice.bin ${PP_FORGED_PARTITION:-$STEP24} "" --forge ${PP_FORGE:-0:0} || rc=1
     fi
   fi
+elif [ -n "${PP_WEIGHTS_TIE:-}" ]; then
+  TCAP=${PP_TIE_CAP:-16} F=$W/tie-fixture
+  (cd adapters/vllm && $PY -m tests.program.predict.weights_tie_fixture $F) > $O/tie-fixture.json 2> $O/tie-fixture.err \
+    || { tail -20 $O/tie-fixture.err; exit 8; }
+  WT="$PY -m verity_vllm.pipeline.cli weights-tie"
+  tie() {  # NAME [--served] [--forge-digest]: the committer's registration of X and its tie window (--served: Y's words served
+           # as X's; --forge-digest: its ends' digests forged to X's), the verifier's tie of X, the records audit of the window
+           # against it, and the pins, which only an accepting audit writes. Each arm is a run (and a root) of its own.
+           # The audit is told what a refused window forges: --served, a registered read that opens no pinned root
+           # (--forged-read); --forge-digest after it, a false unit (--forged)
+    local name=$1 forged= id=${RESEARCH_RUN_ID:-local}/$1 commit=() c run units rc pinned; shift
+    for x in "$@"; do
+      case $x in
+        --served) forged=--forged-read; commit+=(--served-dir $F/y/snap --served-manifest $F/y/checkpoints.json);;
+        --forge-digest) forged=--forged; commit+=(--forge-digest);;
+      esac
+    done
+    local common=(--phi $F/phi.json --checkpoint-dir $F/x/snap --manifest $F/x/checkpoints.json
+                  --grain $($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["grain"])' $O/tie-fixture.json)
+                  --cap $TCAP --run-id $id)
+    mkdir -p $O/$name
+    $WT commit "${common[@]}" --key-file $W/$name-key --registration-out $O/$name/registration.json --out $W/$name-window \
+      "${commit[@]}" | tee $O/$name/commit.json || return 1
+    $WT verify "${common[@]}" --registration $O/$name/registration.json --out $O/$name/verifier | tee $O/$name/verify.json || return 1
+    c=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["circuit"])' $O/$name/verifier/tie.json) || return 1
+    run=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["run"])' $O/$name/verifier/tie.json) || return 1
+    units=$($PY -c 'import json, sys; print(json.load(open(sys.argv[1]))["units"])' $O/$name/verifier/tie.json) || return 1
+    mkdir -p $O/$name/window && cp $W/$name-window/{registration,window,index,circuit}.json $W/$name-window/m*-public.bin $O/$name/window/
+    $TIME $PY benchmarks/prove_path/records_audit.py audit --window $W/$name-window --law work-rate:$units/$units --circuit $c --run $run \
+      --registered $O/$name/verifier/registered.json \
+      ${PP_SESSION_TIMEOUT:+--session-timeout $PP_SESSION_TIMEOUT} $forged "${CH[@]}" \
+      --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN --firewall $FWL --out $W/$name > $O/$name/audit.log 2> $O/$name/audit.err
+    rc=$?
+    grep '^RECORDS' $O/$name/audit.log | cut -c1-6000; tail -25 $O/$name/audit.err
+    keep $name
+    $WT pins "${common[@]}" --registration $O/$name/registration.json --summary $W/$name/summary.json --out $O/$name/pins.json \
+      | tee $O/$name/pins-verdict.json
+    pinned=$?
+    if [ -n "$forged" ]; then [ $pinned != 0 ] && [ ! -e $O/$name/pins.json ] || rc=1; else [ $pinned = 0 ] || rc=1; fi
+    return $rc
+  }
+  tie weights-tie || rc=1
+  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-other --served || rc=1
+  [ "${PP_ONLY:-}" = honest ] || tie weights-tie-forged --served --forge-digest || rc=1
 else
   S=$W/served
-  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:4 --deferred) \
+  (cd adapters/vllm && $PY -m tests.pipeline.served_tp $S --world 2 --I 256 --law $LAW:1/2 --deferred) \
     > $O/standin.json 2> $O/standin.err || { tail -20 $O/standin.err; exit 8; }
   mkdir -p $O/standin && find $S/commit -maxdepth 1 -type f -exec cp {} $O/standin/ \;
   $PP advice --workload $S/workload.json --out $W/advice.bin | tee $O/advice.log || exit 8
-  echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$LAW:8\"}" > $W/all.json
+  echo "{\"templates\": [\"SiluMul_v2{I=256}\"], \"law\": \"$LAW:1/1\"}" > $W/all.json
   SI="--tp-commit $S/commit --build-root $S/build"
   run standin "$SI" $W/advice.bin $S/partition.json "${PP_RANKS:-}" || rc=1
   run standin-forged "$SI" $W/advice.bin $W/all.json "${PP_FORGED_RANKS:-0}" --forge $FORGE || rc=1

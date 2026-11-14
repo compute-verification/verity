@@ -6,11 +6,11 @@ beside frame-v3 (`verity.commitments.frame_v3`). Backends select one or the othe
 benchmarked (`benchmarks/commitments/commit_cost.py`). This spec describes existing bytes: it changes none
 of the roots serving emits.
 
-- Reference: `verity_vllm.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `VllmV1(ports)` is the configured
+- Reference: `verity_vllm.commitments.vllm_v1` (plain `hashlib`); backends lower it by §8 and bind §9 in their statements. `Scheme(ports)` is the configured
   `verity.commitments.scheme.CommitmentScheme`, with one verifier-held domain per port (§5). `TREE` is the bare
   tree rule.
-- Vectors: `vectors.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors`. `--check` exits
-  nonzero if the file is stale.
+- Vectors: `vectors.json`, which `adapters/vllm/tests/commitments/vectors.py` renders from the reference; the
+  conformance test fails if the file is stale.
 - Conformance: `adapters/vllm/tests/commitments/test_vllm_v1.py` checks the reference against the
   vectors. `adapters/vllm/tests/commit/test_production_vectors.py` checks vLLM's Python code against them.
 
@@ -65,7 +65,7 @@ Each `fa2h` header is sixteen `u32le` words:
 ### Leaf layouts: what a backend proves
 
 Every `vllm-v1` leaf is `digest = SHA-256(prefix ‖ value)` with no suffix. The digest *is* the tree leaf, so a backend
-proves it, publishes it, and the verifier checks the tree natively. `VllmV1.leaf_layout(port, position)` and the
+proves it, publishes it, and the verifier checks the tree natively. `Scheme.leaf_layout(port, position)` and the
 domains' `leaf_layout` methods return the layout below; the vectors' `layouts` section pins one of each.
 
 | leaf | prefix (public) | prefix length | value |
@@ -76,7 +76,7 @@ domains' `leaf_layout` methods return the layout below; the vectors' `layouts` s
 | id leaf | `u32be(19) ‖ "verity-vllm/leaf/v1" ‖ (u64be(len p) ‖ p)` for id, dtype and shape text, then `u64be(len v)` | varies | the tensor bytes |
 
 A thread port has no layout from its position alone: its header needs the geometry's row validity and
-`n_block_max`. Such a port takes `ThreadDomain.leaf_layout(n_words, **position)`, and `VllmV1.leaf_layout` refuses it.
+`n_block_max`. Such a port takes `ThreadDomain.leaf_layout(n_words, **position)`, and `Scheme.leaf_layout` refuses it.
 
 ## 3. Tree and openings
 
@@ -315,7 +315,7 @@ this verifier-derived position, of this verifier-derived commitment. §5's injec
 (SHA-512 on every commitment path). It is opt-in:
 - every leaf, tree and root function takes `hash="sha512"`;
 - the domain types take a `hash="sha512"` field;
-- `VllmV1` over such domains is named `vllm-v1-sha512`, with `TREE_SHA512` as its bare tree rule.
+- `Scheme` over such domains is named `vllm-v1-sha512`, with `TREE_SHA512` as its bare tree rule.
 
 Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-baseline switches its committers.
 
@@ -347,7 +347,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - The committers hash with SHA-512: the Python `commit.scheme` rules and the FA2 tap's `Verity_sha_ctx`.
 - They match `vectors_sha512.json` byte for byte.
 
-**Vectors.** `vectors_sha512.json`, written by `python -m verity_vllm.commitments.vllm_v1.vectors_sha512`, covers:
+**Vectors.** `vectors_sha512.json`, which `adapters/vllm/tests/commitments/vectors_sha512.py` renders from the reference, covers:
 - H over the node, lift and empty tags;
 - position, chunk and thread leaves;
 - trees of 0–7 leaves with their paths;

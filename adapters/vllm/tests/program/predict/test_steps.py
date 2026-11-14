@@ -48,7 +48,7 @@ from verity.definitions.registry import io_shell as IO
 from verity.definitions.registry import stop_check as SC
 from verity.definitions.registry.topp_geometry import registered_splits
 
-import verity.protocols.certifier.verifier.advice as I1
+import verity.protocols.accounting.certifier.verifier.advice as I1
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.partition_object import calls
@@ -178,7 +178,7 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
 
 def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_seed_salt_or_refused_by_name():
     """A seed is its certified body's or derived from the request's id and the window's seed salt, never one serving fills in
-    or draws: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
+    or samples: with no seed salt, or for a request the window carries in (whose admitting window's seed salt this compile doesn't
     read), an unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
     unseeded = {**STOCH, "seed": None}
     assert policy_of(0, unseeded, 188, request_id="q1", salt=SALT) == (STOCH_POLICY, derived(SALT, "q1"))
@@ -1019,6 +1019,8 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
     ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
+    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 131072"),
+    ({"max_model_len": 262144}, {}, "engine arg max_model_len 262144, not a stated value of at most 131072"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),

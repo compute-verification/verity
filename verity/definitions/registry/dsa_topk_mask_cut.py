@@ -33,7 +33,8 @@ writer sets the bits past its value's to 0 and a reader ignores them.  ``DsaTopK
 to its steps and not a gate for each key: their ties by `DsaRadixTies_v2`, their keys below n by `DsaRowValid_v2` (past a
 block's start, of `DsaRowValidOffset_v1{AT}`) and the whole mask's passes by `DsaRadixPass_v2`.  ``DsaTopKDigitPick_v2`` is
 the pick as Calls to its steps, a batch over the 255 digits it weighs.  The same masks and the same picks, described in a
-fraction of the bytes.  `plan` and `cut` name the `_v1` units.
+fraction of the bytes.  `plan` and `cut` name the `_v2` pick and mask block, which compute what the `_v1`s above do, and
+`DsaTopKDigitCount_v1`.
 """
 from __future__ import annotations
 
@@ -48,7 +49,7 @@ import numpy as np
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, ZERO, add, and_reduce, compress_columns, const_bits, sub
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.refs import Coll, concat, strided_view
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import boolean_dsa_topk_mask as BM
@@ -467,11 +468,11 @@ def plan(N: int, TOPK: int, block: int = BLOCK) -> tuple[Unit, ...]:
             out.append(Unit(("count", k, b), bind(DsaTopKDigitCount, N=hi - lo, AT=lo, K=k), (lo, hi),
                             (("prefix", prev, 0),) if k else ()))
         w = tuple((f"counts_{b}", ("count", k, b), 0) for b in range(len(bl)))
-        out.append(Unit(("pick", k), bind(DsaTopKDigitPick, M=len(bl), K=k, TOPK=TOPK), (0, 0),
+        out.append(Unit(("pick", k), bind(DsaTopKDigitPickV2, M=len(bl), K=k, TOPK=TOPK), (0, 0),
                         w + ((("prefix", prev, 0), ("r", prev, 1)) if k else ())))
     last = ("pick", ROUNDS - 1)
     for b, (lo, hi) in enumerate(bl):
-        out.append(Unit(("mask", b), bind(DsaTopKMaskBlock, N=hi - lo, AT=lo, TOPK=TOPK), (lo, hi),
+        out.append(Unit(("mask", b), bind(DsaTopKMaskBlockV2, N=hi - lo, AT=lo, TOPK=TOPK), (lo, hi),
                         (("key", last, 0), ("r", last, 1 + b))))
     return tuple(out)
 

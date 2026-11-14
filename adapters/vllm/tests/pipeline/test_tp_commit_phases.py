@@ -4,19 +4,19 @@ no `gpu_lease.*` span.  CPU-only: `tp.commit.main` runs over a stand-in LLM of t
 same timeline as they run, so the file says which step ran inside which span."""
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import sys
 from pathlib import Path
-from types import ModuleType
 
 import pytest
 
+from tests import fake_vllm
+from tests.pipeline import served_ranks
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import timeline as T
 from verity_vllm.pipeline.tp import phases as PH
-
-from tests.pipeline import served_ranks
 
 WORKLOAD = {"requests": [{"request_id": "q0", "prompt_token_ids": [1, 2, 3], "max_tokens": 4}], "sampling": {"max_tokens": 4}, "sha256": "w",
             "execution": "bi-eager"}
@@ -26,6 +26,8 @@ RUN = {"wall_s": 0.5, "iterations": 4, "step_wall_s": [0.2, 0.1, 0.1, 0.1], "ste
 class _LLM:
     """`vllm.LLM` over two ranks: building it and every `collective_rpc` but the CPU readings around a run mark the timeline (``LLM``,
     ``rpc.<method>``); each rpc answers one dict per rank, but the ``n``-th call of the method ``fails`` names raises."""
+
+    calls: dict[str, int]
 
     def __init__(self, mark: T.Timeline, fails: tuple[str, int] | None = None, ranks: int = 2) -> None:
         self.mark, self.fails, self.ranks, self.calls = mark, fails, ranks, {}
@@ -86,9 +88,10 @@ def test_a_tp_commit_writes_each_phase_around_its_gpu_steps_and_ends_the_one_a_f
         return dict(RUN)
 
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "0")
-    vllm = ModuleType("vllm")
-    vllm.LLM = llm
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
+    # The rank worker arms the serving switches when it is imported, once a process, on the vLLM modules `sys.modules` holds then: before
+    # the stand-in, whose sampler module holds no split for `engine.topp_pin` to pin.
+    importlib.import_module("verity_vllm.pipeline.tp.rank_worker")
+    fake_vllm.install(monkeypatch).set("vllm:LLM", llm)
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     for owner, name, value in [(prof, "apply_env", lambda: {}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (va, "load_workload", lambda path, max_tokens: WORKLOAD),

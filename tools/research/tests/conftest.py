@@ -1,14 +1,29 @@
 """Every test gets its own evidence store: `research run` publishes an attempt at the end, and that must never land in the
 developer's ~/.research/store.  And every test starts without credentials or a recording run's variables: tests start runs of
-their own, which would inherit them."""
+their own, which would inherit them.  And they check this tree's `research`, whatever PYTHONPATH holds."""
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import signal
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
+
+#: the tree these tests check. A `research` earlier on PYTHONPATH (a `research run` job puts its tool snapshot first) would be what
+#: they import and what the Pythons they start run, and a file a test takes from beside the code (store.pod.toml) would be sought
+#: beside that copy: the tree's goes first then, in this process and in the PYTHONPATH every test's children inherit
+SRC = Path(__file__).resolve().parents[1] / "src"
+_found = importlib.util.find_spec("research")
+SHADOWED = _found is None or not Path(_found.origin or "/").resolve().is_relative_to(SRC)
+if SHADOWED:
+    if "research" in sys.modules:
+        raise RuntimeError(f"research was imported from {_found.origin} before {__file__}, so these tests would check that copy and "
+                           f"not {SRC}: run them with no other `research` on PYTHONPATH (env -u PYTHONPATH)")
+    sys.path.insert(0, str(SRC))
 
 #: a cloud VM's Cursor secrets stand in for the laptop's config files (pods/runpod.py, store/remote.py), a recorded check's step
 #: holds its run's variables, and a pod's shell its own: no test may reach the real account or bucket, or act as a run, through them
@@ -22,6 +37,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     for k in list(os.environ):
         if k.startswith(CLEARED):
             monkeypatch.delenv(k)
+    if SHADOWED:
+        monkeypatch.setenv("PYTHONPATH", str(SRC), prepend=os.pathsep)
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path_factory.mktemp("store")))
     # ... and never the developer's ~/.research/store.toml remote (an S3 config without credentials in the test env would otherwise
     # be what every test sees).  Tests that want a remote point RESEARCH_STORE_CONFIG at their own file.
@@ -47,6 +64,8 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     # ... nor cpu-1's rule that a run comes through a check slot (/etc/vy/runs-via-slot)
     monkeypatch.setenv("RUNS_VIA_SLOT_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-runs-via-slot"))
     monkeypatch.setenv("NODE_SLOT_ONLY_FILE", str(tmp_path_factory.mktemp("slot-only") / "absent-slot_only.py"))
+    # ... nor what a node requires of a shipped research package (/usr/local/lib/vy-monitoring/tool_rules.py)
+    monkeypatch.setenv("NODE_TOOL_RULES_FILE", str(tmp_path_factory.mktemp("tool-rules") / "absent-tool_rules.py"))
     # ... nor an auditor host's list of the only commands it runs (/etc/vy/auditor)
     monkeypatch.setenv("AUDITOR_FILE", str(tmp_path_factory.mktemp("auditor") / "absent-auditor"))
     # ... nor its learned bundle sizes: on vy-nebius-1 the pacer mirrors them to /workspace/jobs/dispatch/bundle-sizes.json
@@ -66,10 +85,20 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
     # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
     monkeypatch.setattr("research.auto._reach", _unreachable)
+    # ... nor is a pod's address or RunPod's call log kept in the developer's state directory (pods/runpod.py), nor a host
+    # asked for its key at an address a test made up: nothing answers at one unless a test says who does
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path_factory.mktemp("state")))
+    monkeypatch.setattr("research.pods.runpod.run", _no_host)
+    monkeypatch.setattr("research.pods.runpod._KEPT", set())
+    monkeypatch.setattr("research.pods.runpod._SAID", set())
 
 
 def _unreachable(name: str) -> list[str]:
     raise RuntimeError(f"a test reaches no machine ({name})")
+
+
+def _no_host(argv: list[str], **_kwargs) -> subprocess.CompletedProcess:
+    return subprocess.CompletedProcess(argv, 255, "", "ssh: connect to host 203.0.113.1 port 22: Connection refused\r\n")
 
 
 @pytest.fixture(autouse=True)
@@ -81,6 +110,17 @@ def _isolated_git(monkeypatch, tmp_path_factory):
     cfg.write_text("[user]\n\tname = t\n\temail = t@t\n[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n")
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(cfg))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+
+
+@pytest.fixture(autouse=True)
+def _no_asker_left(monkeypatch):
+    """No test leaves an asker behind: a launch `--on auto` sends to a pool would start one, a detached process that outlives
+    the test and asks the real machines (research.asker.start). The launches it would have started, as it was given them."""
+    from research import asker
+
+    started: list[dict] = []
+    monkeypatch.setattr(asker, "start", lambda root, m: started.append(m) or 4242)
+    return started
 
 
 @pytest.fixture

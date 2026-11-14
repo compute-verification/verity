@@ -8,14 +8,15 @@ Every path git sees changed must be one of:
 - an edit, in place or with a rename, to a text file that leaves it unchanged once each moved path in it (from the root, also
   after a variable such as `$REPO/`) is rewritten to where it is now or, in a line, left as it was (a top-level directory's
   name is also a word: `examples` in prose, a JSON key, a function's name), in `RELATIVE_NAMES` a quoted relative path (`".."`, `"../level3"`) resolved against
-  the file's own directory first (in a `*.md` file, one in backticks or a link's target), in a `*.py` file a pathlib
+  the file's own directory first (in a `*.md` file, one in backticks or a link's target; in a Lake file, a requirement's
+  `path` and a path package's `dir` also where written with no leading dot, `"composition"`), in a `*.py` file a pathlib
   chain `ROOT / "a" / "b"` read as `"a/b"`. A changed line may also, the rest of it kept byte for byte, rewrite each
   place it names from the file's own to name, from where the file now is, where that place moved (`placed`): a relative path from the file's directory (`../../verity/x/`, in a
   comment, prose or code), a path below a moved directory the file is in and stays in (`rho/circuits.py` in a file of
-  `verity/protocols/inference_only/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
+  `benchmarks/rho/`, a path BASE has), or in a `*.py` file a pathlib join on a name the file binds only to its own place
   (`HERE.parent / "rho"` after `HERE = Path(__file__).resolve().parent`). Each changed line left may only rewrite a
   moved path as written below a directory its old and new places share (`verity_vllm/program/predict/`), or a dotted
-  name (`verity.protocols.flock.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
+  name (`verity.protocols.proofs.flock.prover.tool:FLOCK_PURE`, `verity_vllm.protocols.remote_bandwidth`'s) from where a renamed module was
   to where it is now; in any of them, the modules a run of import lines binds each name to
   (`from a import m as M` to `from b import m2 as M`, a line split in two, a `from a import (x,` whose names go on
   past the change, or a `from a import x, \\` (`rules`'s `continued`); in a heredoc, or in a string literal
@@ -61,8 +62,10 @@ Every path git sees changed must be one of:
   not run by path (`tests/`, `lean/`), and no higher than the root of that file's package after the move (`[roots] new`
   of a path map under `tools/move/` at BASE): the package level `tools/move/layout.py` writes so the module imports by
   its new name. And a
-  deleted `__init__.py` of a package the range's moves took away: files left its directory by a rename and HEAD has none
-  at or below it (`rules`'s `emptied` in the `--json` report);
+  deleted `__init__.py` of a package the range's moves took away (files left its directory by a rename and HEAD has none
+  at or below it; `rules`'s `emptied` in the `--json` report) that holds nothing but whitespace and comments at BASE, read
+  by the mover's own `only_comments`: one with a docstring, code, or text that doesn't parse is refused, and it gets a row
+  in the map saying where it goes or a hand commit before the move that deletes it;
 - an edit to a shell script that recounts a path after a variable the script sets once to its own directory
   (`here=$(cd "$(dirname "$0")" && pwd)`, then `$here/../..`), as a path from its own directory is (`rules`'s `anchor`);
 - a list of paths rewritten as a cover (`rules`'s `cover`): a list `tools/move/layout.py` reads as one (its `lists`: a
@@ -77,7 +80,7 @@ Every path git sees changed must be one of:
 - on a line none of these explains, what the move's own path map says beyond the renames (`Rows`): the map each commit of
   the range names (`Layout-move: tools/move/NAME.toml`, `tools/move/stage.py`'s line), read as BASE has it. A reference to
   a directory the map splits may go where its `[tokens]` row sends it, or stay, when the range bears the row out (part of
-  the directory is now below the row's): the directory itself (`verity/protocols/flock/prover/`, also as a pathlib chain or a quoted
+  the directory is now below the row's): the directory itself (`verity/protocols/proofs/flock/prover/`, also as a pathlib chain or a quoted
   relative path), a pattern below it, and a path below it that names nothing at BASE; a path below it that BASE has
   follows only its own move. In a `*.py` file an anchor that names the directory (`Path(__file__).parents[1]`) may be
   recounted to name, from where the file now is, where the row sends it. On such a line a moved path, or such a
@@ -112,7 +115,7 @@ Anything else is refused, with what differed and its first offending hunk. Exit 
 git error.
 
 The path map comes from the renames. Each rename contributes the shortest prefix pair (old directory, new directory) whose
-whole subtree in BASE moved there file by file. When only `verity/protocols/pous` moved, `protocols -> security_proofs` is never
+whole subtree in BASE moved there file by file. When only `verity/protocols/accounting/pous` moved, `protocols -> security_proofs` is never
 inferred. Renames are git's exact ones, and its similar ones (`-M`) as candidates, each edit then judged as above; a file
 below a directory that moved whole is paired with its place there, whichever identical file git paired it with. A deleted
 path is paired with the added one a word map at BASE moves it to, and an in-place edit of a path a word map moves to a path
@@ -414,7 +417,9 @@ def module_sub(text: str, mods: dict[str, str]) -> str:
 
 def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
     """Each quoted relative path (in Markdown, in backticks or a link's target), as `<root>/` and the repository path it names
-    from `path`'s directory, mapped by `pmap`."""
+    from `path`'s directory, mapped by `pmap`. In a Lake file, a path to another package is one with no leading dot too
+    (`path = "composition"`, a package inside the requiring one): Lake reads it from the package's directory, and
+    `tools/move/layout.py` rewrites it as one (its `lake_spans`)."""
     here = posixpath.dirname(path)
 
     def rooted(rel: str) -> str | None:
@@ -422,6 +427,9 @@ def resolve_relative(text: str, path: str, pmap: dict[str, str]) -> str:
         return None if p.startswith("..") else f"<root>/{map_path(p, pmap)}"
     if path.endswith(".md"):
         return MD_RELATIVE.sub(lambda m: rooted(m.group(0)) or m.group(0), text)
+    for a, b in reversed(_rename().L.lake_spans(posixpath.basename(path), text)):
+        if not text[a:b].startswith(".") and (r := rooted(text[a:b])):
+            text = text[:a] + r + text[b:]
     return RELATIVE.sub(lambda m: (r := rooted(m.group(2))) and f"{m.group(1)}{r}{m.group(1)}" or m.group(0), text)
 
 
@@ -1108,7 +1116,7 @@ class Rows:
 
     `[tokens]`: where a reference to a directory the map splits goes. A row counts only where the range bears it out: a
     directory of BASE that didn't move whole, part of it now below the row's directory; two maps that disagree on a
-    directory name it nowhere. It reads the directory itself (`verity/protocols/flock/prover/`, `verity/protocols/flock/prover/*.patch`) and a path
+    directory name it nowhere. It reads the directory itself (`verity/protocols/proofs/flock/prover/`, `verity/protocols/proofs/flock/prover/*.patch`) and a path
     below it that names nothing at BASE (a file a test makes up); a path below it that BASE has follows only its own move.
 
     `[split]`: for one file (by its path at BASE) and one such directory, the part the file means by it (`{ to = "..." }`),
@@ -1407,7 +1415,7 @@ TOKEN_CHAR = re.compile(r"[^\s\"'`()\[\]{}<>,;=]")
 
 def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) -> tuple[str, dict] | None:
     """The word map a move with `scope = "prose"` renames by (``path``, else the `Move:` line of HEAD's message), as BASE has
-    it; None for any other move."""
+    it, its words in `[words]` or all scoped to files (`[[words_in]]` under an empty `[words]`); None for any other move."""
     if path is None:
         m = MOVE_LINE.search(git("log", "-1", "--format=%B", head, cwd=cwd).decode(errors="replace"))
         path = m and m.group(1)
@@ -1415,7 +1423,7 @@ def scoped_map(base: Tree, head: str, cwd: str | None, path: str | None = None) 
         data = tomllib.loads(base.text(path) or "") if path else {}
     except tomllib.TOMLDecodeError as e:
         raise SystemExit(f"move-check: the move's word map {path} doesn't parse at BASE: {e}") from e
-    return (path, data) if data.get("scope") == "prose" and data.get("words") else None
+    return (path, data) if data.get("scope") == "prose" and (data.get("words") or data.get("words_in")) else None
 
 
 class Terms:
@@ -1707,7 +1715,8 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
 
     def emptied(d: str) -> bool:
         """Whether the range's moves took the package at `d` away: files left it by a rename, and HEAD has none at or below
-        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it)."""
+        it, so the `__init__.py` that marked it has nothing to mark (the mover deletes it if it holds nothing but comments
+        and whitespace, and refuses the move otherwise)."""
         return not H.has_dir(d) and any(o.startswith(d + "/") for o, _ in renamed)
 
     went, created = dict(renamed), {e["new"] for e in entries if e["status"] == "A"}
@@ -1751,7 +1760,12 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             wa, wb = between(a, (a0, a1), [m.span() for m in px]), between(b, (b0, b1), [m.span() for m in py])
             if len(wa) != len(wb):
                 continue
-            if all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
+            # a list that has each old entry where the range sent it whole is judged as any line is; one that hasn't may be a
+            # cover (the mover writes a directory its rows emptied as the places its files went, and drops one that another
+            # entry already holds)
+            to_whole = collections.Counter(form(m, map_path(m["p"], pmap)) for m in px)
+            landed = collections.Counter(form(y, y["p"]) for y in py)
+            if to_whole == landed and all(now(f) == map_path(m["p"], pmap) + f[len(m["p"]):] for m in px for f in B.below(m["p"])):
                 continue
             files = [{n for f in B.below(m["p"]) if (n := now(f)) is not None} for m in px]
             held, was, news = set().union(*files), {form(m, m["p"]) for m in px}, {form(y, y["p"]) for y in py}
@@ -1759,8 +1773,10 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
                      **({form(m, rows.parts[old, m["p"]]): "split"} if (old, m["p"]) in rows.parts else
                         {form(m, rows.tokens[m["p"]]): "tokens"} if m["p"] in rows.tokens else {})} for m in px]
             has = {f for y in py for f in H.below(y["p"])}
-            # an old entry is gone unless the list has it as the range or its row sends it and not its other files
+            # an old entry is gone unless the list has it as the range or its row sends it and not its other files; one sent
+            # whole onto a place the list has no more often than before, which therefore holds its files, is gone too
             gone = [not news & to.keys() or (fs <= has and any(now(f) != w + f[len(m["p"]):] for f in B.below(m["p"])))
+                    or (fs <= has and (fw := form(m, w)) != form(m, m["p"]) and to_whole[fw] > landed[fw])
                     for m, fs, to in zip(px, files, sent) for w in [map_path(m["p"], pmap)]]
             anew = [y["p"] for y in py if form(y, y["p"]) not in was]
             lost = any(x["p"].endswith("/__init__.py") and now(x["p"]) is None and emptied(posixpath.dirname(x["p"])) for x in px)
@@ -1856,6 +1872,11 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             report["rules"].setdefault("drop", []).append(old)
             continue
         if st == "D" and posixpath.basename(old) == "__init__.py" and emptied(posixpath.dirname(old)):
+            if not _rename().L.only_comments(B.text(old)):
+                refuse(e, "deleted: the `__init__.py` of a package the range emptied, which holds more than comments and "
+                          "whitespace at BASE: give it a row in the map saying where it goes, or delete it in a hand commit "
+                          "before the move")
+                continue
             report["edits"].append({"path": old, "kind": "emptied package"})
             report["rules"].setdefault("emptied", []).append(old)
             continue

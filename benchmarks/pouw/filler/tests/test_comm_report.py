@@ -4,18 +4,13 @@ are skipped, and a point whose KV cache wrapped is flagged."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import sys
-from pathlib import Path
 
 import pytest
+from conftest import load
 
-_spec = importlib.util.spec_from_file_location("tpcomm_report",
-                                               Path(__file__).resolve().parents[1] / "comm" / "report.py")
-R = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = R
-_spec.loader.exec_module(R)
+R = load("comm/report.py")
 
 MHZ = 2000.0
 PEAK = 1024 * 188 * MHZ * 1e6
@@ -133,7 +128,7 @@ def test_proved_fraction_by_fold():
     # DuoQuadNoKernel; five or more words and the served receipt's projected form are open), ram binds word pairs only
     # (half); r9's XOR family (LI, XIN13) reads at ram's proved half, provisional, until the select-charging lemma lands
     assert R.proved_fraction(2, False, 64) == pytest.approx(0.9)
-    assert R.proved_fraction(4, False, 64) == pytest.approx(0.45)             # round 3's rem fill K was 2x this
+    assert R.proved_fraction(4, False, 64) == pytest.approx(0.45)             # half of duo's: ram binds a pair of words
     assert R.proved_fraction(4, True, 64) == pytest.approx(0.45)
     assert R.proved_fraction(None, False, None) == pytest.approx(0.9)         # no fold recorded: word-binding reading
     assert R.fold_label(2, False) == "duo"

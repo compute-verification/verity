@@ -11,12 +11,6 @@ parts, `PARTS`, the last of which is `MOVABLE`. Its side stream takes `DEFERRED`
 side lane (tile hashing), and the screen stays on the main lane. v0.4's phase names ``before``, ``gemm`` and ``after`` are
 still accepted, each as its part, and deprecated; their one ``after`` can't be split, so they get no side stream.
 
-An arm may have ``prefetch(dev, call, shape, flags)`` (optional, v0.6): before a flag set's first gate at a shape, the
-harness syncs the device and calls it on each call it is about to gate (`refs.prefetch`), so an arm whose gate recomputes
-outputs on the host can start those references, in `refs.pool()` (a process pool of the job's CPUs), while the first gate
-runs. It only starts work: the gate still takes what it compares against from the device as it is at the gate, and ignores
-a reference made from other inputs. An arm without it is gated as before.
-
 `build` returns the arm's build record (JSON), which names its ``binaries`` (v0.3): the path of every cubin, fatbin or
 library its kernels are loaded from, ``[]`` if they all come from libraries mapped into the process (those the SASS gate
 finds itself; a cubin loaded with ``cuModuleLoadData`` is never mapped, so it must be listed). `sass_gate.py` passes each
@@ -54,13 +48,13 @@ control is rejected only by a line that starts with ``REJECT`` and names its sha
 The record may also name the kernel it runs and what the attempt is (v0.5), which `verify.py` writes into the attempt's
 evidence-store record (`ledger.py`, kind ``kernel-attempt/v1``):
 
-- ``variant``: the kernel as `verity.protocols.pouw.verifier.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
+- ``variant``: the kernel as `verity.protocols.accounting.pouw.verifier.serving.KernelVariant` names it, from `ledger.variant_record` (family, device,
   schemes, the digest of the sources it was built from, the binary's digest, and ``prices``: the priced path it runs,
   such as ``cast-8.72`` or ``lut256``, `price_twins`' names).
 - ``lineage``: ``parent`` (the art: id of the attempt it changes, or that attempt's variant id), ``approach``
   (``<campaign>/<slug>``), ``mechanism`` (namespaced tags such as ``pipeline:tma-ws``), ``hypothesis`` (one line), ``panel``
   (``{"line", "version", "attempt"?, "change"?}``), ``scheme``, ``schedule``, and ``phase_groups`` (each chain phase,
-  before, gemm and after, as `verity.protocols.pouw.verifier.serving.GROUPS`).
+  before, gemm and after, as `verity.protocols.accounting.pouw.verifier.serving.GROUPS`).
 
 γ is never declared here: the ledger looks it up from the Lean-pinned price twins of the panel version's statement on the
 variant's priced path, at both FP32 prices. A lineage with ``gamma`` gets no record.
@@ -71,18 +65,25 @@ from __future__ import annotations
 import importlib
 import re
 import string
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
+
+#: what the harness's modules, `pearl_c_sm90/overhead_arm.py` and the tests read
+__all__ = [
+    "ArmError", "BenchArm", "Buffer", "DEFERRED", "GROUPS", "GateResult", "MOVABLE", "OperandSet", "PARTS", "Shape",
+    "VERSION", "Work", "check_arm", "check_gate", "check_verifier", "load", "phase_parts", "side_split",
+]
 
 VERSION = "v0.6"
-#: a call's step groups, in the order its main lane runs them; must equal verity.protocols.pouw.verifier.serving.GROUPS
+#: a call's step groups, in the order its main lane runs them; must equal verity.protocols.accounting.pouw.verifier.serving.GROUPS
 GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
-#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity.protocols.pouw.verifier.serving.MOVABLE
+#: the groups nothing later in the call reads, so they may leave the main lane; must equal verity.protocols.accounting.pouw.verifier.serving.MOVABLE
 MOVABLE = frozenset({"tile_hash", "screen"})
 #: the chain's parts (`chain.py`), each the groups it runs, in order
 PARTS = {"before": ("row_seeds", "a_tree", "forming"), "gemm": ("gemm", "cleanup"), "after": ("tile_hash", "screen")}
 #: the groups the chain's side stream takes: the served deferred schedule's side lane, so must equal
-#: verity.protocols.pouw.verifier.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
+#: verity.protocols.accounting.pouw.verifier.serving.DEFERRED.side; moving more of `MOVABLE` would time a schedule nobody serves
 DEFERRED = frozenset({"tile_hash"})
 VERIFIER_FIELDS = {
     "run": ("python", "run_dir", "run_id", "commit", "arm"),
@@ -181,8 +182,8 @@ class Call(Protocol):
 
 @runtime_checkable
 class BenchArm(Protocol):
-    """A prover under test: its build, gates, timed call, work and verifier. Optional, and so not members here: ``dump``
-    (v0.5) and ``prefetch`` (v0.6), the module's docstring."""
+    """A prover under test: its build, gates, timed call, work and verifier. Optional, and so not a member here: ``dump``
+    (v0.5), the module's docstring."""
 
     name: str
     stream: str
@@ -240,8 +241,6 @@ def check_arm(arm: Any, precisions: set[str]) -> None:
                if not hasattr(arm, m)]
     if missing:
         raise ArmError(f"arm lacks {missing}")
-    if getattr(arm, "prefetch", None) is not None and not callable(arm.prefetch):
-        raise ArmError(f"arm {arm.name}: prefetch must be callable (dev, call, shape, flags), not {arm.prefetch!r}")
     if arm.stream not in STREAMS:
         raise ArmError(f"arm {arm.name}: stream {arm.stream!r} not in {STREAMS}")
     if arm.inputs not in INPUTS:

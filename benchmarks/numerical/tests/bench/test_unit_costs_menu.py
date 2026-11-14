@@ -1,10 +1,14 @@
-"""F6's pinned menu: each bucket's B is the cheapest at its public session count among those that are in range, fit one
-node and stay in the sampling design's fitted D, with the outer proof's cost when given and on the inner alone without it."""
+"""The pinned menu: each bucket's B is the cheapest at its public session count among those that are in range, fit one
+node and stay in the fit's D, with the outer proof's cost when given and on the inner alone without it."""
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 
 import pytest
+from verity_flock import rec_residuals as RR
+from verity_flock.rec_algebra import Shape
 
 from verity_numerical.bench import unit_costs_menu as M
 from verity_numerical.bench import unit_costs_padding as P
@@ -124,11 +128,8 @@ def test_the_lean_menu_lists_each_model_s_entries():
 
 def test_the_pinned_lean_menu_is_generated_from_the_pinned_menu_json():
     """`VStar.Menu.Pinned` is `lean` of F6's pinned `menu.json` (`data/f6-menu.json`), byte for byte."""
-    import json
-    from pathlib import Path
-
     here = Path(__file__).resolve()
-    pinned = here.parents[4] / "verity/protocols/flock/verifier/VStar/Menu/Pinned.lean"
+    pinned = here.parents[4] / "verity/protocols/proofs/flock/verifier/VStar/Menu/Pinned.lean"
     mn = json.loads((here.parent / "data/f6-menu.json").read_text())
     assert M.lean(mn, "`benchmarks/numerical/tests/bench/data/f6-menu.json`") == pinned.read_text()
 
@@ -180,13 +181,9 @@ def test_a_shape_takes_its_largest_positions_from_the_rows_instances():
 
 
 def test_v_star_stages_the_reps_algebra_at_16_claims_and_refuses_past_the_lone_part_bound():
-    """proofs' blocker: at m 35, k_log 27 and 16 claims the
-    batched-T residual alone needs more sha512x3 slots than a part holds, so it takes a part of its own (at most
-    ``MAX_LONE_SLOTS``) and V* stages the algebra in 3 parts. At m 26, k_log 24 and 28 claims it needs 300 alone, past
-    that bound, and V* refuses (the control of `test_vstar_menu.py`)."""
-    from verity_flock import rec_residuals as RR
-    from verity_flock.rec_algebra import Shape
-
+    """At m 35, k_log 27 and 16 claims the batched-T residual alone needs more sha512x3 slots than a part holds, so it
+    takes a part of its own (at most ``MAX_LONE_SLOTS``) and V* stages the algebra in 3 parts. At m 26, k_log 24 and 28
+    claims it needs 300 alone, past that bound, and V* refuses (the control of `test_vstar_menu.py`)."""
     products, why = M.rep_algebra(35, 27, 16)
     assert products > 4900 and why is None
     assert len(RR.parts(RR.spec(Shape(35, 27, 16)))) == 3

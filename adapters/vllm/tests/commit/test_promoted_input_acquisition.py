@@ -10,19 +10,28 @@ substituted).  Nothing here names a model, a vLLM class or a module path of the 
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from verity_vllm.commit import binding as B  # noqa: E402
-from verity_vllm.query.manifest.bind import Binder  # noqa: E402
-from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta, _StepJob, _dtype_name  # noqa: E402
+from verity_vllm.commit import binding as B
+from verity_vllm.commit.committer.native_host import (
+    NativeHostCommitter,
+    TensorMeta,
+    _dtype_name,
+    _StepJob,
+)
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.bind import Binder
 
 V, H, TOKENS = 8, 16, 3
-PD = hashlib.sha256(b"program").hexdigest()
+PD = hashlib.sha512(b"program").hexdigest()
 
 
 # ------------------------------------------------------------------------------------------------------------ the tiny module tree
@@ -103,7 +112,7 @@ def _cpu_committer(model, *, acquire_classes: set[str], manifest: dict) -> tuple
     with pytest.MonkeyPatch.context() as mp:
         mp.setenv("VERITY_RETAIN", "host")
         c = NativeHostCommitter(_Engine(model), hash_threads=1, program_digest=bytes.fromhex(PD), acquire_classes=acquire_classes,
-                                staging="direct", geo_digest=hashlib.sha256(b"geo").digest())
+                                staging="direct", geo_digest=hashlib.sha512(b"geo").digest())
     c._start_worker = lambda: None                                             # the worker hashes CUDA jobs; the test commits its step itself
     pia = B.promoted_input_acquisition(manifest)
     assert pia["problems"] == [], pia["problems"]

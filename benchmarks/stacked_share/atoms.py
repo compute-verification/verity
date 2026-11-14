@@ -1,5 +1,5 @@
 """The atoms `frontier.py` composes, counted: each Definition of the exact-int8 profile a composition reads (vLLM's registry:
-`int8_exact`, `moe`, `b1`, `act`), bound at a model's statics and counted by property/v1 (`verity.definitions.circuits.stacking.count`)
+`int8_exact`, `moe`, `b1`, `act`), bound at a model's statics and counted by property/v1 (`verity.circuits.stacking.count`)
 with the run dependence `frontier.DYN` gives its family. An atom's record: its units by class, the gates property/v1 refuses,
 the s8 family's proven steps and their products, the proven affine maps, and its units by ``primitive|class``
 (`units.by_primitive`, every composite expanded). A fitted family (`frontier.FITTED`, the attention row and the KV window) is
@@ -16,17 +16,18 @@ import argparse
 import json
 import re
 import sys
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any
+
+import frontier as F
+import units as U
+
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import stacking as P
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-
-import frontier as F  # noqa: E402
-import units as U  # noqa: E402
-from verity.definitions.circuits import stacking as P  # noqa: E402
-from verity.circuits.defs import REGISTRY, bind  # noqa: E402
 
 
 def registry() -> Any:

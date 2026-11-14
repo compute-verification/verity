@@ -1,17 +1,18 @@
 # The vLLM demo: the remote protocol on a served H200
 
-The vLLM demo is the runnable form of the **remote protocol** (`verity/remote/v0`, in `verity/protocols/remote/verifier/`):
+The vLLM demo is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
+period as its work, which no configuration names, in `verity/protocols/compose/verifier/remote/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
-- **integrity**, by sampled proofs' one-stage audit (`verity/protocols/spot/`): every value the serving
+- **integrity**, by sampled proofs' one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
-- **work**, by proof of useful work (PoUW, `verity/protocols/pouw/verifier/`), on the served model itself: the endpoint
+- **work**, by proof of useful work (PoUW, `verity/protocols/accounting/pouw/verifier/`), on the served model itself: the endpoint
   serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
-- **the inference-only policy** (`verity/protocols/inference_only/verifier/nci/`): the registered circuit divides into inference
+- **the inference-only policy** (`verity/protocols/policy/inference_only/verifier/nci/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
   declared division yet.
 
@@ -24,7 +25,7 @@ is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is prove
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
-itself, to `SampledKSLiveV3`'s event (`verity/protocols/remote/verifier/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
+itself, to `SampledKSLiveV3`'s event (`verity/protocols/compose/verifier/remote/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
@@ -51,7 +52,7 @@ directory holds what is the demo's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
-Onsite (`verity/onsite/v0`, in `verity/protocols/onsite/verifier/`) is remote's superset: it adds PoUS, PoUB
+Onsite (`verity/onsite/v0`, in `verity/protocols/compose/verifier/onsite/`) is remote's superset: it adds PoUS, PoUB
 (`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
 isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and
@@ -61,8 +62,10 @@ gets no verdict.
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
 challenger is an auditor host reached through its gate, and its live coins are PoUW's always and sampled proofs' when
-`PP_CHALLENGER` names it; otherwise a local development challenger session on the endpoint's node samples the proof
-blocks, which shows the path but is no auditor's coins. The verifier flips no coins of its own. The other three are not
+`PP_CHALLENGER` names it, V3c's audit, the sampled-proofs audit of record, among them. Otherwise a local development
+challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
+`served_verdicts.sh` takes it only in a development run, which the demo's `placement.toml` says it is (`DEVELOPMENT=1`).
+The verifier flips no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
 challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the developer
 doesn't control.
@@ -81,7 +84,9 @@ doesn't control.
   varied traffic.
 - `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
   workload dirs, and the flags the run recorder starts each run with, among them the gate PoUW's coins come from.
-  `run.sh` hands a run's script its node's paths as its environment, so no script names a node.
+  `run.sh` hands a run's script its node's paths as its environment, so no script names a node. It holds no machine's
+  address: the gate's value names the variable that holds the challenger host's (`VY_CHALLENGER_1_HOST`), which
+  `run.sh` fills from the environment the demo is launched in, and without it the window run starts nothing and says so.
 - `workloads/` keeps a bf16 RTX PRO 6000 workload, which the demo doesn't serve.
 
 ## Commands

@@ -6,7 +6,7 @@ kernel block 256 over ratio 4), and the block table's row at max_model_len 1,048
 numbers under `vllm/models/deepseek_v4/` unless named.
 
 One GPU process writes `<out>/dsv4_decode_index_row_capture.json`, the property record `dsv4_decode_index_row_capture`
-(`properties.record`), and the kernel's PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one
+(`records.property_record`), and the kernel's PTX (and SASS where Triton's bundled `cuobjdump` runs) under `<out>/ptx/`; it prints one
 line per launch and per case, then `DSV4-DECODE-INDEX-ROW GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs
 first and nothing else runs when it fails (exit 3).  A case that raises records its error and fails its cases without stopping
 the others.  The operands are the integers a decode step holds (`requests`), so no model is loaded.  The kernel reads no position:
@@ -66,15 +66,17 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics import dsv4_decode_indices_twin as T
+from verity.definitions.registry import dsv4_decode_indices as R
 
 from tests.properties import dsv4_compressor_capture_gpu as CX
 from tests.properties import dsv4_flashmla_capture_gpu as FX
 from tests.properties import dsv4_indices_capture_gpu as IX
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity.definitions.numerics import dsv4_decode_indices_twin as T
-from verity.definitions.registry import dsv4_decode_indices as R
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-decode-index-row-capture/v1"
 RECORD = "dsv4_decode_index_row_capture.json"
@@ -134,7 +136,7 @@ def served_rows(case: str, rng) -> tuple[np.ndarray, np.ndarray]:
     """Per served request its top-k row (min(q, TOPK) distinct ids below its compressed count q = (position + 1) // 4, q - 1 among
     them, then -1) and its block row (its cdiv(q, BS) block ids, then junk words), as words."""
     st = statics(case)
-    topk = np.full((len(POSITIONS[case]), st["TOPK"]), -1, dtype=np.int64)
+    topk: np.ndarray = np.full((len(POSITIONS[case]), st["TOPK"]), -1, dtype=np.int64)
     blocks = rng.integers(0, 1 << 32, (len(POSITIONS[case]), st["NB"]), dtype=np.uint64).astype(np.int64)
     for r, p in enumerate(POSITIONS[case]):
         q = (p + 1) // RATIO
@@ -153,7 +155,7 @@ def edge_table(case: str, rng) -> np.ndarray:
     """The edge chunk's block rows: block numbers 2^25 + j (each product by BS wraps); INT32_MAX, INT32_MIN, -1, 0, 1, 2^26 - 1,
     2^25, 2^25 - 1 in turn; random words; ids below NUM_BLOCKS; every word -1; random words."""
     nb = statics(case)["NB"]
-    special = np.resize(np.array([I32_MAX, I32_MIN, -1, 0, 1, (1 << 26) - 1, 1 << 25, (1 << 25) - 1]), nb)
+    special: np.ndarray = np.resize(np.array([I32_MAX, I32_MIN, -1, 0, 1, (1 << 26) - 1, 1 << 25, (1 << 25) - 1]), nb)
     words = rng.integers(0, 1 << 32, (2, nb), dtype=np.uint64).astype(np.int64)
     return _w(np.stack([(1 << 25) + np.arange(nb), special, words[0], rng.integers(0, NUM_BLOCKS, nb), np.full(nb, -1), words[1]]))
 
@@ -200,11 +202,11 @@ def requests(case: str, kind: str, seed: int) -> dict[str, Any]:
                 "valid": np.concatenate([np.ones(nreq), np.zeros(PADDING)]).astype(np.uint8),
                 "pos": np.concatenate([POSITIONS[case], np.full(PADDING, -1)]).astype(np.int64)}
     table = edge_table(case, rng)
-    req = np.repeat(np.arange(EDGE_REQUESTS), EDGE_PER_REQUEST).astype(np.int32)
-    kinds = np.resize(np.array(EDGE_KINDS), req.size)
+    req: np.ndarray = np.repeat(np.arange(EDGE_REQUESTS), EDGE_PER_REQUEST).astype(np.int32)
+    kinds: np.ndarray = np.resize(np.array(EDGE_KINDS), req.size)
     topk = np.stack([edge_row(str(k), case, rng) for k in kinds])
     order = rng.permutation(req.size)
-    valid = rng.permutation(np.resize(np.array(EDGE_BYTES + (1, 1)), req.size)).astype(np.uint8)
+    valid: np.ndarray = rng.permutation(np.resize(np.array(EDGE_BYTES + (1, 1)), req.size)).astype(np.uint8)
     return {"topk": topk[order], "table": table, "req": req[order], "valid": valid, "pos": np.full(req.size, -1, dtype=np.int64),
             "kinds": kinds[order]}
 
@@ -331,9 +333,6 @@ def observe(work: Path, case: str, ops: dict[str, Any], rows: dict[str, dict[str
 def compare_row(job: dict[str, Any], rec: dict[str, Any]) -> None:
     """Tokens [lo, hi): each row of slots and its length against the twin, the reference `Dsv4GlobalTopk_v1` on every
     ref_every-th."""
-    from verity.circuits.defs import bind
-    from verity.circuits.evaluation import evaluate
-
     a = _load(job["paths"])
     lo, hi = job["rows"]
     st = job["statics"]
@@ -381,7 +380,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
         tool = shutil.which("cuobjdump")
     rec: dict[str, Any] = {"kernels": {}}
     for key, kernel in KERNELS.items():
-        entries = []
+        entries: list[dict[str, Any]] = []
         for f in sorted(glob.glob(str(triton_cache / "**" / f"{kernel}.ptx"), recursive=True)):
             text = Path(f).read_text(errors="replace")
             sha = hashlib.sha256(text.encode()).hexdigest()
@@ -406,9 +405,7 @@ def ptx(triton_cache: Path, outdir: Path) -> dict[str, Any]:
 
 def bind_check() -> dict[str, Any]:
     """The Program binds at DeepSeek-V4-Pro's statics."""
-    from verity.circuits.defs import bind
-
-    out = {}
+    out: dict[str, bool | str] = {}
     for case in CASES_L:
         st = statics(case)
         name = "Dsv4GlobalTopk_v1{" + ",".join(f"{k}={v}" for k, v in st.items()) + "}"

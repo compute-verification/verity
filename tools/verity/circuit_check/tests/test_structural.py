@@ -15,7 +15,7 @@ from verity_flock import tmpl as TM
 
 from verity.circuits.boolean.forms import const, maj
 from verity.circuits.boolean.trace import definition
-from verity.definitions.ops.boolean import scalar as SB
+from verity.circuits.ops.boolean import scalar as SB
 
 MAJ = definition("StructuralTestMaj", 1, lambda C, a, b, c: [maj(C, a[0], b[0], c[0])],
                  (("a", SB.BIT), ("b", SB.BIT), ("c", SB.BIT)), SB.BIT, register=False)
@@ -249,11 +249,11 @@ def test_the_command_resolves_a_definition_id(tmp_path):
 # --- the structural lowering ---------------------------------------------------------------------------------------
 
 def test_the_structural_lowering_is_its_definitions_lowering():
-    """`verity_flock.struct_lower` (TMPL1) emits each specialized Definition once and keeps its calls as calls: its template
+    """`verity_flock.struct_lower` emits each specialized Definition once and keeps its calls as calls: its template
     of a GEMM scan is the flat lowering by construction."""
     S = pytest.importorskip("verity_flock.struct_lower")
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as GB
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32)
     tm = S.lower(t)[0]
@@ -267,7 +267,7 @@ def test_the_template_is_read_copy_by_copy_and_never_unrolled(monkeypatch):
     within calls) its output bits on random inputs are the unroll's, and the check never unrolls it."""
     S = pytest.importorskip("verity_flock.struct_lower")
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as GB
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32)
     tm = S.lower(t)[0]
@@ -288,7 +288,7 @@ def test_a_struct_lower_template_reading_a_table_is_its_lowering_by_construction
 
     from verity.circuits.boolean import forms as F
     from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-    from verity.definitions.ops import prims as OP
+    from verity.circuits.ops import prims as OP
     from verity.circuits.refs import array_of
     from verity.circuits.types import Array, Value
 
@@ -319,7 +319,7 @@ def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template
     from circuit_check import checks as CK
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity.definitions.ops.boolean import gemm as GB
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = resolve(bind(GB.GemmAccumulatorS8, K=128, DOT=GB.BlackwellS8ImmaDot32))
     opts = CK.Options(vectors=16, struct_max_gates=1 << 30)
@@ -373,7 +373,7 @@ def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction
     from verity_flock import class_statement as CS
 
     from verity.circuits.defs import bind
-    from verity.definitions.ops.boolean import gemm as GB
+    from verity.circuits.ops.boolean import gemm as GB
 
     t = bind(GB.GemmAccumulatorS8, K=64, DOT=GB.BlackwellS8ImmaDot32)
     rows = [(f"p{r}", [f"x[{r}]", f"wrow[{r}]"]) for r in range(64)]

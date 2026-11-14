@@ -14,7 +14,7 @@ reads. [`security/README.md`](../README.md) has the argument, the lock and what 
 - The Lean check (`tools/verity/lean/check.py`) fails on an import outside `layers` or `trees`, and on a `.lean` file
   that no root imports.
 - One pin's command (`tools/verity/check/pins.py`) runs Lean in this package's Lake environment:
-  `verity/protocols/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
+  `verity/protocols/accounting/pouw/verifier/tests/ncp_lean.py` writes a scratch file importing `Definitions.Pouw.NCP.RouteU` into
   `security/`, and the command runs it there and removes it.
 
 ## Areas
@@ -41,9 +41,9 @@ path: `research msg owners PATH`.
 
 A generated file is its generator's: change the generator and run it, never the file.
 
-- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `benchmarks/pouw/lean_headline.py` and
-  `benchmarks/pouw/lean_headline_dc.py` write the instances there, which import the `Encoding.lean` beside them.
-- `Accounting/Sheets/`: `benchmarks/pouw/machine_model/`, the ACCEL model of each measured card, prints each file
+- `Accounting/Headline/` and `Accounting/HeadlineDc/`: `machine-model lean-headline` writes the instances there, which
+  import the `Encoding.lean` beside them.
+- `Accounting/Sheets/`: `benchmarks/machine_model/`, the ACCEL model of each measured card, prints each file
   from the card's data sheet (`machine-model --device DEVICE sheet --lean`).
 
 Each generator's tests hold the files to its output. `security/README.md` lists every program that writes Lean under

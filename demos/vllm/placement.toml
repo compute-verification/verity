@@ -1,6 +1,9 @@
 # The vLLM demo's placement: the workload it serves, the node each of its runs goes to, how `research run` starts it there,
 # and what that node holds. `run.sh` (`verity demo vllm`) reads it and hands the run's script its node's paths as its environment, so
 # no script names a node or a path on one. A node's paths are the [node.NAME] table; a run's own variables are its env table.
+# No file holds a machine's address: a value names the environment variable that holds one as ${NAME}, which `run.sh`
+# fills from the environment the demo is launched in, and with NAME unset it starts nothing and says so, unless the
+# launch's own `--env` sets that value.
 
 # the workload the demo serves, one of the integration's (adapters/vllm/workloads/<row>.json, fetched by its art id and
 # checked against that directory's SHA256SUMS): Llama-3.2-1B INT8 on one H200, batch 4, int8 linears (its engine's
@@ -29,17 +32,22 @@ NORM_TAP_SO = "/workspace/research/vllm-composed-h200int8/norm_tap/build/verity_
 # one sampling block of the served execution blocks through every subprotocol (served_verdicts.sh, which leases the GPU
 # itself); the prover and the Lean verifier run on the serving node after the lease ends. The endpoint serves PoUW's H1 with
 # each sampling block's coins from a session of its own on vy-challenger-1's gate (H1_GATE, the gate key of the node's
-# research user; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
-# The sampled proofs' coins are the Lean verifier's own unless PP_CHALLENGER names the live challenger
-# (`--env PP_CHALLENGER=gate:USER@HOST` with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). ONSITE_PIECES gives the onsite
-# product its private pieces (the wipe's, PoUS's and the bandwidth audit's) and cases; KEEP_CMD keeps the serve dirs on
-# the node for a week.
+# research user, at the challenger host's address, VY_CHALLENGER_1_HOST; H1_PEER the node); `--env MAIN_SHA=SHA` also holds the gate's pins to main's first-parent line from SHA.
+# The sampled proofs' coins, V3c's audit's of record among them, are a local development session's, which a demo takes
+# as a development run (DEVELOPMENT), unless PP_CHALLENGER names the live challenger (`--env PP_CHALLENGER=gate:USER@HOST`
+# with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY). ONSITE_PIECES gives the onsite product its private pieces (the
+# wipe's, PoUS's and the bandwidth audit's) and cases; KEEP_CMD keeps the serve dirs on the node for a week.
+# A demo samples two of H1's proof blocks (H1_DRAW_K, the period's committed sample size): it shows the code works, and
+# what the theorems give is reported apart, at stated operating points. A run without it gets `pouw_h1_challenger.draw_k`'s
+# sample size, set for epsilon 1/1000 at delta 2^-40.
 node = "vy-dc-h200"
 research = ["--cwd", "clone", "--timeout", "6h"]
 
 [run.window.env]
-H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@204.12.178.84"
+H1_GATE = "ssh -i ~/.ssh/vllm_gate_ed25519 -o BatchMode=yes research@${VY_CHALLENGER_1_HOST}"
 H1_PEER = "vy-dc-h200"
+H1_DRAW_K = "2"
+DEVELOPMENT = "1"
 ONSITE_PIECES = "benchmarks/pous/onsite_pieces.sh"
 KEEP_CMD = '''why="served_verdicts.sh's serve dirs (sealed row dirs, advice, window circuits) and C-Flock's build"; "$PY" -m research keep "$1" --owner @vllm --expires 7d --priority high --why "$why" || research keep "$1" --owner @vllm --expires 7d --priority high --why "$why"'''
 

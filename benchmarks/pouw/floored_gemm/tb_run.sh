@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# The tensor-core receipts (TB4, TB2, TB1; fgemm.cu's header) beside W13's duo and duo2 on one leased sm_120 GPU (cwd =
-# the clone's root): build and SASS counts outside any lease; the gate (every arm's outputs and receipts at W13's six
+# The tensor-core receipts (TB4, TB2, TB1; fgemm.cu's header) beside duo and duo2 on one leased sm_120 GPU (cwd =
+# the clone's root): build and SASS counts outside any lease; the gate (every arm's outputs and receipts at run.sh's six
 # small shapes, every tile config, poisoned outputs) under a short lease, checked by ref.py after it; only if every check
 # passes, the interleaved timing of FG_ARMS at the served shapes and ncu under a second lease. Clocks are read, never set.
 #

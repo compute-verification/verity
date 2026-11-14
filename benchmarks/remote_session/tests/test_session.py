@@ -6,6 +6,7 @@ are audited, accepted when held and rejected when dropped. The Lean verifier dec
 beside it, and the two must agree at every event, window verdict and record field."""
 from __future__ import annotations
 
+import dataclasses
 import os
 import queue
 import random
@@ -20,12 +21,12 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2]))
 
-from verity.protocols.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
-from verity.protocols.poub.verifier import codec as rcodec  # noqa: E402
+from verity.protocols.accounting.poub.verifier import audit, coins, ledger, receipts as rb, timing  # noqa: E402
+from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E402
 
 import prover  # noqa: E402
-from verity.protocols.poub.verifier.session import verifier  # noqa: E402
-from verity.protocols.poub.verifier.session import wire  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import verifier  # noqa: E402
+from verity.protocols.accounting.poub.verifier.session import wire  # noqa: E402
 
 P512 = rcodec.Codec(rcodec.P512, 2, False)
 
@@ -253,14 +254,14 @@ def test_the_timing_parts_reproduce_the_whole_node_sessions_split_and_sum_to_its
             "tiers": {"hbm": {"bytes": 751_619_276_800, "ms": 61.502974},
                       "host": {"bytes": 8_589_934_592, "ms": 25.468371}}}
     for r in (timing.READ_BYTES_PER_S, timing.SPEC_BYTES_PER_S):
-        parts = verifier.timing_parts(capacity_bytes_per_s=r, **d101)
+        parts = verifier.timing_parts(capacity_bytes_per_s=r, node=ledger.Node.stated(), **d101)
         assert sum(parts.values()) == pytest.approx(1 - d101["reads_bytes"] / (r * d101["span_ns"] / 1e9), abs=1e-12)
-    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, **d101)
+    parts = verifier.timing_parts(capacity_bytes_per_s=timing.READ_BYTES_PER_S, node=ledger.Node.stated(), **d101)
     assert sum(parts.values()) == pytest.approx(0.09926702029063428, abs=1e-12)
     assert {k: round(v * 100, 2) for k, v in parts.items()} == {
         "above_stated_tiers": 0.0, "host_dram_idle": 3.68, "hbm_below_stated": 0.66, "receipts_beyond_read": 5.48,
         "boundaries_and_allowance": 0.10, "blocks_left_out": 0.0}
-    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, **d101)
+    spec = verifier.timing_parts(capacity_bytes_per_s=timing.SPEC_BYTES_PER_S, node=ledger.Node.stated(), **d101)
     assert spec["above_stated_tiers"] == pytest.approx(1 - timing.READ_BYTES_PER_S / timing.SPEC_BYTES_PER_S)
 
 
@@ -277,6 +278,52 @@ def test_a_sessions_ledgers_carry_the_timing_parts_when_its_calibration_reads_ea
     for short in ({"hbm": {"bytes": 15 * block, "ms": 1e-6}}, None):
         (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=short)
         assert "timing_parts" not in r["ledger"]["measured"] and "timing_parts" not in r["ledger"]["inputs"]
+
+
+def test_a_sessions_lines_deduct_the_on_chip_bytes_and_rebuilds_of_the_node_its_ledger_was_built_from(monkeypatch):
+    """A session's ledger is built from one node (`ledger.Node.stated`), and the memory line and the paced line deduct
+    that node's on-chip bytes and rebuilds, whatever `timing` states: here a node with four blocks on its chips and no
+    squarings, where `timing`'s has 3,105,652,736 B and a squaring ceiling."""
+    B, stated = rcodec.BLOCK_BYTES, ledger.Node.stated
+
+    def small(**kw) -> ledger.Node:
+        return dataclasses.replace(stated(**kw), chip_bytes=4 * B, rebuild_burst_bytes=4.0 * B,
+                                   squarings_per_s={"p512": 0.0})
+
+    monkeypatch.setattr(ledger.Node, "stated", small)
+    (r,), (pr,) = run("honest", paces=[verifier.pace_of("1:4:40:2", 1.0)])
+    assert r["accepted"] and pr["accepted"]
+    lg = r["ledger"]
+    assert lg["inputs"]["chip_bytes"] == 4 * B and lg["inputs"]["squarings_per_s"] == 0
+    assert lg["memory"]["chip_bytes"] == 4 * B and all(w["chip_blocks"] == 4 for w in lg["memory"]["windows"])
+    assert lg["paced"]["chip_blocks"] == 4 == lg["paced"]["burst_blocks"]
+    assert all(x["rebuild_blocks"] == 0 == x["rebuild_absent_blocks"] for x in lg["paced"]["stretches"])
+
+
+def test_a_sessions_record_and_timing_parts_state_the_tiers_of_the_node_its_ledger_was_built_from(monkeypatch):
+    """The record's `inputs.node` and the timing parts' G and H are the tiers of the session's node
+    (`ledger.Node.tiers`), whatever `timing` states: here two GPUs and a host whose rates sum to the node's R at each
+    reading, so the measured reading has nothing above its stated tiers and the spec reading the gap between the two."""
+    monkeypatch.setattr(prover, "OPENINGS_PART", 4)
+    stated = ledger.Node.stated
+    tiers = {"hbm": ledger.Tier(2, 8e12, 7e12, 4096), "dram": ledger.Tier(1, 4e12, 2e12, 8192)}
+
+    def other(**kw) -> ledger.Node:
+        return dataclasses.replace(stated(**kw), spec_bytes_per_s=2e13, read_bytes_per_s=1.6e13, tiers=tiers)
+
+    monkeypatch.setattr(ledger.Node, "stated", other)
+    block = rcodec.BLOCK_BYTES
+    read = {"hbm": {"bytes": 12 * block, "ms": 1e-6}, "host": {"bytes": 4 * block, "ms": 1e-6}}
+    (r,), _ = run("honest", read_bytes_per_s=1.0, tiers=read)
+    lg = r["ledger"]
+    assert lg["inputs"]["node"] == {
+        "gpus": 2, "gpu_spec_bytes_per_s": 8e12, "gpu_read_bytes_per_s": 7e12, "host_spec_bytes_per_s": 4e12,
+        "host_read_bytes_per_s": 2e12, "gpu_chip_bytes": 4096, "host_chip_bytes": 8192}
+    assert (lg["spec"]["capacity_bytes_per_s"], lg["measured"]["capacity_bytes_per_s"]) == (2e13, 1.6e13)
+    for name in ("spec", "measured"):
+        assert sum(lg[name]["timing_parts"].values()) == pytest.approx(lg[name]["terms"]["timing"], abs=1e-12)
+    assert lg["measured"]["timing_parts"]["above_stated_tiers"] == 0
+    assert lg["spec"]["timing_parts"]["above_stated_tiers"] == pytest.approx(1 - 1.6e13 / 2e13)
 
 
 def test_an_unpaced_session_declares_its_snapshot_line_and_no_time_held_line(monkeypatch):
@@ -395,7 +442,7 @@ def test_a_session_reserves_append_coins_only_when_its_plan_appends_and_an_appen
     which takes only the append coins released, otherwise, so the session is refused there as `disagreement`, the
     honest one accepted."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    from verity.protocols.poub.verifier.session import challengers
+    from verity.protocols.accounting.poub.verifier.session import challengers
 
     layouts, local = [], challengers.Local.open
 
@@ -426,7 +473,7 @@ def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
     `AuditRun.verify` and the Lean's settle give it."""
     from types import SimpleNamespace
 
-    from verity.protocols.poub.verifier.session.checks import Checks
+    from verity.protocols.accounting.poub.verifier.session.checks import Checks
 
     class Books:
         _fail = audit.AuditRun._fail
@@ -443,9 +490,9 @@ def test_a_window_with_no_draws_settles_malformed_whatever_its_batches():
 
 
 def test_the_check_workers_bound_each_windows_wrong_receipts_as_its_profile_does():
-    from verity.protocols.poub.verifier.session.checks import Checks
+    from verity.protocols.accounting.poub.verifier.session.checks import Checks
 
-    from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
+    from verity.protocols.proofs.spot.verifier.profile import IntegrityProfile, Subset
 
     profiles = [IntegrityProfile(("receipt",), (n,), {"receipt": Subset(k)}, 2.0 ** -40, drawn={"receipt": k})
                 for n, k in ((4096, 64), (10 ** 6, 300), (10 ** 6, 301))]
@@ -777,6 +824,9 @@ def test_the_memory_line_held_on_average_credits_what_the_worst_pass_form_cannot
     assert lg["delta"]["rejection"] == len(record.windows) * record.samples / 2 ** 64 > 0
     assert record.samples == r["samples"] == 200 and record.public()["samples"] == 200
     assert lg["memory"]["error"] > lg["memory"]["delta"] + record.passes * 2.0 ** -audit.SLACK_LOG2 * 0.99
+    assert lg["named"] == lg["memory"]["named"] == reading["named"] == ledger.NAMED_TERMS, (
+        "each object of the record that carries a δ or an error names the PRF term it leaves out")
+    assert all(x["named"] == ledger.NAMED_TERMS for x in lg["declared"]["memory"].values() if "delta" in x)
     assert lg["inputs"]["slack_log2"] == audit.SLACK_LOG2
 
     def same(x, y) -> bool:
@@ -834,7 +884,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     replays to its verdict through both verifiers. The clock ticks as each pass starts as well as when it ends, so
     time passes between a coin leaving and the root after it, as on the verifier's own clock: at one tick a pass, a
     paced window's 1 ns is a whole pass and each boundary waits for the tick its next root comes at."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
     ticking = TickingBackend.run_pass
 
     def run_pass(self, seed: bytes, plan=None):
@@ -844,9 +894,9 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
     monkeypatch.setattr(TickingBackend, "run_pass", run_pass)
     import json
 
-    from verity.protocols.poub.verifier.session import challengers
+    from verity.protocols.accounting.poub.verifier.session import challengers
     import replay
-    from verity.protocols.spot.device import challenger as C
+    from verity.protocols.proofs.spot.device import challenger as C
 
     asked = []
 
@@ -1266,7 +1316,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
     the prover that dropped half its blocks rejected at the window and draw it was rejected at live, at a receipt,
     which only a transcript's openings can show. The file is the path, bytes and sha256 verifier.json gives it."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
     import hashlib
     import json
 
@@ -1294,7 +1344,7 @@ def test_a_transcript_replays_each_session_to_its_verdict_through_both_verifiers
 def test_a_paced_sessions_transcript_names_its_pace_and_replays_paced(tmp_path, monkeypatch):
     """A paced session's transcript names its pace (`audit.Pace`'s k and T), which both verifiers hold each window's
     roots to, so its replay is the paced session's: accepted, with its record's pace."""
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
     import json
 
     import replay
@@ -1317,7 +1367,7 @@ def test_a_session_drawn_four_windows_a_coin_is_accepted_through_both_verifiers_
     transcript replays to the same verdict through both verifiers. A prover that dropped half its blocks is rejected
     at a receipt."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
-    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/poub/verifier/lean/tests"))
+    monkeypatch.syspath_prepend(str(HERE.parents[2] / "verity/protocols/accounting/poub/verifier/lean/tests"))
     import json
 
     import replay
@@ -1364,7 +1414,7 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
     import copy
     import json
 
-    from verity.protocols.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
 
     got = {}
     (r,), _ = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], transcript=tmp_path,
@@ -1413,7 +1463,7 @@ def test_the_leans_line_of_a_transcript_drawn_four_windows_a_coin_reads_the_draw
     import copy
     import json
 
-    from verity.protocols.poub.verifier.session import lean_verifier as lv
+    from verity.protocols.accounting.poub.verifier.session import lean_verifier as lv
 
     got = {}
     (r,), (pr,) = run("honest", paces=[verifier.pace_of("2:8:40:2", 1.0)], groups_per_coin=4, transcript=tmp_path,

@@ -89,10 +89,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registered as REG
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops.boolean import gemm as BG
 from verity.commitments import hm96
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
@@ -462,7 +462,7 @@ def _pieces(at: Any) -> list[Read | Position | RegisteredRead] | None:
 
 class WindowLocate:
     """`build`'s ``locate`` and ``reads`` from the H200 window writer's ``Window.locate(step, slot, family, index, port)``
-    (circuits' interface, ``archive/examples/h200/e2e_h200/window.py``), whose pieces are the port's bytes in
+    (circuits' interface), whose pieces are the port's bytes in
     order: ``Segment(step, slot, row, offset, nbytes)`` (bytes of a committed row, ``row`` its index in the slot: a `Read`),
     ``Absent(nbytes)`` (zero bytes, a key at or past n), ``Run(name)`` (``n``, the position + 1, one word: a `Position`) and
     ``Registered(value, row, offset, nbytes)`` (bytes of a registered weight). A port of one Registered piece is a registered

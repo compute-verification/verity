@@ -1,4 +1,4 @@
-"""The slowdown calculator (`verity/protocols/inference_only/rho`) as this package reads it: the one module here that
+"""The slowdown calculator (`benchmarks/rho`) as this package reads it: the one module here that
 names it, and the benchmark's one entry point to a slowdown.
 
 `slowdown(policy, step, run=None)` is that entry point: from a policy's block and a step's record to the lower bound
@@ -37,7 +37,7 @@ from . import work as W
 from .gates import per_and, per_mac
 
 #: the calculator's directory, whose name is its package's too
-CALCULATOR = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "rho"
+CALCULATOR = Path(__file__).resolve().parents[2] / "rho"
 DEPLOYMENTS = Path(__file__).resolve().parents[2] / "census" / "deployments.json"
 #: the precision the registry's locations state their peak rate at: the census's dense FP8 E4M3
 FLEET_PRECISION = "e4m3"
@@ -118,7 +118,8 @@ def fleets() -> list[dict]:
 def _min_cut():
     """The calculator's module for the bound, its `min_cut`, loaded by its path: it is standard library only and
     imports nothing of its package, so reading it loads no registry and leaves the import path as it was."""
-    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", CALCULATOR / "rho" / "min_cut.py")
+    path = CALCULATOR / CALCULATOR.name / "min_cut.py"
+    spec = importlib.util.spec_from_file_location("training_slowdown_min_cut", path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -267,8 +268,9 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     - `figure`: the choice of the work (`_figure`'s: the subset of M that binds, each subset's term and what the
       choice read); None where there is no slowdown;
     - `read`: what the record says of itself: the k its rows were classified at (`k_classified`), its `capture` and,
-      where it has them, its `capture_code`, `stand_in` and `other_program`, and its `p_match` where that is why it
-      has no slowdown.
+      where it has them, its `capture_code`, `stand_in` and `other_program`, its `p_match` where that is why it
+      has no slowdown, and the batch's repeats its M left out (`repeats`, `work.batch_count`'s) where the job
+      counted them.
 
     The work is M at the policy's k (the record's own, or a trace's at each k of the console's dial,
     `work.classified_at`), the best of three choices of it (`HE_SUBSETS`). A weight's β is at most the run's code
@@ -277,12 +279,18 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     products with elementwise ops has one (they are left out of M, and stay in |C|), and so does a circuit that
     declares a tree.
 
-    There is no slowdown on a trace the capture refused (`REFUSED`), on a record with no product rows
-    (`work.PRODUCTS_UNMEASURED`), on a trace of another program (`work.OTHER_PROGRAM`), at a k the record's rows
-    weren't classified at, on rows that predate `work.SYSTEM_FROM` (`work.HE_RETRACE`), on products without M
-    (`work.HE_NO_ROWS`), on a step whose elementwise ops fan out into an operand (`work.p_match_reason`), past the
-    calculator's last β(k) (`he_past`), from `work.HEAD_K` on products that don't say which are the head's
-    (`work.HE_HEAD`), and where neither the run nor the record's circuit gives |C| (`NO_GATES`)."""
+    The work and the circuit it is divided by have one price: a trace's products are priced in the dtype its
+    circuit counts them in, and where a trace's capture prices some in another (`work.repriced`) there is no
+    slowdown over the trace's own circuit. Over a run's `gates` the other side is the run's count, which the trace
+    doesn't hold.
+
+    There is no slowdown on a trace the capture refused (`REFUSED`), on a trace whose products and own circuit
+    differ in price (`work.repriced_reason`), on a record with no product rows (`work.PRODUCTS_UNMEASURED`), on a
+    trace of another program (`work.OTHER_PROGRAM`), at a k the record's rows weren't classified at, on rows that
+    predate `work.SYSTEM_FROM` (`work.HE_RETRACE`), on products without M (`work.HE_NO_ROWS`), on a step whose
+    elementwise ops fan out into an operand (`work.p_match_reason`), past the calculator's last β(k) (`he_past`),
+    from `work.HEAD_K` on products that don't say which are the head's (`work.HE_HEAD`), and where neither the run
+    nor the record's circuit gives |C| (`NO_GATES`)."""
     c, k = policy["c_gates"], policy["k_bits"]
     out = {"slowdown": None, "binds": "unmeasured", "why": None, "term": None, "bound": _bound(c, k, None),
            "figure": None, "read": {}}
@@ -293,6 +301,10 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     if step is not None and "rows" in step:
         if gates is None:
             gates = (step.get("circuit") or {}).get("gates")
+            moved = W.repriced(step) if gates is not None else []
+            if moved:
+                return out | {"why": W.repriced_reason(step, moved),
+                              "read": {x: step[x] for x in ("capture", "capture_code") if x in step}}
         step = W.products_of_trace(W.priced(step))
     if step is None:
         return out | {"why": W.PRODUCTS_UNMEASURED}
@@ -312,6 +324,8 @@ def slowdown(policy: dict, step: dict | None, run: dict | None = None) -> dict:
     he = p.get("he")
     if he is None:
         return out | {"why": W.HE_RETRACE if "he" in p else W.HE_NO_ROWS}
+    if he.get("repeats"):
+        out["read"] = read = read | {"repeats": he["repeats"]}
     if p.get("p_match"):
         return out | {"why": W.p_match_reason(p["p_match"]), "read": read | {"p_match": p["p_match"]}}
     if _min_cut().beta(k) is None:

@@ -15,13 +15,20 @@ dead process's flocks, after SIGTERM (`research cancel`) or SIGKILL too. CMD run
 it (check.py under check's step) runs at once instead of taking a second slot. Without SLOTS (a laptop) CMD runs as it is.
 
 With every slot of its pool taken, a request waits, and never gives up: it queues in arrival order in `lean-line-P` beside
-SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's holder (pid, since when, run, who, the time it
-took the slot) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls otherwise. In a `research run`,
-the run's timeout moves later by the time it waited, so the wait never counts against it. Who asked is --by,
-else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else RESEARCH_AGENT_URL.
+SLOTS (`slot.py`'s line), re-reads SLOTS every POLL_S, and prints each slot's holder (pid, since when it has held the slot,
+how long it waited in line first, run, who) and the waiters ahead of it whenever that changes, and every REPORT_EVERY polls
+otherwise. In a `research run`, the run's timeout moves later by the time it waited, so the wait never counts against it.
+Who asked is --by, else RESEARCH_LANE, else whoever holds the check slot this runs in (slot.py's `check-NAME.who`), else
+RESEARCH_AGENT_URL.
 
-`python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters; --json, the same as one
-JSON object (`status_doc`), which `check.py --slots` reads from every machine. Stdlib only: it runs before uv.
+`NAME 0` closes a pool on this machine. A request that arrives while its pool reads 0 is refused before it joins the line,
+where it would hold its run's cores for a slot that can't come: the refusal names the pool, SLOTS and the `#` comment on the
+pool's line, where the steward says why, and the fix, a machine whose `--status` lists a slot of that pool. A waiter already
+in line when the steward lowers its pool to 0, for a timed window, stays there and takes a slot once the N is raised again.
+
+`python3 tools/verity/check/lean_slot.py --status [--json]`: each pool's slots and holders, then its waiters, and a pool at 0 as
+closed, with its comment; --json, the same as one JSON object (`status_doc`: the comments are its `notes`), which `check.py
+--slots` reads from every machine. Stdlib only: it runs before uv.
 
 From Python (`tools/verity/lean/check.py --build`, `lean_changed.py --records`): `hold(pool)` takes a slot for the calling
 process and returns its descriptor, which the process keeps open until it exits (None: no cap here, or a slot is held
@@ -78,6 +85,17 @@ def parse(text: str) -> dict[str, int]:
     return pools
 
 
+def notes(text: str) -> dict[str, str]:
+    """Each pool's `#` comment on its line of SLOTS, where the steward says why the pool has its N."""
+    rows = (line.partition("#") for line in text.splitlines())
+    return {body.split()[0]: note.strip() for body, _, note in rows if body.split() and note.strip()}
+
+
+def closing(pool: str, note: str | None) -> str:
+    """The line of SLOTS that closes ``pool``, as a refusal and `--status` quote it: `POOL 0`, with its comment (``note``)."""
+    return f"`{pool} 0{'  # ' + note if note else ''}`"
+
+
 def resolve(pools: dict[str, int], pool: str, or_any: bool = True) -> tuple[str, int]:
     """The pool a request for ``pool`` takes from (``or_any``: pool `any` when SLOTS doesn't list it), and its slot count."""
     for p in (pool, ANY) if or_any else (pool,):
@@ -129,19 +147,24 @@ def pool_docs(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("
 
 
 def status(pools: dict[str, int], d: Path, now: datetime, proc: Path = Path("/proc"), only: str | None = None,
-           before: str | None = None) -> list[str]:
-    """`pool_docs` as lines: each slot with its holder, then the pool's waiters."""
+           before: str | None = None, why: dict[str, str] | None = None) -> list[str]:
+    """`pool_docs` as lines: each slot with its holder, then the pool's waiters. With ``why`` (`--status`: SLOTS's `notes`), a
+    pool at 0 is first said to be closed, quoting its line; a waiter's listing passes none, and its first line gives the N."""
     out = []
     for pool, p in pool_docs(pools, d, now, proc, only, before).items():
+        out += [f"{pool}: closed on this machine ({closing(pool, why.get(pool))})"] if why is not None and not p["n"] else []
         out += [f"{pool}/{s['index']}{' (past N)' if s['past_n'] else ''}  {SLOT.held_text(s['holder'])}" for s in p["slots"]]
         out += [f"{pool}: {SLOT.waiter_text(w)}" for w in p["waiters"]]
     return out
 
 
 def status_doc(now: datetime, proc: Path = Path("/proc")) -> dict:
-    """`--status --json`: SLOTS and its pools (`pool_docs`; null without SLOTS, so audits here run uncapped)."""
+    """`--status --json`: SLOTS, its pools (`pool_docs`; one whose `n` is 0 is closed) and each pool's comment there (`notes`);
+    both null without SLOTS, so audits here run uncapped."""
+    text = SLOTS.read_text() if SLOTS.exists() else None
     return {"file": str(SLOTS), "now": f"{now:%Y-%m-%dT%H:%MZ}",
-            "pools": pool_docs(parse(SLOTS.read_text()), SLOTS.parent, now, proc) if SLOTS.exists() else None}
+            "pools": None if text is None else pool_docs(parse(text), SLOTS.parent, now, proc),
+            "notes": None if text is None else notes(text)}
 
 
 def asker(by: str | None = None) -> dict:
@@ -157,13 +180,19 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
     """Wait for a slot of ``pool`` (SLOTS exists; `resolve`); return the pool it came from, its index and the descriptor
     holding it. In a `research run`, the time it waited moves the run's timeout as much later (`slot.defer_run`): with every
     slot busy a wait can outlast a run's whole --timeout, which then ended the run before its audit began. Without ``queue``,
-    a request that would wait is `Refused` at once, naming why."""
+    a request that would wait is `Refused` at once, naming why. So is every request whose pool reads 0 when it arrives, before
+    it joins the line: no slot can come to it while the pool is closed. One already in line when the N goes to 0 stays there."""
     d = SLOTS.parent
-    pools = parse(SLOTS.read_text())
+    text = SLOTS.read_text()
+    pools = parse(text)
     name, n = resolve(pools, pool, or_any)
+    if not n:
+        raise Refused(f"{SLOTS} reads {closing(name, notes(text).get(name))}: pool {name!r} is closed on this machine, so this "
+                      "request takes no slot and joins no line; run it on a machine whose `lean_slot.py --status` lists a slot "
+                      f"of pool {' or '.join(map(repr, dict.fromkeys((pool, name))))}")
     began = mono()
     ticket, tfd = SLOT.join(d, who=asker(by), line=line_name(name))
-    told, since, slept = None, 0, False
+    told, since, slept, joined = None, 0, False, now()
     try:
         while True:
             try:
@@ -179,7 +208,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
             if not queue:
                 raise Refused(f"{why}, and this request doesn't wait in line")
             lines = status(pools, d, now(), only=name, before=ticket.name)
-            seen = (why, [re.sub(r" \(\d+ min\)", "", ln) for ln in lines])       # the same holders, a minute older
+            seen = (why, [re.sub(r"\d+ min\b", "", ln) for ln in lines])          # the same holders, a minute older
             if seen != told or since >= REPORT_EVERY:
                 log(f"lean-slot: {why}; waiting, with no time limit, and retrying every {POLL_S} s ({SLOTS})")
                 for ln in lines:
@@ -191,7 +220,7 @@ def wait(pool: str, by: str | None = None, now=lambda: datetime.now(timezone.utc
         ticket.unlink(missing_ok=True)
         os.close(tfd)
     i, fd = got
-    who = {**asker(by), "took": f"{now():%Y-%m-%dT%H:%MZ}"}
+    who = {**asker(by), "joined": f"{joined:%Y-%m-%dT%H:%M:%SZ}", "took": f"{now():%Y-%m-%dT%H:%M:%SZ}"}
     path = lock_path(d, name, i).with_suffix(".who")
     tmp = path.with_name(f".{path.name}.{os.getpid()}")
     tmp.write_text(json.dumps(who) + "\n")
@@ -223,7 +252,8 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
         elif not SLOTS.exists():
             print(f"no Lean audit cap on this machine ({SLOTS})")
         else:
-            print("\n".join(status(parse(SLOTS.read_text()), SLOTS.parent, now())))
+            text = SLOTS.read_text()
+            print("\n".join(status(parse(text), SLOTS.parent, now(), why=notes(text))))
         return 0
     opts, cmd = (argv[:argv.index("--")], argv[argv.index("--") + 1:]) if "--" in argv else ([], argv)
     val = {k: opts[opts.index(k) + 1] for k in ("--pool", "--by") if k in opts[:-1]}

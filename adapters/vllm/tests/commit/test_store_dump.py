@@ -2,9 +2,14 @@
 was dumped from; its full dump keeps the steps' salt keys, its slim dump only the salts of the leaves its reads opened."""
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import pytest
 
 pytest.importorskip("torch")
+
+import torch
 
 from tests.check.opened import commit_steps, retained_block
 from verity_vllm.check import oracle_compare as OC
@@ -23,6 +28,22 @@ def _reads(reader):
     return {(s, m.name): reader(s, m.name, 0, m.nbytes) for s, ms in reader.com._layouts.items() for m in ms}
 
 
+def test_the_store_imports_where_torch_is_not_installed():
+    """`verity_vllm.commit.store_dump` imports with no torch to import, and so do the CPU replay's modules that load it: only
+    `not_retained_of`, when called, reads `host_retention`, which imports torch."""
+    hidden = "import sys; sys.modules['torch'] = None; import verity_vllm.commit.store_dump"
+    child = subprocess.run([sys.executable, "-c", hidden], capture_output=True, text=True, check=False)
+    assert child.returncode == 0, child.stderr
+
+
+def test_as_bytes_is_a_tensors_and_an_arrays_bytes_in_memory_order():
+    """`verity_vllm.commit.store_dump.as_bytes`: one byte an item, whatever the value's dtype and shape."""
+    t = torch.arange(6, dtype=torch.int32).reshape(2, 3)
+    for value in (t, t.numpy()):
+        view = SD.as_bytes(value)
+        assert view.format == "B" and view.ndim == 1 and bytes(view) == t.numpy().tobytes()
+
+
 def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
     com, rc = commit_steps(STEPS)
     SD.dump(com, rc, tmp_path)
@@ -33,11 +54,24 @@ def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
     assert OC.OpenedReader(store, run)(0, "model.layers.0.self_attn.qkv_proj", 10, 20) == b"\x07" * 10
 
 
+def test_a_dumped_store_keeps_no_weight_registration_and_its_roots_take_the_records(tmp_path):
+    """`verity_vllm.commit.run_roots.RunRoots.weight_registration` is the record's: the store's file holds none, and the roots a
+    reader loads take the one it sets."""
+    com, rc = commit_steps(STEPS)
+    rc.weight_registration = {"root": "ab" * 64}
+    SD.dump(com, rc, tmp_path)
+    assert b"weight_registration" not in (tmp_path / "store.json").read_bytes()
+    run = SD.load(tmp_path)[1]
+    assert run.weight_registration is None and run == rc.roots()
+    run.weight_registration = dict(rc.weight_registration)
+    assert run.weight_registration == rc.weight_registration and run != rc.roots()
+
+
 def test_the_dump_hashes_every_step_file_as_it_writes_it(tmp_path, monkeypatch):
     import hashlib
     monkeypatch.setattr(SD, "FLUSH", 100)                            # a flush between the chunks of every step
     com, rc = commit_steps(STEPS)
-    got = {}
+    got: dict[str, str] = {}
     SD.dump(com, rc, tmp_path, threads=3, digests=got)
     files = sorted(p.relative_to(tmp_path).as_posix() for p in tmp_path.rglob("*.bin"))
     assert sorted(got) == files and len(files) == 2 * len(STEPS) + 1
@@ -128,6 +162,28 @@ def test_touching_a_read_records_what_the_verified_read_opens():
     with SD.touched(com) as touched:
         SD.touch(com, reads + [(0, "no.such.member", 0, 4)])
     assert touched.ranges == verified.ranges and touched.nodes == verified.nodes and touched.ranges[2]
+
+
+def test_touching_a_step_the_committer_holds_no_layout_for_opens_nothing():
+    """`verity_vllm.commit.store_dump.touch`: a read of a step the committer committed no layout for, like a read of a member its
+    step does not hold, opens no range and no tree node."""
+    com, _rc = commit_steps(STEPS)
+    assert 99 not in com._layouts
+    with SD.touched(com) as touched:
+        SD.touch(com, [(99, "runner.sampler", 0, 4), (0, "no.such.member", 0, 4)])
+    assert not any(touched.ranges.values()) and not any(touched.nodes.values())
+
+
+@pytest.mark.parametrize("step", [0, 99], ids=["a step with a layout", "a step with none"])
+@pytest.mark.parametrize("name", [7, None, ["runner.sampler"]], ids=["a number", "null", "a list"])
+def test_touching_a_read_whose_member_name_is_no_string_is_refused_whether_or_not_its_step_has_a_layout(step, name):
+    """`verity_vllm.commit.store_dump.touch`: the member's name is parsed (`verity_vllm.commit.opened.meta_by_name`) before the
+    step's layout is looked through, so a name that is no string is refused at a step the committer holds no layout for as well."""
+    com, _rc = commit_steps(STEPS)
+    assert (step in com._layouts) == (step == 0)
+    with SD.touched(com) as touched, pytest.raises(AttributeError, match=f"'{type(name).__name__}' object has no attribute 'partition'"):
+        SD.touch(com, [(step, name, 0, 4)])
+    assert not any(touched.ranges.values()) and not any(touched.nodes.values())
 
 
 def test_a_rows_store_dumps_its_nodes_and_keys_in_full(tmp_path):

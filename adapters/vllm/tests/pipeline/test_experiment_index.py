@@ -1,15 +1,21 @@
 """[D88] spec.json is written once and never rewritten; experiment.json keeps the four records apart and references files, not copies.
-The code version (`experiment.code_version`) reads the run store's code directories, and falls back to git, then to unknown."""
+The code version (`experiment.code_version`) reads the run store's code directories, and falls back to git, then to unknown.  The
+last tests are of a block a document of the run may leave out, null or empty: a workload's `requests` and `sampling`
+(`verity_vllm.pipeline.experiment.build_spec`), the snapshot index, a phase's `timing` and the census's `realized`
+(`build_experiment`, `realized_consistency`), the gates' `G8` and the query-use verdict (`vu_partition_index`), and the spec's
+own blocks."""
 from __future__ import annotations
 
 import json
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.config import workload_file
 from verity_vllm.pipeline import experiment as EXP
 from verity_vllm.pipeline import research_tools
 
@@ -18,7 +24,7 @@ WL = REPO / "workloads" / "workload_cov_b0_b8-mixed_c256.json"
 
 
 def _spec(**over):
-    wl = json.loads(WL.read_text())
+    wl = json.loads(workload_file(WL).read_text())
     kw = dict(config_id="B0-cov_b0_b8-mixed_c256", case="B0", profile="vllm_d9105ea80_sm89_eager", workload_path=str(WL), workload_doc=wl,
               checkpoint={"repo": "HuggingFaceTB/SmolLM2-135M", "revision": "93efa2f0", "role": "B0"}, checkpoint_dir="/x/snap",
               hf_config={"hidden_size": 576, "torch_dtype": "bfloat16"}, engine_args={"max_num_batched_tokens": 2048}, max_num_seqs=8,
@@ -29,7 +35,7 @@ def _spec(**over):
 
 def test_spec_is_pre_execution_and_concrete():
     s = _spec()
-    assert s["known_before_execution"] is True
+    assert s["schema"] == "verity-gen/spec/v1" and s["known_before_execution"] is True
     w = s["workload"]
     assert w["serving_profile"] == "B8-mixed" and w["context_class"] == "C256" and w["n_requests"] == 8
     r = w["requests"][0]
@@ -41,6 +47,18 @@ def test_spec_is_pre_execution_and_concrete():
     blob = json.dumps(s)
     for bad in ("generated_token_ids", "finish_step", "engine_steps_capture", "n_generated\""):
         assert bad not in blob
+
+
+def test_a_specs_initial_state_is_a_fresh_engine():
+    assert _spec()["initial_state"] == {
+        "kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"}
+
+
+def test_a_spec_states_the_initial_state_its_caller_hands_it_and_the_fresh_engines_for_none_or_an_empty_one():
+    warm = {"kind": "warm", "note": "a KV cache another run left"}
+    fresh, stated = _spec(), _spec(initial_state=warm)
+    assert stated["initial_state"] == warm and stated["digest"] != fresh["digest"]
+    assert _spec(initial_state=None) == _spec(initial_state={}) == fresh
 
 
 def test_spec_dtype_is_the_served_dtype():
@@ -95,7 +113,7 @@ def test_experiment_index_separates_records(tmp_path: Path):
     (run / "stages.json").write_text(json.dumps([{"stage": "fold", "status": "ok", "seconds": 1.5}, {"stage": "gates", "status": "ok", "seconds": 0.5}]))
     (run / "program.json").write_text("{}")
     doc = EXP.write_experiment(run)
-    assert set(doc) >= {"specification", "execution", "representation", "checks"}
+    assert doc["schema"] == "verity-gen/experiment/v1" and set(doc) >= {"specification", "execution", "representation", "checks"}
     assert doc["specification"]["spec"]["present"] and doc["specification"]["spec_digest"]
     assert doc["execution"]["realized"] == {"prompt_lens": [1], "n_generated": [2]}
     assert doc["execution"]["observation_log"]["present"] is False                 # referenced, absent, not invented
@@ -110,10 +128,11 @@ def test_experiment_index_separates_records(tmp_path: Path):
 def test_realized_consistency_names_the_phase_that_ignored_the_arrivals(tmp_path):
     """Spec §5 of the campaign runner: the same spec digest does not prove every phase honoured the arrivals; the check compares each
     phase's own realized record with the capture's and names the phase + request that differ."""
-    import json
-    from verity_vllm.pipeline import experiment as EXP
     run = tmp_path / "run"
-    (run / "capture").mkdir(parents=True); (run / "control").mkdir(); (run / "census").mkdir(); (run / "nonint" / "c_bare").mkdir(parents=True)
+    (run / "capture").mkdir(parents=True)
+    (run / "control").mkdir()
+    (run / "census").mkdir()
+    (run / "nonint" / "c_bare").mkdir(parents=True)
     reqs = {"r0": {"first_step": 0, "finish_step": 12, "n_generated": 13, "arrive_step_realized": 0},
             "r1": {"first_step": 3, "finish_step": 21, "n_generated": 19, "arrive_step_realized": 3}}
     cap = {"timing": {"engine_steps": 38, "requests": reqs}}
@@ -155,8 +174,8 @@ def test_code_version_is_unknown_when_git_cannot_run(tmp_path: Path, monkeypatch
     monkeypatch.setattr(EXP.subprocess, "run", no_tree)
     assert EXP.code_version(tmp_path / "no-such-tree") == {"source": "unknown"}
 
-    def timeout(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+    def timeout(cmd, timeout=None, **kw):
+        raise subprocess.TimeoutExpired(cmd, timeout)
 
     monkeypatch.setattr(EXP.subprocess, "run", timeout)
     assert EXP.code_version(tmp_path) == {"source": "unknown"}
@@ -167,8 +186,6 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     EXPORT.json with the shipped commit): the first pod records carried code null.  Now: EXPORT.json's commit first
     (code_source 'EXPORT.json', the dirty-patch digest named when present), git HEAD in a git tree, null only when neither exists.
     The git tree's git is a stand-in (`experiment.code_version`'s own git is the tests above)."""
-    import subprocess
-    import verity_vllm.pipeline.experiment as EX
     root = os.path.abspath(os.path.join(os.path.dirname(WR.__file__), "..", ".."))
     exp = os.path.join(root, "EXPORT.json")
     if os.path.exists(exp):
@@ -177,7 +194,7 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
     def git(cmd, **kw):
         assert cmd[0] == "git", cmd
         return subprocess.CompletedProcess(cmd, 0, stdout="d" * 40 + "\n" if cmd[1] == "rev-parse" else "", stderr="")
-    monkeypatch.setattr(EX.subprocess, "run", git)
+    monkeypatch.setattr(EXP.subprocess, "run", git)
     dv = WR.derivation_provenance(str(tmp_path), str(tmp_path), None, ["x"])
     assert dv["code"] == "d" * 40 and dv["code_source"] == "git"
     try:
@@ -191,3 +208,143 @@ def test_provenance_code_is_the_shipped_commit_on_a_pod_tree_and_git_head_in_a_g
         assert dv3["code"] == "b" * 40 and dv3["code_source"] == "EXPORT.json"
     finally:
         os.unlink(exp)
+
+
+def test_a_spec_takes_a_workload_that_declares_no_requests_and_no_sampling():
+    """A workload whose `requests` is absent, null or empty gives a spec of no request, and one whose `sampling` is absent, null or
+    empty gives the driver's sampling alone, without its unset fields."""
+    wl = json.loads(workload_file(WL).read_text())
+    left_out: list[dict[str, Any]] = [{k: v for k, v in wl.items() if k != "requests"}, {**wl, "requests": None}, {**wl, "requests": []}]
+    for doc in left_out:
+        w = _spec(workload_doc=doc)["workload"]
+        assert (w["n_requests"], w["requests"], w["serving_profile"]) == (0, [], "B8-mixed"), sorted(doc)
+    left_out = [{k: v for k, v in wl.items() if k != "sampling"}, {**wl, "sampling": None}, {**wl, "sampling": {}}]
+    for doc in left_out:
+        assert _spec(workload_doc=doc, sampling={"seed": 7, "top_p": None})["workload"]["sampling"] == {"seed": 7}, sorted(doc)
+    assert _spec(sampling={"seed": 7, "top_p": None})["workload"]["sampling"] == {**wl["sampling"], "seed": 7}
+    none = _spec(workload_doc=None, workload_path=None)["workload"]
+    assert (none["n_requests"], none["requests"], none["sampling"], none["file_sha256"]) == (0, [], {}, None)
+
+
+def _put(path: Path, doc: Any) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(doc))
+    return path
+
+
+def test_the_index_counts_the_snapshots_its_index_lists_and_none_where_it_lists_none(tmp_path: Path):
+    """The snapshot index lists its tensors under `snapshots`, else under `entries`, else it is the list itself; where the list is
+    absent, null or empty the index states no count."""
+    run, two = tmp_path / "run", [{"step": 1, "path": "a"}, {"step": 0, "path": "b", "skipped": "too large"}]
+
+    def values(snaps: Any) -> dict[str, Any]:
+        _put(run / "capture" / "snapshots.json", snaps)
+        return EXP.build_experiment(run)["representation"]["transcript_values"]
+    left_out: list[Any] = [{}, {"snapshots": None}, {"snapshots": []}, {"snapshots": None, "entries": None}, {"entries": []}, [], "no index"]
+    for snaps in left_out:
+        assert "tensors_captured" not in values(snaps) and "snapshot_steps" not in values(snaps), snaps
+    for snaps in ({"snapshots": two}, {"entries": two}, {"snapshots": [], "entries": two}, {"snapshots": None, "entries": two}, two):
+        got = values(snaps)
+        assert (got["tensors_captured"], got["tensors_skipped_oversize"], got["snapshot_steps"]) == (1, 1, [0, 1]), snaps
+    assert values({"snapshots": two[:1], "entries": two})["tensors_skipped_oversize"] == 0, "`snapshots` is read before `entries`"
+
+
+def test_a_phases_realized_record_reads_tokens_without_their_timing_and_a_census_without_its_requests(tmp_path: Path):
+    """A phase's tokens.json whose `timing`, or its `requests`, is absent, null or empty states no request, and its engine steps are
+    the document's own; a census whose `realized` names no request states none, and one without `realized` counts its `steps`."""
+    run = tmp_path / "run"
+    reqs = {"r0": {"first_step": 0, "finish_step": 4, "n_generated": 5, "arrive_step_realized": 0}}
+    _put(run / "capture" / "tokens.json", {"timing": {"engine_steps": 9, "requests": reqs}})
+
+    def control(doc: dict[str, Any]) -> dict[str, Any]:
+        _put(run / "control" / "tokens.json", doc)
+        return EXP.realized_consistency(run)
+    left_out: list[dict[str, Any]] = [{"engine_steps": 9}, {"engine_steps": 9, "timing": None}, {"engine_steps": 9, "timing": {}},
+                                      {"timing": {"engine_steps": 9}}, {"timing": {"engine_steps": 9, "requests": None}},
+                                      {"timing": {"engine_steps": 9, "requests": {}}}]
+    for doc in left_out:
+        got = control(doc)
+        assert (got["status"], got["phases_compared"], got["problems"]) == ("consistent", ["control"], []), doc
+    assert control({"engine_steps": 8, "timing": {}})["problems"] == ["control: engine_steps 8 != capture 9"]
+    assert control({"timing": {"engine_steps": 8}, "engine_steps": 9})["problems"] == ["control: engine_steps 8 != capture 9"]
+    assert control({"timing": {"engine_steps": 9, "requests": {"r1": {}}}})["problems"] == ["control: request r0 absent"]
+    (run / "control" / "tokens.json").unlink()
+
+    def census(doc: dict[str, Any]) -> dict[str, Any]:
+        _put(run / "census" / "census.json", doc)
+        return EXP.realized_consistency(run)
+    left_out = [{"realized": {"engine_steps": 9}}, {"realized": {"engine_steps": 9, "requests": None}},
+                {"realized": {"engine_steps": 9, "requests": {}}}, {"steps": [{}] * 9}, {"steps": [{}] * 9, "realized": None},
+                {"steps": [{}] * 9, "realized": {}}]
+    for doc in left_out:
+        got = census(doc)
+        assert (got["status"], got["phases_compared"], got["problems"]) == ("consistent", ["census"], []), doc
+    for doc in ({"x": 1}, {"x": 1, "steps": None}, {"x": 1, "steps": []}):
+        assert census(doc)["problems"] == ["census: engine_steps 0 != capture 9"], doc
+    assert census({"realized": {"engine_steps": 9, "requests": {"r0": {**reqs["r0"], "first_step": 2}}}})["problems"] == [
+        "census: request r0 first_step 2 != capture 0"]
+
+
+def test_the_vu_partition_entry_reads_gates_and_a_verdict_with_blocks_left_out():
+    """The gate is G8's status and reason: None where the gates document or its `gates` is absent, null or empty or `G8` is absent
+    or null, and a gate of no status where `G8` is empty.  The binding is G8's `detail.binding`, not checked where the detail is
+    absent, null or empty.  A verdict's partition codes and its width's violators and unsupported uses count none where each is
+    absent, null or empty."""
+    qu = {"schema": "s", "binding_id": "b", "use": {"kind": "k"}, "verdict": {"status": "pass", "count": 2}}
+    left_out: list[Any] = [None, {}, {"gates": None}, {"gates": {}}, {"gates": {"G8": None}}, {"gates": {"G1": {"status": "pass"}}}, ["not gates"]]
+    for gates in left_out:
+        assert EXP.vu_partition_index(None, gates) == {"present": False, "gate": None}, gates
+        got = EXP.vu_partition_index(qu, gates)
+        assert (got["present"], got["gate"], got["binding"], got["status"], got["count"]) == (True, None, {"checked": False}, "pass", 2), gates
+    empty = EXP.vu_partition_index(qu, {"gates": {"G8": {}}})
+    assert (empty["gate"], empty["binding"]) == ({"status": None, "reason": None}, {"checked": False})
+    assert EXP.vu_partition_index(None, {"gates": {"G8": {}}}) == {"present": False, "gate": {"status": None, "reason": None}}
+    g8 = {"status": "pass", "reason": "r"}
+    left_out = [g8, {**g8, "detail": None}, {**g8, "detail": {}}, {**g8, "detail": {"binding": None}}, {**g8, "detail": {"binding": "not a dict"}}]
+    for gate in left_out:
+        got = EXP.vu_partition_index(qu, {"gates": {"G8": gate}})
+        assert (got["gate"], got["binding"]) == (g8, {"checked": False}), gate
+    assert EXP.vu_partition_index(qu, {"gates": {"G8": {**g8, "detail": {"binding": {"checked": True, "id": "b"}}}}})["binding"] == {
+        "checked": True, "id": "b"}
+    left_out = [{}, {"partition": None, "width": None}, {"partition": {}, "width": {}},
+                {"partition": {"codes": None}, "width": {"violators": None, "unsupported": None}},
+                {"partition": {"codes": []}, "width": {"violators": [], "unsupported": []}}]
+    for verdict in left_out:
+        got = EXP.vu_partition_index({**qu, "verdict": verdict}, None)
+        assert (got["partition"]["codes"], got["width"]["n_violators"], got["width"]["n_unsupported"]) == ([], 0, 0), verdict
+    stated = {"partition": {"status": "fail", "codes": [f"c{i}" for i in range(40)]}, "width": {"violators": [1, 2], "unsupported": (3,)}}
+    got = EXP.vu_partition_index({**qu, "verdict": stated}, None)
+    assert (got["partition"], got["width"]["n_violators"], got["width"]["n_unsupported"]) == (
+        {"status": "fail", "codes": [f"c{i}" for i in range(32)]}, 2, 1)
+
+
+def test_the_index_reads_a_spec_without_its_blocks_and_falls_back_to_the_run_record(tmp_path: Path):
+    """A spec whose `workload`, `configuration` or `initial_state` is absent, null or empty states no file digest and no initial
+    state; the checkpoint is then the run record's directory, and the profile and context class are the run record's `workload`'s,
+    None where that is absent, null or empty too."""
+    run = tmp_path / "run"
+    man = {"checkpoint_dir": "/x/snap", "workload": {"serving_profile": "B1", "context_class": "C8"}}
+
+    def index(spec: dict[str, Any], record: dict[str, Any]) -> tuple[dict[str, Any], Any]:
+        _put(run / "spec.json", spec)
+        _put(run / "run.json", record)
+        doc = EXP.build_experiment(run)
+        return doc["specification"], doc["representation"]["prescribed_inputs"]["initial_state"]
+    left_out: list[dict[str, Any]] = [{}, {"workload": None, "configuration": None, "initial_state": None},
+                                      {"workload": {}, "configuration": {}, "initial_state": {}},
+                                      {"workload": {"serving_profile": None}, "configuration": {"checkpoint": None}, "initial_state": {"kind": None}},
+                                      {"workload": {"serving_profile": ""}, "configuration": {"checkpoint": {}}}]
+    for spec in left_out:
+        got, kind = index(spec, man)
+        assert (got["workload_file"]["sha256"], got["checkpoint"], got["serving_profile"], got["context_class"], kind) == (
+            None, {"checkpoint_dir": "/x/snap"}, "B1", "C8", None), spec
+        no_workload: list[dict[str, Any]] = [{}, {"workload": None}, {"workload": {}}]
+        for workload in no_workload:
+            got, _ = index(spec, {"checkpoint_dir": "/x/snap", **workload})
+            assert (got["serving_profile"], got["context_class"], got["checkpoint"]) == (None, None, {"checkpoint_dir": "/x/snap"}), (spec, workload)
+    stated = {"workload": {"file_sha256": "f", "serving_profile": "B8", "context_class": "C256"},
+              "configuration": {"checkpoint": {"repo": "r"}}, "initial_state": {"kind": "fresh"}}
+    got, kind = index(stated, man)
+    assert (got["workload_file"]["sha256"], got["checkpoint"], got["serving_profile"], got["context_class"], kind) == (
+        "f", {"repo": "r"}, "B8", "C256", "fresh")
+

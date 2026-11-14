@@ -21,16 +21,16 @@ def test_the_steps_are_the_suites_then_circuit_check_then_the_lean_hook(tmp_path
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
     names = [(n, argv if isinstance(argv, str) else argv[1:4]) for n, argv, _cwd in CHECK.steps(tmp_path)]
     assert names[0] == ("pytest", [str(ROOT / "tools/verity/check/suites.py"), "--json", str(tmp_path / "suites.json")])
-    assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh")])
+    assert names[1] == ("flock-circuit-build", [str(ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh")])
     assert names[2] == ("flock-rust-tests", ["CARGO_BUILD_JOBS=1", "RUST_TEST_THREADS=1", "bash"])
     assert names[3] == ("circuit-check", ["-m", "circuit_check", "--all"])
-    assert names[4] == ("lean", "skipped: verity/protocols/flock/verifier is not on this tree")
+    assert names[4] == ("lean", "skipped: verity/protocols/proofs/flock/verifier is not on this tree")
 
 
 def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
     """A proving build never has `seed-injection` (1053c0c9 compiled only with it); the class sweep's proving build has no
     `glue`."""
-    script = (ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh").read_text()
+    script = (ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh").read_text()
     assert "for features in sha512 sha512,glue sha512,glue,seed-injection; do" in script
     assert "cargo check -q -p flock-live --bin flock-circuit" in script
 
@@ -38,13 +38,13 @@ def test_the_build_step_checks_every_cpu_feature_set_a_pod_builds():
 def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_crates_the_patches_change():
     """In release, as upstream's CI runs them, on the checkout the build step patches; in two invocations, since `--lib` on the
     upstream crates would drop their integration tests."""
-    script = (ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh").read_text()
+    script = (ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh").read_text()
     start = script.index('if [ "${1:-}" = test ]')
     mode = script[start:script.index("\n  exit\nfi\n", start)]
     assert "for features in sha512 sha512,glue,seed-injection; do" in mode, "the proving build's set, without seed-injection"
     assert 'cargo test --release -q -p flock-live --lib --features "$features"' in mode
     patched = set()
-    for p in sorted((ROOT / "verity" / "protocols" / "flock" / "prover").glob("flock-*-b684b12.patch")):
+    for p in sorted((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover").glob("flock-*-b684b12.patch")):
         patched |= {m.group(1) for line in p.read_text().splitlines() if (m := re.match(r"\+\+\+ b/crates/([a-z-]+)/", line))}
     upstream = re.search(r"cargo test --release -q((?: -p [a-z-]+)+)(?: \\)?$", mode, re.M).group(1).split(" -p ")[1:]
     assert sorted(upstream) == sorted(patched - {"flock-live"}), "every crate a patch changes, and only those"
@@ -52,9 +52,9 @@ def test_the_rust_tests_run_the_live_crates_unit_tests_and_every_test_of_the_cra
 
 def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolchain_only(tmp_path, monkeypatch):
     assert CHECK.rust_toolchain(), "check_build.sh pins its toolchain: an agent VM's default (1.83) can't build upstream"
-    flock = tmp_path / "verity" / "protocols" / "flock" / "prover"
-    files = {"verity/protocols/flock/prover/check_build.sh": "set -e\n", "verity/protocols/flock/prover/flock-sha512-b684b12.patch": "p",
-             "verity/protocols/flock/prover/live/src/lib.rs": "fn a() {}", "verity/protocols/flock/agreement/ci.py": "", "verity/protocols/flock/prover/README.md": ""}
+    flock = tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover"
+    files = {"verity/protocols/proofs/flock/prover/check_build.sh": "set -e\n", "verity/protocols/proofs/flock/prover/flock-sha512-b684b12.patch": "p",
+             "verity/protocols/proofs/flock/prover/live/src/lib.rs": "fn a() {}", "verity/protocols/proofs/flock/prover/agreement/ci.py": "", "verity/protocols/proofs/flock/prover/README.md": ""}
     for f, text in files.items():
         (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / f).write_text(text)
@@ -76,7 +76,7 @@ def test_the_rust_tests_key_moves_with_the_script_patches_live_crate_and_toolcha
     (home / "rustc").rename(rustc)
     key = CHECK.rust_tests_key(e)
     assert key, "the key's rustc runs under the script's pin, and never installs it"
-    (flock.parent / "agreement" / "ci.py").write_text("changed")
+    (flock / "agreement" / "ci.py").write_text("changed")
     (flock / "README.md").write_text("changed")
     assert CHECK.rust_tests_key(e) == key
     (flock / "live" / "src" / "lib.rs").write_text("fn b() {}")
@@ -103,7 +103,7 @@ def _pinned(tmp_path, monkeypatch, binary=_BIN, pinned=_BIN):
     (v / "lean").mkdir(parents=True)
     (v / "lean" / "lakefile.toml").write_text("")
     (v / "ci.py").write_text("import json, sys; open(sys.argv[sys.argv.index('--out') + 1] + '/argv.json', 'w').write(json.dumps(sys.argv))\n")
-    shutil.copy(ROOT / "verity" / "protocols" / "flock" / "agreement" / "agree.py", v / "agree.py")
+    shutil.copy(ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "agree.py", v / "agree.py")
     (v / "vectors.json").write_text(json.dumps({"replayable": {"sets": [{
         "pr83": "abc", "lean_statement": "verity/flock-circuit@abc", "statement": {"circuit": "art:0123/c.txt", "public": "art:0123/pub.bin"},
         "sessions": [{"dir": "art:0456/honest", "expect": {"accepted": True, "why": ""}}]}]}}))
@@ -195,9 +195,9 @@ def test_the_agreement_fails_while_the_verifier_requires_a_package_from_outside_
     (lean / "lakefile.toml").write_text('name = "flock_verifier"\n')
     (lean / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "git", "name": "mathlib", "rev": "abc"}]}))
     assert CHECK.lean_steps(out)[3][1].startswith("the verifier's Lean package requires mathlib from outside")
-    flock = ROOT / "verity" / "protocols" / "flock" / "verifier"
+    flock = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier"
     assert CHECK.requires_outside(flock) == []
-    assert CHECK.required_in_tree("verity/protocols/flock/verifier/") == (
+    assert CHECK.required_in_tree("verity/protocols/proofs/flock/verifier/") == (
         "verity/circuits/base/", "verity/circuits/lean/", "verity/commitments/lean/")
 
 
@@ -368,7 +368,7 @@ def test_the_real_preflight_replays_a_stored_session_per_binary_it_can():
     """Sets 0-5 store honest sessions: four of the eight pinned binaries replay one; the build flags are the same for all."""
     import json
 
-    sets = json.loads((ROOT / "verity" / "protocols" / "flock" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]
+    sets = json.loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]
     assert len({s["pr83"] for s in sets if s.get("sessions") and "tables" not in s["statement"]}) >= 4
 
 
@@ -376,15 +376,15 @@ def test_the_rule_the_gate_reads(monkeypatch):
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
-    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/",
-                                                           "verity/protocols/flock/tool.py", "verity/protocols/flock/verifier/",
+    assert tool.CHECK.merge_requires["lean-agreement"] == ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/pod/", "verity/protocols/proofs/flock/prover/agreement/",
+                                                           "verity/protocols/proofs/flock/prover/tool.py", "verity/protocols/proofs/flock/verifier/",
                                                            "verity/circuits/base/", "verity/circuits/lean/",
                                                            "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
     assert set(tool.CHECK.merge_requires) == {"lean-agreement", "lean-suites"}
-    assert {"verity/protocols/flock/verifier/VStar/In.lean", "verity/protocols/recursion/verifier/vstar_cli/"} <= set(tool.CHECK.merge_requires["lean-suites"])
-    pin = __import__("json").loads((ROOT / "verity" / "protocols" / "flock" / "agreement" / "upstream.json").read_text())
+    assert {"verity/protocols/proofs/flock/verifier/VStar/In.lean", "verity/protocols/proofs/recursion/verifier/vstar_cli/"} <= set(tool.CHECK.merge_requires["lean-suites"])
+    pin = __import__("json").loads((ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "upstream.json").read_text())
     assert set(pin["upstream"]["binaries"]) == {s["pr83"] for s in __import__("json").loads(
-        (ROOT / "verity" / "protocols" / "flock" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]}
+        (ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement" / "vectors.json").read_text())["replayable"]["sets"]}
 
 
 def test_the_recorded_check_takes_cpu_only_torch():
@@ -803,13 +803,13 @@ def test_record_sends_the_agreement_for_a_file_renamed_out_of_its_paths(tmp_path
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
     (tmp_path / "tools" / "verity" / "check" / "tool.py").write_text(
         "from research.store.tool import Tool\nCHECK = Tool(name='check', version='1', command=['true'], "
-        "merge_requires={'lean-agreement': ['verity/protocols/flock/prover/', '!README.md']})\n")
-    (tmp_path / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
-    (tmp_path / "verity" / "protocols" / "flock" / "prover" / "verify.rs").write_text("fn main() {}\n")
+        "merge_requires={'lean-agreement': ['verity/protocols/proofs/flock/prover/', '!README.md']})\n")
+    (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
+    (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover" / "verify.rs").write_text("fn main() {}\n")
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
-    git("mv", "verity/protocols/flock/prover/verify.rs", "verify.rs")
+    git("mv", "verity/protocols/proofs/flock/prover/verify.rs", "verify.rs")
     git("commit", "-q", "-m", "move")
     (tmp_path / "upstream.json").write_text(json.dumps({"upstream": {"art": "art:u", "sha256": "a" * 64},
                                                         "inputs": {"art": "art:i", "sha256": "b" * 64}}))
@@ -950,6 +950,31 @@ def test_circuit_check_is_granted_the_slot_once_every_step_beside_it_has_ended(t
     assert CHECK.run(tmp_path, 1)[0] and not grant.exists()
 
 
+def test_no_grant_passes_what_the_slot_books(tmp_path, monkeypatch):
+    """A slot whose book= is lowered under its mem= reserves only the booking (`slot.booked`), so the steps' grants, sized
+    from mem=, must stop at it: circuit-check's budget and its grant once alone, and the suites' shares, between them."""
+    monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
+    monkeypatch.setattr(CHECK, "memory_gb", lambda: 2048)
+    monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "300")
+    assert CHECK.slot_mem_gb() == 300, "no booking: the slot's mem="
+    monkeypatch.setenv(CHECK.SLOT.BOOK_ENV, "600")
+    assert CHECK.slot_mem_gb() == 300, "a booking past mem= grants no more than mem="
+    monkeypatch.setenv(CHECK.SLOT.BOOK_ENV, "130")
+    assert CHECK.slot_mem_gb() == 130
+
+    def grants(only):
+        steps = {s[0]: s[1] for g in CHECK.groups(tmp_path, 16, only=only) for s in g}
+        return {k: int(v[v.index("--mem-gb") + 1]) for k, v in steps.items() if "--mem-gb" in v}
+
+    for only in (None, ["circuit-check", "pytest"], ["pytest", "lean-build"], ["circuit-check"], ["pytest"]):
+        got = grants(only)
+        assert got and all(gb <= 130 for gb in got.values()), (only, got)
+        assert got.get("circuit-check", 0) + got.get("pytest", 0) * (2 if only is None else 1) <= 130, (only, got)
+    grant, ok = tmp_path / CHECK.CC_GRANT, _py("pass")
+    _fake_run(monkeypatch, [[("pytest", ok, tmp_path)], [("circuit-check", ok, tmp_path)]])
+    assert CHECK.run(tmp_path, 2)[0] and grant.read_text() == "130\n"
+
+
 def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypatch):
     """Pytest's parallel suites had no bound beside circuit-check's, so the two together outgrew the slot."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
@@ -961,7 +986,8 @@ def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypat
         return pt[1][pt[1].index("--mem-gb") + 1]
 
     assert mem(None) == mem(["circuit-check", "pytest"]) == "175", "halved: lean-suites runs beside pytest with the same share"
-    assert mem(["pytest"]) == "280"
+    assert mem(["pytest", "lean-build"]) == "280", "halved beside a Lean step"
+    assert mem(["pytest"]) == "560", "a shard of pytest alone (the 5-pod plan's 4/5) halved the slot for a lean-suites it lacks"
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV)
     [pt] = [s for g in CHECK.groups(tmp_path, 16) for s in g if s[0] == "pytest"]
     assert "--mem-gb" not in pt[1]
@@ -975,7 +1001,7 @@ def test_the_groups_split_the_cores_and_run_at_once(tmp_path, monkeypatch):
     monkeypatch.setenv(CHECK.SLOT.SLOT_MEM_ENV, "560")
     (pt,), (build, rust, cc), (lean,), (gate,) = CHECK.groups(tmp_path, 16)
     assert cc[1][cc[1].index("--mem-gb") + 1] == "210", "a slot's mem=, less what pytest and Lean hold beside it, caps circuit-check"
-    assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/protocols/flock/prover/check_build.sh")
+    assert build[0] == "flock-circuit-build" and build[1][-1].endswith("verity/protocols/proofs/flock/prover/check_build.sh")
     assert rust[0] == "flock-rust-tests" and rust[1][-2:] == [build[1][-1], "test"] and "CARGO_BUILD_JOBS=8" in rust[1]
     assert pt[1][1].endswith("tools/verity/check/suites.py") and pt[1][pt[1].index("--jobs") + 1] == "8" and "--fresh" not in pt[1]
     assert cc[1][cc[1].index("--jobs") + 1] == "8" and "--cache" in cc[1]
@@ -1024,9 +1050,9 @@ def test_the_suites_that_use_lean_run_after_the_verifier_is_built_and_beside_the
     lean = gs[2]
     assert [n for n, _, _ in lean] == ["lean-build", "lean-unit-cut", "lean-agreement"]
     assert [n for n, _, _ in gs[3]] == ["lean-audit"] and gs[3][0][1][4].endswith("tools/verity/lean/lean_audit.py")
-    assert [n for n, _, _ in gs[5]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
+    assert [n for n, _, _ in gs[4]] == ["lean-suites"] and CHECK.AFTER["lean-suites"] == "lean-build"
     assert all(pytest[pytest.index(s) - 1] == "--skip" for s in CHECK.AFTER_LEAN)
-    argv = gs[5][0][1]
+    argv = gs[4][0][1]
     assert argv[:2] == ["bash", "-c"] and argv[2].startswith(CHECK.ELAN), "with elan's lake on the PATH, as lean-build has it"
     assert all(f" {s} " in argv[2] for s in CHECK.AFTER_LEAN) and "suites-lean.json" in argv[2] and "--jobs 4" in argv[2]
     assert "--timeouts" in pytest and " --timeouts " in argv[2], \
@@ -1049,32 +1075,84 @@ def test_a_checkouts_files_are_gits_and_the_key_environment_drops_the_tree_path(
 
 
 def test_the_agreement_is_not_required_for_docs_alone():
-    """README.md and PROTOCOL.md under verity/protocols/flock/prover/ are docs the agreement never reads: alone they do not require it."""
+    """README.md and PROTOCOL.md under verity/protocols/proofs/flock/prover/ are docs the agreement never reads: alone they do not require it."""
     from research.merge import rule_touches
 
     spec2 = importlib.util.spec_from_file_location("check_tool", ROOT / "tools" / "verity" / "check" / "tool.py")
     tool = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(tool)
     rule = tool.CHECK.merge_requires["lean-agreement"]
-    docs = ["verity/protocols/flock/prover/live/PROTOCOL.md", "verity/protocols/flock/agreement/README.md", "verity/protocols/flock/prover/README.md", "AGENTS.md"]
+    docs = ["verity/protocols/proofs/flock/prover/live/PROTOCOL.md", "verity/protocols/proofs/flock/prover/agreement/README.md", "verity/protocols/proofs/flock/prover/README.md", "AGENTS.md"]
     assert rule_touches(rule, docs) == []
-    assert rule_touches(rule, [*docs, "verity/protocols/flock/agreement/ci.py"]) == ["verity/protocols/flock/agreement/"]
-    assert rule_touches(rule, ["verity/protocols/flock/agreement/DESIGN.md"]) == ["verity/protocols/flock/agreement/"]  # only the two names are left out
-    for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
-        reads = [line for line in (ROOT / "verity" / "protocols" / "flock" / "agreement" / f).read_text().splitlines()
-                 if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
-        assert not reads, f"{f} reads a doc the agreement trigger leaves out: {reads}"
+    both = ["verity/protocols/proofs/flock/prover/", "verity/protocols/proofs/flock/prover/agreement/"]
+    assert rule_touches(rule, [*docs, "verity/protocols/proofs/flock/prover/agreement/ci.py"]) == both
+    assert rule_touches(rule, ["verity/protocols/proofs/flock/prover/agreement/DESIGN.md"]) == both  # only the two names are left out
+
+
+def _lean_code(text: str) -> str:
+    """A Lean file's text without its comments (`--` lines, nested `/- -/` blocks), its string literals kept whole."""
+    out, i, depth = [], 0, 0
+    while i < len(text):
+        if text.startswith("/-", i):
+            depth, i = depth + 1, i + 2
+        elif depth:
+            depth, i = (depth - 1, i + 2) if text.startswith("-/", i) else (depth, i + 1)
+        elif text.startswith("--", i):
+            i = text.find("\n", i) if "\n" in text[i:] else len(text)
+        elif text[i] == '"' and text[i - 1:i] != "'":
+            j = i + 1
+            while j < len(text) and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
+    """`agreement_closure` leaves out every `.md` of the agreement's directory and the verifier's packages, so no file it keeps
+    may read one: no Python string but a docstring, no shell text but a comment and no lakefile names a doc, and the Lean
+    code, comments aside, has no `include_str` (the one way a Lake build reads a file it doesn't compile) and names a doc
+    only to cite a section of it (`PROTOCOL.md §1` in an error message)."""
+    import ast
+
+    files = CHECK.tracked_files()
+    kept = CHECK.agreement_closure(files)
+    dirs = {f.rsplit("/", 1)[0] + "/" for f in kept}
+    dropped = [f for f in files if f.endswith(".md") and f.rsplit("/", 1)[0] + "/" in dirs]
+    assert "verity/protocols/proofs/flock/prover/agreement/README.md" in dropped and not any(f.endswith(".md") for f in kept)
+    doc = re.compile(r"\.md\b|README|PROTOCOL")
+    reads = []
+    for f in kept:
+        text = (ROOT / f).read_text(errors="replace")
+        if f.endswith(".py"):
+            tree = ast.parse(text)
+            docs = {id(n.body[0].value) for n in ast.walk(tree)
+                    if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body
+                    and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+            reads += [f"{f}: {n.value[:80]!r}" for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                      and isinstance(n.value, str) and id(n) not in docs and doc.search(n.value)]
+        elif f.endswith(".sh"):
+            reads += [f"{f}: {line}" for line in text.splitlines() if doc.search(re.sub(r"(^|\s)#.*", "", line))]
+        elif f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean"):
+            reads += [f"{f}: names a doc"] if doc.search(text) else []
+        elif f.endswith(".lean"):
+            code = _lean_code(text)
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*(\.md\b(?! §)|README|PROTOCOL(?!\.md §))", code)]
+    assert not reads, f"a file the agreement's key covers reads Markdown the key leaves out; key it in agreement_closure: {reads}"
 
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():
-    """`agreement_key` covers verity/protocols/flock/agreement/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
+    """`agreement_key` covers verity/protocols/proofs/flock/prover/agreement/ and the interpreter only: an import from elsewhere in `ci.py` or the scripts
     it runs would be an input the key misses, so one fails here until the key covers it.  The key also leaves out the Lean
     package's `lean-audit.json` (`agreement_closure`), so neither those scripts nor the package's lakefile may mention it."""
     import ast
     import re
     import sys
 
-    here = ROOT / "verity" / "protocols" / "flock" / "agreement"
+    here = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "agreement"
     todo, seen = ["ci"] + re.findall(r'HERE / "([a-z_]+)\.py"', (here / "ci.py").read_text()), set()
     while todo:
         m = todo.pop()
@@ -1101,21 +1179,44 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     package's `lean-audit.json`, which only the audit reads: that one path, not every file of the name."""
     files = CHECK.tracked_files()
     closure = CHECK.agreement_closure(files)
-    policy, other = "verity/protocols/flock/verifier/lean-audit.json", "verity/protocols/flock/verifier/Flock/lean-audit.json"
+    policy, other = "verity/protocols/proofs/flock/verifier/lean-audit.json", "verity/protocols/proofs/flock/verifier/Flock/lean-audit.json"
     assert policy not in CHECK.agreement_closure([*files, policy]) and other in CHECK.agreement_closure([*files, other])
-    assert "verity/protocols/flock/agreement/ci.py" in closure and "verity/protocols/flock/verifier/FlockVerify.lean" in closure
-    assert "verity/protocols/flock/agreement/upstream.json" in closure
+    assert "verity/protocols/proofs/flock/prover/agreement/ci.py" in closure and "verity/protocols/proofs/flock/verifier/FlockVerify.lean" in closure
+    assert "verity/protocols/proofs/flock/prover/agreement/upstream.json" in closure
     assert not [f for f in closure if f.startswith("security/")]
     assert [f for f in files if f.startswith("security/Proofs/Flock/")]
-    nested = ["verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/nested/lakefile.toml",
-              "verity/protocols/flock/verifier/nested/N.lean"]
-    (tmp_path / "verity/protocols/flock/verifier/nested").mkdir(parents=True)
+    nested = ["verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/nested/lakefile.toml",
+              "verity/protocols/proofs/flock/verifier/nested/N.lean"]
+    (tmp_path / "verity/protocols/proofs/flock/verifier/nested").mkdir(parents=True)
     (tmp_path / nested[0]).write_text("")
     (tmp_path / nested[1]).write_text("")
     monkeypatch.setattr(CHECK, "ROOT", tmp_path)
     assert CHECK.agreement_closure(nested) == nested[:1]
     (tmp_path / nested[0]).write_text('[[require]]\nname = "x"\n')
     assert CHECK.agreement_closure(nested) == nested
+
+
+def test_a_doc_edit_keeps_the_agreements_key_and_a_script_or_source_edit_moves_it(tmp_path, monkeypatch):
+    """Neither Lake nor a script of the agreement reads Markdown (`test_the_agreement_is_not_required_for_docs_alone` holds
+    the scripts to it), so `agreement_key` leaves it out: a README edit keeps the stored pass, which a recorded check then
+    reuses, while an edit to a script or to the verifier's Lean moves the key."""
+    agree, lean = "verity/protocols/proofs/flock/prover/agreement/", "verity/protocols/proofs/flock/verifier/"
+    files = {agree + "README.md": "# the job\n", agree + "ci.py": "x = 1\n", lean + "lakefile.toml": "",
+             lean + "README.md": "# the verifier\n", lean + "PROTOCOL.md": "# its wire\n", lean + "Flock.lean": "def a := 1\n"}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text)
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "tracked_files", lambda *_: sorted(files))
+    assert CHECK.agreement_closure(sorted(files)) == [agree + "ci.py", lean + "Flock.lean", lean + "lakefile.toml"]
+    key = CHECK.agreement_key({})
+    for doc in (agree + "README.md", lean + "README.md", lean + "PROTOCOL.md"):
+        (tmp_path / doc).write_text("# rewritten\n")
+        assert CHECK.agreement_key({}) == key, f"{doc}: a doc edit keeps the agreement's pass"
+    for code in (agree + "ci.py", lean + "Flock.lean"):
+        (tmp_path / code).write_text("changed\n")
+        assert CHECK.agreement_key({}) != key, f"{code}: what the job runs moves its key"
+        key = CHECK.agreement_key({})
 
 
 def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, monkeypatch):
@@ -1307,18 +1408,6 @@ def test_a_step_is_hung_only_once_its_outputs_have_been_quiet_for_idle_s_and_ove
                                                             CHECK.STEP_BUDGET_S)
 
 
-def test_a_lean_module_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
-    """`lean-changed` exits only once `slow` is running (the FIFO): under --keep-going its failure still stops `slow`."""
-    gate = _gate(tmp_path, monkeypatch)
-    slow = _py("import signal, sys\nwith open(sys.argv[1], 'w') as f:\n    f.write('x')\nsignal.pause()", gate)
-    changed = _py("import sys\nopen(sys.argv[1]).read(1)\nsys.exit(1)", gate)
-    _fake_run(monkeypatch, [[("slow", slow, tmp_path)], [("lean-changed", changed, tmp_path)]])
-    passed, done = CHECK.run(tmp_path, 2, keep_going=True)
-    by = {s["step"]: s for s in done}
-    assert not passed and by["lean-changed"]["status"] == "failed"
-    assert by["slow"]["status"] == "stopped" and by["slow"]["detail"] == "stopped: lean-changed failed"
-
-
 def test_a_rust_crate_that_does_not_compile_stops_the_run_even_under_keep_going(tmp_path, monkeypatch):
     """flock-circuit-build fails, with cargo's line, only once `slow` is running (the FIFO): under --keep-going `slow` stops."""
     gate = _gate(tmp_path, monkeypatch)
@@ -1463,8 +1552,8 @@ def test_under_keep_going_only_a_halting_step_stops_the_run_and_it_is_named(tmp_
     steps.end({"step": "pytest", "status": "failed"})
     steps.end({"step": "flock-circuit-build", "status": "failed"})
     assert not steps.stopping
-    steps.end({"step": "lean-changed", "status": "failed"})
-    assert steps.stopping and steps.halted == "lean-changed"
+    steps.end({"step": "flock-circuit-build", "status": "failed", "halts": True})
+    assert steps.stopping and steps.halted == "flock-circuit-build"
     steps = CHECK.Steps(tmp_path)
     steps.end({"step": "pytest", "status": "failed"})
     assert steps.stopping and steps.halted == "pytest"
@@ -1554,15 +1643,12 @@ def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_
     assert json.loads((tmp_path / "result.json").read_text())["passes"] == {}, "a stopped run has no verdict"
 
 
-def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):
+def test_the_audit_is_a_group_of_its_own_and_a_tree_without_the_verifier_has_no_lean_group_but_a_skip(tmp_path, monkeypatch):
     out, _ = _pinned(tmp_path, monkeypatch)
     gs = CHECK.groups(out, 8)
-    assert len(gs) == 7 and [n for n, _, _ in gs[4]] == ["lean-changed"] and "lean-changed" in CHECK.HALTS
-    argv, audit = gs[4][0][1], gs[3][0][1]
-    assert argv[1].endswith("tools/verity/lean/lean_changed.py")
-    assert argv[argv.index("--cache") + 1] == audit[audit.index("--cache") + 1], "the audit's own passes"
-    assert argv[argv.index("--deps") + 1] == audit[audit.index("--deps") + 1], "and its kept dependencies"
-    assert CHECK.groups(out, 8, cache=False)[4][0][1].startswith("skipped: --no-cache")
+    assert len(gs) == 6 and [n for n, _, _ in gs[3]] == ["lean-audit"]
+    assert not any(str(a).endswith("lean_changed.py") for g in gs for _, argv, _ in g if not isinstance(argv, str) for a in argv), \
+        "no step runs the fast path's file: without a mode it runs nothing"
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "no-verifier")
     assert len(CHECK.groups(out, 8)) == 4
 
@@ -1582,7 +1668,6 @@ def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path,
     assert "--cache" not in cold["circuit-check"]
     for s in ("pytest", "lean-suites", "lean-audit"):
         assert "--fresh" in " ".join(after[s]) and "--fresh" not in " ".join(cached[s]), s
-    assert after["lean-changed"].startswith("skipped: --no-cache")
 
 
 def test_an_uncached_check_runs_its_steps_with_lakes_artifact_cache_off(tmp_path, monkeypatch):
@@ -1621,13 +1706,15 @@ def test_a_cold_check_runs_the_opt_in_tests_after_their_steps_suites_and_no_othe
 
 
 def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless_each_passed(tmp_path, monkeypatch, capsys):
-    """Each suite's named tests in a `suites.py` run of its own with its variable set and no other's.  A named test that skipped
-    (its mark reads another variable) or that its suite lacks (pytest's "not found") ran nowhere, so it fails the step."""
+    """Each suite's named tests in one `suites.py` run of its own with its variables set, every one of them, and no other
+    suite's.  A named test that skipped (its mark reads a variable its suite doesn't list) or that its suite lacks (pytest's
+    "not found") ran nowhere, so it fails the step."""
     from collections import namedtuple
 
     suite = namedtuple("suite", "name path")
-    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": ("VERITY_A_SLOW", ("tests/test_a.py::test_x", "tests/test_a.py::test_y")),
-                                          "b/two": ("VERITY_B_SLOW", ("tests/test_b.py::test_z",))})
+    monkeypatch.setattr(CHECK, "OPT_IN", {"a/one": {"VERITY_A_SLOW": ("tests/test_a.py::test_x",),
+                                                    "VERITY_A_E2E": ("tests/test_a.py::test_y",)},
+                                          "b/two": {"VERITY_B_SLOW": ("tests/test_b.py::test_z",)}})
     monkeypatch.setattr(CHECK.SUITES, "discover", lambda: [suite("one", "a/one"), suite("two", "b/two")])
     monkeypatch.setattr(CHECK, "AFTER_LEAN", ("two",))
     ran: list = []
@@ -1636,7 +1723,8 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
 
     def run(cmd, cwd, env):
         suite = cmd[2]
-        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_B_SLOW") if env.get(v) == "1"], cmd[cmd.index("--") + 1:]))
+        ran.append((suite, [v for v in ("VERITY_A_SLOW", "VERITY_A_E2E", "VERITY_B_SLOW") if env.get(v) == "1"],
+                    cmd[cmd.index("--") + 1:]))
         rc, counts = outcome[suite]
         if counts is not None:
             Path(cmd[cmd.index("--json") + 1]).write_text(json.dumps([{"suite": suite, "status": "passed", "counts": counts}]))
@@ -1644,7 +1732,8 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
 
     monkeypatch.setattr(CHECK.subprocess, "run", run)
     assert CHECK.opt_in(tmp_path, "pytest", ["--fresh"]) == 0
-    assert ran == [("a/one", ["VERITY_A_SLOW"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], "pytest's suites alone"
+    assert ran == [("a/one", ["VERITY_A_SLOW", "VERITY_A_E2E"], ["tests/test_a.py::test_x", "tests/test_a.py::test_y"])], \
+        "pytest's suites alone, each in one run"
     ran.clear()
     assert CHECK.opt_in(tmp_path, "lean-suites", []) == 0 and ran == [("b/two", ["VERITY_B_SLOW"], ["tests/test_b.py::test_z"])]
     capsys.readouterr()
@@ -1652,7 +1741,7 @@ def test_the_opt_in_tests_run_with_their_variable_set_and_fail_their_step_unless
     outcome["b/two"] = (4, None)
     assert CHECK.opt_in(tmp_path, "all", []) == 1
     said = capsys.readouterr().out
-    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1 passed (1 skipped)" in said
+    assert "a/one: 1 of the 2 tests named with VERITY_A_SLOW=1, VERITY_A_E2E=1 passed (1 skipped)" in said
     assert "b/two: 0 of the 1 tests named with VERITY_B_SLOW=1 passed (suites.py exited 4)" in said
     assert CHECK.opt_in(tmp_path, "circuit-check", []) == 2
 
@@ -1739,7 +1828,7 @@ def test_the_preflight_refuses_a_fetched_fixture_that_neither_this_machine_nor_t
     (tmp_path / "big" / "there.bin").write_bytes(b"exact bytes")
     there = fixture_id(tmp_path / "big" / "there.bin")
     (tmp_path / "fixtures").mkdir()
-    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(
+    (tmp_path / "artifacts.json").write_text(json.dumps(
         {good: "big/good.bin", gone: "big/gone.bin", small: "small.json", local: "big/local.bin", there: "big/there.bin",
          "previous": {good: ["art:" + "d" * 64]}}))
     (tmp_path / "small.json").write_text("{}")
@@ -1815,7 +1904,7 @@ def test_a_contradicted_cached_pass_is_named_in_the_result(tmp_path, monkeypatch
 
 
 def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_path, monkeypatch, capsys):
-    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/flock/prover/\\303\\251.py"`), which no prefix of the
+    """`git diff --name-only` quotes a name with bytes outside ASCII (`"verity/protocols/proofs/flock/prover/\\303\\251.py"`), which no prefix of the
     agreement's rule matched, so `--record` checked such a change without sending the agreement's pinned build."""
     import shutil
     import subprocess
@@ -1831,8 +1920,8 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     git("init", "-q", "-b", "main")
     git("add", "-A")
     git("commit", "-q", "-m", "base")
-    (tmp_path / "verity" / "protocols" / "flock" / "prover").mkdir(parents=True)
-    (tmp_path / "verity" / "protocols" / "flock" / "prover" / "é.py").write_text("x = 1\n")
+    (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover").mkdir(parents=True)
+    (tmp_path / "verity" / "protocols" / "proofs" / "flock" / "prover" / "é.py").write_text("x = 1\n")
     git("checkout", "-q", "-b", "pr")
     git("add", "-A")
     git("commit", "-q", "-m", "é")
@@ -1851,8 +1940,8 @@ def test_record_sends_the_agreement_for_a_flock_file_whose_name_git_quotes(tmp_p
     monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
     monkeypatch.setattr(subprocess, "run", run)
     assert CHECK.record(["--base", "main"]) == 0
-    assert ("check: changes under verity/protocols/flock/prover/, verity/protocols/flock/pod/, verity/protocols/flock/agreement/, verity/protocols/flock/tool.py, "
-            "verity/protocols/flock/verifier/, verity/circuits/base/, verity/circuits/lean/, "
+    assert ("check: changes under verity/protocols/proofs/flock/prover/, verity/protocols/proofs/flock/prover/pod/, verity/protocols/proofs/flock/prover/agreement/, verity/protocols/proofs/flock/prover/tool.py, "
+            "verity/protocols/proofs/flock/verifier/, verity/circuits/base/, verity/circuits/lean/, "
             "verity/commitments/lean/ against main: sending presigned URLs for the pinned upstream build and inputs") \
         in capsys.readouterr().out
     [cmd] = launched
@@ -1892,7 +1981,7 @@ def test_a_change_to_the_lean_verifier_alone_needs_its_gates_and_misses_the_agre
 def test_every_file_the_agreement_reads_needs_the_agreement_to_merge():
     """The rule `check.py --record` sends the upstream build by, and the gate refuses by, covers each tracked file the agreement
     reads (`agreement_closure`: its scripts and the Lean package `flock-verify` is built from) but the docs, so a change to any
-    of them can't land on a check that skipped it, not only those under verity/protocols/flock/prover/."""
+    of them can't land on a check that skipped it, not only those under verity/protocols/proofs/flock/prover/."""
     from research.merge import rule_touches
 
     spec2 = importlib.util.spec_from_file_location("check_tool_reads", ROOT / "tools" / "verity" / "check" / "tool.py")
@@ -2044,7 +2133,10 @@ _POST_STUB = ('case "$*" in *"msg reply"*) f=; p=; for a; do [ "$p" = --file ] &
 
 def _train_repo(tmp_path):
     """A clone of a local origin with a root commit on main, and train.sh's environment with `uv` and `sleep` stubbed: `uv` records
-    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock."""
+    its arguments in ``argv`` and prints a launch line, and `sleep` waits for that launch, not on a clock.  Each call of
+    ``train`` has its own launch (`launched.$TEST_CALL`): train.sh returns once it reads the launch line, so a launcher can
+    still be running, and mark its launch, after a later call has begun, whose 720 polls would each return at once on that mark
+    and could all end before its own launcher writes (on a loaded node)."""
     import os
     import subprocess
 
@@ -2064,19 +2156,20 @@ def _train_repo(tmp_path):
     bin_, done, argv = tmp_path / "bin", tmp_path / "launched", tmp_path / "argv"
     bin_.mkdir()
     (bin_ / "uv").write_text(f"#!/bin/sh\n{_POST_STUB.format(posted=tmp_path / 'posted')}printf '%s\\n' \"$@\" > {argv}\n"
-                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n" f"touch {done}\n")
-    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done} ]; do :; done\n")
+                             "echo 'research: run r20261009-050001-aaaa launched on vy-x (p) pid=1 -> /r'\n"
+                             f"touch {done}.$TEST_CALL\n")
+    (bin_ / "sleep").write_text(f"#!/bin/sh\nwhile [ ! -e {done}.$TEST_CALL ]; do :; done\n")
     for f in bin_.iterdir():
         f.chmod(0o755)
     env = {**os.environ, **git_env, "PATH": f"{bin_}:/usr/bin:/bin", "TMPDIR": str(tmp_path), "AWS_ACCESS_KEY_ID": "dummy",
            "R2_ENDPOINT": "dummy"}
     for k in ("VERITY_SKIP_STORE", "AWS_SESSION_TOKEN"):
         env.pop(k, None)
+    calls = iter(range(1, 1000))
 
     def train(*a, **extra):
-        done.unlink(missing_ok=True)      # else `sleep` returns at once on an earlier call's launch, before this one's
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), *a], capture_output=True, text=True,
-                              cwd=tmp_path / "repo", env={**env, **extra})
+                              cwd=tmp_path / "repo", env={**env, "TEST_CALL": str(next(calls)), **extra})
 
     return git, train, argv
 
@@ -2144,6 +2237,19 @@ def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_pa
                        (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
         p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
         assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
+
+
+def test_train_sh_gives_every_check_a_timeout_so_its_run_extends_the_nodes_lease(tmp_path):
+    """Only a `research run` with a --timeout extends its node's lease (`remote.lease_extend_s`): without one a node that runs
+    nothing but checks stops two hours after its boot, so every check train.sh launches carries one."""
+    git, train, argv = _train_repo(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "landing")
+    git("push", "-q", "origin", "HEAD:main")
+    for flags in ((), ("--deferred", "lean-audit"), ("--cc-records",)):
+        p = train("HEAD", "vy-x", *flags)
+        args = argv.read_text().split()
+        assert p.returncode == 0 and args[args.index("--timeout") + 1] == "36000", (flags, p.stderr, args)
 
 
 def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
@@ -2251,20 +2357,59 @@ def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
     git("commit", "-q", "-am", "change")
-    git("push", "-q", "origin", "HEAD:main")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:main")       # by its path: no ref of the clone's says origin has it
     origin, gone, sleeps = tmp_path / "origin.git", tmp_path / "gone.git", tmp_path / "sleeps"
     origin.rename(gone)
     # the first backoff gives origin back; a poll for the launch waits on it, not on a clock
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\nif [ -e {gone} ]; then mv {gone} {origin}; '
-                                            f'else while [ ! -e {tmp_path / "launched"} ]; do :; done; fi\n')
+                                            f'else while [ ! -e {tmp_path / "launched"}.$TEST_CALL ]; do :; done; fi\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
     assert sleeps.read_text().split()[0] == "5"
     sleeps.unlink()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "another")
+    git("push", "-q", str(origin), "HEAD:main")
     origin.rename(gone)
     (tmp_path / "bin" / "sleep").write_text(f'#!/bin/sh\necho "$1" >> {sleeps}\n')
     p = train("HEAD", "vy-x")
     assert p.returncode == 1 and "git fetch origin failed" in p.stderr and sleeps.read_text().split() == ["5", "15"], p.stderr
+
+
+def _counting_git(tmp_path):
+    """A `git` ahead of the real one on train.sh's PATH that appends each call's subcommand to the file it returns."""
+    import shutil
+
+    calls = tmp_path / "git-calls"
+    (tmp_path / "bin" / "git").write_text(
+        f'#!/bin/sh\nfor a; do case $a in -*|*/*) ;; *) echo "$a" >> {calls}; break;; esac; done\nexec {shutil.which("git")} "$@"\n')
+    (tmp_path / "bin" / "git").chmod(0o755)
+    return calls
+
+
+def test_train_sh_fetches_only_a_commit_no_ref_of_origin_holds(tmp_path):
+    """The queue launches each shard of a candidate it has just built and pushed from the same clone: a branch of origin
+    points at it, so the launch fetches nothing (a fetch per shard held the clone's lock for each); a commit origin holds but
+    no ref of the clone's says so is fetched, then launched; one origin lacks is refused."""
+    git, train, argv = _train_repo(tmp_path)
+    calls = _counting_git(tmp_path)
+    (tmp_path / "repo" / "a").write_text("b\n")
+    git("commit", "-q", "-am", "candidate")
+    git("push", "-q", "origin", "HEAD:refs/heads/queue/c1")
+    for shard in ("1/2", "2/2"):
+        p = train("HEAD", "vy-x", "--deferred", "pytest", "--shard", shard)
+        assert p.returncode == 0 and p.stdout.splitlines()[-1] == "RUN r20261009-050001-aaaa", (p.stdout, p.stderr)
+    assert "fetch" not in calls.read_text().split(), calls.read_text()
+    (tmp_path / "repo" / "a").write_text("c\n")
+    git("commit", "-q", "-am", "pushed by its path")
+    git("push", "-q", str(tmp_path / "origin.git"), "HEAD:refs/heads/queue/c2")
+    calls.unlink()
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 0 and calls.read_text().split().count("fetch") == 1, (p.stderr, calls.read_text())
+    (tmp_path / "repo" / "a").write_text("d\n")
+    git("commit", "-q", "-am", "local")
+    p = train("HEAD", "vy-x")
+    assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
 
 
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):

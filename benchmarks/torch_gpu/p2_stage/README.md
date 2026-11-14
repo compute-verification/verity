@@ -11,7 +11,9 @@ on that buffer.
   rows to it by P2's reference decode of one label (`p2_v1/store.py`'s `decode_block`), the check's ground truth.
   `open_store` takes the store: memory-accounting's encoded store (`p2_v1/store.py encode`'s segment files, read by
   `segment_rows`), under `store_salt`, `setup.draw_salt` of the coin and commitment its `setup.json` is held to; or a
-  development store under a public test salt.
+  development store under a public test salt. An encoded store is refused unless its `setup.json`'s `program` is the
+  weights manifest's name of its weights (`weights_name`: the generator's `model`), and a manifest that gives no name
+  is refused; only a caller that holds nothing to a weights manifest passes none.
 - `stage.py`: `decode_matrix(store, layer, tensor, out_buf)` and the fixture's `decode_layer(store, layer, staging)`,
   built on `libp2v1.so` through `p2_v1.gpu.Kernels` (keys by `p2v1_keys` v4, then `p2v1_decode`). A chunk of labels is
   decoded at a time, and each row's payload bytes are scattered to their place in the buffer. What the reference refuses
@@ -32,7 +34,7 @@ on that buffer.
   `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store
   against the reference afterwards.
 - `sketch.py`: PoUB's receipts beside the decode (Demo B's bandwidth audit; the interface is
-  `verity/protocols/poub/verifier/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
+  `verity/protocols/accounting/poub/verifier/PROTOCOL.md` §11, the fixture `benchmarks/pous/p2_v1/serve.py fixture`). With
   a pass attached (`store.sketch = sketch.Pass(seed, units, device)`, `units = sketch.plan_units(layout.tensors)`: the
   units the store's tensors lie in, so the encoded padding past the head is in no receipt), `EncodedRows.decode_rows`
   sketches the units of each chunk before decoding it, from the same rows on the device: σ of each unit's 8,224 stored

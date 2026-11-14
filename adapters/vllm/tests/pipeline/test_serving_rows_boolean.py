@@ -17,21 +17,22 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import REGISTRY, bind
-from verity.protocols.spot.verifier.one_stage import draw as DR, partition as P, registration as R
 from verity.commitments.windows import rows as CS
+from verity.definitions import boolean as BB
+from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
+from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+
+from tests.pipeline import served_rope as SR
+from tests.pipeline.served_rope import HEADS, LAW, ROPE, D
 from verity_vllm.pipeline import deferred_rows as DRW
 from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline import serving_rows as SRW
-from verity.definitions import boolean as BB
-from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1)
-from verity.definitions.call_scope import specialization
+from verity_vllm.query.program_view import specialization
 from verity_vllm.query.program_view import spec_base, spec_statics
-
-from tests.pipeline import served_rope as SR
-from tests.pipeline.served_rope import D, HEADS, LAW, ROPE
 
 ROPE_BITS = f"RoPEHead_v2{{D={D}}}"
 GEMM, GEMM_BITS = "GemmCoordinate_v1{K=16}", "GemmCoordinate_v4{K=16}"
@@ -115,8 +116,8 @@ def test_a_boolean_templates_window_commits_the_word_rows_and_passes_the_verifie
 
     # the same u16 rows and the same unit -> served identity index as the word template's window
     n = HEADS * 3 * D * 2
-    rows = [np.frombuffer((d / "m0-private.bin").read_bytes()[:n], dtype="<u2") for d in (wdir, tmp_path / "word")]
-    assert np.array_equal(*rows) and rows[0].any()
+    rows: list[np.ndarray] = [np.frombuffer((d / "m0-private.bin").read_bytes()[:n], dtype="<u2") for d in (wdir, tmp_path / "word")]
+    assert np.array_equal(rows[0], rows[1]) and rows[0].any()
     idx = [json.loads((d / "index.json").read_text())["members"][0] for d in (wdir, tmp_path / "word")]
     assert idx[0]["rows"] == idx[1]["rows"] and (idx[0]["template"], idx[1]["template"]) == (ROPE_BITS, ROPE)
 

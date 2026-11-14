@@ -5,11 +5,11 @@ logits' version 4, whose word view is `_v3`.
     U32And_v2, I32Sub_v2, I32ToF32_v2, F32CeilFtz_v2     traced: and.b32, sub.s32, cvt.rn.f32.s32, cvt.rpi.ftz.f32.f32
     DsaUe8m0Scale_v2, DsaUe8m0Quant_v2{N}
     DsaIndexerKRow_v2{D,ROPE,EPS}, DsaIndexerQHead_v2{D,ROPE,NH}, DsaIndexerQ_v2{H,D,ROPE}
-    DsaMqaLogit_v4{H,D}, DsaMqaLogits_v4{N,H,D}          the H200's (`DsaMqaLogit_v3`); _v2 is the refuted `_v1` on bits
+    DsaMqaLogit_v4{H,D}, DsaMqaLogits_v4{N,H,D}          the H200's (`DsaMqaLogit_v3`); `DsaMqaLogit_v2` is the refuted `_v1` on bits
     DsaMqaLogitsQ_v1{H,D}, DsaMqaLogitsKey_v1{H,D}      DsaMqaLogit_v4's circuit cut at what a row's keys share; no word view
     DsaTopKShortRow_v2{TOPK}                            traced at its TOPK: slot i's bits are i's, each one bit `len <= i`
 
-The callees are core's Boolean FP32 pieces (`verity.definitions.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
+The callees are core's Boolean FP32 pieces (`verity.circuits.ops.boolean`'s `elementwise`, `attention`, `cast`, `mufu`, `scalar`) and
 `gemm.HopperE4m3QgmmaDot32_v2`; a constant word is constant bits and `-x` one NOT gate on x's sign bit (`F32Neg_v1`).  Each callee is
 its word Definition on every word, NaN payloads included.  No table or lookup gate.
 
@@ -33,13 +33,13 @@ from verity.circuits import boolean as BL
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.refs import Coll, concat
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.boolean import attention as BA
-from verity.definitions.ops.boolean import cast as BC
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp as FP
-from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.ops.boolean import mufu as BM
-from verity.definitions.ops.boolean import scalar as SC
+from verity.circuits.ops.boolean import attention as BA
+from verity.circuits.ops.boolean import cast as BC
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.silicon import fp as FP
+from verity.circuits.ops.boolean import gemm as BG
+from verity.circuits.ops.boolean import mufu as BM
+from verity.circuits.ops.boolean import scalar as SC
 from verity.circuits.boolean.forms import ONE, ZERO, NOT, OR, add, and_reduce, const_bits, mux, or_reduce, sub
 from verity.circuits.boolean.trace import definition
 from verity.definitions.registry import dsa as D
@@ -219,18 +219,6 @@ DsaMqaLogitV2 = flat(
     _logit, D.DsaMqaLogit)
 
 
-def _logits(B, S, q, w, k, ks):
-    """`DsaMqaLogits_v1`'s body on bits."""
-    return B.batch(bind(DsaMqaLogitV2, H=S.H, D=S.D), q, w, k, ks, axes=(None, None, 0, 0))
-
-
-DsaMqaLogitsV2 = flat(
-    "DsaMqaLogits", 2, ["N", "H", "D"],
-    lambda S: ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.N, Array(S.D, E4M3))),
-                ("ks", Array(S.N, F32))), Array(S.N, F32)),
-    _logits, D.DsaMqaLogits)
-
-
 def _logit_sig(S):
     return ((("q", Array(S.H, Array(S.D, E4M3))), ("w", Array(S.H, F32)), ("k", Array(S.D, E4M3)), ("ks", F32)), F32)
 
@@ -296,5 +284,4 @@ DsaTopKShortRowV2 = EW.specialized("DsaTopKShortRow", 2, ["TOPK"], _topk, lambda
                                    doc=_topk.__doc__, word=lambda b: bind(D.DsaTopKShortRow, TOPK=b["TOPK"]))
 
 BOOLEAN_DSA = [U32AndV2, I32SubV2, I32ToF32V2, F32CeilFtzV2, DsaUe8m0ScaleV2, DsaUe8m0QuantV2, DsaIndexerKRowV2, DsaIndexerQHeadV2,
-               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitsV2, DsaMqaLogitV4, DsaMqaLogitsQ, DsaMqaLogitsKey, DsaMqaLogitsV4,
-               DsaTopKShortRowV2]
+               DsaIndexerQV2, DsaMqaLogitV2, DsaMqaLogitV4, DsaMqaLogitsQ, DsaMqaLogitsKey, DsaMqaLogitsV4, DsaTopKShortRowV2]

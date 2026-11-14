@@ -199,6 +199,42 @@ def test_the_init_of_a_package_the_move_emptied_may_be_deleted(tmp_path):
     assert r["rules"] == {"emptied": ["protocols/pous/src/verity_pous/__init__.py", "protocols/pous/src/verity_pous/sub/__init__.py"]}
 
 
+CARDS = {**BASE_FILES, "verity/hardware/site.py": "S = 1\n", "verity/hardware/cards/a100.toml": "peak = 1\n"}
+CODE = "from verity.hardware.site import S\n\n\ndef load(name):\n    return {name: S}\n"
+
+
+@pytest.mark.parametrize("held, certified", [
+    ("", True), ("# one data sheet a GPU\n\n   \n", True),
+    ('"""The data sheets, one a GPU."""\n', False), (CODE, False), ("def load(:\n", False),
+])
+def test_the_init_of_an_emptied_package_may_be_deleted_only_if_it_holds_nothing_but_comments(tmp_path, held, certified):
+    """The range moves only the data sheet out of `verity/hardware/cards/` and deletes its `__init__.py`. Read at BASE by
+    the mover's own `only_comments`: empty or of comments and whitespace alone, it goes with its package; a docstring,
+    code, or text that doesn't parse is refused, naming the file and the fix."""
+    repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": held})
+    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _git(repo, "rm", "-q", "verity/hardware/cards/__init__.py")
+    r = _check(repo, base)
+    if certified:
+        assert r["certified"] and r["rules"] == {"emptied": ["verity/hardware/cards/__init__.py"]}, r["refusals"]
+        return
+    assert not r["certified"]
+    [f] = r["refusals"]
+    assert (f["path"], f["status"]) == ("verity/hardware/cards/__init__.py", "D")
+    assert "give it a row in the map saying where it goes, or delete it in a hand commit before the move" in f["reason"]
+    assert "emptied" not in r["rules"]
+
+
+def test_the_init_of_an_emptied_package_moved_by_its_row_is_certified(tmp_path):
+    """The fix for one that holds code: its row sends it where it goes (the package becomes a module of its name)."""
+    repo, base = _repo(tmp_path, {**CARDS, "verity/hardware/cards/__init__.py": CODE})
+    _move(repo, "verity/hardware/cards/a100.toml", "hardware/cards/a100.toml")
+    _move(repo, "verity/hardware/cards/__init__.py", "verity/hardware/cards.py")
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert {"old": "verity/hardware/cards/__init__.py", "new": "verity/hardware/cards.py"} in r["renames"]
+
+
 COVERED = {
     "tools/move/layout_map.toml": '[roots]\nnew = { verity = "verity" }\n',
     "lib/core/__init__.py": "", "lib/core/wire/__init__.py": "", "lib/core/wire/frames.py": "X = 1\n",
@@ -296,6 +332,26 @@ def test_a_cover_may_keep_the_place_the_range_declares_for_an_entry_and_add_its_
             assert [f["path"] for f in r["refusals"]] == ["gates.toml"]
 
 
+def test_a_list_names_a_directory_the_range_emptied_into_one_as_its_parts_or_drops_it_where_it_holds_that_one(tmp_path):
+    """The range sends both parts of `lib/defs/` into `pkg/`, which already holds a file, and leaves `lib/defs/` empty.
+    git reads that as `lib/defs/` sent whole to `pkg/`, but the mover rows its parts, so it writes the list's `lib/defs/`
+    as the parts, or drops it where the list names `pkg/` already. Each holds the files the old list held: a cover.
+    Refused: a list that drops `lib/defs/` while nothing it still has holds them."""
+    for case, old, new, ok in (("parts", '["lib/defs/", "other/"]', '["pkg/a/", "pkg/b/", "other/"]', True),
+                               ("held", '["lib/defs/", "pkg/", "other/"]', '["pkg/", "other/"]', True),
+                               ("lost", '["lib/defs/", "other/"]', '["other/"]', False)):
+        repo, base = _repo(tmp_path / case, {"lib/defs/a/x.py": "X = 1\n", "lib/defs/b/y.py": "Y = 1\n",
+                                             "pkg/z.py": "Z = 1\n", "other/w.py": "W = 1\n", "gates.toml": f"paths = {old}\n"})
+        _move(repo, "lib/defs/a", "pkg/a")
+        _move(repo, "lib/defs/b", "pkg/b")
+        _write(repo, {"gates.toml": f"paths = {new}\n"})
+        r = _check(repo, base)
+        if ok:
+            assert r["certified"] and r["rules"] == {"cover": ["gates.toml"]}, (case, r["refusals"])
+        else:
+            assert [f["path"] for f in r["refusals"]] == ["gates.toml"], case
+
+
 def _levels(tmp_path: Path, low_risk: str, marks: str) -> dict:
     """`_covered`'s range, which also moves `other/notes.md` into `docs/` and makes `verity/commit/` a package, on a
     `gates.toml` whose `low_risk` names `docs/` and `lib/core/` and whose `marks` names `lib/core/`'s own `__init__.py`
@@ -391,6 +447,42 @@ def test_byte_identical_lakefile_whose_relative_require_broke_is_refused(tmp_pat
     _move(repo, "protocols/pous/lean", "security_proofs/pous")
     [f] = _check(repo, base)["refusals"]
     assert f["reason"] == "relative path now resolves elsewhere"
+
+
+INNER_LAKEFILE = 'name = "requirer"\n\n[[require]]\nname = "inner"\npath = "inner"\n'
+INNER_MANIFEST = json.dumps({"packages": [{"type": "path", "name": "inner", "dir": "inner"}]}, indent=1) + "\n"
+INNER_FILES = {"outer/lakefile.toml": INNER_LAKEFILE, "outer/lake-manifest.json": INNER_MANIFEST, "outer/Outer.lean": "",
+               "outer/inner/lakefile.toml": 'name = "inner"\n', "outer/inner/Inner.lean": "def i := 1\n",
+               "outer/other/lakefile.toml": 'name = "other"\n'}
+
+
+def test_a_lake_path_with_no_leading_dot_follows_the_package_it_names(tmp_path):
+    """A package inside the one that requires it is required by its bare name, which Lake reads from the requirer's
+    directory as it reads `../x`. When the inner package leaves, the mover rewrites that path, in the lakefile and in the
+    manifest, and the commit is still a pure move; a path rewritten to any other package is not."""
+    repo, base = _repo(tmp_path / "moved", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "../apart/inner"'),
+                  "outer/lake-manifest.json": INNER_MANIFEST.replace('"dir": "inner"', '"dir": "../apart/inner"')})
+    r = _check(repo, base)
+    assert r["certified"], r["refusals"]
+    assert sorted(e["path"] for e in r["edits"]) == ["outer/lake-manifest.json", "outer/lakefile.toml"]
+    repo, base = _repo(tmp_path / "elsewhere", INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _write(repo, {"outer/lakefile.toml": INNER_LAKEFILE.replace('path = "inner"', 'path = "other"')})
+    [f] = _check(repo, base)["refusals"]
+    assert f["path"] == "outer/lakefile.toml" and '+path = "other"' in f["hunk"]
+
+
+def test_a_moved_lakefile_whose_bare_require_stayed_behind_is_refused(tmp_path):
+    """The requirer moves byte for byte and the package inside it goes elsewhere: `path = "inner"` now names nothing."""
+    repo, base = _repo(tmp_path, INNER_FILES)
+    _move(repo, "outer/inner", "apart/inner")
+    _move(repo, "outer", "far/outer")
+    refusals = _check(repo, base)["refusals"]
+    assert {f["path"]: f["reason"] for f in refusals} == {
+        "far/outer/lakefile.toml": "relative path now resolves elsewhere",
+        "far/outer/lake-manifest.json": "relative path now resolves elsewhere"}
 
 
 def test_lean_audit_pin_change_is_refused(tmp_path):
@@ -957,7 +1049,7 @@ def test_a_pin_whose_digest_is_not_its_file_is_refused(tmp_path):
     assert f["path"] == "p/TRUSTED.sha256"
 
 
-MANIFEST_PIN = "verity/protocols/flock/prover/tests/fixtures/randomness_lean.json"
+MANIFEST_PIN = "verity/protocols/proofs/flock/prover/tests/fixtures/randomness_lean.json"
 MANIFEST = '{"packages": [{"type": "path", "dir": "../pkg/old/lean"}]}\n'
 
 
@@ -1728,6 +1820,19 @@ def test_a_prose_move_is_judged_by_the_map_its_move_line_or_words_names(tmp_path
     (tmp_path / "named").mkdir()
     r = _terms(tmp_path / "named", message="move", words="tools/move/terms_map.toml", **notes)
     assert r["certified"], r["refusals"]
+
+
+def test_a_prose_map_whose_words_are_all_scoped_to_files_is_read(tmp_path):
+    """A prose map with an empty `[words]`, each word under a `[[words_in]]`, is judged as one: its word is replaced in the
+    file its entry names, and the same edit in a file it doesn't name is beyond the map's words."""
+    scoped = {"tools/move/terms_map.toml": 'scope = "prose"\n\n[words]\n\n[[words_in]]\nfiles = ["notes.md"]\n'
+                                           'words = { "draw" = "sample" }\n'}
+    (tmp_path / "named").mkdir()
+    r = _terms(tmp_path / "named", base_extra=scoped, **{"notes.md": "A sample picks `draw_one()`; see [sample](draw.md).\n"})
+    assert r["certified"] and r["words"] == "tools/move/terms_map.toml", r["refusals"]
+    (tmp_path / "other").mkdir()
+    r = _terms(tmp_path / "other", base_extra=scoped, **{"b.py": TERMS_BASE["b.py"].replace("one draw", "one sample")})
+    assert _refused(r) == {"b.py": "edit beyond the words of tools/move/terms_map.toml"}
 
 
 LAYOUT_MAP = "tools/move/layout_map.toml"

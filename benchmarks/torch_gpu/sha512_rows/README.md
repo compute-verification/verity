@@ -8,7 +8,7 @@ A device engine for the commitment's hashes, bit for bit the CPU reference's (`v
 
 commit_slots (the commit path beside this directory) runs on it: the calls below are its inner "hash these rows" and
 "hash this level" steps. The compression is `sx::compress<V, ROLL>` from the GPU's one SHA-512 header
-(`verity/definitions/kernels/sha512.cuh`), with `sha::compress`'s contract, so a kernel can also swap just the compression in.
+(`verity/circuits/kernels/sha512.cuh`), with `sha::compress`'s contract, so a kernel can also swap just the compression in.
 
 ## The call
 
@@ -37,7 +37,7 @@ context of that many (commit_slots' `Plan(sms=)`). Calls run on the current torc
 
 ## Compression variants
 
-A variant is four digits, the pipe of each sigma function's shifts (S0, S1, s0, s1; `verity/definitions/kernels/sha512.cuh`), and
+A variant is four digits, the pipe of each sigma function's shifts (S0, S1, s0, s1; `verity/circuits/kernels/sha512.cuh`), and
 an optional `s` for straight-line rounds (`engine.variant_flags`):
 
 - 0: funnel shifts on the integer ALU;
@@ -52,7 +52,7 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 
 - `rows.cuh`: the row digest and the schedule (the layout `engine.py` fills, the salts, each lane's column order) as
   host+device functions. The frame-v3-sha512 leaf, node and pad and the hm96 leaf's mask, salt digest and value are
-  `verity/definitions/kernels/row_commit.cuh`'s.
+  `verity/circuits/kernels/row_commit.cuh`'s.
 - `rows.cu`: the kernels.
 - `rows_host.cpp`: the host twin.
 - `engine.py`: the call.
@@ -60,10 +60,7 @@ The default is `0000`; `pouw` is commit_gpu's `sha::compress`. `rows.cu` builds 
 - `check.py`: the engine against the reference: every variant, edge sizes, the H200 layer on sampled slots.
 - `bench.py`: the variant and leaf-kernel sweeps, and whole steps at the H200 demo's shape.
 - `sass.py`: opcode counts per variant.
-- `sass_count.py`: one kernel's SASS counts per main-loop iteration, by opcode and issue pipe (`hashcat.sh`'s pipe mix).
 - `gpu.sh`: one leased GPU run.
-- `hashcat.sh`, `hashcat_forms.cu`, `hashcat_summary.py`: hashcat's SHA-512 kernels against the default compression in
-  one lease at one locked SM clock; `hashcat_summary.py`'s `VERDICT overall` line says whether any of them is faster.
 - `tests/`: the host twin always, every variant on a CUDA device.
 
 From the tree's root, on a CUDA GPU (an H200 for the H200 layer) with CUDA torch, CUDA's nvcc and `gpu-lease`:

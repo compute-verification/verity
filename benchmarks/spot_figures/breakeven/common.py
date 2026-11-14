@@ -7,7 +7,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "benchmarks" / "spot_figures")]
 
 import figure1 as f1  # noqa: E402
 import total_cost as tc  # noqa: E402
-from verity.protocols.spot import optimize as opt  # noqa: E402
+from verity.protocols.proofs.spot.prover import optimize as opt  # noqa: E402
 
 #: proving only: each case adds the verifier's seconds itself (`reprice.apply_server`'s column)
 sc, c, cuts, confs, inputs, lines, computed = tc._lines("GLM-5.3", "census", verify=False)
@@ -29,7 +29,7 @@ def job(name, scope="world week", scale=1.0, beta=0.01, inputs_=None, line_=None
 def design(name, **kw):
     m, g, budget, span, conf = job(name, **kw)
     row = opt.two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
-                               served=m.served, union=conf.form == "patterns", registration=span)
+                               stratify=tc.STRATA, served=m.served, union=conf.form == "patterns", registration=span)
     return m, g, row, span
 
 

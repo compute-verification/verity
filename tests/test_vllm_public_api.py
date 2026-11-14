@@ -36,10 +36,13 @@ NOT_SCANNED = {
     "tests/test_module_strings.py": "its exemptions name modules that don't resolve, as data",
 }
 
-#: The public modules: module -> the interface it is (the vision note's I1..I10).
+#: The public modules: module -> the interface it is (I1..I10).
 PUBLIC = {
-    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec and its target",
+    "verity_vllm": "I1: the pinned engine (LLM), its pin, its spec, its target and the serving device's target and execution",
     "verity_vllm.engine.spec": "I1: engine spec documents",
+    "verity_vllm.settings": "I1: the record of the value settings in force in an environment (record): each variable set "
+                            "there that can change what is computed or committed, a credential by name only, and their "
+                            "digest, which benchmarks/serve_tax writes into an arm's meta.json and a replay's replay.json",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
@@ -67,7 +70,7 @@ PUBLIC = {
                                                 "them (the session Definition, its Boolean gates by the gate table, a "
                                                 "block's fresh bits), which benchmarks/inference_only prices",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
-                                                  "verifier's pins of it (VLLM-113)",
+                                                  "verifier's pins of it",
     "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, their layout and record, the committer's "
                                           "registration of a TP rank's and the verifier's pin of it (tp-register-tables)",
     "verity_vllm.commit.history_tables": "I7: the committer's history tables of DSA's long rows by table reads, one a "
@@ -76,11 +79,12 @@ PUBLIC = {
     "verity_vllm.commit.history_tables_device": "I7: a history table on the GPU and its CPU twin (Table), which "
                                                 "benchmarks/commitments times",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
-                                               "values (VLLM-125)",
+                                               "values",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
-    "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
-                                                "tie (Tables)",
+    "verity_vllm.program.predict.window_class": "I7: a window class, and the layouts of PoUW's tables a window circuit reads "
+                                                "on a fixed load (FixedLoad): H1's under H1's tie (Tables) and Pearl+'s, the "
+                                                "circuit cut at its linears (PearlTables)",
     "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
                                                "layout and the primitives a census prices, which the grader "
                                                "(benchmarks/training_slowdown/grader) reads",
@@ -114,6 +118,8 @@ PUBLIC = {
     "verity_vllm.pipeline.cut_plugin": "I1: the carried pool's cut at each window edge under vLLM's own OpenAI server: its "
                                        "general plugin (register, an edge of the engine core's seam) and ASGI middleware "
                                        "(SentFeed), configured by VERITY_CUT, which the trace corpus's cut traces serve under",
+    "verity_vllm.pipeline.serve_pearl": "I1: serve-openai's Pearl+ arm (PearlWindows), its --protocols-config (config_of, "
+                                        "CONFIG) and where a serve dir holds each window's epoch (DIR)",
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
@@ -130,44 +136,139 @@ PUBLIC = {
                                                 "certifier's derived vectors are held to",
     "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
     "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
+    "verity_vllm.pipeline.advice_code.by_class": "I1: advice v1's charge by class: each window's bits split by the field "
+                                                 "that put them there, and the fields a registration holds at 0 with "
+                                                 "the rules that do, which benchmarks/network_e2e reports",
+    "verity_vllm.pipeline.advice_code.schedule_code": "I1: advice v1 to and from the replay's schedule, its entry for a "
+                                                      "serve with a draft, which no I1 v0 says and "
+                                                      "benchmarks/network_e2e holds to vLLM's traces",
+    "verity_vllm.pipeline.advice_code.kept": "I1: advice v1's kept counts, the drafts each emitting row kept: their code "
+                                             "in a window's second segment, and each step's emissions read off the replay",
     "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
                                             "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
+    "verity_vllm.protocols.pouw.pearl_c.window": "I1: Pearl+'s window record W over a run's retained timed rounds (record, write), "
+                                                 "the names it registers each call's A rows and y under (a_value, y_value), "
+                                                 "each weight's B rows at PoUW's weight root (b_entries, b_value), "
+                                                 "built at the version W states (version_of, VERSION), "
+                                                 "which verify_run.tie and the one-stage audit read, the audited "
+                                                 "window's values rebuilt as W's (reuse), and the served run's served.json "
+                                                 "W is written from (SERVED_SCHEMA, KEEP, served_passes, macs, coins_of)",
     "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
                                            "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
+    "verity_vllm.protocols.pouw.h1.answers": "I1: the verifier of record's answers on a window's statements, each run once "
+                                             "as credit asks for it and shared by key by the steps that judge them "
+                                             "(Answers), which drawn.py check and pouw_piece.py period read",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",
+    "verity_vllm.protocols.pouw.pearl_c.served_y": "I1: Pearl+'s served y as a retained pass commits it, a call's real rows "
+                                                   "under its domain (y_domain, commit_y, retain_y) and on its device "
+                                                   "(DeviceTrees), which verify_run opens on each drawn tile",
+    "verity_vllm.acquire.sources.served_compiled_source": "I2: the values of a compiled engine at vLLM's serving defaults "
+                                                          "(torch.compile and CUDA graphs), acquired with no Python hook inside "
+                                                          "graph replay (ServedCompiledSource, linkage), which "
+                                                          "benchmarks/served_commit and the harness's Commit arm time",
+    "verity_vllm.check.oracle_compare": "I7: the served C2's value correspondence by oracle compare, and the value checks' one "
+                                        "byte source, an opening verified against the run commitment of record before its bytes "
+                                        "are returned (OpenedReader), which benchmarks/one_stage and benchmarks/prove_path read a "
+                                        "Commit through",
+    "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
+                                                "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
+                                                "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
+                                                "harness's tests and benchmarks/prove_path's window cost read",
+    "verity_vllm.commit.committer.native_jit": "I7: the native collector's JIT build, keyed by what it compiles, and its CUDA "
+                                               "flags (CUDA_CFLAGS), which benchmarks/served_commit's rows floor compiles under",
+    "verity_vllm.commit.index": "I7: vLLM's labels of a window's units (index.json): per member, each served row's unit and "
+                                "served identity (index_doc), which benchmarks/one_stage's A5 runs write",
+    "verity_vllm.commit.row_tables": "I7: the row tables of a serving-rows window as serving commits them step by step "
+                                     "(step_roots, StepRoots, table_key), which benchmarks/commitments times and "
+                                     "benchmarks/one_stage registers",
+    "verity_vllm.commit.row_tables_device": "I7: a step's row tables hashed on the GPU on a side stream, and their host twin "
+                                            "(step_roots, host_step, plan, DeviceLibrary), which benchmarks/commitments times and "
+                                            "benchmarks/serve_tax's plugin installs",
+    "verity_vllm.commit.scheme": "I7: the Commit path's vllm-v1 commitment scheme: its leaves, folds and roots (pos_leaf, "
+                                 "POS_LEAF_TAG), which benchmarks/commitments prices",
+    "verity_vllm.commit.step_rows": "I7: the Commit's rows-sha512 scheme over a step's stream: its row and key sizes, domains, "
+                                    "levels and roots (ROW_BYTES, KEY_BYTES, tensor_root, keyed_tensor_root, run_program_digest), "
+                                    "which benchmarks/served_commit times and benchmarks/serve_tax and benchmarks/one_stage "
+                                    "commit under",
+    "verity_vllm.commit.store_dump": "I7: a GPU-tree committer's committed store on disk, and back as a CPU store that opens and "
+                                     "verifies like the committer (dump, load), which benchmarks/prove_path's served tie reads",
+    "verity_vllm.correspondence.reader_for_query": "I7: the per-Call runtime correspondence of a derived Program for the query, "
+                                                   "and a Call's name (call_name_of, parse_call_name), which "
+                                                   "benchmarks/served_commit's granularity reads",
+    "verity_vllm.correspondence.runtime": "I7: runtime-correspondence/v1: per Call, the facts that resolve a Program's logical "
+                                          "value to a runtime occurrence (RuntimeCorrespondence), which "
+                                          "benchmarks/served_commit's granularity reads",
+    "verity_vllm.llm": "I1: the pinned engine's own module: LLM, the protocol options it resolves and the context it hands them "
+                       "(resolve_options, protocol_context), which the harness's tests hold its engine to",
+    "verity_vllm.pipeline.commit_coins": "I1: the Commit's coins from the auditor host's challenger, one challenge phase a Commit "
+                                         "(ChallengerGate), which benchmarks/one_stage's local Pearl+ run and benchmarks/pouw's "
+                                         "Pearl-C arm take their coins from",
+    "verity_vllm.pipeline.replay_bundle": "I1: the replay bundle a Commit with --replay-deferred leaves for its C2 replay on CPU "
+                                          "(MANIFEST, open_bundle), which benchmarks/one_stage opens",
+    "verity_vllm.pipeline.tp.rank_replay": "I1: the C2 of record on one rank of a TP Commit, and a rank's manifest (load, "
+                                           "manifest_of_rank), which benchmarks/one_stage reads",
+    "verity_vllm.program.model": "I7: what a model configuration is, and the roots that are functions of it (config_of, "
+                                 "cos_sin_table, INT8_EXACT_QUANT), which benchmarks/prove_path and benchmarks/inference_only "
+                                 "build under",
+    "verity_vllm.protocols": "I1: the protocol options of a vLLM run (PoUW, PoUS and SPOT, each enabled on its own): "
+                             "their selector, context, install and refusals (parse, adapter, Context, install, Refused, "
+                             "requires_build, commit_guard), which the harness's arms and the served benchmarks of PoUW, PoUS and "
+                             "the Commit install",
+    "verity_vllm.protocols.interface": "I1: what every protocol option implements, and what the selector hands it (Option, "
+                                       "Context, Target)",
+    "verity_vllm.protocols.linear.api": "I1: the linear-site interface: what computes y at a linear layer, where its weight comes "
+                                        "from, and the one object vLLM's quant_method.apply calls (Stack, Arm, Control, PassSpec, "
+                                        "LinearSite), which benchmarks/pouw's Pearl-C arms build",
+    "verity_vllm.protocols.linear.vllm_site": "I1: the linear sites of a vLLM model, and a Stack attached to them (discover, "
+                                              "attach), which benchmarks/pouw's Pearl-C arms attach",
+    "verity_vllm.protocols.pouw.h1.handoff": "I1: an H1 window handed from its serving process to a CPU process for its close, "
+                                             "and the file it is saved in (FILE), which benchmarks/pouw/h1_lanes reads",
+    "verity_vllm.protocols.pouw.h1.kept": "I1: a row of a served H1 window's registered tree, rebuilt from what the prover kept "
+                                          "(kept_row), which benchmarks/pouw/h1_lanes opens",
+    "verity_vllm.protocols.pouw.h1.prover": "I1: an H1 window's private prover state: what opening a sampled proof block's "
+                                            "committed values needs after the window's close (STATE), which "
+                                            "benchmarks/pouw/h1_lanes reads",
+    "verity_vllm.protocols.pouw.h1.registered": "I1: H1's served tables registered at serving scale as hm96-sha512 bit rows "
+                                                "(commit, MODE), which benchmarks/pouw's producer test and "
+                                                "benchmarks/prove_path's tests commit under",
+    "verity_vllm.protocols.pouw.h1.served": "I1: H1's served tables, committed as registered values of compute accounting's "
+                                            "window Program as the window serves them (Served, declared, declared_layout, "
+                                            "write_program, nonce), which benchmarks/one_stage's served verdicts, "
+                                            "benchmarks/prove_path and benchmarks/pouw read",
+    "verity_vllm.protocols.pouw.pearl_c.grouped": "I1: Pearl-C's grouped call for a fused-MoE layer on an H100 or H200, every "
+                                                  "routed expert's rows of one layer in one launch a step (gemm_grouped, group, "
+                                                  "module, ROTATED), which benchmarks/pouw/pearl_c_sm90 checks and times",
+    "verity_vllm.protocols.pouw.pearl_c.manifest": "I1: the Pearl-C device path's manifest as a verifier reads it, and a retained "
+                                                   "pass's execution phase re-started from it (manifest_epoch, session_head), "
+                                                   "which benchmarks/pouw/pearl_c_vllm's screen reads",
+    "verity_vllm.protocols.pouw.pearl_c.whole": "I1: Pearl-C's decode forward replayed as one CUDA graph (WholeStep), which "
+                                                "benchmarks/pouw/pearl_c_vllm's arms run",
+    "verity_vllm.protocols.remote_bandwidth.binder": "I1: the store's hooks into one in-process vLLM engine (Binder) and the "
+                                                     "weights it binds (model_weights, WeightRegion, Every), which "
+                                                     "benchmarks/remote_session and benchmarks/vllm_encoded serve under",
+    "verity_vllm.query.manifest.format": "I7: the required-value manifest's format, the vocabulary every manifest producer and "
+                                         "consumer shares (load_program), which benchmarks/prove_path reads",
 }
 
 #: Every other module of the package that outside code imports. Move its importers onto a public interface and delete it.
 KNOWN = frozenset({
     "verity_vllm.acquire.sources.attention_source",
-    "verity_vllm.acquire.sources.served_compiled_source",
     "verity_vllm.acquire.sources.taps",
     "verity_vllm.check.checkpoint_index",
     "verity_vllm.check.fold_compare",
     "verity_vllm.check.fp8_ue8m0",
-    "verity_vllm.check.oracle_compare",
     "verity_vllm.check.replay.evaluate",
     "verity_vllm.check.replay.index",
     "verity_vllm.check.replay.opening",
     "verity_vllm.check.weights_of_record",
     "verity_vllm.commit.committer.host_retention",
     "verity_vllm.commit.committer.native_collect",
-    "verity_vllm.commit.committer.native_host",
-    "verity_vllm.commit.committer.native_jit",
-    "verity_vllm.commit.index",
     "verity_vllm.commit.memory_map",
     "verity_vllm.commit.opened",
-    "verity_vllm.commit.row_tables",
-    "verity_vllm.commit.row_tables_device",
-    "verity_vllm.commit.scheme",
-    "verity_vllm.commit.step_rows",
-    "verity_vllm.commit.store_dump",
-    "verity_vllm.correspondence.reader_for_query",
-    "verity_vllm.correspondence.runtime",
     "verity_vllm.engine.arrivals",
     "verity_vllm.engine.build",
     "verity_vllm.engine.engine_driver",
@@ -184,7 +285,6 @@ KNOWN = frozenset({
     "verity_vllm.engine.profiles.engine_classes",
     "verity_vllm.engine.served",
     "verity_vllm.engine.vllm_adapter",
-    "verity_vllm.llm",
     "verity_vllm.observe.events",
     "verity_vllm.observe.fold.fold",
     "verity_vllm.observe.fold.patterns.pouw",
@@ -195,10 +295,8 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.c2_replay",
     "verity_vllm.pipeline.chunk_rows",
     "verity_vllm.pipeline.commit",
-    "verity_vllm.pipeline.commit_coins",
     "verity_vllm.pipeline.cpu_replay",
     "verity_vllm.pipeline.deferred_rows",
-    "verity_vllm.pipeline.replay_bundle",
     "verity_vllm.pipeline.serve_admit",
     "verity_vllm.pipeline.serve_openai",
     "verity_vllm.pipeline.serve_protocol",
@@ -207,7 +305,6 @@ KNOWN = frozenset({
     "verity_vllm.pipeline.tp.capture",
     "verity_vllm.pipeline.tp.commit_replay",
     "verity_vllm.pipeline.tp.phases",
-    "verity_vllm.pipeline.tp.rank_replay",
     "verity_vllm.pipeline.tp.rank_worker",
     "verity_vllm.pipeline.tp.serving_rows",
     "verity_vllm.pipeline.tp.target",
@@ -218,13 +315,8 @@ KNOWN = frozenset({
     "verity_vllm.program.frontend.derive",
     "verity_vllm.program.frontend.derive_examples",
     "verity_vllm.program.frontend.kernel_readback",
-    # archive/integrations/vllm/tools/train_step_census.py imports these two: they go when the archived file is deleted
-    "verity_vllm.program.frontend.rules",
-    "verity_vllm.program.frontend.rules.training",
     "verity_vllm.program.frontend.rules.family",
-    "verity_vllm.program.frontend.rules.vocab",
     "verity_vllm.program.frontend.targets",
-    "verity_vllm.program.model",
     "verity_vllm.program.predict.batch",
     "verity_vllm.program.predict.build",
     "verity_vllm.program.predict.common",
@@ -232,33 +324,19 @@ KNOWN = frozenset({
     "verity_vllm.program.predict.score",
     "verity_vllm.program.predict.steps",
     "verity_vllm.program.predict.window_circuit",
-    "verity_vllm.protocols",
-    "verity_vllm.protocols.interface",
-    "verity_vllm.protocols.linear.api",
-    "verity_vllm.protocols.linear.vllm_site",
     "verity_vllm.protocols.pouw",
     "verity_vllm.protocols.pouw.h1",
     "verity_vllm.protocols.pouw.h1.challenger",
-    "verity_vllm.protocols.pouw.h1.handoff",
-    "verity_vllm.protocols.pouw.h1.kept",
-    "verity_vllm.protocols.pouw.h1.prover",
-    "verity_vllm.protocols.pouw.h1.registered",
-    "verity_vllm.protocols.pouw.h1.served",
     "verity_vllm.protocols.pouw.h1.window",
     "verity_vllm.protocols.pouw.pearl_c",
     "verity_vllm.protocols.pouw.pearl_c.graphs",
-    "verity_vllm.protocols.pouw.pearl_c.grouped",
     "verity_vllm.protocols.pouw.pearl_c.host",
     "verity_vllm.protocols.pouw.pearl_c.lanes",
-    "verity_vllm.protocols.pouw.pearl_c.manifest",
     "verity_vllm.protocols.pouw.pearl_c.screen",
-    "verity_vllm.protocols.pouw.pearl_c.whole",
-    "verity_vllm.protocols.remote_bandwidth.binder",
     "verity_vllm.protocols.remote_bandwidth.interface",
     "verity_vllm.protocols.remote_bandwidth.memory_map",
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
-    "verity_vllm.query.manifest.format",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
 })
@@ -436,6 +514,6 @@ def test_the_scan_sees_each_form_and_the_tree():
     got = {(s.module, s.name) for s in _sites_in("x.py", text)}
     assert got == {("verity_vllm.engine.handle", None), ("verity_vllm", "LLM"), ("verity_vllm.protocols", None),
                    ("verity_vllm.config", "_x"), ("verity_vllm.llm", None), ("verity_vllm.config", None), ("verity_vllm.llm", "LLM")}
-    assert ("benchmarks/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
+    assert ("benchmarks/harness/specs/tests/test_engine_spec_presets.py", "verity_vllm", "EnginePin") in {(s.file, s.module, s.name) for s in sites()}
     assert not any(s.file.startswith(INTEGRATION) for s in sites())
     assert all((ROOT / f).is_file() for f in NOT_SCANNED)

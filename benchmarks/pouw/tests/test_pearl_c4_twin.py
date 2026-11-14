@@ -1,24 +1,17 @@
-"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.protocols.pouw.prover.schemes.pearl_c4`: the
+"""Pearl-C4's numpy twin (benchmarks/pouw/pearl_c4/twin.py) against the scalar reference `verity.protocols.accounting.pouw.prover.schemes.pearl_c4`: the
 vectorized casts on grids through every rounding case, and whole tiles (forming, C̃, U, the peel factors, the leaf and the
 tickets) for both formats."""
 
 from __future__ import annotations
 
-import importlib.util
 import struct
-import sys
-from pathlib import Path
 
 import numpy as np
 import pytest
-from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape, Tile
-from verity.protocols.pouw.prover.schemes import pearl_c4 as F
+import twin as W
 
-# Loaded under its own name: pearl_c's twin.py is `twin` to the tests beside this one.
-_spec = importlib.util.spec_from_file_location("pearl_c4_twin", Path(__file__).resolve().parents[1] / "pearl_c4" / "twin.py")
-W = importlib.util.module_from_spec(_spec)
-sys.modules[_spec.name] = W
-_spec.loader.exec_module(W)
+from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
+from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape, Tile
 
 
 def grid() -> np.ndarray:

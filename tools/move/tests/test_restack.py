@@ -191,8 +191,10 @@ def test_a_clone_without_the_merge_drivers_gets_them_registered_or_nothing_runs_
     """A checkout whose `.gitattributes` names merge drivers its clone defines none of has them registered before any branch
     (`DRIVERS`), since without them a lock merges as text and the restack stops where its owner's merge wouldn't. When the
     interpreter can't register them, no branch is restacked, the exit is 2, and the refusal names each driver and the command
-    that registers them."""
-    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"})
+    that registers them. Git's own drivers (`union`, which the tree gives every `.gitignore`) are none of them: no clone
+    defines one, so a check that asked for it would refuse every branch."""
+    commit(repo, "attributes", {".gitattributes": "lean-audit.json merge=lean-audit\n*.lean merge=lean-imports\n"
+                                                  ".gitignore merge=union\n*.bin merge=binary\n*.txt merge=text\n"})
     monkeypatch.chdir(repo)
     assert RS.missing_drivers() == ["lean-audit", "lean-imports"]
     monkeypatch.setattr(RS, "DRIVERS", "raise SystemExit('no research here')")
@@ -218,6 +220,8 @@ def test_a_conflict_only_in_lean_locks_takes_ontos_and_leaves_them_stale(repo, m
     assert "return 50" in show(repo, r["result"], "app/core/util.py")
     assert git(repo, "rev-list", "--parents", "-n", "1", r["result"]).split()[2] == onto
     assert f"pr: locks-stale {r['result'][:12]}" in RS.line(r)
+    assert r["error"].endswith(RS.LOCKS_READD) and "re-added by hand: pkg/lean-audit.json" in git(
+        repo, "log", "-1", "--format=%B", r["result"])
     monkeypatch.chdir(repo)
     assert RS.main(["pr", "--move-commit", moved, "--onto", onto]) == 1
 
@@ -233,10 +237,12 @@ def test_a_lock_conflict_beside_a_content_conflict_is_still_a_conflict(repo):
     assert (r["status"], r["step"], r["files"]) == ("conflicted", "moved", ["app/core/util.py", "pkg/lean-audit.json"])
 
 
-def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(repo, monkeypatch, capsys):
+def test_a_branch_based_after_the_moves_base_is_refused_with_the_command_that_carries_it_against_the_move(
+        repo, monkeypatch, capsys):
     """A branch based on a main past the move's base would restack `clean` with duplicate imports and lock entries, because
     the last merge, based on the move, brings main's commits since the base in from both sides. Here main
-    adds an import after the base, and the moved main has it at the top of the file."""
+    adds an import after the base, and the moved main has it at the top of the file. The refusal says a plain merge of main
+    is clean and wrong, and gives the command that carries the branch with the move's own commit as `--main`."""
     git(repo, "checkout", "-q", "-b", "later", "base")
     later = commit(repo, "main after the move's base", {"app/main.py": MAIN + "from app.util import f3\n"})
     git(repo, "checkout", "-q", "-b", "pr-later", later)
@@ -247,15 +253,67 @@ def test_a_branch_based_after_the_moves_base_is_refused_with_the_plain_merge(rep
     onto = commit(repo, "carry later's import across the move", {"app/main.py": "from app.core.util import f3\n" + landed})
     r = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
     assert r["status"] == "based-after" and "result" not in r and "steps" in r and not r["steps"], r
-    assert f"has {later[:12]}" in r["error"] and f"`git merge {onto[:12]}`" in r["error"]
+    move = RS.rev("move", str(repo))
+    assert r["carry"] == ["python3", "tools/move/restack.py", "pr-later", "--move-commit", move, "--main", move]
+    assert f"has {later[:12]}" in r["error"] and "a plain `git merge` of main is clean and wrong" in r["error"]
+    assert f"\n  {shlex.join(r['carry'])}\nthen merge today's main into the carried result, " in r["error"]
+    assert "git merge main" not in r["error"] and f"git merge {onto[:12]}" not in r["error"]
     assert RS.restack("pr", "move", onto=onto, cwd=str(repo))["status"] == "clean", "a branch based before the base still restacks"
     assert RS.restack("pr-later", "move", cwd=str(repo), main="later")["status"] == "based-after", "main shows it before --onto does"
     monkeypatch.chdir(repo)
     assert RS.main(["pr-later", "--move-commit", "move", "--onto", onto, "--main", "main"]) == 1
-    assert "pr-later: based-after  [plain merge" in (o := capsys.readouterr().out) and "`git merge main`" in o
+    o = capsys.readouterr().out
+    assert o.startswith("pr-later: based-after  [plain merge") and "clean and wrong" in o
+    assert f"\n      {shlex.join(r['carry'])}\n    then merge today's main" in o
     monkeypatch.setattr(RS, "based_after", lambda *a: None)
     dup = RS.restack("pr-later", "move", onto=onto, cwd=str(repo))
     assert dup["status"] == "clean" and show(repo, dup["result"], "app/main.py").count("import f3") == 2, "what it refuses"
+
+
+#: the package moved under `lib/`, with a file the move writes left in `app/`: git sees no directory renamed, so a plain merge
+#: has no reason to move a file a branch adds there
+SPLIT = '[paths]\n"app" = "lib/app"\n\n[modules]\n"app" = "lib.app"\n\n[create]\n"app/MOVED" = "see lib\\n"\n'
+
+
+def test_a_line_stacked_on_a_head_that_crossed_the_move_and_landed_is_carried_by_the_command_its_refusal_gives(
+        repo, monkeypatch, capsys):
+    """Line `x` is stacked on head `pr`'s old commit. `pr` crosses the move and lands, so main holds that old commit, which
+    the move's base lacks: `x` is refused `based-after`. A plain merge of main into `x` is clean and wrong, leaving the file
+    it adds at its old path with its old import. The command the refusal gives carries `x` against the move's own commit,
+    with which it shares no late commit, and the carried line merges with main without a conflict, inside the new layout."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", RS.SCRIPT_ARGS)
+    git(repo, "checkout", "-q", "-B", "main", "base")
+    commit(repo, "the split map", {"tools/move/layout_map.toml": SPLIT})
+    move = generate(repo, LINE)
+    assert {"app/MOVED", "lib/app/util.py"} <= paths(repo, move) and "app/util.py" not in paths(repo, move)
+    on(repo, "pr", ("the head's own", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
+    git(repo, "branch", "x", "pr")
+    on(repo, "x", ("the line's own", {"app/added.py": "import app.util\n"}))
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "main", "--json"]) == 0
+    [head] = json.loads(capsys.readouterr().out)
+    commit(repo, "main moves on", {"NOTES.md": "notes 2\n"})
+    git(repo, "merge", "-q", "--no-ff", "-m", "land the head", head["result"])
+
+    plain, conflicts = RS.merge_trees(RS.rev("x", str(repo)), RS.rev("main", str(repo)), str(repo))
+    assert conflicts == [] and show(repo, plain, "app/added.py") == "import app.util\n", "the fault: clean, and wrong"
+    assert "lib/app/added.py" not in paths(repo, plain)
+
+    assert RS.main(["x", "--main", "main", "--json"]) == 1
+    [refused] = json.loads(capsys.readouterr().out)
+    assert (refused["status"], refused["move"], refused["late"]) == ("based-after", move, git(repo, "rev-parse", "pr"))
+    assert refused["carry"] == ["python3", "tools/move/restack.py", "x", "--main", move]
+    assert f"\n  {shlex.join(refused['carry'])}\nthen merge today's main into the carried result, " in refused["error"]
+
+    assert RS.main([*refused["carry"][2:], "--json"]) == 0
+    [carried] = json.loads(capsys.readouterr().out)
+    assert (carried["status"], carried["crossed"], carried["skipped"]) == ("clean", [move], [])
+    merged, conflicts = RS.merge_trees(carried["result"], RS.rev("main", str(repo)), str(repo))
+    assert conflicts == []
+    assert show(repo, merged, "lib/app/added.py") == "import lib.app.util\n"
+    assert "app/added.py" not in paths(repo, merged) and not any("added" in p for p in paths(repo, merged) - {"lib/app/added.py"})
+    assert show(repo, merged, "lib/app/util.py") == edit(UTIL, "return 5", "return 50")
+    assert paths(repo, merged) == paths(repo, carried["result"]) and show(repo, merged, "NOTES.md") == "notes 2\n"
 
 
 @pytest.fixture
@@ -412,7 +470,7 @@ def test_a_crossing_that_skipped_a_move_pushes_nothing_until_its_moves_are_named
 
 def test_a_crossing_that_skipped_a_move_and_left_locks_stale_stays_locks_stale_and_pushes_nothing(
         late, dated, tmp_path, monkeypatch, capsys):
-    """`locks-stale` is pushed for its owner to regenerate the locks on, but not with a move skipped: the status stays, the
+    """`locks-stale` is pushed for its owner to re-add the branch's own lock entries on, but not with a move skipped: the status stays, the
     exit is 1 as it was, nothing is pushed, and the command that names the moves pushes that same result."""
     repo, first = late["repo"], late["first"]
     remote = _remote(repo, tmp_path)
@@ -443,10 +501,14 @@ def test_a_branch_based_after_a_named_move_the_last_move_found_or_one_no_later_b
     assert RS.main(["pr", "--move-commit", first, "--move-commit", second, "--main", "main", "--dry-run", "--json"]) == 1
     [named] = json.loads(capsys.readouterr().out)
     assert (named["status"], named["move"], named["crossed"], named["skipped"]) == ("based-after", first, [], [])
+    assert named["carry"] == ["python3", "tools/move/restack.py", "pr", "--move-commit", first, "--main", first]
+    assert f"\nthen carry the result across the later move {second[:12]} with restack.py too, " in named["error"]
     assert RS.moves_on(late["landed"], "pr", str(repo)) == RS.moves_on("main", "pr", str(repo))[:1]
     assert RS.main(["pr", "--main", late["landed"], "--dry-run", "--json"]) == 1
     [last] = json.loads(capsys.readouterr().out)
     assert (last["status"], last["move"], last["crossed"], last["skipped"]) == ("based-after", first, [], [])
+    assert last["carry"] == ["python3", "tools/move/restack.py", "pr", "--main", first]
+    assert "\nthen merge today's main into the carried result, " in last["error"]
     assert f"has {late['beside'][:12]}" in last["error"] and "skipped" not in RS.line(last)
     line = ("tools/move/layout.py", ("--map", "tools/move/layout_map.toml"))
     assert not RS.contains(first, f"{apart}~1", str(repo))
@@ -765,6 +827,33 @@ def test_a_script_that_fails_is_reported_and_nothing_else_happens(repo):
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "script-failed" and "exit 1" in r["error"] and "LAYOUT_FAIL" in r["error"]
     assert git(repo, "worktree", "list", "--porcelain") == before
+
+
+def test_a_branch_that_writes_code_in_an_init_the_move_deletes_is_script_failed_naming_it_and_the_fix(tmp_path, monkeypatch):
+    """The real mover: the move took the data sheet out of `app/data/` and deleted its `__init__.py`, empty on main. The
+    branch wrote code there, so the move's script, rerun on the branch, refuses: the owner sees `script-failed`, the file
+    and the fix, and nothing is committed."""
+    monkeypatch.setattr(RS, "SCRIPT_ARGS", ("--no-lock",))
+    r = tmp_path / "repo"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    commit(r, "old", {"app/__init__.py": "", "app/data/__init__.py": "", "app/data/a.toml": "a = 1\n",
+                      "tools/research/src/research/store/moves.json": '{"moves": []}\n'})
+    git(r, "branch", "pr")
+    commit(r, "base", {"tools/move/layout.py": (HERE.parent / "layout.py").read_text(),
+                       "tools/move/layout_map.toml": '[roots]\nold = {}\nnew = {}\n\n[paths]\n"app/data/a.toml" = "data/a.toml"\n'
+                                                     '\n[rewrite]\nexclude = ["tools/move/**"]\n'})
+    subprocess.run(["python3", "tools/move/layout.py", "--no-lock"], cwd=r, check=True, capture_output=True)
+    move = commit(r, "layout: generated by tools/move/layout.py" + LINE + " --no-lock")
+    assert "app/data/__init__.py" not in paths(r, move)
+    on(r, "pr", ("code in the package", {"app/data/__init__.py": "def load():\n    return 1\n"}))
+    res = RS.restack("pr", move, cwd=str(r))
+    assert (res["status"], res["step"]) == ("script-failed", "script") and "result" not in res
+    first, fix = res["error"].splitlines()
+    assert first == ("exit 1: the move would delete 1 `__init__.py` file left in packages it empties that hold more than "
+                     "comments and whitespace: app/data/__init__.py")
+    assert fix.startswith("give each a row in the map") and fix.endswith("or delete it in a hand commit before the move")
+    assert RS.line(res).startswith("pr: script-failed  [")
 
 
 def test_the_moves_main_has_and_the_branch_lacks_are_found_by_their_move_lines_oldest_first(repo):
@@ -1109,3 +1198,140 @@ def test_a_branch_with_no_rows_file_crosses_as_before(real):
     assert paths(real, r["result"]) == paths(real, "main") | {"stays/extra.py"}
     assert show(real, r["result"], "new/lib/a.py") == "X = 2\n" and show(real, r["result"], "stays/extra.py") == "import new.lib.a\n"
     assert all(show(real, r["result"], p) == show(real, "main", p) for p in paths(real, "main") - {"new/lib/a.py"})
+
+
+WORDS_MAP = "tools/move/words_map.toml"
+WORDS = """[rewrite]
+exclude = ["tools/move/**"]
+
+[words]
+"windowIdx" = "executionPhaseIdx"
+
+[[words_in]]
+# another namespace's `trustedSessionOf` stands elsewhere, so the challenger's is renamed only in its files
+files = ["Spot/Challenger*.lean"]
+words = { "trustedSessionOf" = "trustedChallengePhaseOf" }
+
+[[words_in]]
+# another protocol's `Window` stands elsewhere, so the period's is renamed only in its file
+files = ["Net/Period.lean"]
+words = { "Window" = "ExecutionPhase" }
+"""
+PERIOD = "namespace Window\ndef bound := 1\nend Window\n"
+CHALLENGER = "def trustedSessionOf := 1\ndef windowIdx := 2\n"
+USES = "-- Flock.trustedSessionOf is another's\ndef trustedSessionOf_ok := 3\n\ndef z := 4\n"
+
+
+@pytest.fixture
+def scoped(tmp_path, monkeypatch):
+    """main: `old` (Spot's challenger, and a file outside it that spells another namespace's `trustedSessionOf`), then `base`
+    (the real `rename.py` and a word map renaming `trustedSessionOf` only in `Spot/Challenger*.lean`, `Window` only in
+    `Net/Period.lean`, and `windowIdx` everywhere), then the move, written by that script and named by its move line. A branch `pr` starts at `old`."""
+    for name in ("SCRIPT", "SCRIPT_ARGS", "KEEP"):          # `carry` and `main` set them: put back after the test
+        monkeypatch.setattr(RS, name, getattr(RS, name))
+    r = tmp_path / "scoped"
+    r.mkdir()
+    git(r, "init", "-q", "-b", "main")
+    commit(r, "old", {".gitignore": "__pycache__/\n", "Spot/Challenger.lean": CHALLENGER, "Other/Uses.lean": USES,
+                      "Net/Period.lean": PERIOD, "Net/Accounting.lean": "def total := 2\n"})
+    git(r, "branch", "pr")
+    commit(r, "base", {"tools/move/rename.py": (HERE.parent / "rename.py").read_text(),
+                       "tools/move/layout.py": (HERE.parent / "layout.py").read_text(), WORDS_MAP: WORDS})
+    subprocess.run([sys.executable, "tools/move/rename.py", "--map", WORDS_MAP], cwd=r, check=True, capture_output=True)
+    git(r, "tag", "move", commit(r, f"rename: the challenger's words\n\nMove: {WORDS_MAP}"))
+    monkeypatch.chdir(r)
+    return r
+
+
+def test_a_branch_adding_a_file_that_spells_a_word_its_map_renames_only_in_other_files_is_stale_words(scoped, tmp_path,
+                                                                                                    capsys):
+    """The map renames `trustedSessionOf` only in the files its `[[words_in]]` block names, and the branch adds a file no
+    block names that calls it qualified, so the move's script leaves the call and the result would not build. The crossing
+    is `stale-words`, never `clean`: it names the file, line and word, rewrites nothing, pushes nothing and exits 1. A longer
+    identifier that holds the word is another name, and the word the map renames everywhere is renamed in the file."""
+    added = ("def ok := trustedSessionOf_ok\n++ a line that reads like a diff's header\n-- windowIdx\n"
+             "theorem t : Challenger.trustedSessionOf = 1 := rfl\n")
+    head = on(scoped, "pr", ("a second stage", {"Spot2/SampledTwo.lean": added}))
+    r = cross(scoped)
+    assert r["status"] == "stale-words", r
+    assert [(w["file"], w["line"], w["word"], w["new"], w["map"], w["move"]) for w in r["words"]] == [
+        ("Spot2/SampledTwo.lean", 4, "trustedSessionOf", "trustedChallengePhaseOf", WORDS_MAP, RS.rev("move", str(scoped)))]
+    assert show(scoped, r["result"], "Spot2/SampledTwo.lean") == added.replace("windowIdx", "executionPhaseIdx")
+    assert r["error"].splitlines()[0].endswith(": Spot2/SampledTwo.lean:4 trustedSessionOf (-> trustedChallengePhaseOf)")
+    text = RS.line(r)
+    assert text.startswith(f"pr: stale-words {r['result'][:12]}  [plain merge ")
+    assert "\n      Spot2/SampledTwo.lean:4: trustedSessionOf -> trustedChallengePhaseOf (tools/move/words_map.toml, " in text
+    remote = _remote(scoped, tmp_path)
+    capsys.readouterr()
+    assert RS.main(["pr", "--main", "main", "--push-to", "pr-crossed", "--json"]) == 1
+    out = capsys.readouterr()
+    assert [x["status"] for x in json.loads(out.out)] == ["stale-words"]
+    assert "--push-to pr-crossed: pr is stale-words; nothing pushed" in out.err
+    assert "pr-crossed" not in git(remote, "branch") and git(scoped, "rev-parse", "pr") == head
+
+
+def test_a_branch_that_spells_the_new_name_or_the_old_one_in_a_file_its_block_names_is_clean(scoped):
+    """The new name is no stale word, and in a file the block names the script renames the old one, as it does main's."""
+    on(scoped, "pr", ("the new name, and a file of the block's", {
+        "Spot2/SampledTwo.lean": "theorem t : Challenger.trustedChallengePhaseOf = 1 := rfl\n",
+        "Spot/ChallengerTwo.lean": "def u := trustedSessionOf\n"}))
+    r = cross(scoped)
+    assert r["status"] == "clean" and "words" not in r, r
+    assert show(scoped, r["result"], "Spot/ChallengerTwo.lean") == "def u := trustedChallengePhaseOf\n"
+
+
+def test_a_line_the_branch_adds_to_a_file_main_has_and_no_block_names_is_stale_words(scoped):
+    """The file need not be the branch's: `Net/Accounting.lean` is main's, and the block renaming `Window` names only
+    `Net/Period.lean`, so the lemma the branch adds there keeps `Window`, which the move renamed where it is declared."""
+    on(scoped, "pr", ("a lemma of its own", {"Net/Accounting.lean": "def total := 2\ntheorem own : Window.bound = 1 := rfl\n"}))
+    r = cross(scoped)
+    assert r["status"] == "stale-words", r
+    assert [(w["file"], w["line"], w["word"], w["new"]) for w in r["words"]] == [
+        ("Net/Accounting.lean", 2, "Window", "ExecutionPhase")]
+    assert show(scoped, r["result"], "Net/Period.lean") == PERIOD.replace("Window", "ExecutionPhase")
+
+
+def test_only_the_branchs_own_lines_are_read_never_mains(scoped):
+    """`Other/Uses.lean` is main's, outside the block, and spells another namespace's `trustedSessionOf`, and main adds one more
+    such file after the move: a branch that edits another line of that file is clean. Where its own line spells the word,
+    that line alone is named."""
+    commit(scoped, "after the move", {"Other/Later.lean": "-- Flock.trustedSessionOf again\n"})
+    on(scoped, "pr", ("edit z", {"Other/Uses.lean": USES.replace("def z := 4", "def z := 5")}))
+    assert cross(scoped)["status"] == "clean"
+    on(scoped, "pr", ("spell it", {"Other/Uses.lean": USES.replace("def z := 4", "def z := Flock.trustedSessionOf")}))
+    r = cross(scoped)
+    assert r["status"] == "stale-words" and [(w["file"], w["line"]) for w in r["words"]] == [("Other/Uses.lean", 4)], r
+
+
+def test_a_layout_maps_scoped_names_are_its_quoted_names_and_a_prose_map_has_none(tmp_path):
+    """layout.py's `[rewrite] words_in` lists a moved directory whose name alone between quotes is the directory in the files
+    its glob matches, and renames it to the destination's name, one entry with every glob that lists it; a word map with
+    `scope = "prose"` renames no code."""
+    repo = tmp_path / "maps"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, "maps", {RS.LAYOUT_MAP: '[paths]\n"bench/census/" = "verity/tables/"\n\n[rewrite]\n'
+                                         'words_in = { "tools/*.py" = ["census/"], "bench/*.py" = ["census"] }\n',
+                          WORDS_MAP: 'scope = "prose"\n\n[words]\n"a" = "b"\n\n[[words_in]]\nfiles = ["x"]\n'
+                                     'words = { "c" = "d" }\n'})
+    move = commit(repo, "the move")
+    (word,) = RS.scoped_words(move, RS.LINE_SCRIPT["Layout-move"], (), str(repo))
+    assert word[:3] == ("census", "tables", ["tools/*.py", "bench/*.py"])
+    assert word[3].search('ROOT / "census"') and not word[3].search("bench/census/x.py")
+    assert RS.scoped_words(move, RS.LINE_SCRIPT["Move"], ("--map", WORDS_MAP), str(repo)) == []
+
+
+def test_a_word_two_blocks_rename_in_disjoint_files_counts_only_outside_both(tmp_path):
+    """Two `[[words_in]]` blocks of one map rename `Session` in disjoint files: in each one's own file the word is the
+    renamed name's, whichever block names it, so neither file is named, while a file neither block names still is."""
+    repo = tmp_path / "blocks"
+    repo.mkdir()
+    git(repo, "init", "-q", "-b", "main")
+    commit(repo, "base", {WORDS_MAP: '[words]\n"a" = "b"\n\n[[words_in]]\nfiles = ["Net/One.lean"]\n'
+                                     'words = { "Session" = "ChallengePhase" }\n\n[[words_in]]\nfiles = ["Net/Two.lean"]\n'
+                                     'words = { "Session" = "ChallengePhase" }\n'})
+    move = commit(repo, "the move")
+    lines = "theorem t : Session.ok := rfl\n"
+    result = commit(repo, "the branch's own lines", {"Net/One.lean": lines, "Net/Two.lean": lines, "Net/Three.lean": lines})
+    words = RS.stale_words(result, move, [(move, RS.LINE_SCRIPT["Move"], ("--map", WORDS_MAP))], str(repo))
+    assert [(w["file"], w["line"], w["word"], w["new"]) for w in words] == [("Net/Three.lean", 1, "Session", "ChallengePhase")]

@@ -71,7 +71,8 @@ def machine(tmp_path):
     (locks / "slots").write_text("a 32-63 only=trains   # train checks\nb 64-95\n")
     (locks / "check-a.lock").touch()
     (locks / "check-b.lock").touch()
-    (locks / "check-b.who").write_text(json.dumps({"pid": 40, "run": "r1", "tree": "/workspace/research/src/abc", "by": "infra"}))
+    (locks / "check-b.who").write_text(json.dumps({"pid": 40, "run": "r1", "tree": "/workspace/research/src/abc", "by": "infra",
+                                                   "joined": "2026-10-07T02:50:10Z", "took": "2026-10-07T03:02:30Z"}))
     (locks / "lean-slots").write_text("check 1\n")
     (locks / "lean-check-0.lock").touch()
     (locks / "lean-check-0.who").write_text(json.dumps({"pid": 40, "run": "r1", "took": "2026-10-07T03:05Z"}))
@@ -117,7 +118,7 @@ def test_status_reads_every_run_on_a_machine_with_one_ssh(machine, tmp_path, mon
     assert f"cpus 96-127 (affinity); AllowedCPUs 96-127 at {SCOPE}\n" in out
     assert "cpus 64-95 (affinity); its cgroup allows 0-159\n" in out
     assert "gpus GPU 0 of " + str(leases) + "  pid 40 since 2026-10-06T16:46Z until 2026-10-06T17:11Z mem 1544G timed\n" in out
-    assert "slot check slot b (cores 64-95) since " in out and "slot Lean slot check/0 since " in out
+    assert "slot check slot b (cores 64-95) since 2026-10-07T03:02Z\n" in out and "slot Lean slot check/0 since 2026-10-07T03:05Z\n" in out
     assert (f"waits gpu-lease {leases}: 2 GPU(s) preemptible since 2026-10-07T03:01Z; 1 waiter(s) ahead, 2 of 4 GPUs unlocked; "
             "pool 1 GPU(s), 1 holder(s) pending\n") in out
     assert "waits check slot since " in out and ": 0 ahead in line; b held (a trains only)\n" in out
@@ -134,6 +135,17 @@ def test_inspect_says_what_a_live_run_holds(machine, tmp_path, monkeypatch, caps
     out = capsys.readouterr().out
     assert "cpus      64-95 (affinity); its cgroup allows 0-159\n" in out
     assert f"waits     gpu-lease {leases}: 2 GPU(s) preemptible" in out
+
+
+def test_a_slot_is_held_since_it_was_taken_never_since_its_holders_process_started():
+    """A holder's `since` is its process's start, which for a check is when it joined the line: a run holds a slot since its
+    record's `took`, and a holder whose record names none is said to hold it for a time not recorded."""
+    arrived = {"run": "r1", "since": "2026-10-07T02:50Z", "minutes": 20}
+    check = {"slots": [{"name": "b", "cpus": "64-95", "holder": {**arrived, "took": "2026-10-07T03:02Z", "held_minutes": 8}}]}
+    lean = {"pools": {"check": {"n": 1, "slots": [{"index": 0, "holder": arrived}]}}}
+    assert H.slots("r1", {"slots": {"check": check, "lean": lean}}) == (
+        ["check slot b (cores 64-95) since 2026-10-07T03:02Z",
+         "Lean slot check/0 for a time not recorded (its process started 2026-10-07T02:50Z)"], [])
 
 
 def test_a_machine_that_cant_be_reached_leaves_the_others_read(machine, tmp_path, monkeypatch, capsys):
@@ -166,25 +178,25 @@ queue = "deployments-gpu"
 """
 
 
-def test_node1_cap_is_the_pool_queues_quota_unless_every_waiter_is_preemptible(tmp_path):
+def test_node1_limit_is_the_pool_queues_quota_unless_every_waiter_is_preemptible(tmp_path):
     desc = tmp_path / "nebius.toml"
     desc.write_text(DESC)
     plain, fill = [{"n": "4"}], [{"n": "4", "preempt": "1"}]
-    assert H.n1_cap("/run/gpu-lease", 4, plain, None, NOW, desc) == (
+    assert H.n1_limit("/run/gpu-lease", 4, plain, None, NOW, desc) == (
         "node 1's provers pool grants at most the provers queue's quota, 2 GPU(s), less its other Workloads', while a waiter isn't "
         "--preemptible; this asks for 4, more than that")
-    assert "the deployments-gpu queue's quota, 6 GPU(s)" in H.n1_cap("/run/gpu-lease-circuits", 1, plain, None, NOW, desc)
-    assert "borrows more only while every waiter is --preemptible" in H.n1_cap("/run/gpu-lease", 4, fill, None, NOW, desc)
+    assert "the deployments-gpu queue's quota, 6 GPU(s)" in H.n1_limit("/run/gpu-lease-circuits", 1, plain, None, NOW, desc)
+    assert "borrows more only while every waiter is --preemptible" in H.n1_limit("/run/gpu-lease", 4, fill, None, NOW, desc)
     lim = "max=8 borrow=6 borrow-until=2026-10-07T12:00:00Z from=policy"
-    assert H.n1_cap("/run/gpu-lease", 4, fill, lim, NOW, desc).startswith(
+    assert H.n1_limit("/run/gpu-lease", 4, fill, lim, NOW, desc).startswith(
         "node 1's provers pool grants at most 8 GPU(s): the provers queue's quota 2 + borrow 6, max 8")
-    assert H.n1_cap("/run/gpu-lease", 4, plain, lim, NOW, desc).endswith("this asks for 4, more than that")
-    assert H.n1_cap("/run/gpu-lease", 4, fill, lim.replace("10-07", "10-06"), NOW, desc).startswith("node 1's provers pool grants at most 2 GPU(s)")
-    assert H.n1_cap("/run/other", 1, plain, None, NOW, desc) is None
-    assert H.n1_cap("/run/gpu-lease", 1, plain, None, NOW) is not None          # the repository's description still reads
+    assert H.n1_limit("/run/gpu-lease", 4, plain, lim, NOW, desc).endswith("this asks for 4, more than that")
+    assert H.n1_limit("/run/gpu-lease", 4, fill, lim.replace("10-07", "10-06"), NOW, desc).startswith("node 1's provers pool grants at most 2 GPU(s)")
+    assert H.n1_limit("/run/other", 1, plain, None, NOW, desc) is None
+    assert H.n1_limit("/run/gpu-lease", 1, plain, None, NOW) is not None          # the repository's description still reads
 
 
-def test_node1_waits_name_their_cap():
+def test_node1_waits_name_their_limit():
     node = {"leases": {"/run/gpu-lease": {"gpus": 8, "locked": 8, "owners": [], "limits": None, "pool": None,
                                           "waits": [{"file": "wait.1.60", "pid": "60", "n": "1", "run": "r2", "since": "2026-10-07T03:01:00Z"}]}}}
     (line,) = H.gpu_waits("r2", "vy-nebius-1", node, NOW)

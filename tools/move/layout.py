@@ -24,7 +24,8 @@ names it rather than leave its lines as they were, until the map excludes it; a 
 What it rewrites, in every tracked text file the map doesn't exclude:
 - paths: root-relative ones (`packages/verity/src/verity/ir/cut.py`, also after `{ROOT}/`, `$ROOT/` or `~/verity/`, and
   after each prefix the map lists as standing for the root: [rewrite] root_prefixes, `/opt/vy-verifier/current/`),
-  ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`), ones relative to an old package
+  ones relative to the file (`../../packages/verity/lean` in a lakefile, `include_str!`; a Lake requirement's `path` and
+  a manifest's `dir` however written, `composition` too, a package inside the requiring one), ones relative to an old package
   root (`verity/ir/cut.py`, `verity_pouw/schemes/ncp.py`) when that file exists, Python joins (`ROOT / "census"`), the
   `Path(__file__).parents[N]` anchors of a moved file, and a shell script's paths from its own directory
   (`$(dirname "$0")/../..`, also through `${BASH_SOURCE[0]}` or a variable the script sets to its own path or its own
@@ -42,7 +43,8 @@ What it rewrites, in every tracked text file the map doesn't exclude:
   `module:attr`, docs). A module whose own row keeps its name (a [paths] row with old == new) stays where it is when its
   package moves;
 - pyprojects: the distributions folded into `verity` ([distributions]), the workspace members, the suites' inputs.
-A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. An
+A `lean-audit.json`'s `guarantees` and `reads` never change, and neither do the digests a path-keyed pin file records. A
+Lake package's path to another package that named one before the move names one after it, or the move stops (exit 1). An
 old path that names something outside the tree ([rewrite] keep: the frozen evidence artifact's layout) is never rewritten,
 and neither is a dotted name that only looks like a module ([rewrite] keep_dotted: a torch op's qualified name).
 A string literal in Rust or Lean is protocol text (a domain tag, a statement's field, a JSON key) where only a path changes:
@@ -55,8 +57,11 @@ word and a package's path (`"INLINE Security"`), [rewrite] word_ends lists the f
 name is rewritten also as the last word of a double-quoted string. A tracked file that a `.gitignore` matches stays tracked where
 it moves. A `.py` file moved below a package root from a package, or from outside every package to a directory that is
 not run by path (`tests/`, `lean/`), gets an `__init__.py` in each directory from it up to the root; and an `__init__.py`
-left where a package held more and now holds only such files is deleted with the package. It appends [paths] to research's
-`moves.json` (once), each row whose path the tree has, and never rewrites the moves recorded there.
+left where a package held more and now holds only such files is deleted with the package when it holds nothing but
+whitespace and comments (`only_comments`). One that holds more, a docstring alone included, stops the move (exit 1) before
+it writes anything, naming each such file: give it a row saying where it goes, or delete it in a hand commit before the
+move. It appends [paths] to research's `moves.json` (once), each row whose path the tree has, and never rewrites the
+moves recorded there.
 
 It fails on a rewritten reference to a directory the map splits across destinations (`verity/ml/flock/` to
 `verity/protocols/flock/prover/` with its `verifier/` to `verity/protocols/flock/agreement/`): the rewrite follows the
@@ -74,6 +79,7 @@ import bisect
 import fnmatch
 import functools
 import hashlib
+import io
 import json
 import os
 import posixpath
@@ -81,6 +87,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tokenize
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -106,6 +113,12 @@ MOVES = "tools/research/src/research/store/moves.json"   # each layout move's [p
 FILE_SUFFIXES = {"py", "json", "toml", "md", "txt", "lean", "sh", "rs", "cu", "cuh", "yaml", "yml", "gz", "jsonl", "npy", "html"}
 #: file types whose plain relative paths (`fixtures/x.json`, with no `./`) are resolved against the file's directory
 RELATIVE_TYPES = {".py", ".toml", ".json", ".sh", ".md", ".rs", ".cu", ".cuh", ".yaml", ".yml", ".txt", ".cfg", ".lean"}
+#: the Lake files that name other packages' directories, each from its own: a lakefile by a requirement's `path`, a
+#: manifest by a path package's `dir` (`lake_dirs` reads them, `lake_spans` finds them in the text)
+LAKE_FILES = ("lakefile.toml", "lake-manifest.json")
+_LAKE_PATH = re.compile(r'[ \t]*path[ \t]*=[ \t]*"(?P<p>[^"\\\n]+)"')
+_LAKE_PACKAGE = re.compile(r"\{[^{}]*\}")
+_LAKE_DIR = re.compile(r'"dir"\s*:\s*"(?P<p>[^"\\\n]+)"')
 #: a distribution's directory as `uv.lock` writes it: a package's `source` and a `requires-dist` or manifest entry
 _LOCK_SOURCE = re.compile(r'\b(editable|virtual|directory) = "([^"\n]+)"')
 #: a shell script's own directory and the path joined to it (`$(dirname "$0")/../..`); `ref` is what `dirname` takes
@@ -155,6 +168,41 @@ BY_PATH = {"tests", "lean"}
 def is_shell(path: str, text: str) -> bool:
     """A shell script: `*.sh`, or a file whose first line is a shell's `#!`."""
     return path.endswith(".sh") or re.match(r"#!\S*(?:/|\s)(?:ba|da|z)?sh\b", text) is not None
+
+
+def lake_dirs(name: str, text: str) -> list[str]:
+    """The directories of other packages that a Lake file named `name` holds, as written and in the file's order: a
+    lakefile's path requirements, a manifest's path packages. Empty for any other file and for an empty one. A Lake file
+    that doesn't parse raises `ValueError`: its paths can't be read, so nothing can say they still name their packages."""
+    if name not in LAKE_FILES or not text.strip():
+        return []
+    if name == "lakefile.toml":
+        held, key, kind = tomllib.loads(text).get("require", []), "path", None
+    else:
+        data = json.loads(text)
+        held, key, kind = data.get("packages", []) if isinstance(data, dict) else [], "dir", "path"
+    return [e[key] for e in (held if isinstance(held, list) else [])
+            if isinstance(e, dict) and isinstance(e.get(key), str) and (kind is None or e.get("type") == kind)]
+
+
+def lake_spans(name: str, text: str) -> list[tuple[int, int]]:
+    """Where `text` writes each of `lake_dirs`, in the forms Lake's files have: a `path` line of a `[[require]]` table, and
+    the `dir` of a flat object whose `type` is `path`. A requirement written another way is in `lake_dirs` alone, so the
+    rewrite leaves it and the check after the rewrite still reads it."""
+    spans = []
+    if name == "lakefile.toml":
+        table, at = "", 0
+        for line in text.splitlines(keepends=True):
+            if line.lstrip().startswith("["):
+                table = line.split("#")[0].strip()
+            elif table == "[[require]]" and (m := _LAKE_PATH.match(line)):
+                spans.append((at + m.start("p"), at + m.end("p")))
+            at += len(line)
+    elif name == "lake-manifest.json":
+        for package in _LAKE_PACKAGE.finditer(text):
+            if re.search(r'"type"\s*:\s*"path"', package.group(0)) and (m := _LAKE_DIR.search(package.group(0))):
+                spans.append((package.start() + m.start("p"), package.start() + m.end("p")))
+    return spans
 
 
 def sh_ref(ref: str) -> str:
@@ -454,6 +502,34 @@ def oversize(src: Path) -> bool:
         return b"\0" not in f.read(8192)
 
 
+def only_comments(text: str | bytes | None) -> bool:
+    """Whether a file of `text` (its text, or its bytes, read as UTF-8) holds nothing but whitespace and comments, so that
+    deleting it loses nothing: what an `__init__.py` left in a package a move empties must be for the move to delete it
+    (`Run._leftover`; `move_check.py` reads it at BASE by this same function). A docstring is content, and so are bytes
+    that aren't UTF-8 (or None, a text that wasn't) and text that doesn't parse."""
+    if text is None:
+        return False
+    try:
+        if isinstance(text, bytes):
+            text = text.decode("utf-8")
+        if ast.parse(text).body:
+            return False
+        kinds = {t.type for t in tokenize.generate_tokens(io.StringIO(text).readline)}
+    except (SyntaxError, ValueError, tokenize.TokenError):
+        return False
+    return kinds <= {tokenize.COMMENT, tokenize.NL, tokenize.NEWLINE, tokenize.ENDMARKER}
+
+
+def refuse_held(held: list[str]):
+    """Stop a move that would delete `held`, the `__init__.py` files left in packages it empties that hold more than
+    comments and whitespace (`only_comments`). The first line names them, since a caller may show only that one."""
+    if held:
+        raise SystemExit(f"the move would delete {len(held)} `__init__.py` file{'s' * (len(held) != 1)} left in packages it "
+                         f"empties that hold more than comments and whitespace: {', '.join(held)}\n"
+                         "give each a row in the map saying where it goes (on a branch, a row in its rows file "
+                         f"NAME{ROWS_SUFFIX} beside the map), or delete it in a hand commit before the move")
+
+
 def refuse_unread(unread: dict[str, int]):
     """Stop a move that would leave `unread` (path -> bytes, the text files `oversize` names) with every line as it was."""
     if unread:
@@ -474,7 +550,7 @@ class Run:
         self.moved: dict[str, str] = {}             # new path -> old path, for files this run moves
         self.texts: dict[str, str] = {}             # new path -> text as it will be written
         self.dropped: list[str] = []                # old paths of the files [drop] deletes
-        self.leftover: list[str] = []               # the `__init__.py` files left alone in the packages the move empties
+        self.leftover: list[str] = []               # the `__init__.py` files left in the packages the move empties
         self.splits: dict[str, str] = {}            # "old file: old directory" -> a rewrite of a split directory's reference
         self.unread: dict[str, int] = {}            # old path -> bytes, for the text files left unread for their size alone
 
@@ -543,11 +619,17 @@ class Run:
         self.old_dirs = {posixpath.dirname(p) for p in tracked}
         self.old_dirs |= {d for p in (*tracked, *fetched) for d in _ancestors(p)}
         self.leftover = self._leftover(tracked, dict(moves))
+        refuse_held([p for p in self.leftover if not only_comments(self._read_old(p))])
         return moves
+
+    def _read_old(self, p: str) -> bytes:
+        """The bytes of `p`, a tracked file of the tree being moved: one that can't be read stops the move."""
+        return (self.root / p).read_bytes()
 
     def _leftover(self, tracked: list[str], dest: dict[str, str]) -> list[str]:
         """Each `__init__.py` that stays in a directory which held more and, after the move, holds nothing but such files,
-        or below one: the package is gone, and a file that only marked it goes with it ([create] keeps one it names)."""
+        or below one: the package is gone, and a file that only marked it goes with it ([create] keeps one it names). One
+        that holds more than comments and whitespace is no mark, and `plan` refuses the move over it (`refuse_held`)."""
         before = sorted(tracked)
         after = sorted({dest.get(p, p) for p in tracked if p not in self.L.drop} | set(self.L.data.get("create", {})))
 
@@ -575,7 +657,7 @@ class Run:
                 (self.root / p).unlink()
         self.changes["files dropped"] = len(self.dropped)
         for p in self.leftover:
-            self.note("`__init__.py` left alone in a package the move empties, deleted", p)
+            self.note("`__init__.py` of nothing but comments and whitespace, left in a package the move empties, deleted", p)
         if not self.dry:
             for d in sorted({posixpath.dirname(o) for o in (*(o for o, _ in moves), *self.dropped, *self.leftover)},
                             key=len, reverse=True):
@@ -654,6 +736,8 @@ class Run:
         pins_before = {p: re.findall(r"\b[0-9a-f]{64}\b", self._read(p) or "")
                        for p in self.new_files if self.L.excluded(self.old_of.get(p, p)) is False
                        and any(fnmatch.fnmatchcase(p, pat) for pat in self.L.include)}
+        lake_before = {p: self._lake_packages(self.old_of.get(p, p), self._read(p) or "", self.tracked_old)
+                       for p in self.new_files if posixpath.basename(p) in LAKE_FILES}
         created = set(self.L.data.get("create", {}))
         for p in sorted(self.new_files - created, key=lambda p: (p == "pyproject.toml", p)):   # the root's members read the rest
             if p == "pyproject.toml":
@@ -671,6 +755,18 @@ class Run:
         for p, before in lean_before.items():
             if self._lean_records(self.texts.get(p) or self._read(p)) != before:
                 raise SystemExit(f"{p}: the rewrite would change a guarantee or reads record")
+        lost = []
+        for p, before in sorted(lake_before.items()):
+            after = self._lake_packages(p, self._read(p) or "", self.new_files)
+            lost += [f"  {p}: {after[i][0]} (it named {was})\n" for i, (_, was) in enumerate(before)
+                     if was is not None and i < len(after) and after[i][1] is None]
+        if lost:
+            raise SystemExit("the move would leave a Lake package's path to another package naming no package, so neither "
+                             "it nor what requires it would build:\n" + "".join(lost)
+                             + "each is a file the map excludes from the rewrite ([rewrite] exclude: take it out), a package "
+                             "the map deletes ([drop]: take the requirement out first, in a change of its own), or a "
+                             "requirement written in a form `lake_spans` doesn't find (write it as a `path` line of a "
+                             "`[[require]]` table)")
         registered = {v for k, v in json.loads(self._read("fixtures/artifacts.json") or "{}").items()
                       if k.startswith("art:") and isinstance(v, str)}
         for p in sorted(registered & set(self.texts)):
@@ -752,7 +848,7 @@ class Run:
         if posixpath.basename(path) == ".gitignore":
             out = self._gitignore(path, out)
         else:
-            out = self._paths(path, old, out)
+            out = self._lake_paths(path, old, self._paths(path, old, out))
         if path.endswith(".py"):
             out = self._anchors(path, old, out)
             out = self._joins(path, old, out)
@@ -984,6 +1080,37 @@ class Run:
                 return new + token[len(stripped):]
             text = self._plain_re.sub(plain, text)
         return text
+
+    def _lake_paths(self, path: str, old: str, text: str) -> str:
+        """A Lake file's paths to other packages that `_paths` takes for no path: a requirement's `path` or a path
+        package's `dir` written as one word (`composition`: a package inside this one's directory), or with a `/` and no
+        leading `./` in a file that stays, where `_paths` reads only a moved file's."""
+        for a, b in reversed(lake_spans(posixpath.basename(path), text)):
+            token = text[a:b]
+            if token.startswith(".") or ("/" in token and path != old):
+                continue
+            new = self._map_relative(token, path, old)
+            if new is None or new == token:
+                continue
+            self._count(path, "relative paths")
+            self.note("relative paths rewritten", f"{path}: {token} -> {new}")
+            text = text[:a] + new + text[b:]
+        return text
+
+    def _lake_packages(self, path: str, text: str, files: set[str]) -> list[tuple[str, str | None]]:
+        """Each directory Lake file `path` names (`lake_dirs`), as written, with the package's directory among `files`, or
+        None where that holds no lakefile. A Lake file that doesn't parse stops the move: its paths can't be checked."""
+        try:
+            dirs = lake_dirs(posixpath.basename(path), text)
+        except ValueError as e:
+            raise SystemExit(f"{path}: not a Lake file the mover can read ({e}), so it can't say that the paths it holds "
+                             "to other packages still name them after the move: fix the file first, in a change of its "
+                             "own") from e
+        out = []
+        for d in dirs:
+            at = posixpath.normpath(posixpath.join(posixpath.dirname(path), d))
+            out.append((d, at if {f"{at}/lakefile.toml", f"{at}/lakefile.lean"} & files else None))
+        return out
 
     def _short_form(self, new: str) -> str:
         """A new path as a package-relative one when it lands under a new root, else root-relative."""

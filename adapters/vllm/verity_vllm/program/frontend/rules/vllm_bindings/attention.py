@@ -5,18 +5,36 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import torch
-
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
+
+from verity_vllm.log import init_logger
+from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import Alloc, refuse
-from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, row_value, shape
+from verity_vllm.program.frontend.rules.common import (
+    attention_scale,
+    known,
+    kv_logs,
+    row_value,
+    shape,
+)
 from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
-                                                                           active_target_profile, attn_kind_for, attn_lookup_key)
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    ATTN_PINS,
+    _attn_pins_ok,
+    active_launch_context,
+    active_target_profile,
+    attn_kind_for,
+    attn_lookup_key,
+)
+from verity_vllm.program.frontend.strided_views import _tensor_type
+from verity_vllm.program.frontend.value_types import shape_of
 
 # -- KV cache write + attention read (two ops) -----------------------------------------------------------------------------
+
+logger = init_logger(__name__)
 
 
 class _KvWrite:
@@ -32,7 +50,8 @@ class _KvWrite:
 def _vllm_op(name: str) -> set:
     try:
         return {getattr(torch.ops.vllm, name).default}
-    except Exception:  # noqa: BLE001 — vLLM not importable (laptop): the rule has no targets
+    except Exception:  # vLLM has registered no such op here (laptop): the rule has no targets
+        logger.debug("a lookup in torch.ops.vllm raised: no rule targets the op", exc_info=True)
         return set()
 
 
@@ -81,8 +100,8 @@ class UnifiedAttentionWithOutputRule(StateRule):
     modes = frozenset({"profile"})
     info = RuleInfo("UnifiedAttentionWithOutput[vllm]", 2, "state",
                     applies_to="vllm.unified_attention_with_output(query, key, value, Tensor! output, layer_name: str, output_scale=None, output_block_scale=None, kv_cache_dummy_dep=None)",
-                    preconditions=("the layer's OBSERVED attention implementation (instantiated `Attention.impl` class, backend, FA version, window, soft cap, "
-                                   "alibi, sinks, kv dtype, batch_invariant_enabled) equals ATTN_PINS — derived from the model instance, never assumed",
+                    preconditions=(("the layer's OBSERVED attention implementation (instantiated `Attention.impl` class, backend, FA version, window, soft cap, "
+                                   "alibi, sinks, kv dtype, batch_invariant_enabled) equals ATTN_PINS — derived from the model instance, never assumed"),
                                    "q [T, NH, D], k, v [T, KVH, D] bf16 (or flat rows with config D); NH % KVH == 0",
                                    "output is an unwritten allocation of q's shape", "layer_name is a static string owned by exactly one module",
                                    "output_scale and output_block_scale are None (no fp8 output quantisation)",
@@ -119,7 +138,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
             return r
         if oscale is not None or obscale is not None:
             return "numerics_unregistered: output_scale / output_block_scale set (fp8 output) — no registered kind"
-        qs, ks, vs, os_ = shape(ctx, q), shape(ctx, k), shape(ctx, v), shape(ctx, out)
+        qs, ks, vs, os_ = known(shape(ctx, q)), known(shape(ctx, k)), shape(ctx, v), shape(ctx, out)
         if qs[0] != ks[0] or ks != vs:
             return f"row counts differ q{qs} k{ks} v{vs}"
         if os_ != qs:
@@ -176,7 +195,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         if opened:
             cached[layer_name] = KP.seed(ctx, node, layer_name, krow_list, vrow_list, KVH, D)
         P0 = len(krow_list)
-        prefill = P0 == cached.get(layer_name, 0)
+        prefill = cached.get(layer_name, 0) == P0
         if not prefill:
             KP.require_consumed(ctx, node)
         for i in range(T):
@@ -203,7 +222,6 @@ class UnifiedAttentionWithOutputRule(StateRule):
         # target-keyed chain: on the accepted target (Ampere step, FA2) the role stays `attention` / `attention_softcap`
         # (digests unchanged); otherwise `attention_dot` = Attention_v2{BN, DOT, INV} with the block size of the launch the target's FA
         # version issues (FA3's tile rule reads the launch's query rows: this call's T on the prefill, 1 per request on decode).
-        from verity_vllm.program.frontend import targets as TG
         tp = active_target_profile()
         accepted = TG.uses_accepted_kinds(tp)
         geom = None
@@ -247,7 +265,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
         statics = {} if scale else extra
         for i in range(T):
             P = P0 + i + 1
-            if window is not None and P > window:
+            if window is not None and window < P:
                 refuse("numerics_unregistered", node, mp, f"layer {layer_name!r} has an OBSERVED sliding window of {window} keys and position {P - 1} "
                        f"has {P} keys in its history: the window is active and no windowed attention kind is registered "
                        f"(positions < {window} are exact under the unwindowed kind)")

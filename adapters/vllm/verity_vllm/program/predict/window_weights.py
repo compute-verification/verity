@@ -9,7 +9,9 @@ root it computes: it holds the registration to its own weights record's shapes (
 value, leaves, words and domain and no root; `registration_pins`), so what it learns of the weights is each weight's size
 and its hiding root. `verity-vllm advice --weights-of-record` records the registration's roots as each window's, and a
 window's committer commits the words it serves under the same key (`weight_values`), so a weight served otherwise
-has another root and its reads are free (`interface.input_count`).
+has another root and its reads are free (`interface.input_count`). A serve puts the registration first in its registration
+log as a record of its own (`deployment_record`). On a serve tied to Pearl+, Pearl+'s window record W is chained after it;
+no other record names it.
 
 A field the weights record holds to an analytic table (the rotary table: its words are the engine's libm's, within a
 bound of the analytic function of config.json, with no byte digest) is registered at the words the engine serves
@@ -25,13 +27,15 @@ from dataclasses import asdict
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments.windows import interface as IF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G, registration as REG
+
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.config import CHECKPOINTS
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 from verity_vllm.records.weights_registration import WeightsRegistration
 
+from .common import _arr_shape
 from .window_builder import WEIGHTS, Grain, table_param, weight_param
 from .window_circuit import WindowClass, class_program, lower
 
@@ -40,6 +44,8 @@ WEIGHTS_CLASS = WindowClass(1, 2, 2)
 #: the salt nonce of the first weight parameter a committer commits under its key, each next one the next (`weight_nonces`):
 #: above every nonce PoUW and the request tables take (`pouw.h1.served`, `pouw.h1.requests`, below 2^62)
 WEIGHTS_NONCE = 1 << 62
+#: what a deployment's first registration record registers, as its header's ``kind`` states (`deployment_record`)
+DEPLOYMENT = "weights"
 _GRAIN = Grain()
 
 
@@ -133,8 +139,6 @@ def weight_nonces(params: Any) -> dict[str, int]:
 
 def _fields(registered: Any) -> tuple[Any, list[tuple[str, list[int], int]]]:
     """The class Program the weights are read of and its weights record's fields (name, shape, value bits)."""
-    from .common import _arr_shape
-
     r = class_program(registered, WEIGHTS_CLASS)
     return r, [(n, list(_arr_shape(t)), next(iter(t.width_set()))) for n, t in dict(r.program.fn.signature()[0])[WEIGHTS].fields]
 
@@ -164,8 +168,6 @@ def _composed(registered: Any, r: Any, fields: list, checkpoint_dir: str, checkp
     """`check.weights_of_record` of ``fields``, composed from ``checkpoint_dir``'s shards as ``checkpoints_manifest``
     (default the repository's ``manifests/checkpoints.json``) pins them at ``registered``'s model and revision, each field's
     words handed to ``on_field`` as digested."""
-    from verity_vllm.config import CHECKPOINTS
-
     model = registered.phi.model
     ck = WR.CheckpointIndex(checkpoint_dir, checkpoints_manifest=str(checkpoints_manifest or CHECKPOINTS), model=model["repo"],
                             revision=model["revision"])
@@ -324,5 +326,25 @@ def registration_pins(registration: Any, record: dict[str, Any]) -> dict[str, st
     return pins
 
 
-__all__ = ["WEIGHTS_CLASS", "WEIGHTS_NONCE", "Grain", "WeightsRegistration", "record_words", "registration_pins", "weight_nonces",
-           "weight_value", "weight_values", "weights_record", "weights_registration"]
+def deployment_record(registration: Any) -> dict[str, Any]:
+    """The deployment's first registration record (`verity/registration/v2`, chained after nothing): each weight parameter
+    the committer's ``registration`` roots (`weights_registration`), as the registered value of 16-bit words the
+    registration states (its value, root, leaves, words and domain), by name, under a ``deployment`` header: the weights
+    record's program, the model at its revision, the grain, and the weight parameters the registration leaves unrooted,
+    which no record registers and whose reads stay free. A serve writes it before its first request. On a serve tied to
+    Pearl+, Pearl+'s window record W names it as ``previous`` (`registration.digest`), so there a weight's root is in the
+    log's first record before W. No other record names it: a window's own record is chained after its W or after nothing,
+    and H1's W after nothing, as before. It states what the registration states and nothing of the key. ValueError unless
+    ``registration`` is one (`records.weights_registration`) whose values are all weight parameters'."""
+    reg = WeightsRegistration.of(registration, "the weights registration")
+    for p in (*reg.values, *reg.unrooted):
+        _param(p)
+    return {"format": REG.FORMAT_V2, "protocol": REG.PROTOCOL,
+            "deployment": {"kind": DEPLOYMENT, "program": reg.program, "model": {"repo": reg.repo, "revision": reg.revision},
+                           "grain": dict(reg.grain), "unrooted": sorted(reg.unrooted)},
+            "registered": [dict(reg.values[p]) for p in sorted(reg.values)],
+            "previous": None}
+
+
+__all__ = ["DEPLOYMENT", "WEIGHTS_CLASS", "WEIGHTS_NONCE", "Grain", "WeightsRegistration", "deployment_record", "record_words",
+           "registration_pins", "weight_nonces", "weight_value", "weight_values", "weights_record", "weights_registration"]

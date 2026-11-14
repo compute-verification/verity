@@ -141,11 +141,16 @@ def own_compile_dirs(root: str) -> dict[str, str]:
                          **COMPILE_FRESH})
 
 
+def own_inductor_dir() -> bool:
+    """Whether this process's TORCHINDUCTOR_CACHE_DIR is its own: whoever gave it one set ``INDUCTOR_DIR_MARK``."""
+    return os.environ.get(INDUCTOR_DIR_MARK) == "1"
+
+
 def compile_dirs() -> dict[str, str] | None:
     """The Inductor output-code dir and vLLM cache root this process was given as its own (``own_compile_dirs``, or exported with
     ``INDUCTOR_DIR_MARK`` by ``ops/served_commit.sh``), else None."""
     ind, root = os.environ.get("TORCHINDUCTOR_CACHE_DIR"), os.environ.get("VLLM_CACHE_ROOT")
-    return {"inductor": ind, "vllm_cache": root} if os.environ.get(INDUCTOR_DIR_MARK) == "1" and ind and root else None
+    return {"inductor": ind, "vllm_cache": root} if own_inductor_dir() and ind and root else None
 
 
 def hide_devices() -> None:
@@ -156,12 +161,6 @@ def hide_devices() -> None:
 
 def snapshot() -> dict[str, str]:
     return dict(os.environ)
-
-
-def set_since(before: Mapping[str, str]) -> dict[str, str]:
-    """The keys set or changed since ``before`` (a `snapshot`). vLLM's batch invariance writes cuBLAS' and NCCL's switches while it
-    builds an engine; the engine keeps them (`Engine.environ`)."""
-    return {k: v for k, v in os.environ.items() if before.get(k) != v}
 
 
 def disable_compile_cache() -> None:
@@ -176,7 +175,7 @@ def prepare_compiled_process_cache() -> dict[str, Any]:
     would be null: a compiled record without positive evidence of compilation).  Costs one Inductor compilation per process (~70 s for
     Llama-3.2-1B), recorded in the header as compilation.compile_cache = disabled."""
     out: dict[str, Any] = {}
-    if os.environ.get(INDUCTOR_DIR_MARK) != "1":
+    if not own_inductor_dir():
         d = tempfile.mkdtemp(prefix="verity_inductor_")
         os.environ["TORCHINDUCTOR_CACHE_DIR"] = d
         os.environ[INDUCTOR_DIR_MARK] = "1"

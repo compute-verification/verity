@@ -30,7 +30,7 @@ import subprocess
 import sys
 from collections import Counter
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import cache
 from pathlib import Path
 
 INTEGRATION = "adapters/vllm"
@@ -85,7 +85,7 @@ class Tree:
         return None
 
 
-@lru_cache(maxsize=None)
+@cache
 def _source(p: Path) -> str:
     return p.read_text(encoding="utf-8")
 

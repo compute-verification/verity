@@ -1,11 +1,12 @@
-"""`proved_ticks`: PoUW's proved block-ticks for a window's declared work, the figure network accounting's joint ledger
-credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`: `Placed.public(plan, ticks=...)`, where
-`tests/test_proved_ticks_placed.py` places PoUW's compiled Program on a block).
+"""`proved_ticks`: PoUW's proved block-ticks for the work of a window's registered circuit, the figure network
+accounting's joint ledger credits as a block's `compute` with basis "proved" (`benchmarks/datacenter`:
+`Placed.public(plan, ticks=...)`, where `tests/test_proved_ticks_placed.py` places PoUW's compiled Program on a block).
 
     uv run python benchmarks/pouw/proved_ticks.py     the hand-checked point: H1 + fx1 on DS-120
 
-For a census W of a window's declared work on a block of G GPUs of one device, at its data-sheet reading (`placed`
-reads W off a block where the datacenter places a Program `SCHEME` or its one stream `SCHEME_V3` compiled):
+For a census W of the work of a window's registered circuit on a block of G GPUs of one device, at its data-sheet
+reading (`placed` reads W off a block where the datacenter places a Program `SCHEME` or its one stream `SCHEME_V3`
+compiled):
 
     ticks(W) = (1 − ε) · U(W) · B_♭ / (4 · SMs · f_max) / G / tick_seconds
 
@@ -14,7 +15,7 @@ reads W off a block where the datacenter places a Program `SCHEME` or its one st
   committed words a transcript word for its noise (`eps_budget.FLOOR_WORDS`: H1's cohalf QKᵀ at 1.25), as
   `eps_budget.floor_skip` counts them.
 - B_♭, the floor program ♭'s bound a unit in SMSP-cycles on the sheet's machine: `eps_budget.prices`' ♭ (the tensor
-  route at the operand floor φ_del and the fold, no filler) with ε_skip's skippable work in it, B_♭ = B/(1 − ε_skip),
+  route at the operand floor φ_del and the fold, no filler) with ε_skip's free compute in it, B_♭ = B/(1 − ε_skip),
   ε_skip `eps_budget.design_skip` at the sheet's vector, as Lean's ♭ (`Accounting.TS.Headline.Sm120.flat`) is.
   For H1 + fx1 on DS-120, ♭ binds DS_issue alone: an IMMA.16832, 0.025641 LDSM_X4 and fx1's 8 ALU and 8 IMAD warp
   instructions, 17.025641, and 0.4207% skippable, so B_♭ = 17.097571.
@@ -58,13 +59,17 @@ import sys
 from collections import Counter
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent))     # appended: the tests import this module by path
 import eps_budget as EB
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
 from verity_machine_model.model import device
+
+#: what the tests read
+__all__ = [
+    "EB", "SCHEME", "SCHEME_V3", "SHEET_EPS", "Tile", "device", "placed", "proved_block_ticks", "sheet", "tiles",
+    "unit_cycles", "units",
+]
 
 SMSPS = 4                          # SMSPs an SM
 #: each family's f_max, the sheet's highest SM clock (A1): SPEC's P1, the hardware's 2,430 MHz on sm_120 (Lean's
@@ -73,7 +78,7 @@ FMAX_MHZ = {"sm_120": 2430}
 #: PoUW's headline ε at the data sheet, H1 + fx1 on DS-120: `Accounting.SecurityProofs.TS.Sm120SheetHeadline`
 SHEET_EPS = 5860 / 100000
 KINDS = tuple(f"mac:{p}" for p in PRODUCTS)
-#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.protocols.pouw.prover.circuit.h1tile.SCHEME`)
+#: PoUW's compile pass for H1 + fx1 on sm_120 (`verity.protocols.accounting.pouw.prover.circuit.h1tile.SCHEME`)
 SCHEME = "eps1-sm120-h1fx1"
 #: its one-stream form, whose units are `PouwH1Tile_v3` (`h1tile.SCHEME_V3`)
 SCHEME_V3 = "eps1-sm120-h1fx1-os"
@@ -98,7 +103,7 @@ def sheet(family: str = "sm_120") -> Sheet:
 
 
 def unit_cycles(s: Sheet) -> float:
-    """B_♭: ♭'s bound a unit of honest work on one SMSP, in SMSP-cycles, with ε_skip's skippable work in it."""
+    """B_♭: ♭'s bound a unit of honest work on one SMSP, in SMSP-cycles, with ε_skip's free compute in it."""
     data = device(s.family)
     d = design(s.design, data)
     return EB.prices(d.name, data, s.vector).mma / (1 - EB.design_skip(d, data=data, vector=s.vector).eps_time)
@@ -137,7 +142,7 @@ class Tile:
         """Every int8 product census/v1 counts in the tile (none served, no tail): the lanes' segment dots', r·c·(K + 32m)
         (`PouwSegDot_v2` and `PouwSegDot0_v2`), and on v1 `z`'s own (Lean's `h1Rows` dotMacs). v3 has none of its own:
         its z is recombined from the lanes' folded words, so its products are the segment dots' alone."""
-        from verity.protocols.pouw.prover.circuit import h1tile
+        from verity.protocols.accounting.pouw.prover.circuit import h1tile
         lanes = self.r * self.c * (self.k + 32 * h1tile.Layout(self.r, self.c, self.k).m)
         return lanes + (self.linears if self.version == 1 else 0)
 
@@ -145,8 +150,8 @@ class Tile:
 def tiles(program, calls: Collection[int] | None = None) -> Counter:
     """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
     each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
-    from verity.protocols.pouw.prover.circuit import h1tile
     from verity.circuits.program import is_input
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile
     versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
     memo: dict[int, Counter] = {}
 

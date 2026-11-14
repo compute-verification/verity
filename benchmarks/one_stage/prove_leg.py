@@ -55,7 +55,7 @@ template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`
 and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
 (``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
 (`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes Flock's block
-(`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
+(`m1_families.block`) is reported refused, not lowered.
 
 Known limits: units flat unless ``--structural``, and untyped; Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
 need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
@@ -85,8 +85,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import a7  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
-from verity.protocols.spot.verifier.one_stage import verifier as V  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
@@ -697,7 +697,7 @@ def registered_standin(n: int, K: int, out: Path, table_rows: int = 8, seed: int
     ``--registered`` file (`registered.reads_file` at the values' roots, and the output rows' port) written under
     ``out``."""
     from circuit_check import targets as TG
-    from verity.protocols.spot.verifier.one_stage import registered as G
+    from verity.protocols.proofs.spot.verifier.one_stage import registered as G
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.circuits.program import Program
     from verity.circuits.refs import coll_concat
@@ -775,11 +775,6 @@ STATE = {"m_prev": (2.0, 0.0), "l_prev": (4.0, 16.0), "o_prev": (4.0, 0.0), "l":
 #: the window circuit's units that no serving row commits (`serving_rows.template` refuses their one-bit leaves): their
 #: Definition is the window's own (`interface.resolve`), and they read no pinned table
 WINDOW_ONLY = ("EmbeddingRead_v1",)
-#: the units `defs` sizes but never stages, and why: the stager lowers a unit whole through `ir_lower`, and these whole
-#: pass any node's memory
-UNSTAGED = {"EmbeddingRead_v1": "lowered whole, its SHA-512 parts take about 150 GB each through ir_lower, and staging "
-                                "embedding-read:1b reached 430 GB before its out-of-memory kill: it needs cutting into Calls "
-                                "first"}
 
 
 def _gen(rng: np.random.Generator, n: int, size: int, scale: float = 1.0, mean: float = 0.0) -> np.ndarray:
@@ -964,8 +959,8 @@ def reuse_lowerings():
 
 
 def sized(fn) -> dict:
-    """`m1_families`' estimate of the unit (an upper bound on its ANDs) and M0's block for it (``rows_log``: its rows'
-    in-circuit hashing alone, a lower bound whatever its ANDs)."""
+    """`m1_families`' estimate of the unit (its leaves' ANDs, table reads apart: not its ``ands`` staged with reads
+    inline) and M0's block for it (``rows_log``: its rows' in-circuit hashing alone, a lower bound whatever its ANDs)."""
     import math
 
     import m1_families as MF
@@ -1036,7 +1031,7 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
     sample. A shape whose rows alone pass Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
+    its blocker Flock's own refusal), nor one whose estimate passes ``max_ands``."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}
@@ -1048,9 +1043,6 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
             rec["descriptor_id"] = descriptor_id(fn)
             rec["census"] = c = sized(fn)
             log(f"{shape}: census {c}")
-            if fn.base_id in UNSTAGED:
-                rec["blocker"] = f"not staged: {UNSTAGED[fn.base_id]}"
-                continue
             if c["refused_block"]:
                 rec["blocker"] = (f"refused by C-Flock's block: its rows ({c['row_bits']} bits) need a block of 2^{c['rows_log']} "
                                   f"for their in-circuit hashing alone, past 2^{c['k_max']}")

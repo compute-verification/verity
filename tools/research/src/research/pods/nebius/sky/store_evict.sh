@@ -14,13 +14,30 @@
 # every node every 30 minutes (store_evict_research.{service,timer}); vy-nebius-cpu-1 runs only that one.
 # A tool too old for --src-dir still evicts the rest, and the line says so. Python runs from / so nothing in a writable cwd imports.
 # The node's runs have no private remote, so a fixture whose blob is gone fails its suite whenever the public export lacks it.
-# Every artifact in `fixtures/artifacts.json` at the $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
+# Every artifact in `artifacts.json` (at the root, or under fixtures/ in a commit from before the registry moved) at the
+# $VY_EVICT_KEEP_REFS newest `refs/research/src/*` commits
 # of $VY_EVICT_GIT (each tree `research run` shipped here) keeps its blobs (`--keep-registry`). When no registry can be read, or the
 # tool has no --keep-registry, no store blob (and no run file) is evicted, and the line says why.
 # With $VY_EVICT_PYCACHE (research's unit: its PYTHONPYCACHEPREFIX, /workspace/research/cache/pycache) it also removes every directory
 # there whose source directory is gone (an evicted source tree, a uv build env, a run's scratch), which nothing else prunes and
 # whose dead files would otherwise take a node's inodes by the million. Only a definite ENOENT removes one; a source it can't stat stays.
-#   VY_RESEARCH_TOOL: the research tool to run (default the newest snapshot under /workspace/research/tool).
+# Four more passes remove what nothing else does (store/leftovers.py), each only where its variable points it (research's unit,
+# store_evict_src.conf) and each switched off by leaving that variable empty:
+#   VY_EVICT_REQUESTS  the request directories there (/workspace/research/requests) whose run dir is gone (`--requests-dir`)
+#   VY_EVICT_SCRATCH   the clones there (/workspace/research/scratch) of runs that are over, or whose run dir is gone with no
+#                      request left, no process naming the run and no write for 48 hours (`--scratch-dir`)
+#   VY_EVICT_LOCKS=1   $VY_EVICT_STORE's lock files that are free and over an hour old (`--locks`)
+#   VY_EVICT_UV        the editable shards and temporary build directories of the uv cache there (/workspace/cache/uv) that nothing
+#                      wrote for $VY_EVICT_UV_KEEP_H hours (48) and no live process names (`--uv-cache`)
+# The line counts, for each, what went (GB, inodes), what stayed by reason, and the first path kept because it is in use or
+# unknown, with why; it names the runs whose request or clone went (the first twenty: nothing else records them). One that
+# could not establish its conditions fails the unit like the source-tree pass; a tool too old for one still runs the rest, and
+# the line says so.
+#   VY_RESEARCH_TOOL: the directory holding the `research` package to run. The units set it to main's copy, the whole tree
+#   `research deploy install` places (deploy.toml: /usr/local/lib/vy-monitoring/clean-up, a link to one commit's directory). It is
+#   resolved once, here, so a pass runs that one commit's code to its end whatever is installed meanwhile, and the line names
+#   the directory, which is this script's working directory while the pass runs (the tool's Python still runs from /).
+#   There is no default: a snapshot under /workspace/research/tool is whatever branch a `research run` shipped.
 set -uo pipefail
 FREE=${VY_EVICT_FREE_GB:-2500}
 STORE=${VY_EVICT_STORE:-/workspace/jobs/store}
@@ -28,12 +45,15 @@ RUNS=${VY_EVICT_RUNS:-/workspace/jobs/runs}
 SRCDIR=${VY_EVICT_SRC:-}
 GITDIR=${VY_EVICT_GIT:-/workspace/research/git/verity.git}
 KEEP_REFS=${VY_EVICT_KEEP_REFS:-20}
-TOOL=${VY_RESEARCH_TOOL:-$(ls -td /workspace/research/tool/*/ 2> /dev/null | head -1)}
-TOOL=${TOOL%/}
+TOOL=$(readlink -e -- "${VY_RESEARCH_TOOL:-}" 2> /dev/null)
 if [ -z "$TOOL" ] || [ ! -d "$TOOL/research" ]; then
-  echo "vy-store-evict: no research tool (VY_RESEARCH_TOOL, or a snapshot under /workspace/research/tool)" >&2
+  echo "vy-store-evict: no research package at VY_RESEARCH_TOOL (${VY_RESEARCH_TOOL:-unset}): the unit sets it to main's copy," \
+    "which \`research deploy install\` places on the node; nothing was deleted" >&2
   exit 1
 fi
+# From here to its end the pass has that directory as its working directory, which is how an install knows it is in use: it
+# removes an older directory of the tree only once no process names it (deploy.py), and until Python starts nothing else does.
+cd "$TOOL" || { echo "vy-store-evict: cannot enter $TOOL; nothing was deleted" >&2; exit 1; }
 args=(--target-free-gb "$FREE" --runs --runs-dir "$RUNS")
 # a node's runs are collected from its custody upload, so its window stays 30 min (the tool's default is a day, for agent VMs)
 grep -q -- '"--quiet-min"' "$TOOL/research/store/cli.py" 2> /dev/null && args+=(--quiet-min 30)
@@ -46,6 +66,21 @@ if [ -n "$SRCDIR" ] && grep -q -- '"--src-dir"' "$TOOL/research/store/cli.py" 2>
 elif [ -n "$SRCDIR" ]; then
   srcnote="; src trees: not evicted, $(basename "$TOOL") has no --src-dir"
 fi
+left() {   # left NAME FLAG [VALUE]: pass FLAG when the tool has it, else say what stays
+  if grep -q -- "\"$2\"" "$TOOL/research/store/cli.py" 2> /dev/null; then
+    args+=("${@:2}")
+  else
+    srcnote="$srcnote; $1: not removed, $(basename "$TOOL") has no $2"
+  fi
+}
+[ -n "${VY_EVICT_REQUESTS:-}" ] && left requests --requests-dir "$VY_EVICT_REQUESTS"
+[ -n "${VY_EVICT_SCRATCH:-}" ] && left clones --scratch-dir "$VY_EVICT_SCRATCH"
+[ "${VY_EVICT_LOCKS:-}" = 1 ] && left "store locks" --locks
+if [ -n "${VY_EVICT_UV:-}" ]; then
+  left "uv cache" --uv-cache "$VY_EVICT_UV"
+  [ -n "${VY_EVICT_UV_KEEP_H:-}" ] && grep -q -- '"--uv-keep-h"' "$TOOL/research/store/cli.py" 2> /dev/null \
+    && args+=(--uv-keep-h "$VY_EVICT_UV_KEEP_H")
+fi
 keep=$(mktemp)
 trap 'rm -f "$keep"' EXIT
 kept=$(python3 - "$GITDIR" "$KEEP_REFS" "$keep" 2>&1 <<'EOF'
@@ -55,12 +90,16 @@ git = ["git", "-c", "safe.directory=*", "--git-dir", g]
 shas = subprocess.run([*git, "for-each-ref", "--sort=-committerdate", f"--count={n}", "--format=%(objectname)", "refs/research/src"],
                       capture_output=True, text=True, check=True).stdout.split()
 ids = {}
+# where a commit holds the registry (research's REPLICA_MAPS): the root, and under fixtures/, as commits from before it moved
+# do; the second in two parts, which a rerun of that move's rewrite of the registry's path leaves two places
+places = ("artifacts.json", "/".join(("fixtures", "artifacts.json")))
 for s in shas:
-    p = subprocess.run([*git, "show", f"{s}:fixtures/artifacts.json"], capture_output=True, text=True)
-    if p.returncode == 0:
-        ids.update({k: v for k, v in json.loads(p.stdout).items() if k.startswith("art:")})
+    for place in places:
+        p = subprocess.run([*git, "show", f"{s}:{place}"], capture_output=True, text=True)
+        if p.returncode == 0:
+            ids.update({k: v for k, v in json.loads(p.stdout).items() if k.startswith("art:")})
 if not ids:
-    sys.exit(f"no fixtures/artifacts.json at the newest refs/research/src commits of {g}")
+    sys.exit(f"no artifacts.json at the newest refs/research/src commits of {g}")
 json.dump(ids, open(out, "w"))
 print(len(ids))
 EOF
@@ -120,10 +159,25 @@ if c is not None:
         line += "; trees a process names: " + ", ".join("%s %d" % (p, len(t)) for p, t in sorted(procs.items(), key=lambda x: -len(x[1]))[:3])
     if c.get("error"):
         line += ", nothing more deleted: " + c["error"]
+left = []
+for key, name in (("requests", "requests"), ("clones", "clones"), ("locks", "store locks"), ("uv", "uv cache")):
+    p = d.get(key)
+    if p is None:
+        continue
+    line += "; %s: deleted %d (%.1f GB, %d inodes), kept %d (%s)" % (name, p.get("deleted", 0), p.get("deleted_bytes", 0) / 1e9,
+        p.get("deleted_inodes", 0), p.get("kept", 0), " ".join("%s:%d" % kv for kv in sorted((p.get("kept_by") or {}).items())) or "none")
+    runs = [x.rsplit("/", 1)[-1] for x in p.get("deleted_first") or []] if key in ("requests", "clones") else []
+    if runs:
+        line += ", gone: " + " ".join(runs) + (" ..." if p.get("deleted", 0) > len(runs) else "")
+    for k in (p.get("kept_first") or [])[:1]:
+        line += ", e.g. %s: %s" % (k.get("path"), k.get("why"))
+    if p.get("error"):
+        line += ", nothing more deleted: " + p["error"]
+        left.append(name)
 if d.get("error"):
     line += "; FAILED " + d["error"]
 print(line)
-sys.exit(3 if c is not None and c.get("error") and not c["error"].startswith("another pass holds") else 4 if d.get("error") else 0)
+sys.exit(3 if c is not None and c.get("error") and not c["error"].startswith("another pass holds") else 4 if d.get("error") else 5 if left else 0)
 ' 2> /dev/null)
 src_failed=$?
 if [ -z "$summary" ]; then
@@ -137,5 +191,10 @@ if [ "$src_failed" -eq 3 ]; then
 fi
 if [ "$src_failed" -eq 4 ]; then
   echo "vy-store-evict: the store pass failed (above; the source-tree pass ran without it); check \$VY_EVICT_STORE's owner" >&2
+  exit 1
+fi
+if [ "$src_failed" -eq 5 ]; then
+  echo "vy-store-evict: a pass over requests, clones, store locks or the uv cache could not run (above: \"nothing more deleted\");" \
+    "check the directory its variable names and the unit's capabilities, or leave that variable empty" >&2
   exit 1
 fi

@@ -8,8 +8,9 @@ verdict a run wrote of itself is never read. Two kinds of run can be it:
 - **a run of the point** (`tool.STEADY_POINT` with the point's identity, at any commit: the identity digests what the
   time depends on), which ran to its end (exit 0 or `steady_spec.NOT_PASSED`) from a clean tree;
 - **a labelled row**: a row of a run of the workload's steady-state record (`prove_records.STEADY`: a labelled run, or a
-  run a labelled art names), timed before the harness or outside it, whose `pin`, `provers` and `cores.count` are the
-  point's. The row judged against the run's files is the run's own, or, where a labelled art holds the run's rows as
+  run a labelled art names), timed before the harness or outside it, whose `pin`, statement blocks
+  (`steady_spec.row_blocks`), `provers` and `cores.count` are the point's: a quarter of a statement has its full
+  statement's `pin`, and is another point. The row judged against the run's files is the run's own, or, where a labelled art holds the run's rows as
   completed after it (`completed_rows`), the art's: such an art names that one run in its `runs`, carries the rows'
   derivation from the run's own records (`DERIVATION`), isn't superseded, is the one standing art that completes the
   run, and holds the run's own rows with nothing changed but what its derivation names (`completed`). So a run from
@@ -313,8 +314,11 @@ class SteadyCompletion:
         store, whys = self.store, []
         for run in self._own(identity):
             files = run_files(store, run)
-            row = f"{steady.CANNOT_TELL}: the run kept no files" if files is None else steady_spec.own_row(files, item)
-            why = row if isinstance(row, str) else steady_spec.point_why(row, files, spec, item, own=True)
+            if files is None:
+                why: str | None = f"{steady.CANNOT_TELL}: the run kept no files"
+            else:
+                row = steady_spec.own_row(files, item)
+                why = row if isinstance(row, str) else steady_spec.point_why(row, files, spec, item, own=True)
             if why is None:
                 return run, None
             whys.append(f"{run}: {why}")
@@ -322,10 +326,12 @@ class SteadyCompletion:
         if record not in self._labelled:
             self._labelled[record] = labelled_rows(store, record)
         for found in sorted(self._labelled[record], key=lambda found: found.run, reverse=True):
-            if found.row is None:
+            if found.row is None or found.files is None:
                 whys.append(f"{found.run} (labelled `{record}`): {steady.CANNOT_TELL}: {found.held}")
                 continue
-            if found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers:
+            blocks = steady_spec.row_blocks(found.row)
+            if (found.row.get("pin") != item.row.pin or found.row.get("provers") != item.provers
+                    or isinstance(blocks, int) and blocks != item.row.n):
                 continue
             why = steady_spec.point_why(found.row, found.files, spec, item)
             if why is None:
@@ -340,7 +346,7 @@ def _added(root: Path, source: str | Path) -> int:
 
     path = jobs._relative_spec(source, root)
     if served_table.spec_path(served_table.spec_name(path)) != path:
-        raise ValueError(f"{path} isn't a spec of benchmarks/specs, so its points' runs can't be looked up on the store's "
+        raise ValueError(f"{path} isn't a spec of {served_table.SPECS}, so its points' runs can't be looked up on the store's "
                          "remote since it was added: move it there, or pass --local-only")
     return served_table.spec_added(root, served_table.spec_name(path))
 
@@ -370,47 +376,26 @@ def make_plan(source: str | Path, *, root: Path | None = None, lookup: Lookup | 
 def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str) -> list[str]:
     """The point as a `research run --on NODE` through one of the node's GPU slots, which gives it its cores. The node
     side takes the card itself, in one lease, so that the lease has ended and left its usage line among the run's
-    files before the run's verdict is computed."""
+    files before the run's verdict is computed. A point whose row names its statement in the store runs with a
+    read-only key to it."""
 
-    spec = plan.spec
-    minutes = jobs.direct_minutes(spec, node)
-    return [
-        "research", "run",
-        "--on", node,
-        "--project", "verity",
-        "--campaign", "steady-point",
-        "--source", str(root),
-        "--cwd", "source",
-        "--timeout", f"{minutes:g}m",
-        "--require-result",
-        "--tool", "verity_bench.tool:STEADY_POINT",
-        *[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
-        "--",
-        "env", f"CHECK_SLOTS={jobs.GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",
-        "--run-max", f"{minutes * 60:g}",
-        "--",
-        "bash", "benchmarks/harness/steady_point.sh",
-        "--spec", jobs._relative_spec(source, root),
-        "--point", item.point.id,
-        "--identity", item.identity,
-    ]
+    spec, point = plan.spec, item.point
+    if not isinstance(point, SteadyPoint):
+        raise TypeError(f"{point.id} is a vLLM point: jobs runs it")
+    return jobs.slot_run(
+        spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
+        store_read=point.row.stored is not None,
+        env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
+        job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
+             "--point", item.point.id, "--identity", item.identity])
 
 
 def dispatch(plan: jobs.Plan, source: str | Path, *, root: Path | None = None, execute: jobs.Executor = jobs._execute,
              direct: str | None = None) -> int:
-    """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots, in the spec's order, as
-    `jobs.dispatch` launches a vLLM spec's direct points: each launch returns once its run has started on the node, where
-    the runs take the slots in turn. The first launch that fails stops the rest; its exit code, or 0."""
+    """Launch one recorded run for each point without a passing run, on `direct`'s GPU slots: the harness's one
+    dispatch (`jobs.dispatch`), with a steady-state point's command. A steady-state spec has no queued form."""
 
-    root = root or jobs.repository_root()
     if direct is None:
         raise ValueError(f"spec {plan.spec.id!r} is a steady-state spec: its points run on a node's own card, through a "
                          "GPU slot of it: `verity-bench run SPEC --direct NODE`")
-    jobs.direct_minutes(plan.spec, direct)
-    for item in plan.points:
-        if item.passing_run is not None:
-            continue
-        rc = execute(direct_command(plan, source, item, root, direct), root)
-        if rc:
-            return rc
-    return 0
+    return jobs.dispatch(plan, source, root=root, execute=execute, direct=direct, command=direct_command)

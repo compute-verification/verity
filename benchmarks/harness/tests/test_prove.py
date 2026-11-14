@@ -12,7 +12,8 @@ count a row with the fields the command reads: a statement's mean GPU-seconds as
 one GPU, a report that was stopped or timed out as a void row whose prover exited nonzero, and one with a session not
 accepted as a void row with a refused session. `server-reports/RUN/` holds the runs' reports themselves, as the store does,
 for the reader of runs from before `rate.json`. `refusals/rate/rate.json` is made up: one row that is a steady-state
-measurement and one of each way a row isn't. The figures pinned below hold this code's arithmetic to a computation done
+measurement and one of each way a row isn't. `exfiltration/RUN/rows.jsonl` is the exfiltration run of record's world
+year rows of its figure's case, cut to the fields `verity bench exfiltration`'s reader reads. The figures pinned below hold this code's arithmetic to a computation done
 independently of it on the same records; they publish no measurement, and what the command says of a workload is what
 it prints from the store's records of record."""
 
@@ -28,18 +29,30 @@ import shutil
 import sys
 from dataclasses import replace
 from pathlib import Path
+from statistics import linear_regression
 
 import pytest
 
+from verity_bench import exfiltration as E
+from verity_bench import kit
 from verity_bench import lean_verify as L
 from verity_bench import prove as P
 from verity_bench import prove_records as R
+from verity_bench import spot_status
 from verity_bench import steady as S
 from verity_bench.cli import main
 
 REPO = Path(__file__).resolve().parents[3]
 FIXTURES = Path(__file__).parent / "fixtures" / "prove"
 W = R.WORKLOADS["glm53"]
+RUNNER = REPO / "benchmarks" / "prove" / "run.py"
+
+
+@pytest.fixture(autouse=True)
+def _outside_a_research_run(monkeypatch):
+    """No test of the command writes into the result of a research run the suite itself runs under."""
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
 
 # ---- the rules, on small tables ------------------------------------------------------------------------------------------------
 
@@ -47,17 +60,19 @@ W = R.WORKLOADS["glm53"]
 CENSUS = {
     "tokens": {"prefill": 3, "decode": 1}, "per_request": {"circuit_macs": 4000, "macs": 3600},
     "definitions": {
-        'Gemm_v1{K=64,N=1,DOT={"fn":"Dot_v1"}}': {"k_log": 20, "of": {"Linear_v1": "row"}, "prefill": 6, "decode": 2},
-        "Gemm_v1{K=32,N=1}": {"k_log": 19, "of": {"Linear_v1": "row"}, "prefill": 3, "decode": 1},
-        'Norm_v1{N=8,EPS={"f64":"0x1.0p-3"},FMA=true,TREE=[0,[1,2]]}': {"k_log": 22, "of": {"Norm_v1": "row", "Add_v1": "part"},
+        'Gemm_v1{K=64,N=1,DOT={"fn":"Dot_v1"}}': {"k_log": 20, "ands": 1000, "of": {"Linear_v1": "row"}, "prefill": 6,
+                                                  "decode": 2},
+        "Gemm_v1{K=32,N=1}": {"k_log": 19, "ands": 400, "of": {"Linear_v1": "row"}, "prefill": 3, "decode": 1},
+        'Norm_v1{N=8,EPS={"f64":"0x1.0p-3"},FMA=true,TREE=[0,[1,2]]}': {"k_log": 22, "ands": 3000,
+                                                                    "of": {"Norm_v1": "row", "Add_v1": "part"},
                                                                     "prefill": 1, "decode": 1},
         "Idle_v1{N=1}": {"k_log": 18, "of": {"Idle_v1": "row"}, "prefill": 0, "decode": 0},
     },
 }
 GEMM64, GEMM32, NORM = (name for name in CENSUS["definitions"] if not name.startswith("Idle"))
 CUT = {"name": "split", "label": "a toy cut", "replaces": ["Add_v1, Norm_v1"],
-       "strata": [{"block": "Half_v1{N=4}", "kind": "Half_v1", "per_token": 1.0, "k_log": 21},
-                  {"block": "Bare_v1{N=4}", "kind": "Bare_v1", "per_token": 0.25},
+       "strata": [{"block": "Half_v1{N=4}", "kind": "Half_v1", "per_token": 1.0, "k_log": 21, "ands": 2000},
+                  {"block": "Bare_v1{N=4}", "kind": "Bare_v1", "per_token": 0.25, "ands": 500},
                   {"block": "Unused_v1{N=4}", "kind": "Unused_v1", "per_token": 0, "k_log": 21}]}
 #: single sessions: the K=64 GEMM's own, and another Definition's, both at 2 s a statement's fixed cost
 SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}", 22, 2.0, 2.0, 1 << 13))
@@ -65,11 +80,12 @@ SESSIONS = (P.Session(GEMM64, 20, 0.5, 2.0, 1 << 15), P.Session("Other_v1{N=2}",
 
 def steady(type_: str, definition: str, run: str, blocks: int, gpu: float | None, *, full: int = 8, k_log: int = 20,
            verify: float | None = None, refused: str | None = None, provers: int = 1, art: str | None = None,
-           cores: int = P.HOST_CORES) -> P.Steady:
-    """A steady-state row, timed at the host's cores unless `cores` says otherwise."""
+           cores: int = P.HOST_CORES, form: str | None = None) -> P.Steady:
+    """A steady-state row, timed at the host's cores unless `cores` says otherwise, its statements of `definition`
+    unless `form` names another Definition."""
 
     return P.Steady(type_, definition, k_log, blocks, full, run, R.ART_RATES if art else R.RATES, gpu, verify, refused,
-                    provers, art, cores)
+                    provers, art, cores, form)
 
 
 def test_a_census_counts_a_request_over_its_tokens_and_a_cut_replaces_its_kinds():
@@ -111,7 +127,10 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     gemm = by[GEMM64].cost
     assert (gemm.source, gemm.seconds, gemm.record, gemm.staged) == (P.STEADY, 1.0, "r20260102-000000-0002", "gemm64")
     assert gemm.verifier_seconds == 0.5 and gemm.at_steady_rate is None and gemm.provers == 1
-    assert gemm.note == "`gemm64`, 1 prover, full statements (out/rate/rate.json)"
+    assert gemm.note == ("`gemm64` (`Gemm_v1{K=64,N=1,DOT=Dot_v1}`), 1 prover, full statements (out/rate/rate.json); "
+                         "another size, statements 4/8 full (r20260103-000000-0003)")
+    assert gemm.sizes == ((8, 8.0, "r20260102-000000-0002"), (4, 6.0, "r20260103-000000-0003"))
+    assert gemm.definition == P.definition_id(GEMM64) and by[GEMM32].cost.definition is None
 
     # the card measures the K=64 GEMM alone: K=32 is another type, so it and the cut's block are modeled from k_log, at
     # the card's types' median seconds a witness bit and their fixed seconds' line in k_log (flat here, at 2 s)
@@ -140,6 +159,42 @@ def test_a_block_type_takes_the_best_source_that_holds_it():
     assert {r.cost.source for r in P.Flock().table(census).rows} == {P.MISSING}
 
 
+def test_a_types_rows_at_other_statement_sizes_are_its_sizes_and_move_no_figure():
+    """A type's measured rows at its prover count and cores that timed statements of another size are carried beside
+    the row that prices it, one a size, the most blocks first: the pricing row's run's where it timed that size, else
+    the newest. A row at other cores or provers, one refused, and one staged in another Definition are no size of it.
+    The sizes move no figure, and a type timed at one size has none."""
+
+    census = P.Census.of(CENSUS)
+    gemm, norm = P.definition_id(GEMM64), P.definition_id(NORM)
+    run, newer, newest = "r20260102-000000-0002", "r20260103-000000-0003", "r20260104-000000-0004"
+    sizes = (
+        steady("gemm64", gemm, run, 8, 8.0),                                    # prices the type
+        steady("gemm64", gemm, run, 2, 3.0),                                    # a quarter, the pricing row's run
+        steady("gemm64", gemm, newest, 2, 2.5),                                 # a newer quarter
+        steady("gemm64", gemm, newer, 4, 6.0),                                  # a half, another run
+        steady("gemm64", gemm, newest, 1, 1.0, cores=24),                       # other cores
+        steady("gemm64", gemm, newest, 1, 1.0, provers=2),                      # another prover count
+        steady("gemm64", gemm, newest, 1, None, refused="timed out"),
+        steady("gemm64", gemm, newest, 1, 1.0, form="Gemm_v2{K=64,N=1,DOT=Dot_v2}"),
+        steady("norm", norm, run, 8, 24.0, k_log=22),
+    )
+    table = P.Flock(sizes, SESSIONS, "art:card").table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert by[GEMM64].sizes == ((8, 8.0, run), (4, 6.0, newer), (2, 3.0, run))
+    assert by[GEMM64].note.endswith(f"full statements (out/rate/rate.json); another size, statements 4/8 full ({newer}); "
+                                    f"another size, statements 2/8 full ({run})")
+    assert by[NORM].sizes == () and "another size" not in by[NORM].note
+    one = P.Flock((sizes[0], sizes[-1]), SESSIONS, "art:card").table(census)
+    assert [replace(r, cost=replace(r.cost, sizes=(), note="")) for r in table.rows] == [
+        replace(r, cost=replace(r.cost, note="")) for r in one.rows]
+    rows = {r["block"]: r for r in P.report(table, 1.0)["rows"]}
+    assert rows[GEMM64]["sizes"] == [{"blocks": 8, "statement_seconds": 8.0, "record": run},
+                                     {"blocks": 4, "statement_seconds": 6.0, "record": newer},
+                                     {"blocks": 2, "statement_seconds": 3.0, "record": run}]
+    assert rows[NORM]["sizes"] is None and rows[GEMM32]["sizes"] is None
+
+
 def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_measured_for_them():
     """A type with no row of its own takes the steady-state rows of its Definition and K at other statics: at 2^Δk
     their seconds a block, the dearest of them, with no verifier's seconds. Another K is another family. Such a type
@@ -165,6 +220,72 @@ def test_a_steady_row_prices_its_definition_and_ks_other_statics_and_is_not_meas
     whole = P.Flock(rows, (), None).table(P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
         name: {"k_log": defs[name], "of": {"Head_v1": "row"}, "prefill": 1, "decode": 0} for name in list(defs)[:3]}}))
     assert P.report(whole, 1.0)["totals"]["status"] == "modeled"
+
+
+def test_a_types_row_names_the_definition_that_priced_it_and_which_form_of_the_type_it_is():
+    """A row staged for its census type in another Definition prices the type as any row of it does, and the type's
+    row names the Definition its statements are of: as the type's Boolean version where the tree registers it as that,
+    as another Definition where it doesn't, and with no qualifier where it is the type's own. A type priced from its
+    family's row names that row's Definition the same way, and a type priced off the steady state names none. The
+    form moves no figure."""
+
+    defs = {"Head_v1{K=4,FIRST=false}": 20, "Head_v1{K=4,FIRST=true}": 20, "Head_v1{K=4,LAYER=9}": 21,
+            "Tail_v1{K=4,FIRST=false}": 20, "Tail_v1{K=4,LAYER=9}": 21, "Odd_v1{N=2}": 20, "Bare_v1{N=2}": 20}
+    census = P.Census.of({"tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 1, "macs": 1}, "definitions": {
+        name: {"k_log": k, "of": {name.split("{")[0]: "row"}, "prefill": 1, "decode": 0} for name, k in defs.items()}})
+    head, first, layer, tail, tail_layer, odd, bare = defs
+    run = "r20260101-000000-0001"
+    rows = (steady("head-bits", "Head_v1{K=4,FIRST=False}", run, 8, 16.0, form="Head_v2{K=4,FIRST=False}"),
+            steady("head-first", "Head_v1{K=4,FIRST=True}", run, 8, 8.0),
+            steady("tail", "Tail_v1{K=4,FIRST=False}", run, 8, 8.0),
+            steady("odd-v3", "Odd_v1{N=2}", run, 8, 8.0, form="Odd_v3{N=2}"))
+    # the tree's Boolean version of each census type, by the type's census name: `Odd_v3` is none of `Odd_v1`
+    registered = {head: "Head_v2{K=4,FIRST=False}", odd: "Odd_v2{N=2}"}
+    flock = P.Flock(rows, (), None, boolean=lambda block, definition: registered.get(block) == definition)
+    table = flock.table(census)
+    by = {r.block: r.cost for r in table.rows}
+    assert [c.source for c in by.values()] == [P.STEADY, P.STEADY, P.FAMILY, P.STEADY, P.FAMILY, P.STEADY, P.MISSING]
+
+    # a Boolean row prices the word-form census type, and its line says so
+    assert by[head].note == ("`head-bits` (its Boolean version, `Head_v2{K=4,FIRST=False}`), 1 prover, full statements "
+                             "(out/rate/rate.json)")
+    # a row of the type's own Definition names it with no qualifier
+    assert by[first].note == "`head-first` (`Head_v1{K=4,FIRST=True}`), 1 prover, full statements (out/rate/rate.json)"
+    # a Definition the tree doesn't register as the type's Boolean version is another Definition
+    assert by[odd].note == "`odd-v3` (another Definition, `Odd_v3{N=2}`), 1 prover, full statements (out/rate/rate.json)"
+    # a type priced from its family's row names the block type that row measured and the Definition it was staged in
+    assert by[layer].note == ("its Definition and K's, `head-bits` (`Head_v1{K=4,FIRST=False}` in its Boolean version, "
+                              "`Head_v2{K=4,FIRST=False}`), 1 prover, full statements, at 2^1 its seconds; the dearest of 2 "
+                              "measured")
+    assert by[tail_layer].note == ("its Definition and K's, `tail` (`Tail_v1{K=4,FIRST=False}`), 1 prover, full statements, "
+                                   "at 2^1 its seconds")
+    named = {head: "Head_v2{K=4,FIRST=False}", first: "Head_v1{K=4,FIRST=True}", layer: "Head_v2{K=4,FIRST=False}",
+             tail: "Tail_v1{K=4,FIRST=False}", tail_layer: "Tail_v1{K=4,FIRST=False}", odd: "Odd_v3{N=2}", bare: None}
+    assert {name: c.definition for name, c in by.items()} == named
+    doc = P.report(table, 1.0)
+    assert {r["block"]: r["definition"] for r in doc["rows"]} == named
+
+    # with nothing to say what the tree registers, no row is called a Boolean version
+    unsaid = {r.block: r.cost for r in P.Flock(rows, (), None).table(census).rows}
+    assert unsaid[head].note == ("`head-bits` (another Definition, `Head_v2{K=4,FIRST=False}`), 1 prover, full statements "
+                                 "(out/rate/rate.json)")
+    assert "`Head_v1{K=4,FIRST=False}` in another Definition, `Head_v2{K=4,FIRST=False}`" in unsaid[layer].note
+
+    # the form prices nothing: the same rows staged in their types' own Definitions give every figure the same
+    plain = P.Flock(tuple(replace(s, form=None) for s in rows), (), None).table(census)
+
+    def figures(t: P.Table) -> list[P.Row]:
+        return [replace(r, cost=replace(r.cost, note="", definition=None)) for r in t.rows]
+
+    assert figures(plain) == figures(table)
+    same = P.report(plain, 1.0)
+    assert (same["totals"], same["sources"]) == (doc["totals"], doc["sources"])
+    assert {r["block"]: r["definition"] for r in same["rows"]} == named | {
+        head: "Head_v1{K=4,FIRST=False}", layer: "Head_v1{K=4,FIRST=False}", odd: "Odd_v1{N=2}"}
+    # a sampling plan takes the prover's rows, each with its Definition and its line
+    cells = [{"block": name, "type": "", "taken": 1.0} for name in defs]
+    spot = P.Spot(flock, plan(cells), P.Serving(0.5, 4.0, "stated")).table(census)
+    assert [(r.cost.definition, r.cost.note) for r in spot.rows] == [(c.definition, c.note) for c in by.values()]
 
 
 def test_the_steady_rows_are_the_types_measured_at_steady_state_as_the_planner_reads_them():
@@ -212,12 +333,12 @@ def test_a_type_is_priced_at_the_stated_prover_count_from_rows_at_that_count_onl
     one, two, four = priced(1), priced(2), priced(4)
     assert (one[GEMM64].source, one[GEMM64].seconds, one[GEMM64].record, one[GEMM64].provers) == (
         P.STEADY, 2.0, "r20260101-000000-0001", 1)
-    assert one[GEMM64].note.startswith("`gemm64`, 1 prover, full statements")
+    assert one[GEMM64].note.startswith(f"`gemm64` (`{gemm}`), 1 prover, full statements")
     # the norm has no row at one prover: it is modeled, and its row says which counts measured it
     assert one[NORM].source == P.MODELED and one[NORM].provers is None
     assert one[NORM].note == "measured at steady state at 2 provers, which price no type at 1"
     assert (two[GEMM64].seconds, two[GEMM64].provers, two[NORM].seconds, two[NORM].source) == (0.5, 2, 3.0, P.STEADY)
-    assert two[GEMM64].note.startswith("`gemm64`, 2 provers, full statements")
+    assert two[GEMM64].note.startswith(f"`gemm64` (`{gemm}`), 2 provers, full statements")
     # at four provers the only row is void: the type is priced off the steady state, naming the attempt and the counts
     assert four[GEMM64].source == P.SINGLE and four[GEMM64].provers is None
     assert four[GEMM64].note == ("steady state tried as `gemm64` at 4 provers in r20260103-000000-0003 (out/rate/rate.json): "
@@ -255,10 +376,10 @@ def test_a_type_is_priced_at_the_hosts_cores_else_from_the_fewest_cores_above():
     assert ten == priced(cores=10)
     assert (ten[GEMM64].source, ten[GEMM64].seconds, ten[GEMM64].record, ten[GEMM64].cores) == (
         P.STEADY, 2.0, "r20260101-000000-0001", 10)
-    assert ten[GEMM64].note == "`gemm64`, 1 prover, statements 4/8 full (out/rate/rate.json)"
+    assert ten[GEMM64].note == f"`gemm64` (`{gemm}`), 1 prover, statements 4/8 full (out/rate/rate.json)"
     assert (ten[NORM].source, ten[NORM].seconds, ten[NORM].cores) == (P.STEADY, 2.0, 12)
-    assert ten[NORM].note == ("`norm`, 1 prover, statements 4/8 full (out/rate/rate.json); timed at 12 cores, above the "
-                              "host's 10")
+    assert ten[NORM].note == (f"`norm` (`{norm}`), 1 prover, statements 4/8 full (out/rate/rate.json); timed at 12 cores, "
+                              "above the host's 10")
     assert ten[GEMM32].source == P.MODELED and ten[GEMM32].cores is None
     assert ten[GEMM32].note == ("measured at steady state at 2 provers, which price no type at 1; measured at steady state "
                                 "at 6 cores, which price no type at 10")
@@ -269,8 +390,8 @@ def test_a_type_is_priced_at_the_hosts_cores_else_from_the_fewest_cores_above():
     assert "timed at" not in twelve[GEMM64].note + twelve[NORM].note
     wide = priced(cores=24)
     assert (wide[GEMM64].seconds, wide[GEMM64].record, wide[NORM].seconds) == (1.0, "r20260103-000000-0003", 3.0)
-    assert priced(cores=16)[GEMM64].note == ("`gemm64`, 1 prover, full statements (out/rate/rate.json); timed at 24 cores, "
-                                             "above the host's 16")
+    assert priced(cores=16)[GEMM64].note == (f"`gemm64` (`{gemm}`), 1 prover, full statements (out/rate/rate.json); timed at "
+                                             "24 cores, above the host's 16")
     # on a host of more cores than any row was timed at, no row prices a type: each names the cores that measured it
     over = priced(cores=32)
     assert (over[GEMM64].source, over[NORM].source) == (P.SINGLE, P.MODELED)
@@ -372,7 +493,8 @@ def test_a_row_an_art_holds_is_its_runs_and_names_the_art():
     )
     cost = {r.block: r.cost for r in P.Flock(rows, SESSIONS, "art:card").table(census).rows}
     assert (cost[GEMM64].source, cost[GEMM64].seconds, cost[GEMM64].record) == (P.STEADY, 1.0, art)
-    assert cost[GEMM64].note == "`gemm64`, 1 prover, full statements (rate.json of art:abababababab, measured in r20260102-000000-0002)"
+    assert cost[GEMM64].note == (f"`gemm64` (`{gemm}`), 1 prover, full statements (rate.json of art:abababababab, measured in "
+                                 "r20260102-000000-0002)")
     # the art's row of the norm isn't a steady-state measurement, so the older run's own prices it
     assert (cost[NORM].source, cost[NORM].seconds, cost[NORM].record) == (P.STEADY, 3.0, "r20260101-000000-0001")
     tried = {r.block: r.cost for r in P.Flock(rows[3:], SESSIONS, "art:card").table(census).rows}[NORM]
@@ -533,10 +655,16 @@ def lean(definition: str, run: str, seconds: tuple[float, ...], size: int, *, k_
     return P.LeanVerify(definition, k_log, blocks, full, seconds, size, run, "node-a (64 cores, a CPU)", L.COVER_LABEL)
 
 
-def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scaled_to_the_rest():
+def lean_shares(measured: tuple[int, float], family: tuple[int, float], fitted: tuple[int, float]) -> dict:
+    return {source: {"block_types": n, "share": pytest.approx(share)}
+            for source, (n, share) in zip(P.LEAN_SOURCES, (measured, family, fitted), strict=True)}
+
+
+def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_priced_to_the_rest_by_size():
     """A block type the Lean verifier ran on takes its statement's median seconds and its proof's bytes over the
-    statement's blocks; every other type with a k_log takes the same seconds and bytes a witness bit; a type with none
-    takes nothing. The totals are modeled, and say how much of each the measured type holds."""
+    statement's blocks; another type of its Definition takes them a unit of size times its own, every other type the
+    rate fitted over the measured statements times its own: seconds by AND gates, bytes by witness bits. A type with
+    no size takes nothing of that figure. The totals are modeled, and say how much of each figure each source holds."""
 
     census = P.Census.of(CENSUS).recut(CUT)
     rows = (steady("gemm64", P.definition_id(GEMM64), "r20260102-000000-0002", 8, 8.0, verify=4.0),)
@@ -546,47 +674,171 @@ def test_the_lean_verifiers_seconds_and_the_proofs_bytes_are_one_types_and_scale
     table = P.Flock(rows, SESSIONS, "art:card", lean=timed).table(census)
     assert [v.run for v in table.lean] == ["r20260105-000000-0005"]
     by = {r.block: r.cost for r in table.rows}
-    assert [(by[n].lean_seconds, by[n].proof_bytes, by[n].lean_source) for n in (GEMM64, GEMM32, "Half_v1{N=4}", "Bare_v1{N=4}")] == [
-        (3.0, 500.0, P.LEAN_MEASURED), (1.5, 250.0, P.LEAN_SCALED), (6.0, 1000.0, P.LEAN_SCALED), (None, None, None)]
+    # 24 s over 8 blocks of 1000 ANDs: 0.003 s an AND; 4000 bytes over 8 blocks of 2^20 witness bits
+    assert [(by[n].lean_seconds, by[n].lean_source, by[n].proof_bytes, by[n].proof_bytes_source)
+            for n in (GEMM64, GEMM32, "Half_v1{N=4}", "Bare_v1{N=4}")] == [
+        (3.0, P.LEAN_MEASURED, 500.0, P.LEAN_MEASURED), (pytest.approx(1.2), P.LEAN_FAMILY, 250.0, P.LEAN_FAMILY),
+        (pytest.approx(6.0), P.LEAN_FITTED, 1000.0, P.LEAN_FITTED), (pytest.approx(1.5), P.LEAN_FITTED, None, None)]
+    assert table.lean_fitted == (pytest.approx(0.003), 4000 / 2**23)
     # the proof server's verifier's seconds stay the steady-state row's own
     assert by[GEMM64].verifier_seconds == 0.5
 
     doc = P.report(table, 1.0)
     t = doc["totals"]
+    total = 2.0 * 3.0 + 1.2 + 6.0 + 0.25 * 1.5
     assert t["lean_verifier_seconds_per_token"] == {
-        "value": 2.0 * 3.0 + 1.5 + 6.0, "status": "modeled", "measured_block_types": 1, "scaled_block_types": 2,
-        "unpriced_block_types": 1, "measured_share": 6.0 / 13.5, "basis": P.LEAN_SECONDS_BASIS}
+        "value": pytest.approx(total), "status": "modeled", "unpriced_block_types": 0, "fitted_rate": pytest.approx(0.003),
+        "sources": lean_shares((1, 6.0 / total), (1, 1.2 / total), (2, 6.375 / total)), "basis": P.LEAN_SECONDS_BASIS}
     assert t["proof_bytes_per_token"] == {
-        "value": 2250.0, "status": "modeled", "measured_block_types": 1, "scaled_block_types": 2, "unpriced_block_types": 1,
-        "measured_share": 1000.0 / 2250.0, "basis": P.PROOF_BYTES_BASIS}
+        "value": 2250.0, "status": "modeled", "unpriced_block_types": 1, "fitted_rate": 4000 / 2**23,
+        "sources": lean_shares((1, 1000.0 / 2250), (1, 250.0 / 2250), (1, 1000.0 / 2250)), "basis": P.PROOF_BYTES_BASIS}
     share = 2.0 * by[GEMM64].seconds / table.gpu_seconds_per_token()
     assert t["lean_verify"] == [{"block": GEMM64, "time_share": share, "k_log": 20, "blocks": 8, "full": 8,
                                  "seconds": [40.0, 16.0, 24.0], "statement_seconds": 24.0, "proof_bytes": 4000,
                                  "run": "r20260105-000000-0005", "host": "node-a (64 cores, a CPU)",
-                                     "label": L.COVER_LABEL}]
+                                 "label": L.COVER_LABEL, "form": None}]
     row = next(r for r in doc["rows"] if r["block"] == GEMM32)
-    assert (row["lean_verifier_seconds"], row["proof_bytes"], row["lean_source"]) == (1.5, 250.0, P.LEAN_SCALED)
+    assert (row["lean_verifier_seconds"], row["lean_source"], row["proof_bytes"], row["proof_bytes_source"]) == (
+        pytest.approx(1.2), P.LEAN_FAMILY, 250.0, P.LEAN_FAMILY)
     assert t["verifier_seconds_per_token"] == {"value": 1.0, "block_types": 1, "block_share": 2.0 / 4.25}
 
-    # with two types measured, the rest scale at the median of the two statements' seconds, and bytes, a witness bit
+    # with a second Definition measured, the family keeps its own rate and the rest take the pooled one: 88 s over
+    # 8 * 1000 + 2 * 2000 ANDs, and 20000 bytes over 2^23 + 2^22 witness bits
     two = P.Flock(rows, SESSIONS, "art:card", lean=(*timed, lean("Half_v1{N=4}", "r20260105-000000-0005", (64.0,), 16000,
-                                                                 k_log=21, blocks=4, full=4))).table(census)
+                                                                 k_log=21, blocks=2, full=4))).table(census)
     by = {r.block: r.cost for r in two.rows}
     assert (by["Half_v1{N=4}"].lean_seconds, by["Half_v1{N=4}"].proof_bytes, by["Half_v1{N=4}"].lean_source) == (
-        16.0, 4000.0, P.LEAN_MEASURED)
-    assert by[GEMM32].lean_seconds == pytest.approx((24.0 / 2**23 + 64.0 / 2**23) / 2 * 2**19)
-    assert by[GEMM32].proof_bytes == pytest.approx((4000 / 2**23 + 16000 / 2**23) / 2 * 2**19)
+        32.0, 8000.0, P.LEAN_MEASURED)
+    assert (by[GEMM32].lean_seconds, by[GEMM32].proof_bytes) == (pytest.approx(1.2), 250.0)
+    assert by["Bare_v1{N=4}"].lean_seconds == pytest.approx(88.0 / 12000 * 500)
+    assert two.lean_fitted == (pytest.approx(88.0 / 12000), pytest.approx(20000 / (2**23 + 2**22)))
     assert [x["block"] for x in P.report(two, 1.0)["totals"]["lean_verify"]] == [GEMM64, "Half_v1{N=4}"]
 
     # measured only when every block type has a record of its own; none of either with no record
     whole = P.Census.of({**CENSUS, "definitions": {GEMM64: CENSUS["definitions"][GEMM64]}})
     own = P.report(P.Flock(rows, SESSIONS, "art:card", lean=timed).table(whole), 1.0)["totals"]
     assert own["lean_verifier_seconds_per_token"] == {
-        "value": 6.0, "status": "measured", "measured_block_types": 1, "scaled_block_types": 0, "unpriced_block_types": 0,
-        "measured_share": 1.0, "basis": P.LEAN_SECONDS_BASIS}
+        "value": 6.0, "status": "measured", "unpriced_block_types": 0, "fitted_rate": pytest.approx(0.003),
+        "sources": lean_shares((1, 1.0), (0, 0.0), (0, 0.0)), "basis": P.LEAN_SECONDS_BASIS}
     none = P.report(P.Flock(rows, SESSIONS, "art:card").table(census), 1.0)
     assert none["totals"]["lean_verifier_seconds_per_token"] is None and none["totals"]["proof_bytes_per_token"] is None
     assert none["totals"]["lean_verify"] == [] and {r["lean_source"] for r in none["rows"]} == {None}
+
+
+#: one served token of a head block measured at two statics and at a third not, a GEMM measured, and a read of no
+#: measured Definition
+HEADS = {
+    "tokens": {"prefill": 1, "decode": 0}, "per_request": {"circuit_macs": 100, "macs": 100},
+    "definitions": {
+        "Head_v1{NVIS=64,FIRST=false}": {"k_log": 27, "ands": 37_000, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
+        "Head_v1{NVIS=64,FIRST=true}": {"k_log": 27, "ands": 36_000, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
+        "Head_v1{NVIS=8,FIRST=true}": {"k_log": 24, "ands": 4_500, "of": {"Attn_v1": "row"}, "prefill": 1, "decode": 0},
+        "Gemm_v1{K=64,N=1}": {"k_log": 25, "ands": 3_000, "of": {"Linear_v1": "row"}, "prefill": 1, "decode": 0},
+        "Read_v1{H=4}": {"k_log": 23, "ands": 1_800, "of": {"Read_v1": "row"}, "prefill": 1, "decode": 0},
+    },
+}
+
+
+def test_an_unmeasured_type_takes_its_definitions_measured_rate_by_its_ands_else_the_fitted_rate_never_a_median():
+    """A head block at other statics than its two measured siblings is priced at the dearer sibling's seconds an AND
+    times its own ANDs: its ANDs ratio to that sibling, not a median of unlike statements. A type whose Definition no
+    statement measured takes the rate fitted over all of them, their seconds over their ANDs, which is neither the
+    old median a witness bit nor the median rate an AND."""
+
+    statements = {"Head_v1{NVIS=64,FIRST=false}": (256, 27, 320.0, 2_400_000),
+                  "Head_v1{NVIS=64,FIRST=true}": (256, 27, 350.0, 2_380_000),
+                  "Gemm_v1{K=64,N=1}": (1024, 25, 16.0, 2_350_000)}
+    timed = tuple(lean(P.definition_id(name), "r20260105-000000-0005", (s,), size, k_log=k, blocks=n, full=n)
+                  for name, (n, k, s, size) in statements.items())
+    table = P.Flock((), (), None, lean=timed).table(P.Census.of(HEADS))
+    by = {r.block: r.cost for r in table.rows}
+
+    sibling = by["Head_v1{NVIS=8,FIRST=true}"]
+    assert sibling.lean_source == sibling.proof_bytes_source == P.LEAN_FAMILY
+    # the FIRST=true sibling is the dearer an AND (350 / 36000 over 320 / 37000), and its ANDs ratio prices the block
+    assert sibling.lean_seconds == pytest.approx(350.0 / 256 * 4_500 / 36_000)
+    # bytes by witness bits: the dearer sibling's a witness bit, at 2^24 of them
+    assert sibling.proof_bytes == pytest.approx(2_400_000 / 2**35 * 2**24)
+
+    read = by["Read_v1{H=4}"]
+    assert read.lean_source == read.proof_bytes_source == P.LEAN_FITTED
+    ands = 256 * 37_000 + 256 * 36_000 + 1024 * 3_000
+    assert read.lean_seconds == pytest.approx((320.0 + 350.0 + 16.0) / ands * 1_800)
+    assert read.proof_bytes == pytest.approx((2_400_000 + 2_380_000 + 2_350_000) / (3 * 2**35) * 2**23)
+    old_median = 320.0 / 2**35 * 2**23
+    median_per_and = 320.0 / (256 * 37_000) * 1_800
+    assert read.lean_seconds != pytest.approx(old_median) and read.lean_seconds != pytest.approx(median_per_and)
+
+    t = P.report(table, 1.0)["totals"]["lean_verifier_seconds_per_token"]
+    assert {k: v["block_types"] for k, v in t["sources"].items()} == {P.LEAN_MEASURED: 3, P.LEAN_FAMILY: 1, P.LEAN_FITTED: 1}
+    assert t["sources"][P.LEAN_FAMILY]["share"] == pytest.approx(sibling.lean_seconds / t["value"])
+    assert t["fitted_rate"] == pytest.approx((320.0 + 350.0 + 16.0) / ands)
+
+
+def test_each_block_types_lean_verifier_row_carries_the_mark_its_source_earns_and_the_record_it_rests_on():
+    """The Lean verifier's table holds a row for every block type, each marked by where its seconds are from: measured
+    only on a statement of its own Definition, which its row cites with the circuit file it was read from (the
+    unrolled file, the templates, or neither named); modeled only on its Definition's measured statement, cited; assumed
+    at the fitted rate, citing none; none with no AND gates. A mark that says more than its source fails here."""
+
+    heads = {**HEADS, "definitions": {**HEADS["definitions"], "Bare_v1{N=1}": {"of": {"Bare_v1": "row"}, "prefill": 1,
+                                                                                 "decode": 0}}}
+    statements = {"Head_v1{NVIS=64,FIRST=false}": (256, 27, 320.0, "r20260105-000000-0001", "verity/flock-circuit"),
+                  "Head_v1{NVIS=64,FIRST=true}": (256, 27, 350.0, "r20260105-000000-0002", "verity/flock-circuit/tmpl"),
+                  "Gemm_v1{K=64,N=1}": (512, 25, 16.0, "r20260105-000000-0003", None)}
+    timed = tuple(replace(lean(P.definition_id(name), run, (s,), 1000, k_log=k, blocks=n, full=1024 if k == 25 else n),
+                          form=form) for name, (n, k, s, run, form) in statements.items())
+    doc = P.report(P.Flock((), (), None, lean=timed).table(P.Census.of(heads)), 1.0)
+    rows = {r["block"]: r for r in doc["rows"]}
+    assert {name: (r["lean_mark"], r["lean_record"], r["lean_form"]) for name, r in rows.items()} == {
+        "Head_v1{NVIS=64,FIRST=false}": ("measured", "r20260105-000000-0001", "verity/flock-circuit"),
+        "Head_v1{NVIS=64,FIRST=true}": ("measured", "r20260105-000000-0002", "verity/flock-circuit/tmpl"),
+        "Gemm_v1{K=64,N=1}": ("measured", "r20260105-000000-0003", None),
+        "Head_v1{NVIS=8,FIRST=true}": ("modeled", "r20260105-000000-0002", "verity/flock-circuit/tmpl"),
+        "Read_v1{H=4}": ("assumed", None, None),
+        "Bare_v1{N=1}": (None, None, None)}
+    measured = {v.definition for v in timed}
+    for r in doc["rows"]:
+        assert r["lean_mark"] == P.LEAN_MARKS.get(r["lean_source"])
+        assert (r["lean_mark"] == "measured") == (P.definition_id(r["block"]) in measured)
+        if r["lean_mark"] == "measured":
+            assert r["lean_definition"] == P.definition_id(r["block"])
+        elif r["lean_mark"] == "modeled":
+            assert r["lean_definition"] in measured and r["lean_definition"] != P.definition_id(r["block"])
+        else:
+            assert r["lean_record"] is r["lean_definition"] is None
+    assert [(x["block"], x["form"]) for x in doc["totals"]["lean_verify"]] == [
+        (name, form) for name, (*_, form) in statements.items()]
+
+    page = {"workload": "toy", "model": "Toy", "provers": 1, "cores": 10, "inputs": [], "refused": [], "macs_in_blocks": 1.0,
+            **doc, "serving": {"gpu_seconds_per_token": 1.0, "status": "modeled", "basis": "stated"},
+            "periods": {"gates_basis": "stated", "only": None, "rows": []}}
+    text = R.render(page)
+    assert f"\n{R.LEAN_ROWS}:\n\n| block type | Lean verifier ms per block | mark | record | rests on |\n" in text
+
+    def line(name: str, mark: str, record: str, basis: str) -> str:
+        seconds = rows[name]["lean_verifier_seconds"]
+        return f"| `{name}` | {'—' if seconds is None else R._n(1e3 * seconds)} | {mark} | {record} | {basis} |"
+
+    assert line("Head_v1{NVIS=64,FIRST=false}", "measured", "r20260105-000000-0001",
+                "its own statement of 256 blocks (a full statement), measured from the unrolled circuit file") in text
+    assert line("Head_v1{NVIS=64,FIRST=true}", "measured", "r20260105-000000-0002",
+                "its own statement of 256 blocks (a full statement), measured from its circuit's templates") in text
+    assert line("Gemm_v1{K=64,N=1}", "measured", "r20260105-000000-0003",
+                "its own statement of 512 blocks (512/1024 of a full statement), its record names no statement id") in text
+    assert line("Head_v1{NVIS=8,FIRST=true}", "modeled", "r20260105-000000-0002",
+                f"`{P.definition_id('Head_v1{NVIS=64,FIRST=true}')}`'s statement of 256 blocks (a full statement), "
+                "measured from its circuit's templates") in text
+    assert line("Read_v1{H=4}", "assumed", "—", "the fitted rate") in text
+    assert line("Bare_v1{N=1}", "none", "—", "—") in text
+    rest = [r["lean_mark"] or "none" for r in doc["rows"][2:]]
+    counts = ", ".join(f"{m} {rest.count(m)}" for m in ("measured", "modeled", "assumed", "none") if m in rest)
+    assert f"\n| 4 more block types | | {counts} | | |\n" in R.render(page, rows=2)
+
+    # the reader takes the statement id its record names, and None where it names none
+    assert R.lean_verify(lean_record("r1") | {"statement": {"id": "verity/flock-circuit/tmpl"}}, "r1").form == (
+        "verity/flock-circuit/tmpl")
+    assert R.lean_verify(lean_record("r1"), "r1").form is None
 
 
 def test_spot_takes_the_lean_verifiers_seconds_at_the_blocks_its_plan_samples():
@@ -597,8 +849,9 @@ def test_spot_takes_the_lean_verifiers_seconds_at_the_blocks_its_plan_samples():
              {"block": NORM, "type": "norm", "taken": 0.8}]
     table = P.Spot(flock, plan(cells), P.Serving(0.5, 4000.0, "stated")).table(census)
     t = P.report(table, 1.0)["totals"]
-    # 40, 20 and 8 blocks sampled over 800 tokens, at 3 s a block and at its seconds a witness bit times 2^19 and 2^22
-    assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx((40 * 3.0 + 20 * 1.5 + 8 * 12.0) / 800)
+    # 40, 20 and 8 blocks sampled over 800 tokens, at 3 s a block and at its 0.003 s an AND times 400 and 3000 ANDs;
+    # bytes at its bytes a witness bit times 2^19 and 2^22
+    assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx((40 * 3.0 + 20 * 1.2 + 8 * 9.0) / 800)
     assert t["proof_bytes_per_token"]["value"] == pytest.approx((40 * 500 + 20 * 250 + 8 * 2000) / 800)
     assert t["lean_verifier_seconds_per_token"]["status"] == "modeled" and t["lean_verify"][0]["block"] == GEMM64
     assert t["lean_verify"][0]["time_share"] == pytest.approx(40 * 1.0 / sum(
@@ -696,7 +949,7 @@ def test_a_plan_that_states_its_own_prices_gets_both_totals_and_where_they_diffe
     assert ("- where the two differ, this table's proving time over the plan's by this table's source: measured at steady "
             f"state 2x (1 block types), modeled from k_log {(20 * own[1] + 8 * own[2]) / 12:.3g}x (2 block types); `") in text
     assert f"alone is {gaps[top] / sum(gaps):.1%} of the difference" in text
-    assert text.count(" --- |") == 9 + 6 + 6                              # the rows' table has the plan's column
+    assert text.count(" --- |") == 9 + 6 + 5 + 6                          # the rows' table has the plan's column
 
     bare = [{k: v for k, v in c.items() if k != "prove_s"} for c in cells]
     one = P.report(P.Spot(flock, plan(bare), serving).table(census), 1.0)
@@ -850,8 +1103,8 @@ def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_
     tell" prices nothing. `one_numa_node` is no condition here: a row that fails it, or can't show it, is still
     priced."""
 
-    assert R.CHECKS == tuple(getattr(S, name) for name in GATES)
-    assert S.CHECKS == tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) and S.one_numa_node not in R.CHECKS
+    assert tuple(getattr(S, name) for name in GATES) == R.CHECKS
+    assert tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) == S.CHECKS and S.one_numa_node not in R.CHECKS
     good = {row["type"]: row for row in REFUSALS}["good"]
     rows = [row for row in REFUSALS if "stage" in row] + [changed(good, change) for change, _ in STRICT]
     for row in rows:
@@ -921,15 +1174,24 @@ def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepte
 
 def test_a_row_names_the_census_type_it_was_staged_for_not_the_form_staged():
     """A row staged in another form of its census type (the card stages `FlashInferFp8Linear_v1` as `_v2`) prices the
-    census's type: `stage.word` names it, and `stage.definition` only where a row has no `stage.word`."""
+    census's type: `stage.word` names it, and `stage.definition` only where a row has no `stage.word`. The Definition
+    staged is the row's `form` where it is another than its census type's, and the type's row names it."""
 
     good = {row["type"]: row for row in REFUSALS}["good"]
     staged = good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}", "word": "Good_v1{N=1}"}}
     read = R.steady_row(staged, "r1")
-    assert read.definition == "Good_v1{N=1}" and read.measured
+    assert (read.definition, read.form, read.proved) == ("Good_v1{N=1}", "Good_v2{N=1}", "Good_v2{N=1}") and read.measured
     cost = P.Flock((read,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
-    assert cost.source == P.STEADY
-    assert R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}"}}, "r1").definition == "Good_v2{N=1}"
+    assert (cost.source, cost.definition) == (P.STEADY, "Good_v2{N=1}")
+    assert cost.note.startswith("`good` (another Definition, `Good_v2{N=1}`), 1 prover, full statements (out/rate/rate.json)")
+    # a row that names no census type is its staged Definition's, and one staged in its census type's own Definition
+    # has no other form, in the census's spelling of it or the Definition's id's
+    bare = R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v2{N=1}"}}, "r1")
+    assert (bare.definition, bare.form, bare.proved) == ("Good_v2{N=1}", None, "Good_v2{N=1}")
+    own = R.steady_row(good | {"stage": good["stage"] | {"definition": "Good_v1{N=1,FMA=True}", "word": "Good_v1{N=1,FMA=true}"}}, "r1")
+    assert (own.definition, own.form) == ("Good_v1{N=1,FMA=True}", None)
+    # a row that isn't a steady-state measurement keeps its form
+    assert R.steady_row(staged | {"flat": False}, "r1").form == "Good_v2{N=1}"
 
 
 def test_a_rows_cores_are_its_count_or_its_mappings_count_and_24_where_it_states_none():
@@ -1048,6 +1310,23 @@ def plan_art(s: Store, **change) -> str:
     return s.tree("evidence/v1", R.PLAN_FILE, fixture("mix.json") | change)
 
 
+#: the exfiltration run of record whose world year rows `fixtures/prove/exfiltration/` holds, cut to the fields its
+#: reader reads (`exfiltration.at_share`)
+DESIGN = fixture("records.json")[E.RECORD]
+
+
+def designed(s: Store, tmp: Path, run: str = DESIGN) -> str:
+    """The exfiltration run of record's rows in the store, its run files holding them as the planner's driver writes
+    them, labelled its record."""
+
+    files = tmp / "design-files" / run
+    (files / E.ROWS_FILES[0]).parent.mkdir(parents=True)
+    shutil.copy(FIXTURES / "exfiltration" / DESIGN / "rows.jsonl", files / E.ROWS_FILES[0])
+    s.ran(run, files)
+    s.label(run, R.RUN_OF_RECORD, E.RECORD)
+    return run
+
+
 def recorded(tmp: Path, **plan_change) -> tuple[Store, dict[str, str]]:
     """The fixtures' records in a store, each labelled its slot's record: the census, its cut, the single-session card,
     the three proof server runs and the sampling plan (with `plan_change` over its fields)."""
@@ -1094,7 +1373,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     rows = {r["block"]: r for r in doc["rows"]}
     steady_rows = [r for r in doc["rows"] if r["source"] == P.STEADY]
     assert {r["record"] for r in steady_rows} == {RUNS[-1]}
-    assert sorted(r["note"].split(",")[0] for r in steady_rows) == [
+    assert sorted(r["note"].split(" (")[0] for r in steady_rows) == [
         "`ar-multimem`", "`dsa-logits-v3`", "`fr-w13`", "`fr-w2`", "`residual-add`", "`rmsnorm-v8`", "`sm-fp8-k2048`",
         "`sm-fp8-k6144`"]
     assert sum("statements 128/256 full" in r["note"] for r in steady_rows) == 2
@@ -1179,7 +1458,7 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     assert "- prover GPUs per serving GPU: 0.542 (range 0.186 to 0.542), modeled" in text
     assert "- served tokens covered per second per prover GPU: 14,246 (range 14,246 to 41,509)" in text
     assert "| world year | year |" in text and "no plan of record covers another period, or a datacenter." in text
-    assert text.count("\n| `") == 150
+    assert text.count("\n| `") == 2 * 150                               # the cost table and the Lean verifier's
 
 
 def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):
@@ -1202,6 +1481,66 @@ def test_the_plan_of_records_own_prices_are_read_from_its_record(tmp_path):
     table = text[text.index("| block type |"):].split("\n\n")[0].splitlines()
     assert table[0].count("|") == 10 and "| ms per block in the plan |" in table[0] and len(table) == 2 + 2 + 1
     assert table[-1].startswith("| 148 more block types | | ") and {line.count("|") for line in table} == {10}
+
+
+def test_spot_prints_the_prover_gpus_a_serving_gpu_at_the_exfiltration_run_of_records_design_beside_the_plans(tmp_path):
+    """Beside the prover GPUs a serving GPU at the sampling plan of record, SPOT's table gives them at the exfiltration
+    run of record's design, each line naming its source: the planner's world year at 10% of total compute, read off by
+    `verity bench exfiltration`'s reader from that run's rows (`fixtures/prove/exfiltration/`, the run of record's own
+    world year rows), its proving's share of total compute over 1 - its audit budget. With no record, or a superseded
+    one, the line says why and the table stands; with every block proved there is no such line."""
+
+    s, arts = recorded(tmp_path)
+    bare = R.build("spot", "glm53", store=s.fresh("bare"), root=REPO)
+    assert bare["at_record"]["gpus_per_serving_gpu"] is None and bare["at_record"]["run"] is None
+    nothing = (f"no planner rows of record: nothing in the store carries `{R.RUN_OF_RECORD}={E.RECORD}` (label each run "
+               f"that holds them: `research data label RUN {R.RUN_OF_RECORD} {E.RECORD} --by LANE`)")
+    assert bare["at_record"]["why"] == nothing
+    text = R.render(bare)
+    assert (f"- prover GPUs per serving GPU at the sampling plan of record ({arts[R.SAMPLING]}): 0.542, modeled\n"
+            f"- prover GPUs per serving GPU at the exfiltration run of record's design (`{R.RUN_OF_RECORD}={E.RECORD}`): "
+            f"not read: {nothing}\n") in text
+    (none,) = R.measurements(bare, {"a/z": R.AT_RECORD})
+    assert none == {"name": "a/z", "value": None, "unit": "prover GPUs a serving GPU", "mark": "modeled",
+                    "why": f"not read: {nothing}", "inputs": [], "target": R.GPUS_PER_SERVING_GPU_TARGET}
+    assert kit.writer(tmp_path / "bare-run").measurement(**none)["inputs"] == ["modeled"]
+
+    designed(s, tmp_path)
+    spot = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    got = spot["at_record"]
+    rows = [json.loads(line) for line in (FIXTURES / "exfiltration" / DESIGN / "rows.jsonl").read_text().splitlines()]
+    slope, intercept = linear_regression([r["b10"] for r in rows], [r["total"] for r in rows])
+    beta = (0.10 - intercept) / slope
+    lo, hi = next((a, b) for a, b in zip(rows, rows[1:], strict=False) if a["b10"] <= beta <= b["b10"])
+    prove = lo["prove"] + (hi["prove"] - lo["prove"]) * (beta - lo["b10"]) / (hi["b10"] - lo["b10"])
+    assert (got["record"], got["run"], got["scope"], got["share"], got["status"], got["why"]) == (
+        E.RECORD, DESIGN, "world year", 0.10, "modeled", None)
+    assert got["beta"] == pytest.approx(beta, rel=1e-12) == pytest.approx(0.054555103866200196, rel=1e-12)
+    assert got["prove_share"] == pytest.approx(prove, rel=1e-12) == pytest.approx(0.052138852549246315, rel=1e-12)
+    assert got["gpus_per_serving_gpu"] == pytest.approx(prove / (1 - beta), rel=1e-12)
+    assert got["gpus_per_serving_gpu"] == pytest.approx(0.055147426108551965, rel=1e-12)
+    # the table's own figures don't move
+    assert spot["totals"] == bare["totals"] and spot["rows"] == bare["rows"]
+    text = R.render(spot)
+    assert (f"- prover GPUs per serving GPU at the sampling plan of record ({arts[R.SAMPLING]}): 0.542, modeled\n"
+            "- prover GPUs per serving GPU at the exfiltration run of record's design: 0.05515, modeled: run "
+            f"{DESIGN} (`{R.RUN_OF_RECORD}={E.RECORD}`), the planner's world year at 10% of total compute: its proving's "
+            "5.214% of total compute over 1 - its audit budget, 5.456%\n") in text
+    (one,) = R.measurements(spot, {"a/z": R.AT_RECORD})
+    assert one == {"name": "a/z", "value": got["gpus_per_serving_gpu"], "unit": "prover GPUs a serving GPU",
+                   "mark": "modeled", "inputs": [f"modeled: {R._design(got)}", DESIGN], "target": 0.0545,
+                   "verdict": "misses"}
+
+    s.label(DESIGN, R.SUPERSEDED_BY, "r20261114-000000-0000")
+    gone = R.build("spot", "glm53", store=s.fresh("gone"), root=REPO)["at_record"]
+    assert gone["gpus_per_serving_gpu"] is None and gone["why"] == (
+        f"no run of record holds the planner's rows: {DESIGN} superseded by r20261114-000000-0000 (label one that does: "
+        f"`research data label RUN {R.RUN_OF_RECORD} {E.RECORD} --by LANE`)")
+
+    flock = R.build("flock", "glm53", store=s.fresh("flock"), root=REPO)
+    assert "at_record" not in flock and "run of record's design" not in R.render(flock)
+    with pytest.raises(ValueError, match="`gpus_per_serving_gpu_at_record` is SPOT's: only a table at a sampling plan"):
+        R.measurements(flock, {"a/z": R.AT_RECORD})
 
 
 def test_an_unlabelled_or_superseded_input_is_refused_by_name(tmp_path):
@@ -1399,6 +1738,96 @@ def test_an_art_that_holds_rate_json_gives_its_runs_rows_in_their_place(tmp_path
     assert doc["inputs"][2]["targets"] == [] and {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 0
 
 
+HEAD_BLOCK = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=4,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+              'SCALE={"f64":"0x1.0000000000000p-4"}}')
+
+
+def registered(block: str) -> str:
+    """The id of the Definition the tree registers as a census type's Boolean version, asked of the registry itself."""
+
+    from verity.definitions import boolean
+    from verity.circuits.call_scope import spec_base, spec_statics, specialization
+    from verity.definitions.registry.catalog import load
+
+    return boolean.boolean_version(specialization(spec_base(block), spec_statics(block), load()[0])).id
+
+
+def test_a_definition_is_a_types_boolean_version_only_where_the_trees_registry_says_so():
+    """`boolean_version` asks the tree's registry: a census type's Boolean version is the one Definition
+    `verity.definitions.boolean.boolean_version` gives for the type's own, at the statics it binds, a function-valued
+    static's Boolean version among them. The type's own Definition, its Boolean Definition at other statics, a
+    version the tree doesn't hold, and anything of a type the registry doesn't bind are none."""
+
+    linear = "FlashInferFp8Linear_v1{K=2048,N=1}"
+    bits = registered(linear)
+    assert bits.startswith("FlashInferFp8Linear_v") and bits.endswith("{K=2048,N=1}") and bits != P.definition_id(linear)
+    assert R.boolean_version(linear, bits)
+    assert not any(R.boolean_version(linear, other) for other in (
+        P.definition_id(linear), registered("FlashInferFp8Linear_v1{K=1536,N=1}"), "FlashInferFp8Linear_v0{K=2048,N=1}"))
+    head = registered(HEAD_BLOCK)
+    assert head.startswith("SparseMlaHeadBlock_v") and R.boolean_version(HEAD_BLOCK, head)
+    assert not R.boolean_version(HEAD_BLOCK, P.definition_id(HEAD_BLOCK))
+    # a name the registry doesn't hold, and statics it can't bind
+    assert not R.boolean_version("Made_up_v1{N=1}", "Made_up_v2{N=1}")
+    assert not R.boolean_version("FlashInferFp8Linear_v1{BOGUS=1}", bits)
+
+
+def test_the_table_names_each_priced_rows_definition_and_its_form_from_the_trees_registry(tmp_path):
+    """On a store: a made-up row staged for a census type in the Definition the tree registers as its Boolean version
+    says so on the type's row, one staged in any other Definition is another Definition's, and the fixture's rows,
+    each of its type's own Definition, name it with no qualifier. The JSON row holds the Definition, the rendered
+    table the line, and the same rows staged in their types' own Definitions give every total the same."""
+
+    newest = RUNS[-1]
+    whole = json.loads((FIXTURES / "steady" / newest / "rate" / "rate.json").read_text())
+    good = next(row for row in whole if row["type"] == "residual-add")
+    linear, wide = "FlashInferFp8Linear_v1{K=2048,N=1}", "FlashInferFp8Linear_v1{K=6144,N=1}"
+
+    def staged(type_: str, word: str, definition: str, k_log: int) -> dict:
+        return good | {"type": type_, "stage": good["stage"] | {"word": word, "definition": definition, "k_log": k_log}}
+
+    def built(name: str, rows: list[dict]) -> dict:
+        s = Store(tmp_path / name)
+        for slot, card in ((R.CUT, "partition.json"), (R.SINGLE, "proof_overhead.json")):
+            s.record(s.doc(R.CARD_SCHEMA, card, fixture(card)), slot)
+        s.record(census_art(s), R.CENSUS)
+        s.record(s.tree("evidence/v1", R.ART_RATES, [*whole, *rows], {"runs": [newest]}), R.STEADY)
+        return R.build("flock", "glm53", store=s.fresh(), root=REPO)
+
+    bits = registered(linear)
+    doc = built("forms", [staged("fi-linear-bits", linear, bits, 24),
+                          staged("fi-linear-n2", wide, "FlashInferFp8Linear_v1{K=6144,N=2}", 26)])
+    rows = {r["block"]: r for r in doc["rows"]}
+    assert bits != linear and (rows[linear]["source"], rows[linear]["definition"]) == (P.STEADY, bits)
+    assert rows[linear]["note"].startswith(
+        f"`fi-linear-bits` (its Boolean version, `{bits}`), 1 prover, full statements (rate.json of ")
+    assert (rows[wide]["source"], rows[wide]["definition"]) == (P.STEADY, "FlashInferFp8Linear_v1{K=6144,N=2}")
+    assert rows[wide]["note"].startswith(
+        "`fi-linear-n2` (another Definition, `FlashInferFp8Linear_v1{K=6144,N=2}`), 1 prover, full statements (rate.json of ")
+    assert rows["ResidualAdd_v1{N=6144}"]["definition"] == "ResidualAdd_v1{N=6144}"
+    assert rows["ResidualAdd_v1{N=6144}"]["note"].startswith(
+        "`residual-add` (`ResidualAdd_v1{N=6144}`), 1 prover, full statements (rate.json of ")
+    # every steady-state and family's row names a Definition, and no other row does
+    assert all((r["definition"] is not None) == (r["source"] in (P.STEADY, P.FAMILY)) for r in doc["rows"])
+    assert {x["source"]: x["block_types"] for x in doc["sources"]}[P.STEADY] == 10
+    family = next(r for r in doc["rows"] if r["source"] == P.FAMILY)
+    assert f"(`{family['definition']}`), 1 prover, full statements, at 2^" in family["note"]
+    text = R.render(doc)
+    assert f"| `fi-linear-bits` (its Boolean version, `{bits}`), 1 prover, full statements " in text
+    assert "| `fi-linear-n2` (another Definition, `FlashInferFp8Linear_v1{K=6144,N=2}`), 1 prover, full statements " in text
+
+    # the same two rows staged in their types' own Definitions: every figure is the same, and no row has a qualifier
+    own = built("own", [staged("fi-linear-bits", linear, linear, 24), staged("fi-linear-n2", wide, wide, 26)])
+    assert (own["totals"], own["sources"], own["periods"]) == (doc["totals"], doc["sources"], doc["periods"])
+
+    def figures(d: dict) -> list[dict]:
+        return [{k: v for k, v in r.items() if k not in ("note", "definition", "record")} for r in d["rows"]]
+
+    assert figures(own) == figures(doc)
+    assert {r["block"]: r["definition"] for r in own["rows"] if r["block"] in (linear, wide)} == {linear: linear, wide: wide}
+    assert not any("Boolean version" in r["note"] or "another Definition" in r["note"] for r in own["rows"])
+
+
 def test_a_rows_cores_are_its_own_else_its_runs_host_else_24(tmp_path):
     """Where a row's cores are read from, on a store: a run's row that states none takes the cores its run's
     `out/host.json` states (`cpus_used`), and is read at 24 where the run holds no host file or the file states none;
@@ -1513,31 +1942,37 @@ def lean_ran(s: Store, tmp: Path, run: str, doc: dict | None, *, name: str = L.R
 
 
 def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_what_was_measured(tmp_path):
-    """One block type's statement measured, on made-up figures: its row takes them, every other row with a k_log is
-    scaled a witness bit, and both lines say modeled, the measured type and its share of the proving time, the
-    statement, the run, the host and the basis. The proof server's verifier line stays."""
+    """One block type's statement measured, on made-up figures: its row takes them, every other row (no other type
+    of its Definition is in the census) takes the fitted rate, the seconds by its census ANDs and the bytes by its
+    witness bits, and both lines say modeled, the measured type and its share of the proving time, the statement, the
+    run, the host, each source's share and the basis. The proof server's verifier line stays."""
 
     s, arts = recorded(tmp_path)
     run = lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"))
     doc = R.build("flock", "glm53", store=s.fresh(), root=REPO)
     rows = {r["block"]: r for r in doc["rows"]}
     own, t = rows[RMSNORM], doc["totals"]
+    ands = {b.name: b.ands for b in P.Census.of(fixture("census.json")).recut(fixture("partition.json")["value"]).blocks}
+    per_and = 520.0 / (256 * ands[RMSNORM])
     assert (own["lean_verifier_seconds"], own["proof_bytes"], own["lean_source"]) == (520.0 / 256, 2_000_000 / 256, "measured")
-    assert {r["lean_source"] for r in doc["rows"] if r is not own} == {"scaled"}
-    assert all(r["lean_verifier_seconds"] == pytest.approx(520.0 * 2 ** r["k_log"] / 2**35) for r in doc["rows"])
+    assert {(r["lean_source"], r["proof_bytes_source"]) for r in doc["rows"] if r is not own} == {("fitted", "fitted")}
+    assert all(r["lean_verifier_seconds"] == pytest.approx(per_and * ands[r["block"]]) for r in doc["rows"])
+    assert all(r["proof_bytes"] == pytest.approx(2_000_000 * 2 ** r["k_log"] / 2**35) for r in doc["rows"])
     seconds, size = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"]
-    assert seconds["value"] == pytest.approx(sum(r["per_token"] * 520.0 * 2 ** r["k_log"] / 2**35 for r in doc["rows"]))
+    assert seconds["value"] == pytest.approx(sum(r["per_token"] * per_and * ands[r["block"]] for r in doc["rows"]))
     assert size["value"] == pytest.approx(sum(r["per_token"] * 2_000_000 * 2 ** r["k_log"] / 2**35 for r in doc["rows"]))
     assert (seconds["status"], size["status"]) == ("modeled", "modeled")
-    assert (seconds["measured_block_types"], seconds["scaled_block_types"], seconds["unpriced_block_types"]) == (1, 149, 0)
-    assert seconds["measured_share"] == pytest.approx(own["per_token"] * 520.0 / 256 / seconds["value"])
+    assert seconds["fitted_rate"] == pytest.approx(per_and) and seconds["unpriced_block_types"] == 0
+    measured = own["per_token"] * 520.0 / 256 / seconds["value"]
+    assert seconds["sources"] == lean_shares((1, measured), (0, 0.0), (149, 1 - measured))
     assert t["lean_verify"] == [{"block": RMSNORM, "time_share": own["time_share"], "k_log": 27, "blocks": 256, "full": 256,
                                  "seconds": [600.0, 500.0, 520.0], "statement_seconds": 520.0, "proof_bytes": 2_000_000,
-                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)", "label": L.COVER_LABEL}]
+                                 "run": run, "host": "cpu-node-0 (64 cores, A CPU 9000)", "label": L.COVER_LABEL,
+                                 "form": None}]
     assert doc["inputs"][-1] == {"slot": R.LEAN, "record": "prove-glm53-lean-verify", "targets": [run],
                                  "what": "the Lean verifier (its `verify`) on one statement of each of 1 block "
-                                         "type(s); every other type's Lean verifier seconds and proof bytes are scaled "
-                                         "from them"}
+                                         "type(s); every other type's Lean verifier seconds and proof bytes are priced "
+                                         "from them, its Definition's at its size, else at the rate fitted over them"}
     assert doc["refused"] == [] and t["verifier_seconds_per_token"]["block_types"] == 8
 
     text = R.render(doc)
@@ -1549,23 +1984,27 @@ def test_a_lean_verifier_run_of_record_gives_both_figures_as_modeled_and_says_wh
         f"`{RMSNORM}` ({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full "
         "statement): accepted on the provisional unit cover, units as stated, the Program not held to the circuit, by the "
         "Lean verifier's `verify` in 520 s (the median of 3 runs: 600, 500, 520 s; a run is one "
-        f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Scaled: the "
-        f"other 149 block types, {1 - seconds['measured_share']:.1%} of this figure, each at the measured statement's "
-        f"seconds a witness bit times its 2^k_log bits: {P.LEAN_SECONDS_BASIS}.")
+        f"process, the statement read and set up in it), in run {run} on cpu-node-0 (64 cores, A CPU 9000). Of this "
+        f"figure: own 1 block type(s), {measured:.1%}; fitted 149 block type(s), {1 - measured:.1%}, each at "
+        f"{R._n(per_and)} seconds an AND gate (every measured statement's seconds over their AND gates) times its AND "
+        f"gates: {P.LEAN_SECONDS_BASIS}.")
+    bytes_measured = size["sources"]["measured"]["share"]
+    assert bytes_measured == pytest.approx(own["per_token"] * 2_000_000 / 256 / size["value"])
     assert lines["- proof bytes"] == (
         f"- proof bytes per token: {R._n(size['value'])}, modeled, not measured. Measured: one block type, `{RMSNORM}` "
         f"({share} of the proving time), in its statement of 256 blocks of 2^27 witness bits each (a full statement), "
-        f"whose proof files are 2.000e+06 bytes in all (run {run}). Scaled: the other 149 block types, "
-        f"{1 - size['measured_share']:.1%} of this figure, each at the measured statement's bytes a witness bit times "
-        f"its 2^k_log bits: {P.PROOF_BYTES_BASIS}.")
-    assert "per token: not measured" not in text
+        f"whose proof files are 2.000e+06 bytes in all (run {run}). Of this figure: own 1 block type(s), "
+        f"{bytes_measured:.1%}; fitted 149 block type(s), {size['sources']['fitted']['share']:.1%}, each at "
+        f"{R._n(2_000_000 / 2**35)} bytes a witness bit (every measured statement's bytes over their 2^k_log witness "
+        f"bits) times its 2^k_log witness bits: {P.PROOF_BYTES_BASIS}.")
+    assert "per token: not measured" not in text and "Scaled:" not in text
 
     # at the sampling plan: the same record at the blocks the plan samples, the type's share the plan's
     spot = R.build("spot", "glm53", store=s.fresh("second"), root=REPO)
     rows = {r["block"]: r for r in spot["rows"]}
     t = spot["totals"]
     assert t["lean_verifier_seconds_per_token"]["value"] == pytest.approx(
-        sum(r["per_token"] * 520.0 * 2 ** r["k_log"] / 2**35 for r in spot["rows"]))
+        sum(r["per_token"] * per_and * ands[r["block"]] for r in spot["rows"]))
     assert t["lean_verifier_seconds_per_token"]["status"] == "modeled" and t["proof_bytes_per_token"]["status"] == "modeled"
     assert t["lean_verify"][0]["time_share"] == rows[RMSNORM]["time_share"] != own["time_share"]
     assert [i["slot"] for i in spot["inputs"]][-2:] == [R.LEAN, R.SAMPLING]
@@ -1748,7 +2187,7 @@ def test_the_lean_verifiers_runner_records_each_run_of_the_verifier_on_a_kept_pr
     # the record is the one `prove` reads
     read = R.lean_verify(doc, "r20261110-000000-0001")
     assert read == P.LeanVerify(P.definition_id(RMSNORM), 27, 256, 256, (12.5, 10.0, 11.0), 500, "r20261110-000000-0001",
-                                "cpu-node-0 (64 cores, A CPU 9000)", L.COVER_LABEL)
+                                "cpu-node-0 (64 cores, A CPU 9000)", L.COVER_LABEL, L.STATEMENT_ID)
     assert read.statement_seconds == 11.0 and read.bits == 2**35
 
 
@@ -1917,6 +2356,9 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     shutil.rmtree(tmp_path / "producer")
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    # spot's holes block over the fixture runs, with no git and the fixture lock: test_spot_status.py decides the holes
+    monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
 
     def run(*argv: str) -> tuple[int, str, str]:
         monkeypatch.setattr(sys, "argv", ["run.py", *argv])
@@ -1946,6 +2388,7 @@ def test_verity_bench_prove_is_the_commands_runner(tmp_path, monkeypatch, capsys
     code, out, _ = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.SAMPLING], "--json")
     doc = json.loads(out)
     assert code == 0 and doc["schema"] == P.SCHEMA and doc["totals"]["gpus_per_serving_gpu"] == pytest.approx(0.5420038985704952)
+    assert doc["spot_holes"]["label"] == "SPOT"
     code, _, err = run("--system", "spot", "--workload", "glm53", "--sampling", arts[R.CENSUS], "--local-only")
     assert code == 2 and f"{arts[R.CENSUS]} isn't a sampling plan of record" in err
     with pytest.raises(SystemExit):
@@ -1982,3 +2425,179 @@ def test_verity_bench_prove_lean_verify_is_the_lean_verifiers_runner_and_the_tab
     t = json.loads(out)["totals"]
     assert (t["lean_verifier_seconds_per_token"]["status"], t["proof_bytes_per_token"]["status"]) == ("modeled", "modeled")
     assert t["lean_verify"][0]["seconds"] == [9.0] and t["lean_verify"][0]["proof_bytes"] == 500
+
+
+def test_under_a_research_run_the_runner_records_spots_metrics_and_prints_the_same_table(tmp_path, monkeypatch, capsys):
+    """Under a research run, `verity bench prove --system spot` writes run.py's metrics into the run's result through
+    the kit: each total of SPOT's table at the plan of record in its unit with its mark first among its inputs, the Lean
+    verifier's seconds and the proof's bytes with no value and why until a Lean verifier run of record measures a type
+    and then modeled with what its accept holds, the prover GPUs a serving GPU at the exfiltration run of record's
+    design, modeled, from that run, the six checks as the validation and the table as its evidence. What it prints is
+    the same in a run as outside one, where it writes nothing; with every block proved it records nothing."""
+
+    s, arts = recorded(tmp_path)
+    designed(s, tmp_path)
+    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "reader"))
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(s.config))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261112-000000-0000")
+    # spot's holes block over the fixture runs, with no git and the fixture lock: test_spot_status.py decides the holes
+    monkeypatch.setattr(spot_status, "commit_known", lambda root, commit: False)
+    monkeypatch.setattr(spot_status, "LOCK", Path(__file__).parent / "fixtures" / "spot_status" / "lock.json")
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"card": "none", "gpus": [], "driver": None, "cuda": None,
+                                                    "node": "cpu-node-0", "commit": "c" * 40, "why": "no nvidia-smi on PATH"})
+    writers, writer = [], kit.writer
+    monkeypatch.setattr(kit, "writer", lambda out: writers.append(out) or writer(out))
+    metrics = runpy.run_path(str(RUNNER))["METRICS"]
+    spot = ("--system", "spot", "--workload", "glm53")
+
+    def run(*argv: str, within: Path | None = None) -> str:
+        if within is None:
+            monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+        else:
+            monkeypatch.setenv("RESEARCH_RUN_DIR", str(within))
+        monkeypatch.setattr(sys, "argv", ["run.py", *argv])
+        with pytest.raises(SystemExit) as done:
+            runpy.run_path(str(RUNNER), run_name="__main__")
+        assert done.value.code == 0
+        return capsys.readouterr().out
+
+    def result(within: Path) -> dict:
+        return json.loads((within / kit.RESULT).read_text())
+
+    outside, doc = run(*spot), json.loads(run(*spot, "--json"))
+    assert outside.startswith(R.render(doc)) and writers == []
+    first = tmp_path / "run-1"
+    assert run(*spot, within=first) == outside and writers == [str(first)]
+    got, kept = result(first), json.loads((first / R.TABLE).read_text())
+    assert got["run_id"] == "r20261112-000000-0000" and kept["rows"] and kept.items() <= doc.items()
+    assert got["workload_fingerprint"] == {"source_sha": None, "benchmark": "prove", "system": "spot[flock]",
+                                           "workload": "glm53", "sampling": arts[R.SAMPLING], "provers": 1, "cores": 10}
+    assert got["measurement_files"] == [R.TABLE] and got["artifacts"] == []
+    by = {m["name"]: m for m in got["measurements"]}
+    assert list(by) == list(metrics) == [
+        "benchmarks/prover-gpus-per-serving-gpu", "benchmarks/prover-gpu-seconds-per-token",
+        "benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token",
+        "benchmarks/prover-gpus-per-serving-gpu-at-record"]
+    assert [m["unit"] for m in by.values()] == [R.FIGURES[f] for f in metrics.values()]
+    design = by["benchmarks/prover-gpus-per-serving-gpu-at-record"]
+    assert design["value"] == pytest.approx(0.055147426108551965, rel=1e-12) and design["mark"] == "modeled"
+    assert design["inputs"] == [f"modeled: {R._design(doc['at_record'])}", DESIGN] and "why" not in design
+    # goal benchmarks/proof-system-performance's target is on the two prover GPUs a serving GPU and on no other
+    # measurement; both are over it on these records
+    assert R.GPUS_PER_SERVING_GPU_TARGET == 0.0545
+    assert {m["name"]: (m["target"], m["verdict"]) for m in by.values()} == {
+        "benchmarks/prover-gpus-per-serving-gpu": (0.0545, "misses"), "benchmarks/prover-gpu-seconds-per-token": (None, None),
+        "benchmarks/lean-verifier-seconds-per-token": (None, None), "benchmarks/proof-bytes-per-token": (None, None),
+        "benchmarks/prover-gpus-per-serving-gpu-at-record": (0.0545, "misses")}
+    t, targets = doc["totals"], [*dict.fromkeys(x for i in doc["inputs"] for x in i["targets"])]
+    assert arts[R.SAMPLING] in targets
+    head, seconds = by["benchmarks/prover-gpus-per-serving-gpu"], by["benchmarks/prover-gpu-seconds-per-token"]
+    assert head["value"] == pytest.approx(0.5420038985704952, rel=1e-12) and seconds["value"] == t["gpu_seconds_per_token"]
+    assert head["mark"] == "modeled" and head["inputs"][:2] == [
+        "modeled", (f"proving: modeled: steady-state measurements cover {t['steady_time_share']:.1%} of the proving "
+                    f"time; range 0.186021 to 0.542004, the other end {t['range_basis']}")]
+    assert head["inputs"][2].startswith("serving rate (modeled, a stated input): MFU ") and head["inputs"][3:] == targets
+    assert seconds["mark"] == "modeled" and seconds["inputs"][0].startswith("modeled: ") and seconds["inputs"][1:] == targets
+    assert "why" not in head and head["ci95"] is None and head["host"]["node"] == "cpu-node-0"
+    for name in ("benchmarks/lean-verifier-seconds-per-token", "benchmarks/proof-bytes-per-token"):
+        assert by[name]["value"] is None and by[name]["mark"] == "modeled" and by[name]["inputs"] == ["modeled", *targets]
+        assert by[name]["why"] == ("not measured: no Lean verifier run of record measures a block type "
+                                   "(`run_of_record=prove-glm53-lean-verify`)")
+    steady = next(x["block_types"] for x in doc["sources"] if x["source"] == P.STEADY)
+    assert got["validation"] == {
+        "status": "passed", "checker": "verity_bench.prove_records.CHECKS", "evidence": [R.TABLE],
+        "detail": f"{steady} block type(s), {t['steady_time_share']:.1%} of the proving time, priced from steady-state "
+                  "rows that each passed `accepted`, `exits`, `not_void`, `flat`, `no_throttling`, "
+                  "`every_prover_warmed`; a row that didn't prices nothing and is named on its type's row"}
+
+    lean_ran(s, tmp_path, "r20261110-000000-0001", lean_record("r20261110-000000-0001"))
+    second = tmp_path / "run-2"
+    run(*spot, within=second)
+    lean = {m["name"]: m for m in result(second)["measurements"]}
+    t = json.loads((second / R.TABLE).read_text())["totals"]
+    for name, key, unit in (("benchmarks/lean-verifier-seconds-per-token", "lean_verifier_seconds_per_token", "s an AND gate"),
+                            ("benchmarks/proof-bytes-per-token", "proof_bytes_per_token", "bytes a witness bit")):
+        v = t[key]
+        assert lean[name]["value"] == v["value"] and lean[name]["mark"] == "modeled" and "why" not in lean[name]
+        own, family, fitted = (v["sources"][k] for k in ("measured", "family", "fitted"))
+        assert own["block_types"] == 1 and fitted["block_types"] > 0 and v["fitted_rate"] > 0
+        assert lean[name]["inputs"][0] == (
+            f"modeled, not measured: own {own['share']:.1%} (1 block types), family {family['share'] or 0.0:.1%} "
+            f"({family['block_types']} block types), fitted {fitted['share']:.1%} ({fitted['block_types']} block types) "
+            f"(fitted rate {v['fitted_rate']:.4g} {unit}); measured on one block type, `{RMSNORM}` ({L.COVER_LABEL}, run "
+            f"r20261110-000000-0001): {v['basis']}")
+        assert "r20261110-000000-0001" in lean[name]["inputs"][1:]
+
+    every = tmp_path / "run-3"
+    run("--system", "flock", "--workload", "glm53", within=every)
+    assert not every.exists()
+
+
+def test_the_proving_totals_marks_give_the_plans_own_prices_where_its_record_states_them(tmp_path):
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    head, seconds = R.measurements(doc, {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"})
+    marks = [head["inputs"][1], seconds["inputs"][0]]
+    planned = doc["totals"]["planned"]
+    assert [m.rsplit("; ", 1)[1] for m in marks] == [
+        f"at the sampling plan's own prices, which its planner sized the sample at: {planned[k]:.6g}"
+        for k in ("gpus_per_serving_gpu", "gpu_seconds_per_token")]
+
+
+def test_the_prover_gpus_a_serving_gpu_take_the_weaker_of_provings_and_the_serving_rates_marks(tmp_path):
+    """The headline is the proving total over a stated serving rate, so its mark is the weaker of the two's (measured,
+    then partial, then modeled), and its inputs list both; the proving GPU-seconds keep proving's own."""
+
+    mix = fixture("mix.json")
+    s, _ = recorded(tmp_path, cells=[c | {"prove_s": 0.002 * c["taken"]} for c in mix["cells"]])
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    assert R.STRENGTH == ("measured", "partial", "modeled") and set(R.STRENGTH) == set(kit.MARKS)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/y": "gpu_seconds_per_token"}
+    for proving, missing, serving, weaker in (("measured", [], "modeled", "modeled"), ("measured", [], "measured", "measured"),
+                                              ("measured", ["t"], "measured", "partial"), ("modeled", [], "measured", "modeled"),
+                                              ("measured", ["t"], "modeled", "modeled")):
+        given = doc | {"totals": doc["totals"] | {"status": proving, "missing": missing},
+                       "serving": doc["serving"] | {"status": serving}}
+        head, seconds = R.measurements(given, metrics)
+        own = "partial" if missing else proving
+        assert (head["mark"], seconds["mark"]) == (weaker, own), (proving, missing, serving)
+        assert head["inputs"][0] == weaker and head["inputs"][1].startswith(f"proving: {own}")
+        assert head["inputs"][2].startswith(f"serving rate ({serving}, a stated input): ")
+        assert seconds["inputs"][0].startswith(own)
+        w = kit.writer(tmp_path / f"{proving}-{len(missing)}-{serving}")
+        assert w.measurement(**head)["inputs"] == head["inputs"] and w.measurement(**seconds)["mark"] == own
+
+
+def test_the_prover_gpus_a_serving_gpu_carry_the_goals_target_and_meet_it_at_or_under_it(tmp_path):
+    """Both prover GPUs a serving GPU carry the goal's target, lower being better: a value at or under it `meets` it,
+    one over it `misses` it, and a figure with no value carries the target and no verdict. The kit writes both."""
+
+    s, _ = recorded(tmp_path)
+    designed(s, tmp_path)
+    doc = R.build("spot", "glm53", store=s.fresh(), root=REPO)
+    metrics = {"a/x": "gpus_per_serving_gpu", "a/r": R.AT_RECORD, "a/y": "gpu_seconds_per_token"}
+    target = R.GPUS_PER_SERVING_GPU_TARGET
+    for value, verdict in ((target, "meets"), (0.9 * target, "meets"), (1.1 * target, "misses")):
+        given = doc | {"totals": doc["totals"] | {"gpus_per_serving_gpu": value},
+                       "at_record": doc["at_record"] | {"gpus_per_serving_gpu": value}}
+        head, design, seconds = R.measurements(given, metrics)
+        assert [(m["target"], m["verdict"]) for m in (head, design)] == [(target, verdict)] * 2, value
+        assert "target" not in seconds and "verdict" not in seconds
+        w = kit.writer(tmp_path / verdict / str(value))
+        assert [(m["target"], m["verdict"]) for m in (w.measurement(**head), w.measurement(**design))] == [(target, verdict)] * 2
+    unread = doc | {"at_record": doc["at_record"] | {"gpus_per_serving_gpu": None, "why": "no record"}}
+    (design,) = R.measurements(unread, {"a/r": R.AT_RECORD})
+    assert design["target"] == target and "verdict" not in design and design["value"] is None
+
+
+def test_the_validation_fails_where_no_steady_state_row_prices_a_type_or_a_total_leaves_a_type_out():
+    sources = [{"source": P.STEADY, "block_types": 3}, {"source": P.SINGLE, "block_types": 2}]
+    doc = {"sources": sources, "totals": {"steady_time_share": 0.25, "missing": []}}
+    assert R.validation(doc)[0] == "passed"
+    status, detail = R.validation(doc | {"totals": {"steady_time_share": 0.25, "missing": [{"block": "X"}]}})
+    assert status == "failed" and detail.endswith("; 1 block type(s) have no figure, and every total leaves them out")
+    status, detail = R.validation(doc | {"sources": [{"source": P.STEADY, "block_types": 0}]})
+    assert status == "failed" and detail.startswith("no steady-state row passed `accepted`, ")
+    with pytest.raises(ValueError, match="no total of the table is named blocks_per_token"):
+        R.measurements(doc, {"benchmarks/x": "blocks_per_token"})

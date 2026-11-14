@@ -3,25 +3,18 @@ and its allocation is the least ε within each budget."""
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import math
-import sys
-from pathlib import Path
 
+import budget as B
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_budget", Path(__file__).parents[1] / "budget.py")
-B = importlib.util.module_from_spec(spec)
-sys.modules["pouw_budget"] = B
-spec.loader.exec_module(B)
 
 FAM = {f.name: f for f in B.FAMILIES}
 #: 1 + γ at y = 0, the machine model's ratio on each family's measured kernel (budget_fill.json's first point)
 GAMMA = {"sm_120": 2.1868, "H200": 2.3435, "B200": 2.5611, "L40S": 3.0144, "A100": 4.2263}
 
 
-def test_luck_is_the_drawn_units_deficient_branch_and_the_sum_bounds_the_mix():
+def test_luck_is_the_sample_deficient_branch_and_the_sum_bounds_the_mix():
     assert B.DEFICIT == pytest.approx(0.002368, rel=1e-3)
     for f in B.FAMILIES:
         t = B.today(f)
@@ -42,12 +35,12 @@ def test_today_on_sm_120_is_notations_terms_and_b_its_parts():
     assert round(100 * t.eps_skip, 3) == 0.362
     assert round(100 * t.eps_machine, 3) == 0.125
     assert t.eps_served == 0
-    assert t.draws == pytest.approx(B.TODAY_DRAWS, rel=1e-6)
-    assert t.eps_sample == pytest.approx(B.LN_INV_DELTA / B.TODAY_DRAWS, rel=0.02)
+    assert t.draws == pytest.approx(B.TODAY_SAMPLES, rel=1e-6)
+    assert t.eps_sample == pytest.approx(B.LN_INV_DELTA / B.TODAY_SAMPLES, rel=0.02)
     assert t.B == pytest.approx(t.B_transform + t.B_hash + t.B_sample)
     assert t.B_transform == pytest.approx(GAMMA["sm_120"] - 1, abs=1e-4)
     assert t.B_hash == pytest.approx(0.060 + 0.016 + 0.019)
-    assert t.B_sample == pytest.approx(B.spend_for(B.TODAY_DRAWS)) and 0.3 < t.B_sample < 0.4
+    assert t.B_sample == pytest.approx(B.spend_for(B.TODAY_SAMPLES)) and 0.3 < t.B_sample < 0.4
 
 
 def test_sampling_data_is_opt2s_frontier_on_the_grid():
@@ -70,7 +63,7 @@ def test_sampling_data_is_opt2s_frontier_on_the_grid():
             assert e < plain[x] / 50
 
 
-def test_spend_and_draws_interpolate_through_the_points():
+def test_spend_and_samples_interpolate_through_the_points():
     xs, es, ds, _, _ = B.curve("plain")
     for x, e, d in list(zip(xs, es, ds))[5:-5]:
         s = B.sample(FAM["sm_120"], x)
@@ -87,7 +80,7 @@ def test_a_family_buys_provers_at_the_price_ratio():
     assert B.today(h200).B_sample == pytest.approx(B.today(sm).B_sample / 3)
 
 
-def test_filler_grows_each_drawn_units_cost():
+def test_filler_grows_each_sampled_blocks_cost():
     f = FAM["sm_120"]
     s0, s16 = B.sample(f, 0.3), B.sample(f, 0.3, y=16)
     u = B.curve("plain")[3][B.curve("plain")[0].index(0.316228) - 1]
@@ -130,7 +123,7 @@ def test_served_check_is_free_and_takes_its_share_of_skip():
 def test_batching_frees_most_of_todays_sampling_spend():
     for f in B.FAMILIES:
         t = B.today(f)
-        r = next(r for r in B.levers(f) if r["lever"] == "today's draws in regime sessions/256")
+        r = next(r for r in B.levers(f) if r["lever"] == "today's samples in regime sessions/256")
         assert -r["d_B"] > 0.99 * t.B_sample
         assert abs(r["d_eps"]) < 1e-3 * t.eps
 

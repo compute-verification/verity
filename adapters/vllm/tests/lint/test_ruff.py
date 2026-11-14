@@ -17,7 +17,8 @@ import json
 import re
 import subprocess
 import sys
-from functools import lru_cache
+from collections.abc import Iterable
+from functools import cache
 from pathlib import Path
 
 from . import _ratchet as R
@@ -28,17 +29,18 @@ CONFIG = R.ROOT / "ruff.toml"
 LINE_REF = re.compile(r" from line \d+")
 
 
-@lru_cache(maxsize=None)
+@cache
 def scopes(tree: ast.Module) -> tuple[tuple[int, int, str], ...]:
     """(first line, last line, qualified name) of every def and class, in source order.  A def is a statement, so only
     statement bodies are walked."""
     out: list[tuple[int, int, str]] = []
 
-    def visit(stmts: list[ast.AST], prefix: str) -> None:
+    def visit(stmts: Iterable[ast.AST], prefix: str) -> None:
         for s in stmts:
             name = prefix
             if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                 name = f"{prefix}.{s.name}" if prefix else s.name
+                assert s.end_lineno is not None, "a parsed definition has its end line"
                 out.append((s.lineno, s.end_lineno, name))
             for field in ("body", "orelse", "finalbody", "handlers", "cases"):
                 visit(getattr(s, field, []), name)
@@ -69,7 +71,7 @@ def findings(config: Path, *paths: str) -> tuple[R.Violation, ...]:
     return tuple(violation(f) for f in json.loads(r.stdout))
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     return findings(CONFIG, ".", str(R.DEFINITIONS))
 

@@ -13,6 +13,8 @@ heartbeat_table = "store_private.control_heartbeat"
 cloud_watch_state = "/data/cloud-watch/state.json"
 
 [env]
+# {src}/infra/control/bin comes first: its `gh` runs {dir}/bin/gh with the pod's read-only App token of that call
+# (/data/infra/gh_read_token.sh --cached), so no loop reads GitHub with a token from an env file or from its start
 PATH = "{src}/infra/control/bin:{dir}/bin:/data/nebius/bin:/root/.local/bin:/usr/local/bin:/usr/bin:/bin"
 PYTHONPATH = "{src}/tools/research/src:{src}/infra/ops"
 HOME = "/root"
@@ -45,7 +47,7 @@ env = { FLEET_DIR = "{dir}/fleet", FLEET_MACHINES_D = "/data/steward/research-no
 [[loop]]
 name = "monitors-relay"
 argv = ["python3.12", "-s", "-m", "research.monitors", "relay", "--by", "vy-watchdog-relay@vy-control-verity", "--on", "vy-nebius-cpu-1",
-        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check",
+        "--only", "drift", "asks", "failed-checks", "fixtures-public", "unverified-main", "nightly-check", "stranded",
         "--machine-alerts", "vy-nebius-cpu-1=cpu1:/workspace/monitoring/watchdog/alerts",
         "--alerts", "{dir}/monitors/alerts", "--state", "{dir}/monitors/relay-state.json", "--posts", "{dir}/monitors/relay-posts.json"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]
@@ -82,7 +84,7 @@ env = { RESEARCH_STORE = "/root/watchers-preflight-store" }
 # reads --state, and rings infra when it shows no outcome for 36 h
 [[loop]]
 name = "nightly-check"
-argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-8", "--pool", "nightly",
+argv = ["python3.12", "-s", "{src}/infra/control/nightly_check.py", "--on", "vy-nebius-cpu-14", "--pool", "nightly",
         "--timeout", "36000", "--hour", "9", "--work", "/root/fast/nightly-check", "--state", "{dir}/nightly-check.json",
         "--tmp", "{dir}/nightly-check/tmp"]
 env_files = ["/root/.config/verity/relay.env", "/root/.config/verity/r2.env"]

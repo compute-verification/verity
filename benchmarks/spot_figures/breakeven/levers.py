@@ -1,11 +1,11 @@
 """Levers on Figure 1's request-grain lines, computed with the figure's own planner path (total_cost._point):
 each lever rewrites the priced strata, the replay per sampled request or the scope's budget, and the bound and the
 break-even beta follow from optimize.two_stage_design."""
-import re
 from dataclasses import replace
-from math import log, sqrt
+from functools import lru_cache
+from math import sqrt
 
-from common import SCOPES, c, computed, confs, f1, inputs, lines, sc, tc
+from common import SCOPES, c, computed, confs, cuts, f1, inputs, lines, sc, tc
 
 PEAK_MAC_S = sc["proof_overhead"]["value"]["peak_mac_s"]
 #: the measured compressed size of the FP8 checkpoint, a share of its 8 bits a weight: what an FP8 theft must recover
@@ -32,8 +32,22 @@ def refit(name, strata):
     return i2, line, comp
 
 
-def priced_strata(name):
-    return [dict(x) for x in inputs[name]["partition"].value["strata"]]
+@lru_cache(maxsize=None)
+def _cut(name, partition):
+    """`name`'s inputs with its circuit also cut by the `partition` card `partition`, priced as the line's own are."""
+    if partition not in cuts:
+        raise ValueError(f"GLM-5.3 has no partition card `{partition}`: its cards are {sorted(cuts)}")
+    own = confs[name].partition
+    if own and (both := set(cuts[own]["value"]["replaces"]) & set(cuts[partition]["value"]["replaces"])):
+        raise ValueError(f"the partition cards `{own}` and `{partition}` both replace {sorted(both)}: a line takes one "
+                         "cut of a kind")
+    return tc.priced(tc.cut(tc.cut(c, cuts[own]) if own else c, cuts[partition]), sc["proof_overhead"])
+
+
+def priced_strata(name, partition=""):
+    """The line's priced strata, its circuit also cut by the `partition` card of that name where one is given."""
+    i = _cut(name, partition) if partition else inputs[name]
+    return [dict(x) for x in i["partition"].value["strata"]]
 
 
 # ---- strata transforms -------------------------------------------------------------------------------------------
@@ -54,20 +68,9 @@ def fuse_reads(strata, fixed="read"):
         out.append(g | {"block": f"Fused[{r['block']} + {g['block']}]", "kind": "fused", "k_log": k_log,
                         "seconds_per_block": r["seconds_per_block"] + g["seconds_per_block"],
                         "fixed_seconds": r["fixed_seconds"] + (g["fixed_seconds"] if fixed == "sum" else 0.0),
-                        "statement_blocks": max(1, tc.STATEMENT_BITS >> k_log), "priced": "modeled"})
+                        "statement_blocks": max(1, tc.STATEMENT_BITS >> k_log),
+                        "table_blocks": tc.table_blocks(k_log), "priced": "modeled"})
     return out
-
-
-def split_cols(strata, pattern, n):
-    """Each block of the types `pattern` matches cut into `n` column blocks: n times the blocks a token, each with 1/n
-    of its outputs, MACs and ANDs, 2^-Δk its seconds a block and 2^Δk its statement's cap, as total_cost.priced
-    scales a Definition measured at another size; a stratum that says what priced it (`basis`) then says it was cut."""
-    dk = log(n, 2)
-    return [x | {"per_token": x["per_token"] * n, "out_bits": x["out_bits"] / n, "macs": x["macs"] / n,
-                 "ands": x["ands"] / n, "in_bits": x["in_bits"] / n, "k_log": x["k_log"] - dk,
-                 "seconds_per_block": x["seconds_per_block"] / n, "statement_blocks": x["statement_blocks"] * n}
-            | ({"basis": f"{x['basis']}, cut into {n} column blocks"} if "basis" in x else {})
-            if re.match(pattern, x["block"]) else x for x in strata]
 
 
 def set_bits(strata, prefix, bits):

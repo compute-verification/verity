@@ -12,6 +12,7 @@ public import Proofs.Flock.SamplingGeneric.Bits
 public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.RegAt
+public import Proofs.Flock.SamplingGeneric.RegTrace
 public import Proofs.Flock.SamplingGeneric.RegX
 public import Proofs.Flock.SamplingGeneric.RegCanon
 public import Proofs.Flock.SamplingGeneric.Efficient
@@ -33,6 +34,7 @@ public import Proofs.Flock.SamplingGeneric.TwoRegMiss
 public import Proofs.Flock.SamplingGeneric.TwoRegX
 public import Proofs.Flock.SamplingGeneric.TwoRegFirstHit
 public import Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitKS
 public import Proofs.Flock.SamplingGeneric.RunExtAt
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitAt
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassAt
@@ -62,7 +64,7 @@ shape fixes, so its strict and expected reruns and its own calls are bounded at 
 opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter.not_ownLe_openCalls`,
 `SamplingGeneric/Counter.lean`). A session's coins in a compiled run, `coinsOf` and `place`, invert each other
 (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the plurality trace the prover's tape
-fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so
+fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/RegTrace.lean`: `compilerKSReg_of`):
 **`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`). The same form against the incorrect
 set of the trace read at the statement, the plurality over the prover's tape and the coins together, which no tape
 moves, follows from the same bound and the rewinding lemma over the tapes and the runs

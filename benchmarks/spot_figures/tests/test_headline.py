@@ -1,8 +1,12 @@
 """The figure of record's driver (`breakeven/headline.py`): a row counts every sparse-MLA head, carries its own plan's
 request count and split, and leaves the planner as it found it; the figure reads the 10% point off pinned rows."""
+import hashlib
 import json
-from math import isclose
+from dataclasses import astuple
+from math import ceil, isclose
+from pathlib import Path
 
+import cards
 import pytest
 
 from breakeven import headline as H
@@ -29,24 +33,68 @@ def row(p, requests=None):
 
 
 def test_the_sparse_mla_blocks_count_glm53_s_heads():
-    """The 128k workload's per-head sparse-MLA blocks are GLM-5.3's eight heads', not one head's."""
+    """The 128k workload's sparse-MLA blocks are GLM-5.3's eight heads', not one head's: every sparse-MLA block of
+    the `workload` card takes a factor, a head's units at one head a row an eighth of it and a whole row its own."""
     from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
 
     assert H.heads() == SPARSE_MLA_GLM53["NH"] == 8
-    vol = H.volume()
-    assert vol == {p: f * (8 if p in H.PER_HEAD else 1) for p, f in H.MLA128_VOLUME.items()}
-    assert H.spec_of("(i) honest", "world year", 0.4)["volume"] == vol
+    vol, one = H.volume(), H.volume(1)
+    card = [x["block"] for x in cards.load("workload", "GLM-5.3")["value"]["strata"]]
+    assert set(vol) == {b for b in card if b.startswith("SparseMla")} and len(vol) > 1
+    for b, f in vol.items():
+        assert f > 0 and isclose(one[b], f if b.startswith("SparseMlaSplit_v1{") else f / 8, rel_tol=1e-12), b
+    spec = H.spec_of("(i) honest", "world year", 0.4)
+    assert spec["volume"] == vol and spec["heads"] == 8
+    assert H.spec_of("(i) honest", "world year", 0.4, n_heads=1)["volume"] == one
 
 
 def test_the_head_count_is_read_not_written(monkeypatch):
-    """The volume follows the registry's `NH`, as a head count written into the driver would not."""
+    """The volume counts the registry's `NH` heads a row, as a head count written into the driver would not: under
+    another count the card's own request no longer gives the card's blocks, and the row is refused."""
     from verity.definitions.registry import sparse_mla
 
     monkeypatch.setitem(sparse_mla.SPARSE_MLA_GLM53, "NH", 3)
-    spec = H.spec_of("(iii) honest", "datacenter week", 1.0)
-    assert spec["heads"] == 3
-    assert spec["volume"]["SparseMlaCombine_v1{"] == 3 * H.MLA128_VOLUME["SparseMlaCombine_v1{"]
-    assert spec["volume"]["SparseMlaSplit_v1{"] == H.MLA128_VOLUME["SparseMlaSplit_v1{"]
+    with pytest.raises(ValueError, match="not its own request's at 3 heads a row"):
+        H.spec_of("(iii) honest", "datacenter week", 1.0)
+
+
+def test_no_row_rescales_the_combine_and_the_warm_factor_names_the_card_s_units():
+    """The lever counts a combine's splits in its volume, so no row scales the combine's seconds; the third row's warm
+    factor names the card's sparse-MLA units under either cut, and each type a pair's host memory is given for is on
+    one of them."""
+    assert [r["scale"] for r in H.ROWS.values()][:2] == [{}, {}]
+    warm = H.ROWS["(iii) honest"]["scale"]
+    whole, cut = ([x["block"] for x in H.workload(p)["strata"]] for p in ("", H.UNITS))
+    assert all(H.factors({"block": b}, warm) == (0.25, 0.25) for b in whole + cut if b.startswith("SparseMla"))
+    assert all(any(b.startswith(p) for b in cut) for p in ("SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{"))
+    assert all(any(b.startswith(p) for b in whole + cut) for p in H.PAIR_GIB)
+
+
+def test_no_row_is_cut_unless_named_and_a_row_of_the_whole_head_is_unread_on_the_units_cut():
+    """No row's line is cut by a partition card unless one is named: a row prices the head as the `workload` card's
+    whole blocks, the forms that verify. Cut by the units' card, each head's key block is its scores unit and its
+    values units, no whole head block left, its volume the cut card's, and a table's or a steady-state row for a block
+    that cut leaves out (the head blocks, their whole ends and column ends) is listed unread, not refused: it measured
+    the census's cut. On the `workload` card's own cut nothing is unread."""
+    assert not any("partition" in r["case"] for r in H.ROWS.values())
+    gone = H.replaced(H.UNITS)
+    assert {H.family(b) for b in gone} == {"SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaSplitEndCols_v1"}
+    assert len(gone) == 74 and H.replaced("") == frozenset()
+    block = min(gone)
+    doc = {"cores": 10, "cells": {COMBINE: {"source": "steady", "seconds": 1.0}, block: {"source": "steady",
+                                                                                         "seconds": 2.0}}}
+    rows = {"rows": {block: {"type": "Head_v1{NVIS=64}"}, COMBINE: {"type": COMBINE}}, "unread": ["Other_v1"]}
+    spec = H.spec_of("(i) honest", "world year", 0.4, prices=H.prices(doc), partition=H.UNITS)
+    assert spec["case"]["partition"] == H.UNITS and spec["volume"] == H.volume(partition=H.UNITS)
+    assert list(spec["prices"]["cells"]) == [COMBINE] and spec["prices"]["unread"] == [block]
+    assert not any(b.startswith("SparseMlaHeadBlock_v1{") for b in spec["volume"])
+    measured = H.spec_of("(i) honest", "world year", 0.4, steady=rows, partition=H.UNITS)["steady"]
+    assert list(measured["rows"]) == [COMBINE] and measured["unread"] == ["Head_v1{NVIS=64}", "Other_v1"]
+    whole = H.spec_of("(i) honest", "world year", 0.4, prices=H.prices(doc))
+    assert "partition" not in whole["case"] and list(whole["prices"]["cells"]) == [COMBINE, block]
+    assert whole["prices"]["unread"] == [] and whole["volume"] == H.volume()
+    with pytest.raises(ValueError, match="no partition card `per-head`"):
+        H.spec_of("(i) honest", "world year", 0.4, partition="per-head")
 
 
 def test_a_row_whose_requests_are_not_its_plan_s_is_refused():
@@ -59,13 +107,14 @@ def test_a_row_whose_requests_are_not_its_plan_s_is_refused():
 
 
 def test_a_row_s_split_is_its_own_plan_s():
-    """A row's split is its own plan's at its beta, its blocks priced as its own calls and model priced them, and
-    another beta's plan is refused."""
+    """A row's split is its own plan's at its beta, its blocks priced as its own calls and model priced them, the
+    planner's `measured` as the planner's price, which is its price's word and no measurement of the row's, and another
+    beta's plan is refused."""
     a, b = plan(), plan(beta=1.0, replay_sample=5.0e10, prove_s=(6.0, 2.0))
     got = H.assemble(row(a), a, CALLS, STRATA, CALLS[0][1])["split"]
     assert (got["X"], got["q"], got["replay_sample"]) == (4.0, a["q"], a["replay_sample"])
-    assert got["priced"] == {"measured": 0.75, "modeled": 0.25}
-    assert got["families"]["SparseMlaCombine_v1"]["priced"] == ["measured"]
+    assert got["priced"] == {H.PLANNER: 0.75, "modeled": 0.25}
+    assert got["families"]["SparseMlaCombine_v1"]["priced"] == [H.PLANNER]
     assert H.assemble(row(b), b, CALLS, STRATA, CALLS[0][1])["split"]["X"] == 8.0
     with pytest.raises(ValueError, match="not the row's"):
         H.assemble(row(a), b, CALLS, STRATA, CALLS[0][1])
@@ -110,8 +159,10 @@ def test_the_figure_reads_the_10_percent_point():
 @pytest.mark.slow
 def test_a_planner_row_describes_itself_and_restores_the_planner():
     """One row on the planner (about 6 s): its split is its own bound's plan, its requests its line's (not the
-    census's), its heads eight, and every name and table the row's path set is as it was after it. Catches a planner
-    change that renames or rebinds what the driver sets, which the plain dicts above can't."""
+    census's), its heads eight, its verification phase a datacenter's window with a whole count of its replay blocks
+    sampled, a measured block's table the proof blocks its k_log holds, and every name and table the
+    row's path set is as it was after it; a beta that pays for no sampled replay block of the phase is refused.
+    Catches a planner change that renames or rebinds what the driver sets, which the plain dicts above can't."""
     P = H.planner()
     names = [(P.reprice, "apply_server"), (P.reprice, "K_MAX"), (P.sweep, "make_line"), (P.f1, "model"),
              (P.tc, "two_stage_design")]
@@ -125,6 +176,33 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isclose(got["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
     assert got["requests"] < got["census_scope"]["requests"]
     assert got["total"] == got["serve"] + got["edge"] + got["beta"] + got["compile"] + got["pool"]
+    phase = got["verification_phase"]
+    assert phase["name"] == "datacenter" and phase["machines"] > 1 and phase["seconds"] == H.RUN_S
+    assert isinstance(phase["sampled"], int) and 1 <= phase["sampled"] <= phase["replay_blocks"]
+    assert p["replay_sample"] == pytest.approx(phase["sampled"] * got["requests"] / phase["replay_blocks"])
+    assert phase["sessions"] > len(p["cells"]) and phase["limit"]
+    bound = phase["binding"]
+    taken = sum(c["taken"] for c in p["cells"] + p["left_out"])
+    assert bound["status"] == "modeled" and bound["proof_blocks"] == pytest.approx(phase["sampled"] * taken)
+    assert f"is {bound['tables']} of its type" in phase["limit"]
+    assert [(a["input"], a["value"]) for a in bound["assumed"]] == [
+        ("classes of gates a sampled proof block", 4130), ("symbols of a table's level-0 codewords", 2 ** 23),
+        ("one commitment, one sample; every committed window is presented", None)]
+    assert bound["design"]["sessions"] == ceil(phase["sessions"])
+    assert bound["design"]["classes"] == 4130 * ceil(bound["proof_blocks"] - 1e-6)
+    assert bound["design"]["k"] == P.binding.queries(bound["tables"] * 2 ** 23)
+    assert bound["design"]["phases"] == ceil(got["gpu_seconds"] / (phase["machines"] * 8 * H.RUN_S) - 1e-9)
+    assert bound == H.binding_bound(P, {"tables": bound["tables"], "draws": taken, "replay_sample": 1.0},
+                                    phase["sampled"], phase["sessions"], bound["design"]["phases"])
+    for counted in P.binding.COUNTED:
+        cell = bound["counted"][counted]
+        assert 0 < cell["phases"]["centibits"] < cell["phase"]["centibits"] and "theorem" in cell["lean"]
+    measured = {b["block"]: b for b in cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]}
+    held = [c for c in p["cells"] if c["block"] in measured]
+    assert held and all(c["table"] == P.tc.table_blocks(measured[c["block"]]["k_log"]) for c in held)
+    with pytest.raises(ValueError, match="pays for no sampled replay block"):
+        H.run(H.spec_of("(i) honest", "world year", 1e-6), P=P)
+    assert [getattr(o, n) for o, n in names] == before
 
 
 QUANT = "Fp8GroupQuantUe8m0_v1{K=2048,G=128}"
@@ -174,7 +252,7 @@ def test_a_block_with_a_steady_row_costs_what_the_row_measured():
     """Priced by the planner alone, the quant type takes the host walk and the combine the row's scale. With a
     steady-state row each costs its row's seconds a block and the measured verifier, and neither: the row timed the
     whole statement, and a lever on it would rescale a measurement."""
-    scale, core = H.comb(1.0), 2.0
+    scale, core = {"SparseMlaCombine_v1{": {"marg": 4.0, "fixed_x": 1.0}}, 2.0
     plain = H.pricing(planner_price, scale, core, [])(LINE, verify=1.0)
     assert plain[0]["seconds_per_block"] == 1.0 + H.QUANT_WALK + H.V_OTHER[1] / core
     assert plain[1]["seconds_per_block"] == 4.0 * (1.0 + H.V_OTHER[1] / core) and plain[1]["priced"] == "measured"
@@ -198,6 +276,57 @@ def test_a_steady_row_that_prices_no_block_of_the_line_is_refused_by_name():
         "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
 
 
+#: the two fused reads' types as a census names them, and their steady-state rows
+W13 = ('MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,'
+       'DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}')
+W2 = ('MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=true,'
+      'DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}')
+FUSED_ROWS = {n: {"block": n, "statement_seconds": 2.0, "blocks": 1024, "provers": 1, "record": f"art:{t}"}
+              for t, n in (("w13", W13), ("w2", W2))}
+
+
+def fused_line(P):
+    """The proof server's line as the planner builds it before pricing: the card's per-expert strata, reads fused."""
+    case = P.sweep.served_line()["P5+poolwin600"]
+    assert case.fuse
+    return P.levers.fuse_reads(P.levers.priced_strata(case.line))
+
+
+def test_a_fused_read_s_row_prices_the_line_s_fused_block_with_no_map():
+    """A census holds a fused read as one type; the line names the block by its read and its GEMM. With no map each
+    of the two rows prices its fused block of the planner's own line, none is unread, and the pricing takes them; a
+    map entry still decides, and a type that isn't a fused read's keeps its own name."""
+    line = fused_line(H.planner())
+    fused = [x["block"] for x in line if x["kind"] == "fused"]
+    by, unread = H.placed(FUSED_ROWS, {})
+    assert sorted(by) == sorted(fused) and len(fused) == 2 and unread == []
+    assert {r["type"]: b for b, r in by.items()} == {W13: H.fused_block(W13), W2: H.fused_block(W2)}
+    assert by[H.fused_block(W13)] == FUSED_ROWS[W13] | {"block": H.fused_block(W13), "type": W13, "per_block": 1}
+    got = H.pricing(planner_price, {}, 2.0, [], by)(line)
+    assert sorted(x["block"] for x in got if x["priced"] == "steady") == sorted(fused)
+    assert [x["basis"] for x in got if x["block"] == H.fused_block(W2)] == ["steady: art:w2"]
+    assert H.placed(FUSED_ROWS, {W13: None}) == ({H.fused_block(W2): by[H.fused_block(W2)]}, [W13])
+    assert H.fused_block(QUANT) is None and H.fused_block(W13.replace("H=3072", "H=8")) is None
+    assert list(H.placed(MEASURED, {})[0]) == list(MEASURED)
+
+
+def test_beside_the_fused_reads_a_row_that_names_nothing_is_still_refused_by_name():
+    """The fused reads' rows placed with no map, a row for no block of the line still stops the pricing by its name;
+    and on a line with no fused block a fused read's row is refused with the block it was read as."""
+    line = fused_line(H.planner())
+    rows, _ = H.placed(FUSED_ROWS | {"Gone_v1{N=1}": MEASURED["Gone_v1{N=1}"]}, {})
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, 2.0, [], rows)(line)
+    assert str(refused.value) == (
+        "1 steady-state rows price no block of this line: `Gone_v1{N=1}`. "
+        "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, 2.0, [], H.placed({W2: FUSED_ROWS[W2]}, {})[0])(LINE)
+    assert str(refused.value) == (
+        f"1 steady-state rows price no block of this line: `{W2}` (as `{H.fused_block(W2)}`). "
+        "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
+
+
 def test_a_row_s_split_gives_each_basis_s_share():
     """The plan's proving by what priced it: every steady-state row's blocks under `steady`, the rest under the
     planner's table, a column cut's note left off, and the carried pages under the copy stratum's own model."""
@@ -207,20 +336,439 @@ def test_a_row_s_split_gives_each_basis_s_share():
                      LINE[0] | {"basis": "reprice.CACHE, cut into 32 column blocks"}])]
     strata = [{"block": PAGES, "priced": "modeled", "basis": H.COPY_BASIS}]
     got = H.plan_split(p, calls, strata)
-    assert got["priced"] == {"steady": 0.75, "measured": 0.5, "modeled": 0.25}
+    assert got["priced"] == {"steady": 0.75, H.PLANNER: 0.5, "modeled": 0.25}
     assert got["basis"] == {"steady": 0.75, "reprice.CACHE": 0.5, H.COPY_BASIS: 0.25}
     assert H.plan_split(plan(), CALLS, STRATA)["basis"] == {H.NO_BASIS: 1.0}
 
 
+def test_a_table_row_s_block_is_tagged_by_its_source_and_its_verifier_seconds_apart():
+    """A block a table row prices is tagged as the row's source names it (`steady`, `family`), not by the planner's
+    word; its Lean verifier's seconds, its share of the cell's statements and of its blocks, are their own share under
+    `verifier_priced` and the Lean verifier's source; a block the planner prices keeps the planner's word, `computed`
+    included, for the rest. The split's shares still sum to the plan's."""
+    p = plan()
+    p["cells"][0] |= {"fixed_s": 2.0, "sessions": 0.5}
+    p["cells"].append({"block": QUANT, "share": 0.5, "prove_s": 2.0, "taken": 1.0, "fixed_s": 1.0, "sessions": 1.0})
+    p["cells"].append({"block": "Gemm_v2{M=1}", "share": 0.25, "prove_s": 1.0, "taken": 1.0, "fixed_s": 1.0,
+                       "sessions": 1.0})
+    calls = [(True, [CALLS[0][1][0] | {"table": "steady", "verifier_priced": "modeled", "verifier_fixed": 0.5,
+                                       "verifier_block": 0.0},
+                     LINE[0] | {"priced": "computed", "verifier_priced": "modeled", "verifier_fixed": 0.25,
+                                "verifier_block": 0.1},
+                     LINE[0] | {"block": "Gemm_v2{M=1}", "table": "family", "verifier_priced": "measured",
+                                "verifier_fixed": 0.0, "verifier_block": 0.0}])]
+    got = H.plan_split(p, calls, [{"block": PAGES, "priced": "modeled", "basis": H.COPY_BASIS}])
+    combine, quant = 0.75 * 0.5 / 3.0, 0.5 * (0.25 + 0.1) / 2.0
+    assert got["priced"] == pytest.approx({"steady": 0.75 - combine, "modeled": combine + quant + 0.25,
+                                           "computed": 0.5 - quant, "family": 0.25})
+    assert got["sources"] == pytest.approx({"own row": 0.75 - combine, H.VERIFIER_SOURCE: combine + quant,
+                                            H.PLANNER: 0.5 - quant, "family row": 0.25, H.COPY_BASIS: 0.25})
+    assert got["families"]["SparseMlaCombine_v1"]["priced"] == ["modeled", "steady"]
+    assert got["families"]["SparseMlaCombine_v1"]["ways"] == pytest.approx({"steady": 0.75 - combine, "modeled": combine})
+    assert got["families"]["Gemm_v2"]["ways"] == {"family": 0.25}
+    assert isclose(sum(got["priced"].values()), 1.75) and isclose(sum(got["sources"].values()), 1.75)
+    assert got["basis"] == {"steady": 0.75, H.NO_BASIS: 0.5, "family": 0.25, H.COPY_BASIS: 0.25}
+
+
+def test_each_reader_says_what_its_gb_is():
+    """`plan` says its GB is the bound at its own pinned budget, with the share of compute its total is there and
+    lambda; `rows` and `read` say their column is lambda times the bound where the total is 10%."""
+    r = row(plan()) | {"bound_bits": 8e12, "total": 0.10105001369288587}
+    assert H.show_what(r) == ("1,000.0 GB: the bound at the pinned budget beta = 40% of compute, where the row's total "
+                              "is 10.11% (not read at 10%), at lambda = 1; x1.05 is lambda times it")
+    assert H.show({}).splitlines()[-1].startswith("GB@10% x1.05: lambda = 1.05 times the bound where the scope's total "
+                                                  "is 10% of its compute")
+
+
+#: what a row's split records: mostly priced by the table's rows, none, and under half (row (i) at the table)
+AT_TABLE = {"sources": {"own row": 0.79, H.VERIFIER_SOURCE: 0.2, H.PLANNER: 0.01}, "scaled": 0.0}
+AT_PLANNER = {"sources": {H.PLANNER: 0.91, H.VERIFIER_SOURCE: 0.09}, "scaled": 0.0}
+UNDER_HALF = {"sources": {H.PLANNER: 0.44, "own row": 0.42, H.VERIFIER_SOURCE: 0.13, "family row": 0.01}, "scaled": 0.0}
+
+
+def figure_row(name: str, split: dict, **more) -> dict:
+    """A printed row of `ROWS[name]`'s case and scale with `split`, at 1,000 GB."""
+    return (row(plan()) | {"row": name, "case": H.ROWS[name]["case"], "scale": H.ROWS[name]["scale"], "split": split,
+                           "bound_bits": 8e12, "total": 0.1} | more)
+
+
+def test_each_reader_prints_a_row_s_note_beside_its_figure():
+    """A row no table's row priced says so beside its figure, and a row they priced under half says that with its
+    share, by source where the reader prints no sources of its own; a row of another's case with a scale says it is
+    that row with the share of its proving the scale reached (`split.scaled`), or that it reached none, or, where its
+    row doesn't record it, that it isn't recorded. Row (ii) says neither, and its lines are as they were. Each reader
+    takes the note from the rows' data, not their names: `read` from the row at the pinned budget nearest the 10%
+    point."""
+    plain = figure_row("(ii) honest", AT_TABLE)
+    assert H.note(plain) == ""
+    assert H.show_what(plain) == ("1,000.0 GB: the bound at the pinned budget beta = 40% of compute, where the row's "
+                                  "total is 10% (not read at 10%), at lambda = 1; x1.05 is lambda times it")
+    assert H.show_row(plain).endswith("own row 79%, Lean verifier 20%, planner's price 1%")
+
+    planner = "at the planner's prices, not the table's"
+    for r in (figure_row("(i) honest", AT_PLANNER), figure_row("(ii) honest", {"basis": {"reprice.CACHE": 1.0}})):
+        assert H.note(r) == planner and H.show_what(r).endswith(f"x1.05 is lambda times it | {planner}")
+    assert H.show_row(figure_row("(i) honest", AT_PLANNER)).endswith(f"Lean verifier 9% | {planner}")
+    assert H.note(figure_row("(i) honest", {})) == ""
+    half = figure_row("(i) honest", UNDER_HALF)
+    under = "under half priced by the table's rows, 43% of its proving"
+    assert H.note(half) == under and H.show_row(half).endswith(f"family row 1% | {under}")
+    assert H.note(half, sources=True) == (f"{under} (by source: planner's price 44%, own row 42%, Lean verifier 13%, "
+                                          "family row 1%)")
+
+    warm = figure_row("(iii) honest", AT_TABLE | {"scaled": 6e-5})
+    said = "row `(ii) honest` with its blocks of 19 block families at the planner's price scaled x0.25 (assumed), 0.006% of its proving"
+    assert H.note(warm) == said and H.show_row(warm).endswith(f"planner's price 1% | {said}")
+    assert H.note(warm | {"case": warm["case"] | {"partition": H.UNITS}}) == said
+    assert H.note(figure_row("(iii) honest", AT_TABLE)) == ("row `(ii) honest`: its scale, x0.25 on 19 block families, "
+                                                            "reaches no block of its plan")
+    assert H.note(warm | {"split": {"sources": AT_TABLE["sources"]}}) == (
+        "row `(ii) honest` with 19 block families' seconds scaled x0.25 (assumed); which of them, not recorded")
+    assert H.note(figure_row("(iii) honest", AT_PLANNER | {"scaled": 0.8})).startswith(f"{planner}; row `(ii) honest`")
+    assert H.note(warm | {"case": H.ROWS["(i) honest"]["case"]}).startswith("row `(i) honest` with its blocks")
+    assert H.note(warm | {"case": warm["case"] | {"dense_k": 4}}).startswith("its unscaled row with its blocks")
+
+    fig = H.read([r | {"step": H.STEP, "compile": 0.0, "serve": 0.03, "edge": 0.0, "pool": 0.0, "q": 1e-16,
+                       "replay_sample": 1.0, "S": H.SERVED_BITS, "delta_seen": 0.01, "share": H.SHARE,
+                       "gpu_seconds": 1.0, "weights_bits": 3.0e12, "bound_bits": 4e12 / r["beta"]}
+                  for one in (plain, warm, half) for r in (one, one | {"beta": 1.0, "split": AT_TABLE})])
+    assert "note" not in fig["(ii) honest | world year"] and fig["(iii) honest | world year"]["note"] == said
+    lines = H.show(fig).splitlines()
+    assert [x.split(" | ")[0].strip() for x in lines[1:4]] == ["(ii) honest", "(iii) honest", "(i) honest"]
+    assert lines[1].endswith(")") and lines[2].endswith(f") | {said}")
+    assert lines[3].endswith(f") | {H.note(half, sources=True)}")
+
+
+def test_a_block_with_neither_its_own_nor_its_family_s_row_keeps_the_planner_s_price():
+    """At `verity bench prove`'s table, a block whose row is a steady-state one, its own or its family's, costs the
+    row's seconds a block: its price without the verifier times one factor, the verifier's seconds a statement on top,
+    and neither takes the row's scale, which would rescale a warm measurement. A block whose row is from a single
+    session or the k_log model, or that has no row, keeps the planner's price as the row scales it, tagged `scaled`.
+    A table's row for a block of the census this line doesn't hold is unread and named; one for no block of the census
+    is refused by name."""
+    scale, core = {"SparseMlaCombine_v1{": {"marg": 4.0, "fixed_x": 1.0}, "Gemm_v2{": 2.0}, 2.0
+    gemm = LINE[1] | {"block": "Gemm_v2{M=1}"}
+    line = LINE + [gemm]
+    plain = H.pricing(planner_price, scale, core, [])(line, verify=1.0)
+    table = {COMBINE: {"source": "family", "seconds": 3.0, "record": "art:combine"},
+             QUANT: {"source": "single", "seconds": 9.0, "record": None}}
+    calls = []
+    got = H.pricing(planner_price, scale, core, calls, table=table)(line, verify=1.0)
+    assert got[0] == plain[0] and got[2] == plain[2] and plain[2]["seconds_per_block"] == 2.0 * (1.0 + H.V_OTHER[1] / core)
+    assert got[1]["seconds_per_block"] == 1.0 and isclose(got[1]["fixed_seconds"], 8.0 + 2.0 * H.V_OTHER[0])
+    assert [x["scaled"] for x in calls[-1][1]] == [None, None, True] and "scaled" not in got[1]
+    assert isclose(got[1]["seconds_per_block"] + (got[1]["fixed_seconds"] - 2.0 * H.V_OTHER[0]) / 4, 3.0)
+    assert (got[1]["priced"], got[1]["table"], got[1]["basis"]) == ("measured", "family", "family: art:combine")
+    assert [x["table"] for x in calls[-1][1]] == [None, "family", None]
+    # the verifier's seconds are the row's apart: all of its seconds a statement over the table's row, none a block
+    assert [x["verifier_priced"] for x in calls[-1][1]] == ["modeled"] * 3
+    assert isclose(got[1]["verifier_fixed"] * got[1]["fixed_seconds"], 2.0 * H.V_OTHER[0]) and got[1]["verifier_block"] == 0
+    assert isclose(plain[2]["verifier_block"] * plain[2]["seconds_per_block"], 2.0 * H.V_OTHER[1] / core)
+    assert isclose(plain[2]["verifier_fixed"] * plain[2]["fixed_seconds"], 2.0 * 2.0 * H.V_OTHER[0])
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, core, [], table=table | {"Gone_v1{N=1}": table[COMBINE]})(line)
+    assert str(refused.value) == ("1 rows of the table price no block of this line: `Gone_v1{N=1}`. It is another "
+                                  "cut's table, or the line names those blocks otherwise (`FUSED`)")
+    other = H.prices({"rows": [{"block": W13, "source": "steady", "seconds": 1.0}]})["cells"] | {HEAD_V1: table[COMBINE]}
+    unread = set()
+    H.pricing(planner_price, {}, core, [], table=table | other, unread=unread)(line)
+    assert unread == {H.fused_block(W13), HEAD_V1}
+    doc = {"cores": 10, "rows": [{"block": W13, "source": "steady", "seconds": 1.0}]}
+    assert list(H.prices(doc)["cells"]) == [H.fused_block(W13)] and H.prices(doc)["cores"] == 10
+    with pytest.raises(ValueError, match="steady-state rows or at a table, not both"):
+        H.spec_of("(ii) honest", "world year", 0.4, steady={"rows": {}}, prices=H.prices(doc))
+
+
+#: one type timed both ways by one prover on ten cores: a full statement of 1,024 blocks and a quarter of one, in a
+#: statement's GPU-seconds (read off a split run, which is no steady-state row of record: a fixture only)
+FULL, QUARTER = (1024, 2.384), (256, 0.835)
+
+
+def two_sizes(full=FULL, part=QUARTER) -> dict:
+    """A type's own table row that timed a full statement and a part of one, priced at the full one's seconds a block."""
+    return {"source": "steady", "seconds": full[1] / full[0], "record": "r-full",
+            "sizes": [{"blocks": full[0], "statement_seconds": full[1], "record": "r-full"},
+                      {"blocks": part[0], "statement_seconds": part[1], "record": "r-part"}]}
+
+
+def test_a_type_timed_at_two_statement_sizes_takes_their_split_not_the_planner_s_proportion():
+    """A block whose own row timed two statement sizes takes the line through them: (f S_q - q S_f) / (f - q) fixed
+    seconds a statement, 0.318 s (13% of a full statement) on the full and quarter statements, and (S_f - S_q) / (f - q)
+    seconds a block, with the verifier's seconds a statement on top as before; a block and its share of a full
+    statement's fixed seconds still come to the row's seconds. The split says so (`own row, fixed part timed`). A
+    one-size row, and a block beside it, keep the planner's proportion exactly; two sizes whose line has a negative
+    fixed part are no split, and keep it too, saying why."""
+    core, v = 2.0, 2.0 * H.V_OTHER[0]
+    combine = {"source": "steady", "seconds": 3.0, "record": "art:combine"}
+    one_size = {k: x for k, x in two_sizes().items() if k != "sizes"}
+
+    def priced(quant: dict) -> tuple[list, list]:
+        calls = []
+        return H.pricing(planner_price, {}, core, calls, table={QUANT: quant, COMBINE: combine})(LINE, verify=1.0), calls
+
+    (timed, other), calls = priced(two_sizes())
+    (plain, other_plain), _ = priced(one_size)
+    fixed = (1024 * 0.835 - 256 * 2.384) / 768
+    assert isclose(timed["fixed_seconds"] - v, fixed, rel_tol=1e-12) and int(1000 * fixed) == 318
+    assert round(100 * fixed / 2.384) == 13
+    assert isclose(timed["seconds_per_block"], (2.384 - 0.835) / 768, rel_tol=1e-12)
+    assert isclose(timed["seconds_per_block"] + (timed["fixed_seconds"] - v) / 1024, 2.384 / 1024, rel_tol=1e-12)
+    assert timed["basis"] == f"steady: r-full, {H.TIMED} at 1024 and 256 blocks"
+    assert isclose(timed["verifier_fixed"] * timed["fixed_seconds"], v) and timed["verifier_block"] == 0
+    assert timed["fixed_timed"]["fixed_s"] == pytest.approx(fixed) and plain["fixed_timed"] is None
+    # the planner's proportion: the line's 8 s a statement over 4 blocks to 1 s a block (and the walk), scaled
+    assert (plain["fixed_seconds"] - v) / plain["seconds_per_block"] == pytest.approx(8.0 / (1.0 + walked(QUANT)))
+    assert other == other_plain and other["fixed_timed"] is None
+    assert [x["fixed_timed"] is not None for x in calls[-1][1]] == [True, False]
+
+    p = {"q": 1e-6, "replay_sample": 1.0, "left_out": [],
+         "cells": [{"block": QUANT, "share": 0.5, "prove_s": 1.0, "taken": 1.0, "fixed_s": 1.0, "sessions": 0.0},
+                   {"block": COMBINE, "share": 0.5, "prove_s": 1.0, "taken": 1.0, "fixed_s": 1.0, "sessions": 0.0}]}
+    assert H.plan_split(p, calls, [])["sources"] == {f"own row, {H.TIMED}": 0.5, "own row": 0.5}
+    assert H.table_share({"sources": H.plan_split(p, calls, [])["sources"]}) == 1.0
+
+    (crossed, _), _ = priced(two_sizes(FULL, (256, 0.4)))
+    assert [crossed[k] for k in ("fixed_seconds", "seconds_per_block", "fixed_timed")] == [
+        plain["fixed_seconds"], plain["seconds_per_block"], None]
+    assert crossed["basis"] == ("steady: r-full, the planner's proportion: its 1024 and 256 blocks timed give no split "
+                                "(-0.2613 s fixed, 0.002583 s a block)")
+    assert H.show_timed(QUANT, H.timed_split(two_sizes())) == (
+        f"`{QUANT}`: {H.TIMED}, 0.3187 s a statement (13.4% of 1024 blocks') and 2.017 ms a block: its own row timed "
+        "1024 blocks at 2.384 GPU-s a statement and 256 at 0.835 (r-full, r-part)")
+    assert H.timed_split(one_size) is None and H.timed_split(two_sizes() | {"source": "family"}) is None
+
+
+def walked(block: str) -> float:
+    """The quant walk's seconds a block of `block`, which the planner's price carries."""
+    m = H.QUANT.match(block)
+    return H.QUANT_WALK * int(m.group(1)) / 2048 if m else 0.0
+
+
+CONTROL = Path(__file__).parent / "fixtures" / "control"
+#: the control: `verity bench prove`'s table it prices row (ii) at, and the planner's inputs of the plan it must give
+CONTROL_SHA256 = {"bench_prices.json": "f2badd5ecdf36530b918b34782fec63466b8586cd6df55e46c43af442af9604c",
+                  "plan_inputs.json": "cb8f1733d189228657f96342c359a8b230078c8760066b443559862bd44d0c80"}
+#: the control's plan's budget
+PLAN_BETA = 0.05544106123672309
+
+
+def test_row_ii_at_the_control_s_table_is_the_plan_s():
+    """Row (ii) at the control's table and the plan's budget (about 3 s): its bound is the plan's to 1e-12, its 193
+    blocks are the plan's in order, every planner input within 1e-9 of the plan's, and its plan's proving is the
+    table's own rows', its family rows', the Lean verifier's and the planner's price's in their shares, each tagged as
+    its source prices it, with `computed` only on the planner's price. Catches a change to the pricing rule, the
+    planner or the card that moves the figure or its split, which the stand-in pricing above can't."""
+    for name, digest in CONTROL_SHA256.items():
+        assert hashlib.sha256((CONTROL / name).read_bytes()).hexdigest() == digest, f"fixtures/control/{name}"
+    want = json.loads((CONTROL / "plan_inputs.json").read_text())
+    P = H.planner()
+    spec = H.spec_of("(ii) honest", "world year", PLAN_BETA,
+                     prices=H.prices(json.loads((CONTROL / "bench_prices.json").read_text())))
+    row, reads = H.evaluate(spec, P)
+    p = H.plan(spec, row, reads, {}, P)
+    got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    assert isclose(got["bound_bits"] / 8e9, 2635.9320571029266, rel_tol=1e-12)
+    assert isclose(got["total"], 0.10086052035955254, rel_tol=1e-12)
+    assert len(p["cells"]) + len(p["left_out"]) == 193
+    assert [x["block"] for x in reads["strata"]] == [x["block"] for x in want["strata"]]
+    cells = [astuple(c) for c in reads["design"]["cells"]]
+    assert len(cells) == len(want["cells"]) == 193
+    off = [(want["strata"][i]["block"], f, u, v) for i, (a, b) in enumerate(zip(want["cells"], cells))
+           for f, u, v in zip(want["cell_fields"], a, b) if not isclose(u, v, rel_tol=1e-9)]
+    assert off == []
+    assert got["prices"] == {"read": None, "cores": None, "rows": 192, "above_cores": {}, "unread": {}}
+    assert "cut" not in got
+    sources, priced = got["split"]["sources"], got["split"]["priced"]
+    assert list(sources) == ["own row", H.VERIFIER_SOURCE, "family row", H.PLANNER, H.COPY_BASIS]
+    assert [round(v, 6) for v in sources.values()] == [0.787037, 0.209103, 0.003741, 0.000117, 1e-06]
+    assert {k: round(v, 6) for k, v in priced.items()} == {"steady": 0.787037, "modeled": 0.206741, "measured": 0.002363,
+                                                           "family": 0.003741, H.PLANNER: 8.6e-05, "computed": 3.1e-05}
+    assert isclose(sum(priced.values()), 1.0, rel_tol=1e-12) and isclose(sum(sources.values()), 1.0, rel_tol=1e-12)
+    assert (priced["steady"], priced["family"]) == (sources["own row"], sources["family row"])
+    assert priced["computed"] < sources[H.PLANNER]
+    assert got["split"]["scaled"] == 0 and "note" not in got
+
+
+def test_row_ii_at_the_control_s_table_with_one_type_at_two_sizes_moves_that_type_alone():
+    """Row (ii) at the control's table with the fused read GEMM's own row given a full and a quarter statement (about
+    3 s): that block takes the two sizes' split, 0.3187 s fixed a statement and 2.017 ms a block, with the Lean
+    verifier's seconds on top; every other block a table row prices keeps the planner's proportion, a block and its
+    share of a statement's fixed seconds its row's seconds; the split names the block's source as its fixed part
+    timed, the row names the block's split and `rows` prints it. Catches the split reaching a one-size row, or the
+    timed split dropping out of the line's pricing, which the stand-in pricing can't."""
+    table = H.prices(json.loads((CONTROL / "bench_prices.json").read_text()))
+    w2 = H.fused_block(W2)
+    table = table | {"cells": table["cells"] | {w2: table["cells"][w2] | two_sizes()}}
+    P = H.planner()
+    spec = H.spec_of("(ii) honest", "world year", PLAN_BETA, prices=table)
+    row, reads = H.evaluate(spec, P)
+    got = H.assemble(row, H.plan(spec, row, reads, {}, P), reads["calls"], reads["strata"], reads["pricing"])
+    assert isclose(got["bound_bits"] / 8e9, 2558.2497865050154, rel_tol=1e-9)
+    by = {x["block"]: x for x in reads["pricing"]}
+    x = by[w2]
+    assert isclose(x["fixed_seconds"] * (1 - x["verifier_fixed"]), (1024 * 0.835 - 256 * 2.384) / 768, rel_tol=1e-9)
+    assert isclose(x["seconds_per_block"], (2.384 - 0.835) / 768, rel_tol=1e-12) and x["statement_blocks"] == 1024
+    others = [b for b, y in by.items() if y["table"] and b != w2]
+    assert len(others) > 100 and not any(by[b]["fixed_timed"] for b in others)
+    for b in others:
+        y = by[b]
+        own = y["seconds_per_block"] + y["fixed_seconds"] * (1 - y["verifier_fixed"]) / max(1, y["statement_blocks"])
+        assert isclose(own, table["cells"][b]["seconds"], rel_tol=1e-9), b
+    sources = got["split"]["sources"]
+    assert 0 < sources[f"own row, {H.TIMED}"] < sources["own row"] and isclose(sum(sources.values()), 1.0, rel_tol=1e-12)
+    assert list(got["prices"]["fixed_timed"]) == [w2]
+    assert H.show_prices(got["prices"]).splitlines()[1] == H.show_timed(w2, H.timed_split(two_sizes()))
+
+
+def test_row_iii_at_the_control_s_table_is_row_ii_s_design():
+    """Rows (ii) and (iii) at the control's table (about 6 s): the warm scale reaches no block a table's row prices,
+    its verifier's seconds included, so row (iii) gives row (ii)'s design, its bound and total to the digit and its
+    proving within the few warm blocks the table holds no row of, which its note names with their share. Catches the
+    scale reaching a table's row again, which counts a warm measurement's saving twice."""
+    P = H.planner()
+    table = H.prices(json.loads((CONTROL / "bench_prices.json").read_text()))
+    got = {}
+    for name in ("(ii) honest", "(iii) honest"):
+        spec = H.spec_of(name, "world year", PLAN_BETA, prices=table)
+        row, reads = H.evaluate(spec, P)
+        got[name] = (H.assemble(row, H.plan(spec, row, reads, {}, P), reads["calls"], reads["strata"], reads["pricing"]),
+                     reads["design"]["row"])
+    (ii, two), (iii, three) = got.values()
+    assert (iii["bound_bits"], iii["total"]) == (ii["bound_bits"], ii["total"])
+    cost = ("prove", "total", "shared", "padding", "fill")
+    assert {k: v for k, v in three.items() if k not in cost} == {k: v for k, v in two.items() if k not in cost}
+    assert isclose(three["prove"], two["prove"], rel_tol=1e-4) and three["prove"] < two["prove"]
+    assert 0 < iii["split"]["scaled"] < 1e-4 and ii["split"]["scaled"] == 0
+    assert not any(x["scaled"] and x["table"] for x in reads["pricing"])
+    assert iii["note"] == ("row `(ii) honest` with its blocks of 19 block families at the planner's price scaled x0.25 "
+                           "(assumed), 0.0017% of its proving")
+
+
+def test_row_ii_at_the_control_s_table_on_the_units_cut_prices_the_units_at_the_planner_s():
+    """Row (ii) on the units' cut at the control's table (about 3 s): the table's rows for the head blocks and their
+    ends are counted unread by family, every scores and values unit is priced by the planner (the table holds no row
+    of either), every other block the table prices keeps its row, and the row names its cut and the cut's label.
+    Catches the cut dropping out of a row that names it, or a whole-block measurement pricing a unit."""
+    P = H.planner()
+    table = H.prices(json.loads((CONTROL / "bench_prices.json").read_text()))
+    spec = H.spec_of("(ii) honest", "world year", PLAN_BETA, prices=table, partition=H.UNITS)
+    row, reads = H.evaluate(spec, P)
+    p = H.plan(spec, row, reads, {}, P)
+    got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    assert got["prices"]["unread"] == {"SparseMlaHeadBlock_v1": 65, "SparseMlaHeadEnd_v1": 1,
+                                       "SparseMlaSplitEndCols_v1": 8}
+    assert got["prices"]["rows"] == 192 - 74
+    card = H.partition_card(H.UNITS)
+    assert got["cut"] == {"name": H.UNITS, "label": card["value"]["label"], "replaces": ["SparseMlaSplit_v1"],
+                          "art": card["art"]}
+    units = [x for x in reads["pricing"] if x["block"].startswith(("SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{"))]
+    assert len(units) == 130 and all(x["table"] is None for x in units)
+    tabled = {x["block"] for x in reads["pricing"] if x["table"]}
+    assert tabled and tabled <= set(table["cells"]) and not tabled & H.replaced(H.UNITS)
+    assert not any(x["block"].startswith("SparseMlaHeadBlock_v1{") for x in reads["strata"])
+    assert {"own row", "family row", H.PLANNER} <= set(got["split"]["sources"])
+
+
+HEAD_V1 = ('SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},'
+           'SCALE={"f64":"0x1.0000000000000p-4"}}')
+END_V1 = 'SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}'
+#: the head's Definitions and their nested ones, each as its Boolean version names it
+V2 = {"SparseMlaHeadBlock_v1{": "SparseMlaHeadBlock_v2{", "SparseMlaHeadEnd_v1{": "SparseMlaHeadEnd_v2{",
+      "HopperBF16WgmmaDot16_v1": "HopperBF16WgmmaDot16_v2", "Fa3InvSum_v1": "Fa3InvSum_v2"}
+
+
+def as_v2(block: str) -> str:
+    """A head block or end as its Boolean version names it; any other block as it is."""
+    if not block.startswith(("SparseMlaHeadBlock_v1{", "SparseMlaHeadEnd_v1{")):
+        return block
+    for a, b in V2.items():
+        block = block.replace(a, b)
+    return block
+
+
+def control_rows(name=lambda b: b) -> dict:
+    """The control's table as `verity bench prove --json` writes it, a row a block, each named by `name`."""
+    return {"rows": [r | {"block": name(b)} for b, r in json.loads((CONTROL / "bench_prices.json").read_text())["cells"].items()]}
+
+
+def test_a_table_of_the_head_s_boolean_versions_prices_the_head_as_its_own_rows():
+    """Row (ii) at the control's table with every head block and end row under its Boolean version's name (`_v2`, its
+    `fn` static's too; about 4 s): each such row prices its census block (`_v1`) at the same seconds as under the census
+    names, so the bound and every block's price are the same, each named its Boolean version, which the split's
+    sources say. Catches a table of the Boolean versions pricing nothing, as the head's overhead rows are timed."""
+    P = H.planner()
+    v1, v2 = H.prices(control_rows()), H.prices(control_rows(as_v2))
+    assert set(v1["cells"]) == set(v2["cells"]) and HEAD_V1 in v2["cells"] and END_V1 in v2["cells"]
+    paired = {b: x["boolean"] for b, x in v2["cells"].items() if x.get("boolean")}
+    assert len(paired) == 66 and paired[HEAD_V1] == as_v2(HEAD_V1) and paired[END_V1] == as_v2(END_V1)
+    assert all(b.startswith(("SparseMlaHeadBlock_v1{", "SparseMlaHeadEnd_v1{")) for b in paired)
+    got = []
+    for table in (v1, v2):
+        spec = H.spec_of("(ii) honest", "world year", PLAN_BETA, prices=table)
+        row, reads = H.evaluate(spec, P)
+        got.append((H.assemble(row, H.plan(spec, row, reads, {}, P), reads["calls"], reads["strata"], reads["pricing"]),
+                    reads["pricing"]))
+    (own, by_own), (boolean, by_boolean) = got
+    assert boolean["bound_bits"] == own["bound_bits"]
+    keys = ("block", "seconds_per_block", "fixed_seconds", "statement_blocks", "table")
+    assert [[x[k] for k in keys] for x in by_boolean] == [[x[k] for k in keys] for x in by_own]
+    assert {x["block"]: x["boolean"] for x in by_boolean if x.get("boolean")} == paired
+    head = next(x for x in by_boolean if x["block"] == HEAD_V1)
+    assert head["table"] == "steady" and head["basis"].endswith(f"({H.BOOLEAN}, `{as_v2(HEAD_V1)}`)")
+    mine, theirs = boolean["split"]["sources"], own["split"]["sources"]
+    assert not any(H.BOOLEAN in s for s in theirs) and mine[f"own row, {H.BOOLEAN}"] > 0
+    assert H.VERIFIER_SOURCE in theirs and set(mine) - set(theirs) == {f"{s}, {H.BOOLEAN}" for s in H.TABLE_SOURCES.values()}
+    for source, share in theirs.items():
+        assert isclose(mine.get(source, 0.0) + mine.get(f"{source}, {H.BOOLEAN}", 0.0), share, rel_tol=1e-12), source
+    assert boolean["split"]["priced"].keys() == own["split"]["priced"].keys()
+    for way, share in own["split"]["priced"].items():
+        assert isclose(boolean["split"]["priced"][way], share, rel_tol=1e-12), way
+
+
+def test_a_boolean_name_that_pairs_with_no_block_without_a_row_is_refused_by_name():
+    """A `_v2` name whose `fn` static isn't its Boolean version pairs with no census block and stays a row for no
+    block of the line, refused by its name as before; so does a Boolean version's row beside its block's own row,
+    which the own row prices."""
+    unpaired = HEAD_V1.replace("SparseMlaHeadBlock_v1{", "SparseMlaHeadBlock_v2{")
+    row = {"source": "steady", "seconds": 1.0, "record": "art:head"}
+    line = [LINE[0] | {"block": HEAD_V1}]
+    for rows in ([{"block": unpaired} | row], [{"block": HEAD_V1} | row, {"block": as_v2(HEAD_V1)} | row]):
+        table = H.prices({"rows": rows})["cells"]
+        name = rows[-1]["block"]
+        assert name in table and not any(x.get("boolean") for x in table.values())
+        with pytest.raises(ValueError) as refused:
+            H.pricing(planner_price, {}, 2.0, [], table=table)(line)
+        assert str(refused.value) == (f"1 rows of the table price no block of this line: `{name}`. It is another "
+                                      "cut's table, or the line names those blocks otherwise (`FUSED`)")
+
+
+@pytest.mark.slow
+def test_the_rows_command_takes_another_cut_by_name(tmp_path, capsys):
+    """`rows` (about 6 s) writes rows on the `workload` card's own cut by default, which name no cut and count the
+    whole head blocks; `rows --partition head-scores-values` writes the units' rows, which name that cut and print its
+    label."""
+    args = ["rows", "--rows", "(i) honest", "--scopes", "world year", "--betas", "0.4", "1.0"]
+    assert H.main([*args, "--out", str(tmp_path / "own")]) == 0
+    assert "cut by the partition card" not in capsys.readouterr().out
+    assert H.main([*args, "--out", str(tmp_path / "units"), "--partition", H.UNITS]) == 0
+    assert f"cut by the partition card {H.UNITS}" in capsys.readouterr().out
+    own, units = ([json.loads(x) for x in (tmp_path / d / "rows.jsonl").read_text().splitlines()] for d in ("own", "units"))
+    assert [r["case"].get("partition") for r in own + units] == [None, None, H.UNITS, H.UNITS]
+    assert "cut" not in own[0] and units[0]["cut"]["name"] == H.UNITS
+    assert any(b.startswith("SparseMlaHeadBlock_v1{") for b in own[0]["volume"])
+    assert not any(b.startswith("SparseMlaHeadBlock_v1{") for b in units[0]["volume"])
+
+
 @pytest.mark.slow
 def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
-    """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key split part, the planner
+    """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key head block, the planner
     prices that block at the row (the row's seconds a block and the measured verifier's, in statements of the row's
     blocks; its plan's proving says `steady` for it and the bound falls with the cheaper block), every other block as
     without it, and a row for no block of the line stops the row. Catches the planner's own
     pricing no longer taking a row by the line's block, which the stand-in pricing above can't."""
     P = H.planner()
-    part = next(x["block"] for x in P.levers.priced_strata("tokens") if x["block"].startswith("SparseMlaSplitPart_v1{T=64,"))
+    part = next(x["block"] for x in P.levers.priced_strata("tokens")
+                if x["block"].startswith("SparseMlaHeadBlock_v1{") and "NVIS=64,FIRST=false" in x["block"])
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps({"rows": [{"block": "Head_v1{NVIS=64}", "statement_seconds": 0.128, "blocks": 128,
                                           "provers": 1, "record": "art:head"}]}))
@@ -240,7 +788,10 @@ def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
     assert (priced["priced"], priced["basis"], priced["statement_blocks"]) == ("steady", "steady: art:head", 128)
     assert isclose(priced["seconds_per_block"], 0.128 / 128 + H.V_OTHER[1] / P.reprice.CORE_PER_GPU, rel_tol=1e-12)
     cell = next(c for c in p["cells"] if c["block"] == part)
-    assert isclose(got["split"]["priced"]["steady"], cell["share"], rel_tol=1e-12)
+    statements = cell["sessions"] * cell["fixed_s"]
+    lean = (statements * priced["verifier_fixed"] + (cell["prove_s"] - statements) * priced["verifier_block"]) / cell["prove_s"]
+    assert priced["verifier_priced"] == "modeled" and 0 < lean < 1
+    assert isclose(got["split"]["priced"]["steady"], cell["share"] * (1 - lean), rel_tol=1e-12)
     assert isclose(got["split"]["basis"]["steady"], cell["share"], rel_tol=1e-12)
     assert isclose(sum(got["split"]["basis"].values()), 1.0, rel_tol=1e-9) and H.NO_BASIS not in got["split"]["basis"]
     assert got["bound_bits"] < base["bound_bits"]
@@ -251,7 +802,7 @@ def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
 def test_a_row_is_a_case_under_a_plan():
     """Every case comes under every plan, the planner's own under the case's bare name; a plan's keywords are the
     planner's, and a held κ is one of its grid."""
-    from verity.protocols.spot.optimize import KAPPAS
+    from verity.protocols.proofs.spot.prover.optimize import KAPPAS
 
     assert set(H.ROWS) == {case + more for case in H.CASES for more in H.PLANS}
     for case in H.CASES:

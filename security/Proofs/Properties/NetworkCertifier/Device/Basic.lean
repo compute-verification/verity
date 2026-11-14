@@ -62,7 +62,7 @@ theorem doFault_link (c : Certifier) (r : Reason) : (c.doFault r).link = c.link 
   unfold Certifier.doFault; split <;> rfl
 theorem doFault_params (c : Certifier) (r : Reason) : (c.doFault r).params = c.params := by
   unfold Certifier.doFault; split <;> rfl
-theorem doFault_window (c : Certifier) (r : Reason) : (c.doFault r).window = c.window := by
+theorem doFault_executionPhase (c : Certifier) (r : Reason) : (c.doFault r).window = c.window := by
   unfold Certifier.doFault; split <;> rfl
 theorem doFault_rows (c : Certifier) (r : Reason) : (c.doFault r).rows = c.rows := by
   unfold Certifier.doFault; split <;> rfl
@@ -100,7 +100,7 @@ theorem CertRel.link {c c' : Certifier} (h : CertRel c c') : c'.link = c.link :=
 theorem CertRel.params {c c' : Certifier} (h : CertRel c c') : c'.params = c.params := by
   rcases h with rfl | ⟨r, rfl⟩ <;> simp [doFault_params]
 theorem CertRel.window {c c' : Certifier} (h : CertRel c c') : c'.window = c.window := by
-  rcases h with rfl | ⟨r, rfl⟩ <;> simp [doFault_window]
+  rcases h with rfl | ⟨r, rfl⟩ <;> simp [doFault_executionPhase]
 theorem CertRel.rows {c c' : Certifier} (h : CertRel c c') : c'.rows = c.rows := by
   rcases h with rfl | ⟨r, rfl⟩ <;> simp [doFault_rows]
 theorem CertRel.of_fault {c c' : Certifier} {r : Reason} (h : CertRel c c') (hf : c.fault = some r) : c' = c := by
@@ -126,8 +126,8 @@ theorem enqueue_link (c : Certifier) (f : ByteArray) : (c.enqueue f).link = c.li
   rcases enqueue_eq c f with h | ⟨r, h⟩ | ⟨-, -, -, h⟩ <;> rw [h]; all_goals simp [doFault_link]
 theorem enqueue_params (c : Certifier) (f : ByteArray) : (c.enqueue f).params = c.params := by
   rcases enqueue_eq c f with h | ⟨r, h⟩ | ⟨-, -, -, h⟩ <;> rw [h]; all_goals simp [doFault_params]
-theorem enqueue_window (c : Certifier) (f : ByteArray) : (c.enqueue f).window = c.window := by
-  rcases enqueue_eq c f with h | ⟨r, h⟩ | ⟨-, -, -, h⟩ <;> rw [h]; all_goals simp [doFault_window]
+theorem enqueue_executionPhase (c : Certifier) (f : ByteArray) : (c.enqueue f).window = c.window := by
+  rcases enqueue_eq c f with h | ⟨r, h⟩ | ⟨-, -, -, h⟩ <;> rw [h]; all_goals simp [doFault_executionPhase]
 theorem enqueue_rows (c : Certifier) (f : ByteArray) : (c.enqueue f).rows = c.rows := by
   rcases enqueue_eq c f with h | ⟨r, h⟩ | ⟨-, -, -, h⟩ <;> rw [h]; all_goals simp [doFault_rows]
 theorem enqueue_of_fault {c : Certifier} {r : Reason} (h : c.fault = some r) (f : ByteArray) : c.enqueue f = c := by

@@ -11,7 +11,7 @@ import pytest
 from verity_numerical.checker import REAL
 
 ROOT = Path(__file__).resolve().parents[4]
-GOLDEN = ROOT / "verity/definitions/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
+GOLDEN = ROOT / "verity/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json"
 K1536 = ROOT / "fixtures/typed-obligation-v0/stage2--qkv-proj-decode-0-k1536.json"
 
 K = 16
@@ -39,7 +39,7 @@ def _fill(pairs: list[tuple[int, int]]) -> tuple[list[int], list[int]]:
 
 
 def structured_cases() -> list[tuple[str, int, list[int], list[int]]]:
-    """(name, c, a, b): every family the handoff names, both groups exercised."""
+    """(name, c, a, b): every family, both groups exercised."""
     cases: list[tuple[str, int, list[int], list[int]]] = []
 
     def add(name: str, c: int, pairs: list[tuple[int, int]]) -> None:

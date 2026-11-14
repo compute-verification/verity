@@ -72,12 +72,12 @@ set_option maxRecDepth 20000
 namespace Properties.NetworkCertifier
 
 open Bytes _root_.Properties.NetworkCertifier.Tree GridProofs CheckProofs
-open Properties.CertifierNetwork.Proofs (Inv inv_after init_inv windowsOn)
+open Properties.CertifierNetwork.Proofs (Inv inv_after init_inv executionPhasesOn)
 open Properties.CertifierDevice.Proofs.Issuer (except_bind_ok prepare_spec prepare_head)
 
 /-! ## What the device's code issues -/
 
-theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {r : Record}
+theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Nat} {r : BlockGrid}
     {d : NetworkCheck.Direction} {g : NetworkCheck.Params} {pd : ByteArray} {cr : CertifiedRecord}
     (h : i.certify salt leaf r d g pd = .ok (i', some cr)) :
     NetworkCheck.recordHead r.link d r.window r.grid ((Status.reason? r.status).map reasonValue) g pd true =
@@ -101,7 +101,7 @@ theorem certify_some {i i' : Issuer} {salt : ByteArray} {leaf : Except String Na
 
 /-- Each certificate the code issues is of a record it was given: the head `record_head` makes of it under its grid's
 parameters digest, signing that head's digest under the certificate's salt and naming the record's link-window. -/
-theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {salts : Nat → ByteArray} {rs : List Record}
+theorem issued_spec {c : Config} : ∀ {i : Issuer} {next : Nat} {salts : Nat → ByteArray} {rs : List BlockGrid}
     {cr : CertifiedRecord},
     cr ∈ issued c i next salts rs → ∃ rec ∈ rs, ∃ pd, parameters (gridOf c rec) (syncSetOf c rec) = .ok pd ∧
       NetworkCheck.recordHead rec.link (directionOf c rec) rec.window rec.grid
@@ -146,25 +146,25 @@ theorem deviceCode_started {x : DeviceInput} (h : x.issuer.session ∈ x.session
 
 /-! ## One record per link-window -/
 
-theorem nodup_windows {l : String} {P : List Record} {n : Nat} (h : windowsOn l P = List.range n) {r r' : Record}
+theorem nodup_executionPhases {l : String} {P : List BlockGrid} {n : Nat} (h : executionPhasesOn l P = List.range n) {r r' : BlockGrid}
     (hr : r ∈ P) (hr' : r' ∈ P) (hl : r.link = l) (hl' : r'.link = l) (hw : r.window = r'.window) : r = r' := by
-  have hnd : ((P.filter fun r => decide (r.link = l)).map Record.window).Nodup := by
-    unfold windowsOn at h
+  have hnd : ((P.filter fun r => decide (r.link = l)).map BlockGrid.window).Nodup := by
+    unfold executionPhasesOn at h
     rw [h]
     exact List.nodup_range
   exact List.inj_on_of_nodup_map hnd (List.mem_filter.mpr ⟨hr, by simpa using hl⟩)
     (List.mem_filter.mpr ⟨hr', by simpa using hl'⟩) hw
 
 /-- With two links, the device publishes at most one record of each link-window on each. -/
-theorem unique {c : Config} {tr : List Event} (hd : Distinct c) {r r' : Record} (hr : r ∈ published c tr)
+theorem unique {c : Config} {tr : List Event} (hd : Distinct c) {r r' : BlockGrid} (hr : r ∈ published c tr)
     (hr' : r' ∈ published c tr) (hl : r.link = r'.link) (hlk : r.link ∈ [c.egressLink, c.ingressLink])
     (hw : r.window = r'.window) : r = r' := by
   have h := inv_after hd tr (init c) [] (init_inv c)
   rw [List.nil_append] at h
   change Inv c (after (init c) tr) (published c tr) at h
   rcases List.mem_pair.mp hlk with hlk | hlk
-  · exact nodup_windows h.eg hr hr' hlk (hl ▸ hlk) hw
-  · exact nodup_windows h.ig hr hr' hlk (hl ▸ hlk) hw
+  · exact nodup_executionPhases h.eg hr hr' hlk (hl ▸ hlk) hw
+  · exact nodup_executionPhases h.ig hr hr' hlk (hl ▸ hlk) hw
 
 /-! ## The strings of the run -/
 
@@ -191,7 +191,7 @@ theorem mem_run_message {x : DeviceInput} {out : DeviceOutput} {c : Commitment} 
   rw [h]
   exact List.mem_singleton_self _
 
-theorem mem_run_tree {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence} {r : Record}
+theorem mem_run_tree {x : DeviceInput} {out : DeviceOutput} {c : Commitment} {e : Evidence} {r : BlockGrid}
     (hr : r ∈ out.records) {y : ByteArray} (h : TreeString (gridOf x.config r) r.grid y) :
     y ∈ runStrings x out c e :=
   List.mem_append_right _ (List.mem_append_right _ (List.mem_flatMap.mpr ⟨r, hr, mem_treeStrings h⟩))
@@ -263,7 +263,7 @@ theorem acceptedRowsAreProgramRows : AcceptedRowsAreProgramRows := by
       LmsVerifies (deviceParams x) m r.certificate.signature → Signed x.issuer.session (deviceCode x) m :=
     fun r hr m hm hv => Classical.byContradiction fun hn => hf ⟨r, hr, m, hm, hv, hn⟩
   have dev := fun {d l w r dg} (hs : Signs (deviceParams x) c d l w r dg) => device_record hcr hsig hs
-  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsLinkWindows _ c e hacc
+  obtain ⟨hfit, eg, ig, hpd, he, hi⟩ := acceptsTransferBlocks _ c e hacc
   have heg : egressDigest (deviceParams x) = eg := by
     simp [egressDigest, hpd.1, Except.toOption]
   have hpe : (deviceParams x).egress = #[x.config.egressLink] := rfl

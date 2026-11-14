@@ -1,4 +1,4 @@
-"""`verity config` and `verity run` (`verity_cli.run`, `verity.configuration.deploy.config`): the configuration's refusals by name,
+"""`verity config` and `verity run` (`verity_cli.run`, `verity.config`): the configuration's refusals by name,
 a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
 runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
@@ -14,12 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.configuration.deploy import config as K
-from verity.configuration.deploy.manifest import Channel, Role
-from verity.protocols.certifier.verifier.warden import WardenParams
-from verity.protocols.spot.verifier import parties as SP
-from verity.protocols.spot.verifier.one_stage import registration as RG
-from verity.configuration.wire import Refused
+from verity import config as K
+from verity.protocol import Channel, Role
+from verity.protocols.accounting.certifier.verifier import parties as NC
+from verity.protocols.accounting.certifier.verifier.warden import WardenParams
+from verity.protocols.policy.inference_only.verifier import parties as IO
+from verity.protocols.proofs.spot.verifier import parties as SP
+from verity.protocols.proofs.spot.verifier.one_stage import registration as RG
+from verity.channel import Refused
 from verity_cli import run as R
 
 EXAMPLE = Path(__file__).parent / "fixtures" / "config.toml"
@@ -28,7 +30,8 @@ REG = R.registry(TABLE)
 D = sys.modules[TABLE[1]]
 COMMIT = "a" * 40
 ONSITE = ("sampled-proofs", "certifier", "pouw", "pous", "bandwidth", "inference-only", "wipe")
-REMOTE = ("sampled-proofs", "pouw", "inference-only")
+REMOTE = ("sampled-proofs", "pearl-plus", "inference-only")
+REMOTE_V0 = ("sampled-proofs", "pouw", "inference-only")
 
 
 def config(protocols=ONSITE, **machines) -> dict:
@@ -117,13 +120,14 @@ def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
 
 
 def test_the_composites_are_remote_and_onsite():
-    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v0"}
+    assert {K.composite(p, REG.components) for p in (ONSITE, REMOTE)} == {"verity/onsite/v0", "verity/remote/v1"}
     assert K.composite(ONSITE[::-1], REG.components) == "verity/onsite/v0"
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SP.SUBPROTOCOLS.items()}
-    assert SP.SUBPROTOCOLS["verity/remote/v0"] == {"inference-only": "verity/inference-only/v0",
-                                                   "pouw": "verity/pouw/period/v1",
+    assert SP.SUBPROTOCOLS["verity/remote/v1"] == {"inference-only": "verity/inference-only/v0",
+                                                   "pearl-plus": "verity/pouw/pearl-plus/v1",
                                                    "sampled-proofs": "verity/sampled-proofs/v1"}
+    assert SP.SUBPROTOCOLS["verity/onsite/v0"]["sampled-proofs"] == "verity/sampled-proofs/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["pouw"] == "verity/pouw/period/v1"
     assert SP.SUBPROTOCOLS["verity/onsite/v0"]["wipe"] == "verity/wipe/v0"
 
@@ -179,7 +183,7 @@ def capped(cap):
 
 def test_an_uncapped_certifier_configuration_hashes_as_before_the_cap():
     cfg = K.check(config(), REG.components, REG.workloads)
-    assert not {"max_tokens_cap", "lengths"} & set(cfg["params"]["verity/certifier/v0"])
+    assert not {"max_tokens_cap", "lengths", "content"} & set(cfg["params"]["verity/certifier/v0"])
     assert K.digest(cfg) == UNCAPPED_ONSITE
 
 
@@ -199,13 +203,16 @@ def with_lengths(**schedule):
 
 def test_a_certifier_configuration_with_lengths_rows_round_trips_and_needs_a_schedule_that_fits_them():
     fits = {"cell_bytes": 512, "ingress_buckets": 10, "egress_cells": 2048}
-    cfg = K.check(K.parse(K.render(with_lengths(**fits))), REG.components, REG.workloads)
-    table = cfg["params"]["verity/certifier/v0"]
-    assert table["lengths"] == 1 and "max_tokens_cap" not in table
-    assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == 1
-    assert K.check(cfg, REG.components, REG.workloads) == cfg
-    assert K.digest(cfg) != UNCAPPED_ONSITE
-    for schedule in ({}, fits | {"lengths": 2}, fits | {"egress": "bytes"}):
+    digests = {UNCAPPED_ONSITE}
+    for form in (1, 2):  # the lengths rows' two forms, each a configuration of its own digest
+        cfg = K.check(K.parse(K.render(with_lengths(**fits | {"lengths": form}))), REG.components, REG.workloads)
+        table = cfg["params"]["verity/certifier/v0"]
+        assert table["lengths"] == form and "max_tokens_cap" not in table
+        assert WardenParams(**{k: v for k, v in table.items() if k != "tie"}).lengths == form
+        assert K.check(cfg, REG.components, REG.workloads) == cfg
+        digests.add(K.digest(cfg))
+    assert len(digests) == 3
+    for schedule in ({}, fits | {"lengths": 3}, fits | {"egress": "bytes"}):
         with pytest.raises(Refused) as e:
             K.check(with_lengths(**schedule), REG.components, REG.workloads)
         assert e.value.name == "params" and "lengths" in e.value.detail
@@ -393,8 +400,18 @@ def test_a_check_that_faults_fails_the_run_with_no_verdict(tmp_path, capsys):
 def test_remotes_verdict_covers_exactly_its_subprotocols(tmp_path, capsys):
     rc, lines = run(tmp_path, registry(), cfg=config(REMOTE))
     assert rc == 0 and lines[0]["components"] == {c: "accept" for c in REMOTE}
-    assert lines[0]["product"] == "verity/remote/v0"
+    assert lines[0]["product"] == "verity/remote/v1"
     assert "network-certifier" not in capsys.readouterr().out
+
+
+def test_remotes_development_composite_is_no_composite():
+    """H1's development composite (remote with PoUW's period as its work) is no composite a configuration can name:
+    protocol soundness covers only onsite and remote v1, so `check` refuses it by name."""
+    assert refused(edit(lambda c: c.update(protocols=list(REMOTE_V0)))) == "composite"
+    with pytest.raises(K.Refused) as e:
+        K.composite(REMOTE_V0, REG.components)
+    assert e.value.name == "composite" and "verity/remote/v1 (inference-only, pearl-plus, sampled-proofs)" in str(e.value)
+    assert "verity/remote/v0" not in K.COMPOSITES and "verity/remote/v0" not in SP.SUBPROTOCOLS
 
 
 def test_verity_run_refuses_a_configuration_that_is_no_composite(tmp_path, capsys):
@@ -467,6 +484,17 @@ def test_verity_run_with_no_table_is_refused_by_name(tmp_path, capsys, monkeypat
     assert "refused no-table" in capsys.readouterr().err
     assert R.config_main(["check", str(path)]) == 2
     assert "refused no-table" in capsys.readouterr().out
+
+
+def test_the_certifier_and_the_policy_are_declared_from_their_manifests():
+    certifier, policy = REG.components["certifier"], REG.components["inference-only"]
+    assert (policy.id, policy.parties, policy.channels) == (IO.ID, IO.MANIFEST.parties, IO.MANIFEST.channels)
+    assert (certifier.id, certifier.channels) == (NC.ID, NC.MANIFEST.channels)
+    assert [r for r in NC.MANIFEST.parties if r not in certifier.parties] == [NC.MANIFEST.role(NC.WORKERS)]
+    assert all(r in NC.MANIFEST.parties for r in certifier.parties)
+    assert set(D.PARTIES["certifier"]) == {r.name for r in certifier.parties}
+    assert [r.name for r in D.TOY.parties] == [NC.WORKERS]
+    assert NC.WORKERS not in {p for ps in D.PARTIES.values() for p in ps}
 
 
 def test_the_table_holds_what_the_listed_components_need():

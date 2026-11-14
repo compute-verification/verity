@@ -11,9 +11,14 @@ import sys
 
 import pytest
 
-from verity_vllm.query.manifest import format as RM
 from verity_vllm.acquire import plan as P
-from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, ArgSlot, ReturnSlot, runtime_tree_from_paths
+from verity_vllm.correspondence.reader_for_acquire import (
+    AcquireCorrespondence,
+    ArgSlot,
+    ReturnSlot,
+    runtime_tree_from_paths,
+)
+from verity_vllm.query.manifest import format as RM
 
 PD = hashlib.sha256(b"program").hexdigest()
 
@@ -36,7 +41,7 @@ def row(family, op, member, *, step=0, **extra):
 
 
 def manifest(rows, **hdr):
-    fams = {}
+    fams: dict[str, int] = {}
     for r in rows:
         fams[r["family"]] = fams.get(r["family"], 0) + 1
     d = {"schema": RM.SCHEMA, "program_digest": PD, "identities": rows, "populations": {"identities": len(rows), "by_family": fams}, "wrapper_prefix": "", "op_path_aliases": {}}
@@ -68,14 +73,14 @@ def base_rows():
 def make_plan(rows, rt=None, **hdr):
     rt = rt or tree()
     man = manifest(rows, **hdr)
-    corr = AnnotationCorrespondence(rt, wrapper_prefix=man["wrapper_prefix"], aliases=man["op_path_aliases"])
+    corr = AcquireCorrespondence(rt, wrapper_prefix=man["wrapper_prefix"], aliases=man["op_path_aliases"])
     return P.acquisition_plan(man, corr, tables=TABLES), man, rt
 
 
 # ------------------------------------------------------------------------------------------------------------------ correspondence
 
 def test_adapter_three_functions():
-    corr = AnnotationCorrespondence(tree(), wrapper_prefix="model.")
+    corr = AcquireCorrespondence(tree(), wrapper_prefix="model.")
     assert corr.owning_module({"op_path": "body.embed", "output_member": "out"}) == "body.embed"
     assert corr.owning_module({"name": "model.body.blocks.0.proj_a/linear_3/[7]", "spec": "Gemm_v1{K=8,N=8}"}) == "body.blocks.0.proj_a"
     assert corr.return_slot({"op_path": "x", "output_member": "out"}) == ReturnSlot()
@@ -83,7 +88,7 @@ def test_adapter_three_functions():
     assert corr.return_slot({"op_path": "x", "output_member": "in"}) is None
     assert corr.return_slot({"op_path": "runner.sampler", "output_member": "sampled_token_ids"}) == ReturnSlot(attr="sampled_token_ids")
     assert corr.arg_slot({"op_path": "x"}, 0) == ArgSlot(0) and ArgSlot(0).label() == "in[0]"
-    corr2 = AnnotationCorrespondence(tree(), aliases={"body.blocks.1.rope": ["body.blocks.0.rope", 1]})
+    corr2 = AcquireCorrespondence(tree(), aliases={"body.blocks.1.rope": ["body.blocks.0.rope", 1]})
     assert corr2.owning_module({"op_path": "body.blocks.1.rope"}) == "body.blocks.0.rope"
 
 
@@ -128,6 +133,13 @@ def test_many_sites_policy_producer_output_first_and_analytic_beside():
     assert sorted(s.kind for s in w.sites) == ["analytic_table", "registered_input"] and w.chosen.kind == "registered_input"
 
 
+@pytest.mark.parametrize("held", [{}, {"consumers": None}, {"consumers": []}], ids=["absent", "null", "empty"])
+def test_a_row_that_names_no_consumer_has_none(held):
+    """`consumers` is a promoted row's field: a row that leaves it out, or holds null or an empty list, names no consumer."""
+    (v,) = P.value_classes(manifest([row("instance_outputs", "body.blocks.0.act", "out", spec="Act_v1", **held)]))
+    assert (v.value_id, v.consumers, v.identities) == ("body.blocks.0.act/out", [], 1)
+
+
 def test_promoted_value_consumer_input_only():
     rows = base_rows() + [row("instance_outputs", "body", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 3, "width": 8, "dtype": "bf16", "spec": "Scale_v1", "consumers": ["body.blocks.0.norm_in"]}))]
     plan, _, _ = make_plan(rows)
@@ -137,11 +149,22 @@ def test_promoted_value_consumer_input_only():
     assert v.chosen.lifetime == "unknown"
     # in-place facts, when the annotations carry them, decide the lifetime
     man = manifest(rows)
-    corr = AnnotationCorrespondence(tree(), inplace_facts={"body.blocks.0.norm_in": {"mutates_input": False}})
+    corr = AcquireCorrespondence(tree(), inplace_facts={"body.blocks.0.norm_in": {"mutates_input": False}})
     p2 = P.acquisition_plan(man, corr, tables=TABLES)
     assert {v.value_id: v for v in p2.values}["body/out"].chosen.lifetime == "unmutated"
     # one promoted-consumer pre-hook, whatever the consumer's class
     assert ("body.blocks.0.norm_in", "consumer_input", "in[0]") in [h.key() for h in plan.hooks()]
+
+
+def test_promoted_value_with_two_consumers_takes_the_first_consumer_input():
+    """POLICY over several legal sites of a promoted Value: each consumer's input is one, and the first by module is chosen."""
+    rows = base_rows() + [row("instance_outputs", "body", RM.PROMOTED_MEMBER, **RM.promoted_annotations(
+        {"rows": 3, "width": 8, "dtype": "bf16", "spec": "Scale_v1", "consumers": ["body.blocks.0.norm_out", "body.blocks.0.norm_in"]}))]
+    plan, _, _ = make_plan(rows)
+    v = {v.value_id: v for v in plan.values}["body/out"]
+    assert v.promoted and [(s.kind, s.module) for s in v.sites] == [("consumer_input", "body.blocks.0.norm_out"), ("consumer_input", "body.blocks.0.norm_in")]
+    assert v.chosen.key() == ("body.blocks.0.norm_in", "consumer_input", "in[0]")
+    assert v.why == "several legal sites (consumer_input, consumer_input): policy chose consumer_input"
 
 
 def test_zero_sites_is_unsupported_and_fails_closed():
@@ -191,7 +214,7 @@ def test_prescribed_padding_identities():
     assert [s.kind for s in v.sites] == ["prescribed", "producer_output"]
     # padding identities as the finalize phase knows them: every identity of a Value -> prescribed as a whole
     pad = [r for r in rows if r["op_path"] == "logits"]
-    plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AnnotationCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
+    plan2, _, _ = make_plan(rows) if False else (P.acquisition_plan(manifest(rows), AcquireCorrespondence(tree()), tables=TABLES, padding_identities=pad), None, None)
     lg = {v.value_id: v for v in plan2.values}["logits/out"]
     assert lg.prescribed and lg.chosen.kind == "prescribed" and lg.prescribed_identities == 2
     assert ("logits", "producer_output", "out") not in [h.key() for h in plan2.hooks()]
@@ -223,8 +246,8 @@ import json, sys
 if sys.argv[3] == "blocked":
     sys.modules["torch"] = None
 from verity_vllm.acquire import plan as P
-from verity_vllm.correspondence.reader_for_acquire import AnnotationCorrespondence, RuntimeTree
-plan = P.acquisition_plan(json.load(open(sys.argv[1])), AnnotationCorrespondence(RuntimeTree.load(sys.argv[2])))
+from verity_vllm.correspondence.reader_for_acquire import AcquireCorrespondence, RuntimeTree
+plan = P.acquisition_plan(json.load(open(sys.argv[1])), AcquireCorrespondence(RuntimeTree.load(sys.argv[2])))
 print(json.dumps({"digest": plan.digest, "residuals": {r.table: r.values for r in plan.residuals},
                   "tables": {k: sorted(v) for k, v in P._lifetime_tables().items()}, "torch": sys.modules.get("torch") is not None}))
 """
@@ -263,7 +286,8 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
     path = tmp_path / "plan.json"
     dig = p1.save(path)
     doc = P.load_plan(path)
-    assert doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA and P.hooks_of_doc(doc) == [h.key() for h in p1.hooks()]
+    assert doc["plan_digest"] == dig and doc["schema"] == P.SCHEMA
+    assert [(h["module"], h["kind"], h["slot"]) for h in doc["hooks"]] == [h.key() for h in p1.hooks()]
     # any change to the body changes the digest; a tampered file is refused
     rows2 = copy.deepcopy(rows)
     rows2.append(row("instance_outputs", "body.norm", "out", spec="Norm_v1"))
@@ -276,7 +300,8 @@ def test_plan_digest_stable_and_order_independent(tmp_path):
         P.load_plan(path)
     # the digest is over the plan's CONTENT: the runtime tree's provenance string is not part of it -- the meta-instantiated model and the
     # live engine of the same row give the same sites (they did, Value for Value, on the reference row) and so the same digest
-    rt = tree(); rt.source = "other"
+    rt = tree()
+    rt.source = "other"
     p4, _, _ = make_plan(rows, rt=rt)
     assert p4.digest == p1.digest and p4.body()["runtime_source"] == "other" != p1.body()["runtime_source"]
     assert P.plan_digest(p1.to_json()) == p1.digest                     # the saved document re-digests to itself (load_plan's check)

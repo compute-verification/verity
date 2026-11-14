@@ -65,6 +65,7 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
     m = _build(art)
     p = m["program"]
     assert m["complete"] and not m["routes_missing"]
+    assert m["kind"] == SV.KIND == "verity/served-required-manifest/v1"
     assert len(p["piece_wrappers"]) == 17 and len(set(p["piece_wrappers"])) == 3
     assert Counter(c.get("base", c["op"]) for c in p["calls"]) == {
         "mm": 64, "InductorRoPE_v1": 32, "InductorAddRMSNorm_v1": 16, "InductorSiluMul_v1": 16, "InductorAdd2RMSNorm_v1": 15,
@@ -81,14 +82,20 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
 
 def test_the_gemm_route_follows_the_step(art: Path) -> None:
     plans = {s["step"]: s for s in _build(art)["steps_plan"]}
-    down = lambda s: plans[s]["gemms"]["8192,2048"]
+    def down(s: int) -> dict:
+        return plans[s]["gemms"]["8192,2048"]
+
     assert down(1)["base"] == "CublasSplitKGemm_v1" and down(1)["statics"]["SPLIT_K"] == 3
     assert down(0)["statics"]["SPLIT_K"] == 2
     assert down(6)["base"] == "Gemm_v2"
 
 
-def test_a_missing_route_leaves_the_build_incomplete(art: Path) -> None:
-    m = _build(art, routes={})
+NO_ROUTES: list[dict] = [{}, {"routes": None}, {"routes": {}}, {"routes": []}, {"routes": ""}, {"routes": 0}, {"routes": False}]
+
+
+@pytest.mark.parametrize("routes", NO_ROUTES, ids=repr)
+def test_a_missing_route_leaves_the_build_incomplete(art: Path, routes: dict) -> None:
+    m = _build(art, routes=routes)
     assert not m["complete"] and len(m["routes_missing"]) == 28
     assert all(g is None for s in m["steps_plan"] for g in s["gemms"].values())
 
@@ -110,6 +117,49 @@ def test_an_unhooked_buffer_is_refused(art: Path, tmp_path: Path) -> None:
     _edit(ind, "        run_intermediate_hooks('verity|mul|buf4', buf4)\n", "", count=-1)
     with pytest.raises(Unmodelled, match="no run_intermediate_hooks names them"):
         _build(art, inductor=ind)
+
+
+def test_a_piece_argument_of_no_known_source_is_refused(art: Path, tmp_path: Path) -> None:
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    assert "_weight_, l_positions_, " in src
+    graph.write_text(src.replace("_weight_, l_positions_, ", "_weight_, positions, ", 1))
+    with pytest.raises(Unmodelled, match=r"piece 0 argument 5 \(positions\): a unknown argument"):
+        _build(art, split_graph=str(graph))
+
+
+@pytest.mark.parametrize("operand,why", [
+    ("output_3", "an attention op's output buffer is not a piece's return"),
+    ("query_2", "piece 1 mm reads storage no launch wrote"),
+    ("key_2", "attention 0: its k is not a piece's return"),
+    ("value", "attention 0: its v is not a piece's return"),
+])
+def test_an_attention_op_whose_signature_leaves_an_operand_out_is_refused(art: Path, tmp_path: Path, operand: str, why: str) -> None:
+    """The wiring names an attention op's query, key, value and output by its signature's parameter names; one it cannot name is
+    left out of the op's record, and the build is refused."""
+    graph = tmp_path / "computation_graph.py"
+    src = (art / "computation_graph.py").read_text()
+    signature = next(line for line in src.splitlines() if line.lstrip().startswith("def forward(self, key_2: "))
+    assert f"{operand}: " in signature
+    graph.write_text(src.replace(signature, signature.replace(f"{operand}: ", f"x_{operand}: "), 1))
+    with pytest.raises(Unmodelled, match=re.escape(why)):
+        _build(art, split_graph=str(graph))
+
+
+def test_a_launch_reads_a_view_at_the_views_width(art: Path, tmp_path: Path) -> None:
+    ind = _copy(art, tmp_path)
+    kernel = "triton_red_fused_fused_add_rms_norm_0"
+    old = f"{kernel}.run(buf0, arg4_1, arg3_1, buf2, s72, 2048, stream=raw_stream0)"
+    path = next(p for p in sorted(ind.rglob("*.py")) if old in p.read_text())
+
+    def launch() -> dict:
+        return next(la for la in C.parse_wrapper(str(path))["launches"] if la["kernel"] == kernel)
+
+    whole = launch()
+    assert whole["args"][0] == "buf0" and whole["widths"][0] == 2048
+    view = "reinterpret_tensor(buf0, (s72, 8, 64), (512, 64, 1), 0)"
+    _edit(ind, old, old.replace("buf0", view))
+    assert launch()["args"][0] == view and launch()["widths"] == [512, *whole["widths"][1:]]
 
 
 def test_batched_copy_flushes_are_no_calls(art: Path, tmp_path: Path) -> None:
@@ -148,7 +198,9 @@ def test_add_norm_storing_its_rows_twice_binds_its_definition_per_buffer(art: Pa
     srcs = [(n, s) for p in sorted((art / "inductor").rglob("*.py")) for n, s in T.kernel_sources(p.read_text()).items()]
     name, src = next((n, s) for n, s in srcs if T.recognize(n, s, T.launch_config(configs, s), cc=CC)["template"] == "ADD_NORM")
     cfg = T.launch_config(configs, src)
-    store = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src).group(1)
+    stored = re.search(r"\n( +tl\.store\(out_ptr1 \+ [^\n]*\n)", src)
+    assert stored is not None
+    store = stored.group(1)
     twice = (src.replace("'out_ptr1': '*bf16'", "'out_ptr1': '*bf16', 'out_ptr2': '*bf16'", 1)
              .replace("out_ptr1, xnumel", "out_ptr1, out_ptr2, xnumel", 1).replace(store, store + store.replace("out_ptr1", "out_ptr2"), 1))
     one, two = T.recognize(name, src, cfg, cc=CC), T.recognize(name, twice, cfg, cc=CC)

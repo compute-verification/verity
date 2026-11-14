@@ -5,16 +5,18 @@ from __future__ import annotations
 
 import hashlib
 import json
+from typing import Any
 
 import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 
-from tests.properties import tp4_nccl_tree_replay as X  # noqa: E402
 from verity.definitions.registry import tp_allreduce as T  # noqa: E402
 from verity.definitions.registry import tp_allreduce_check as K  # noqa: E402
-from verity_vllm.properties.record import DIR, PropertyRecord  # noqa: E402
+
+from tests.properties import tp4_nccl_tree_replay as X  # noqa: E402
+from verity_vllm.records.property_record import DIR, PropertyRecord  # noqa: E402
 
 N = 8192
 NCCL_ENV = {**X.BI_PINS, "NCCL_P2P_DISABLE": "1", "NCCL_LAUNCH_MODE": "GROUP", "NCCL_NTHREADS": "1"}
@@ -38,9 +40,9 @@ def _capture(tmp_path, *, flags=None, gpu=None, nccl_env=None, flip=None, stale=
     d.mkdir()
     (d / "topology.json").write_text(json.dumps({"tp": 4, "env_flags": flags if flags is not None else {"VLLM_BATCH_INVARIANT": "1"}}))
     (d / "versions.json").write_text(json.dumps({"gpu": gpu or {"name": "NVIDIA RTX PRO 6000 Blackwell Server Edition", "cc": "12.0", "sms": 188}}))
-    rows = {r: [] for r in range(X.WORLD)}
+    rows: dict[int, list[dict[str, Any]]] = {r: [] for r in range(X.WORLD)}
     for step, Ms in STEPS.items():
-        dumps = {r: {"step": step, "part": [], "out": []} for r in range(X.WORLD)}
+        dumps: dict[int, dict[str, Any]] = {r: {"step": step, "part": [], "out": []} for r in range(X.WORLD)}
         for k, M in enumerate(Ms):
             parts = ((rng.standard_normal((X.WORLD, M, N)) * 0.05).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
             out = K.nccl_tree_rows(parts, (0, 1, 2, 3))

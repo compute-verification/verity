@@ -45,6 +45,8 @@ KINDS: dict[str, str] = {
     "run-files/v1": "the files a result.json pointed at, as one tree",
     "run-record/v1": "every file of a run dir (stdout.log, stderr.log, launcher.log, job.json, status.json, outputs; markers excluded) as one "
                      "tree, named by its attempt as outputs.run_record: the run's custody on the remote (store.custody); meta {run_id, files, bytes}",
+    "run-file/v1": "one file of a run's out/, put by the run's runner while its workload ran (`research run-preserve`, "
+                   "store.run_preserve): payload file; meta {run_id, path (run-dir relative)} over whatever the workload's --meta gave",
     "node-data/v1": "a path of a node's working set, preserved by `research keep --preserve` (research.retention): payload its file or "
                     "tree; meta {path, node, owner}; its retention record names the id",
     "labels-backup/v1": "a tarball of the local labels/ directory (every assertion file) -- interim durability until push carries labels; "
@@ -64,11 +66,11 @@ KINDS: dict[str, str] = {
     "lean-review/v1": "a `check.py --update` run's audit.json (tools/verity/lean): per package its review, statement_changes, and the guarantees "
                       "and reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> may name it, "
                       "as a record nothing waits on",
-    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/flock/agreement/upstream-build.sh): "
+    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/proofs/flock/prover/agreement/upstream-build.sh): "
                                "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
-                               "binaries}, pinned by verity/protocols/flock/agreement/upstream.json",
+                               "binaries}, pinned by verity/protocols/proofs/flock/prover/agreement/upstream.json",
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
-                                 "{arts}, pinned by verity/protocols/flock/agreement/upstream.json",
+                                 "{arts}, pinned by verity/protocols/proofs/flock/prover/agreement/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "circuit-check-report/v1": "a `circuit-check --out` report (tools/verity/circuit_check): payload file circuit-check.json; meta "
                                "{targets, failures}; a subcircuit catalog's counts cite its targets",
@@ -102,16 +104,19 @@ KINDS: dict[str, str] = {
     "vllm-commit-plan/v1": "one Commit's plan, derived on CPU before the GPU is held (verity_vllm.pipeline.commit_plan): payload tree = "
                            "plan/commit_plan.json (the key and the producer facts) + the plan stage's logs; meta {row, program_digest, "
                            "plan_key, stage_status}; refs.build = the vllm-build/v1 planned from",
-    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, control/tokens.json, capture/tokens.json, "
-                            "global_match.json, versions.json (never the raw capture planes); meta {row, program_digest, "
-                            "match_ok?}; refs.build = the vllm-build/v1 consumed",
+    "vllm-match-record/v1": "one Match account: payload tree = instances.jsonl, global_match.json, versions.json (never the raw "
+                            "capture planes, nor the token records, which hold the requests' and served token ids and stay on the "
+                            "node); meta {row, program_digest, match_ok?}; refs.build = the vllm-build/v1 consumed",
     "vllm-verdict/v1": "one Commit verdict (a Verity check/verdict, represented durably): payload tree = commit_verdict.json + "
-                       "sampled_replay_p*.json + commit_summary.json (compat); meta {row, verdict, ...}; refs.build, refs.match",
+                       "commit_summary.json (compat), never a C2 replay's facts of record (sampled_replay*.json, served tokens), "
+                       "which stay on the node; meta {row, verdict, ...}; refs.build, refs.match",
     "vllm-replay-slim/v1": "a decided CPU replay's slim keep (verity_vllm.pipeline.cpu_replay.keep): payload tree = slim.json + the slim "
                            "committed store (only the leaves and Merkle nodes its picks and linkage opened) + weights tree + binding map + "
-                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}",
-    "execution-evidence/v1": "application evidence of one stage's execution (timeline.jsonl, schedule / arrival facts) — not "
-                             "telemetry; meta {row, stage}",
+                           "context; meta {row, stage, run_root, program_digest, picked, bytes, dump_sha256, commit_pass}. No stage "
+                           "publishes one any more: a keep holds clear values (opened committed values with their salts, the "
+                           "requests and served tokens, opened weights) and stays on the node",
+    "execution-evidence/v1": "application evidence of one stage's execution (stages.txt, admission.json) — not telemetry, and "
+                             "never when or where each process ran (timeline.jsonl, topology.json stay on the node); meta {row, stage}",
     "advice-encoding/v1": "network accounting's advice coded under registered codebooks, bits per certifier window "
                           "(benchmarks/network_e2e/encodings/measure.py): payload tree = table.json (per trace, window, "
                           "subject and code, and the summary) + table.md + codebook.json (+ codebooks/fold-K.json, each "
@@ -133,7 +138,7 @@ KINDS: dict[str, str] = {
                                     "adversary's choices in raw/adversary.*.jsonl), and compare/<sampling>/ (compare.json, "
                                     "COMPARE.md: whether every request's output ids match the honest trace's, bits per "
                                     "request, the first divergence)",
-    "challenger-ledger/v1": "the auditor host's challenger ledger (verity/composite/device/live_challenger/auditor.py, publish.sh): payload "
+    "challenger-ledger/v1": "the auditor host's challenger ledger (verity/protocols/compose/device/live_challenger/auditor.py, publish.sh): payload "
                             "windows.jsonl, one signed open entry a window and one end entry a session; meta {host, entries, sha512, "
                             "key_sha512}",
     "challenger-ledger/v2": "the auditor host's challenger ledger once it holds v2 entries (one window a Commit root, its prover "
@@ -152,11 +157,11 @@ KINDS: dict[str, str] = {
     "challenger-key/v1": "the auditor host's challenger signing key, published by infra apart from the ledger so that a verifier pins "
                          "it from here: payload one JSON file {host, instance, pubkey (hex), pubkey_sha512, W, H, pinned, valid_from_utc, "
                          "retired [{pubkey_sha512, retired_utc, sessions}]}; label challenger-key current|retired",
-    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/poub/device/live_verifier/host.py, vy-auditor-1): "
+    "verifier-run/v1": "one run of the verifier host's PoUB verifier (verity/protocols/accounting/poub/device/live_verifier/host.py, vy-auditor-1): "
                        "payload tree = request.json + out/ (verifier.json, challenger/, verifier.log, registry.json, "
                        "transcripts/*.json.gz + SHA256SUMS) + end.json, and replay/ once replayed; meta {run, by, pinned, peer, "
                        "period, requested_utc, end {rc, ended_utc}, replay}",
-    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step (archive/examples/h200/m3bundle.py build), what "
+    "m3-drawn-blocks/v1": "one live draw's proof blocks of a registered H200 step, what "
                           "DRAWPROVE proves: payload tree = step-registration.json, receipt.json, draw.json, summary.json and "
                           "blocks/<g>/ (window/, a one-member window registered subset:1, and bundle.json + bundle.bin, a "
                           "drawn-unit-bundle/v2); meta {lane, registration, registration_art, program, coin_session, runs, branch, "

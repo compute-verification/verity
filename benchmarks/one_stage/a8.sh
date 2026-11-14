@@ -11,14 +11,18 @@
 #      A8_NO_AUDIT=1 (a8.py's --no-audit: the honest statement staged and the cost points only)
 # Kept in $OUT/a8: a8's records and logs, the public files and everything the verifier received; never a prover's file
 # (inst-*) nor a circuit (its pin is kept), nor a session's archive.
+# The window is over a registered store of a few thousand blocks. Lean holds every opening's proof, everything the
+# verifier received is scanned for the sampled proof blocks' bytes, and the cost points are the prover's cost per opening.
+# a8_gpu.sh takes the cost points on sm_120 (`flock-circuit prove --zk --gpu`), as a GPU host job, and a8_cost.py reads a
+# run's sessions into the one cost model's observations (benchmarks/sampling_plan).
 set -uo pipefail
 export HZ_CONFIGS=a8 HZ_MEM_GB=${A8_MEM_GB:?}
 if [ -n "${A8_CACHE:-}" ] && mkdir -p "$A8_CACHE" 2>/dev/null && [ -w "$A8_CACHE" ]; then export HZ_CACHE=$A8_CACHE; fi
 source benchmarks/pouw/hidden_zk/job.sh
 export PATH=$HOME/.elan/bin:$PATH
-export PYTHONPATH=$SRC:$SRC/verity/protocols/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
+export PYTHONPATH=$SRC:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/adapters/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 setup
-(cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 ARMS=${A8_ARMS:-fw,nofw}
 if [[ ,$ARMS, == *,fw,* ]]; then

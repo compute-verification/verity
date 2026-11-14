@@ -21,7 +21,7 @@ from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import NOT, OR, ZERO, compress_columns, or_reduce
 from verity.circuits.boolean.gather import gather
 from verity.circuits.defs import bind
-from verity.definitions.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import elementwise as EW
 from verity.circuits.types import Array
 from verity.definitions.registry import dsv4_decode_indices as X
 

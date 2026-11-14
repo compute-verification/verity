@@ -1,6 +1,7 @@
 # Lifecycle: the onsite and remote composites, stepped through
 
-A minimal worked example of the two composite protocols, `verity/onsite/v0` and `verity/remote/v0`, run through the
+A minimal worked example of onsite, `verity/onsite/v0`, and of remote's H1 development executable
+`verity/remote/v0` (H1's period as its work, which no configuration names), run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
 is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the demo writes the smallest
 version of it in `lifecycle.py`, and nothing under `verity/` or `security/` changes.
@@ -16,13 +17,13 @@ uv run --directory demos/lifecycle pytest tests/test_lifecycle.py     # honest, 
 (developer, verifier); `onsite.py` adds the network certifier, the memory challenger and the onsite verifier's subprotocols;
 `remote.py` is the two-party deployment; `tests/test_lifecycle.py` runs both, honest and with every deviation.
 
-**The proofs are a stand-in**, answering under the id both composites run for integrity, the one-stage audit
-(`Spot.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
+**The proofs are a stand-in**, answering under the id each composite runs for integrity (`lifecycle.SAMPLED`), in both
+sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`). `prove(statement, witness) -> proof` returns the
+sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
-It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
-sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
-server replace it (`verity/protocols/flock/prover/`, `verity/protocols/flock/verifier/`). Everything else is the repository's own code, as
-(b) says.
+It is sound for the example and not zero-knowledge, though its answer carries that id; Flock's zero-knowledge proofs
+behind the ZK server replace it (`verity/protocols/proofs/flock/prover/`, `verity/protocols/proofs/flock/verifier/`). Everything else is the repository's
+own code, as (b) says.
 
 ## Terms
 
@@ -36,7 +37,7 @@ server replace it (`verity/protocols/flock/prover/`, `verity/protocols/flock/ver
 
 ## (a) The lifecycle as run
 
-Every party is a sans-IO party of the deployment layer (`verity/configuration/deploy/`), run by `runtime.run` in simulated mode:
+Every party is a sans-IO party of the deployment layer (`verity/runtime/`), run by `runtime.run` in simulated mode:
 in one process, on seeded coins and virtual clocks, with the manifest's channels and latencies. The model is two
 4x4 int8 matmuls (`forward`: y = sat(W2 relu(W1 x) >> 7) >> 7) with a 16-bit running state; one request is one proof
 block, the Boolean Definition `LifecycleRequest` (5,200 AND gates), and an execution block is `LifecycleBlock(N)`: N units
@@ -154,19 +155,19 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `register`, `check_baseline` | developer, verifier | product, theta, B, state0 | `Baseline` (roots and B's descriptor) | missing: written in the demo |
 | `operate` | developer | requests, theta, state, tape | `Served` | the integration's (here the toy model) |
 | `declare`, `check_declaration` | developer, verifier | advice, served values, layout, previous record | `Declaration`, `Block` | missing: written in the demo |
-| `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/protocols/spot/verifier/one_stage/registered.py` over `verity.commitments.hm96` |
+| `commit`, `opens`, `committed` | developer, verifier | rows and salts; an opening | a root; whether it opens | `verity/protocols/proofs/spot/verifier/one_stage/registered.py` over `verity.commitments.hm96` |
 | `UNIT`, `BLOCK`, `block_digest(n)` | B | — | Boolean Definitions; a Program digest | `verity.circuits` (`boolean.trace`, `defs.CompositeDefinition`, `codec`) |
 | `evaluate_unit` | the stand-in verifier | theta, state, x | y, state′ | `verity.circuits.evaluation.evaluate_words` |
-| `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/protocols/spot/device/coins.py` (`draw_first`), `verity/protocols/pouw/verifier/window.py` (`bucket`, `k_prime`) |
+| `draw(coins, block)`, `draw_size` | verifier | live coins | the sampled proof blocks | `verity/protocols/proofs/spot/device/coins.py` (`draw_first`), `verity/protocols/accounting/pouw/verifier/window.py` (`bucket`, `k_prime`) |
 | `prove(statement, witness)` | ZK server | a `Statement`, the openings | a proof | STAND-IN for Flock |
 | `verify(statement, proof)` | verifier | a `Statement`, a proof | each check's reason, or none | STAND-IN for Flock's verifier |
 | `spot`, `pouw_window`, `inference_only`, `OnsiteVerifier.answers` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as per-declaration functions: written in the example |
-| `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/protocols/remote/verifier/composition/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
+| `compose(protocol, answers)` | verifier | the subprotocols' outcomes | the composite verdict and binding | `verity/protocols/compose/verifier/lean/tests/reference.py` (`verdict`, `bind`, `ONSITE`, `REMOTE`) |
 | `inference_only` | verifier | one declaration's checks, view, report | `Core.Protocol` outcomes | missing as a per-declaration function: written in the example |
 | `account(baseline, declarations, lines, layout)` | verifier | the period's records and verdicts | period verdict, credit, bound, projections, scaling | missing: written in the example |
 | `Certifier`, `certified(I, view, direction)` | network certifier | frames seen | a signed view | `verity/commitments/crypto/lms.py` (`certificate_message`, `sign_at`, `verify`) |
 | `Challenger`, `theta_reach(layout, store)`, `label` | memory challenger, verifier | an open round; the layout | PoUS, bandwidth and wipe report; rate and latency | missing: written in the example (the wipe a STAND-IN for `verity/wipe/v0`) |
-| `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/configuration/deploy/` (`party`, `manifest`, `runtime.run`) |
+| `Developer`, `Verifier`, manifests | runtime | params, capabilities, messages | actions | `verity/runtime/` (`party`, `manifest`, `runtime.run`) |
 
 ## (c) What this exposes
 
@@ -230,6 +231,6 @@ In a noun-based layout, each part of the demo goes where its noun is:
 - `verity/commitments`: `commit`, `opens`, the row and frame commitments (today split between `one_stage.registered`,
   `verity.commitments` and the certifier's own).
 - `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the ZK server.
-- `verity/protocols/onsite` and `verity/protocols/remote`: the parties and manifests, each composite's per-declaration
-  subprotocol checks and `account`, over the composition's rule.
+- `verity/protocols/compose/verifier/onsite` and `verity/protocols/compose/verifier/remote`: the parties and manifests,
+  each composite's per-declaration subprotocol checks and `account`, over the composition's rule.
 - The model, its load and `operate` stay with the integration that serves them (`adapters/`).

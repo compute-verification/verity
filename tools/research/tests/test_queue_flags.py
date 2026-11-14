@@ -36,12 +36,14 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert DriveFlags.parse("restack_jobs = 1\n").restack_jobs == 1
     assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
+    assert DriveFlags.parse('lowrisk_excludes = ["*.lean", "verity/", "verity/__init__.py"]\n').lowrisk_excludes == (
+        "*.lean", "verity/", "verity/__init__.py")
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
                         "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                         "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
                         "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= verdict_carry=off bottom_ring=@ci "
-                        "bottom_wait_min=45 signed_verdicts=False restack_jobs=3")
+                        "bottom_wait_min=45 signed_verdicts=off restack_jobs=3")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'verdict_carry = "{v}"\n').verdict_carry for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]
@@ -72,6 +74,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["/verity/core/"]', "lowrisk_excludes = ['/verity/core/']: a non-empty list"),
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
+                      ('lowrisk_excludes = ["x/../y.py"]', "lowrisk_excludes = ['x/../y.py']: a non-empty list"),
                       ("bottom_ring = []", "bottom_ring = []: a non-empty list of handles, each `@` and its lower-case name, "
                                            "as [\"@ci\"]"),
                       ('bottom_ring = "@ci"', "bottom_ring = '@ci': a non-empty list of handles"),
@@ -167,19 +170,20 @@ def test_land_into_takes_checked_or_main_and_only_drives_app_pushes_checked(tmp_
 
 
 def test_the_low_risk_lane_excludes_what_runs_with_the_control_pods_or_every_agents_credentials():
-    """A change to infra, the research tool, the agent guard and its hooks, or the environment runs on the control pod or on
-    every agent once it is on main, so it lands only on a review, never on a ready mark alone."""
+    """A change to infra, the research tool, the move scripts and maps (which the loop runs, and certifies a move against), the
+    agent guard and its hooks, or the environment runs on the control pod or on every agent once it is on main, so it lands
+    only on a review, never on a ready mark alone."""
     import tomllib
 
     root = Path(__file__).resolve().parents[3]
     excludes = tomllib.loads((root / "tools/verity/check/drive.toml").read_text())["lowrisk_excludes"]
-    for path in ("infra/", "tools/research/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
+    for path in ("infra/", "tools/research/", "tools/move/", "tools/agent-guard/", ".cursor/", "pyproject.toml", "uv.lock"):
         assert path in excludes, f"drive.toml's lowrisk_excludes lacks {path}"
 
 
 #: drive.toml's `lowrisk_excludes`
 EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-manifest.json", "TRUSTED.sha256",
-            "verity/core/", "verity/circuits/", "verity/definitions/ops/", "verity/definitions/kernels/", "verity/commitments/", "verity/commitments/crypto/",
+            "verity/core/", "verity/circuits/", "verity/circuits/ops/", "verity/circuits/kernels/", "verity/commitments/", "verity/commitments/crypto/",
             "verity/commitments/randomness/")
 
 
@@ -187,11 +191,11 @@ EXCLUDES = ("*.lean", "lean-audit.json", "lakefile.*", "lean-toolchain", "lake-m
     (["tools/research/src/research/landing.py", "README.md"], True),
     (["adapters/vllm/verity_vllm/serve.py", "verity/ml/flock/x.py", "verity/ml/definitions/y.py"], True),
     (["security/Proofs/Core/X.lean"], False),
-    (["docs/a.md", "verity/protocols/pous/lean/lean-audit.json"], False),
-    (["verity/protocols/flock/verifier/lakefile.toml"], False),
+    (["docs/a.md", "tools/pous_grader/lean-audit.json"], False),
+    (["verity/protocols/proofs/flock/verifier/lakefile.toml"], False),
     (["x/lean-toolchain"], False), (["x/lake-manifest.json"], False), (["x/TRUSTED.sha256"], False),
     (["verity/core/claims.py"], False),
-    (["verity/definitions/ops/add.py"], False), (["verity/definitions/kernels/k.cu"], False),
+    (["verity/circuits/ops/add.py"], False), (["verity/circuits/kernels/k.cu"], False),
     (["verity/commitments/c.py"], False), (["verity/commitments/crypto/c.py"], False), (["verity/commitments/randomness/r.py"], False),
     (["verity/ml/circuitsx/a.py"], True),                   # a directory entry is a whole path component
     ([], False),                                            # nothing to land
@@ -202,3 +206,13 @@ def test_the_class_is_no_file_drive_toml_excludes(files, low):
 
 def test_no_excludes_is_no_low_risk_change():
     assert not lowrisk(["README.md"], ())
+
+
+def test_an_entry_with_a_slash_before_its_end_keeps_that_one_file_off():
+    """A package's `__init__.py` runs on every import below it, so it is kept off by its path, without the rest of its
+    directory; such an entry names no other file of that name, and no path it only begins or ends."""
+    excludes = ("verity/protocols/__init__.py", "verity/channel.py")
+    for f in excludes:
+        assert not lowrisk(["README.md", f], excludes), f
+    assert lowrisk(["verity/protocols/accounting/pouw/__init__.py", "verity/protocols/reporting.py", "adapters/vllm/channel.py",
+                    "x/verity/channel.py", "verity/channel.pyc"], excludes)

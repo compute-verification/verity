@@ -34,7 +34,7 @@ ALLOWED_EXTRA = (
 #: soundness's detail behind its named assumptions (its ``ASSUMPTIONS.md`` states them in full) and the network certifier's sections (``protocol/<topic>.md``, each
 #: keeping its heading in ``PROTOCOL.md`` with a one-line pointer).
 SPLIT_DOCUMENT_DIRS = {"security/Proofs/Flock/Soundness/assumption-notes/": "security/Proofs/Flock/Soundness/ASSUMPTIONS.md",
-                       "verity/protocols/certifier/verifier/protocol/": "verity/protocols/certifier/verifier/PROTOCOL.md"}
+                       "verity/protocols/accounting/certifier/verifier/protocol/": "verity/protocols/accounting/certifier/verifier/PROTOCOL.md"}
 #: Generated output, by where it sits or what it is: no tracked path has one of these directories, suffixes or stamps.
 GENERATED_DIRS = frozenset({"reports", "results", "renders", "previews", "plots", "evidence", "assets", "outputs"})
 GENERATED_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".pdf", ".html", ".htm"})
@@ -64,7 +64,7 @@ CODE_SUFFIXES = SOURCE_SUFFIXES | {".lean", ".cuh", ".cpp", ".md"}
 #: manifest (append-only; most of its readers don't read the sibling manifests yet), the retired-terms lint's per-file list
 #: (shrink-only: a rename of a retired term prunes it). Each is capped at its size rounded up
 #: to 64 KiB, so none can grow past that and nothing joins them silently. A test fixture over BLOB_LIMIT is registered in
-#: fixtures/artifacts.json instead and fetched (`research data fetch-fixtures`).
+#: artifacts.json instead and fetched (`research data fetch-fixtures`).
 ALLOWLIST = {
     "benchmarks/census/workloads.json": 384 * 1024,
     "adapters/vllm/tests/lint/allowlists/mypy.json": 448 * 1024,  # shrink-only: the integration's mypy errors
@@ -72,8 +72,7 @@ ALLOWLIST = {
     "tests/lint/allowlists/repo_retired_terms.json": 512 * 1024,
     "tools/research/src/research/store/moves.json": 320 * 1024,  # the paths of every layout move: it only grows
     "adapters/vllm/tests/lint/allowlists/ruff_vllm.json": 512 * 1024,  # shrink-only: ruff's findings under vLLM's rules
-    "adapters/vllm/verity_vllm/check/tables/B0-divergence-20260907T1604Z/cos_sin_cache.npy": 1088 * 1024,
-    "verity/definitions/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
+    "verity/circuits/ops/tables/mufu_tanh_sm89.xzblocks": 448 * 1024,
 }
 AUDIT_RECORD = "lean-audit.json"
 #: A Lean package's audit record must stay in Git, since the audit compares the build against it and `--update`'s diff is
@@ -85,7 +84,7 @@ AUDIT_RECORD_LIMIT = 6 * 1024 * 1024
 #: AUDIT_RECORD_LIMIT, so counting them here would make every new guarantee spend the fixtures' budget. 48 MiB:
 #: the E2E demo's fixtures took the tree to 40.1 MiB; register the next large one rather than raising it again.
 DATA_BUDGET = 48 * 1024 * 1024
-REGISTRY = "fixtures/artifacts.json"
+REGISTRY = "artifacts.json"
 
 
 def _tracked() -> list[str]:
@@ -184,7 +183,7 @@ def test_markdown_over_cap_says_by_how_much_and_where_detail_goes(monkeypatch) -
     for p in (soundness + "ASSUMPTIONS.md", soundness + "assumption-notes/e2e-checklist.md"):
         assert markdown_over_cap(p, MD_SIZE_CAP + 7).endswith(f", 7 bytes over; move detail to one file per entry under {soundness}assumption-notes/")
     assert markdown_over_cap(soundness + "README.md", MD_SIZE_CAP + 1).endswith("the notes store (cite it by note:<id>)")
-    certifier = "verity/protocols/certifier/verifier/"
+    certifier = "verity/protocols/accounting/certifier/verifier/"
     assert markdown_over_cap(certifier + "PROTOCOL.md", PROTOCOL_SIZE_CAP + 1).endswith(f"one file per entry under {certifier}protocol/")
     assert markdown_over_cap(certifier + "protocol/calibration.md", MD_SIZE_CAP + 1).endswith(f"{certifier}protocol/")
     assert markdown_over_cap(".agents/skills/x/SKILL.md", SKILL_SIZE_CAP) is None
@@ -217,9 +216,8 @@ def test_markdown_size_caps() -> None:
     assert not offenders, "maintained documents are small:\n" + "\n".join(offenders)
 
 
-#: Test files that need torch, a GPU or cargo, and were never part of `check`; and the tests of archived code, which go to
-#: `archive/` with it and which no suite runs.
-UNSUITED_TEST_DIRS = ("verity/definitions/kernels/", "archive/")
+#: Test files that need torch, a GPU or cargo, and were never part of `check`.
+UNSUITED_TEST_DIRS = ("verity/circuits/kernels/",)
 #: what pytest collects from a module: a function or a class of its own named as a test
 _DEFINES_A_TEST = re.compile(r"^(?:async\s+)?def\s+test|^class\s+Test", re.M)
 
@@ -371,7 +369,6 @@ def test_tracked_data_within_budget() -> None:
 #: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
 #: outputs or archives matches.
 IGNORED_TRACKED = frozenset({
-    "adapters/vllm/tests/acquire/fixtures/served_llama.tar.gz",
     "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
     "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
 })

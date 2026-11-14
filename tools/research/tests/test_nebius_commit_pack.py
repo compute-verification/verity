@@ -357,7 +357,7 @@ def test_the_pack_hold_sends_the_spool_out_deletes_unstarted_pods_and_drains_at_
     assert [a for a, _ in dispatch.calls if a[0] == "delete"] == [("delete", "job", "pack-running", "--wait=false")]
 
 
-def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch, tmp_path, monkeypatch):
+def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_limit(dispatch, tmp_path, monkeypatch):
     """A pod that can claim nothing idles 3 min and exits, a GPU held for no Commit."""
     monkeypatch.setenv("PACK_BUNDLE_GLOBS", f"{tmp_path}/cov/*/commit/replay_bundle_p*")
     monkeypatch.setenv("PACK_BUNDLE_CAP_GB", "100")
@@ -389,7 +389,9 @@ def test_a_pack_pod_starts_only_when_a_queued_entry_fits_the_bundle_cap(dispatch
 def test_no_pack_pod_starts_or_claims_from_1210z_and_none_runs_past_1235z(monkeypatch, path, drain):
     before = dict(os.environ)
     mod = _load(NEBIUS / path, f"windows_{drain[1]}", monkeypatch)
-    assert dict(os.environ) == before                    # on node 1 its dispatch.env would reach the next tests
+    after = dict(os.environ)
+    differ = sorted(k for k in before.keys() | after.keys() if before.get(k) != after.get(k))
+    assert differ == []                                  # on node 1 its dispatch.env would reach the next tests
     day = 1790812800                                     # 2026-10-01T00:00:00Z
 
     def at(h: int, m: int) -> float:
@@ -471,7 +473,7 @@ def test_a_fault_in_one_client_stops_the_others_and_claims_nothing_more(pilot, t
     assert (spool / "queue" / "c-later.json").exists()
 
 
-def test_no_claims_at_the_disk_pause_and_no_b8_while_bundles_pass_the_cap(pilot, tmp_path):
+def test_no_claims_at_the_disk_pause_and_no_b8_while_bundles_pass_the_limit(pilot, tmp_path):
     spool = tmp_path / "spool"
     _queue(spool, "b8", "exit 0", LLAMA_B8)
     _queue(spool, "b1", "exit 0", LLAMA_B8.replace("__b8__", "__b1__"))
@@ -481,25 +483,25 @@ def test_no_claims_at_the_disk_pause_and_no_b8_while_bundles_pass_the_cap(pilot,
     bundle = tmp_path / "cov" / "row" / "commit" / "replay_bundle_p1"
     bundle.mkdir(parents=True)
     (bundle / "part").write_bytes(b"x" * 10)
-    pilot.BUNDLE_CAP = 5
+    pilot.BUNDLE_LIMIT = 5
     assert pilot.main() == 0
     assert (spool / "results" / "b1.json").exists() and (spool / "queue" / "b8.json").exists()
 
 
-def test_the_bundle_cap_counts_the_commits_running_and_the_candidate(pilot):
+def test_the_bundle_limit_counts_the_commits_running_and_the_candidate(pilot):
     def e(row):
         return {"env": {"ROW": row}}
     long_b8 = e(LLAMA_B8.replace("__i256__o32__", "__i1024__o128__"))
     short_b8, b1 = e(LLAMA_B8), e(LLAMA_B8.replace("__b8__", "__b1__"))
     assert pilot.bundle_est(long_b8) == pilot.BUNDLE_EST and pilot.bundle_est(short_b8) == pilot.BUNDLE_EST / 4
-    n = int(pilot.BUNDLE_CAP // pilot.BUNDLE_EST)
+    n = int(pilot.BUNDLE_LIMIT // pilot.BUNDLE_EST)
     assert pilot.bundle_ok(long_b8, 0, [long_b8] * (n - 1)) and not pilot.bundle_ok(long_b8, 0, [long_b8] * n)
-    assert pilot.bundle_ok(short_b8, 0, [short_b8, short_b8]) and not pilot.bundle_ok(short_b8, int(pilot.BUNDLE_CAP), [])
-    assert pilot.bundle_ok(b1, int(pilot.BUNDLE_CAP) * 2, [long_b8, long_b8])
+    assert pilot.bundle_ok(short_b8, 0, [short_b8, short_b8]) and not pilot.bundle_ok(short_b8, int(pilot.BUNDLE_LIMIT), [])
+    assert pilot.bundle_ok(b1, int(pilot.BUNDLE_LIMIT) * 2, [long_b8, long_b8])
 
 
-def test_a_full_pod_of_b8_1k_commits_fits_the_cap_with_each_models_measured_bundle(pilot):
-    """At 150 GB and 120 GB for every model, one B8 1k Commit runs at a time: the grid's bundles measure 25-57 GB, and the cap
+def test_a_full_pod_of_b8_1k_commits_fits_the_limit_with_each_models_measured_bundle(pilot):
+    """At 150 GB and 120 GB for every model, one B8 1k Commit runs at a time: the grid's bundles measure 25-57 GB, and the limit
     would hold small Commits back with most of node 1's GPUs empty."""
     def e(model):
         return {"env": {"ROW": f"{model}__bf16__rtxpro6000__tp1__b8__i1024__o128__mixed__greedy__bi-eager"}}

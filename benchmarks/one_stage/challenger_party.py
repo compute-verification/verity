@@ -1,5 +1,5 @@
 """The challenger's host on this machine: the ``host`` capability of sampled proofs' challenger party
-(`verity.protocols.spot.verifier.parties`).
+(`verity.protocols.proofs.spot.verifier.parties`).
 
 `Host(root, main).start()` makes a development challenger host (`a5_coins.Local`: the auditor host's own reserve, admit
 and run, then `serve.py`, with no tunnel) under ``root``, which must not exist yet: its LMS key, its signed ledger and its
@@ -13,6 +13,7 @@ Clients (the verifier's audit: `a5_coins.Loopback`, ``records_audit --challenger
 request, one JSON line each way:
 
 ~~~text
+{"op": "key"} -> {"key": {"W", "H", "public"}}                                       the host's key, before any session
 {"op": "open", "root": HEX, "layout": [[label, count], ...], "scheme": S, "minutes": M}
     -> {"address": "HOST:PORT", "secret": HEX, "commitment": HEX, "session": ID}     the session's challenger, signed
 {"op": "finish", "dest": DIR}
@@ -57,6 +58,8 @@ class Party:
         if not isinstance(req, dict) or not isinstance(req.get("op"), str):
             return {"refused": "a request is a JSON object with its op"}
         op = req["op"]
+        if op == "key":
+            return {"key": self.local.key.to_json()}
         if op == "open":
             root = req.get("root")
             if self.open_root is not None:

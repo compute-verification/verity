@@ -42,10 +42,18 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.commit import capture_map as CM
-from verity_vllm.config import CHECKPOINTS, MANIFESTS, ROOT, UsageError, option, workload_files
-from verity_vllm.engine.profiles import dense_generic, family_facts as FF
+from verity_vllm.config import (
+    CHECKPOINTS,
+    MANIFESTS,
+    ROOT,
+    UsageError,
+    option,
+    workload_files,
+)
+from verity_vllm.engine.profiles import dense_generic
+from verity_vllm.engine.profiles import family_facts as FF
+from verity_vllm.pipeline import circuit_db as RC
 from verity_vllm.pipeline import config_record as CR
 
 MARKER = "__models__"
@@ -68,11 +76,11 @@ def marked(path: Path, root: Path = ROOT) -> tuple[str, ...]:
         return ()
     for node in ast.parse(src).body:
         if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == MARKER for t in node.targets):
-            v = node.value
-            if not (isinstance(v, (ast.Tuple, ast.List)) and v.elts and all(isinstance(e, ast.Constant) and isinstance(e.value, str)
-                                                                               for e in v.elts)):
+            elts = node.value.elts if isinstance(node.value, (ast.Tuple, ast.List)) else []
+            names = tuple(e.value for e in elts if isinstance(e, ast.Constant) and isinstance(e.value, str))
+            if not names or len(names) != len(elts):
                 raise ValueError(f"{path.relative_to(root)}:{node.lineno}: {MARKER} is a tuple of HF repo ids")
-            return tuple(e.value for e in v.elts)
+            return names
     return ()
 
 
@@ -109,9 +117,16 @@ def checkpoints() -> list[dict[str, Any]]:
     return json.loads(CHECKPOINTS.read_text())["checkpoints"]
 
 
+def _pinned_repo(capture_map: dict[str, Any]) -> str | None:
+    """The repo of the checkpoint a capture map pins; None for a map that pins none."""
+    pins = capture_map.get("pins")
+    checkpoint = pins.get("checkpoint") if pins else None
+    return checkpoint.get("repo") if checkpoint else None
+
+
 def capture_maps(repo: str | None = None) -> list[dict[str, Any]]:
     maps = [CM.load(p) for p in sorted(CM.MAPS.glob("*.json"))]
-    return [m for m in maps if repo is None or ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == repo]
+    return [m for m in maps if repo is None or _pinned_repo(m) == repo]
 
 
 def known() -> set[str]:
@@ -167,12 +182,15 @@ def _lines(path: Path) -> int:
 
 
 def _rules(path: Path) -> list[str]:
-    out = []
+    out: list[str] = []
     for n in ast.walk(ast.parse(path.read_text())):
-        if isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "RuleInfo" and n.args \
-                and isinstance(n.args[0], ast.Constant):
-            v = n.args[1].value if len(n.args) > 1 and isinstance(n.args[1], ast.Constant) else None
-            out.append(f"{n.args[0].value}_v{v}" if v is not None else n.args[0].value)
+        if not (isinstance(n, ast.Call) and getattr(n.func, "id", getattr(n.func, "attr", None)) == "RuleInfo" and n.args):
+            continue
+        name, version = n.args[0], n.args[1] if len(n.args) > 1 else None
+        if isinstance(name, ast.Constant):
+            rule: Any = name.value
+            v: Any = version.value if isinstance(version, ast.Constant) else None
+            out.append(f"{rule}_v{v}" if v is not None else rule)
     return out
 
 
@@ -187,12 +205,14 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
     if fam is None:
         return None
     others = sorted({c["repo"] for c in checkpoints() if c["repo"] != repo and c.get("role") and _model_type(c["role"]) == model_type})
-    params = sum(len(v) for k, v in (fam.get("params") or {}).items() if isinstance(v, dict))
+    groups = fam.get("params")
+    params = sum(len(v) for _, v in groups.items() if isinstance(v, dict)) if groups else 0
     return {"model_type": model_type, "arch": fam["arch"], "facts": len(fam["facts"]), "params": params, "rules": fam["rules"],
             "shared_with": others}
 
 
 def _profile(role: str | None, world: int, files: set[str], config: tuple[dict[str, Any] | None, str]) -> dict[str, Any]:
+    # Here, not at the module's head: the package adds its finder to `sys.meta_path` when it is first imported.
     from verity_vllm.observe.fold import profiles
     from verity_vllm.observe.fold.profiles import generic
     cfg, source = config
@@ -276,8 +296,8 @@ def render(inv: dict[str, Any]) -> str:
         areas[f["area"]] += f["lines"]
     n_area = Counter(f["area"] for f in files)
     lines = [f"{inv['model']}  (role {inv['role']}, model_type {inv['model_type']}, rows {len(inv['rows'])})",
-             f"  files         {len(files)}, {sum(f['lines'] for f in files):,} lines; {len(only)}, "
-             f"{sum(f['lines'] for f in only):,} lines for this model alone",
+             (f"  files         {len(files)}, {sum(f['lines'] for f in files):,} lines; {len(only)}, "
+              f"{sum(f['lines'] for f in only):,} lines for this model alone"),
              "                " + "  ".join(f"{a} {n_area[a]} ({areas[a]:,})" for a in sorted(areas)),
              f"  rules         {len(inv['rules'])}" + "".join(f"  {r['rule']}" for r in inv["rules"]),
              f"  allowlists    {len(inv['allowlists'])}" + "".join(f"  {k} {n}" for k, n in sorted(Counter(e['allowlist'] for e in inv['allowlists']).items()))]

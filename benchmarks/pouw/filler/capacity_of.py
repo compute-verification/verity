@@ -1,4 +1,4 @@
-"""The certified share σ of a GPU's capacity, from a scored filler run's measured entries.
+"""The share σ of a GPU's capacity that is verified compute, from a scored filler run's measured entries.
 
 Each entry of a run's score.json is one served step beside its filler: the step's time, the served and filler MACs in
 it, and the SM clock. Their certified load, pooled over the step and the GPU's 4 × SMs SMSPs (a receipt attests no
@@ -23,9 +23,12 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "machine_model"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "machine_model"))
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
+
+#: what the tests read
+__all__ = ["E", "dfill_rows", "fstep_rows", "lfill_rows", "main"]
 
 F_MAX_MHZ = 2430.0  # sm_120's maximum SM clock, the credit's
 SMS = 188
@@ -44,7 +47,7 @@ def load(serving_macs: float, filler_macs: float, ms: float, mhz: float, sms: in
     return w
 
 
-def sigma(pi, entry: dict, mhz: float | None = None, **kw) -> C.Cell:
+def sigma(pi: E.Machine, entry: dict, mhz: float | None = None, **kw: float | str) -> C.Cell:
     w = load(entry["serving_macs"], entry["filler_macs"], entry["t1_ms"], mhz or entry["mhz"], **kw)
     return C.cell(pi, [(1.0, w)])
 
@@ -66,7 +69,7 @@ def lfill_load(rec: dict, arm: str, mhz: float, fold: str = "duo", served_fold: 
     return w
 
 
-def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+def lfill_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     rows = []
     for r in recs:
         for arm in ("pump", "lane"):
@@ -83,61 +86,70 @@ def lfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none
     return rows
 
 
-def dfill_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+def dfill_arm(rec: dict) -> dict:
+    """A dfill line's arm beside the pump: co_fill where the step runs on every SM (place co), split_fill on a split."""
+    co = rec["place"] == "co"
+    return rec["arms"]["co_fill" if co else "split_fill"]
+
+
+def dfill_cell(pi: E.Machine, rec: dict, mhz: float, fold: str = "duo", served_fold: str = "none") -> C.Cell:
+    """A dfill line's cell at `mhz`: the pump's MMAs with their fold and the served step at its measured time, pooled
+    over the step's SMs (place co) or over the step's and the filler's (a split)."""
+    a = dfill_arm(rec)
+    sms = rec["step_sms"] if rec["place"] == "co" else rec["step_sms"] + rec["fill_sms"]
+    cyc = 4 * sms * mhz * 1e6
+    w = C.tensor_filler(rec["window"]["fill_mac_per_s"] / MACS_A_MMA / cyc * C.TENSOR_CYCLES, fold)
+    w = w + C.served(rec["step_macs"] / (a["ms"] * 1e-3) / MACS_A_MMA / cyc * C.TENSOR_CYCLES, served_fold)
+    return C.cell(pi, [(1.0, w)])
+
+
+def dfill_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     """dcap dfill lines: the step beside the pump on its split's SMs (split_fill) or on every SM at the lowest priority
     beside the step at the highest (co_fill), pooled over the GPU."""
     rows = []
     for r in recs:
-        co = r["place"] == "co"
-        a = r["arms"]["co_fill" if co else "split_fill"]
-        sms = r["step_sms"] if co else r["step_sms"] + r["fill_sms"]
-
-        def at(mhz):
-            cyc = 4 * sms * mhz * 1e6
-            w = C.tensor_filler(r["window"]["fill_mac_per_s"] / MACS_A_MMA / cyc * C.TENSOR_CYCLES, fold)
-            w = w + C.served(r["step_macs"] / (a["ms"] * 1e-3) / MACS_A_MMA / cyc * C.TENSOR_CYCLES, served_fold)
-            return C.cell(pi, [(1.0, w)])
-
-        top = at(F_MAX_MHZ)
+        a = dfill_arm(r)
+        top = dfill_cell(pi, r, F_MAX_MHZ, fold, served_fold)
         rows.append({"B": r["B"], "L": r["L"], "place": r["place"], "build": r.get("build"), "NC": r["NC"], "S": r["S"],
                      "pad_kb": r.get("pad_kb"), "fill_sms": r["fill_sms"], "slowdown": r["slowdown"], "mhz": a["mhz"],
-                     "sigma": top.sigma(), "sigma_run_clock": at(a["mhz"]).sigma(), "tensor": top.tensor(),
-                     "binding": list(top.pooled.binding), "rec_bad": r["rec_bad"]})
+                     "sigma": top.sigma(), "sigma_run_clock": dfill_cell(pi, r, a["mhz"], fold, served_fold).sigma(),
+                     "tensor": top.tensor(), "binding": list(top.pooled.binding), "rec_bad": r["rec_bad"]})
     return rows
 
 
-def fstep_rows(pi, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
+def fstep_cell(pi: E.Machine, rec: dict, mhz: float, fold: str = "duo", served_fold: str = "none") -> C.Cell:
+    """An fstep line's cell at `mhz`: the pump's and the filler warps' MMAs with their fold and the fused step. The
+    line's shares are of the whole GPU's tensor peak at its run clock, so at `mhz` they scale by run clock / mhz."""
+    k = rec["mhz"] / mhz
+    fill = (rec["pump"]["share"] + rec["fill_share_lin"] + rec["fill_share_att"]) * k
+    srv = rec["step_share_fused"] * k
+    return C.cell(pi, [(1.0, C.tensor_filler(fill, fold) + C.served(srv, served_fold))])
+
+
+def fstep_rows(pi: E.Machine, recs: list[dict], fold: str = "duo", served_fold: str = "none") -> list[dict]:
     """dcap fstep lines: the step through flin and dcap's attention beside the pump, on a split or co-scheduled on every
-    SM (place co), its filler warps' MMAs (if any) with the pump's. Shares in a line are of the whole GPU's tensor peak at
-    its run clock, so at `mhz` they scale by run clock / mhz. A line's own "fold" (the probe's tag for its build) wins over
-    `fold`."""
+    SM (place co), its filler warps' MMAs (if any) with the pump's. A line's own "fold" (the probe's tag for its build)
+    wins over `fold`."""
     rows = []
     for r in recs:
         rf = r.get("fold", fold)
-
-        def at(mhz):
-            k = r["mhz"] / mhz
-            fill = (r["pump"]["share"] + r["fill_share_lin"] + r["fill_share_att"]) * k
-            srv = r["step_share_fused"] * k
-            return C.cell(pi, [(1.0, C.tensor_filler(fill, rf) + C.served(srv, served_fold))])
-
-        top = at(F_MAX_MHZ)
+        top = fstep_cell(pi, r, F_MAX_MHZ, rf, served_fold)
         rows.append({"B": r["B"], "L": r["L"], "place": r.get("place", "split"), "build": r.get("build"), "M": r["M"],
                      "kind": r.get("kind", 2), "pdl": r.get("pdl", 1), "pump_nc": r["pump"].get("NC"), "fold": rf,
                      "pad_kb": r.get("pad_kb"), "fill_sms": r["fill_sms"], "slowdown": r["slowdown"],
                      "co_cost": r["fused_ms"] / r["fused0_ms"], "fused0_vs_base": r["fused0_vs_base"],
                      "pump_share": r["pump"]["share"], "pump_alone": r["pump"]["alone_share"], "mhz": r["mhz"],
-                     "sigma": top.sigma(), "sigma_run_clock": at(r["mhz"]).sigma(), "tensor": top.tensor(),
-                     "binding": list(top.pooled.binding),
+                     "sigma": top.sigma(), "sigma_run_clock": fstep_cell(pi, r, r["mhz"], rf, served_fold).sigma(),
+                     "tensor": top.tensor(), "binding": list(top.pooled.binding),
                      "rec_bad": r["pump"]["rec_bad"] + r["lin"]["rec_bad"] + r["att"]["rec_bad"],
                      "out_bad": r["out_mismatches"] + r["lm_mismatches"]})
     return rows
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="capacity_of.py", description=__doc__.split("\n")[0])
     ap.add_argument("out", type=Path, nargs="?", help="a scored run's arm dir (its score.json)")
-    ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_probe.sh's lfill.jsonl)")
+    ap.add_argument("--lfill", type=Path, help="dcap lfill lines (capfill_fold_probe.sh's lfill.jsonl)")
     ap.add_argument("--dfill", type=Path, help="dcap dfill lines, split or co (capfill_co_probe.sh's co.jsonl)")
     ap.add_argument("--fstep", type=Path, help="dcap fstep lines (capfill_fstep_probe.sh's fstep.jsonl)")
     ap.add_argument("--fold", default="duo")

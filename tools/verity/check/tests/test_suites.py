@@ -140,7 +140,8 @@ def test_every_declared_package_is_probed_whatever_its_name_and_one_that_wont_im
 def test_a_member_that_builds_but_declares_no_package_is_named(tmp_path, monkeypatch):
     _member(tmp_path, "odd", "odd", None)
     S = _suites(monkeypatch, tmp_path)
-    assert S.foreign({"odd": "odd"}, dict(os.environ)) == "odd's package from nowhere (its build configuration declares none)"
+    found = S.foreign({"odd": "odd"}, dict(os.environ))
+    assert found == "odd's package from nowhere (its build configuration declares none)"
     (tmp_path / "odd" / "src" / "odd").mkdir(parents=True)
     (tmp_path / "odd" / "src" / "odd" / "__init__.py").write_text("")       # hatch's default layout
     assert S.importable({"odd": "odd"}) == {"odd": "odd"}
@@ -233,6 +234,25 @@ def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     (tmp_path / "pkg" / ".lake" / "cache").mkdir()
     keys.append(S.key(suite, {}, {}, []))
     assert len(set(keys)) == 3 and S.artifact_ids(suite)["pkg/.lake/cache"] == "directory"
+
+
+def test_a_suites_bound_stretches_for_fewer_workers_than_it_was_measured_on(tmp_path, monkeypatch):
+    """verity-vllm's 14,400 s holds for the 5 workers its 10,000 s was measured on; a whole check on an 11-core slot ran it on 3
+    and killed it at 14,400 s, short of the 16,700 s 3 workers take. Its bound follows the workers it gets, never below its own."""
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\nparallel = true\n'
+    pyproject.write_text(head + "timeout_s = 14400\ntimeout_workers = 5\n")
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    [suite] = S.discover()
+    assert suite.timeout_workers == 5
+    assert [S.bound(suite, n) for n in (3, 2, 5, 16)] == [24000.0, 36000.0, 14400.0, 14400.0]
+    assert S.bound(S.Suite("x", "x", (), ()), 2) == S.SUITE_TIMEOUT_S, "undeclared: the fixed bound, whatever the workers"
+    for bad in ("timeout_s = 60\ntimeout_workers = 0\n", "timeout_s = 60\ntimeout_workers = 2.5\n", "timeout_workers = 5\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="timeout_workers"):
+            S.discover()
 
 
 def test_what_the_lean_verifier_builds_keys_the_suite_by_its_sources(tmp_path, monkeypatch):
@@ -849,7 +869,7 @@ def test_fetched_fixtures_are_the_registry_entries_git_does_not_hold(tmp_path, m
     (tmp_path / "pkg" / "fx" / "small.json").write_text("{}\n")
     reg = {"art:" + "a" * 64: "pkg/fx/small.json", "art:" + "b" * 64: "pkg/fx/big.proof", "art:" + "c" * 64: "other/big.bin",
            "previous": {"art:" + "a" * 64: ["art:" + "d" * 64]}}
-    (tmp_path / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (tmp_path / "artifacts.json").write_text(json.dumps(reg))
     S = _suites(monkeypatch, tmp_path)
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "add", "-A"], check=True)
@@ -884,7 +904,7 @@ def _shipped_workspace(root: Path, *, absent: bool) -> None:
     if absent:
         reg["art:" + hashlib.sha256(b"never shipped").hexdigest()] = "pkg/tests/fixtures/big.proof"
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps(reg))
+    (root / "artifacts.json").write_text(json.dumps(reg))
     (root / ".gitignore").write_text("__pycache__/\n")
     _git(root, "init", "-q")
     _git(root, "add", ".")
@@ -1008,8 +1028,8 @@ def test_a_fresh_run_builds_the_verifier_and_runs_the_suites_with_lakes_artifact
     root = tmp_path / "tree"
     _env_workspace(root, {"verity-flock": "import os\n\ndef test_env():\n"
                                           "    assert os.environ.get('LAKE_ARTIFACT_CACHE') == os.environ['WANT']\n"})
-    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "f"\n')
     (root / ".gitignore").write_text(".lake/\n")
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
@@ -1066,7 +1086,7 @@ def test_inside_a_research_run_the_fixture_fetch_gets_its_custody_key_and_fetche
     _env_workspace(root, {"pkg": "from pathlib import Path\n\ndef test_reads_it():\n    assert (Path(__file__).parent / 'fixtures' / "
                                  "'big.proof').read_bytes() == b'in the store alone\\n'\n"})
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
+    (root / "artifacts.json").write_text(json.dumps({art: "pkg/tests/fixtures/big.proof"}))
     (root / ".gitignore").write_text("pkg/tests/fixtures/big.proof\n")                  # as the root's lists each fetched entry
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "registered")
@@ -1156,9 +1176,9 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     root, log = tmp_path / "tree", tmp_path / "lake.log"
     _env_workspace(root, {"verity-flock": "import shutil\n\ndef test_lake():\n    assert shutil.which('lake')\n",
                           "other": "def test_other():\n    pass\n"})
-    (root / "verity" / "protocols" / "flock" / "verifier").mkdir(parents=True)
-    (root / "verity" / "protocols" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
-    (root / "verity" / "protocols" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier").mkdir(parents=True)
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / "lakefile.toml").write_text('name = "flock"\n')
+    (root / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".gitignore").write_text(".lake/\n")       # as the verifier's own
     _git(root, "add", ".")
     _git(root, "commit", "-q", "-m", "verifier")
     # ELAN puts $HOME/.elan/bin first on the PATH, so on a machine with elan its real lake would shadow one only on the PATH
@@ -1175,10 +1195,10 @@ def test_the_suites_on_the_lean_verifier_run_after_its_build_as_inside_check(tmp
     assert p.returncode == 0 and not log.exists(), p.stdout
     p = _run_suite(root, tmp_path, "--fresh", extra=extra)
     assert p.returncode == 0 and "passed  verity-flock" in p.stdout and "passed  other" in p.stdout, p.stdout
-    assert log.read_text() == f"{root / 'verity/protocols/flock/verifier'} build\n"
+    assert log.read_text() == f"{root / 'verity/protocols/proofs/flock/verifier'} build\n"
 
     p = _run_suite(root, tmp_path, "--fresh", extra={**extra, "FAKE_LAKE_RC": "1"})
-    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/flock/verifier exited 1" in p.stdout
+    assert p.returncode == 1 and "failed  verity-flock" in p.stdout and "`lake build` in verity/protocols/proofs/flock/verifier exited 1" in p.stdout
     assert "passed  other" in p.stdout, p.stdout
 
 
@@ -1234,6 +1254,24 @@ def test_a_suite_past_its_bound_is_killed_and_fails_as_timed_out(tmp_path):
     [r] = json.loads((tmp_path / "out.json").read_text())
     assert r["status"] == "failed" and r["timed_out"] == 0.5
     assert [f.name for f in (tmp_path / "cache").glob("*.json")] == ["durations.json"], "no pass kept"
+
+
+def test_a_suite_on_fewer_workers_than_its_bound_holds_for_runs_to_the_stretched_bound(tmp_path):
+    """The run applies `bound` with the workers the suite got: the hanging suite declares 0.25 s on 4 workers, runs on 1, and is
+    killed at 1 s."""
+    root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
+    _per_test_workspace(root)
+    for f in tests.glob("test_*.py"):
+        f.unlink()
+    fifo = tmp_path / "never-written"
+    os.mkfifo(fifo)
+    (tests / "test_hangs.py").write_text(f"def test_hangs():\n    open({str(fifo)!r}).read()\n")
+    pyproject = root / "pkg" / "pyproject.toml"
+    pyproject.write_text(pyproject.read_text() + "timeout_s = 0.25\ntimeout_workers = 4\n")
+    _git(root, "add", "-A")
+    _git(root, "commit", "-q", "-m", "hangs")
+    p = _run_suite(root, tmp_path, "--fresh", "--timeouts")
+    assert p.returncode == 1 and "TIMED OUT: still running after 1 s, so its process group was killed" in p.stdout, p.stdout
 
 
 def test_oom_kills_reads_the_kernels_count(monkeypatch, tmp_path):
@@ -1643,16 +1681,16 @@ def test_an_edit_to_a_nested_suite_reuses_the_outer_suites_pass_and_reading_it_u
 
 
 def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds_while_it_is_unchanged(tmp_path):
-    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `fixtures/artifacts.json` for
+    """`research data fetch` on an empty local store indexes the remote's manifest, which reads `artifacts.json` for
     repo replicas: in the test's process or a child's, that read fails no suite, and the test's own read is watched."""
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
     _per_test_workspace(root)
     (tests / "test_sibling.py").write_text("def test_sibling():\n    assert True\n")
     (root / "fixtures").mkdir()
-    (root / "fixtures" / "artifacts.json").write_text("{}\n")
+    (root / "artifacts.json").write_text("{}\n")
     (tests / "test_registry.py").write_text(
         "import os, subprocess, sys\n\ndef test_registry():\n"
-        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'fixtures', 'artifacts.json')\n"
+        "    p = os.path.join(os.path.dirname(__file__), '..', '..', 'artifacts.json')\n"
         "    open(p).read()\n"
         "    subprocess.run([sys.executable, '-c', 'import sys; open(sys.argv[1]).read()', p], check=True)\n")
     _git(root, "add", ".")
@@ -1660,7 +1698,7 @@ def test_every_suite_may_read_the_fixture_registry_and_a_pass_that_read_it_holds
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout and "outside its inputs" not in p.stdout, p.stdout
     assert "cached  pkg" in _run_suite(root, tmp_path).stdout
-    (root / "fixtures" / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
+    (root / "artifacts.json").write_text('{"art:x": "elsewhere/big.bin"}\n')
     p = _run_suite(root, tmp_path)
     assert p.returncode == 0 and "passed  pkg" in p.stdout, p.stdout
 
@@ -2141,6 +2179,118 @@ def test_a_parallel_suite_runs_beside_the_others_on_the_slots_they_leave(tmp_pat
     assert p.returncode == 0, p.stdout + p.stderr
     assert "1 parallel suites one at a time on 2 processes, beside 1 others on 1" in p.stdout, p.stdout
     assert re.search(r"passed  wide .* on 2 workers", p.stdout) and "passed  one" in p.stdout, p.stdout
+
+
+def test_the_longest_parallel_suite_runs_in_a_lane_of_its_own_with_a_share_in_proportion_to_its_seconds(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    big, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("big", "a", "b"))
+    heavy = S.Suite("heavy", "h", (), (), parallel=True, worker_gb=16)
+    [alone, rest] = S.wide_lanes([a, big, b], [300.0, 600.0, 100.0], 20, 100.0)
+    assert (alone.suites, alone.procs, alone.gb) == ([big], 12, 60.0), "the longest recorded, in proportion to 600 of 1,000 s"
+    assert (rest.suites, rest.procs, rest.gb) == ([a, b], 8, 40.0), "the rest in their order, on what it leaves"
+    assert [(x.suites, x.procs) for x in S.wide_lanes([a, big, b], [None, 600.0, 100.0], 7, None)] == [([big], 6), ([a, b], 1)], \
+        "a suite never timed runs in the rest's lane, counted at nothing"
+    assert S.wide_lanes([big], [600.0], 20, 100.0) == [S.Lane([big], 20, 100.0)], "one suite"
+    assert S.wide_lanes([big, a], [None, None], 20, 100.0) == [S.Lane([big, a], 20, 100.0)], "none recorded"
+    assert S.wide_lanes([big, a], [600.0, 300.0], 1, 100.0) == [S.Lane([big, a], 1, 100.0)], "one process"
+    assert S.wide_lanes([big, heavy], [600.0, 300.0], 20, 30.0) == [S.Lane([big, heavy], 20, 30.0)], \
+        "a share that holds no worker of a suite's worker_gb keeps one lane"
+
+
+def test_a_suite_that_declares_workers_runs_on_at_least_that_many_up_to_half_of_what_the_parallel_suites_have(tmp_path, monkeypatch):
+    """circuit_check's workers each build its catalog before any test runs, so their count bounds its run; a share by last
+    durations (`shared_lanes`) left it a few, behind verity/definitions' larger one or after a run that reused most of its
+    passes. Declaring `workers`, it has a lane of its own with that many wherever its share gives it fewer, up to half the
+    processes and half the GB at its worker_gb, and the others split the rest as before."""
+    S = _suites(monkeypatch, tmp_path)
+    cc = S.Suite("cc", "cc", (), (), parallel=True, worker_gb=8, workers=14)
+    defs, a, b = (S.Suite(n, n, (), (), parallel=True) for n in ("defs", "a", "b"))
+    seconds = [300.0, 900.0, 200.0, 100.0]
+    [shared] = [x for x in S.shared_lanes([cc, defs, a, b], seconds, 88, 260.0) if cc in x.suites]
+    assert shared.suites == [cc, a, b] and S.wide_workers(cc, shared.procs, shared.gb) == 13
+    lanes = S.wide_lanes([cc, defs, a, b], seconds, 88, 260.0)
+    assert lanes == [S.Lane([cc], 14, 112.0), *S.shared_lanes([defs, a, b], seconds[1:], 74, 148.0)]
+    longest = [3000.0, *seconds[1:]]
+    assert S.wide_lanes([cc, defs, a, b], longest, 88, 260.0) == S.shared_lanes([cc, defs, a, b], longest, 88, 260.0), \
+        "a share that gives it as many already is as it was"
+    assert S.wide_lanes([cc, defs], seconds[:2], 20, 260.0)[0] == S.Lane([cc], 10, 80.0), "at most half the processes"
+    assert S.wide_lanes([cc, defs], seconds[:2], 88, 100.0)[0] == S.Lane([cc], 6, 48.0), "at most half the GB at its worker_gb"
+    assert S.wide_lanes([cc, defs], seconds[:2], 40, None) == [S.Lane([cc], 14, None), S.Lane([defs], 26, None)]
+    assert S.wide_lanes([cc], [300.0], 88, 260.0) == [S.Lane([cc], 88, 260.0)], "alone, all of them"
+    (tmp_path / "pkg").mkdir()
+    pyproject = tmp_path / "pkg" / "pyproject.toml"
+    head = '[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n\n[tool.verity.tests]\n'
+    pyproject.write_text(head + "parallel = true\nworkers = 14\n")
+    _git(tmp_path, "init", "-q")
+    assert [s.workers for s in S.discover()] == [14]
+    for bad in ("parallel = true\nworkers = 1\n", "parallel = true\nworkers = 2.5\n", "workers = 14\n"):
+        pyproject.write_text(head + bad)
+        with pytest.raises(ValueError, match="workers"):
+            S.discover()
+
+
+def _line_end(S, lanes, cost) -> float:
+    """When a plan's parallel suites end on a simulated clock: each lane from 0, its suites one after another, each lasting
+    ``cost(suite, workers)`` at the workers its lane gives it (`wide_workers`)."""
+    return max(sum(cost(s, S.wide_workers(s, lane.procs, lane.gb)) for s in lane.suites) for lane in lanes)
+
+
+def test_the_line_ends_near_the_longer_of_the_longest_suite_and_the_rest(tmp_path, monkeypatch):
+    """A suite's seconds on n workers are max(its longest test, its tests' seconds / n), as for verity/definitions, whose one
+    long test bounds it, beside circuit_check, which its workers' count bounds. One after another on 16 processes the line
+    lasts the sum of the suites; in two lanes on twice the processes, each about as many as it had alone, it ends near the
+    longer of the longest suite's seconds and the rest's, and before the line of one lane on all 32."""
+    S = _suites(monkeypatch, tmp_path)
+    work = {"cc": (16_000, 100), "defs": (3_200, 600), "pouw": (3_200, 50), "ops": (1_600, 20)}
+    suites = [S.Suite(n, n, (), (), parallel=True) for n in work]
+
+    def cost(s, n: int) -> float:
+        total, longest = work[s.name]
+        return max(longest, total / n)
+
+    seconds = [cost(s, 16) for s in suites]
+    big, rest = seconds[0], sum(seconds[1:])
+    lanes = S.wide_lanes(suites, seconds, 32, None)
+    assert [x.suites for x in lanes] == [suites[:1], suites[1:]]
+    end = _line_end(S, lanes, cost)
+    assert end <= 1.05 * max(big, rest) and end < _line_end(S, [S.Lane(suites, 32, None)], cost) < sum(seconds)
+    gb = 32 * S.TEST_PROCESS_GB
+    held = S.wide_lanes(suites, seconds, 64, gb)
+    assert sum(x.gb for x in held) == gb and all(S.wide_workers(s, x.procs, x.gb) * S.worker_gb(s) <= x.gb
+                                                 for x in held for s in x.suites), "each lane's workers fit its share of the GB"
+    assert _line_end(S, held, cost) <= 1.05 * max(big, rest), "the memory bounds the workers as the processes did"
+
+
+def test_a_line_in_two_lanes_runs_every_suite_with_its_verdict_and_its_key(tmp_path):
+    """End to end: three parallel suites whose recorded seconds put the longest beside the other two, on 4 of 6 processes and 2,
+    pass as the same suites under the same keys as in one lane (no recorded seconds)."""
+    import json
+
+    root = tmp_path / "tree"
+    test = "def test_a():\n    pass\n\ndef test_b():\n    pass\n"
+    _env_workspace(root, {"big": test, "mid": test, "small": test})
+    for name in ("big", "mid", "small"):
+        f = root / name / "pyproject.toml"
+        f.write_text(f.read_text() + "\n[tool.verity.tests]\nparallel = true\n")
+    _git(root, "commit", "-qam", "all three are parallel")
+    (tmp_path / "cache").mkdir()
+
+    def line(durations: dict | None) -> tuple[str, list[tuple]]:
+        (tmp_path / "cache" / "durations.json").unlink(missing_ok=True)
+        if durations:
+            (tmp_path / "cache" / "durations.json").write_text(json.dumps(durations))
+        out = tmp_path / "out.json"
+        p = _run_suite(root, tmp_path, "--fresh", "--jobs", "6", "--json", str(out))
+        assert p.returncode == 0, p.stdout + p.stderr
+        return p.stdout, sorted((r["name"], r["status"], r["key"], r["counts"]) for r in json.loads(out.read_text()))
+
+    out, one = line(None)
+    assert "beside" not in out and all(re.search(rf"passed  {n} .* on 6 workers", out) for n in ("big", "mid", "small")), out
+    out, two = line({"big": 100.0, "mid": 30.0, "small": 20.0})
+    assert "suites: big on 4 processes beside 2 parallel suites one at a time on 2" in out, out
+    assert re.search(r"passed  big .* on 4 workers", out) and all(re.search(rf"passed  {n} .* on 2 workers", out)
+                                                                   for n in ("mid", "small")), out
+    assert two == one and [r[1] for r in one] == ["passed"] * 3
 
 
 def test_mem_gb_defaults_to_the_check_slots_memory(tmp_path, monkeypatch):

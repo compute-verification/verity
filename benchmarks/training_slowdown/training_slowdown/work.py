@@ -20,6 +20,28 @@ from .gates import gates
 THE_CODE = "training's slowdown code"
 #: the premise the products term takes on the step's elementwise ops, as published strings state it
 P_MATCH = "elementwise steps don't fan out (P-match)"
+#: the premise the products term takes on the step's batch where the record has no count of its repeats (a record
+#: made before the count, a step whose reads don't give it, a library's planned run), as published strings state
+#: it: M charges a token-indexed product for every position past each row's first (`SHARED_PREFIX`) as words of its
+#: own. Three batches break it (tests/test_batch_premise.py holds each on the model's forward): two rows that share
+#: their first two tokens or more hold equal words at the shared positions, at every layer; a row that starts with a
+#: run of three or more of one token holds equal words along the run, at every layer, with the rotation or without
+#: it, since attention over equal keys returns their one value, so a run of r charges r − 2 of that row's n
+#: positions a second time; and without the rotation, two positions with one token whose tokens up to it, its own
+#: included, are in the same proportions hold equal words after the first attention and not after the second. Equal
+#: is to rounding, not bit for bit: a float sums one word at two positions in two orders. The equal words are the
+#: forward's, which a forward product and a weight gradient read; the gradients at two such positions differ wherever
+#: a target or a later position's reading of them does. A job counts the first two on each step's own batch
+#: (`flops.repeats`, a step's `repeats`) and takes `P_REPEATS` in this one's place: M then leaves out a shared
+#: prefix's positions past the first in every row but one, and a run's r − 1 positions past the first, so the one
+#: word a run's first token holds is charged nowhere
+P_BATCH = "past each row's first position, no two positions of the batch hold equal words"
+#: the premise the products term takes on the batch where the job counted its repeats by its tokens: the third batch
+#: of `P_BATCH`'s is its edge, which the count doesn't look for
+P_REPEATS = ("two positions of the batch hold equal words only where their tokens make them, by an equal prefix or a "
+             "leading run of one token")
+#: what a published string says of M where the job counted the batch's repeats
+COUNTED = "M leaves out every position whose tokens repeat another's, counted on the job's own batch"
 #: the first training_slowdown whose capture writes a traced step's product rows (training_slowdown.capture.products' `CAPTURE`)
 PRODUCTS_FROM = "4.8"
 #: why the products kind is unmeasured on a record with no product rows
@@ -30,8 +52,9 @@ PRODUCTS_UNMEASURED = (f"unmeasured: the record has no product rows (a step capt
 SYSTEM_FROM = "4.12.1"
 #: the positions at the start of each sequence that M leaves out of every token-indexed product (`he_of_rows`):
 #: position 0 reads only its own token, so sequences that share their first token (a BOS, or the stream's own where
-#: windows are cut from it) compute it identically through every layer. A longer shared prefix needs the batch's
-#: tokens, which no trace keeps
+#: windows are cut from it) compute it identically through every layer. Past the first position M leaves out the
+#: positions the job counted as repeats on its batch's tokens (`batch_count`), and where it has no count, takes
+#: `P_BATCH`
 SHARED_PREFIX = 1
 #: why the products kind is unmeasured where a trace isn't of the run's own program (`formalism.other_program`): a
 #: products term is priced only on its run's own program
@@ -88,22 +111,57 @@ def product_kind(row: dict) -> str:
     return "fresh" if all(is_paid(r, w) for r, w in zip(row["rates"], row["widths"])) else "expansion"
 
 
-def products_of_trace(block: dict, steps: float | None = None) -> dict:
+def row_positions(rows: list[dict]) -> int | None:
+    """The positions a row of the batch holds in a step's product rows (training_slowdown.capture.products' rows): the
+    widest token-indexed dim of a product with two (attention's); None where no product has two."""
+    return max((r["dims"][d] for r in rows if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
+                for d in ("m", "k", "n") if d in r["token_dims"]), default=None)
+
+
+def batch_count(steps: list[dict], n: int | None = None) -> dict | None:
+    """What M leaves out of a run's `steps` (a record's, each with its `tokens` and, where the job counted them, its
+    `repeats` over `batch_rows` rows: `flops.Counter`'s) past `SHARED_PREFIX` by their batch's tokens: the positions
+    they counted as repeats (`positions`), the tokens those are out of (`tokens`, every step's) and how many of those
+    tokens a count covers (`measured`). A step's count is read only where its tokens are its rows times the `n`
+    positions a row holds in the products (`row_positions`; any, where they give none), the positions the products
+    run over; any other step, and one with no `repeats`, adds its tokens and no positions. None where no step's count
+    is read (a record made before the count): M then takes `P_BATCH`."""
+    counted = [s for s in steps if s.get("repeats") is not None
+               and (n is None or s["tokens"] == s.get("batch_rows", 0) * n)]
+    if not counted:
+        return None
+    return {"positions": sum(s["repeats"] for s in counted), "tokens": sum(s.get("tokens", 0) for s in steps),
+            "measured": sum(s["tokens"] for s in counted)}
+
+
+def batch_premise(count: dict | None) -> str:
+    """The premise on the batch a products figure rests on, as a published string states it after "that": `P_BATCH`
+    where M has no count of the batch's repeats (`batch_count`'s `count`), else `P_REPEATS` with what M left out
+    (`COUNTED`), and `P_BATCH` on the steps that counted none."""
+    if not count:
+        return P_BATCH
+    if count["measured"] >= count["tokens"]:
+        return f"{P_REPEATS} ({COUNTED})"
+    return f"{P_REPEATS} ({COUNTED}, on the steps that counted it), and on the other steps, that {P_BATCH}"
+
+
+def products_of_trace(block: dict, steps: float | None = None, batch: dict | None = None) -> dict:
     """`Measured.products` from a trace's product rows (training_slowdown.capture.products' `rows`, the trace's
     `products`) over `steps` traced steps: each kind's MACs (`product_kind`, each row's times its count and `steps`),
-    the trace's P-match check, and the products term's M over the steps of the block's tokens (`he`, `he_of_rows`), at
-    the k the capture classified them at, and at each k of the console's dial where the trace keeps rows there (`at`).
-    The steps are ones after the run's first update (`formalism.of_record` counts no step before it, whose products
-    read only registered weights; None: a step captured on its own, which stands for one after it)."""
+    the trace's P-match check, and the products term's M over the steps of the block's tokens (`he`, `he_of_rows`,
+    less the repeats `batch` counts over those steps: `batch_count`'s), at the k the capture classified them at, and
+    at each k of the console's dial where the trace keeps rows there (`at`). The steps are ones after the run's first
+    update (`formalism.of_record` counts no step before it, whose products read only registered weights; None: a step
+    captured on its own, which stands for one after it)."""
     kinds = dict.fromkeys(PRODUCT_KINDS, 0.0)
     for r in block["rows"]:
         kinds[product_kind(r)] += r["count"] * (1.0 if steps is None else steps) * r["macs"]
     got = {"k": float(block["k"]), "capture": block["capture"], "capture_code": block.get("capture_code"),
            "kinds_macs": kinds, "p_match": block.get("p_match"),
-           "he": he_of_rows(block["rows"], block["k"], steps, block.get("tokens"))}
+           "he": he_of_rows(block["rows"], block["k"], steps, block.get("tokens"), batch)}
     if "at" in block:
         rest = {x: v for x, v in block.items() if x != "at"}
-        got["at"] = {x: products_of_trace(rest | b, steps) for x, b in block["at"].items()}
+        got["at"] = {x: products_of_trace(rest | b, steps, batch) for x, b in block["at"].items()}
     return got
 
 
@@ -129,7 +187,28 @@ def beta_eff(w: float, r: float, k: float) -> float:
     return w / (1 + (k_star(k, w) / r) ** 2) if r > 0 else 0.0
 
 
-def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: float | None = None) -> dict | None:
+def left_out(row: dict) -> str | None:
+    """Which of `he_of_rows`' left-out MACs a product row whose two operands both depend on the update is counted in,
+    None where M holds it: `self_macs` for one array times itself, `gathered_macs` for a product with an operand that
+    reads a gather's rows, `left_out_macs` for the optimizer's products and attention's (two token-indexed dims among
+    m, k and n)."""
+    if row["self"]:
+        return "self_macs"
+    if any(row["gathered"]):
+        return "gathered_macs"
+    if row["phase"] == "optimizer" or sum(x in row["token_dims"] for x in ("m", "k", "n")) >= 2:
+        return "left_out_macs"
+    return None
+
+
+def in_m(row: dict) -> bool:
+    """Whether the products term's M holds a product row, a trace's raw one or a priced one: its two operands both
+    depend on the update, and nothing leaves it out (`left_out`)."""
+    return all(row["affected"]) and left_out(row) is None
+
+
+def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: float | None = None,
+               batch: dict | None = None) -> dict | None:
     """The products term's M from a step's product rows at k (training_slowdown.capture.products' rows) over `steps` steps
     after the run's first (None: one step captured on its own, which stands for one after the first ones), each of
     `tokens` tokens (+1: the grader chooses M): every product whose two operands both depend on the update, except
@@ -147,9 +226,16 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     scores), is at most `beta_eff`(w, r_step, k): the update reaches it only through the adapters, and its rate
     stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
     their widths. Each output is at its Definition's output width b_y. Token-indexed products keep 1 −
-    `SHARED_PREFIX`/n of their MACs, and every output. An operand no token indexes is a
-    weight (`weight`), which `calculator.slowdown` caps at the record's code bits a trained weight, the others
-    activations, which it caps at β(k); a backward product contracting over tokens is a weight gradient (`dw`); the head's are the
+    `SHARED_PREFIX`/n − p/T of their MACs, and every output, p/T the share of the steps' T tokens the job counted as
+    repeats on its batch's tokens (`batch`, `batch_count`'s; 0 without it), one share for every token-indexed
+    product, though the backward's input gradients at two repeated positions differ: every other position is charged
+    as words of its own, the premise `batch_premise` states (`P_REPEATS` where the job counted, `P_BATCH` where it
+    didn't). The rule leaves out positions that repeat in a causal model whose words read positions only through
+    attention's weights; in any other it leaves out positions that don't repeat too, so M is lower, never higher. An
+    operand no token indexes is a
+    weight (`weight`), which `calculator.slowdown` holds to the record's code bits a trained weight at most, the
+    others activations, which it holds to β(k) at most; a backward product contracting over tokens is a weight
+    gradient (`dw`); the head's are the
     backward products over its vocabulary width V, the widest output of a forward product indexed by tokens on m that
     the update reaches, a frozen head's too (`head`). The trained weights (`trained_weights`, None without `tokens`) are each forward product's weight
     operands' entries, a product of one token-indexed operand counted as count·(its tokens)/`tokens` weights (to the
@@ -157,13 +243,13 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     Grouped by (β_a, β_b, the widths, which is a weight, b_y, forward or not, its contraction K, `dw`, `head`): {"k",
     "groups": [{"beta", "width", "weight", "b_y", "forward", "k_dim", "dw", "head", "macs", "wires"}], "r_step",
     "candidates_macs", "self_macs", "gathered_macs", "left_out_macs" (attention's and the optimizer's), "steps",
-    "step_tokens", "trained_weights"}; None for rows captured before `SYSTEM_FROM`, which don't flag a gather's
-    rows."""
+    "step_tokens", "trained_weights"}, and with `batch` what it left out by it (`repeats`: its positions, the tokens
+    they are out of and how many of those a count covers); None for rows captured before `SYSTEM_FROM`, which don't
+    flag a gather's rows."""
     if any("gathered" not in r for r in rows):
         return None
-    seq = max((r["dims"][d] for r in rows if sum(x in r["token_dims"] for x in ("m", "k", "n")) >= 2
-               for d in ("m", "k", "n") if d in r["token_dims"]), default=None)
-    keep = 1 - SHARED_PREFIX / seq if seq else 1.0
+    seq = row_positions(rows)
+    keep = (1 - SHARED_PREFIX / seq if seq else 1.0) - (batch["positions"] / batch["tokens"] if batch else 0.0)
     sides = SIDES
 
     def token(r: dict, i: int) -> bool:
@@ -186,7 +272,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     vocab = max((r["dims"]["n"] for r in rows if r["phase"] == "forward" and r["token_dims"] == ["m"]
                  and any(r["affected"])), default=None)
     groups: dict = {}
-    total = alone = gathered = left = trained = 0.0
+    total = trained = 0.0
+    out = {"self_macs": 0.0, "gathered_macs": 0.0, "left_out_macs": 0.0}
     for r in rows:
         if not all(r["affected"]):
             continue
@@ -194,14 +281,9 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
         macs = n * r["macs"]
         total += macs
         d, td = r["dims"], r["token_dims"]
-        if r["self"]:
-            alone += macs
-            continue
-        if any(r["gathered"]):
-            gathered += macs
-            continue
-        if r["phase"] == "optimizer" or sum(x in td for x in ("m", "k", "n")) >= 2:
-            left += macs
+        why = left_out(r)
+        if why:
+            out[why] += macs
             continue
         w_op, b_y = HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)
         betas, widths, weight = [], [], []
@@ -231,8 +313,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
         g["macs"] += (keep if td else 1.0) * macs
         g["wires"] += n * r["outputs"] * b_y
     return {"k": float(k), "groups": [groups[x] for x in sorted(groups)], "r_step": r_step, "candidates_macs": total,
-            "self_macs": alone, "gathered_macs": gathered, "left_out_macs": left, "steps": steps,
-            "step_tokens": tokens, "trained_weights": trained if tokens and trained else None}
+            **out, "steps": steps, "step_tokens": tokens, "trained_weights": trained if tokens and trained else None} | (
+        {"repeats": dict(batch)} if batch else {})
 
 
 def p_match_reason(broken: list[dict]) -> str:
@@ -243,15 +325,40 @@ def p_match_reason(broken: list[dict]) -> str:
             f"way into a product's operand")
 
 
+def repriced(trace: dict) -> list[dict]:
+    """The raw rows of a job's trace whose product is priced in another dtype than the trace's circuit counts it in
+    (`capture.products.priced_dtype` and `counted_dtype`), the largest first by its MACs. A trace of this capture
+    has none; one of a capture before `capture.products.PRICED_AS_TRACED_FROM` has its float32 attention products,
+    which that capture's rule prices in bf16 (`capture.products.AUTOCAST`) and its circuit counted in float32."""
+    from .capture import products
+
+    found = [r for r in trace["rows"] if products.priced_dtype(r, trace.get("capture")) != products.counted_dtype(r)]
+    return sorted(found, key=lambda r: -r["count"] * math.prod(r["dims"].values()))
+
+
+def repriced_reason(trace: dict, found: list[dict]) -> str:
+    """Why there is no slowdown over a trace's own circuit where `repriced` finds rows: the work would be priced in
+    one dtype and the circuit it is divided by in another."""
+    from .capture import products
+
+    r, d = found[0], found[0]["dims"]
+    return (f"unmeasured: {sum(x['count'] for x in found)} of the traced step's matrix products are priced in "
+            f"another dtype than its circuit counts them in (the largest: {r['count']} {r['phase']} {r['op']} of "
+            f"{d['m']}×{d['k']} by {d['k']}×{d['n']}, counted in {products.counted_dtype(r)} and priced in "
+            f"{products.priced_dtype(r, trace.get('capture'))}), and one slowdown has one price; retrace the "
+            f"record with {THE_CODE} {products.CAPTURE} or later, which prices each product as its circuit counts it")
+
+
 def priced(trace: dict) -> dict:
     """A job's trace (`run.trace_step`'s) as the block `products_of_trace` reads: each raw product row priced
-    (`capture.products.priced`), at the k the job classified the rows at and at each other k of the console's dial
-    (`at`), with the capture's version (None on a trace that states none), the traced step's tokens and, where the
-    trace has it, the version of the code that took it (`capture_code`)."""
+    (`capture.products.priced`, by its capture's rule), at the k the job classified the rows at and at each other k
+    of the console's dial (`at`), with the capture's version (None on a trace that states none), the traced step's
+    tokens and, where the trace has it, the version of the code that took it (`capture_code`)."""
     from .capture import products
 
     def block(b: dict) -> dict:
-        return {"k": b["k"], "rows": [products.priced(r) for r in b["rows"]], "p_match": b["p_match"]}
+        return {"k": b["k"], "rows": [products.priced(r, trace.get("capture")) for r in b["rows"]],
+                "p_match": b["p_match"]}
 
     return block(trace) | {"capture": trace.get("capture"), "tokens": trace["tokens"],
                            "at": {k: block(b) for k, b in trace["at"].items()}} | (

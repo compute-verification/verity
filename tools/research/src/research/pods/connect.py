@@ -5,8 +5,11 @@
     research pods procs TARGET --comm NAME|--pid N ... [--json]
 
 TARGET is a `machines.toml` name, a RunPod pod id, or a pod name (`vy-ligerito-sumcheck-2`; a project suffix such as the
-`-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The ssh port is looked up at call time (`remote.pod_target`: the REST API's flaky empty
-mappings are retried), so nothing hard-codes an ip/port that changes when a pod restarts.
+`-veritor-campaign` that `pods create` appends is optional, `pods.POD_SUFFIXES`).  The address is `remote.pod_target`'s: the one last read
+from RunPod while the host there proves the host key recorded for it (ssh to it is then strict about that key), read again when
+it does not or the read is over an hour old (the REST API's flaky empty mappings are retried), so nothing hard-codes an ip/port
+that changes when a pod restarts.  A machine name asks RunPod for nothing else; a pod id or pod name also costs one listing of
+the account's pods.
 
 `sync` ships exactly the files git would show for SRC (default: the repository containing cwd): tracked files that still exist
 plus untracked files that are not ignored -- no `.git`, no `.venv`, no build products, nothing gitignored.  It ships them to DEST
@@ -70,7 +73,7 @@ def _list_pods() -> list[dict]:
     from . import runpod
 
     try:
-        return runpod._request("GET", "/pods") or []  # noqa: SLF001  (runpod.py is kept verbatim; its list verb only prints)
+        return runpod.pods()
     except runpod.PodError as e:
         raise remote.Refused(f"runpod API unavailable: {e}") from None
 

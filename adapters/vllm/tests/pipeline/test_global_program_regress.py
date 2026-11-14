@@ -31,26 +31,29 @@ import collections
 import gzip
 import json
 import os
+from pathlib import Path
+from typing import Any
 
 import pytest
-
-from verity_vllm.check.match import batch_decomp as bd
-from verity_vllm.check.match import program_compare as C
-from verity_vllm.pipeline import global_program as gp
-from verity_vllm.program import workload as W
-from verity_vllm.records import workload as WL
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat, runs
 from verity.circuits.types import Array, RecordType, Value
 
+from verity_vllm.check.match import batch_decomp as bd
+from verity_vllm.check.match import dag_form
+from verity_vllm.check.match import program_compare as C
+from verity_vllm.pipeline import global_program as gp
+from verity_vllm.program import workload as W
+from verity_vllm.records import workload as WL
+
 # ------------------------------------------------------------------------------------------------------------------ toy definitions
 # distinct ids from test_workload_program's toys (both may be imported into one process; REGISTRY refuses a second body under one id)
 
 
 def _reg(fid):
-    return REGISTRY[fid] if fid in REGISTRY else None
+    return REGISTRY.defs.get(fid)
 
 
 
@@ -156,7 +159,7 @@ def test_no_second_identity_per_output_position_and_no_root_node_beyond_inputs_a
     assert all(sp == "n" for sp, _, _, _ in ret_runs)
     leaves = [(idx, j) for sp, idx, lo, hi in ret_runs for j in range(lo, hi)]
     assert len(leaves) == len(set(leaves)) == sum(r.cap for r in wl.requests)
-    per_node = {}
+    per_node: dict[int, list[int]] = {}
     for idx, j in leaves:
         per_node.setdefault(idx, []).append(j)
     assert list(per_node) == [K + i for i in range(len(wl.requests))]                # manifest order, one call node each
@@ -193,7 +196,7 @@ def test_program_is_a_function_of_the_manifest_only_two_builds_are_byte_equal():
 def test_a_program_rebuilt_from_a_served_length_is_refused_by_name():
     """The population is D_MAX steps x declared requests: a component whose T is not cap-1 (a Program rebuilt to the served
     length) is refused by name, at every cap and for every request position."""
-    canon = {}
+    canon: dict = {}
     c = W.request_component(_desc(3, 2), REGISTRY, _WP(3), canon=canon)          # a T=2 component: cap must be 3
     for cap in (1, 2, 4, 8):
         with pytest.raises(ValueError, match="never from a served length"):
@@ -213,23 +216,22 @@ def _derived_dir(tmp_path, LP, T, execution="bi-eager"):
         f.write(canonical_json(desc))
     with gzip.open(d / "instances.json.gz", "wt") as f:
         json.dump({"params": [[n, t] for n, t in _WP(LP)], "rows": []}, f)
-    json.dump({"program": {"digest": program_digest(desc)},
-               "applicability": {"execution": execution, "numerics_profile": "toy", "sampler": "greedy",
-                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}, open(d / "result.json", "w"))
-    json.dump({"structural_inputs": {"LP": LP, "T": T}}, open(d / "construction_manifest.json", "w"))
-    json.dump({"provenance": {"source": {"example_inputs": [[0] * LP]},
-                              "weights": [{"field": 0, "name": "wa"}, {"field": 1, "name": "wb"}, {"field": 2, "name": "wc"}]}},
-              open(d / "derive-report.json", "w"))
+    (d / "result.json").write_text(json.dumps({"program": {"digest": program_digest(desc)},
+                                               "applicability": {"execution": execution, "numerics_profile": "toy", "sampler": "greedy",
+                                                                 "engine": {"enforce_eager": True, "enable_prefix_caching": False}}}))
+    (d / "construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": LP, "T": T}}))
+    (d / "derive-report.json").write_text(json.dumps({"provenance": {"source": {"example_inputs": [[0] * LP]},
+                                                                     "weights": [{"field": 0, "name": "wa"}, {"field": 1, "name": "wb"}, {"field": 2, "name": "wc"}]}}))
     return str(d)
 
 
 def _manifest(tmp_path, reqs, name="workload.json", **extra):
     """A workload record (`records.workload`) of `reqs`, its greedy sampling section holding `extra`, on an eager workload."""
     p = tmp_path / name
-    json.dump({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
-               "requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
-                             "arrive_step": r.get("arrive", 0)} for i, r in enumerate(reqs)],
-               "sampling": {"variant": "greedy", "temperature": 0.0, **extra}, "sweep": {"execution": "bi-eager"}}, open(p, "w"))
+    Path(p).write_text(json.dumps({"schema": WL.SCHEMA, "model": "toy", "engine": {}, "variants": {"greedy": {"temperature": 0.0, "top_p": 1.0, "top_k": 0}},
+                                   "requests": [{"request_id": f"uuid-{i}", "prompt_token_ids": list(range(1, r["LP"] + 1)), "max_tokens": r["cap"],
+                                                 "arrive_step": r.get("arrive", 0)} for i, r in enumerate(reqs)],
+                                   "sampling": {"variant": "greedy", "temperature": 0.0, **extra}, "sweep": {"execution": "bi-eager"}}))
     return str(p)
 
 
@@ -248,7 +250,7 @@ def test_gp01_build_reads_no_execution_record_and_is_stable_across_builds(tmp_pa
     assert a["stop_rule"]["eos_token_ids"] == [7]                                # activity is derived from committed tokens vs THIS set
     assert [r["request_id"] for r in a["requests"]] == ["r0", "r1", "r2"]         # r<k> identity, manifest position
     assert [r["cap"] for r in a["requests"]] == [3, 1, 3] and [r["arrive_step"] for r in a["requests"]] == [0, 1, 2]
-    assert json.load(open(tmp_path / "out_a" / "address_map.json")) == json.load(open(tmp_path / "out_b" / "address_map.json"))
+    assert json.loads((tmp_path / "out_a" / "address_map.json").read_text()) == json.loads((tmp_path / "out_b" / "address_map.json").read_text())
     # a component of the wrong shape for a declared cap is not silently reused: the missing shape is named (exit 4 path)
     m2 = _manifest(tmp_path, [{"LP": 3, "cap": 2}], name="w2.json")
     r = gp.build(m2, derived, str(tmp_path / "out_c"))
@@ -267,7 +269,9 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
         name = f"w_{lag}_{'default' if target is None else 'declared'}.json"
         m = _manifest(tmp_path, reqs, name=name, eos_token_ids=[7])
         if target is not None:
-            mm = json.load(open(m)); mm["engine"] = {"target": target}; json.dump(mm, open(m, "w"))
+            mm = json.loads(Path(m).read_text())
+            mm["engine"] = {"target": target}
+            Path(m).write_text(json.dumps(mm))
         out = str(tmp_path / f"out_{name}")
         a = gp.build(m, derived, out, eos_token_ids=None)
         assert a["ok"], a
@@ -282,14 +286,15 @@ def test_gp01_build_to_from_gprog_carries_the_declared_lag_static_end_to_end(tmp
     assert outs[(1, True)][0] == outs[(1, False)][0] != outs[(0, False)][0]     # the same LAG = one Program however declared; LAG 0 != LAG 1
     # the section edited to the other value over the intact Program -> refused by name, and the artifact edited to claim NO lag as well
     d1, out1 = outs[(1, True)]
-    p = os.path.join(out1, "workload_program.json"); art = json.load(open(p))
-    json.dump({**art, "lag": {**art["lag"], "value": 0}}, open(p, "w"))
+    p = os.path.join(out1, "workload_program.json")
+    art = json.loads(Path(p).read_text())
+    Path(p).write_text(json.dumps({**art, "lag": {**art["lag"], "value": 0}}))
     with pytest.raises(ValueError, match="lag declaration is not the Program's"):
         gm.from_gprog(p)
-    json.dump({k: v for k, v in art.items() if k != "lag"}, open(p, "w"))
+    Path(p).write_text(json.dumps({k: v for k, v in art.items() if k != "lag"}))
     with pytest.raises(ValueError, match="lag declaration is not the Program's"):
         gm.from_gprog(p)
-    json.dump(art, open(p, "w"))
+    Path(p).write_text(json.dumps(art))
     assert gm.from_gprog(p)["gprog_artifact"]["digest_verification"]["lag_static"] == 1
 
 
@@ -330,7 +335,7 @@ def test_dag_multiset_is_permutation_invariant_and_operand_order_sensitive():
     different DAGs.  The sequence criterion (canonical sha over the emission sequence) differs under the permutation, as it must."""
     P_ab = _prog_of(_two_chain_def("PrDagAB"), "ab")
     P_ba = _prog_of(_two_chain_def("PrDagBA", order="ba"), "ba")
-    assert bd.dag_multiset(P_ab) == bd.dag_multiset(P_ba)                                         # same DAG, other emission order
+    assert dag_form.dag_multiset(P_ab) == dag_form.dag_multiset(P_ba)                                         # same DAG, other emission order
     assert C.compare_steps(P_ab, P_ba)["canonical_sha256"]["equal"] is False                     # the sequence criterion sees the permutation
     # positive control: the same Program twice is sequence-equal
     assert C.compare_steps(P_ab, _prog_of(_two_chain_def("PrDagAB2"), "ab2"))["canonical_sha256"]["equal"] is True
@@ -350,9 +355,9 @@ def test_dag_multiset_is_permutation_invariant_and_operand_order_sensitive():
             return coll_concat(Array(1, Value(32)), [tok])
         return CompositeDefinition("PrDagSubBA", 1, (), sig, body, register=False)
 
-    assert bd.dag_multiset(P_sub_ab) != bd.dag_multiset(_prog_of(swapped_sub(), "sub-ba"))
+    assert dag_form.dag_multiset(P_sub_ab) != dag_form.dag_multiset(_prog_of(swapped_sub(), "sub-ba"))
     # a REPEATED operand is a different computation from two distinct operands ([v, v] is two positions of one value)
-    assert bd.dag_multiset(P_ab) != bd.dag_multiset(_prog_of(_two_chain_def("PrDagAA", second_operand="a"), "aa"))
+    assert dag_form.dag_multiset(P_ab) != dag_form.dag_multiset(_prog_of(_two_chain_def("PrDagAA", second_operand="a"), "aa"))
     # the live cone covers every instance of a Program whose only output is the sampled token's dependency chain
     assert bd.live_cone(P_ab) == set(range(len(P_ab.inst)))
 
@@ -421,7 +426,7 @@ def _oracle_dir(tmp_path, reqs):
     def body(Bd, S, *args):
         prompts, weights = args[:B], args[B]
         prev = [p[0] for p in prompts]
-        outs = [[] for _ in reqs]
+        outs: list[list] = [[] for _ in reqs]
         horizon = max(r["T"] + 1 for r in reqs)
         for e in range(horizon):
             live = [i for i, r in enumerate(reqs) if e <= r["T"]]
@@ -447,7 +452,7 @@ def _oracle_dir(tmp_path, reqs):
     d = tmp_path / "oracle"
     (d / "capture").mkdir(parents=True)
     n_in = B + 3
-    json.dump({"program": desc, "digest": program_digest(desc), "n_input_nodes": n_in}, open(d / "program.json", "w"))
+    (d / "program.json").write_text(json.dumps({"program": desc, "digest": program_digest(desc), "n_input_nodes": n_in}))
     with open(d / "instances.jsonl", "w") as f:
         for i, m in enumerate(meta):
             f.write(json.dumps({"node": i, "spec": "toy", **m}) + "\n")
@@ -489,7 +494,8 @@ def test_batch_decomp_refuses_a_header_that_disagrees_with_the_programs_input_la
     oracle, _ = _oracle_dir(tmp_path, reqs)
     derived = [_derived_dir(tmp_path, 3, 2), _derived_dir(tmp_path, 2, 1)]
     log = os.path.join(oracle, "capture", "log.jsonl.gz")
-    lines = gzip.open(log, "rt").read().splitlines()
+    with gzip.open(log, "rt") as f:
+        lines = f.read().splitlines()
     hdr = json.loads(lines[0])
     hdr["workload"]["requests"].append({"request_id": "r2", "prompt_token_ids": [1, 2], "max_tokens": 1})
     bad = os.path.join(oracle, "capture", "log_bad.jsonl.gz")
@@ -503,7 +509,6 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
     """Control for the mixed-width fixture machinery: the same toy with a width-HOMOGENEOUS weights RecordType (ONE Input node on both sides,
     one weight tensor `weights` named by every hint — the dense layout) goes through `decompose` as every dense workload does — attributed, no XREQ, canonical-equal, PASS — so the xfail above is about the weights node COUNT and nothing else."""
     HREC = RecordType(("wa", Array(2, Value(16))), ("wc", Array(2, Value(16))))
-    HREC_REPR = "{wa: Array<2,Value<16>>, wc: Array<2,Value<16>>}"
 
     def step(Bd, prev16, weights, s):
         a = Bd.call(ADD16, prev16, weights.field("wa")[s % 2])
@@ -524,7 +529,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
         d = _reg("PrToyReqH_v1") or CompositeDefinition("PrToyReqH", 1, ("LP", "T"), sig, body)
         return d.bind(LP=LP, T=T)
 
-    reqs = [{"id": "r0", "LP": 3, "T": 2}, {"id": "r1", "LP": 2, "T": 1}]
+    reqs: list[dict[str, Any]] = [{"id": "r0", "LP": 3, "T": 2}, {"id": "r1", "LP": 2, "T": 1}]
     B = len(reqs)
     meta = []
 
@@ -534,7 +539,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
     def body(Bd, S, *args):
         prompts, weights = args[:B], args[B]
         prev = [p[0] for p in prompts]
-        outs = [[] for _ in reqs]
+        outs: list[list] = [[] for _ in reqs]
         for e in range(3):
             live = [i for i, r in enumerate(reqs) if e <= r["T"]]
             for row, i in enumerate(live):
@@ -552,7 +557,7 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
     desc = encode_program(Program(fn))
     d = tmp_path / "oracle_h"
     (d / "capture").mkdir(parents=True)
-    json.dump({"program": desc, "digest": program_digest(desc), "n_input_nodes": B + 1}, open(d / "program.json", "w"))
+    (d / "program.json").write_text(json.dumps({"program": desc, "digest": program_digest(desc), "n_input_nodes": B + 1}))
     with open(d / "instances.jsonl", "w") as f:
         for i, m in enumerate(meta):
             f.write(json.dumps({"node": i, "spec": "toy", **m}) + "\n")
@@ -569,8 +574,8 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
         rd = encode_program(Program(req_def(LP, T)))
         with gzip.open(dd / "descriptor.json.gz", "wb") as f:
             f.write(canonical_json(rd))
-        json.dump({"structural_inputs": {"LP": LP, "T": T}}, open(dd / "construction_manifest.json", "w"))
-        json.dump({"provenance": {"source": {"example_inputs": [[0] * LP]}, "weights": [{"field": 0, "name": "weights"}]}}, open(dd / "derive-report.json", "w"))
+        (dd / "construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": LP, "T": T}}))
+        (dd / "derive-report.json").write_text(json.dumps({"provenance": {"source": {"example_inputs": [[0] * LP]}, "weights": [{"field": 0, "name": "weights"}]}}))
         derived.append(str(dd))
     res = bd.decompose(str(d), derived)
     assert res["attribution"]["unattributed"] == 0 and res["xreq_total"] == 0 and res["missing_derived"] == []
@@ -583,11 +588,12 @@ def test_single_weights_input_node_baseline_still_passes(tmp_path):
 # GM-01's own e2e fixtures (test_global_match: toy fold + batched record with declared arrivals / caps / an EOS stop) are the record of
 # reference here; `memory` is their fold fixture.  R1_EOS: cap 4, stops on the declared EOS 11 after 2 events -> a_r = n_r = 2.
 
-from verity_vllm.check.match import global_match as gm  # noqa: E402
-from verity_vllm.check.match import sampler_geometry as SG  # noqa: E402
+from verity.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
+
 from tests.check import test_global_match as TGM  # noqa: E402
 from tests.check.test_global_match import memory  # noqa: E402,F401 - the fold fixture
-from verity.definitions.registry.topp_geometry import registered_splits, splits_for  # noqa: E402
+from verity_vllm.check.match import global_match as gm  # noqa: E402
+from verity_vllm.check.match import sampler_geometry as SG  # noqa: E402
 
 NSM = 4   # a num_SMs at which vLLM's own S discriminates 1 vs 2 live rows: splits_for(1, 4) = 4, splits_for(2, 4) = 2 (142 SMs gives 32 for both)
 S_REG = registered_splits(NSM)   # 4: the split count the pinned engine launches at every batch
@@ -619,7 +625,7 @@ def _program_activity(gpd: dict, transcripts: dict[str, list[int]], eos_ids: set
 
 
 def _transcripts(oracle: str) -> dict[str, list[int]]:
-    tk = json.load(open(os.path.join(oracle, "capture", "tokens.json")))
+    tk = json.loads(Path(os.path.join(oracle, "capture", "tokens.json")).read_text())
     return {r["request_id"]: list(r["generated_token_ids"]) for r in tk["requests"]}
 
 
@@ -647,7 +653,8 @@ _S_FORMS = ["static"] + (["operand"] if _reader_takes_the_bound_operand() else [
 def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: str = "static"):
     """A stub fold with one GumbelTopPTokenSelect per live row per step carrying the launch S `s_of[step]` in the given representation,
     plus engine_step_of (keyed by the SELECT instances' indices -- the unbound form interleaves one Const32 instance per select)."""
-    s_list, es = [], {}
+    s_list: list[int] = []
+    es: dict[int, int] = {}
     for st in sorted(live_per_step):
         for _ in range(live_per_step[st]):
             es[len(s_list)] = st
@@ -656,7 +663,7 @@ def _topp_fold_for(live_per_step: dict[int, int], s_of: dict[int, int], form: st
         return _OperandStubFold(s_list), es
     if form == "unbound":
         fold = TGM._OperandFold([(S, None) for S in s_list])
-        sel = [i for i, x in enumerate(fold.inst) if x["spec"].startswith("GumbelTopP")]
+        sel = [i for i, x in enumerate(fold.inst) if str(x["spec"]).startswith("GumbelTopP")]
         assert len(sel) == len(s_list)
         return fold, {sel[n]: es[n] for n in range(len(s_list))}
     return TGM._StubFold([f"GumbelTopPTokenSelect_v1{{V=64,S={S}}}" for S in s_list]), es
