@@ -155,11 +155,11 @@ def test_an_accepted_run_prints_the_share_of_the_models_macs_as_text_and_as_json
     text, doc, err = printed(capsys)
     assert err == ""
     assert text == [
-        ("compute: 75.00% of the served model's MACs are credited by Pearl+ (105,449,127,936 of 140,598,837,248), below "
-         "the 97% target"),
+        ("compute: 75.00% of the served model's MACs are credited by Pearl+ (105,449,127,936 of 140,598,837,248), "
+         "below the 97% target"),
         (f"  {RUN}, commit {COMMIT}: Pearl+'s answer accepts (scheme pearl-c-h100-v1-h3) at ε_s 1/100, δ_s 1/100 "
-         f"(sampling's alone: the assumption's gap and δ, and binding, are not in them), and the Lean verifier's verdict "
-         f"is the same"),
+         f"(sampling's alone: the assumption's gap and δ, and binding, are not in them), and the Lean verifier's "
+         f"verdict is the same"),
         ("  PoUW's row in the run's composed record is `missing`, not an accept, so the credit is the Pearl+ piece's "
          "alone: development run, credits nothing: the registration can't be read"),
         ("  unsloth/Llama-3.2-1B at 4 slots of 32 prompt and 4 output tokens: linears 136,230,993,920, attention "
@@ -219,8 +219,8 @@ def test_the_number_is_held_to_the_target_exactly(store, tmp_path, capsys, monke
 @pytest.mark.parametrize("verdicts, said", [
     (to("protocols", "work", value={"verdict": "accept"}), "  PoUW's row in the run's composed record accepts too"),
     (to("protocols", "work", value={"verdict": "reject", "reason": "a sampled tile is wrong"}),
-     ("  PoUW's row in the run's composed record is `reject`, not an accept, so the credit is the Pearl+ piece's alone: "
-      "a sampled tile is wrong")),
+     ("  PoUW's row in the run's composed record is `reject`, not an accept, so the credit is the Pearl+ piece's "
+      "alone: a sampled tile is wrong")),
     (to("protocols", value={}), ("  PoUW's row in the run's composed record is absent, so the credit is the Pearl+ "
                                  "piece's alone")),
     (None, "  PoUW's row in the run's composed record is absent, so the credit is the Pearl+ piece's alone"),
@@ -373,8 +373,8 @@ def test_the_command_line_names_a_run(store, capsys):
     ({"POLICY": to("class", "positions", value=36)},
      "the policy's class runs 36 positions a slot, not the 35 of 32 prompt and 4 output tokens"),
     ({"POLICY": to("n_inputs", "work", "lm_head", value=1)},
-     ("the policy counts its class's MACs as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4} and run.py "
-      "as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4202692608}")),
+     ("the policy counts its class's MACs as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4} and "
+      "run.py as {'linears': 136230993920, 'attention': 165150720, 'lm_head': 4202692608}")),
     ({"VERDICTS": "[]"}, "the run's composed record doesn't read as one"),
     ({"ANSWER": to("public", "work", "credited", value=MACS["linears"] + 1), "LEAN": None},
      ("Pearl+'s answer holds 136,230,993,921 MACs, more than the 136,230,993,920 of the linears of the policy's class: "
@@ -570,8 +570,8 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
     assert [(c["call"], c["linear"]) for c in got["top"]] == [(71, "1x1"), (2, "gate_up")]
     assert got["top"][1]["causes"] == {"epsilon_macs": "3000000001/3", "rho_macs": "9884901887/1200"}
     assert text[7:] == [
-        ("  per call: the model gives up 35,149,709,312 of its MACs (25.00%); by cause, from the verifier's split of its 4 "
-         "calls (out/pieces/pouw/verify.json):"),
+        ("  per call: the model gives up 35,149,709,312 of its MACs (25.00%); by cause, from the verifier's split of "
+         "its 4 calls (out/pieces/pouw/verify.json):"),
         "    LM head, which Pearl+ doesn't credit         4,202,692,608 MACs   11.96%",
         "    attention, which Pearl+ doesn't credit         165,150,720 MACs    0.47%",
         "    linears outside the passes                  16,079,998,976 MACs   45.75%",
@@ -583,8 +583,8 @@ def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_mos
         "    sampled tiles over the inert-work bound                  0 MACs    0.00%",
         "    ι, the inert-work share                        264,283,529 MACs    0.75%",
         "    the credit's floor                                       0 MACs    0.00%",
-        ("  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most MACs "
-         "a ticket, so the calls it lands on carry it for the whole run"),
+        ("  ε's deduction is the run's, at its sample: the verifier takes it off the records whose cells hold the most "
+         "MACs a ticket, so the calls it lands on carry it for the whole run"),
         "  the 2 calls that give up the most:",
         ("    pass 1 call 71, weight 1000 1x1, 111493951488x1x1 with 111493951488 real rows: 13,532,106,942 MACs "
          "(ε's deduction 13,286,588,535, ι 245,518,407)"),
@@ -648,8 +648,8 @@ def test_the_uncredited_words_are_the_calls_own_sum_over_every_call(store, tmp_p
     ({"VERIFY": lambda d: d["uncredited"]["calls"][2].update(epsilon_macs="-1")},
      "the per-call split's call 70 holds a count that is no count of MACs"),
     ({"VERIFY": to("uncredited", "totals", "excluded_a", value=0)}, "the per-call split's totals are not its calls' sums"),
-    ({"VERIFY": moved(400)}, ("the per-call split's calls credit 105,449,128,335 of 120,000,000,000 MACs and the answer "
-                              "105,449,127,936 of 120,000,000,000")),
+    ({"VERIFY": moved(400)}, ("the per-call split's calls credit 105,449,128,335 of 120,000,000,000 MACs and the "
+                              "answer 105,449,127,936 of 120,000,000,000")),
     ({"VERIFY": lambda d: (d["uncredited"]["calls"][3].update(macs=d["uncredited"]["calls"][3]["macs"] + 16_079_998_977,
                                                               uncredited_macs={**d["uncredited"]["calls"][3]["uncredited_macs"],
                                                                                "kept_width": 16_079_998_977}), resum(d))},
