@@ -1426,6 +1426,14 @@
   "Pous.Component.SecurityProofs.wipeAccepts_complete": {
    "honest": ["Pous.Component.SecurityProofs.wipeAccepts_honest"],
    "nontrivial": "Pous.Component.SecurityProofs.wipeAccepts_complete_nontrivial"
+  },
+  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives": {
+   "honest": ["Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_honest"],
+   "nontrivial": "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_nontrivial"
+  },
+  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives": {
+   "honest": ["MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_honest"],
+   "nontrivial": "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_nontrivial"
   }
  },
  "unwitnessed": {
@@ -3035,6 +3043,21 @@
    "owner": "@memory-accounting"
   },
   "PousCheck.Properties.InProofs.SecurityProofs.setupGives": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.InProofs.SecurityProofs.spanGives_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_honest": {
+   "owner": "@memory-accounting"
+  },
+  "MemoryChallenger.Properties.InProofs.SecurityProofs.sessionGives_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "PousCheck.Properties.InProofs.SecurityProofs.setupGives_nontrivial": {
    "owner": "@memory-accounting"
   },
   "MemoryChallenger.Properties.SecurityProofs.verdictAccepts": {
