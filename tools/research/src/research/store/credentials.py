@@ -27,6 +27,7 @@ import hmac
 import json
 import os
 import re
+import sys
 import time
 import tomllib
 import urllib.error
@@ -155,7 +156,8 @@ def remote_config(config_path: str | os.PathLike[str] | None = None) -> dict:
         return {}
     try:
         r = tomllib.loads(p.read_text(encoding="utf-8")).get("remote") or {}
-    except tomllib.TOMLDecodeError:
+    except tomllib.TOMLDecodeError as e:
+        print(f"research data: {p} did not parse, so it names no remote ({type(e).__name__})", file=sys.stderr, flush=True)
         return {}
     return r if r.get("type") == "s3" else {}
 

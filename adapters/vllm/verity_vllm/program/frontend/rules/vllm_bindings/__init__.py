@@ -143,7 +143,7 @@ def vllm_ruleset():
     from verity_vllm.program.frontend.rules.base import RuleSet
     base = [r for r in DEFAULT_RULES.rules if type(r) is not _FusedAddRmsNormRule]
     from verity_vllm.program.frontend.rules.vllm_dsa import (
-        VLLM_DSA_RULES,  # DeepSeek sparse attention's leaves (export_compat.dsa_leaves)
+        VLLM_DSA_RULES,  # DeepSeek sparse attention's leaves (dsa_leaves.dsa_leaves)
     )
     from verity_vllm.program.frontend.rules.vllm_dsa_absorb import (  # MLA's latent absorptions around them
         VLLM_DSA_ABSORB_RULES,
@@ -151,6 +151,9 @@ def vllm_ruleset():
     )
     from verity_vllm.program.frontend.rules.vllm_dsa_dense import (
         VLLM_DSA_DENSE_RULES,  # its prefill by dense MHA (the same shim's leaf)
+    )
+    from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import (
+        VLLM_DSA_FP8_RULES,  # the same leaves over an fp8_ds_mla KV cache
     )
     from verity_vllm.program.frontend.rules.vllm_dsv4 import (
         VLLM_DSV4_RULES,  # DeepSeek-V4's sparse MLA leaves
@@ -174,7 +177,7 @@ def vllm_ruleset():
         VLLM_SAMPLING_RULES,  # the seeded temperature + top-p token select (GumbelTopPTokenSelect_v1{V,S})
     )
     return RuleSet("default+vllm-bindings", VLLM_DSA_PATTERN_RULES + base + VLLM_BINDING_RULES + VLLM_MOE_RULES + VLLM_MOE_FP8_RULES + VLLM_MOE_ROUTER_RULES
-                   + VLLM_DSA_RULES + VLLM_DSA_ABSORB_RULES + VLLM_DSA_DENSE_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES + VLLM_DSV4_RULES
+                   + VLLM_DSA_RULES + VLLM_DSA_ABSORB_RULES + VLLM_DSA_DENSE_RULES + VLLM_DSA_FP8_RULES + list(VLLM_SAMPLING_RULES) + VLLM_MHC_RULES + VLLM_DSV4_RULES
                    + VLLM_MARLIN_MOE_RULES, list(DEFAULT_RULES.families))
 
 

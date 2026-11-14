@@ -61,11 +61,6 @@ def _refuse(fact: str):
     raise Unexpressible(f"vocabulary cannot express: {fact}")
 
 
-# vLLM d9105ea80's FlashMLA sparse backend (flashmla_sparse.py): below this many heads a rank an fp8_ds_mla cache takes one mixed
-# batch of every sparse row, its query padded to FP8_PADDED_HEADS heads, the planner's h_q.
-MIN_HEADS_FOR_BF16_PREFILL = 32
-FP8_PADDED_HEADS = 64
-
 
 def run_field(layer: int, pos: int) -> str:
     """The `run` field `<layer>/topk_switches[t=P]` of layer `layer`'s Waksman settings for the row at position `pos`, as the
@@ -204,6 +199,7 @@ class Net:
         FlashMLA's sparse fp8 kernel takes every sparse row of a step in one mixed batch below MIN_HEADS_FOR_BF16_PREFILL heads a
         rank, over whole BN-row blocks of INDEX_TOPK rows (`FlashMlaV32Decode_v1`)."""
         from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import MIN_HEADS_FOR_BF16_PREFILL
         C, G = self.C, FLASHMLA_GLM53
         if self.kv_layout != "fp8_ds_mla":
             return [f"a KV cache in layout {self.kv_layout!r} (the decoder writes fp8_ds_mla's)"]
@@ -526,8 +522,8 @@ class _Model:
         qn = self.k("dsa_rmsnorm", N=QL, EPS=self.EPS)
         qc = [self.call(qn, q.slice(0, QL), w("q_a_ln").refs).refs for q in qkv]
         if fp8:
-            from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53
-            lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=FLASHMLA_GLM53["QT"], EPS=self.EPS)
+            from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import DS_MLA_TILE
+            lr = self.k("dsa_latent_row_ds_mla", KVL=KVL, R=R, TILE=DS_MLA_TILE, EPS=self.EPS)
             cache = [self.call(lr, q.slice(QL, QL + KVL + R), w("kv_a_ln").refs, c) for q, c in zip(qkv, cs)]
             kvc, kpe = [o[0].refs.slice(0, KVL) for o in cache], [o[0].refs.slice(KVL, KVL + R) for o in cache]
         elif self.batched:
@@ -626,17 +622,15 @@ class _Model:
     def _flashmla_fp8(self, logs: dict[str, PartLog], ql: list[Refs], qpe: list[Refs], keys: list[int], tokens: int) -> list[Refs]:
         """The rows' attention over an fp8_ds_mla cache (`FlashMLASparseImpl._forward_fp8_kv_mixed_batch`) -> rows [NH * KV_LORA]: one
         FlashMLA call over the launch's `tokens` sparse rows, which the planner takes as one request of that many query rows at
-        FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`flashmla_twin.sched_meta`), so every row shares its SPLITS.  Row i's
+        FP8_PADDED_HEADS heads over INDEX_TOPK cache rows (`vllm_dsa_fp8.decode_splits`), so every row shares its SPLITS.  Row i's
         query is per head [ql | q_pe]; its INDEX_TOPK cache rows are its keys' (nope, scale, rope) in index order, then row 0's
         under index -1 (`FlashMlaV32KvRow_v1` zeroes them)."""
-        from verity.definitions.numerics import flashmla_twin as FT
-        from verity.definitions.registry.flashmla_dsv32 import FLASHMLA_GLM53 as G
+        from verity_vllm.program.frontend.rules.vllm_dsa_fp8 import FLASHMLA_FP8_GEOMETRY, decode_splits
         C = self.C
         KVL, R, NH, TOPK = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "NH", "INDEX_TOPK"))
-        metas, ns = FT.sched_meta([TOPK], topk=TOPK, parts=FT.num_sm_parts(FP8_PADDED_HEADS, s_q=tokens,
-                                                                          num_sms=int(self.net.tp.num_sms)), block_size_n=G["BN"])
-        fn = self.k("flashmla_v32_decode", NH=NH, SPLITS=FT.request_splits(metas, ns, 0, TOPK // G["BN"]), DN=KVL, DR=R, QT=G["QT"],
-                    BN=G["BN"], DOT=G["DOT"], SCALE=float(C["ATTN_SCALE"]))
+        G = FLASHMLA_FP8_GEOMETRY[(R, KVL)]
+        fn = self.k("flashmla_v32_decode", NH=NH, SPLITS=decode_splits(tokens, TOPK, int(self.net.tp.num_sms), G["BN"]), DN=KVL, DR=R,
+                    QT=G["QT"], BN=G["BN"], DOT=G["DOT"], SCALE=float(C["ATTN_SCALE"]))
         valid, pad = (self.call(self.k("const", W=32, BITS=v)).refs for v in (0, 0xFFFFFFFF))
         out = []
         for i, n in enumerate(keys):
