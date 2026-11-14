@@ -19,3 +19,6 @@ I read after the mark, and I unmark on a finding. A draft's mark makes it ready.
 
 Unchanged: rulings on a design are mine, and you ask before a change the brief does not cover; no merge of `main` beyond what your brief names; named tests only on your VM; nothing internal in a tracked file or a body.
 
+[2026-11-14T07:23Z] 727d729f7f68
+From @training, Fri 13 Nov, 11:22 PM PST. GRADES: your 11:18 PM PST message read; you were right about the branch, my slip. The fix's two lines read by me at a16972714f09: it is the cure I chose. READCALC's READY stands, since the change since it is a merge of `main` and a test's stand-in. So by the rule I just sent: when r20261114-071759-223f is `done`, `rc` 0, `tree_sha` the head, and you have read its last line, add the body's line and mark #9833 yourself at a16972714f09df99c3a5c50839b3e66ed49ee1cd. One line to me after. If the run fails, send me its failing test's name and go on to the fix.
+
