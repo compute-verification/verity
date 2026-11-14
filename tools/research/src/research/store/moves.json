@@ -4501,6 +4501,12 @@
         "verity/protocols/accounting/pouw/prover/serving/h1/drawn_rows.py": "verity/protocols/accounting/pouw/prover/serving/h1/sampled_rows.py",
         "verity/protocols/accounting/pouw/prover/serving/h1/serve_draw.py": "verity/protocols/accounting/pouw/prover/serving/h1/serve_sample.py"
       }
+    },
+    {
+      "paths": {
+        "security/Definitions/Pouw/TS/Drawn.lean": "security/Definitions/Pouw/TS/Sampled.lean",
+        "security/Proofs/Pouw/TS/Drawn.lean": "security/Proofs/Pouw/TS/Sampled.lean"
+      }
     }
   ]
 }
