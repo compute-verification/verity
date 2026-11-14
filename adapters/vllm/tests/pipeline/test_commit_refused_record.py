@@ -29,7 +29,11 @@ import pytest
 pytest.importorskip("torch")
 
 from tests.check.test_oracle_compare import U0, U1, make_match
-from tests.check.test_oracle_compare_promoted_key import _add_promoted, _manifest, _promoted_bmap
+from tests.check.test_oracle_compare_promoted_key import (
+    _add_promoted,
+    _manifest,
+    _promoted_bmap,
+)
 from tests.check.test_verdict import _base, _both
 from tests.pipeline import test_commit_main as M
 from tests.pipeline.test_commit_main import Ended, Record, oracle_compares, run
