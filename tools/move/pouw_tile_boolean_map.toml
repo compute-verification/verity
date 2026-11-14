@@ -33,7 +33,8 @@ paths = []
 
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves, the
-# archive), files whose bytes a digest pins, and Lean sources, as in `definitions_served_map.toml`.
+# archive), files whose bytes a digest pins, and Lean sources, as in `definitions_served_map.toml`; nor the
+# lakefile of Flock's sigma package, whose comments name `boolean.sigma_check`, so this map changes no Lean input.
 exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
            "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
            "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json",
@@ -42,7 +43,8 @@ exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.t
            "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
            "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**",
            "adapters/vllm/tools/migrate/superseded_quarantine.py",
-           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean"]
+           "adapters/vllm/tests/migrate/test_superseded_quarantine.py", "**/*.lean",
+           "verity/protocols/proofs/flock/verifier/sigma/lakefile.toml"]
 include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json",
            "adapters/vllm/manifests/definitions.json"]
 
