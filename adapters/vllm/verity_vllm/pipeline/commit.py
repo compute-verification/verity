@@ -552,7 +552,7 @@ def binding_record(com, rc, reqs, sampling, args, pair: int, *, served_tokens: d
                                weight_registration=rc.weight_registration, collector=collector, request_rows=request_rows, binder=binder)
     horizon = max(arrivals[k] + n_exec[k] for k in caps)
     request_steps = EP.request_steps_of_record(epr, arrivals)
-    workload = {"program_digest": pd, "requests": sorted(caps, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
+    workload: dict[str, Any] = {"program_digest": pd, "requests": sorted(caps, key=lambda k: int(k[1:])), "steps": horizon, "ranks": [0], "request_steps": request_steps}
     man_hdr = None
     comp = None
     if getattr(args, "required_manifest", None):
@@ -1320,7 +1320,7 @@ def main(args: Options) -> None:
                 # the C2 sampled replay's Programs of record become Python objects in THIS process (B8: 70,300 MiB,
                 # the peak of attempt 1); forecast them BEFORE the run from the instance files the replay will load (streamed count, ~17 s
                 # for the B8 row's 4.9 GB of json; nothing is built), so the bound printed here names them as a term of their own
-                _c2f = c2_programs_forecast(getattr(args, "programs_root", None), getattr(args, "program_dir", None)) if args.replay_per_stratum else \
+                _c2f: dict[str, Any] = c2_programs_forecast(getattr(args, "programs_root", None), getattr(args, "program_dir", None)) if args.replay_per_stratum else \
                     {"bytes": 0, "rows": 0, "json_bytes": 0, "files": [], "why": "no sampled replay (--replay-per-stratum 0)"}
                 asz["c2_programs_forecast"] = _c2f
                 print(f"[delta] C2 PROGRAMS FORECAST: {_c2f['rows']:,} instance rows in {len(_c2f['files'])} files, json {_c2f['json_bytes'] >> 20} MiB -> "
@@ -1899,7 +1899,7 @@ def main(args: Options) -> None:
                     from verity_vllm.check import weights_of_record as WR
                     TL.start("validate.weights_pin", pair=pair)
                     if _wor_rec is None or _live_wd is None or _wor_rec.get("error"):
-                        _wp = {"result": None, "why": (_wor_rec or {}).get("why") or "live parameter digests not taken", "method": "MAN-09 weights pin (not evaluated)"}
+                        _wp: dict[str, Any] = {"result": None, "why": (_wor_rec or {}).get("why") or "live parameter digests not taken", "method": "MAN-09 weights pin (not evaluated)"}
                     else:
                         # the record must be the one of THIS Program and THIS checkpoint: its program_digest against the
                         # Build digest of record (--program-digest) / the manifest's component digests, its checkpoints.json entry against
