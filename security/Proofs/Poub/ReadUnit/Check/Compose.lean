@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Accounting.ReadUnit.Check.Copies
+public import Proofs.Poub.ReadUnit.Check.Copies
 
 /-!
 # The read's root composes its calls into the read
