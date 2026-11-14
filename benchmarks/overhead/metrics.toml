@@ -1,0 +1,26 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+# `table` reads the labelled runs of record from the evidence store, so any CPU node with a --store-read key runs it; a γ
+# changes only when a new run of record is labelled (`verity bench overhead run --record RUN`)
+[[metric]]
+id = "benchmarks/pearl-plus-gamma-c-h200"
+title = "Pearl+'s overhead γ over stock FP8 on the H200 at its compute-bound point C, in busy SM-time, from the run of record, without the output's commitment (each layer's output hash not counted)"
+owner = "benchmarks"
+unit = "busy SM-seconds over stock's, less one"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
+every = "7d"
+floor = 10.0
+goal = "kernels/overhead-counts-output-commitment"
+
+[[metric]]
+id = "benchmarks/pearl-plus-gamma-l-h200"
+title = "Pearl+'s overhead γ over stock FP8 on the H200 at its memory-bound point L, in busy SM-time, from the run of record, without the output's commitment (each layer's output hash not counted)"
+owner = "benchmarks"
+unit = "busy SM-seconds over stock's, less one"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run python benchmarks/overhead/run.py table"
+every = "7d"
+floor = 10.0
+goal = "kernels/overhead-counts-output-commitment"

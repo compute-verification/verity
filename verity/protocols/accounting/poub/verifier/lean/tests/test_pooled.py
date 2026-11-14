@@ -11,10 +11,10 @@ import shutil
 from fractions import Fraction
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.poub.verifier import pooled
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -22,10 +22,13 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 GATE_RUNS = {"5/0": (2118, 130023424, 48), "5/2": (96, 130023424, 232), "6/0": (2118, 113770496, 48),
              "6/2": (96, 113770496, 232), "7/0": (2118, 130023424, 48), "7/2": (96, 130023424, 232)}
 """Each accepted session of gate runs 5–7 as `gate_run/k`: its record's windows, all alike (n of them, U receipts
-drawn s times each), at δ = 2^-40 (`tests/test_pooled.py`)."""
+sampled s times each), at δ = 2^-40 (`tests/test_pooled.py`)."""
 
 
-def port(inputs=st.nothing(), reference=pooled.run_json) -> D.Port:
+NOTHING = st.nothing()
+
+
+def port(inputs=NOTHING, reference=pooled.run_json) -> D.Port:
     return D.Port(M.EXE, "pooled", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
@@ -42,42 +45,42 @@ DELTAS = st.one_of(st.sampled_from([2.0 ** -40, 1e-9, 1e-6, 0.5, 0.999]).map(lam
 
 
 @st.composite
-def inputs(draw) -> dict:
+def inputs(take) -> dict:
     """A record's windows and δ, as they are or with one fault (most often neither)."""
-    shape = draw(st.sampled_from(["small", "alike", "large"]))
-    n = draw(st.integers(1, {"small": 6, "alike": 40, "large": 4}[shape]))
+    shape = take(st.sampled_from(["small", "alike", "large"]))
+    n = take(st.integers(1, {"small": 6, "alike": 40, "large": 4}[shape]))
     if shape == "alike":
-        u = draw(st.integers(1, 10 ** 9))
-        ws = [[u, draw(st.integers(1, min(u, 300)))]] * n
+        u = take(st.integers(1, 10 ** 9))
+        ws = [[u, take(st.integers(1, min(u, 300)))]] * n
     else:
         ws = []
         for _ in range(n):
-            u = draw(st.integers(1, 60 if shape == "small" else 10 ** 12))
-            ws.append([u, draw(st.one_of(st.integers(1, min(u, 60 if shape == "small" else 10 ** 4)),
+            u = take(st.integers(1, 60 if shape == "small" else 10 ** 12))
+            ws.append([u, take(st.one_of(st.integers(1, min(u, 60 if shape == "small" else 10 ** 4)),
                                          st.just(max(1, u // 2)), st.just(u)))])
-    v = {"windows": ws, "delta": draw(DELTAS)}
-    fault = {4: draw(st.sampled_from(["empty", "none drawn", "over", "delta"])), 5: "malformed", 6: "malformed"}.get(
-        draw(st.integers(0, 6)))
-    t = draw(st.integers(0, n - 1))
+    v = {"windows": ws, "delta": take(DELTAS)}
+    fault = {4: take(st.sampled_from(["empty", "none drawn", "over", "delta"])), 5: "malformed", 6: "malformed"}.get(
+        take(st.integers(0, 6)))
+    t = take(st.integers(0, n - 1))
     if fault == "empty":
         v["windows"] = []
     elif fault == "none drawn":
         ws[t] = [ws[t][0], 0]
     elif fault == "over":
-        ws[t] = [ws[t][0], ws[t][0] + draw(st.integers(1, 3))]
+        ws[t] = [ws[t][0], ws[t][0] + take(st.integers(1, 3))]
     elif fault == "delta":
-        v["delta"] = draw(st.sampled_from([0, 1, "-1/3", "3/2", "1"]))
+        v["delta"] = take(st.sampled_from([0, 1, "-1/3", "3/2", "1"]))
     elif fault == "malformed":
-        bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
-        k = draw(st.sampled_from(["windows", "delta", "window", "count", "drop"]))
+        bad = take(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
+        k = take(st.sampled_from(["windows", "delta", "window", "count", "drop"]))
         if k in ("windows", "delta"):
             v[k] = bad
         elif k == "window":
-            ws[t] = draw(st.sampled_from([[1], [1, 2, 3], {}, "1,1"]))
+            ws[t] = take(st.sampled_from([[1], [1, 2, 3], {}, "1,1"]))
         elif k == "count":
-            ws[t] = draw(st.sampled_from([[bad, 1], [2, bad]]))
+            ws[t] = take(st.sampled_from([[bad, 1], [2, bad]]))
         else:
-            v.pop(draw(st.sampled_from(["windows", "delta"])))
+            v.pop(take(st.sampled_from(["windows", "delta"])))
     return v
 
 

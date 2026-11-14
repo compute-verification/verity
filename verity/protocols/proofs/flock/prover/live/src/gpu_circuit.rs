@@ -1,7 +1,7 @@
 //! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (verity/protocols/proofs/flock/prover/cuda/prove_circuit.cuh,
 //! installed by verity/protocols/proofs/flock/prover/cuda_circuit_patch.py). The honest witness is built on the device from the compressions' and
-//! hm96 slots' inputs and every unit's input words (all computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
-//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
+//! hm96 slots' inputs and every unit's input words (all computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`)
+//! unless the device walks its levels (`unit_walk`); a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
 
 use std::{ffi::c_void, ptr::{null, null_mut}, sync::{atomic::{AtomicU64, Ordering}, Mutex, OnceLock}, time::Instant};
 
@@ -17,7 +17,7 @@ use crate::{
     LiveChallenger,
     chunk::comp,
     gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, csr, decode_with, link_cb, prove_params, sched, statics_for},
-    ir_block::{IrUnitNet, RowRead},
+    ir_block::{IrUnitNet, UnitSched, WalkRows, schedule},
     circuit::{Kind, Stmt},
 };
 
@@ -123,6 +123,8 @@ struct CircuitParams {
     /// [`Types::types_gen`]: the key the device holds the slot types' CSC and the unit's CSR under; the row arrays are null where it
     /// holds a copy of them
     types_gen: u64,
+    /// the units by the device's level walk ([`unit_walk`]) rather than its unit kernel, from the same input words
+    u_walk: i32,
 }
 
 #[cfg(feature = "sha512")]
@@ -257,6 +259,9 @@ unsafe extern "C" {
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
     fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
     fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64, key: *const u8) -> i32;
+    fn flock_cuda_unit_walk(types_gen: u64, inputs: *const u64, in_words: i32, n: i64, useful: i32, cpos: i32, levels: i32,
+                            level_off: *const u32, unit_log: i32, walked: i32, z: *mut u64, a: *mut u64, b: *mut u64) -> i32;
+    fn flock_cuda_types_share(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, key: *const u8) -> i32;
     fn flock_cuda_types_held(types_gen: u64, set: i32) -> i32;
 }
 
@@ -304,7 +309,8 @@ impl Drop for Pinned {
 
 /// The device's unit kernel syncs once per AND-level for 32 units per CTA, so a deep unit leaves the device idle (a flattened
 /// GEMM coordinate has 305 levels per tensor-core step), while the host's `eval64` walks its rows once per 64 units. A unit at
-/// least this deep is evaluated on the host; `FC_HOST_UNITS=0|1` overrides.
+/// least this deep is evaluated on the host, or by the device's level walk where that is on ([`unit_walk`]);
+/// `FC_HOST_UNITS=0|1` overrides.
 pub const HOST_UNIT_LEVELS: usize = 2048;
 
 /// A slot circuit's native witness plan (`sha512_native`): its rows' `(a, b)` sources as `u32` pairs, and the tape's words per
@@ -391,8 +397,80 @@ pub fn deep_unit(st: &Stmt) -> bool {
     match std::env::var("FC_HOST_UNITS").as_deref() {
         Ok("0") => false,
         Ok("1") => true,
-        _ => types(st).sched.level_off.len() - 1 >= HOST_UNIT_LEVELS,
+        _ => types(st).sched.level_off.len() - 1 >= HOST_UNIT_LEVELS && !unit_walk(st),
     }
+}
+
+/// Whether the device computes the statement's units by the level walk (`fc_unit_walk`, prove_circuit.cuh: a launch a level
+/// over every unit at once, where the unit kernel syncs every 32 units at every level) when it computes them at all.
+/// `FC_UNIT_WALK=1`: a unit as deep as [`HOST_UNIT_LEVELS`], which then stays off the host; `FC_UNIT_WALK=2`: any unit. It
+/// needs the net's one-pass form ([`WalkRows::of`]) and the walk's rows on the device as the one copy the GPU's provers share
+/// ([`arrays_key`]). They are as large as the unit type's CSC, so where they can't be shared no prover takes a copy of its
+/// own: the walk is off for the process, which says so once, and the host builds a deep unit as before.
+pub fn unit_walk(st: &Stmt) -> bool {
+    let levels = types(st).sched.level_off.len() - 1;
+    let asked = match std::env::var("FC_UNIT_WALK").as_deref() {
+        Ok("1") => levels >= HOST_UNIT_LEVELS,
+        Ok("2") => true,
+        _ => false,
+    };
+    asked && walk_rows_shared(st)
+}
+
+/// Why the unit's level walk is off for `st` on any device, read from the statement alone (no device is asked); None where
+/// the walk can run.
+pub fn unit_walk_off(st: &Stmt) -> Option<String> {
+    let unit = st.c.unit();
+    if unit.order.is_some() {
+        return Some(format!("{} is committed at a position map (ORDER)", unit.name));
+    }
+    WalkRows::of(unit, &schedule(unit)).is_none().then(|| format!("{} has no one-pass form, or is a cut unit", unit.name))
+}
+
+/// Whether the device holds the unit's level walk's rows as the GPU's shared copy, put there at the first ask.
+fn walk_rows_shared(st: &Stmt) -> bool {
+    let unit = st.c.unit();
+    let t = types(st);
+    unit.order.is_none() && *t.walk.get_or_init(|| {
+        let Some(rows) = WalkRows::of(unit, &t.sched) else {
+            eprintln!("the unit's level walk is off: {} has no one-pass form, or is a cut unit", unit.name);
+            return false;
+        };
+        let arrays = [&t.sched.order, &rows.st, &rows.mid, &rows.cols, &rows.own];
+        let key = arrays_key(b"verity flock-circuit: the unit's level walk's rows", &arrays);
+        let (h, len): (Vec<*const u32>, Vec<usize>) = arrays.iter().map(|v| (v.as_ptr(), v.len())).unzip();
+        let shared = unsafe { flock_cuda_types_share(t.types_gen, 2, h.as_ptr(), len.as_ptr(), h.len(), key.as_ptr()) } == 0;
+        if !shared {
+            eprintln!("the unit's level walk is off: its rows ({} MiB) are not shared on this GPU", (4 * len.iter().sum::<usize>()) >> 20);
+        }
+        shared
+    })
+}
+
+/// The units' words as the device's level walk builds them (`flock_cuda_unit_walk`, the kernels `fc_witness` runs under
+/// [`unit_walk`]), from their input words: a test vector against the host's (`Stmt::slot_zab`). The walk's working arrays
+/// start as 0xA5 bytes; `walked` false is the control, the same slots without the levels.
+pub fn device_unit_walk(st: &Stmt, ins: &[Vec<F128>], walked: bool) -> Result<Vec<(Vec<F128>, Vec<F128>, Vec<F128>)>, String> {
+    let (unit, t) = (st.c.unit(), types(st));
+    if !walk_rows_shared(st) {
+        return Err("the unit's level walk's rows are not on the device".into());
+    }
+    let uw = 1usize << (unit.unit_log - 7);
+    let flat: Vec<u64> = ins.iter().flat_map(|w| {
+        assert_eq!(w.len(), unit.in_words, "a unit's input words");
+        w.iter().flat_map(|x| [x.lo, x.hi])
+    }).collect();
+    let (mut z, mut a, mut b) = (vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()], vec![0u64; 2 * uw * ins.len()]);
+    let rc = unsafe {
+        flock_cuda_unit_walk(t.types_gen, flat.as_ptr(), unit.in_words as i32, ins.len() as i64, unit.useful as i32, unit.const_pos as i32,
+                             (t.sched.level_off.len() - 1) as i32, t.sched.level_off.as_ptr(), unit.unit_log as i32, walked as i32,
+                             z.as_mut_ptr(), a.as_mut_ptr(), b.as_mut_ptr())
+    };
+    if rc != 0 {
+        return Err(format!("the device's level walk failed ({rc})"));
+    }
+    let slot = |v: &[u64], s: usize| v[2 * uw * s..2 * uw * (s + 1)].chunks_exact(2).map(|p| F128::new(p[0], p[1])).collect::<Vec<F128>>();
+    Ok((0..ins.len()).map(|s| (slot(&z, s), slot(&a, s), slot(&b, s))).collect())
 }
 
 /// The hm96 leaves of the digests `x` (64 bytes each) under the host's `salts` (192 bytes each) as the device finishes a tree's
@@ -800,78 +878,9 @@ pub enum CircuitSrc<'a> {
     /// Every compression slot's input words (`[blocks][slots per block][in_words]`, `Stmt::row_inputs`), the hm96 slots' witness
     /// (host slots) or input words (`HostSlots::hm96_rows`), and every unit's input words (`[blocks][units per block][in_words]`):
     /// the honest witness, built on the device.
-    /// With `inputs` empty, every unit slot is among the host slots (`deep_unit`).
+    /// With `inputs` empty, every unit slot is among the host slots (`deep_unit`); otherwise the device computes the units from
+    /// `inputs`, by its level walk where that is on ([`unit_walk`]).
     Device { rows: &'a [F128], host: &'a HostSlots, inputs: &'a [F128] },
-}
-
-/// The unit's expanded circuit's level schedule: level 0 the input rows and the constant, a row one past its deepest operand
-/// (itself, in an assertion row, excluded). The device reads its rows beside it as CSR ([`csr`]).
-pub struct UnitSched {
-    /// levels [0, levels0) read no late input row; the rest do
-    pub levels0: usize,
-    pub late_rows: Vec<u32>,
-    pub cut_rows: Vec<u32>,
-    pub level_off: Vec<u32>,
-    pub order: Vec<u32>,
-}
-
-/// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
-/// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
-pub fn schedule(net: &IrUnitNet) -> UnitSched {
-    schedule_of(net, &net.a, &net.b)
-}
-
-/// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
-fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
-    let (u, first, cpos) = (net.useful, net.in_words * 128, net.const_pos);
-    let rows_of = |g: &crate::ir_block::Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * 128 + j) as u32).collect() };
-    let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
-    let mut cut_rows: Vec<u32> = if late_rows.is_empty() { vec![] } else { net.out_groups.last().map(rows_of).unwrap_or_default() };
-    let mut late = vec![false; u];
-    for &r in &late_rows {
-        late[r as usize] = true;
-    }
-    for i in first..u {
-        if i != cpos {
-            late[i] = a.row_cols(i).chain(b.row_cols(i)).any(|c| c != i && c != cpos && late[c]);
-        }
-    }
-    if cut_rows.iter().any(|&r| late[r as usize]) {
-        // not two-phase (a cut output reads a late input: attention's and GEMM's tensor-core steps): one phase; such a unit's
-        // witness is the host's (flock-circuit keeps it off the device)
-        late_rows.clear();
-        cut_rows.clear();
-        late = vec![false; u];
-    }
-    let mut level_off = vec![0u32];
-    let mut order = Vec::new();
-    let mut levels0 = 0;
-    for phase in [false, true] {
-        let mut level = vec![0u32; u];
-        let mut max = 0;
-        for i in first..u {
-            if i == cpos || late[i] != phase {
-                continue;
-            }
-            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
-            level[i] = l;
-            max = max.max(l);
-        }
-        let mut by: Vec<Vec<u32>> = vec![Vec::new(); max as usize];
-        for i in first..u {
-            if i != cpos && late[i] == phase {
-                by[level[i] as usize - 1].push(i as u32);
-            }
-        }
-        for l in by {
-            order.extend(l);
-            level_off.push(order.len() as u32);
-        }
-        if !phase {
-            levels0 = level_off.len() - 1;
-        }
-    }
-    UnitSched { levels0, late_rows, cut_rows, level_off, order }
 }
 
 /// A slot type's circuit as the device reads it, CSC over its slot's columns: A's and B's column pointers and nonzero counts,
@@ -886,7 +895,7 @@ struct TypeCsc {
 }
 
 struct Types {
-    /// The key the device holds this build's slot types' CSC (set 0) and its unit's CSR (set 1) under (`FcTypeUploads`,
+    /// The key the device holds this build's slot types' CSC (set 0), its unit's CSR (set 1) and its level walk's rows (set 2) under (`FcTypeUploads`,
     /// prove_circuit.cuh): sampled once from a counter that only goes up, so no two builds share one, and a set is read from the
     /// host only while the device lacks it. A freed host array can then never be taken for another's, as an address could.
     types_gen: u64,
@@ -895,6 +904,8 @@ struct Types {
     ranges: Vec<(i32, i32, i32)>,
     u_range: usize,
     sched: UnitSched,
+    /// whether the device holds the unit's level walk's rows (set 2), decided at the first ask ([`unit_walk`])
+    walk: OnceLock<bool>,
     h_range: usize,
     hsched: UnitSched,
     /// the compression circuit's rows as CSR, A's then B's: small, and kept, since the device keys its copy by their addresses
@@ -902,12 +913,12 @@ struct Types {
     hcsr: [(Vec<u32>, Vec<u32>); 2],
 }
 
-/// A digest of a set's arrays: the key under which every prover on a GPU shares one device copy of them (`fc_share_get`,
-/// prove_circuit.cuh's csc_share.cuh), so a copy another prover made holds exactly these arrays.
-fn arrays_key(arrays: &[&Vec<u32>]) -> [u8; 64] {
+/// A digest of a set's arrays under the set's `domain`: the key under which every prover on a GPU shares one device copy of
+/// them (`fc_share_get`, prove_circuit.cuh's csc_share.cuh), so a copy another prover made holds exactly these arrays.
+fn arrays_key(domain: &[u8], arrays: &[&Vec<u32>]) -> [u8; 64] {
     use sha2::{Digest, Sha512};
     let mut h = Sha512::new();
-    h.update(b"verity flock-circuit: the slot types' CSC");
+    h.update(domain);
     h.update((arrays.len() as u64).to_le_bytes());
     for a in arrays {
         let bytes = unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), 4 * a.len()) };
@@ -981,14 +992,15 @@ fn types(st: &Stmt) -> &'static Types {
         }
         // the device's copy is shared by every prover on its GPU whose slot types' CSC is this one (FC_CSC_SHARE=0: a copy of
         // this process's own)
-        let key = (host == 0 && std::env::var("FC_CSC_SHARE").map_or(true, |v| v != "0")).then(|| arrays_key(&arrays));
+        let key = (host == 0 && std::env::var("FC_CSC_SHARE").map_or(true, |v| v != "0")).then(|| arrays_key(b"verity flock-circuit: the slot types' CSC", &arrays));
         let key_ptr = key.as_ref().map_or(null(), |k| k.as_ptr());
         // a device that can't take them now keeps them on the host, and the first rep's fold copies them under the same key
         if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host, key_ptr) } == 0 {
             csc.iter_mut().zip(&mapped).filter(|(_, m)| !**m).for_each(|(t, _)| t.rows = None);
         }
         let sha = &c.nets[c.sha_net].1;
-        Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(sha), hcsr: [csr(&sha.a), csr(&sha.b)] }
+        Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), walk: OnceLock::new(), h_range, hsched: schedule(sha),
+                hcsr: [csr(&sha.a), csr(&sha.b)] }
     }));
     held.push((st.c.sha512, t));
     t
@@ -1111,8 +1123,10 @@ pub fn prove_circuit(
             host0 = Some(*host);
         }
     }
-    // the unit's rows as CSR for a device that computes the units and lacks them, dropped once the prover returns
-    let ucsr = (matches!(src, CircuitSrc::Device { .. }) && u_host == 0 && unsafe { flock_cuda_types_held(t.types_gen, 1) } == 0)
+    // the units the device computes go by its level walk where that is on (not a cut template's: its schedule has two phases)
+    let u_walk = matches!(src, CircuitSrc::Device { .. }) && u_host == 0 && mctx.is_none() && unit_walk(st);
+    // the unit's rows as CSR for a device whose unit kernel computes the units and lacks them, dropped once the prover returns
+    let ucsr = (matches!(src, CircuitSrc::Device { .. }) && u_host == 0 && !u_walk && unsafe { flock_cuda_types_held(t.types_gen, 1) } == 0)
         .then(|| [csr(&unit.a), csr(&unit.b)]);
     let c = ChunkParams {
         delta_a: s.da.as_ptr(),
@@ -1209,6 +1223,7 @@ pub fn prove_circuit(
         m_mid: null(),
         m_tables: null(),
         types_gen: t.types_gen,
+        u_walk: u_walk as i32,
     };
     #[cfg(feature = "sha512")]
     if let Some((plan, words)) = native_sha.then(|| native_plan(st)).flatten() {
@@ -1399,7 +1414,7 @@ mod tests {
 
     #[test]
     fn device_builders_read_rows_alike() {
-        use crate::ir_block::{Group, Rows};
+        use crate::ir_block::{Group, Rows, schedule_of};
         let g = |col: usize| Group { col, words: 1, bits: vec![128] };
         // a one-phase unit, and a cut unit (late input rows 128..256, cut output rows 256..384, which read no late row)
         for (seed, useful, ins, outs) in [(3u64, 600usize, vec![g(0)], vec![g(4)]), (0x51ed, 5000, vec![g(0), g(1)], vec![g(30), g(2)])] {
