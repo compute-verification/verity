@@ -2806,6 +2806,11 @@
     },
     {
       "paths": {
+        "demos/onsite_served/config.toml": "demos/onsite_full.toml"
+      }
+    },
+    {
+      "paths": {
         "security/Proofs/Flock/Bridge/DrawnLaw.lean": "security/Proofs/Flock/Bridge/SampledLaw.lean",
         "security/Proofs/Flock/Claims/Complete/Json/UnitDraw.lean": "security/Proofs/Flock/Claims/Complete/Json/UnitSample.lean",
         "security/Proofs/Flock/Claims/KS/PlainDraw.lean": "security/Proofs/Flock/Claims/KS/PlainSample.lean",
