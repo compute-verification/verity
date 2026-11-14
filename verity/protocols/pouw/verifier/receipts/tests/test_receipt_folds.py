@@ -13,8 +13,8 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pouw.receipts import receipt_conform as C
-from verity.protocols.pouw.receipts import receipt_folds as F
+from verity.protocols.pouw.verifier.receipts import receipt_conform as C
+from verity.protocols.pouw.verifier.receipts import receipt_folds as F
 
 HERE = Path(__file__).resolve().parent
 #: the repository's root, the one path entry a reader in the workspace has
@@ -37,11 +37,11 @@ def test_each_module_binds_what_it_lists_and_the_checks_read_only_listed_names()
 
 
 @pytest.mark.parametrize("path, code", [
-    (REPO, "from verity.protocols.pouw.receipts import receipt_conform as C, receipt_folds as F"),
+    (REPO, "from verity.protocols.pouw.verifier.receipts import receipt_conform as C, receipt_folds as F"),
     (HERE.parent, "import receipt_conform as C, receipt_folds as F"),
 ], ids=["the package's name, the repository on the path", "the bare name, the directory on the path"])
 def test_the_checks_import_under_each_name_and_check_that_names_reference(path, code):
-    """A reader in the workspace imports `verity.protocols.pouw.receipts.receipt_conform` with the repository alone on
+    """A reader in the workspace imports `verity.protocols.pouw.verifier.receipts.receipt_conform` with the repository alone on
     the path; a file started by path imports `receipt_conform` from the directory. Under each name the checks hold the
     `receipt_folds` of that name, not a second copy, and the other name is not loaded."""
     code += ("; import sys; assert C.F is F, 'receipt_conform holds another copy of receipt_folds'; "
