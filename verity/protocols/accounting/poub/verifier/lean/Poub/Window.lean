@@ -4,11 +4,11 @@ public import CoreProtocol.Protocol
 public import Poub.Receipts
 
 /-!
-# A window's receipt checks: `audit.py`'s `Session.close` draw and `Session.verify`
+# A window's receipt checks: `audit.py`'s `Session.close` sample and `Session.verify`
 
 `verifyWindow` takes what the verifier holds of window t once its roots are final (its challenge, each pass's root,
 plan and the appends' head received before it, the root before its first pass, the session's appends with their coins)
-and its openings coin, draws `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the prover's
+and its openings coin, samples `s` distinct receipts uniformly from the window's `U_t = Σ_i L_i`, and checks the prover's
 openings of them, in the order sampled. Each opening, in `_check`'s order, fails with the first of:
 
 1. `malformed`: not the sampled (pass, position), a block not 4096 bytes, a tile (none is bound), a salt not 192 bytes, a
@@ -22,7 +22,7 @@ openings of them, in the order sampled. Each opening, in `_check`'s order, fails
    of its append's tree, under that root;
 5. `receipt`: the receipt recomputed from the block under the registration's kind and the pass's seed not the opened one.
 
-A window with another number of openings than draws is `malformed`. `tile` is never reached: a registration that binds
+A window with another number of openings than samples is `malformed`. `tile` is never reached: a registration that binds
 PoUW's tiles is refused (`Registration.make?`), a form no proof here covers.
 -/
 
@@ -76,7 +76,7 @@ def Registration.make? (node : ByteArray) (blocks : Nat) (payloadRoot codecSeed 
 def CODEC_DOMAIN : String := "verity/remote-bandwidth/codec/v0"
 def NONCE_BYTES : Nat := 32
 
-/-- `audit.register`: the codec seed the verifier draws from its secret `source` and a fresh 32-byte `nonce` once the
+/-- `audit.register`: the codec seed the verifier samples from its secret `source` and a fresh 32-byte `nonce` once the
 payload root has arrived, `derive(source, CODEC_DOMAIN, {blocks, codec, node, nonce, payload}).stream("codec", 32)`,
 and the registration under it (`Registration.make?`). The receipt kind, `bind`, the layout and the rows are not in
 the seed's context: the store depends on none of them. -/
@@ -151,7 +151,7 @@ structure Opening where
   digest : ByteArray
 deriving Inhabited
 
-/-- What rejected a window: its failure and the draw it failed at, `none` for the window as a whole. -/
+/-- What rejected a window: its failure and the sample it failed at, `none` for the window as a whole. -/
 structure Rejection where
   failure : Failure
   at? : Option (Nat × Nat)
@@ -161,7 +161,7 @@ deriving BEq, Repr, DecidableEq
 abbrev Findings := Option Rejection
 
 /-- A window's outcome as `Core.Verdict`, with its findings (`audit.Verdict`): `accept` with none (`Verdict.accept`), or
-`reject` with the failure and the draw it failed at (`Verdict.reject`); never `undecided`. -/
+`reject` with the failure and the sample it failed at (`Verdict.reject`); never `undecided`. -/
 abbrev Verdict := Findings × Core.Verdict
 
 def Verdict.accept : Verdict := (none, Core.Verdict.accept)
@@ -173,7 +173,7 @@ def Verdict.reject (failure : Failure) (at? : Option (Nat × Nat)) : Verdict :=
 none, which no check here gives. -/
 def Verdict.rejection (v : Verdict) : Rejection := v.1.getD ⟨.malformed, none⟩
 
-/-- `Session.close`'s draws: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
+/-- `Session.close`'s samples: `min(s, U)` distinct receipts (pass, position) uniform over the window's U receipts, from
 its openings coin, in order. -/
 def receiptSample (registration : ByteArray) (t : Nat) (coin : ByteArray) (samples : Nat) (lengths : Array Nat) :
     Option (Array (Nat × Nat)) := do
@@ -188,7 +188,7 @@ def appendOf (appends : Array Append) (j : Nat) : Option Append :=
   let k := bisectRight (appends.map (·.first)) j
   if k = 0 then none else appends[k - 1]?
 
-/-- `Session._check`: draw (i, p)'s opening, `none` if it checks. -/
+/-- `Session._check`: sample (i, p)'s opening, `none` if it checks. -/
 def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (receipter : Receipter) (i p : Nat) (o : Opening) : Option Failure := Id.run do
   let N := reg.blocks
@@ -212,7 +212,7 @@ def checkOpening (reg : Registration) (digest : ByteArray) (appends : Array Appe
   if receipter.receipt j o.block != y then return some .receipt
   return none
 
-/-- `Session.verify` on sampled receipts: the first opening that fails, with its draw, or accept. -/
+/-- `Session.verify` on sampled receipts: the first opening that fails, with its sample, or accept. -/
 def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none
@@ -226,9 +226,9 @@ def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Appen
     if let some f := checkOpening reg digest appends w r i p openings[k]! then return .reject f (some (i, p))
   return .accept
 
-/-- `checkWindow` over contiguous chunks of `size` draws, each chunk on a thread of its own: the first chunk's rejection
-in draw order, or accept. A chunk's verdict is `checkWindow`'s on its draws and their openings, so a rejection names
-the draw and failure `checkWindow` on the whole window would (its earlier chunks accept, and its first failing opening
+/-- `checkWindow` over contiguous chunks of `size` samples, each chunk on a thread of its own: the first chunk's rejection
+in sample order, or accept. A chunk's verdict is `checkWindow`'s on its samples and their openings, so a rejection names
+the sample and failure `checkWindow` on the whole window would (its earlier chunks accept, and its first failing opening
 is the window's first), and an acceptance is every chunk's, each chunk's openings passing `checkOpening` under the
 receipter of their pass's seed (`checkWindow_accept`). -/
 def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append)
@@ -243,8 +243,8 @@ def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (a
     if t.get ≠ .accept then return t.get
   return .accept
 
-/-- Window t's verdict: its draws from the openings coin, then each opening checked in the order sampled. `none` only if
-the draw runs past its doubled reads, which it does with probability below 2^-256. -/
+/-- Window t's verdict: its samples from the openings coin, then each opening checked in the order sampled. `none` only if
+the sample runs past its doubled reads, which it does with probability below 2^-256. -/
 def verifyWindow (reg : Registration) (appends : Array Append) (w : WindowRecord) (openingsCoin : ByteArray)
     (samples : Nat) (openings : Array Opening) : Option Verdict := do
   let digest := reg.digest

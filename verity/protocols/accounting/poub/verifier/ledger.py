@@ -257,7 +257,7 @@ BINDING_ROOT_BITS = 64
 def binding_over(draws: int, receipts: int, samples: int, queries: int) -> Fraction:
     """`binding` over a session of `draws` samples, at most `receipts` receipts a sample (`window_receipts` times the
     windows a sample covers) and a sample cap of `samples`, its prover making at most `queries` SHA-512 compressions over
-    the session: draws·√(receipts·s)·q/2^256.5, its √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`, so the exact
+    the session: samples·√(receipts·s)·q/2^256.5, its √(receipts·s/2) rounded up at 2^-`BINDING_ROOT_BITS`, so the exact
     value is at least the term."""
     s = min(samples, receipts)
     m = receipts * s << (2 * BINDING_ROOT_BITS - 1)

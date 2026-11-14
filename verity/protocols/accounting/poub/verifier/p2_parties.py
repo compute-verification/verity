@@ -129,7 +129,7 @@ DELTA = 2.0 ** -40
 `audit.DELTA`, and not at an error of 2^-100."""
 REFUSED = {"refused": True}
 DISAGREEMENT = "disagreement"
-#: The draws a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
+#: The samples a thread of the Lean checks at once (`P2Session.checkOpeningsChunked`).
 CHUNK = 64
 #: what an accepted session's `eps` sums (`core_answer`)
 EPS_TERMS = ("δ and the draws' rejected first words, δ + Σ draws/2^64, the terms `Poub.Protocol.certify` sums; "
@@ -308,7 +308,7 @@ def _done(v: audit.Verdict | None) -> dict[str, Any]:
 
 def answer(s: audit.AuditRun, reason: str | None = None, plan: Plan | None = None) -> dict[str, Any]:
     """The session's answer (`P2Session.answer`, with `reason`): `accept` with the credited reads, `reject` with the
-    failure and the draw it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass
+    failure and the sample it failed at, or `undecided`; `units` are the store's and `plan_units` those each pass
     reads."""
     reg = s.registration
     out: dict[str, Any] = {"protocol": PROTOCOL, "registration": reg.digest.hex(), "unit_bytes": p2.UNIT_BYTES,
@@ -344,7 +344,7 @@ def core_answer(a: Mapping[str, Any], r_bytes_per_s: int | None = None) -> dict[
     """The session's answer `a` (`answer`, as the verifier sent it) in the core interface's form (`period.answer`'s),
     its commitment the registration's digest. Accepted, its public outputs are the credited reads `q_bytes` over the
     span `span_ns` at `eps` (`EPS_TERMS`), and with `r_bytes_per_s` (R) `gamma` against it (`GAMMA_TERMS`); its profile
-    is δ, the receipts, the wrong ones the pooled bound leaves, each window's draws and the store's units. Any other
+    is δ, the receipts, the wrong ones the pooled bound leaves, each window's samples and the store's units. Any other
     answer is a reject (`undecided` while a window is unverified) with its failure, where, and its reason, and neither.
     ValueError for an answer of another protocol."""
     if a.get("protocol") != PROTOCOL:
@@ -547,7 +547,7 @@ class Twin:
         return self._settle(t, "root", got, mine)
 
     def close(self, t: int, now: int) -> dict[str, Any]:
-        """Window t's draws at `now`."""
+        """Window t's samples at `now`."""
         mine = self.books.close(t, now)
         return self._event(t, {"kind": "close", "now": now, "t": t}, mine)
 
@@ -606,7 +606,7 @@ def hold(lean: Lean, data: bytes, chunk: int = CHUNK,
          auditor: Mapping[str, int] = SESSION) -> tuple[p2.Registration, Plan]:
     """The registration file's bytes `data`, held by both verifiers: the Python's registration and plan
     (`registration_of`, `plan_of`), refused (ValueError) unless the Lean holds the same store and holds every request to
-    the auditor's session parameters `auditor`, every `chunk` draws checked on a thread (`P2Session.heldOf`). The Lean
+    the auditor's session parameters `auditor`, every `chunk` samples checked on a thread (`P2Session.heldOf`). The Lean
     is sent `auditor` only when it isn't `SESSION` (a toy party's): otherwise it holds its own pinned
     `P2Session.SESSION`, which must be this one's."""
     doc = json.loads(data.decode())
@@ -713,7 +713,7 @@ class Verifier:
     coins. Its capabilities are `lean` (holding `registration` and `plan`: `hold`), the auditor's session parameters
     `auditor`, its `host`'s name, the memory challenger signing the close (`closer`, or None), where its case is kept
     (`keep`, or None) and a progress `log`.
-    It claims the closer's session id, draws the session's coins, and reads the prover's request; then each pass is
+    It claims the closer's session id, flips the session's coins, and reads the prover's request; then each pass is
     asked for in order under the plan, each window's openings sampled once its roots are final and verified, and the
     session ends with its coins disclosed, its case and the answer sent, finishing with `{"answer", "case"}`. Every
     line the prover sends reaches the Lean whole whatever its type, the end of the channel as an empty line; a channel

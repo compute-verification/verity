@@ -658,7 +658,7 @@ def test_an_honest_session_over_the_committed_store_is_accepted_in_lean(server, 
 
 def committed_session(server, committed, session: dict | None, asked: dict) -> D.Outcome:
     """The Lean's outcome, held to the books', of an honest session over the committed store, every unit a pass,
-    checked two draws at a time: the request `asked`, held to the auditor's `session` (`SESSION` for None)."""
+    checked two samples at a time: the request `asked`, held to the auditor's `session` (`SESSION` for None)."""
     reg = committed.registration
     req = p2_parties.request_of(reg.node, **asked)
     held = p2_parties.SESSION if session is None else session

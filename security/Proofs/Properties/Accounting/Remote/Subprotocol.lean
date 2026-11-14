@@ -8,7 +8,7 @@ public import Properties.Accounting.Remote.SubprotocolDeployed
 `check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
 that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
 `plays_verified` reads `Plays` as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the
-record's at the node, at the node's windows a draw; `plays_iff_publishes` reads it as `Publishes` at some public
+record's at the node, at the node's windows a sample; `plays_iff_publishes` reads it as `Publishes` at some public
 outputs, and `publishes_publishedQBytes_iff` reads `PublishedQBytes`, which spells the acceptance out, as its statement
 at `Publishes`. `publishedEps` reads `certify`'s `eps` at the node's parameters
 and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.samples`.
