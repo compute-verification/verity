@@ -11,6 +11,7 @@ unit = "minutes"
 better = "lower"
 command = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
 every = "6h"
+tags = ["communication"]
 
 [[metric]]
 id = "top/lead-asks-open-over-30-min"
@@ -20,3 +21,4 @@ unit = "asks"
 better = "lower"
 command = "research run --project verity --cwd source -- uv run python benchmarks/communication/response.py"
 every = "1h"
+tags = ["communication"]
