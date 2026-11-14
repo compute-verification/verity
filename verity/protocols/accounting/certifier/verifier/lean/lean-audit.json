@@ -5,7 +5,7 @@
   "NetworkCheck.DifftestMain": "the difftest against certificate.py, under `runs`: compiled evaluation of NetworkCheck.Difftest.main, audited under NetworkCheck, a test and not a proof",
   "NetworkCheck.Main": "the network-check executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Check.protocol, audited under NetworkCheck",
   "NetworkCheck.PeriodMain": "the network-period executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Period.protocol, audited under NetworkCheck",
-  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.TransferBlocks.transferBlocksFn), of the client's check of a window's served certificates (certificates, NetworkCheck.TransferBlocks.certificatesFn) and of the syncs the certifier signed for a link, read through its clock certificates' openings (clocks, NetworkCheck.Period.clocksFn, in NetworkCheck.Clocks), audited under NetworkCheck",
+  "NetworkCheck.RecordsMain": "the network-records executable's entry point: Core.Protocol.main of NetworkCheck.Records.protocol, or Difftest.serve of its verdicts with the grid compared (verdicts) or not (verdicts-no-grid) of N2's link-window verdict of record (link-window, NetworkCheck.TransferBlocks.transferBlocksFn) and of the client's check of a window's served certificates (certificates, NetworkCheck.TransferBlocks.certificatesFn), audited under NetworkCheck",
   "NetworkCheck.SpanMain": "the network-span executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.Span.protocol, audited under NetworkCheck",
   "NetworkCheck.RowsMain": "the network-rows executable's entry point, one line; its command is Core.Protocol.main of NetworkCheck.RowsAudit.protocol, audited under NetworkCheck"
  },
@@ -60,7 +60,7 @@
   "NetworkCheck.Clocks": {
    "imports": ["NetworkCheck.Check"],
    "except": [],
-   "why": "the clock openings are code: v4's certificate and sync, its encodings and its one LMS check, no Mathlib, nothing of Security and nothing of the inference-only policy's check, so `network-records` builds without it"
+   "why": "the period's decoders are code: v4's certificate and its encodings, no Mathlib, nothing of Security and nothing of the inference-only policy's check"
   },
   "NetworkCheck.ScanOk": {
    "imports": ["Flock.RegKnown", "Identity.Domains", "Identity.Tagged"],

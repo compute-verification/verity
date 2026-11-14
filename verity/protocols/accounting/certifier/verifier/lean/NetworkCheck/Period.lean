@@ -300,9 +300,8 @@ listed entry, which is the auditor's pin, the signed message naming the key's li
 session of the key the list leaves out; and a device state restored from an earlier copy, which rests on the
 network certifier's host (`trusted-host`).
 
-**The clock openings** are apart from the period's check, in `NetworkCheck.Clocks` and this namespace: `clocksFn`,
-`network-records verdicts`' `clocks`, with the decoders the period's check reads from there
-(`exactly`, `keysOf`, `hexAt`, `certificateOf`).
+The decoders the period's check reads (`exactly`, `keysOf`, `hexAt`, `certificateOf`) are in `NetworkCheck.Clocks`,
+in this namespace.
 -/
 
 @[expose] public section
