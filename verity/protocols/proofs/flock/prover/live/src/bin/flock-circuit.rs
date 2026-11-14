@@ -4120,8 +4120,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut commit: Vec<F128> = Vec::new();
     let (device, host_units, mapped, hm96) = witness_mode(st, plan);
     // the ZK server rechecks a host witness: a session whose witness the device would build is refused by the recheck's own
-    // name, decided here from the witness mode alone, so no witness is built for it and a build without the device reaches
-    // the refusal too. It leaves where the recheck's own refusal does: after `Hello`, before anything of a table
+    // name, decided here from the session's witness mode before the session builds a witness; one the pipeline built ahead
+    // for it is waited for and dropped (below). A build without the device reaches the refusal too. It leaves where the
+    // recheck's own refusal does: after `Hello`, before anything of a table
     let no_recheck = firewall_on(st) && device;
     // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
     // witness again, under M1 too: both reps commit one level-0 codeword
@@ -6148,7 +6149,8 @@ fn worker_subsession_with(instances: &str, extra: &[String], env: &[(&str, Strin
 /// walk asked for (`FC_UNIT_WALK=1`, under which a deep unit's words are the device's and no host slots) as without it. One
 /// ZK server session asked for the device (`--gpu`) in a process of its own, with no `FC_HOST_WITNESS`: the prover stops with
 /// the recheck's own refusal, the verifier gets no `Commit`, round or proof, and does not accept. The refusal is decided
-/// from the witness mode before any witness is built, so a build without the device holds it too (`device_build` false:
+/// from the session's witness mode before the session builds a witness; one the pipeline built ahead for it is waited for
+/// and dropped. So a build without the device holds it too (`device_build` false:
 /// the session's `--gpu` reaches nothing of a device before it is refused); a device build runs the case on the device.
 fn firewall_device_witness_case(gpu: bool) -> Value {
     let name = "zk_firewall_refuses_device_witness";
