@@ -29,6 +29,8 @@
 patterns = [
   # a test's name that names vLLM's weights registration
   'weights_registration_roots\w*',
+  # the vLLM adapter's test of its own H1 registration's bytes
+  'test_h1_registration\w*',
 ]
 strings = []
 
