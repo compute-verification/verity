@@ -862,7 +862,7 @@ mod tests {
 
     /// A flat type of two input groups, an AND with a constant form, an AND over an XOR and two output ports in one group,
     /// with `verity_flock.circuit_types`' digest, `verity_flock.layouts`' record and the SHA-256 of `verity_flock.derive`'s
-    /// netlist of it (unit name `t`).
+    /// circuit description of it (unit name `t`).
     const CONTENT: &str = r#"{"calls":[],"format":"verity/circuit-type/v1","in":[[1,2],[1,1]],"items":[[0,[[0],0],[[1],1]],[0,[[2,3],0],[[0],0]]],"label":"program","out":[[1,1],[1,1]],"outputs":[[[3],0],[[0,2,4],1]],"tables":[]}"#;
     const TYPE: &str = "3ca26baa5024af3ea96a08e63ea90814ab025eb6b59291b3d7fe17548e496aa243742fba9aba08fc2bcd35388bdf5d89823648c69d9378b81af1986924c53dd7";
     const LAYOUT: &str = r#"{"calls":[],"in_split":[1],"out_split":[],"own":{"derive":"v2"},"reads":[],"sha512":"fa46a775a07166964967f473598baf43517481d05100c0d259bfc489dc14abc1abedba107b1827ff69d0dd7921ddc23477d3cd0b0074ca79dd5c4b06539b8d7e","type":"3ca26baa5024af3ea96a08e63ea90814ab025eb6b59291b3d7fe17548e496aa243742fba9aba08fc2bcd35388bdf5d89823648c69d9378b81af1986924c53dd7"}"#;
