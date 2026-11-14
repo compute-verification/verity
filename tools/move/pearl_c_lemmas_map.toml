@@ -1,0 +1,34 @@
+# PoUW's statements at device records, out of the guarantees and beside their proofs: the two renames of
+# `tools/move/layout.py --map tools/move/pearl_c_lemmas_map.toml`, as the branch of the moves made them by hand.
+#
+# `security/Definitions/Pouw/Guarantees/PearlC.lean` becomes `security/Proofs/Pouw/Lemmas/PearlCRecords.lean` and
+# `security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean` becomes `security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean`.
+# Each is another module of the same Lake package (`Definitions.Pouw.Guarantees.PearlC` to
+# `Proofs.Pouw.Lemmas.PearlCRecords`); the edits that go with them (which statements stay guarantees, the imports
+# the tree rule allows) are the branch's own, carried by its merge, so no `.lean` file is rewritten here. The format is
+# `layout_map.toml`'s.
+
+[roots]
+old = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difftest", verity_flock = "verity/protocols/proofs/flock/prover/python/verity_flock", verity_numerical = "benchmarks/numerical/python/verity_numerical", verity_vllm = "adapters/vllm/verity_vllm", research = "tools/research/src/research", circuit_check = "tools/verity/circuit_check/src/circuit_check", cluster = "infra/cluster/src/cluster", verity_cli = "tools/verity/cli/verity_cli", verity_config = "tools/config/verity_config", verity_machine_model = "benchmarks/machine_model/verity_machine_model", datacenter = "benchmarks/datacenter/datacenter" }
+
+[paths]
+"security/Definitions/Pouw/Guarantees/PearlC.lean" = "security/Proofs/Pouw/Lemmas/PearlCRecords.lean"
+"security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean" = "security/Proofs/Pouw/Lemmas/PearlCFlockTile.lean"
+
+[retired]
+paths = []
+
+[drop]
+paths = []
+
+[rewrite]
+exclude = ["fixtures/**", "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "**/CHANGELOG.md", "*.patch",
+           "**/TRUSTED.sha256", "**/lake-manifest.json.lock", "tools/move/**", "archive/**",
+           "benchmarks/numerical/tests/bench/data/**", "**/price_twins.json", "tools/verity/check/tests/test_suites.py",
+           "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "benchmarks/network_e2e/tests/data/**", "adapters/vllm/manifests/**", "adapters/vllm/workloads/**",
+           "adapters/vllm/data/**", "adapters/vllm/verity_vllm/pins/**", "**/*.lean", "tests/tree.toml"]
+include = ["fixtures/artifacts.json", "**/fixtures/README.md", "**/fixtures/**/README.md", "**/lake-manifest.json"]
+
+[modules]
