@@ -1,7 +1,7 @@
 module
 
 public import Attest.Period
-public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Compose.Assumptions.Parties
 public import Definitions.Claims
 public import Mathlib
 public import Properties.Pous.MemoryChallenger

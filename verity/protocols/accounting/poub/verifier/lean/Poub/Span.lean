@@ -74,10 +74,10 @@ def u16s (b : ByteArray) : Array Nat :=
 /-- `x`'s low `16 n` bits as `n` u16 words, low first. -/
 def u16sOf (x n : Nat) : Array Nat := (Array.range n).map fun i => (x >>> (16 * i)) % 65536
 
-/-- `block_check.opening_public_v2`'s `pub` row for sample (i, p) of window `w`, a registered block j = p: block j's codec
-key under the registration's seed (unbound: `bound` 0, `coin` zero), `t0 = τ W j mod p`, the pass's sketch prefix's
-chaining value (`mid`), `pos` = j, the pass's receipt root, its tree's domain id and depth, the registration's payload
-root, its domain id, rank j and depth, and the value tree's fields zero. -/
+/-- `block_check.opening_public_v2`'s `pub` row for sample (i, p) of window `w`, a registered block j = p: block j's
+codec key under the registration's seed (unbound: `bound` 0, `coin` zero), `t0 = τ W j mod p`, the pass's sketch
+prefix's chaining value (`mid`), `pos` = j, the pass's receipt root, its tree's domain id and depth, the registration's
+payload root, its domain id, rank j and depth, and the value tree's fields zero. -/
 def publicWords (reg : Registration) (w : WindowRecord) (i j : Nat) : Array Nat :=
   let f := reg.codec.field
   let fw := f.n / 16

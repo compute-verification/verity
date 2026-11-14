@@ -117,6 +117,9 @@ PUBLIC = {
                                                     "(int8_exact_of), the FP8 linear kernel and the experts class, each one "
                                                     "value over the layers, which the harness's engine checks against its "
                                                     "declaration",
+    "verity_vllm.program.frontend.vllm_derive": "I7: a Program derived under the vLLM adapter's rules, its profiles' vocabulary "
+                                                "and its served seed and length rules (derive, derive_report), which "
+                                                "benchmarks/network_sim derives its served Program with",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
@@ -189,6 +192,11 @@ PUBLIC = {
     "verity_vllm.check.weights_of_record": "I7: the weights of record: a Commit's weights checked against the pinned "
                                            "checkpoint (build_record, check, compose), and the Program parameter the record "
                                            "is of (PARAM), which benchmarks/inference_only reads",
+    "verity_vllm.definitions": "I7: the adapter's catalog of Definitions, public for its import alone, which registers the "
+                               "catalog with the Boolean-versions lookup (verity.circuits.ops.boolean.versions); it exports "
+                               "no name",
+    "verity_vllm.definitions.registry.catalog": "I7: the registry with every module loaded (load) and the packages it "
+                                                "loads by scope (SCOPES), which SPOT's audit and the benchmarks read",
     "verity_vllm.commit.committer.native_host": "I7: the reference committer of the values a served engine materialises, hashed "
                                                 "on the host (NativeHostCommitter), its GPU chunk size and its bound on a "
                                                 "schedule's stream (schedule_stream_bound), which benchmarks/served_commit, the "
@@ -297,7 +305,6 @@ KNOWN = frozenset({
     "verity_vllm.definitions.registry.boolean_io_shell",
     "verity_vllm.definitions.registry.boolean_silu",
     "verity_vllm.definitions.registry.boolean_stop_rule",
-    "verity_vllm.definitions.registry.catalog",
     "verity_vllm.definitions.registry.cublas_bf16",
     "verity_vllm.definitions.registry.cuda_rmsnorm",
     "verity_vllm.definitions.registry.dead_free",

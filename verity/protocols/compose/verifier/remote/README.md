@@ -10,9 +10,9 @@ registered circuit is inference, not training).
 `Core.Composites.ofIds`, which names the composite a configuration's verifier runs, refuses v0's subprotocols.
 
 **The open gap.** Remote's composed guarantee, `Verity.remote_soundness_of_subprotocols`, is proved at its compiled
-verifier from its three subprotocols' targets (`Vocab.SpotSound`, `PouwSound`, `InferenceOnlySound`), each an open
-premise until proved at remote. The policy's is proved (`Vocab.inferenceOnlySound`), on the Program its check judges,
-and the composed statement still takes it.
+verifier from four open premises: SPOT's and PoUW's targets (`Vocab.SpotSound`, `PouwSound`) and, for the policy,
+whose clause is proved on the Program its check judges, the two statements that tie it to the committed files
+(`Vocab.WiresSound`, `GateARow`).
 
 This file is an outline with signposts; the Lean is the definition. The vocabulary is `ARCHITECTURE.md`'s
 Glossary, with `GLOSSARY.md` for the notation and the older names. Lean keeps some older names: `*Horizon` means a
@@ -210,7 +210,7 @@ the whole, and nothing is retried.
 
 **Assumes.** PoUW's premises, as its period's guarantee takes them:
 
-- the proof system is sound against the window's check (`Properties.Pouw.PeriodJ10R.TileServiceSound`), a named
+- the proof system is sound against the window's check (`Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`), a named
   assumption no theorem discharges yet;
 - the published sample is the tile stratum's sample at the coin (`TileSampleIsCoin`), and registration precedes the
   sample (`RegisteredBeforeDraw`);
@@ -226,7 +226,7 @@ The time credit adds the data sheet's rates.
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
 - SPOT: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
-- PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
+- PoUW's period credit: `Properties.Pouw.MonitoringPeriodJ10R.H1J10RCheckedCreditMonitoringPeriod`, `CheckedCreditMonitoringPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
   (`GUARANTEE`) and refuses every other window form for, **proved** under the premises above.
 - The time credit: `Accounting.Guarantees.Compose.CircuitCredit`, **proved**, reading the data sheet.
@@ -375,7 +375,7 @@ the local bound (an activation price, a joint price, a recoverable source), each
 - The local bounds' caps `Slowdown.Guarantees.HeldBudget` (or, statistically, `Slowdown.Guarantees.StatHeldBudget`),
   `Slowdown.Guarantees.ImportOrRecompute`, `Slowdown.Guarantees.RecomputeByGates` and `Slowdown.Guarantees.RecomputeByState`, and the
   floor `InferenceOnly.Guarantees.CapabilityFloor`: **proved**
-  (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  (`security/Proofs/Slowdown/Capability/`, `security/Proofs/Slowdown/Coverage.lean`), each from its premises. Every premise,
   structure and bound is surveyed in `security/Definitions/Slowdown/Capability/README.md`.
 - Their premises, `InferenceOnly.Assumptions.CoversEfficientMethods`, `Slowdown.Assumptions.DescriptionHard` (or
   `Slowdown.Assumptions.MinEntropyHard`) and the wiring property `Slowdown.Capability.Consumers.Upstream`, are named assumptions in
@@ -391,9 +391,9 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 |---|---|---|---|
 | SPOT's accept rule | `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
 | A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | SPOT `--zk`: proved |
-| SPOT over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
+| SPOT over a monitoring period | `Flock.Guarantees.IntegrityMonitoringPeriod`, `IntegrityPooled` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The slowdown over remote, per period | `Slowdown.Guarantees.SlowdownRemote` (`security/Definitions/Slowdown/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemotePeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The slowdown over a monitoring period | `Slowdown.Guarantees.SlowdownRemoteMonitoringPeriod` (`security/Definitions/Slowdown/Guarantees/RemoteMonitoringPeriod.lean`; proof `Slowdown.SecurityProofs.SlowdownRemoteMonitoringPeriod` in `security/Proofs/Slowdown/RemoteMonitoringPeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each day's count verdict with (H) and (E), pooled over the days | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` (`security/Properties/Verity/Soundness.lean`) | **proved**, from three open targets (the open gap, above) | — |
 
 `SlowdownRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`Slowdown.Slowdown.remoteSlowdown`; MFU₀ divides only
@@ -410,8 +410,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 ### What's open
 
 - **Chaining the parts in Lean.**
-  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote. `Vocab.InferenceOnlySound` is, on the Program its
-    check judges; `Vocab.Holds` lists what that leaves unsaid of the committed files.
+  - `Vocab.SpotSound` and `Vocab.PouwSound` aren't proved at remote, nor `Vocab.WiresSound` and `GateARow`, which
+    tie the policy's clause, proved on the Program its check judges, to the committed files.
   - `SampledKSLiveV3` doesn't read part 1's theorem.
   - `ServiceSound` and `Slowdown.Assumptions.PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
@@ -473,19 +473,19 @@ SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
   (`Pouw.Assumptions.CoinsConfidential`, which `Pouw.Guarantees.Dither.FleetSound` takes) is another premise: a
   replica's coins reach no machine outside its certifier's boundary before it has them.
 
-PoUW, as `H1J10RCheckedCreditPeriod` takes them (`security/Properties/Pouw/PeriodJ10R.lean`):
+PoUW, as `H1J10RCheckedCreditMonitoringPeriod` takes them (`security/Properties/Pouw/MonitoringPeriodJ10R.lean`):
 
-- `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
+- `Properties.Pouw.MonitoringPeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
-- `Properties.Pouw.PeriodJ10R.TileSampleIsCoin`: on every accepted window, the proof blocks the check demands proofs of
+- `Properties.Pouw.MonitoringPeriodJ10R.TileSampleIsCoin`: on every accepted window, the proof blocks the check demands proofs of
   are the tile stratum's sample at the window's coin. A protocol-code fact still to prove.
-- `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
+- `Properties.Pouw.MonitoringPeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the
   deployed path doesn't do yet.
-- `Properties.Pouw.Period.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
+- `Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin`: each window's salt is its round's live coin. The deployed path doesn't meet
   it: the loop is given its salt before it serves, and nothing in the challenger's record binds the salt to a live coin
-  (`security/Properties/Pouw/Period.lean`, `SaltIsLiveCoin`'s docstring).
-- `Properties.Pouw.PeriodJ10R.SharedNoiseLucks`: the Duo receipts' lucks (H-μ⁺, `OperandHMu`, with `ReceiptLuckAt`
+  (`security/Properties/Pouw/MonitoringPeriod.lean`, `SaltIsLiveCoin`'s docstring).
+- `Properties.Pouw.MonitoringPeriodJ10R.SharedNoiseLucks`: the Duo receipts' lucks (H-μ⁺, `OperandHMu`, with `ReceiptLuckAt`
   and `GuessLuckAt`) at J10-R's shared noise, one computational claim over a call's joint coins.
 - `Accounting.Assumptions.TS.UnitFixed`: the run's fixed and folded words are at least those of the units it didn't
   skip. It stays an assumption until those words are defined from the committed values.
@@ -497,7 +497,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`security/Properties/Pouw/Perio
 - The data sheet: `Accounting.Assumptions.TS.SheetClock`, `SheetDispatch`, `SheetTensor`, `SheetPipe`, `SheetSmem`,
   `SheetWords`, `SheetSemantics`, `FoldOpt`, `FoldOptFoldedAt` and `FillOpt`: the GPU's clock, rates and semantics are
   the data sheet's, and the folds are optimal. The live-words credit over a monitoring period (`CircuitCreditMonitoringPeriod`,
-  `H1J10RCheckedCreditPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
+  `H1J10RCheckedCreditMonitoringPeriod`) doesn't read them. The time credit `Accounting.Guarantees.Compose.CircuitCredit` does, and it
   is what backs the slowdown bound's `PouwSound` (below), so the slowdown over remote rests on the data sheet.
 
 The slowdown, `SlowdownRemote`:

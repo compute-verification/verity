@@ -18,7 +18,7 @@ one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampl
 commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
 forms) are the run's registration record, and the composite rejects unless both decode to one digest
 (`Core.Composition.strays` over `Core.Remote.tied`);
-the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
+the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.executionPhases`) rejects unless every Commit
 record its windows name (`Core.Remote.executionPhaseRecords`) has that digest too. The policy's check
 (`InferenceOnlyCheck.Protocol.check`) refuses a record whose `program` is not the
 registered circuit's SHA-512 (`names`), then runs
@@ -34,10 +34,9 @@ the check of record, `InferenceOnlyCheck.Theta.evaluate`: the policy check at th
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
   (`InferenceOnly.CompliesRate Γ α`), and with its constants registered it has a `(Γ, ⌊αΓ⌋)`-partition when its gates are one
   bit wide, its bit-level expansion a `(ΓW, ⌊αΓW⌋)`-partition when they are at most `W` bits wide, with no assumption
-  that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program the form its params
-  name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
-  statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
-  registered circuit the policy checked and the program SPOT verifies have one SHA-512.
+  that it is Boolean or of positive fan-in; and the record SPOT's case commits to names, by its SHA-512, the program
+  one-stage v2's verifier verifies the sessions against (`StageHeld`; SPOT refuses the recursive form by name). With one
+  digest for the two records, the registered circuit the policy checked and the program SPOT verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Slowdown.Guarantees.SlowdownThreaded` reads, `InferenceOnly.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other. `Slowdown.Guarantees.SlowdownRemote` reads the count
   verdict instead, `InferenceOnly.CompliesAtMost c k n d`, which a published `complies` of the count gives

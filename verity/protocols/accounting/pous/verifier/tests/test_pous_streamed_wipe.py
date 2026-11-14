@@ -71,7 +71,7 @@ def test_label_format():
         sw.label(key, 1 << 64)
 
 
-def test_the_sampled_indices_are_uniform_and_come_from_the_coin_secret():
+def test_samples_are_uniform_indices_from_the_coin_secret():
     idx = sw.sample_indices(b"coins", SERVER, SESSION, N, K)
     key = derive(b"coins", sw.COIN_DOMAIN, {"server": SERVER, "session": SESSION, "n": N})
     assert idx == tuple(key.uniform(N, j) for j in range(K))

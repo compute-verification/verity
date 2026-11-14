@@ -58,7 +58,7 @@ from verity_vllm.definitions.registry.sparse_mla_split import launch_num_splits
 from tests import fake_vllm
 from verity_torch import dsa_table
 from verity_vllm.program.frontend import targets as TG
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
 from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense

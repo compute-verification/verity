@@ -119,14 +119,14 @@ least the honest work of its correct units, over `1 + ε`.
 
 ## Read first
 
-* `Properties.Pouw.Period.H1CheckedCreditPeriod` (`Properties.Pouw.Period`): the credit over the windows the deployed
+* `Properties.Pouw.MonitoringPeriod.H1CheckedCreditMonitoringPeriod` (`Properties.Pouw.MonitoringPeriod`): the credit over the windows the deployed
   check accepts, at H1's tile unit on the torch loop. It is PoUW's row in `security/README.md` and the lock's deployed
   PoUW guarantee.
-* `Properties.Pouw.Period.CheckedCreditPeriod` (the same module): the general form it instantiates, the credit in live
+* `Properties.Pouw.MonitoringPeriod.CheckedCreditMonitoringPeriod` (the same module): the general form it instantiates, the credit in live
   words over the windows the deployed check accepts.
 * Resource accounting reads PoUW through two guarantees. `Accounting.Guarantees.ComputeOfPouw`
-  (`Definitions.Accounting.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.
-  `Accounting.Guarantees.Compose.CircuitCredit` (`Definitions.Accounting.Guarantees.Compose`) is PoUW's credit on a
+  (`Definitions.Pouw.Guarantees.Pouw`) is PoUW's guarantee as the compute guarantee.
+  `Accounting.Guarantees.Compose.CircuitCredit` (`Definitions.Compose.Guarantees.Compose`) is PoUW's credit on a
   registered circuit it compiles.
 
 The area's own statements are `Definitions.Pouw.Guarantees` and the modules under it, proved under `Proofs.Pouw`.

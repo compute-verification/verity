@@ -17,7 +17,7 @@ check's provenance (`Provenance`) and a layout that reads a Definition's signatu
 `pin_listed`: the pin an opened row is held under is one the instance lists, from `Owns` and `Provenance`.
 
 `unitAt_iff`: the two numberings of a template's units agree. Where the record's text gives its templates
-(`InferenceOnlyCheck.RecordText.templatesOf`), no two of the root's ranges have one template (`range_unique`), so unit `u` of a
+(`Spot.RecordText.templatesOf`), no two of the root's ranges have one template (`range_unique`), so unit `u` of a
 template (`UnitAt`) is member `u` of its one range, and the range's count is the units the text's template has. The
 root's ranges are the same whatever templates the template query is asked for (`evaluate_ranges`).
 -/
@@ -30,7 +30,7 @@ open Lean (Json)
 open Flock.Program (Prog Scope)
 open Flock.TemplateQuery (TRange)
 open InferenceOnlyCheck.DefinitionDigest (closureDigest)
-open InferenceOnlyCheck.RecordText (Row Tmpl tmplOf templatesOf)
+open Spot.RecordText (Row Tmpl tmplOf templatesOf)
 
 theorem complies_of {F : Form} (hown : Owns F) (hlaid : LaidOut F) (hcount : Counts F) (hrate : Rates F) :
     Complies F := by

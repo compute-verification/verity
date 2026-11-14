@@ -1,4 +1,5 @@
-"""Registered weights (`registration`): one rule for Pearl-C4 and served FP8's Pearl-C, and the keyed transforms' key,
+"""Registered weights (`registration`): served FP8's Pearl-C's rule (Pearl-C4's is the same one:
+`test_pouw_pearl_c4`), and the keyed transforms' key,
 sampled from the execution phase's salt coin after the weights' root is recorded and refused for any other salt."""
 
 from __future__ import annotations
@@ -10,13 +11,11 @@ import pytest
 import epoch_coins as E
 from verity.commitments.randomness import derive
 from verity.protocols.accounting.pouw.prover.schemes import get
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c4 as F
 from verity.protocols.accounting.pouw.verifier import registration as R
 from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload, weights_root
 from verity.protocols.accounting.pouw.verifier.protocol import DomainError, Matmul, Shape
 
-FP8, FP4 = "pearl-c-sm120-v1-h3", "pearl-c-nvfp4-v0"
+FP8 = "pearl-c-sm120-v1-h3"
 VO = (R.VO_ROTATION, R.HEAD_INTERLEAVE)
 STACKS = (*R.REGISTRATION_STACKS, *R.UNROTATED_STACKS, VO, (R.GAMMA_FOLD, *VO), (R.ROTATION_8, R.GAMMA_FOLD),
           (R.ROTATION_8, R.VO_ROTATION), (R.LATENT_ROTATION,), (R.LATENT_ROTATION, R.ROTATION_8),
@@ -31,16 +30,6 @@ def _outcome(scheme, transforms, curated, needs_gamma_fold):
     except DomainError as e:
         return str(e)
     return None
-
-
-def test_both_constructions_take_the_one_shared_rule():
-    """Pearl-C4 and served FP8 read the same function, so every declared stack meets the same verdict under both."""
-    assert C.check_registration is F.check_registration is R.check_registration
-    assert (F.ROTATION_8, F.GAMMA_FOLD, F.REGISTRATION_STACKS) == (R.ROTATION_8, R.GAMMA_FOLD, R.REGISTRATION_STACKS)
-    fp8, fp4 = get(FP8), get(FP4)
-    assert isinstance(fp8, C.PearlC) and not isinstance(fp8, F.PearlC4)
-    for t, curated, fold in itertools.product(STACKS, (False, True), (False, True)):
-        assert _outcome(fp8, t, curated, fold) == _outcome(fp4, t, curated, fold), (t, curated, fold)
 
 
 def test_served_fp8_registers_the_rotated_stacks_and_a_curated_unrotated_checkpoint():

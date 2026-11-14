@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Pouw.PeriodJ10R.Honest
+public import Proofs.Pouw.MonitoringPeriodJ10R.Honest
 public import Properties.Pouw.ServedWork
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -41,7 +41,7 @@ import Proofs.Pouw.ServedWork
 /-!
 # `ServedWork` is honest and nontrivial
 
-The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.PeriodJ10R.Honest`'s honest J10-R
+The honest and nontrivial lemmas of `Properties.Pouw.Served.ServedWork`, over `Proofs.Pouw.MonitoringPeriodJ10R.Honest`'s honest J10-R
 period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the executionPhases' inputs (`hacc`, `hsalt`, `hdraw`).
 
 * `fm`, `fa c`: a flat machine. A program is any function, and every run uses `c` units of one resource at rate 1 and
@@ -51,7 +51,7 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the execu
 * The honest inventory: one instance (`Unit`), no advice, and a program whose every tile's word is the window's salt bit
   (`hon`, `work`): it gets every tile right.
 * `served_rest`, `served_meets`: at any `c ≥ 0` and `p = 1` the honest inventory meets every premise `ServedWork` adds
-  to `H1J10RCheckedCreditPeriod`'s, which `j10r_meets` gives, but `SAKServed`, and at `c = N_p` that one too;
+  to `H1J10RCheckedCreditMonitoringPeriod`'s, which `j10r_meets` gives, but `SAKServed`, and at `c = N_p` that one too;
   `served_honest` is the conclusion there.
 * `served_nontrivial`: `ServedWork` is false without `SAKServed`. On the free machine (`fa 0`), at `n ≥ 17` executionPhases
   and `δ_s = e^{−1}`, every other premise holds, `SAKServed` fails (`not_sakServed_free`: the honest program gets
@@ -64,8 +64,8 @@ period, conditional as `j10r_meets` is on `Credit.window`'s verdict on the execu
 namespace Properties.Pouw.Served.SecurityProofs.Honest
 
 open Properties.Pouw.Served Properties.Pouw.Served.SecurityProofs
-open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs
-open Properties.Pouw.PeriodJ10R.SecurityProofs.HonestJ10R
+open Properties.Pouw.MonitoringPeriodJ10R Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs
+open Properties.Pouw.MonitoringPeriodJ10R.SecurityProofs.HonestJ10R
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
@@ -338,7 +338,7 @@ theorem served_nontrivial (hKd : 1 ≤ k sT) (hacc : ∀ c β, ExecutionPhaseAcc
     RegisteredBeforeDraw (executionPhases σ sT regOf evOf n) ∧ TileSampleIsCoin σ k hk sT unitOf (executionPhases σ sT regOf evOf n) ∧
     TileServiceSound σ sT unitOf (executionPhases σ sT regOf evOf n) opened
       (pinnedAt (saltOf (executionPhases σ sT regOf evOf n)) place tile) 0 ∧
-    Properties.Pouw.Period.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
+    Properties.Pouw.MonitoringPeriod.SaltIsLiveCoin (hr1 _) (saltOf (executionPhases σ sT regOf evOf n)) enc ∧
     SharedNoiseLucks Honest.scheme (circuit (tileCount σ sT)) (period (Ω1 σ sT) (tileCount σ sT) n) ∧
     UnitFixed (play Unit (tileCount σ sT) (k sT) n)
       (tileLayer (circuit (tileCount σ sT)) (hr1 _) σ k hk sT unitOf (executionPhases σ sT regOf evOf n) opened

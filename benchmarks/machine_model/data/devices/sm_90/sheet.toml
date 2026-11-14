@@ -7,7 +7,7 @@
 name = "H200"
 gpu = "H200 SXM (sm_90a)"
 vector = "DS-90"
-lean = "security/Definitions/Accounting/Sheets/H200.lean"
+lean = "security/Definitions/Registration/Sheets/H200.lean"
 
 [fmax]
 card = "clock.sm"

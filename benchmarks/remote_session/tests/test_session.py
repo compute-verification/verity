@@ -518,8 +518,8 @@ def test_kv_pages_appended_and_released_mid_session_are_audited(monkeypatch):
     """Two sessions over one registration, each beside a serving trace of memory-map/v1 steps (2 pages every 4th pass
     over a pool of 10 slots): an honest one is accepted, its record counting the appends, releases and post-seed reads
     the verifier saw, which its ledger leaves uncredited without a property verdict; then one whose prover drops the
-    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 samples a window
-    the second's chance of sampling no dropped page is below 2^-30 at the passes these sessions make."""
+    pages it appends, whose appends start again from N, is rejected at a sample on a dropped page.  At 16 samples a
+    window the second's chance of sampling no dropped page is below 2^-30 at the passes these sessions make."""
     monkeypatch.setattr(prover, "OPENINGS_PART", 4)
     (honest, dropping), (ph, pd) = run("kv:2,kvdrop:2", sessions=2, samples=16, kv_every=4, kv_pool=8)
     assert honest["accepted"] and ph["accepted"] and honest["failure"] is None
@@ -974,9 +974,9 @@ def test_a_paced_session_puts_each_group_of_k_passes_under_a_live_coin_and_a_dro
 @pytest.mark.parametrize("k", [1, 3])
 def test_a_paced_group_is_sampled_as_its_k_th_root_arrives(k):
     """A paced window takes at most k roots, so its k-th makes them final once its boundary has left
-    (`audit.AuditRun.close`), which the loop sends before that root: each group's samples go out as that root arrives, the
-    last group's too, so the openings coin's request on the challenger's log names the group's last root when it came,
-    not one root or a deadline later."""
+    (`audit.AuditRun.close`), which the loop sends before that root: each group's samples go out as that root arrives,
+    the last group's too, so the openings coin's request on the challenger's log names the group's last root when it
+    came, not one root or a deadline later."""
     (r,), _ = run("honest", paces=[verifier.pace_of(f"{k}:{4 * k}:40:2", 1.0)])
     assert r["accepted"]
     assert [w["draws_sent_ns"] for w in r["windows_seen"]] == [w["arrivals_ns"][-1] for w in r["windows_seen"]]
@@ -1573,8 +1573,8 @@ def test_the_leans_line_of_a_transcript_is_the_line_of_the_record_session_run_ma
 def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_samples_of_the_record_it_makes(tmp_path):
     """At `--groups-per-coin 4` and two windows in flight, a paced session's twelve windows are three samples. Its line
     of record reads the same twelve groups and, for its pooled bound, the three samples, each four windows' receipts and
-    samples summed (`line.draws_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line off
-    the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
+    samples summed (`line.samples_of`); `line_record` with the transcript runs `Shared.run 4` on it and reads the line
+    off the record that run makes, which names g: the line of the kept record, given beside it or not, line.py's. With
     the record's pace at one window in flight it has no line (`line.SHARED`)."""
     import copy
     import json
@@ -1591,7 +1591,7 @@ def test_the_leans_line_of_a_transcript_sampled_four_windows_a_coin_reads_the_sa
     inputs = verifier.recorded_inputs(r, got["reg"], figures=FIGURES, host_bytes=0, rates=rates)
     record = inputs["record"]
     assert record["groups_per_coin"] == 4 and len(record["windows"]) == 12
-    draws = verifier.line.draws_of(4, record["windows"])
+    draws = verifier.line.samples_of(4, record["windows"])
     assert [d for _, d in draws] == [min(inputs["samples"], u) for u, _ in draws] and len(draws) == 3
     assert draws == verifier.recorded_windows(r)[0]
     want = verifier.line.record_run_json(inputs)

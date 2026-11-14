@@ -394,7 +394,7 @@ variable {V θ F c} in
 /-- **The joint distribution's support off the held-off events is the members' traces in order** from the play's start on the
 coin map's tape at some widened coins, at the decoded registration and those coins' sample, beside the tape at the
 position the last ends at. -/
-theorem ExecutionPhaseReaches.chain {W : Window} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
+theorem ExecutionPhaseReaches.chain {W : ExecutionPhase} {t : ℕ} {rd : Reading W.rounds} {σ : Strategy (V.game θ F c)}
     {D : ExecutionPhaseDecoders V θ F c W σ} {M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds} {BL : ExecutionPhaseLinkHold}
     {B : ExecutionPhaseRoundHold} {o : W.Out × CoinTape (V.game θ F c) σ}
     (h : ExecutionPhaseReaches V θ F c W t rd σ D M BL B o) :
@@ -418,7 +418,7 @@ transcript verity-verify-proof `--zk` accepts at the member's `own` (`step`); an
 a member with no proof block in the sample, which has no session, has `I` at the next place and the same position
 (`skip`). The invariant reads `r` because what a member's session answered is a fact about the play the verdict
 accepts, the one on `r`'s tape. -/
-structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →
@@ -449,7 +449,7 @@ structure MemberDecodes (k : Verity.Registration.Composite) (P : Exchange → Pr
 premise holds at each member's session (`MemberDecodes`), at any invariant of the position a member's session starts
 at. The joint distribution's support is the members' traces in order, each from where the one before it ended, and the tape an
 accepted play is on is the one at the position the last ends at. -/
-theorem executionPhaseDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
+theorem executionPhaseDecodes_of_members (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : ExecutionPhase) (t : ℕ)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (D : ExecutionPhaseDecoders V θ F c W σ)
     (M : ExecutionPhaseCoinMap (V.game θ F c) σ W.Ω W.rounds) (BL : ExecutionPhaseLinkHold) (B : ExecutionPhaseRoundHold)
     (I : (W.extend M.widening).L.Ω → Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds) → ℕ →

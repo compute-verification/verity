@@ -9,9 +9,10 @@ blobs its evidence names (`span`). The statements' instances in order are the wi
 auditor's own side is the audit's parameters and the registered opening circuit's ports in order, each with its row's
 bits (`auditor`, `layout`).
 
-`public_rows` is the unit's two public rows for a sample as the verifier derives them (`block_check.opening_public_v2`'s,
-for a registered block of a pass whose plan is the identity), which the prover commits and the Lean derives again for
-itself (`Poub.Span.publicWords`, `signWords`); the difftest holds the two to each other."""
+`public_rows` is the unit's two public rows for a sample as the verifier derives them
+(`block_check.opening_public_v2`'s, for a registered block of a pass whose plan is the identity), which the prover
+commits and the Lean derives again for itself (`Poub.Span.publicWords`, `signWords`); the difftest holds the two to each
+other."""
 from __future__ import annotations
 
 import hashlib

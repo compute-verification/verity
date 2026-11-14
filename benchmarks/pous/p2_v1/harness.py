@@ -71,7 +71,7 @@ RECOMPUTE_EVERY = 10
 
 class V3:
     """`p2-16448/v4` (`verity.protocols.accounting.pous.verifier.schemes.p2`): `protocol.commit`'s commitment to `W` under the
-    scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
+    scheme's manifest, `protocol.sample_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
     leaves, audited by `protocol.TimedAudit` (`verity/protocols/accounting/pous/device/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
@@ -97,7 +97,7 @@ class V3:
         self.scheme_obj = schemes.P2(self.params)
         self.scheme = self.scheme_obj.name
         self.model = protocol.commit(self.scheme_obj, w_host)
-        self.salt = protocol.draw_salt(SETUP_SOURCE, self.model)
+        self.salt = protocol.sample_salt(SETUP_SOURCE, self.model)
         self.prefix = p2.expand_prefix(self.params, self.salt)
         self.memory_challenger_args = () if research else ("--strict",)
 

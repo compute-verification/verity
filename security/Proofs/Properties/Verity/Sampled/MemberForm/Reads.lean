@@ -49,7 +49,7 @@ pinned table and each member's file at its registered file, and whose sample ans
 the parameters' family answering `after` precedes every opening, and the play has the sessions of the window's
 sample, each with the evidence sent for it and the proof files decoded from that evidence. -/
 theorem executionPhaseRead_members {V : Vocab d α} {k : Verity.Registration.Composite} (hF : FormAccepts)
-    (hR : RegisteredHolds V) {F : Array ByteArray} {W : Window} {x : Verity.Exchange}
+    (hR : RegisteredHolds V) {F : Array ByteArray} {W : ExecutionPhase} {x : Verity.Exchange}
     (hset : MembersSetUp V x.params F W) (hv : V.Verdict k .sampled x)
     (hl : Binding.Logged Binding.readsV2 x) (ht : TablesSent x.sent) (hfs : FilesSent V x) {after : ByteArray}
     (hsd : SampledDigest k x.sent after) :

@@ -44,7 +44,7 @@ namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Scope Ref Ty Defn fieldsOf)
 open Flock.TemplateQuery (TRange)
-open InferenceOnlyCheck.RecordText (Row Tmpl outerOf templatesOf)
+open Spot.RecordText (Row Tmpl outerOf templatesOf)
 open InferenceOnlyCheck.Record (unwhole leavesOf passedOn)
 open InferenceOnlyCheck.Record.SecurityProofs (runOf runOf_some mem_of_lookup shaped_of_tmplOf whole_spec bitsOf_eq passOf
   passedOn_get)

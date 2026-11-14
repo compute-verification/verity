@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Accounting.Requirement
-public import Definitions.Accounting.Confidence
+public import Definitions.Pouw.Confidence
 
 /-!
 # A placed execution as an actual run (trusted)
