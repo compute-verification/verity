@@ -110,8 +110,8 @@ private def recordsOf (policy sampled : String) : Answer :=
 #guard !((recordsOf (record 1) (record 0)).reason.map (contains · "reject: params")).getD true
 
 -- the egress tie: every compute audit of the network certifier's period on the policy's record holds; one on another
--- record, or a period with no compute audit, names the policy's record and the period's stray (the empty string when
--- it has none); a period that doesn't decode names nothing, and its own rejection stands
+-- record, or a period with no compute audit, names the tie and the two subprotocols and neither value; a period that
+-- doesn't decode names nothing, and its own rejection stands
 private def monitoringPeriodOn (audits : List String) : Case :=
   { refused NetworkCheck.Period.protocol with
     commitment := s!"\{\"audits\":[{",".intercalate audits}],\"windows\":[]}".toUTF8 }
@@ -128,13 +128,11 @@ private def digestOf (r : String) : String :=
 #guard egress.strays [monitoringPeriodOn [record 0], policyOn (record 0)] == none
 #guard egress.strays [monitoringPeriodOn [record 0, record 0], policyOn (record 0)] == none
 #guard egress.strays [monitoringPeriodOn [record 1], policyOn (record 0)] ==
-  some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed \
-    {digestOf (record 1)}"
+  some "record: verity/inference-only/v0 and verity/certifier/v0 named different values"
 #guard egress.strays [monitoringPeriodOn [record 0, record 1], policyOn (record 0)] ==
-  some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed \
-    {digestOf (record 1)}"
+  some "record: verity/inference-only/v0 and verity/certifier/v0 named different values"
 #guard egress.strays [monitoringPeriodOn [], policyOn (record 0)] ==
-  some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed "
+  some "record: verity/inference-only/v0 and verity/certifier/v0 named different values"
 #guard egress.strays [refused NetworkCheck.Period.protocol, policyOn (record 0)] == none
 #guard egress.strays [monitoringPeriodOn [record 1]] == none
 

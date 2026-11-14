@@ -385,7 +385,7 @@ def debit(a: np.ndarray, b: np.ndarray, G: int = 4) -> tuple[np.ndarray, np.ndar
     return flags, eF
 
 
-def debit_pure(a: np.ndarray, b: np.ndarray) -> np.ndarray:
+def inert_work_pure(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     """The replayed debit per word with no promotion (one chain over all of k): flag atom t when skipping it alone leaves the
     word's final value unchanged. It contains the identities. Joint skips of several atoms are the chain's cross-atom hole,
     which only TT_OUT carries once there are no promotion groups to bound them."""
@@ -625,7 +625,7 @@ def val(codes: np.ndarray) -> np.ndarray:
 
 
 def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming: str = "census",
-         line_norm: float = 256.0, with_debit: bool = False, cross_words: int = 0, transfer_words: int = 0) -> list[dict]:
+         line_norm: float = 256.0, with_inert_work: bool = False, cross_words: int = 0, transfer_words: int = 0) -> list[dict]:
     rng = _rng(run, fam, k, delta)
     FA, FB = lines(k, _rng(run, "FA", k)), lines(k, _rng(run, "FB", k))
     XA, XB = family(fam, rows, cols, k, FA, rng)
@@ -662,8 +662,8 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                "skippable_share": skip / T, "atom": ATOM,
                "word_exact_share": round(float((words[G] == exact).mean()), 6),
                "promoted_equals_unpromoted_share": round(float((words[0] == words[4]).mean()), 6)}
-        if not G and with_debit and ATOM != "hopper":
-            flags = debit_pure(A, B)
+        if not G and with_inert_work and ATOM != "hopper":
+            flags = inert_work_pure(A, B)
             per_word = flags.sum(1)
             row.update({"debit_share": round(float(per_word.mean()) / T, 6), "debit_max_word_share": round(float(per_word.max()) / T, 6),
                         "not_needed_share": round(not_needed_share(flags, rows, cols), 6),
@@ -692,7 +692,7 @@ def cell(fam: str, k: int, delta: float, rows: int, cols: int, run: int, forming
                             C, _ = step(C, A[p:p + 1, 32 * t:32 * t + 32], B[p:p + 1, 32 * t:32 * t + 32])
                     hits += bool(S_sim) and float(C[0]) == float(words[0][p])
                 row.update({"transfer_words": len(sample), "transfer_nonempty_sim_sets": nonempty, "transfer_hits": hits})
-        if G and with_debit:
+        if G and with_inert_work:
             flags, eF = debit(A, B, G)
             per_word = flags.sum(1)
             # Every tile identity is flagged in every word, so under the debited credit only exact runs remain skippable.
