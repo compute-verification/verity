@@ -17,9 +17,7 @@ import pytest
 import torch
 
 import grader as G
-from verity_vllm.definitions.registry import cublas_bf16 as CB
-from verity_vllm.definitions.registry import fa2_train as FT
-from verity_vllm.definitions.registry import fa2_train_bwd as FTB
+import adapter as A
 from verity_torch.frontend.train_step import AdamW, export_step, primitives, step_report
 
 LF_PATH = Path(__file__).resolve().parents[4] / "adapters" / "torch" / "tests" / "frontend" / "train_step_lf.py"
@@ -30,8 +28,8 @@ STEP, STRUCTURE = (2, 17), (3, 33)
 #: step's linears' GEMMs at M = 2 x 16 tokens (its capture covers the workloads' shapes, not these): unsplit, but for a split-K
 #: over a bf16 workspace, a serial split-K and the three over grid.z (an f32 workspace and none, their slices' residue tiles
 #: padded, and a bf16 workspace, its slices whole tiles), one route of each kind the grader reads
-CC = CB.TRAIN_CC
-ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for role in CB.TRAIN_LINEAR_ROLES},
+CC = A.TRAIN_CC
+ROUTES = {**{(32, K, N, role): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for role in A.TRAIN_LINEAR_ROLES},
           (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
           (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3},
           (32, 64, 64, "fwd"): {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
@@ -74,9 +72,9 @@ def _derive(dtype, rows: int, tokens: int, cc: tuple[int, int] | None = None, st
         ex = export_step(model, LF.square_loss, opt, batch, gpu=cc is not None)
         if step:
             for key, route in ROUTES.items():
-                mp.setitem(CB.TRAIN_ROUTES, key, route)
-            mp.setitem(FT.TRAIN_SDPA, SDPA, ("unsplit", 16))
-            mp.setitem(FTB.TRAIN_SDPA_BWD, SDPA, (16, 16))
+                mp.setitem(A.TRAIN_ROUTES, key, route)
+            mp.setitem(A.TRAIN_SDPA, SDPA, ("unsplit", 16))
+            mp.setitem(A.TRAIN_SDPA_BWD, SDPA, (16, 16))
         rep = step_report(model, LF.square_loss, opt, batch, exported=ex, cc=cc, structure=structure)
     assert rep.program is not None, rep.unsupported
     return rep.program, ex[0]
@@ -127,8 +125,8 @@ def k16_steps(handover) -> collections.Counter:
     for nd, c in zip(nodes[len(nodes) - len(calls):], calls):
         if getattr(nd.fn, "base_id", G.CELL) in set(G.ROWS) - {G.CELL}:
             b = nd.fn.bindings
-            k = (sum(hi - lo + CB.residue_first(lo, hi, b["TILE_K"])[1]
-                     for lo, hi in CB.aligned_bounds(b["K"], b["SPLIT_K"], b["ALIGN"])) if "ALIGN" in b else b["K"])
+            k = (sum(hi - lo + A.residue_first(lo, hi, b["TILE_K"])[1]
+                     for lo, hi in A.aligned_bounds(b["K"], b["SPLIT_K"], b["ALIGN"])) if "ALIGN" in b else b["K"])
             got[c["occ"]] += (nd.n if nd.form in ("batch", "scan") else 1) * b["N"] * k // 16
     return got
 
