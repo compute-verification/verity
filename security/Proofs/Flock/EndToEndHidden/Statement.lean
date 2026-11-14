@@ -23,7 +23,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # Flock's one-stage audit, end to end, under hidden outputs (trusted)
 
-`EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration production `--zk` runs (the default
+`EndToEndHidden` is `EndToEnd`'s statement under hidden outputs, the configuration the prover's `--zk` runs (the default
 `--statement`, whose tables `Stmt.setupHidden` sets up), and `EndToEndHiddenSampled` is `EndToEndSampled`'s, the same
 statement at the sampled proof blocks. Both read the circuit through its descriptor (`Flock.Desc`): the circuit file is read as
 a descriptor `D` and the units are `D.unroll`'s. `EndToEndHiddenFlat` and `EndToEndHiddenDrawnFlat` are the two at a

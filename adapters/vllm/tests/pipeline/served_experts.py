@@ -2,7 +2,7 @@
 experts, TOPK = 2, two tokens of one request, H = 128, I = 64, G = KB = 32.  Its Program is written here in the order the Build
 derives the layer (the input's group quant a token, the router, the w13 pair rows, the SiLU, the activation's group quant and
 the w2 pair rows a pair, the sum a token), executed honestly by the row kernels over a synthetic checkpoint, and committed as
-the MoE block's planes (``moe/L3/<plane>``, pair-major) by the production CPU committer.  The one run of committed steps is
+the MoE block's planes (``moe/L3/<plane>``, pair-major) by the serving CPU committer.  The one run of committed steps is
 
 * a deferred Commit's (``OUT/commit``: its record, binding map and sealed replay bundle, as `tests.pipeline.served_rope`
   seals one), whose in-Commit hook's window is the row driver's (`hook`: ``served``), and

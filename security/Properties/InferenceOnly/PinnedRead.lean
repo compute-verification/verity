@@ -112,7 +112,7 @@ By itself it fixes no table: `table` is whatever is committed under the root and
 `Yc`, and no hypothesis ties those to a registered root, since every hypothesis on `Yc` is at the unit `u` alone. What
 would tie them is that `Yc` is a transcript the proof system accepted, whose input rows open against the window's
 registered roots, with this unit's root and domain id rows among them; no statement here says so, and its form waits
-on the sampled proofs' predicate for a proof block's input rows. -/
+on SPOT's predicate for a proof block's input rows. -/
 def PinnedReadBinds : Prop :=
   ∀ (F : Form) (c : F.Case) (j tr : Json) (P : Prog) (r : Row) (name p pin : String) (k : ℕ) (dfn : Defn) (ro : Roles)
     (out : String) (tags : Flock.Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (ct : Flock.Circuit)

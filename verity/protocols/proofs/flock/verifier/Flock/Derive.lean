@@ -320,9 +320,9 @@ def header (name : String) (d : Derived) : String :=
     toString gs.length :: gs.flatMap fun g => ([g.word, g.words, g.bits.length] ++ g.bits).map toString
   " ".intercalate ([FORMAT, name, toString d.rows.length, toString d.geo.const] ++ side d.geo.ins ++ side d.geo.outs)
 
-/-- The rows as `ir_lower.netlist` writes them, with the lowering's `LEAVES` and `CUT` lines (canonical JSON) passed
+/-- The rows as `ir_lower.circuit_description` writes them, with the lowering's `LEAVES` and `CUT` lines (canonical JSON) passed
 through. -/
-def netlist (name : String) (d : Derived) (leaves cut : Option String) : String :=
+def circuitDescription (name : String) (d : Derived) (leaves cut : Option String) : String :=
   let lines := header name d :: d.rows.map rowLine ++
     (leaves.map (fun l => ["LEAVES " ++ l]) |>.getD []) ++ (cut.map (fun c => ["CUT " ++ c]) |>.getD [])
   "\n".intercalate lines ++ "\n"

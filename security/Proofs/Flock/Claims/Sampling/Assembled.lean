@@ -64,7 +64,7 @@ form, bits and efficiency are the compiled sampled verifier's at the deployed re
   `SamplingDeploy.row_places`).
 * `DrawSlots` (`Sampling.Select.SampleDesign`): on every statement that parses and whose query evaluates, the partition and
   design are the verifier's own: the partition has the shape of its layout, and the design is the one `Slots.select`
-  samples, from uniform bytes of the coins, every slot checked where it is refused; the Lean sampled-proofs verifier's
+  samples, from uniform bytes of the coins, every slot checked where it is refused; the Lean SPOT verifier's
   run, which builds `D`.
 * `ProgramScope` (`Sampling.Select.Scope`): the scope check is the readable scope's program part (a topologically
   ordered program, partitioned into proof blocks). The design part is a theorem (`designWellFormed`); the program part

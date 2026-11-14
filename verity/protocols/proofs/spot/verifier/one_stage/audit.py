@@ -181,6 +181,43 @@ def answer_complete(answer: Any) -> bool:
     return isinstance(public, Mapping) and answer.get("verdict") == "accept" and public.get(COMPLETE) is True
 
 
+def _field(j: Any, k: str) -> Any:
+    return j.get(k) if isinstance(j, Mapping) else None
+
+
+def window_reads(opened: Mapping[str, Any] | None, registration: Mapping[str, Any],
+                 named: Sequence[str]) -> dict[str, Any] | None:
+    """`Record.windowReads`: ``opened``'s reads of the window values ``named`` that are not the docket's own (no
+    port of its roots, no value of its registered entries), less each at the root of that value's entry in its
+    `window.activations.values` (an entry whose `value` is its key and whose root is a string). A named value's read at
+    another root, or with no such entry, stays, to be held to the registered values. The caller names the values."""
+    if opened is None:
+        return None
+    roots = _field(registration, "roots")
+    regs = _field(registration, "registered")
+    own = {x for x in [*(_field(r, "port") for r in (roots if isinstance(roots, list) else [])),
+                       *(_field(e, "value") for e in (regs if isinstance(regs, list) else []))] if isinstance(x, str)}
+    free = {v for v in named if v not in own}
+    values = _field(_field(_field(registration, "window"), "activations"), "values")
+
+    def root_of(v: str) -> str | None:
+        e = _field(values, v)
+        return e["root"] if _field(e, "value") == v and isinstance(_field(e, "root"), str) else None
+
+    return {v: r for v, r in opened.items() if v in free and not (root_of(v) is not None and _jeq(root_of(v), r))}
+
+
+def held_reads(verdicts: Mapping[str, Mapping[str, Any]], registration: Mapping[str, Any],
+               window_values: Sequence[str] = ()) -> dict[str, Any] | None:
+    """`Record.heldReads` on the verdicts' reads (`session_registered`): the docket's own values' less those of its
+    own ports at their own roots (`less_own_reads`), then the window values' less those at their window entries' roots
+    (`window_reads`). What `audit_record`'s `session_registered` takes."""
+    opened = less_own_reads(session_registered(verdicts, registration), registration)
+    if opened is None:
+        return None
+    return {**opened, **(window_reads(session_registered(verdicts), registration, window_values) or {})}
+
+
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  sampling_design: Mapping[str, Any], proved_units: list[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
@@ -190,7 +227,8 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
     (each must serve exactly the sample). `session_roots`: `{registered port: root}` from the sessions' statements (each
     must be the registered root). `session_registered`: `{value: root}`, the registered roots the verdicts of
     record opened the sessions' reads against (`session_registered(verdicts)`, never the docket's own), less the
-    reads of its own ports at their own roots (`less_own_reads`); each read it reports must be of a registered value, at
+    reads of its own ports at their own roots, with the reads of the window values its caller names less those at their
+    window entries' roots (`held_reads`); each read it reports must be of a registered value, at
     that value's registered root, and a registered value needs no reported read. `certified`: the names of the values
     the verifier holds certified entries for; each of them does need a reported read (the check `certified` names the
     ones that have none), so a read reported under another value's name does not stand in for it."""

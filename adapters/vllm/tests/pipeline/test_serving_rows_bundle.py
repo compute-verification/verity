@@ -1,5 +1,5 @@
 """The serving rows of a deferred Commit (`pipeline.deferred_rows`, ``verity-vllm serving-rows``), end to end on CPU: a Program
-with RoPE_v1 rows (D=64) executed honestly, its members committed by the production CPU committer and sealed into a replay bundle with
+with RoPE_v1 rows (D=64) executed honestly, its members committed by the serving CPU committer and sealed into a replay bundle with
 its registered weights, then the verifier's partition (every RoPE head) read back through the bundle opened against the Commit's record.
 The registration, a stand-in linked to the record (the in-Commit hook's over the same members is served), passes `registration.check`
 against the verifier's own copies (its population program, the run root of record, the public bodies), every hidden row is the served

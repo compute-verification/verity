@@ -4,7 +4,7 @@ deployment costs as a share of serving compute, one line per server configuratio
 that bounds it, skipped work.
 
 A configuration (`CONFIGURATIONS`) is what serving commits at serve time, the replay block that follows from it and the
-design the audit samples with.  Its serve tax, what that change to the production server costs on every token, is one
+design the audit samples with.  Its serve tax, what that change to serving costs on every token, is one
 number in the model's `serve_tax` card, priced (`priced_card`) or measured.  A line's x is its tax plus β, the share
 of the scope's compute the audit spends on replays, interior commitments and proofs of the sampled proof blocks, and
 its y the bound at β on Figure 1's model (`figure1.model`).  So each line starts at its own tax.  Every line prices a
@@ -806,7 +806,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                 f"verification phase it fits (one machine's {least * window / 3600:,.3g} hours);{beside()}")
 
     head = (f"{f1.ROLES} {f1.TRUST} "
-            "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
+            "x is the serve tax, what each configuration's change to serving costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "

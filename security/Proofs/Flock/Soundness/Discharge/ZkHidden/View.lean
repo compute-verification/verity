@@ -28,9 +28,9 @@ import Proofs.Flock.Soundness.ZK.RealLeaves
 import Proofs.Flock.Soundness.ZK.Session
 
 /-!
-# Zero knowledge of production's `--zk` session: hidden outputs, `J` tables
+# Zero knowledge of the prover's `--zk` session: hidden outputs, `J` tables
 
-`zk_session_view` at the session production runs. Its tables are `setupHidden`'s (hidden outputs: the output rows, their
+`zk_session_view` at the session the prover runs. Its tables are `setupHidden`'s (hidden outputs: the output rows, their
 Δ pairs `HmOut.delta`, `HmIn`'s public-input filter, and every row's `b ‖ c` region) at `--session-tables J`, each table
 with its own coin vector.
 

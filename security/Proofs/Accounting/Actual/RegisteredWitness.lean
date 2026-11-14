@@ -76,17 +76,17 @@ theorem acts_injective {L : Type*} [DecidableEq L] (x : Fin 1 → L) (X : Finset
 
 /-- **A strategy at the outside does more than the limit**: at a Site none of whose locations has the outside's id,
 and a subtree at a place other than the outside, with no pinned challenger, every record limit `0` and no jitter, the
-strategy whose one gate is at the outside and holds one bit more than the registered links' whole capacity a tick
-has the outside do more over `[0, 1)` than the limit's `2 ^ β°` values. -/
+strategy whose one gate is at the outside and holds one bit more than the links' whole capacity a tick has the
+outside do more over `[0, 1)` than the limit's `2 ^ β°` values, at any rates `β` of the links. -/
 theorem outside_exceeds (S : Site) (hno : ∀ x ∈ S.locs, x.id ≠ Site.outside)
-    (hk : S.kind? Site.outside ≠ some .certifier) {i : String} (hi : i ≠ Site.outside) :
-    ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, S.linkβ e) + 1)) =>
+    (hk : S.kind? Site.outside ≠ some .certifier) {i : String} (hi : i ≠ Site.outside) (β : Fin S.links.length → ℕ) :
+    ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, β e) + 1)) =>
         (run (fun _ : Fin 1 => S.place Site.outside) (BitVec.ofFin r)).acts
           (S.placesIn (S.proverUnder i ∪ (S.challengersOf ∅ i \ ∅)) ∪ S.placesIn (S.certifiersOf i ∪ ∅))ᶜ
           (Set.Ico 0 1)).encard ≤
       ((2 ^ ((∑ _y ∈ S.placesIn (S.certifiersOf i ∪ ∅), 0) +
         0 * ((Finset.Ico (0 : ℕ) 1).image id).card * (S.placesIn (S.certifiersOf i ∪ ∅)).card +
-        uncertifiedCapacity S.placeEnds S.linkβ (S.placesIn (S.auditorsOf ∅ i)) (S.placesIn (S.proverUnder i)) *
+        uncertifiedCapacity S.placeEnds β (S.placesIn (S.auditorsOf ∅ i)) (S.placesIn (S.proverUnder i)) *
           (1 - 0)) : ℕ) : ℕ∞)) := by
   intro h
   rw [← Set.image_univ,
@@ -146,10 +146,11 @@ theorem LeakPartsRegistered_honest :
 /-- **`LeakPartsRegistered`'s nontrivial lemma**: the limit is not true of every strategy. At the example onsite
 log's Site and the subtree at `node0`, with no pinned challenger, every record limit `0` and no jitter, the strategy
 whose one gate is at the outside and holds one bit more than the registered links' whole capacity a tick has the
-outside do more over `[0, 1)` than the limit's `2 ^ β°` values. The strategy varies the outside's own input, so the
-coins do not reach the window only through the subtree's secrets (`Secrets`). -/
-theorem LeakPartsRegistered_nontrivial :
-    ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, (Site.ofLog [Registration.Example.onsite]).linkβ e) + 1)) =>
+outside do more over `[0, 1)` than the limit's `2 ^ β°` values, at any rates `β` of the links, the registered ones
+among them. The strategy varies the outside's own input, so the coins do not reach the window only through the
+subtree's secrets (`Secrets`). -/
+theorem LeakPartsRegistered_nontrivial (β : Fin (Site.ofLog [Registration.Example.onsite]).links.length → ℕ) :
+    ¬ ((Set.range fun r : Fin (2 ^ ((∑ e, β e) + 1)) =>
         (Toy.run (fun _ : Fin 1 => (Site.ofLog [Registration.Example.onsite]).place Site.outside)
             (BitVec.ofFin r)).acts
           ((Site.ofLog [Registration.Example.onsite]).placesIn
@@ -162,13 +163,12 @@ theorem LeakPartsRegistered_nontrivial :
             ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅), 0) +
         0 * ((Finset.Ico (0 : ℕ) 1).image id).card * ((Site.ofLog [Registration.Example.onsite]).placesIn
           ((Site.ofLog [Registration.Example.onsite]).certifiersOf "node0" ∪ ∅)).card +
-        uncertifiedCapacity (Site.ofLog [Registration.Example.onsite]).placeEnds
-          (Site.ofLog [Registration.Example.onsite]).linkβ
+        uncertifiedCapacity (Site.ofLog [Registration.Example.onsite]).placeEnds β
           ((Site.ofLog [Registration.Example.onsite]).placesIn
             ((Site.ofLog [Registration.Example.onsite]).auditorsOf ∅ "node0"))
           ((Site.ofLog [Registration.Example.onsite]).placesIn
             ((Site.ofLog [Registration.Example.onsite]).proverUnder "node0")) * (1 - 0)) : ℕ) : ℕ∞)) :=
   Toy.outside_exceeds (Site.ofLog [Registration.Example.onsite]) (by decide +kernel) (by decide +kernel)
-    (by decide +kernel)
+    (by decide +kernel) β
 
 end Accounting.SecurityProofs

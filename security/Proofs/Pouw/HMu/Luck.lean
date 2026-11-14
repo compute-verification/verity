@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Guarantees.HMu
-public import Proofs.Pous.Tag.LittlewoodOfford
+public import Proofs.Poub.Tag.LittlewoodOfford
 public import Proofs.Accounting.Lemmas.HMu
 
 /-!

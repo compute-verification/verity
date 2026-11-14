@@ -10,7 +10,7 @@ subprotocol's own proof discharges it. This page says where it is, what it reads
 **Imports.** These modules import what the `Properties.Verity` entry of `layers` lists
 (`security/Properties/lean-audit.json`): the composites' compiled code, the definitions and the composition's
 properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) import them, and so do two readers of
-`Sha512.lean`: `security/Proofs/Poub/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
+`Sha512.lean`: `security/Proofs/Accounting/ReadUnit/Gates.lean` and `security/Properties/Spot/HistoryTable.lean`.
 
 ## The theorem
 
