@@ -64,3 +64,6 @@ MEND9319 to network-accounting (lead). **The lane's gone workers' changes: what 
 
 Order: #9639, #9663, #9827, #9883, #9228, #9541, #9457, then #9589 after reading.
 
+[2026-11-14T18:49Z] c7a01b079611
+ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:04 AM PST. MERGE 2: #9826 484f76448fc77b699b2c33bf9453a913c3d548ca is in the collect branch, head ab4fb68cf25df47076550cf0eb62232c9b957d32. No move lay between. By hand: the certifier verifier package lakefile.toml, where our network-rows executable and the collect side network-span executable stand side by side (defaultTargets hold both; NetworkCheck.lean imports RowsAudit and Span). The 8 .py files the merge changes all compile. No statement changed.
+
