@@ -114,6 +114,8 @@
   "Proofs.Properties.InferenceOnly.RecordForm",
   "Proofs.Properties.InferenceOnly.RecordCounts",
   "Proofs.Properties.InferenceOnly.DecodeKeys",
+  "Proofs.Properties.InferenceOnly.Lemmas.Opening",
+  "Proofs.Properties.InferenceOnly.RecordProvenance",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
   "Proofs.Properties.Verity.Sampled.Unbound",

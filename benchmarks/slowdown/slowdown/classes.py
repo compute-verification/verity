@@ -53,7 +53,7 @@ Allowance = Callable[[FlopBudget], float]
 
 
 def per_block(a: Allowance, units: Units) -> Yield:
-    """`q_T(c, k)`: allowance `a` on a block of `c` gates."""
+    """`q(c, k)`: allowance `a` on a block of `c` gates."""
     return lambda b: a(FlopBudget(units.flops(b.gates), b.inputs, b.cut))
 
 

@@ -15,7 +15,7 @@ of its cuts (the local minimum), and the unregistered leaves `q_U(|A[L_unreg]|)`
 (`Accounting.Guarantees.ServingBlocks.ServingBlockBound`; `ServingBlockBoundRemote`, the inference cut alone, for a
 remote regime):
 
-    Σ_v ω_v ≤ Σ_S min{q_T(c_S, k_S) + ω_max μ k_S, n_S q_T(c, k) + q_U(S)} + q_U(unregistered)
+    Σ_v ω_v ≤ Σ_S min{q(c_S, k_S) + ω_max μ k_S, n_S q(c, k) + q_U(S)} + q_U(unregistered)
 
 With `aggregate=True` the minimum is of the global sums instead (each cut name summed over every server block), the
 bound to use where only aggregate bounds exist. Remote has no wipe or certifier, so its server blocks are a server over

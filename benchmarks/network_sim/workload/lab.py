@@ -1,8 +1,7 @@
 """The lab's Program: the workload's messages as the network certifier's sessions and server-sent events.
 
-On the mock datacenter (`../mockdc.py`) every block is a server behind the certifier's proxy on its uplink, and the client
-on the outside host is the only peer of every link (`lab_run`). The proxy carries requests in and server-sent events out,
-so φ's messages are recast:
+Every block is a server behind the certifier's proxy on its uplink, and the client on the outside host is the only peer
+of every link. The proxy carries requests in and server-sent events out, so φ's messages are recast:
 
 - **Sessions.** A block's inbound messages read at one tick are one request: session j of block X, named `X.j`, is stream
   j + 1 on X's link, in read-tick order. A block that reads nothing, or sends a message read no later than its first read,
@@ -35,13 +34,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 from verity.protocols.accounting.certifier.verifier.active import (
-    HEADER,
-    LENGTH,
     TOKEN_BYTES,
     event,
     event_placement,
     request_frame_count,
 )
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER, LENGTH
 
 from . import framing as F
 from . import model as M

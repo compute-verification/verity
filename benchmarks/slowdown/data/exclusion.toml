@@ -1,4 +1,4 @@
-# The exclusion bound: the elementary uncertified cap q_U(U) = omega_max U / s_times (slowdown/classes.py Structure), what
+# The slowdown lower bound: the elementary free-compute yield q_U(U) = omega_max U / s_times (slowdown/classes.py Structure), what
 # an uncertified or an unregistered gate holds under a bound. A scenario picks one by `structure`, else structure.default.
 # s_times and units.gates_per_flop must come from one source (basis, as units.basis says it; Structure.check refuses a
 # mix): the bound holds a gate at u/w = omega_max 2G / (kappa s_times) of the reference's weight. A structure's
@@ -25,7 +25,7 @@ omega_max = { value = 1, source = "a counted product's weight (slowdown/theorem.
 mu = { value = 1, source = "counted operations' bodies are pairwise disjoint: each counted product's gates are its own (Accounting.ServingBlocks.Overlap at mu = 1)", status = "declared" }
 basis = "flop-model"
 
-# The elementary cap: one counted operation per gate, at most (each charged to its output gate, so none straddles).
+# The elementary yield: one counted operation per gate, at most (each charged to its output gate, so none straddles).
 [structure.elementary]
 s_times = { value = 1, unit = "gate", source = "a counted operation has at least one gate, its output", status = "derived" }
 omega_max = { value = 1, source = "as structure.reference", status = "declared" }
