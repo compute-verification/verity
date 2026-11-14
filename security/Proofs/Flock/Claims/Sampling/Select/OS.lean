@@ -21,7 +21,7 @@ tape.
   than the uniform `k`-subset does (`Law.drawOS_subset_escape_le`).
 
 A stratified or work sample reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
-from a tape each, so the agreement here is the subset sampling design's, which a rate law resolves to (`Select.Rule.over`).
+from a tape each, so the agreement here is the subset sampling design's, which a rate sampling design resolves to (`Select.Rule.over`).
 -/
 
 @[expose] public section

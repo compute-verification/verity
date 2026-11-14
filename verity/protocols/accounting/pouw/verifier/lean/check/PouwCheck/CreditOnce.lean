@@ -43,7 +43,7 @@ private def isDigest (j : Json) (n : Nat := 128) : Bool :=
 
 /-- `auditedOpen` with `replay` its ledger's replay. -/
 def auditedOpenWith (replay : Replay) (window : Json) (key : ChallengerKey) : V (Audited × Json) := do
-  unless isRun window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
+  unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
   let (wins, periods) ← replay key
   let root := strOf (getD window "root")
   let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"

@@ -776,7 +776,7 @@ READ_RECORD = {"roots": [{"port": "t", "root": T_ROOT, "domain": T_DOMAIN, "leav
 #: What the verifier fills of a read: its table's root and domain id, as the bytes it computed for the table, its key,
 #: and the 1 its verdict port reads.
 READ_FILLED = {"root": [[{"bytes": T_ROOT}]], "domain": [[{"bytes": T_DOMAIN}]], "tok": [[{"bytes": "00000002"}]],
-               "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
+               "one": [[{"bytes": "0001"}], [{"bytes": "0001"}]]}
 READ_REF = ((READ_T, {"ports": {"o1": {"value": "one"}}}),)
 #: The rows of the read's root and domain ports: one row a block, which every unit reads.
 READ_ROWS = tuple(SS.Rows(READ_T, p, 1, (SS.Run(0, 1, 0, 0),)) for p in ("root", "domain"))
@@ -786,13 +786,14 @@ TWO_TABLES = {**READ_FILLED, "root": [[{"bytes": T_ROOT}], [{"bytes": U_ROOT}]],
 
 
 def _holding(registered, links=READ_LINKS, wires=(), supplied=None, fixed=(), ref_reads=READ_REF,
-             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES) -> SS.Own:
+             rows=READ_ROWS, boundary=READ_RECORD, reads=READ_SIZES, tables=()) -> SS.Own:
     """What round 2 holds (`second_stage.Own`) of an interior registration registering values `registered`, with the
     design's `links`, `wires` and `rows`, the verifier's own `supplied` values and `fixed` names, the reference
-    reads, round 1's record `boundary`, and the templates the params record as `reads`."""
+    reads, round 1's record `boundary`, the templates the params record as `reads`, and the tables they pin."""
     return SS.Own((0,), (), {"registered": [{"value": v} for v in registered]}, boundary, (), tuple(links),
                   wires=tuple(wires), supplied=SS.supplied_of(READ_FILLED if supplied is None else supplied),
-                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads))
+                  fixed=tuple(fixed), ref_reads=tuple(ref_reads), rows=tuple(rows), reads=tuple(reads),
+                  tables=tuple(tables))
 
 
 READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
@@ -825,7 +826,8 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 2, READ_ROWS[1].runs))), "row"),
     (_holding(READ_VALUES, rows=(READ_ROWS[0], SS.Rows(READ_T, "domain", 1, (SS.Run(0, 1, 0, 1),)))), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "root"}), "root"),
-    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "0001"}], [{"bytes": "0000"}]]}), "row"),
+    (_holding(READ_VALUES, supplied={**READ_FILLED, "one": [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}), "row"),
     (_holding(READ_VALUES, supplied={**READ_FILLED, "one": []}), "row"),
     (_holding(READ_VALUES, supplied={k: v for k, v in READ_FILLED.items() if k != "one"}, fixed=("one",)), "row"),
     (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": f"{READ_T}/o1"}}}),)), "row"),
@@ -875,6 +877,62 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     assert SS.inputs_failure(own) == value
     found = dict(SS._interior_failures(own)).get("second-inputs")
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+#: The tables' registration's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
+PINNED = (("t", {"value": "t", "root": T_ROOT, "leaves": 8, "words": 2, "domain": T_DOMAIN}),
+          ("u", {"value": "u", "root": U_ROOT, "leaves": 8, "words": 2, "domain": U_DOMAIN}))
+NO_RECORD = {"roots": []}
+
+
+@pytest.mark.parametrize("own,value", [
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED), None),
+    (_holding(READ_VALUES, boundary={"roots": READ_RECORD["roots"][1:]}, supplied=TWO_TABLES, tables=PINNED[:1]), None),
+    (_holding(READ_VALUES, boundary=NO_RECORD), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED[1:]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, supplied=TWO_TABLES, tables=PINNED[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "root": "c3" * 64}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "domain": U_DOMAIN}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": 16}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=(("t", {**PINNED[0][1], "leaves": "8"}),)), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, rows=READ_ROWS[:1]), "row"),
+    (_holding(READ_VALUES, boundary=NO_RECORD, tables=PINNED, reads=()), "row"),
+    (_holding(READ_VALUES[1:], READ_LINKS[1:], boundary=NO_RECORD, tables=PINNED), "row"),
+])
+def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(own, value):
+    """`second_stage._one_table` beside round 1's record: a read's root and domain may be one table's of the tables
+    the auditor's params pin before any coin (`Own.tables`, the tables' registration's entries), so a read's row,
+    salt and path pass with round 1's record registering no table, or with it registering one of two tables filled
+    row by row and the params pinning the other. Refused, the row named, with `second_stage.INPUTS_WHY`: a table
+    neither pinned nor registered, a pin whose root, domain id or count of leaves is another than the one the verifier
+    filled, and a pin that leaves the read's other conditions unmet (its rows, its record as a read, its key)."""
+    assert SS.inputs_failure(own) == value
+    found = dict(SS._interior_failures(own)).get("second-inputs")
+    assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
+
+
+def test_the_params_pin_registered_tables_beside_the_circuit_files():
+    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' registration's
+    entries by parameter, which it pinned before any coin; the verifier takes them in the parameters' order and the
+    circuit files as without them, and refuses an entry not exactly the registration's form (`service._table_entry`)
+    and tables that are not an object."""
+    entry = dict(PINNED[0][1])
+    pinned = {**_circuits(), "tables": {"u": {**entry, "value": "u"}, "t": entry}}
+    assert S.template_circuits(pinned, WINDOW_QUERY) == S.template_circuits(_circuits(), WINDOW_QUERY)
+    assert S.pinned_tables(pinned) == (("t", entry), ("u", {**entry, "value": "u"}))
+    assert S.pinned_tables(_circuits()) == () == S.pinned_tables(None)
+    assert S.template_circuits({**_circuits(), "tables": {"t": {**entry, "word_bits": 8}}}, WINDOW_QUERY)
+    for bad in ({**entry, "value": "u"}, {**entry, "root": "AB" * 64}, {**entry, "domain": "ab" * 32},
+                {**entry, "leaves": 0}, {**entry, "words": True}, {**entry, "word_bits": 0}, {**entry, "x": 1},
+                {k: v for k, v in entry.items() if k != "words"}, [entry]):
+        with pytest.raises(ValueError, match="a pinned table's entry is exactly"):
+            S.template_circuits({**_circuits(), "tables": {"t": bad}}, WINDOW_QUERY)
+    for bad in ([entry], "t", None):
+        with pytest.raises(ValueError, match="the params' proofs are"):
+            S.template_circuits({**_circuits(), "tables": bad}, WINDOW_QUERY)
 
 
 def test_a_read_at_a_key_the_block_computes_is_refused_and_says_so():
@@ -946,6 +1004,29 @@ def test_with_the_switch_on_a_wired_key_passes_only_whole(change, why):
                 SS.KEY_WHY, SS.INPUTS_WHY}) == 7
     off = dataclasses.replace(own, wired_key=False)
     assert dict(SS._interior_failures(off))["second-inputs"] == {"value": "row", "why": SS.KEY_WHY}
+
+
+def test_a_read_whose_key_is_wired_lists_no_table_rows():
+    """A read whose key is wired lists no ``table_rows`` at a port of its opening (its key, row, salt, path or verdict):
+    the rows it reads are a function of a committed value, so listing them would disclose it. Round 2 refuses such an
+    entry with ``second-table-rows`` and `KEY_ROWS_WHY`, the switch on or off. It reads no ``table_rows`` yet, so one
+    listed anywhere else is refused too, with `TABLE_ROWS_WHY`; an entry that lists none, or lists null, passes."""
+    listed = {"value": "row", "table_rows": [0, 2]}
+
+    def stmt(port: str, e: dict) -> dict:
+        return {"template": READ_T, "header": {}, "draw": {}, "registered": {"ports": {port: e}}}
+
+    for own in (_keyed(), _keyed(on=False)):
+        assert all(SS.table_rows_why(own, READ_T, p, listed) == SS.KEY_ROWS_WHY for p in SS.KEYED_PORTS)
+        assert SS.table_rows_why(own, READ_T, "root", listed) == SS.TABLE_ROWS_WHY
+        assert SS.table_rows_why(own, READ_T, "row", {"value": "row"}) is None
+        assert SS.table_rows_why(own, READ_T, "row", {"value": "row", "table_rows": None}) is None
+        assert ("second-table-rows", {"statement": 0, "template": READ_T, "port": "row", "why": SS.KEY_ROWS_WHY}) in \
+            SS._failures(True, own, own.parts, [stmt("row", listed)])
+        assert not any(c == "second-table-rows" for c, _ in SS._failures(True, own, own.parts, [stmt("row", {})]))
+    unwired = dataclasses.replace(_keyed(), wires=())
+    assert SS.table_rows_why(unwired, READ_T, "row", listed) == SS.TABLE_ROWS_WHY
+    assert SS.KEYED_PORTS == ("tok", "row", "salt", "path", "o1")
 
 
 def test_nothing_of_record_turns_the_wired_key_on():

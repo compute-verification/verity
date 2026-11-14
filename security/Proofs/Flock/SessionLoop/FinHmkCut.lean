@@ -345,7 +345,7 @@ theorem piopBodies_eq (P : List UInt8) {m kLog : ℕ} (digest cap root : ByteArr
     omega
   have hb0 : piopBody P m kLog digest cap root lay mk 0 =
       P ++ encs (zcBind digest cap root) ++ (Frame.sq 2 6).enc := by
-    simp [piopBody, piopFr, piopK, piopN, zcBind, _root_.Flock.Firewall.Frame.LABEL_ZC]
+    simp [piopBody, piopFr, piopK, piopN, zcBind, _root_.Flock.ZkServer.Frame.LABEL_ZC]
   have hb1 : piopBody P m kLog digest cap root lay mk 1 = (Frame.sq 2 (m - 13)).enc := by
     simp [piopBody, piopFr, piopK, piopN, encs]
   have hb2 : piopBody P m kLog digest cap root lay mk 2 =
@@ -639,7 +639,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
           (Masked.priorE (finCoins x ops) (k / 2) (k % 2)) (FlockComplete.MaskRank.masksOf (Masked.stsOf x))[k / 2]!).run
           (_root_.Flock.Transcript.init #[] (spec.domain spec.tables[k / 2]! (k % 2)).toUTF8)).go l =
           (.ok (p, tr), l') ∧ l'.size = Masked.repBase x (k + 1))
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.Firewall.Finish.RepIn}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {q : _root_.Flock.ZkServer.Finish.RepIn}
     {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) ((m₀, ρ₀) :: ops) spec (2 * j.val + r.val) tb hi q f)
     {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (viewPoints x ops spec) = .ok extras)
@@ -664,7 +664,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     ∀ i < (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).zp 64,
       i ≠ (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).fc →
       ((Masked.swSrcE x (finCoins x ops) w (vs x w ν (finCoins x ops) (finS.seenOf x t)) t j.val).rep r.val).masked i =
-        q.vals[i]! + (_root_.Flock.Firewall.Finish.padsOf q.draws).toC.h[i]! := by
+        q.vals[i]! + (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC.h[i]! := by
   intro i hi hne
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
     intro α β y f b hb
@@ -784,7 +784,7 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
     have hs' := wordsAt_size x ops hp le_rfl
     rw [List.take_length, hNR jj (by omega)] at hs'
     rw [hs']
-    exact Nat.min_eq_left (by unfold piopN _root_.Flock.Firewall.Frames.COIN_MAX; split_ifs <;> omega)
+    exact Nat.min_eq_left (by unfold piopN _root_.Flock.ZkServer.Frames.COIN_MAX; split_ifs <;> omega)
   -- the zerocheck's outer coins are not `1`
   have hA := admits_of_finCtx L₀ src (realOf src) wk hServe hF
   have hnr := Masked.not_refused_of_admits hx hA (Masked.innerSlotE x j r + 2)
@@ -848,9 +848,9 @@ theorem swSrcE_hmk_cut (vs : finS.SwVals)
   cases hq'
   dsimp only
   rw [valsOf_at lay _ none _ _ hi hne (by omega), getElem!_absPos htail hi hne,
-    show (_root_.Flock.Firewall.Finish.padsOf (_root_.Flock.Firewall.Frame.Draws.ofBytes lay
+    show (_root_.Flock.ZkServer.Finish.padsOf (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay
       (L₀.draws (ν, t) (2 * j.val + r.val)))).toC.h =
-      (_root_.Flock.Firewall.Frame.Draws.ofBytes lay (L₀.draws (ν, t) (2 * j.val + r.val))).h from rfl,
+      (_root_.Flock.ZkServer.Frame.Draws.ofBytes lay (L₀.draws (ν, t) (2 * j.val + r.val))).h from rfl,
     add_pad_pad]
 
 end Loop

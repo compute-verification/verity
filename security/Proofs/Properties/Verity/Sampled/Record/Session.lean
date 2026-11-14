@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Deploy
 # v2's verdict on its one session is the record's decision at that session
 
 One-stage v2 (`Spot.OneStageZk`) decides its one session with `verdictOf`: the session set up at its record's
-sample (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the sample's law), the rep files its
+sample (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the sample's sampling design), the rep files its
 `reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is verity-verify-proof
 `--zk` in public-coin form (`FlockDeploy.V true`), which at SHA-512 accepts exactly when `Zk.verify` at its statement's
 setup accepts the last message's record and proof files and `FlockDeploy.checks` pass (`next_decide_sha512`).
@@ -193,7 +193,7 @@ theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {dr
   exact ⟨hprog, hinner, hb, hsc, hsh, hrc⟩
 
 /-- **`setupAt`, unfolded**: `sessionAt`'s session `(spec, sts)`, whose tables' verifier-side setups are the model's
-(`FlockDeploy.tabsOf`), and the sample's law where there is a sample. -/
+(`FlockDeploy.tabsOf`), and the sample's sampling design where there is a sample. -/
 theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : SessionSpec} {tabs : Array Setup} {p o : Json}
     (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
@@ -232,7 +232,7 @@ theorem setupChecks_checks {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Read
 /-- **The model's setup passes where v2's does**, with the same session: where `si` matches v2's inputs and its sample is
 the one v2 set up at, v2's `setupAt` being `.ok` gives each call `FlockDeploy.Ins.setup` makes (the hm96-sha512 rows
 check, the inner checks, `Read.setup`, each table's registered reads and identifier, the full registration,
-`RecSetup.checks`, `Zk.shapeOk`, check 5, the public rows and the sample's law). -/
+`RecSetup.checks`, `Zk.shapeOk`, check 5, the public rows and the sample's sampling design). -/
 theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
     {draw : Option Json} {spec : SessionSpec} {tabs : Array Setup} {p o : Json} (hm : SessionMatch si I rd)
     (hdraw : si.read.draw = draw) (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :

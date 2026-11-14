@@ -1,6 +1,6 @@
 # The word codec's benchmarks and their tests. Not a package: `kv.cu` and `kv_bench.py` run on a GPU node (`run.sh`), and
 # the byte-exact references (`codec.py`, `wide.py`, `kv.py`) with the kernels' arithmetic twins (`twin.py`, `kv_twin.py`)
-# run here as a suite (`uv run tools/verity/check/suites.py benchmarks/word_codec`).
+# run here as a suite (`uv run tools/check/suites.py benchmarks/word_codec`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

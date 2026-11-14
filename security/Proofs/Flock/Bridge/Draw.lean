@@ -10,17 +10,17 @@ public import Proofs.Flock.Soundness.ExecStrataOf
 # The deployed sample at the registration's strata
 
 `SampledKSLiveV5` samples with the deployed sample (`Spot.Draw.drawUnits`, `Flock.Draw.drawWith` on the
-challenger's coins read in order as one stream) under a Flock law over the registration's strata, and its `δ` is that
+challenger's coins read in order as one stream) under a Flock sampling design over the registration's strata, and its `δ` is that
 sampling design's own `P_a`. This file holds what the statement reads and how the sample meets it:
 
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;
 * `LawOn law ns kd`: `law` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
-  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none (`NotBernoulli`);
+  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none (`NotBernoulli`);
 * `pa_stratified`, `pa_work`: such a sampling design's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
   and samples; `pa_empty_of_lawOn`: it misses nothing with probability `1`;
-* `wellFormed_of_lawOn`: such a sampling design, where it is the one the verifier's agreed law gives (`deriveLaw`, else
-  `flockLaw` of `derive`'s law object), is well formed over `ns` (`OneStage.WellFormed`), by the code's own refusals;
+* `wellFormed_of_lawOn`: such a sampling design, where it is the one the verifier's agreed sampling design gives (`deriveLaw`, else
+  `flockLaw` of `derive`'s sampling design object), is well formed over `ns` (`OneStage.WellFormed`), by the code's own refusals;
 * `drawUnits_miss_le`: the deployed sample misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
   `strata_bound`);
 * `execSel src law pop`: the deployed sample as a sampling design on the verifier's bytes `src`, a sample that runs out of them sampling
@@ -32,7 +32,7 @@ sampling design's own `P_a`. This file holds what the statement reads and how th
   `workProblem_chain`); `lawOn_size` at a sampling design on strata;
 * `drawUnits_size`: the deployed sample under such a sampling design that ends holds `kd` units, at any population (`subset_size`,
   `stratifiedWith_size`);
-* `All`: the rule's law is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
+* `All`: the rule's sampling design is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
   (`lawOn_all`), and under it the deployed sample holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
 -/
 
@@ -80,7 +80,7 @@ def StrataOn (St : List Flock.Draw.Stratum) (ns : List ℕ) : Prop :=
     St.map (·.size) = ns
 
 /-- **A sampling design at the strata `ns` that samples `kd` units**: `subset kd`, or `stratified K` or `work K` over strata at `ns`
-(`StrataOn`), each stratum's `k` the rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none. -/
+(`StrataOn`), each stratum's `k` the rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli sampling design is none. -/
 def LawOn (law : Flock.Draw.Law) (ns : List ℕ) (kd : ℕ) : Prop :=
   match law with
   | .subset k => k = kd ∧ kd ≤ ns.sum
@@ -91,7 +91,7 @@ def LawOn (law : Flock.Draw.Law) (ns : List ℕ) (kd : ℕ) : Prop :=
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
 
-/-- **No Bernoulli law**: `law` samples a count its strata or its `k` fix, not one the coins set, as `LawOn` and
+/-- **No Bernoulli sampling design**: `law` samples a count its strata or its `k` fix, not one the coins set, as `LawOn` and
 `LawSized` require. -/
 def NotBernoulli (law : Flock.Draw.Law) : Prop := ∀ a b, law ≠ .bernoulli a b
 
@@ -285,7 +285,7 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     _ = ENNReal.ofReal (Claims.Pr (E 0)) := by rw [Claims.Sampling.Pr_eq_toReal_prCoin, ENNReal.ofReal_toReal hfin]
     _ ≤ _ := ENNReal.ofReal_le_ofReal (drawUnits_miss_le hlaw hns _ hU (L 0))
 
-/-- **`All`'s law is on the strata**: `subset n` over the `n` units, sampling all of them. -/
+/-- **`All`'s sampling design is on the strata**: `subset n` over the `n` units, sampling all of them. -/
 theorem lawOn_all (ns : List ℕ) : LawOn (.subset ns.sum) ns ns.sum := ⟨rfl, le_rfl⟩
 
 /-- **Under `All` the deployed sample holds every unit**: a sample of `subset n` over `[0, n)` that ends is the image of
@@ -326,7 +326,7 @@ theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ 
   exact ⟨r, hr, h1, by omega⟩
 
 /-- **A sampling design whose sample files hold `kd` units** (`lawSized_size`): `subset kd`, or a stratified or work sampling design whose
-strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli law is none. -/
+strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli sampling design is none. -/
 def LawSized (law : Flock.Draw.Law) (kd : ℕ) : Prop :=
   match law with
   | .subset k => k = kd
@@ -351,7 +351,7 @@ theorem lawSized_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h :
     obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
     exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
 
-/-- **A sample file of the verifier's sample under a sized law decodes only to `kd` units**, at any population: a subset
+/-- **A sample file of the verifier's sample under a sized sampling design decodes only to `kd` units**, at any population: a subset
 sample has its `k` (`ofJson_shape`), and a stratified or work sample `k_s` units in each stratum (`ofJson_count`,
 `ofJson_count_work`), whose slots hold each unit once and whose ranges hold each of its units, since `UnitDraw.ofJson`
 checks that they tile the sample's population (`strataProblem_none`, `workProblem_chain`). -/
@@ -436,8 +436,8 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       _ = kd := hsum
 
 open Properties.Spot.SecurityProofs in
-/-- **The sampling design the verifier agrees is well formed over its strata**: where `deriveLaw` expands the named law, or
-`flockLaw` reads `derive`'s law object, and the sampling design is one at `ns` (`LawOn`), its claims design is well formed over
+/-- **The sampling design the verifier agrees is well formed over its strata**: where `deriveLaw` expands the named sampling design, or
+`flockLaw` reads `derive`'s sampling design object, and the sampling design is one at `ns` (`LawOn`), its claims design is well formed over
 `ns`, by the code's own refusals. A subset samples at least one unit (`flockLaw`); a stratified `K` is in
 `[1, population]` (`Flock.Draw.derive`); a work sampling design's strata are nonempty (`strataOf` of a covered partition), its
 floors at least one (`workTableOfJson`) and its work nonzero (`deriveWork`). -/

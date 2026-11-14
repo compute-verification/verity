@@ -85,7 +85,7 @@
   circuits read, and the caller's check refuses a window that names another or none, or names one where the verifier read none
   (`R6-seed-salt`), so a salt the server chose is refused by name.
 * **Registered compiler** (`compiler`): the registration log's registered compiler as its view publishes it
-  (`verity.hardware.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
+  (`verity.protocols.accounting.registration.verifier.registration`): its item, with its digest and the public length ℓ of the advice it reads, or None
   when the log registers none. The caller's check holds the record's window to name that compiler by its digest
   (`window.compiler.digest`; `R6-compiler`) and advice of at most ℓ bits (`window.advice.bits`; `R6-advice-length`),
   and, where the log registers none, to name neither a compiler nor advice (`R6-compiler`), so advice no registered
@@ -693,7 +693,7 @@ def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
 
 def _registered_compiler(item: Any) -> Any:
     """The registered compiler the verifier read (Registered compiler): `UNREAD`; None, a log that registers none; or the
-    log's item as its view publishes it (`verity.hardware.registration`), its digest lowercase hex of 64 bytes, its
+    log's item as its view publishes it (`verity.protocols.accounting.registration.verifier.registration`), its digest lowercase hex of 64 bytes, its
     advice format a string and its length ℓ a natural, as `(digest, ℓ)`; ValueError otherwise, which the Lean verifier
     refuses too (`OneStage.paramsOfJson`)."""
     if item is UNREAD or item is None:

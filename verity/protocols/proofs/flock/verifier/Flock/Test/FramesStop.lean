@@ -1,7 +1,7 @@
 module
 
-public import Flock.Firewall.Frames
-meta import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
+meta import Flock.ZkServer.Frames
 
 /-!
 A session's stop in the loop's frames (`Frames.roundStep`, `Frames.coinsStep`, `Frames.finishOf`), on a table's two
@@ -17,7 +17,7 @@ then answer `finish` `stop`, so the session's `Finish` leaves without proofs.
 
 namespace Flock.Test.FramesStop
 
-open Flock Flock.Firewall Flock.Firewall.Frames
+open Flock Flock.ZkServer Flock.ZkServer.Frames
 open Flock.Transcript (header)
 
 def h0 : F128 := ⟨0x1111, 0x2222⟩

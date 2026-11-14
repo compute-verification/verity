@@ -83,8 +83,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   work sampling design (``work-rate:NUM/DEN``) proves every unit of theirs (`serving_rows.work_table_of`: work 0, floor all its units) beside the sampled
   rest, the stream registering with that work table; its negatives (`transfer_gate_negatives`, and in `advice_negatives` the
   registration under the compiler listing none, `source`): the proved set less a transfer-gate unit (`check_proved`), a sample
-  trading one for a unit of the rest (`check_draw`), and the registration's law sampling them as the rest is (R1).
-* **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
+  trading one for a unit of the rest (`check_draw`), and the registration's sampling design sampling them as the rest is (R1).
+* **One sample per window** by the registered sampling design (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `verity-verify-proof draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
@@ -804,10 +804,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
     (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
-    registration (a two-stage design's second stage of its interior registration), its sample, law and receipt, proved in
+    registration (a two-stage design's second stage of its interior registration), its sample, sampling design and receipt, proved in
     place of a5's own; the audit record and its negatives are then decided as that stream decides the interior's
-    (`verifier.audit_record`'s ``own_reads``: a session's read of one of the registration's own ports at its own root is
-    no registered read, its rows being round 2's to hold), ``audit.json`` says so (``own_reads``), and the summary's
+    (`audit.less_own_reads`, which `verifier.audit_record` always applies: a session's read of one of the registration's
+    own ports at its own root is no registered read, its rows being round 2's to hold), ``audit.json`` says so
+    (``own_reads``), and the summary's
     ``handed`` is what the audit record took (its verdicts, statement, sessions,
     proved units, instances, served units and session roots), for the caller's stream's outcome. ``history``: the
     verifier's history tables from the members' public bodies by key (`ml.windows.history.params`), to which the
@@ -868,7 +869,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         else:
             src = ["--template", m.template, *(["--cache", a.compose_cache] if a.compose_cache else [])] if chunked else \
                 ["--input-set", str(sets[m.template][0])]
-            p = a0.run([sys.executable, str(HERE / "compose_circuit.py"), *src, "--out", str(st_dir / "circuit.txt"),
+            compose = Path(__file__).resolve().parents[2] / "verifier" / "one_stage" / "compose_circuit.py"
+            p = a0.run([sys.executable, str(compose), *src, "--out", str(st_dir / "circuit.txt"),
                         "--partition", pd, "--program", part["program"]], st_dir / "compose.log", {"PYTHONPATH": a.m0_pythonpath},
                        timeout=a.session_timeout)
             if p.returncode != 0:
@@ -1192,8 +1194,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     coin_neg: dict[str, dict] = {}
     if not streamed(a):
         result = V.audit_record(rec, receipt, union_draw, drawn_law, sorted(proved), instances, statement, verdicts, a.delta,
-                                sessions=sessions, served=sorted(served_units), session_roots=session_roots,
-                                own_reads=drawn is not None)
+                                sessions=sessions, served=sorted(served_units), session_roots=session_roots)
         if drawn is not None:
             result["own_reads"] = True
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
@@ -1270,7 +1271,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             wrong = {**hist, "registered": {**hist["registered"], name: root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
             v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, history=wrong,
                         **tie(a))
-            neg["history-root-not-its-writers-strings"] = a0.history_negative(v)
+            neg["history-root-not-its-writers-strings"] = a0.negative(v)
         v = outside_the_partition(union_draw, rec, drawn_law, n_all)
         neg["draw-outside-the-partition"] = a0.negative(v)
         neg.update(wiring_negatives(mine.members, publics))
@@ -1279,8 +1280,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             neg["proved-set-short-of-the-draw"] = a0.negative(v)
         neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
                                            tie(a)))
-        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units),
-                                      own_reads=drawn is not None))
+        neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
         neg.update(coin_neg)
         if linked is not None:
             neg.update(registered_negatives(a, *linked))
@@ -1530,7 +1530,7 @@ def per_member(members: Sequence[dict], zk: bool) -> bool:
 def link_points(law: dict, population: int, members: Sequence[dict]) -> dict:
     """The registration's `link-points` (`link_points.refused`) over the window's staged members, each its units
     ``[base, base + n)`` at its circuit's units a proof block: the members it would refuse, each with its fewest and most
-    sampled proof blocks under the sampled law over the samples that end (one that runs out of coins fails the window:
+    sampled proof blocks under the sampled sampling design over the samples that end (one that runs out of coins fails the window:
     `draw_ran_out`): one a sample misses, its fewest none, and one whose fewest and most open different link points. Or
     why it refuses them all, a sampling design no sample of which ends among them (`link_points.NEVER_ENDS`).
     Recorded here for every window; the registration's check refuses them where the audit's case is of the per-member

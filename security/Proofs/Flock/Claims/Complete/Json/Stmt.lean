@@ -224,7 +224,7 @@ theorem mapM_ok_mem {α β : Type} {f : α → V β} {a : Array α} {b : Array �
 
 /-! ## What the setup checked -/
 
-/-- A sampled session's setup checked its sample's law (`ProvedScope.drawLaw`). -/
+/-- A sampled session's setup checked its sample's sampling design (`ProvedScope.drawLaw`). -/
 theorem Ins.setup_drawLaw {s : Ins} {p : SessionSpec × Array Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
     ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by

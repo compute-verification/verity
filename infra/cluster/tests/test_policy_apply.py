@@ -86,7 +86,7 @@ def n1(tmp_path: Path, files: dict[str, str | None]) -> Node:
     return Node(tmp_path / "n1", {**FILES, **files, QUIET: None, DISK: None})
 
 
-N1_DRIFT = {LEAN: "# NAME CAP\ncheck 3   # three at once\naudit 2\n",
+N1_DRIFT = {LEAN: "# NAME LIMIT\ncheck 3   # three at once\naudit 2\n",
             SLOTS: "a 32-63 only=trains\nb 64-95\nd 128-159  # since 2 Oct\n",
             DCPUS: "0-95\n", DROPIN: "# delegate cpuset\n[Service]\nDelegate=cpu memory pids\n"}
 
@@ -139,7 +139,7 @@ def test_apply_writes_each_file_records_who_and_why_reads_it_back_and_a_second_a
     assert rc == 0, "pools.checks, which has no applier, follows the check slots"
     assert reps[N1]["result"] == {"ok": True, "wrote": [SLOTS, DCPUS, LEAN, DROPIN], "left": {}}
     note = f"cluster policy apply, infra {STAMP}"
-    assert node.text(LEAN) == f"# NAME CAP\n# check 3   # three at once   -- until {note}\ncheck 2  # {note}\naudit 2\n"
+    assert node.text(LEAN) == f"# NAME LIMIT\n# check 3   # three at once   -- until {note}\ncheck 2  # {note}\naudit 2\n"
     assert node.text(SLOTS) == f"a 32-63 only=trains\nb 64-95\nd 128-159  # since 2 Oct\nc 8-31  # {note}\n"
     assert node.text(DCPUS) == "0-95,128-159\n"
     assert node.text(DROPIN) == "# delegate cpuset\n[Service]\nDelegate=cpu cpuset memory pids\n"
