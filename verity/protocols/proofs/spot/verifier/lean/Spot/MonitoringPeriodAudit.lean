@@ -3,7 +3,7 @@ SPOT's monitoring period, the audits' half, and the period's check (`verity/samp
 every root a lane committed at the auditor's challenger during a monitoring period, in a period of the lane that
 commits this registration's circuit, pass SPOT's audit, on the one sample the challenger gave it?
 
-The period's check audits every window the ledger's half lists (`Spot.MonitoringPeriod.windowsOf`) with the one-stage audit on
+The period's check audits every window the ledger's half lists (`Spot.MonitoringPeriod.runsOf`) with the one-stage audit on
 the proofs themselves (`OneStageZk`). The verifier holds one set of parameters for the whole monitoring period
 (`AuditParams`): the ledger's half's, its copy of main's first-parent history (`main`), this registration's circuit
 (`registration`), and `audit`, one-stage v2's parameters less what a window sets. A case supplies nothing of the
@@ -23,7 +23,7 @@ one-stage v2 reads a sample's coins from are the period's own (`evidenceAt`), ne
 
 **The check** (`checkBlobs`), in order, the first refusal the answer, each under its code (`Code`):
 
-1. the ledger's half (`windowsOf`): `coin`, `early`, `missing`, `outside`, `period`;
+1. the ledger's half (`runsOf`): `coin`, `early`, `missing`, `outside`, `period`;
 2. whose each session of the lane is (`registeredIn`): every window is this registration's (`period`); every other
    session of the lane, one that holds no coin of the family, is another registration's: one that no period that
    commits a circuit lists is refused (`outside`), and one of this registration's is a root committed under this

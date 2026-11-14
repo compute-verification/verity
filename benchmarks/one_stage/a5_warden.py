@@ -445,6 +445,7 @@ def main(argv=None) -> int:
         ap.error("one refused statement a run: --altered or --made-for")
     from verity.protocols.proofs.spot.prover.audit import window_audit as a5
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     out = a.out
     at = links(a.run, a.units)
@@ -459,7 +460,7 @@ def main(argv=None) -> int:
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
     port = a.port or free_ports(a5.RANK_PORTS)
     summary0 = {"rank": 0, "standin": provenance(at), "altered": a.altered, "made_for": a.made_for}
-    manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main)
+    manager, a.coins, finisher = AC.start("local", ROOT, [0], out / "challenger", a.main, local=LC.Local)
     published: dict = {}
     try:
         s, ok = a5.audit(a, sets, out / "rank0", mine, out / "window", source, port, summary0,

@@ -20,7 +20,7 @@ public import Proofs.Accounting.Actual.Sampler
 /-!
 # The actual circuit's guarantees
 
-The model of `Security/Definitions/Accounting/Actual.lean`:
+The model of `security/Definitions/Accounting/Actual.lean`:
 
 * `Actual/Split.lean`: what a region reads from outside itself is what its location carried in plus what crossed its
   boundary, and so in any set of gates.

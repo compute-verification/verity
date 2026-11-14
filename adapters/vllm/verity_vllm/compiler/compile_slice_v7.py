@@ -51,7 +51,7 @@ from verity.circuits.evaluation.bits import evaluate_bits
 from verity.protocols.accounting.certifier.prover import window_charge as WC
 from verity.protocols.accounting.certifier.verifier import charge_chain as CC, replay_chain as RC
 from verity_vllm.compiler import compile_slice as CS
-from verity.protocols.accounting.certifier.verifier.head_check import _part
+from verity.circuits.boolean.trace import part as _part
 
 STATICS, BLOCK_STATICS, FLAGS, ACCEPT = CS.STATICS, CS.BLOCK_STATICS, CS.FLAGS, CS.ACCEPT
 

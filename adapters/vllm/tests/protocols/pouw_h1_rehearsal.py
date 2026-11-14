@@ -133,9 +133,11 @@ def build_program(d: Path, layers: int = 32) -> dict[str, Any]:
     import gzip
     import resource
     import time
+
     from verity.circuits.codec import canonical_json, encode_program, program_digest
     from verity.protocols.accounting.pouw.prover.serving import h1 as PH
     from verity.protocols.accounting.pouw.prover.serving.h1 import served as SV
+
     from tests.protocols.pouw_h1_gpu import layout_of
     d.mkdir(parents=True, exist_ok=True)
     shapes, modules = declaration(layers)
@@ -381,11 +383,10 @@ def forge(gate: Gate, honest: dict[str, Any], opened_on: bytes, peer: str, at: s
     from a sampling challenge phase the gate reserves beside it and opens withheld on the window's sample root
     (`pouw_h1_window.DrawSession`), as `test_pouw_h1._salted` forges one in process: (the forged commitment, its
     challenge phase, its sample's)."""
-    from verity.protocols.accounting.pouw.verifier import window as Wd
-
     from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
     from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
     from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
+    from verity.protocols.accounting.pouw.verifier import window as Wd
     reserved = gate("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.families(len(honest["rounds"])),
                     "--minutes", "30")
     if "refused" in reserved:

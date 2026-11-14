@@ -70,24 +70,24 @@ def refusals(scheme: str, settings: Any, stage: str, opens: str | None = None) -
     that opens its session itself opens it on (H1's window-open root, `Window`; Pearl-C's epoch root, `salt_session`)."""
     out = []
     if settings.session is None:
-        out.append(f"{scheme}: the pouw setting 'challenger' needs 'session', the challenger gate's "
+        out.append("the pouw setting 'challenger' needs 'session', the challenger gate's "
                    + (f"reserve answer for the window ({{'session', ...}}), which it opens on {opens}"
                       if opens else "open answer for the window's Commit ({'session', 'seq', 'root', 'commitment'})")
                    + ", which the window carries and the verifier checks against the auditor's ledger")
     elif opens and ("root" in settings.session or settings.gate is None):
-        out.append(f"{scheme}: the window opens its session itself, on {opens}, committed before its salt: the pouw "
+        out.append(f"the window opens its session itself, on {opens}, committed before its salt: the pouw "
                    "setting 'session' is the gate's reserve answer and 'gate' opens it")
     elif not opens and "root" not in settings.session:
-        out.append(f"{scheme}: the pouw setting 'session' is the gate's open answer for the window's Commit "
+        out.append("the pouw setting 'session' is the gate's open answer for the window's Commit "
                    "({'session', 'seq', 'root', 'commitment'})")
     if not opens and settings.gate is not None:
-        out.append(f"{scheme}: the pouw setting 'gate' opens a reserved session on the root its window commits first, and "
+        out.append("the pouw setting 'gate' opens a reserved session on the root its window commits first, and "
                    "this window's 'session' is the gate's open answer")
     if settings.coins is not None or settings.rounds is not None:
-        out.append(f"{scheme}: the window's coins come from one source: the pouw setting 'challenger' (the auditor device's "
+        out.append("the window's coins come from one source: the pouw setting 'challenger' (the auditor device's "
                    "salt and round coins) or, in tests, 'coins' and 'rounds' held in this process, not both")
     if stage == "capture":
-        out.append(f"{scheme}: a capture records nothing, so it opens no session on the auditor device's challenger (the pouw "
+        out.append("a capture records nothing, so it opens no session on the auditor device's challenger (the pouw "
                    "setting 'challenger' is a served window's)")
     return out
 
@@ -306,7 +306,9 @@ def reserve_draw(call: Callable[..., Mapping[str, Any]], peer: str) -> dict[str,
     answer = call("reserve", "--peer", peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(), "--withhold")
     if answer.get("withheld") is not True:
         raise CoinError(f"the gate reserved draw session {answer.get('session')} plain, not withheld")
-    return reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
+    reserved = reserved_of({k: v for k, v in answer.items() if k in ("session", *RESERVE_FIELDS)}, "draw_session")
+    assert reserved is not None
+    return reserved
 
 
 def open_session(entry: str, gate: Callable[..., Mapping[str, Any]], sid: str, root: bytes, k: int = 0,
@@ -341,10 +343,10 @@ Gate = Callable[..., Mapping[str, Any]]
 #: why the gate's open of a sampling session is refused before any coin (`gate_of`)
 WITHHELD_OPEN = ("a sampling session is withheld: the gate's open answers `withheld: true`, no coin commitment root "
                  "(`commitment` null until the session's end) and `signed: true`, since its challenger releases its root "
-                 "only at its close, after the prover's commitment (`reserve --withhold`, CMP-177)")
+                 "only at its close, after the prover's commitment (`reserve --withhold`)")
 #: why an H1 window's sampling coin has no session to come from (`DrawSession`)
 NO_DRAW_SESSION = ("the window's draw coin comes from a draw session of its own, opened withheld on its draw root once "
-                   "the prover's commitment is in (CMP-177), and the pouw setting 'draw_session' reserves none")
+                   "the prover's commitment is in, and the pouw setting 'draw_session' reserves none")
 
 
 def in_process_draw(rounds: Any, coins: Any) -> LiveRecord | None:
@@ -466,7 +468,7 @@ def finish(run: Any, client: Any) -> None:
             run.details["challenger"] = {"closed": why is None, **({"reason": why} if why else {})}
 
 
-__all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "at_port",
-           "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
+__all__ = ["DrawSession", "EPOCHS", "Gate", "H1_PERIOD", "NO_DRAW_SESSION", "RESERVE_FIELDS", "WITHHELD_OPEN", "Window", "after_close",
+           "at_port", "closed_on_error", "connect", "finish", "gate_of", "in_process_draw", "open_period", "open_session", "opened",
            "period_reason", "period_setting", "refusals", "reserve_draw", "reserve_salt", "reserved_of", "salt_session",
            "session", "session_setting"]

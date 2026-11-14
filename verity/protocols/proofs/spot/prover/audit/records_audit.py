@@ -1011,6 +1011,7 @@ def audit(a: argparse.Namespace) -> int:
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -1079,7 +1080,8 @@ def audit(a: argparse.Namespace) -> int:
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key)
+                                          peer=a.peer, key_record=a.challenger_key, deployed=a.deployed_key,
+                                          local=LC.Local)
     try:
         s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
                          {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
@@ -1198,6 +1200,7 @@ def main(argv: list[str] | None = None) -> int:
                    "every member with a proved unit, a sample needing more refused before any listens (default one a member)")
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--session-jobs", type=A5.one_session, default=1, help="1 only: a5 runs the sessions one at a time (a5.ONE_AT_A_TIME)")
+    p.add_argument("--archive-link", action="store_true", help=A5.ARCHIVE_LINK_HELP)
     A5.lean_options(p)
     forges = p.add_mutually_exclusive_group()
     forges.add_argument("--forged", action="store_true", help="the window holds a forged unit: it must be refused")

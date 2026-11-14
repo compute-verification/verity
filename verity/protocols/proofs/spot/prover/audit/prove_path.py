@@ -205,7 +205,6 @@ from types import SimpleNamespace
 from typing import Any
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path")
-sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from verity.protocols.proofs.spot.prover.audit.records_audit import PORTS, REFUSED, forged_outcome, free_ports, leak_count, pin_arg, pins_of, registration_roots  # noqa: E402, F401
 from verity.protocols.proofs.spot.verifier.consumers import exfiltration_bound, location_bits  # noqa: E402
@@ -1209,6 +1208,7 @@ def coins_of(a: argparse.Namespace) -> dict[str, Any]:
 def audit(a: argparse.Namespace) -> int:
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     world, ranks = ranks_of(a)
     if a.port is None:
@@ -1237,7 +1237,7 @@ def audit(a: argparse.Namespace) -> int:
                      "requests": requests, "rule": a.rule, "delta": a.delta, "forged": a.forged, "coins": coins_of(a), "ranks": {},
                      **({"plain": {"scope": A5.PLAIN_SCOPE, "interim": PLAIN_INTERIM}} if a.plain else {})}
     manager, a.coins, finisher = AC.start(a.challenger, root, ranks, out / "challenger", a.main, ssh_key=a.gate_key,
-                                          peer=a.peer, key_record=a.challenger_key)
+                                          peer=a.peer, key_record=a.challenger_key, local=LC.Local)
     try:
         for (_a, _w, r), row in in_processes(audit_rank, a.jobs, [(a, world, r) for r in ranks]):
             summary["ranks"][str(r)] = row
@@ -1478,60 +1478,31 @@ def class_size_of_advice(a: argparse.Namespace) -> dict[str, Any]:
             "probe": {"class": asdict(probe), "census": seen, "seconds": round(lowered, 1)}, **sizes}
 
 
-@contextlib.contextmanager
-def network_traces() -> Iterator[None]:
-    """``benchmarks/network_traces``' modules importable inside, then ``sys.path`` and the module ``replay`` as they were:
-    its ``replay`` isn't one_stage's, which ``a5`` imports."""
-    path, replay = list(sys.path), sys.modules.pop("replay", None)
-    sys.path.insert(0, str(HERE.parent / "network_traces"))
-    sys.path.append(str(HERE.parents[1]))  # the root, for benchmarks.network_traces
-    try:
-        yield
-    finally:
-        sys.path[:] = path
-        sys.modules.pop("replay", None)
-        if replay is not None:
-            sys.modules["replay"] = replay
+#: what a caller passes for the network certifier run a serve kept: serve dir -> None where it kept none, else the run's
+#: deployment parameters, its certified I/O and its certified ingress, each execution phase's number and rows
+KeptIngress = Callable[[Path], tuple[Any, Mapping[str, Any], Sequence[tuple[int, Sequence[Any]]]] | None]
 
 
-def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
-              ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None,
+def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, kept_ingress: KeptIngress | None = None,
               ) -> tuple[list[list[int]], list[str | None]] | None:
-    """The network certifier's scan of its run the certifier front kept under ``serve_dir``
-    (`certifier_piece.PRIVATE`), as a window of class ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's
-    state rows and slot k's request, the I1 id (its id request's ``user``) of the one whose Program starts there,
-    None for a slot no request starts (`scan_state.scan_state`). The window is the execution phase, of the class's
-    buckets, whose Programs start its requests (their anchors, `scan_state.scan_anchors`); the scan reads the network
-    certifier's certified ingress rows from execution phase 0 and the outputs its egress cells carry (`warden_chain.io`).
-    ``ingress_records`` reads the kept run's ingress records, one an execution phase, from its witness directory, and
-    ``window_rows`` one record's rows: the network certifier's readers, which the caller passes, since SPOT reads the
-    certifier's record as a certified input and never imports the certifier.
-    None where the front kept no run; ValueError, naming why, where the kept run doesn't give the window's scan or the
-    caller passed no readers."""
+    """The network certifier's scan of its run the certifier front kept under ``serve_dir``, as a window of class
+    ``cls`` holding the requests of I1 ids ``users`` reads it: the scan's state rows and slot k's request, the I1 id
+    (its id request's ``user``) of the one whose Program starts there, None for a slot no request starts
+    (`scan_state.scan_state`). The window is the execution phase, of the class's buckets, whose Programs start its
+    requests (their anchors, `scan_state.scan_anchors`); the scan reads the network certifier's certified ingress rows
+    from execution phase 0 and the outputs its egress cells carry. ``kept_ingress`` reads the kept run
+    (`KeptIngress`): the caller passes it, since SPOT reads the certifier's record as a certified input and imports
+    neither the certifier nor a benchmark. None where the front kept no run; ValueError, naming why, where the kept run
+    doesn't give the window's scan or the caller passed no reader."""
     from verity_vllm.program.predict import scan_state as SS
 
-    with network_traces():
-        import certifier_piece as CP
-        from benchmarks.network_traces import warden_chain as WCH
-
-    if not any((serve_dir / CP.PRIVATE).glob("*/fetch.tar.gz")):
+    if kept_ingress is None:
+        raise ValueError("a window's scan reads the network certifier run its serve kept, or that it kept none, by the "
+                         "caller's reader, since SPOT imports neither the certifier nor a benchmark: run this from a "
+                         "caller that passes it (main's kept_ingress, as benchmarks/one_stage/window_commit.py does)")
+    if (kept := kept_ingress(serve_dir)) is None:
         return None
-    if window_rows is None or ingress_records is None:
-        raise ValueError("the serve kept a network certifier run, whose scan reads its certified ingress rows by the "
-                         "certifier's readers, which SPOT never imports: run this from a caller that passes them "
-                         "(main's window_rows and ingress_records)")
-    unpacked = None
-    try:
-        run = CP.kept_run(serve_dir)
-        unpacked, kept = CP.unpack(serve_dir / CP.PRIVATE / run / "fetch.tar.gz")
-        _, params = WCH.deployment(kept)
-        io = WCH.io(kept)
-        records = list(ingress_records(WCH.witness(kept), params))
-    except (SystemExit, CP.NotRun) as e:
-        raise ValueError(f"the certifier front's kept run: {e}") from None
-    finally:
-        if unpacked is not None:
-            CP.rm(unpacked)
+    params, io, phases = kept
     T = params.window
     cls.scan.serves(params)
     if T != cls.buckets:
@@ -1545,10 +1516,10 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
                          "served traffic the network certifier didn't see")
     if None in (release := [by[u]["release"] for u in users]):
         raise ValueError("a request of the window has no END in the kept run's ingress")
-    windows = sorted(r.window for r in records)
+    windows = sorted(w for w, _ in phases)
     if windows != list(range(len(windows))):
         raise ValueError(f"the kept run's ingress records are execution phases {windows[:8]}, not 0, 1, …")
-    ingress = [x for r in sorted(records, key=lambda r: r.window) for x in window_rows(r, params)]
+    ingress = [x for _, rows in sorted(phases, key=lambda p: p[0]) for x in rows]
     outputs = {r["stream"]: r["output"] for r in io["records"]}
     anchors = SS.scan_anchors(cls, ingress[:max(release, default=0) + cls.scan.D + 1], outputs)
     at = {anchors[by[u]["stream"]] // T if by[u]["stream"] in anchors else None for u in users}
@@ -1562,16 +1533,14 @@ def kept_scan(serve_dir: Path, cls: Any, users: Sequence[str], *, window_rows: C
     return rows, [None if q is None else user[q] for q in starts]
 
 
-def scan_state_opening(value: Any, out: Path) -> Path:
-    """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole for the network certifier's
-    scan, which reads it as its state tree (``scan_zk.py --v3c``): ``out``/`scan_zk.SCAN_STATE_FILE`, prover only,
-    every row (u16 little-endian) and then every salt. The window's ``v<j>-private.bin`` holds only the rows its members
-    read."""
+def scan_state_opening(value: Any, path: Path) -> Path:
+    """The window's `SCAN_STATE` value ``value`` (`window_rows.state_value`'s) opened whole at ``path`` for the network
+    certifier's scan, which reads it as its state tree (``scan_zk.py --v3c``, under the name its caller passes,
+    `scan_zk.SCAN_STATE_FILE`), prover only, every row (u16 little-endian) and then every salt. The window's
+    ``v<j>-private.bin`` holds only the rows its members read."""
     import numpy as np
 
-    with network_traces():
-        from scan_zk import SCAN_STATE_FILE
-    at, path = np.arange(value.leaves), out / SCAN_STATE_FILE
+    at = np.arange(value.leaves)
     with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600), "wb") as f:
         os.fchmod(f.fileno(), 0o600)
         f.write(np.ascontiguousarray(RW.value_rows(value, at), dtype="<u2").tobytes() + RW.value_salts(value, at))
@@ -1680,8 +1649,8 @@ def pearl_tie(a: argparse.Namespace, cls: Any) -> tuple[dict[str, Any], list[dic
     return w, [json.loads(Path(held[s]["manifest"]).read_text()) for s in rounds], rounds, WC.PearlTables(scheme)
 
 
-def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
-                            ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
+def window_commit_of_advice(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
+                            scan_state_file: str | None = None) -> dict[str, Any]:
     """A served window committed as its window class's one Circuit (module docstring): the class lowered
     (`window_circuit.lower`, refused where the class's slots don't take the window), each slot's values (`window_rows.Slot`,
     its request's served values its sealed record's), the circuit's output rows (`window_rows.Rows`) recorded into a `Window`
@@ -1706,11 +1675,11 @@ def window_commit_of_advice(a: argparse.Namespace, window_rows: Callable[[Any, A
     out.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="builds-", dir=out.parent) as builds:
         a.builds = builds
-        return window_commit_of_builds(a, window_rows, ingress_records)
+        return window_commit_of_builds(a, kept_ingress, scan_state_file)
 
 
-def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
-                            ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None) -> dict[str, Any]:
+def window_commit_of_builds(a: argparse.Namespace, kept_ingress: KeptIngress | None = None,
+                            scan_state_file: str | None = None) -> dict[str, Any]:
     """`window_commit_of_advice` over its own Build of each Program, from its compile (`own_builds`, into ``a.builds``
     beside ``--out``, as ``circuit``'s), never its row dir's: those are `advice_compile`'s, written once the serve is done,
     and a window tied to W is committed at its close, before its sample coin (`serve_tie`)."""
@@ -1736,6 +1705,10 @@ def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, A
         nonlocal t
         seconds[what], t = round(time.time() - t, 1), time.time()
 
+    if kept_ingress is None or scan_state_file is None:
+        raise ValueError("window-commit reads the network certifier run its serve kept, and names the scan state it opens "
+                         "for the certifier's scan, by what its caller passes (kept_ingress, scan_state_file), since SPOT "
+                         "imports neither the certifier nor a benchmark: run benchmarks/one_stage/window_commit.py")
     S.SamplingDesign(a.sampling_design)
     key = committer_key(Path(a.key))
     compiler, data = compiler_of_args(a), Path(a.advice).read_bytes()
@@ -1770,7 +1743,7 @@ def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, A
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     store = CommittedStore.of_record(bmap, OpenedReader(r.store, r.run), r.manifest if isinstance(r.manifest, dict) else None)
     units = [u for u in compiled.requests if u is not None]
-    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], window_rows=window_rows, ingress_records=ingress_records)
+    scanned = kept_scan(Path(a.serve_run), cls, [u.id for u in units], kept_ingress=kept_ingress)
     state = None if scanned is None else WRS.state_value(WC.NAME, cls, scanned[0], key, int(a.window), window=run)
     lap("scan")
     placed = place_slots(cls, [u.id for u in units], compiler.inner.ingress,
@@ -1816,7 +1789,7 @@ def window_commit_of_builds(a: argparse.Namespace, window_rows: Callable[[Any, A
     prov = {"window_circuit": {"class": [cls.slots, cls.prompt, cls.outputs, cls.lanes, cls.every], "window": int(a.window)},
             "activations": {"program": WC.NAME, "values": {SS.SCAN_STATE: values[SS.SCAN_STATE].entry()}}}
     win.write(c, a.out, prov, registrar=R, index_salt=WRS.index_salt(key, int(a.window)), previous=previous)
-    scan_state_opening(values[SS.SCAN_STATE], Path(a.out))
+    scan_state_opening(values[SS.SCAN_STATE], Path(a.out) / scan_state_file)
     lap("write")
     sources = {s: int(sum((x == i).sum() for x in filled.source.values())) for i, s in enumerate(WRS.SOURCES)}
     return {"run": run, "circuit": hashlib.sha512((Path(a.out) / "circuit.json").read_bytes()).hexdigest(),
@@ -1872,11 +1845,11 @@ def serve_standin(a: argparse.Namespace) -> dict[str, Any]:
             "requests": len(reqs)}
 
 
-def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequence[Any]] | None = None,
-         ingress_records: Callable[[Path, Any], Sequence[Any]] | None = None) -> int:
-    """The commands (the module docstring). ``window_rows`` and ``ingress_records`` are the network certifier's readers of its
-    ingress rows and records, which ``window-commit`` needs where the serve kept a certifier run (`kept_scan`): a caller
-    that holds the certifier passes them."""
+def main(argv: list[str] | None = None, kept_ingress: KeptIngress | None = None, scan_state_file: str | None = None) -> int:
+    """The commands (the module docstring). ``kept_ingress`` reads the network certifier run a serve kept
+    (`KeptIngress`), which ``window-commit``'s scan needs (`kept_scan`), and ``scan_state_file`` is the name its scan
+    reads the window's opened scan state under (`scan_state_opening`): a caller that may import the certifier and
+    ``benchmarks/`` passes both."""
     from verity_vllm.pipeline.workload_file import workload_file
 
     def workload_arg(s: str) -> str:
@@ -2066,7 +2039,7 @@ def main(argv: list[str] | None = None, window_rows: Callable[[Any, Any], Sequen
                  "weights-registration"):
         commands = {"circuit": circuit_of_advice, "window-circuit": window_circuit_of_advice,
                     "class-circuit": class_circuit_of_serve, "serve-phi": serve_phi, "class-size": class_size_of_advice,
-                    "window-commit": functools.partial(window_commit_of_advice, window_rows=window_rows, ingress_records=ingress_records), "weights-registration": weights_registration_of_serve}
+                    "window-commit": functools.partial(window_commit_of_advice, kept_ingress=kept_ingress, scan_state_file=scan_state_file), "weights-registration": weights_registration_of_serve}
         try:
             print(json.dumps(commands[a.cmd](a), sort_keys=True))
         except ValueError as e:

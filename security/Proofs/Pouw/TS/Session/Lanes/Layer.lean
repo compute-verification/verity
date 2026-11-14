@@ -4,7 +4,7 @@ public import Proofs.Pouw.TS.Session.Held.Layer
 public import Proofs.Flock.Recursive.Registrants
 public import Flock.KnownRead
 public import PouwWindow.OwnPorts
-public import PouwWindow.FullDraw
+public import PouwWindow.FullSample
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic

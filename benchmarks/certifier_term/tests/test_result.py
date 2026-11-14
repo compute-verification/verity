@@ -36,7 +36,7 @@ sys.path.insert(0, str(HERE.parent))
 
 import run as R  # noqa: E402
 from verity.protocols.accounting.registration.verifier import registration  # noqa: E402
-from verity.device import OUTSIDE, Link, Loc  # noqa: E402
+from verity.device import NO_LINE_RATE, OUTSIDE, Link, Loc  # noqa: E402
 from verity_bench import kit  # noqa: E402
 
 LB = R.calculator()
@@ -433,9 +433,11 @@ def test_refusals(tmp_path, capsys):
     bare = (Link("uplink0", ("node0", OUTSIDE), BETA, 0),)
     beside = (Link("uplink0", ("node0", "cert0"), BETA, 0), Link("uplink0-out", ("cert0", OUTSIDE), BETA, 0),
               Link("uplink1", ("node0", OUTSIDE), BETA, 0))
+    unrated = (Link("uplink0", ("node0", "cert0"), None, 0, NO_LINE_RATE), Link("uplink0-out", ("cert0", OUTSIDE), BETA, 0))
     second = registration.site(locs=(Loc("node1", "host", "site0"),))
     for path, why in ((log(tmp_path, composite="remote", links=bare, name="bare"), r"are \['uplink0'\], \[\] of them"),
                       (log(tmp_path, links=beside, name="beside"), r"\['uplink0', 'uplink1'\], \['uplink0'\] of them"),
+                      (log(tmp_path, links=unrated, name="unrated"), r"\['uplink0'\], \['uplink0'\] of them certified, each at a capacity"),
                       (log(tmp_path, BETA, second, name="second"), r"it registers the hosts \['node0', 'node1'\]")):
         with pytest.raises(SystemExit, match=f"doesn't register the model's machine, one host whose 1 boundary.*{why}"):
             R.main(["--out", str(out), "--registration", str(path), *GIVEN])

@@ -3,11 +3,14 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 from verity_vllm.records.schema_ids import IMPORT_PATH_RUNTIME_SCHEMA
 
+__all__ = ["write_import_path_runtime"]
 
-def write_import_path_runtime(llm, out: Path, rpc_timeout: float) -> None:
+
+def write_import_path_runtime(llm: Any, out: Path, rpc_timeout: float) -> None:
     """The import path OF RECORD, from the RUNNING processes: this driver's repo-local sys.modules + every rank process's (after
     finalize: replay, linkage, pin, partial source all imported) + the collector's JIT C++/CUDA sources -- what ran, not a static
     closure; the tag-candidate equivalence rule reads `import_path_runtime.json` when it exists."""

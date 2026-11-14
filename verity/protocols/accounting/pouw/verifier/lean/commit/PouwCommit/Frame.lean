@@ -7,7 +7,7 @@ public import PouwCommit.Tagged
 public import Identity.Domains.Pouw
 
 /-!
-# frame-v3 trees (`verity.ml.commitments.merkle`) over range positions
+# frame-v3 trees (`verity.commitments.merkle`) over range positions
 
 Flock's frame-v3 (`Flock.FV3`) under the frame's hash: `sha512` (`Flock.FV3.Sha512`, 64-byte digests, the default) or
 `sha256` (`Flock.FV3.Sha256`, 32, Pearl-C's h0 format and NCP's, named where it is read). A domain over positions

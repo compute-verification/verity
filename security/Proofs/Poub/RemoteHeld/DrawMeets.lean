@@ -43,7 +43,6 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Poub.Bandwidth.Chip
 import Proofs.Poub.RateAudit.Pooled
 import Proofs.Poub.RemoteHeld.Sample
-import Proofs.Poub.RemoteHeld.Sample
 import Proofs.Pouw.Prob
 
 /-!

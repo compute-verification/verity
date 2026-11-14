@@ -570,7 +570,7 @@ def sampleDesign (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Js
   | some j => match Draw.UnitSample.ofJson j with
     | .error e => .error s!"refused: a draw that does not parse ({e})"
     | .ok d => match samplingDesignWhy zk tags plainTables d with
-      | some why => .error s!"refused: {why}: no soundness claim draws by this samplingDesign"
+      | some why => .error s!"refused: {why}: no soundness claim draws by this law"
       | none => .ok ()
 
 /-- **The verifier was handed a program**: a session verified without one (`--program`) is refused (`NO_PROGRAM`),

@@ -22,7 +22,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # The premises the recursive audit's property takes
 
 The named premises a property of the recursive audit may take: `shape.premises` in
-`Security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
+`security/lean-audit.json` names this module, so the shape check reads a hypothesis whose head is one of these as a
 premise and refuses every other. Each but `CompiledForkSound`, a proved lemma's conclusion, is the named assumption it
 abbreviates, unchanged.
 
@@ -51,7 +51,7 @@ abbreviates, unchanged.
   and session record the challenger's live-coin part writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).
 
-The list belongs in `Security/Definitions/`, whose modules import only Mathlib and the spec; Flock's
+The list belongs in `security/Definitions/`, whose modules import only Mathlib and the spec; Flock's
 definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
 -/
 

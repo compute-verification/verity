@@ -14,7 +14,7 @@ stream has enqueued, nothing waiting on the host, and hands back a `Pending` who
 step's roots at its round's close, so a call's tables hash beside the forward rather than in it. `device_roots` waits at once.
 `host_roots` runs the same functions on the CPU (`row_table_host.cpp`), the twin the CPU tests hold to `hiding_rows` on
 machines without a GPU. Builds share the Commit's row-table builds (`row_table_kernels._build`) and its per-device state
-(`row_table_kernels.DeviceLibrary`); nvcc is `pouw_device`'s.
+(`verity_torch.pouw.row_table_device.DeviceLibrary`); nvcc is `pouw_device`'s.
 
 `commit_tables` is `tables.commit_tables` of the workload's buffers (`tensors.H1Device.commit_tables`), by these kernels
 where `path` says or by `tables.commit_python`, the reference; `tables.settle` records the roots of the calls the GPU has
@@ -39,6 +39,7 @@ import numpy as np
 from verity.protocols.accounting.pouw.verifier.audit import HM96, rows_domain
 
 from verity.protocols.accounting.pouw.prover.serving import row_table_kernels as RTD
+from verity_torch.pouw import row_table_device as RTL
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import tables as TB
 from verity.protocols.accounting.pouw.prover.serving.h1.tables import _binding, _keep, settle
@@ -138,8 +139,8 @@ def device_lib(arch: str) -> ctypes.CDLL:
     return dll
 
 
-def _device(torch: Any, device: Any) -> RTD.DeviceLibrary:
-    return RTD.DeviceLibrary.of(torch, device.index, device_lib, "rt_midstates", STREAMS)
+def _device(torch: Any, device: Any) -> RTL.DeviceLibrary:
+    return RTL.DeviceLibrary.of(torch, device.index, device_lib, "rt_midstates", STREAMS)
 
 
 @cache

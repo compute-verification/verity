@@ -5,9 +5,6 @@ whole run (`Run.run`) at its select (`coins`). A toy window of two templates; an
 
 from __future__ import annotations
 
-import sys
-from pathlib import Path
-
 import pytest
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
@@ -16,10 +13,7 @@ from verity.circuits.types import Array, Value as Bits
 from verity.protocols.proofs.spot.device import coins as CC
 from verity.protocols.proofs.spot.verifier import service as S
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, partition as P, docket as R, verifier as V
-
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
-sys.path.insert(0, str(HERE.parent))
-from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC
 
 XOR8 = PrimitiveDefinition("A5CoinsTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)

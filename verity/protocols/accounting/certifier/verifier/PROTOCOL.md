@@ -234,8 +234,7 @@ One execution phase's certificates are registered through the proof system
   sha512/row/v2 digest would share it and save about 1.2M ANDs a head at T = 600. The count check needs no frame's bytes, so it is the part of the egress grid check
   a proof can make without the content, and the only grid check on ingress. It runs on every execution phase: a
   structural check runs in full.
-- **N3, the content check,** a prototype in `benchmarks/network_sim` evaluated in the clear and in no proof-system
-  Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
+- **N3, the content check,** a prototype evaluated in the clear and in no proof-system Spec, is retired, superseded by the network certifier's step-indexed scan (`ingress_scan`, `egress`), which
   `verity/protocols/accounting/certifier/prover/scan_zk.py` proves in zero knowledge, outside this protocol.
 - **Its verifier** is `TransferBlocks.verify`, which decides on the delivered proof (`service.Delivered`) and
   public inputs alone. It accepts when its own run of Flock's Lean verifier (`proofs.verify`, `verify --zk`, on the

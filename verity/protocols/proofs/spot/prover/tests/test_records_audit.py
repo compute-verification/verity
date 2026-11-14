@@ -936,8 +936,8 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 
 def _auditor():
-    from verity.protocols.proofs.spot.device import challenger_session as AC
-    return AC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
+    return LC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:
@@ -1368,6 +1368,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     `prove_path.py audit` does; the command refuses a gate without the peer or the key record, and any other challenger.
     ``--deployed-key`` reaches `a5_coins.start` as ``deployed`` with ``--challenger local``, and is refused with a gate."""
     from verity.protocols.proofs.spot.device import challenger_session as AC
+    from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
 
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--port", "10000",
@@ -1393,6 +1394,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     gate = ["--challenger", "gate:research@gate", "--peer", "vy-nebius-1", "--challenger-key", "key.json", "--gate-key", "gate.key"]
     with pytest.raises(Opened):
         RA.main([*args, *gate])
+    assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "gate:research@gate", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": "gate.key",
                     "peer": "vy-nebius-1", "key_record": "key.json", "deployed": False}
     seen.clear()
@@ -1401,6 +1403,7 @@ def test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session
     assert seen == {}
     with pytest.raises(Opened):
         RA.main([*args, "--challenger", "local", "--deployed-key"])
+    assert seen.pop("local") is LC.Local
     assert seen == {"challenger": "local", "root": RUN, "ranks": [0], "main": "main.txt", "ssh_key": None, "peer": None,
                     "key_record": None, "deployed": True}
 
@@ -1571,7 +1574,7 @@ def test_the_audit_counts_a_listed_record_with_window_ingress_and_prints_its_win
 def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, monkeypatch, capsys):
     """``warm`` hands `a5.warm` the verifier's window and its composers, each saying what it composes from (the record's
     statement under the stager's label, which a5's cache keys), with ``--compose-cache`` and ``--jobs``; the audit hands a5
-    that cache, and none without ``--compose-cache``."""
+    that cache, and none without ``--compose-cache``. It hands a5 ``--archive-link`` too, and only where it is given."""
     from verity.protocols.proofs.spot.prover.audit import window_audit as A5
     from verity.protocols.proofs.spot.device import challenger_session as AC
 
@@ -1594,7 +1597,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
         pass
 
     def audit(a, *args, **kw):
-        seen["audit"] = a.compose_cache
+        seen["audit"] = a.compose_cache, a.archive_link
         raise Opened
 
     session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
@@ -1605,7 +1608,7 @@ def test_warm_fills_the_compose_cache_the_audit_then_takes(written, tmp_path, mo
     args = ["audit", "--window", str(written.dir), "--sampling-design", _rate(written.dir), "--circuit", written.rec["window"]["circuit"], "--run", RUN,
             "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--zk-server", "f", "--out", str(tmp_path / "out"),
             "--skip-negatives", "--challenger", "local", "--main", "m.txt"]
-    for extra, want in ((["--compose-cache", cache], cache), ([], None)):
+    for extra, want in ((["--compose-cache", cache], (cache, False)), ([], (None, False)), (["--archive-link"], (None, True))):
         with pytest.raises(Opened):
             RA.main([*args, *extra])
         assert seen["audit"] == want

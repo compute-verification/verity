@@ -10,8 +10,10 @@ bare case too:
 
 ``--audit`` is the window's `records_audit.py audit --circuit --registered` out directory (`served_verdicts.sh`'s
 ``$VW/audit``); ``--serve-dir`` finds it as the one ``D/v3c-w*/audit`` that holds a case, and reads the serve's H1 log
-(``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`) and Pearl+'s case's
-parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`) where it holds them.
+(``D/h1/log.jsonl``, `H1_LOG`), PoUW's period case (``D/private/pouw/period``, `PERIOD_PIECE`), Pearl+'s case's
+parts (``D/private/pearlplus/case``, `PEARL_PLUS_PIECE`), the serve's first registration record
+(``D/deployment-registration.json``, `DEPLOYMENT`) and each window's docket records as the harness keeps them
+(`RECORDS`) where it holds them.
 Every case commits to the same record R, ``window/case.json``'s commitment, the record the audit sampled against (under
 H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Commit record before its sample coin,
 `serve_tie`), and each must name R's digest, SHA-512(format ‖ 0 ‖ canon(record)) (`registration.digest`), or nothing is
@@ -40,9 +42,15 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     ``--from-division`` read off the case's own division, `division_policy`, so the check confirms that the division
     complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
     either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
-    null, as the policy's check reads them: ``--log``, else with ``--serve-dir`` the serve's H1 log through R's
-    ``previous``, `h1_log`, each window's docket W and record R up to the window's W; empty when R names no
-    previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
+    null, as the policy's check reads them. It has three sources, tried in this order, and the first that is there is
+    the whole log, none filled in from another: (1) ``--log``, a file the caller hands; (2) with ``--serve-dir``, the
+    serve's H1 log through R's ``previous``, `h1_log`, each window's docket W and record R up to the window's W;
+    (3) the serve's own records, walked back from R's ``previous`` by digest to a record whose
+    ``previous`` is null, `pearl_log`: on a serve whose window record is Pearl+'s, that W and before it the serve's
+    first registration record, W from Pearl+'s case's parts on the served node and, on a copy of the compose hand-off,
+    which holds no part of Pearl+'s case, from the files the hand-off lists (`RECORDS`, `DEPLOYMENT`). Whoever handed
+    a record over, the policy's check holds the chain itself and refuses a log that doesn't reach R (``trusted``).
+    Empty when R names no previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
     root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
     ``program``, `parameters`);
@@ -72,11 +80,14 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
 * **Pearl+'s run case** (`pearlplus_case`, `PEARL_PLUS`: `verity/pouw/pearl-plus/v1`, the work subprotocol of remote's
   composite of record, `Core.Remote.V1`): from the parts Pearl+'s piece wrote on the served node (``--pearlplus``; with
   ``--serve-dir``, `PEARL_PLUS_PIECE` when it holds them: `served_passes.py case`), its params (the epoch's coin
-  commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record"}``, the retained passes'
-  manifests and R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and its evidence, each
+  commitment, the samples and the verifier's coin record), its commitment ``{"manifests", "record", "window"}``, the
+  retained passes' manifests, R's digest, which remote ties to the policy's record (`Core.Remote.V1.run`), and the
+  window record W the passes are held to with its rounds and dropped rounds, whose digest remote ties to the record R is
+  chained right after (`Core.Remote.V1.window`), and its evidence, each
   pass's files the opened tiles read by the SHA-512 of the blob holding them, the blobs the parts' own. Its answer is the
-  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples and coin record, which the check of this
-  case runs on the blobs instead of the files) under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
+  Lean verdict of record's (`pouw-pearlplus` on the same passes, coins, samples, coin record and W, which the check of
+  this case runs on the blobs instead of the files, and at no class: its public is the exact work, `PEARL_PLUS_PUBLIC`)
+  under the commitment's digest, SHA-512(`PEARL_PLUS_TAG` ‖ 0 ‖
   commitment), since Pearl+'s package builds no executable of the protocol's form alone. The manifests carry the
   passes' salt key, so its commitment, unlike the others', is witness. Without the parts none is made.
 * **`verity/sampled-proofs/one-stage/v2`** (`v2_case`, only with ``--v2``): a5's ``window/case-v2.json``
@@ -96,16 +107,30 @@ subprotocols: remote's are SPOT's, the inference-only case's and the period's (v
 place), onsite's the same three among its own, and neither's one-stage v1's case or v2's bare case. The Lean runs on
 files in a 0700 scratch directory under ``--private``; the period's answer is the one `pouw_piece.py` wrote, and
 Pearl+'s the Lean verdict of record's.
-This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written and
+
+**No check runs outside a memory limit of its own, and none is started that cannot fit** (`lean_answer`, `Limits`).
+Each check is its own process in a systemd user scope of its own (``MemoryMax`` ``CHECK_MEM_GB``, default
+`CHECK_MEM_GB`, no swap), and on a host with no such scope it is not started (``CHECK_SCOPE=none`` runs it under no
+limit, a development host's choice, which its line then says). The executables read every blob file into memory before
+they check anything (`Core.BlobProtocol`), so a case whose blob files sum past ``CHECK_BLOBS_GB`` (default
+`CHECK_BLOBS_GB`) is not started either. And a v2 case, remote's SPOT case or the bare one, is not asked where
+its proofs are not one statement's sessions (the per-member form, `proofs.statements_v2`): one-stage v2 refuses that
+form when it parses the evidence (`OneStageZk.proofsOf`), after it has read every blob, so its answer is known and the
+check is not run.
+
+This prints a ``CASE {"protocol", "verdict", "dir"}`` line per case written (with ``memory``, where its check ran
+under no limit), a ``NOT_STARTED {"protocol", "reason", "blob_bytes", "limit_bytes", "blobs"}`` line per check not
+started, the case's blob files' sum and the limit beside it, and
 a ``NOT_WRITTEN {"protocol", "reason"}`` line per case refused, and nothing of a case's params or evidence: not α and Γ
 either, which ``--from-division`` reads off the division, so on a one-block window they'd publish its block's gates
 and fresh-input bits. The lines go to a private log (a reason may quote a5's ``case-error.txt`` or
-``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict`` are public. Exit 0 when every case is
-written, 1 when one is refused, 64 on a usage error.
+``case-v2-error.txt``), of which only a line's ``protocol`` and ``verdict`` (and a check not started's sum and limit)
+are public. Exit 0 when every case is written, 1 when one is refused or not started, 64 on a usage error.
 """
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import fcntl
 import functools
 import hashlib
@@ -153,7 +178,12 @@ PEARL_PLUS = "verity/pouw/pearl-plus/v1"
 #: what Pearl+'s commitment's digest hashes ahead of a zero byte and the commitment (`PouwCheck.PearlPlus.Protocol`)
 PEARL_PLUS_TAG = b"verity/pouw/pearl-plus/manifests/v1"
 #: the keys of `served_passes.py case`'s parts that make the case and its answer
-PEARL_PLUS_PARTS = {"params", "manifests", "evidence", "lean", "delta"}
+PEARL_PLUS_PARTS = {"params", "manifests", "window", "evidence", "lean", "delta"}
+#: the commitment's window (`PouwCheck.PearlPlus.Protocol.windowKeys`)
+PEARL_PLUS_WINDOW = {"dropped", "record", "rounds"}
+#: the work the protocol's check publishes (`PouwCheck.PearlPlus.Protocol.publicJson`, δ aside): the exact credit, which
+#: holds no class, so where the verdict of record printed the grid form, its exact work in that form's place
+PEARL_PLUS_PUBLIC = ("credited", "credited_tiles", "epsilon", "macs", "rho")
 DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inference-only", PERIOD: "pouw-period",
         PEARL_PLUS: "pouw-pearl-plus", V2: "sampled-proofs-v2"}
 #: Under ``--serve-dir``: the serve's H1 log, a line a record H1's tie wrote (`serve_tie.LOG`: ``{"window", "kind",
@@ -162,6 +192,14 @@ DIRS = {V1: "sampled-proofs-v1", SAMPLED: "sampled-proofs", INFERENCE_ONLY: "inf
 H1_LOG = Path("h1/log.jsonl")
 PERIOD_PIECE = Path("private/pouw/period")
 PEARL_PLUS_PIECE = Path("private/pearlplus/case")
+#: Under ``--serve-dir``: the serve's first registration record, where the serve wrote one before its first request
+#: (`served_verdicts.sh`'s weights step: every weight's root, chained after nothing)
+DEPLOYMENT = Path("deployment-registration.json")
+#: The docket records a serve dir holds beside its first, by where the harness keeps them: each window's Pearl+
+#: record W (`served_verdicts.sh`'s `pearl_tie`) and each window's record R as its audit wrote it. The compose hand-off
+#: lists every one there is (`served_verdicts.sh`'s `handoff_inputs`), so a copy of it holds each record a window's log
+#: can name
+RECORDS = ("pearlplus/w*/registration.json", "v3c-w*/audit/window/registration.json")
 CASE_KEYS = {"commitment", "evidence", "params"}
 USAGE = 64
 #: α and Γ past any block's (its gates and its fresh-input bits are each under 2^64), at which the policy's check reports
@@ -171,8 +209,80 @@ UNBOUNDED = (2**64, 2**64)
 FROM_DIVISION = "read off the honest division, so the check confirms it complies; not a security setting"
 
 
+#: A check's memory limit in GB, its own scope's ``MemoryMax`` (``CHECK_MEM_GB`` in the environment), and the most a
+#: case's blob files may sum to, in GB, for its check to be started (``CHECK_BLOBS_GB``)
+CHECK_MEM_GB, CHECK_BLOBS_GB = 170, 64
+#: ``CHECK_SCOPE``'s value under which a host with no systemd user scope runs its checks under no memory limit
+NO_SCOPE = "none"
+#: what a check that ran under no memory limit says of it, on its CASE line
+UNLIMITED = f"no limit (CHECK_SCOPE={NO_SCOPE}: a development host's choice)"
+#: the scope a check runs in, ahead of its memory limit
+SCOPE = ("systemd-run", "--user", "--scope", "--quiet", "--collect")
+#: why no check starts on a host that makes no such scope
+NO_SCOPE_HERE = (f"this host makes no systemd user scope ({' '.join(SCOPE)}), and no check runs outside a memory limit "
+                 f"of its own (CHECK_SCOPE={NO_SCOPE} runs it under none, on a development host)")
+
+
 class Refused(Exception):
     """The audit's outputs don't make the case; the message says why."""
+
+
+class NotStarted(Refused):
+    """A check that was not started; the message says why, and ``line`` holds what its NOT_STARTED line names beside
+    it: the case's blob files' count and sum in bytes, and the limit in bytes."""
+
+    def __init__(self, reason: str, *, blobs: int, blob_bytes: int, limit_bytes: int):
+        super().__init__(reason)
+        self.line = {"blobs": blobs, "blob_bytes": blob_bytes, "limit_bytes": limit_bytes}
+
+
+@dataclasses.dataclass(frozen=True)
+class Limits:
+    """What a check runs under: the most its case's blob files may sum to, in bytes, and the command its process runs
+    behind, a scope of its own with its memory limit (``mem_gb``), or none where the host said `NO_SCOPE`. ``refusal``:
+    why no check starts under them (`NO_SCOPE_HERE`), else None."""
+    blob_bytes: int
+    mem_gb: int
+    scope: tuple[str, ...] | None
+    refusal: str | None = None
+
+    @property
+    def memory(self) -> str:
+        return UNLIMITED if self.scope is None else f"its own scope, MemoryMax {self.mem_gb}G, no swap"
+
+
+def scope_here() -> bool:
+    """Whether this host makes a systemd user scope."""
+    try:
+        return subprocess.run([*SCOPE, "true"], capture_output=True, check=False).returncode == 0
+    except OSError:
+        return False
+
+
+def limits(env: Mapping[str, str] | None = None) -> Limits:
+    """The limits a check runs under here, from ``env`` (default the environment): ``CHECK_BLOBS_GB`` and
+    ``CHECK_MEM_GB`` over their defaults, and a scope of its own where the host makes one (`scope_here`). On a host
+    that makes none they start no check (``refusal``), unless ``CHECK_SCOPE`` is `NO_SCOPE`."""
+    env = os.environ if env is None else env
+    try:
+        blobs, mem = (int(env.get(k) or d) for k, d in (("CHECK_BLOBS_GB", CHECK_BLOBS_GB), ("CHECK_MEM_GB", CHECK_MEM_GB)))
+    except ValueError:
+        raise Refused("CHECK_BLOBS_GB and CHECK_MEM_GB are whole numbers of GB") from None
+    _need(blobs > 0 and mem > 0, "CHECK_BLOBS_GB and CHECK_MEM_GB are positive")
+    if env.get("CHECK_SCOPE") == NO_SCOPE:
+        return Limits(blobs * 10**9, mem, None)
+    if not scope_here():
+        return Limits(blobs * 10**9, mem, None, NO_SCOPE_HERE)
+    return Limits(blobs * 10**9, mem, (*SCOPE, "-p", f"MemoryMax={mem}G", "-p", "MemorySwapMax=0", "--"))
+
+
+def blob_bytes(case: Mapping[str, Any]) -> tuple[int, int]:
+    """How many blob files ``case`` names and what they sum to, in bytes."""
+    try:
+        sizes = [Path(b).stat().st_size for b in case.get("blobs", ())]
+    except OSError as e:
+        raise Refused(f"a blob of the case can't be read: {type(e).__name__}: {e}") from None
+    return len(sizes), sum(sizes)
 
 
 def _need(ok: bool, reason: str) -> None:
@@ -210,8 +320,16 @@ def window_case(audit: Path) -> dict[str, Any]:
     return case
 
 
-def v2_case(audit: Path) -> dict[str, Any]:
-    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs."""
+#: why a v2 case in the per-member form is not asked
+PER_MEMBER = ("the case's proofs are not one statement's sessions but the per-member form, which one-stage v2 refuses "
+              "when it parses the evidence (OneStageZk.proofsOf), after reading every blob: its answer is known, so "
+              "the check is not started")
+
+
+def v2_case(audit: Path, env: Mapping[str, str] | None = None) -> dict[str, Any]:
+    """SPOT's v2 case (module docstring): a5's ``case-v2.json`` held to v1's record and to its blobs. One
+    whose proofs are in the per-member form is not asked (`PER_MEMBER`: `NotStarted`, with its blobs' sum and the limit
+    of ``env``, default the environment)."""
     w = audit / "window"
     v1 = window_case(audit)
     if not (w / "case-v2.json").is_file():
@@ -226,6 +344,14 @@ def v2_case(audit: Path) -> dict[str, Any]:
     _need(isinstance(case["blobs"], list) and all(isinstance(b, str) for b in case["blobs"]), "v2's blobs are paths")
     gone = [b for b in case["blobs"] if not Path(b).is_file()]
     _need(not gone, f"v2's case names {len(gone)} blob(s) that aren't files, the first {gone[:1]}")
+    try:
+        proofs = json.loads(bytes.fromhex(case["evidence"])).get("proofs")
+    except (TypeError, ValueError, AttributeError) as e:
+        raise Refused(f"v2's evidence is not a JSON object: {type(e).__name__}: {e}") from None
+    if isinstance(proofs, dict) and set(proofs) != {"sessions"}:
+        n, total = blob_bytes(case)
+        raise NotStarted(PER_MEMBER, blobs=n, blob_bytes=total, limit_bytes=limits(
+            dict(os.environ if env is None else env) | {"CHECK_SCOPE": NO_SCOPE}).blob_bytes)
     return case
 
 
@@ -285,14 +411,18 @@ def pearlplus_case(d: Path, digest: str) -> tuple[dict[str, Any], str, Any]:
     files, lean = (parts["evidence"] or {}).get("files"), parts["lean"] or {}
     _need(isinstance(files, list) and all(isinstance(f, dict) for f in files), "the parts' evidence is not each pass's files")
     _need(lean.get("verdict") in ("accept", "reject"), f"the parts' Lean verdict is {lean.get('verdict')!r}")
+    window = parts["window"]
+    _need(isinstance(window, dict) and set(window) == PEARL_PLUS_WINDOW and isinstance(window["record"], dict),
+          f"the parts' window is not {sorted(PEARL_PLUS_WINDOW)} with the window record W the passes are held to")
     blobs = [d / "blobs" / h for h in sorted({h for f in files for h in f.values()})]
     gone = [b for b in blobs if not b.is_file()]
     _need(not gone, f"the parts name {len(gone)} blob(s) that aren't files in {d / 'blobs'}")
-    commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest})
+    commitment = codec.canonical_json({"manifests": parts["manifests"], "record": digest, "window": window})
     accepted = lean["verdict"] == "accept"
+    work = {**(lean.get("work") or {}), **(lean.get("exact_work") or {})}
     answer = {"protocol": PEARL_PLUS, "verdict": lean["verdict"], "reason": lean.get("reason"),
               "commitment": hashlib.sha512(PEARL_PLUS_TAG + b"\0" + commitment).hexdigest(),
-              "public": {**(lean.get("work") or {}), "delta": parts["delta"]} if accepted else None,
+              "public": {**{k: work[k] for k in PEARL_PLUS_PUBLIC if k in work}, "delta": parts["delta"]} if accepted else None,
               "profile": {"draws": parts["params"].get("draws"), "drawn": lean.get("drawn"),
                           "passes": len(parts["manifests"])} if accepted else None}
     case = {"params": parts["params"], "commitment": commitment.hex(),
@@ -364,6 +494,47 @@ def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
             return log
     raise Refused("the record's previous is no record the serve's H1 log names, so its log doesn't chain from the "
                   "deployment's first record")
+
+
+def pearl_log(serve: Path | None, parts: Path | None, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The deployment's records before ``rec``, oldest first, on any serve dir without an H1 log, Pearl+'s or not:
+    walked back from the record ``rec`` names as its ``previous`` to one whose ``previous`` is null, each taken by the
+    digest the record after it names, however many there are. On the harness's serve tied to Pearl+ that is the record
+    W Pearl+'s passes are held to, which ``rec`` is chained right after (the tie `Core.Remote.V1.window` checks), and
+    before it the serve's first registration record where W is chained after one. The records it walks among are the W
+    Pearl+'s case's parts hold (``parts``, `pearlplus_of`) and the ones ``serve`` holds: its first (`DEPLOYMENT`, which
+    must parse where it is there) and each window's W and R (`RECORDS`), which is all a copy of the compose hand-off
+    holds of them. A file under `RECORDS` that doesn't parse, or that is no record of the digest a later one names, is
+    no part of the log, and a link no record answers is refused, saying the log doesn't reach the deployment's first
+    record and naming each file under `RECORDS` that didn't parse. Empty when ``rec`` names no previous record."""
+    held: dict[str, dict[str, Any]] = {}
+    unread: list[str] = []
+    if parts is not None:
+        w = (_json(parts / "parts.json").get("window") or {}).get("record")
+        if isinstance(w, dict):
+            held[R.digest(w)] = w
+    if serve is not None:
+        found = [_json(serve / DEPLOYMENT)] if (serve / DEPLOYMENT).is_file() else []
+        for f in sorted(f for pattern in RECORDS for f in serve.glob(pattern) if f.is_file()):
+            try:
+                found.append(json.loads(f.read_text()))
+            except (OSError, ValueError) as e:
+                unread.append(f"{f.relative_to(serve)} ({type(e).__name__})")
+        for r in found:
+            if isinstance(r, dict):
+                held[R.digest(r)] = r
+    log: list[dict[str, Any]] = []
+    at = rec.get("previous")
+    while at is not None:
+        _need(isinstance(at, str) and at in held and len(log) < len(held),
+              "the record's previous records are not all among Pearl+'s window record and the serve's registration "
+              f"records (its first, each window's W and R): none is the record of digest {str(at)[:16]}…, which "
+              f"{'the record' if not log else 'the earliest of them found'} names as its previous, so its log doesn't "
+              "chain from the deployment's first record: pass the deployment's log (--log)"
+              + (f"; no record either, since they don't parse: {', '.join(unread)}" if unread else ""))
+        log.insert(0, held[at])
+        at = held[at].get("previous")
+    return log
 
 
 def _values(given: Any, members: Sequence[tuple[Any, int]]) -> tuple[tuple[str, int, int], ...]:
@@ -466,10 +637,27 @@ def division_policy(v1: Mapping[str, Any], log: Sequence[Mapping[str, Any]], exe
     return max(Fraction(bits, gates) for gates, bits in blocks), max(gates for gates, _ in blocks)
 
 
+def may_start(case: Mapping[str, Any], within: Limits) -> None:
+    """``case``'s check may start under ``within``; otherwise `NotStarted`, naming the case's blob files' sum and the
+    limit: on a host that makes no scope, or when the blob files sum past the limit (the executable reads every blob
+    into memory before it checks anything)."""
+    n, total = blob_bytes(case)
+    if within.refusal is not None:
+        raise NotStarted(within.refusal, blobs=n, blob_bytes=total, limit_bytes=within.blob_bytes)
+    if total > within.blob_bytes:
+        raise NotStarted(f"the case's {n} blob files sum to {total:,} bytes, past the {within.blob_bytes:,} a check is "
+                         "started on (CHECK_BLOBS_GB): the executable reads every blob into memory before it checks "
+                         "anything", blobs=n, blob_bytes=total, limit_bytes=within.blob_bytes)
+
+
 def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
-                cmd: Sequence[str] = ()) -> tuple[dict[str, Any], str]:
+                cmd: Sequence[str] = (), within: Limits | None = None) -> tuple[dict[str, Any], str]:
     """``exe check`` (`CoreProtocol.Cli`; with ``cmd``, the command ahead of ``check``, as ``vstar-recursive sampled``)
-    on ``case`` and its blobs, its files in a 0700 directory under ``scratch``: the answer and its line."""
+    on ``case`` and its blobs, its files in a 0700 directory under ``scratch``: the answer and its line. The check is
+    one process in a scope of its own under ``within``'s memory limit (default `limits`, this host's), and it is not
+    started where ``within`` doesn't let it (`may_start`)."""
+    within = limits() if within is None else within
+    may_start(case, within)
     scratch.mkdir(parents=True, exist_ok=True, mode=0o700)
     with tempfile.TemporaryDirectory(prefix="case-", dir=scratch) as d:
         os.chmod(d, 0o700)
@@ -478,13 +666,13 @@ def lean_answer(exe: str | os.PathLike, case: Mapping[str, Any], scratch: Path,
                                 bytes.fromhex(case["evidence"]))):
             f.write_bytes(b)
             os.chmod(f, 0o600)
-        p = subprocess.run([str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())], capture_output=True,
-                           text=True)
+        p = subprocess.run([*(within.scope or ()), str(exe), *cmd, "check", *map(str, files), *case.get("blobs", ())],
+                           capture_output=True, text=True)
     lines = p.stdout.strip().splitlines()
     try:
         answer = json.loads(lines[-1])
     except (IndexError, ValueError):
-        raise Refused(f"{exe} answered no line (exit {p.returncode})") from None
+        raise Refused(f"{exe} answered no line (exit {p.returncode}) under {within.memory}") from None
     _need(isinstance(answer, dict), f"{exe}'s answer is not an object")
     return answer, lines[-1]
 
@@ -561,24 +749,29 @@ def produce(a: argparse.Namespace) -> int:
 
     kept: dict[str, dict[str, Any]] = {}
 
-    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any) -> None:
+    def written(id: str, case: Mapping[str, Any], line: str, verdict: Any, memory: str | None = None) -> None:
         write(private / DIRS[id], case, line, kept.get(id))
-        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict},
-                                   sort_keys=True), flush=True)
+        print("CASE " + json.dumps({"dir": str(private / DIRS[id]), "protocol": id, "verdict": verdict,
+                                    **({"memory": memory} if memory else {})}, sort_keys=True), flush=True)
 
     def refused(id: str, e: Exception) -> None:
         nonlocal bad
         bad = 1
-        print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
+        if isinstance(e, NotStarted):
+            print("NOT_STARTED " + json.dumps({"protocol": id, "reason": str(e), **e.line}, sort_keys=True), flush=True)
+        else:
+            print("NOT_WRITTEN " + json.dumps({"protocol": id, "reason": str(e)}, sort_keys=True), flush=True)
 
     def one(id: str, make, exe, cmd: Sequence[str] = ()) -> None:
         try:
             case = make()
-            answer, line = lean_answer(exe(), case, private / "scratch", cmd)
+            within = limits()
+            may_start(case, within)                             # before its executable is built
+            answer, line = lean_answer(exe(), case, private / "scratch", cmd, within)
             tie(answer, id, digest)
         except (Refused, PF.LeanError) as e:
             return refused(id, e)
-        written(id, case, line, answer.get("verdict"))
+        written(id, case, line, answer.get("verdict"), UNLIMITED if within.scope is None else None)
 
     one(V1, lambda: v1, functools.cache(lambda: a.v1_exe or build(*V1_LEAN)))
     one(SAMPLED, lambda: sampled_case(audit), functools.cache(lambda: a.sampled_exe or build(*SAMPLED_LEAN)), SAMPLED_CMD)
@@ -589,6 +782,8 @@ def produce(a: argparse.Namespace) -> int:
             log = _json(a.log)
         elif a.serve_dir is not None and (a.serve_dir / H1_LOG).is_file():
             log = h1_log(a.serve_dir / H1_LOG, rec)
+        elif pearlplus is not None or a.serve_dir is not None:
+            log = pearl_log(a.serve_dir, pearlplus, rec)
         else:
             log = []
         _need(isinstance(log, list), "--log is a JSON list of registration records")
@@ -633,7 +828,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--from-division", action="store_true",
                     help="α and Γ read off the case's own division (division_policy) instead of given")
     ap.add_argument("--log", type=Path, help="the deployment's registration records before the window's, a JSON list "
-                    "(default with --serve-dir: its H1 log's, h1_log)")
+                    "(default with --serve-dir: its H1 log's, h1_log, else the serve's own registration records, pearl_log)")
     ap.add_argument("--period", type=Path, help="PoUW's period case, pouw_piece.py period's --out (default with "
                     f"--serve-dir: its {PERIOD_PIECE} when it holds a case)")
     ap.add_argument("--pearlplus", type=Path, help="Pearl+'s case's parts, served_passes.py case's --out (default with "

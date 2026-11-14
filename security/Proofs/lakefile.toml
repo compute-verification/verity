@@ -54,7 +54,8 @@ path = "../Properties"
 [[lean_lib]]
 name = "Proofs"
 roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowdown", "Proofs.Pous", "Proofs.Pouw",
-  "Proofs.Certifier", "Proofs.Flock", "Proofs.Accounting", "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
+  "Proofs.Certifier", "Proofs.Flock", "Proofs.Accounting", "Proofs.Poub", "Proofs.Compose", "Proofs.Registration",
+  "Proofs.Hash", "Proofs.Spot", "Proofs.WeightSecurity",
   "Proofs.Flock.SpotFlock.AddressFacts.Row", "Proofs.Flock.SpotFlock.AddressFacts.RowRead",
   "Proofs.Flock.SpotFlock.AddressFacts.RowKind", "Proofs.Flock.SpotFlock.AddressFacts.RowGive",
   "Proofs.Flock.SpotFlock.AddressFacts.RowLeaf", "Proofs.Flock.SpotFlock.AddressFacts.RowInstance",
@@ -78,7 +79,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Pouw.LiveSalt.Canon", "Proofs.Properties.Pouw.LiveSalt.Coin", "Proofs.Properties.Pouw.Strata",
   "Proofs.Properties.Pouw.PearlPlus", "Proofs.Properties.Pouw.PearlPlus.Open",
   "Proofs.Properties.Pouw.PearlPlus.Verdict", "Proofs.Properties.Pouw.PearlPlus.Witnesses",
-  "Proofs.Properties.Pouw.PearlPlus.Draw", "Proofs.Properties.Pouw.PearlPlus.Tie", "Proofs.Pouw.PearlPlus.Numerics",
+  "Proofs.Properties.Pouw.PearlPlus.Sample", "Proofs.Properties.Pouw.PearlPlus.Tie", "Proofs.Pouw.PearlPlus.Numerics",
   "Proofs.Properties.InferenceOnly", "Proofs.Properties.Pous", "Proofs.Properties.Pous.TimedAudit", "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Session",
   "Proofs.Properties.Pous.Run", "Proofs.Properties.Pous.Setup", "Proofs.Properties.Pous.RunAt",
@@ -95,6 +96,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Spot.FactorUpper", "Proofs.Properties.Spot.TwoStageCheck", "Proofs.Properties.Spot.Bits",
   "Proofs.Properties.Spot.Wires", "Proofs.Properties.Spot.Tables", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.Certifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
+  "Proofs.Properties.Certifier.Registered",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
   "Proofs.Properties.Spot.Rate", "Proofs.Flock.Bridge.RatePeriod", "Proofs.Properties.Spot.MonitoringPeriod",
   "Proofs.Properties.Spot.MonitoringPeriodLedger", "Proofs.Properties.Spot.MonitoringPeriodSigned",
@@ -120,7 +122,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.InferenceOnly.BodiesOk.ReadsDecoded", "Proofs.Properties.Composition", "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.ChallengePhase", "Proofs.Properties.Challenger.CanonRead",
   "Proofs.Properties.Challenger.Window", "Proofs.Properties.Challenger.Lines", "Proofs.Properties.Challenger.Coins",
-  "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
+  "Proofs.Properties.Pous.WipeSigned", "Proofs.Properties.Pous.WipeCount", "Proofs.Properties.Challenger", "Proofs.Properties.Challenger.CanonLine",
   "Proofs.Properties.Challenger.Drawn", "Proofs.Properties.ZkServer", "Proofs.Properties.Flock.Nets",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.InferenceOnly.Protocol", "Proofs.Properties.InferenceOnly.RecordRead",
@@ -244,4 +246,8 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.InferenceOnly", "Proofs.Slowd
   "Proofs.Properties.Verity.SampledTwo.SessionLive", "Proofs.Properties.Verity.SampledTwo.FormDraw",
   "Proofs.Properties.Verity.SampledTwo.FormCircuit", "Proofs.Properties.Verity.SampledTwo.FormBytes",
   "Proofs.Properties.Verity.SampledTwo.FirstEarly", "Proofs.Properties.Verity.SampledTwo.FormMember",
-  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent"]
+  "Proofs.Properties.Verity.SampledTwo.StmtBytes", "Proofs.Properties.Verity.SampledTwo.SessionSent",
+  "Proofs.Properties.Verity.SampledTwo.Claim", "Proofs.Properties.Verity.SampledTwo.DevAgrees",
+  "Proofs.Properties.Verity.SampledTwo.InputMap", "Proofs.Properties.Verity.SampledTwo.Projection",
+  "Proofs.Properties.Verity.SampledTwo.Reading", "Proofs.Properties.Verity.SampledTwo.SecondRead",
+  "Proofs.Properties.Verity.SampledTwo.Steps", "Proofs.Properties.Verity.SampledTwo.Subprotocol"]
