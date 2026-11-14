@@ -107,8 +107,8 @@ def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
 
 
 @pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
-def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: bool) -> None:
-    """At the HBM cap, with room for two groups' tables (the one being read and the one being made), a producer that
+def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_limit(graphs: bool) -> None:
+    """At the HBM limit, with room for two groups' tables (the one being read and the one being made), a producer that
     frees each group's tables once it has made the next group's (a serving loop's driver, its stream waiting for the
     reads a fixed number of groups back) gets the group before's memory back for the group after while the side stream
     lags its reads, so across two steps the allocator never retries (a retry frees its cache and waits on every stream)
@@ -166,7 +166,7 @@ def test_tables_freed_once_added_take_no_allocator_retry_at_the_hbm_cap(graphs: 
 @pytest.mark.parametrize("graphs", [False, True], ids=["eager", "graphs"])
 def test_a_table_freed_once_added_goes_at_its_read_with_no_later_add(graphs: bool) -> None:
     """A CUDA plan drops an add's tensors as soon as the side stream has read them, before any later add or result, so a
-    producer that frees its tables has their memory back for whatever it allocates next. What it catches that the HBM-cap
+    producer that frees its tables has their memory back for whatever it allocates next. What it catches that the HBM-limit
     test can't: tables held to the next add, which kept each freed group from the forward's allocations in between (1.76
     GB more on the device at the frozen shape's 1 KiB rows); the roots are the reference's."""
     layout = S.h200_layout(layers=2)

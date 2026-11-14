@@ -18,10 +18,10 @@ import shutil
 from fractions import Fraction
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.accounting.poub.verifier import audit, line, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -29,11 +29,14 @@ pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean to
 N, B = 1000, 4096
 
 
-def port(inputs=st.nothing(), reference=line.run_json) -> D.Port:
+NOTHING = st.nothing()
+
+
+def port(inputs=NOTHING, reference=line.run_json) -> D.Port:
     return D.Port(M.EXE, "line", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
-def record_port(inputs=st.nothing(), reference=line.record_run_json) -> D.Port:
+def record_port(inputs=NOTHING, reference=line.record_run_json) -> D.Port:
     return D.Port(M.EXE, "line_record", reference, inputs, package=M.PACKAGE, of_record="lean", rejects=M.REFUSALS)
 
 
@@ -56,63 +59,63 @@ DELTAS = ("1/1099511627776", line.text(Fraction(1e-9)), "1/3", "999/1000")
 
 
 @st.composite
-def windows(draw, top: int) -> list[list[int]]:
+def windows(take, top: int) -> list[list[int]]:
     """A record's windows, each [U, s] with 1 ≤ s ≤ U ≤ `top`: s small enough that some receipts may be wrong, or
     every receipt sampled (none can be)."""
     out = []
-    for _ in range(draw(st.integers(1, 3))):
-        u = draw(st.integers(1, top))
-        out.append([u, draw(st.one_of(st.integers(1, min(u, 30)), st.just(u)))])
+    for _ in range(take(st.integers(1, 3))):
+        u = take(st.integers(1, top))
+        out.append([u, take(st.one_of(st.integers(1, min(u, 30)), st.just(u)))])
     return out
 
 
 @st.composite
-def inputs(draw) -> dict:
+def inputs(take) -> dict:
     """A paced session's groups and a node, as they are or with one fault (most often neither: Hypothesis leans to
     each choice's first)."""
-    per = draw(st.sampled_from([2, 3, 4, 1]))
-    n_groups = draw(st.sampled_from([2 * per, 3 * per, 4 * per + 1, 2 * per + 1, 2 * per - 1, per, 1, 0]))
-    blocks, b = draw(st.integers(1, 40)), draw(st.sampled_from([B, 7, 1]))
-    t, groups = draw(st.integers(0, 10 ** 12)), []
+    per = take(st.sampled_from([2, 3, 4, 1]))
+    n_groups = take(st.sampled_from([2 * per, 3 * per, 4 * per + 1, 2 * per + 1, 2 * per - 1, per, 1, 0]))
+    blocks, b = take(st.integers(1, 40)), take(st.sampled_from([B, 7, 1]))
+    t, groups = take(st.integers(0, 10 ** 12)), []
     for _ in range(n_groups):
-        n = draw(st.integers(1, 3))
-        hbm = draw(st.integers(0, n * blocks))
-        groups.append({"released_ns": t, "last_ns": t + draw(st.integers(0, 10 ** 4)), "passes": n, "least": blocks,
-                       "weights": draw(st.integers(0, hbm)), "hbm": hbm, "host": n * blocks - hbm})
-        t += draw(st.sampled_from([10 ** 4, 10 ** 3, 1, 0])) + draw(st.integers(0, 10 ** 4))
-    rates = {"squarings_per_s": draw(rational(10 ** 6)), "encode_squarings": draw(st.integers(1, 10)),
-             **{k: draw(rational(10 ** 5)) for k in line.RATES[1:3]},
-             **{k: draw(rational(10)) for k in line.RATES[3:]}}
+        n = take(st.integers(1, 3))
+        hbm = take(st.integers(0, n * blocks))
+        groups.append({"released_ns": t, "last_ns": t + take(st.integers(0, 10 ** 4)), "passes": n, "least": blocks,
+                       "weights": take(st.integers(0, hbm)), "hbm": hbm, "host": n * blocks - hbm})
+        t += take(st.sampled_from([10 ** 4, 10 ** 3, 1, 0])) + take(st.integers(0, 10 ** 4))
+    rates = {"squarings_per_s": take(rational(10 ** 6)), "encode_squarings": take(st.integers(1, 10)),
+             **{k: take(rational(10 ** 5)) for k in line.RATES[1:3]},
+             **{k: take(rational(10)) for k in line.RATES[3:]}}
     v = {"groups": groups, "per": per, "blocks": blocks, "block_bytes": b,
-         "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
-         "windows": draw(st.one_of(windows(blocks), windows(4 * 3 * blocks * (per + 1)))),
-         "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
-    fault = {4: draw(st.sampled_from(FAULTS)), 5: "malformed"}.get(draw(st.integers(0, 5)))
-    g = draw(st.integers(0, max(n_groups - 1, 0)))
+         "chip_bytes": take(st.integers(0, 3 * b)), "node_bytes": take(st.integers(1, 10 ** 6)),
+         "windows": take(st.one_of(windows(blocks), windows(4 * 3 * blocks * (per + 1)))),
+         "delta": take(st.sampled_from(DELTAS)), "rates": rates}
+    fault = {4: take(st.sampled_from(FAULTS)), 5: "malformed"}.get(take(st.integers(0, 5)))
+    g = take(st.integers(0, max(n_groups - 1, 0)))
     if fault in ("per", "block_bytes", "blocks", "node_bytes"):
         v[fault] = 0
     elif fault == "encode_squarings":
         rates["encode_squarings"] = 0
     elif fault == "rate":
-        rates[draw(st.sampled_from(line.RATES))] = draw(st.sampled_from([-1, "-1/3"]))
+        rates[take(st.sampled_from(line.RATES))] = take(st.sampled_from([-1, "-1/3"]))
     elif fault == "windows":
-        t = draw(st.integers(0, len(v["windows"]) - 1))
-        v["windows"] = draw(st.sampled_from([[], v["windows"][:t] + [[3, 0]], v["windows"][:t] + [[2, 3]]]))
+        t = take(st.integers(0, len(v["windows"]) - 1))
+        v["windows"] = take(st.sampled_from([[], v["windows"][:t] + [[3, 0]], v["windows"][:t] + [[2, 3]]]))
     elif fault == "delta":
-        v["delta"] = draw(st.sampled_from([0, 1, "-1/3", "3/2"]))
+        v["delta"] = take(st.sampled_from([0, 1, "-1/3", "3/2"]))
     elif fault == "malformed":
-        k = draw(st.sampled_from(["per", "windows", "delta", "window", "rates", "groups", "group", "squarings_per_s"]))
-        bad = draw(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
+        k = take(st.sampled_from(["per", "windows", "delta", "window", "rates", "groups", "group", "squarings_per_s"]))
+        bad = take(st.sampled_from([-1, "1/0", "1.5", "+3", None, True, [], {}]))
         if k == "window":
-            v["windows"] = [*v["windows"][:-1], draw(st.sampled_from([[1], [1, 2, 3], [bad, 1], [2, bad]]))]
+            v["windows"] = [*v["windows"][:-1], take(st.sampled_from([[1], [1, 2, 3], [bad, 1], [2, bad]]))]
         elif k == "group" and groups:
-            groups[g] = {**groups[g], draw(st.sampled_from(line.GROUP)): bad}
+            groups[g] = {**groups[g], take(st.sampled_from(line.GROUP)): bad}
         elif k == "squarings_per_s":
             rates[k] = bad
         elif k != "group":
             v[k] = bad
-        if draw(st.booleans()):
-            v.pop(draw(st.sampled_from(sorted(v))))
+        if take(st.booleans()):
+            v.pop(take(st.sampled_from(sorted(v))))
     elif fault is not None and groups:
         x = groups[g]
         if fault == "passes":
@@ -123,7 +126,7 @@ def inputs(draw) -> dict:
             x["released_ns"] = groups[g - 1]["released_ns"] - 1
             x["last_ns"] = max(x["last_ns"], x["released_ns"])
         elif fault == "least":
-            x["least"] = draw(st.integers(0, 2 * blocks).filter(lambda k: k != blocks))
+            x["least"] = take(st.integers(0, 2 * blocks).filter(lambda k: k != blocks))
         elif fault == "read":
             x["host"] += 1
         elif fault == "weights":
@@ -144,8 +147,12 @@ def test_line(server) -> None:
     assert stats.rejects > 20 and told["line"] > 100 and told["credited"] > 15 and told["refused"] > 100, (stats, told)
 
 
+#: a node with no way back into its memory: every ceiling zero
+NO_WAYS_BACK = line.Rates(0, 1)
+
+
 def session(stretch: int = 1, *, weights: int = 600, host: int = 0, n: int = 12, windows=((1, 1),),
-            delta: object = 2.0 ** -40, rates: line.Rates = line.Rates(0, 1), **over) -> dict:
+            delta: object = 2.0 ** -40, rates: line.Rates = NO_WAYS_BACK, **over) -> dict:
     """`n` groups of two passes over N chunks, 10 ns apart but group 5, `stretch` times that, each one's last root at
     the next coin, its record's `windows` at `delta` (by default one opened whole, so no receipt is wrong)."""
     gs, t = [], 0
@@ -200,13 +207,13 @@ def test_each_refusal_of_the_node_is_the_leans_word_for_word(server, over, why) 
     (3, dict(passes=0, hbm=0, weights=0), "group 3 has no pass"),
     (3, dict(last_ns=29), "group 3's last root came before its coin"),
     (3, dict(released_ns=15, last_ns=40), "group 3's coin left before group 2's"),
-    (2, dict(least=990), "group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every "
-                         "pass to read every registered block, since a block a pass leaves out can be absent across "
-                         "it with neither a wrong read nor a rebuild"),
+    (2, dict(least=990), ("group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every "
+                          "pass to read every registered block, since a block a pass leaves out can be absent across "
+                          "it with neither a wrong read nor a rebuild")),
     (2, dict(hbm=1999), "group 2's 2 passes read 1999 registered blocks in all, not 2000"),
     (2, dict(weights=2001, hbm=1999, host=1), "group 2's passes read more weights than HBM, which holds them"),
-    (8, dict(released_ns=40, last_ns=80), "stretch 1's span is empty: group 8's coin left no later than group 4's "
-                                          "coin"),
+    (8, dict(released_ns=40, last_ns=80), ("stretch 1's span is empty: group 8's coin left no later than group 4's "
+                                           "coin")),
 ])
 def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why) -> None:
     v = session()
@@ -259,107 +266,107 @@ INVALID = (("rows", 3), ("layout", "x"), ("bind", True), ("node", ""), ("node", 
 
 
 @st.composite
-def records(draw) -> dict:
+def records(take) -> dict:
     """An accepted session's record of a registration given with it and what the auditor saw of each window, as they
     are or with one fault: the record not of the registration given (another registration, or the record's chunks
     another count), the auditor seeing another count of windows, a window sampled other than min(s, U_t), one of the
     node's inputs `line` refuses, or a malformed record, registration, seen or input (most often none: Hypothesis leans
     to each choice's first)."""
-    per = draw(st.sampled_from([2, 3, 1]))
-    n_groups = draw(st.sampled_from([2 * per, 3 * per + 1, per, 1, 0]))
-    blocks, b, samples = draw(st.integers(1, 40)), draw(st.sampled_from([B, 7])), draw(st.integers(1, 30))
-    t, ws, seen = draw(st.integers(0, 10 ** 12)), [], []
+    per = take(st.sampled_from([2, 3, 1]))
+    n_groups = take(st.sampled_from([2 * per, 3 * per + 1, per, 1, 0]))
+    blocks, b, samples = take(st.integers(1, 40)), take(st.sampled_from([B, 7])), take(st.integers(1, 30))
+    t, ws, seen = take(st.integers(0, 10 ** 12)), [], []
     for _ in range(n_groups):
-        lengths = draw(st.lists(st.integers(1, 4 * blocks), min_size=1, max_size=3))
-        k, last = len(lengths), t + draw(st.integers(0, 10 ** 4))
-        hbm = draw(st.one_of(st.just(k * blocks), st.integers(0, k * blocks)))
+        lengths = take(st.lists(st.integers(1, 4 * blocks), min_size=1, max_size=3))
+        k, last = len(lengths), t + take(st.integers(0, 10 ** 4))
+        hbm = take(st.one_of(st.just(k * blocks), st.integers(0, k * blocks)))
         seen.append({"released_ns": t, "last_ns": last, "least": blocks,
-                     "weights": draw(st.one_of(st.just(hbm), st.integers(0, hbm))), "hbm": hbm,
+                     "weights": take(st.one_of(st.just(hbm), st.integers(0, hbm))), "hbm": hbm,
                      "host": k * blocks - hbm})
-        ws.append({"lengths": lengths, "steps": sorted(draw(st.sets(st.integers(0, 10 ** 6), min_size=k, max_size=k))),
-                   "post_seed": [draw(st.integers(0, x)) for x in lengths],
-                   "heads": draw(st.lists(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex)),
+        ws.append({"lengths": lengths, "steps": sorted(take(st.sets(st.integers(0, 10 ** 6), min_size=k, max_size=k))),
+                   "post_seed": [take(st.integers(0, x)) for x in lengths],
+                   "heads": take(st.lists(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex)),
                                           min_size=k, max_size=k)),
                    "stale": [blocks] * k, "arrived_ns": [last] * k, "released_ns": t, "deadline_ns": last + 10,
                    "opened_ns": last + 1, "drawn": min(samples, sum(lengths))})
-        t += draw(st.sampled_from([10 ** 4, 1, 0])) + draw(st.integers(0, 10 ** 4))
-    rates = {"squarings_per_s": draw(rational(10 ** 6)), "encode_squarings": draw(st.integers(1, 10)),
-             **{k: draw(rational(10 ** 5)) for k in line.RATES[1:3]},
-             **{k: draw(rational(10)) for k in line.RATES[3:]}}
-    pace = draw(st.one_of(st.none(), st.builds(lambda k, w, one: {"k": k, "window_ns": w} | ({"in_flight": 1} if one
+        t += take(st.sampled_from([10 ** 4, 1, 0])) + take(st.integers(0, 10 ** 4))
+    rates = {"squarings_per_s": take(rational(10 ** 6)), "encode_squarings": take(st.integers(1, 10)),
+             **{k: take(rational(10 ** 5)) for k in line.RATES[1:3]},
+             **{k: take(rational(10)) for k in line.RATES[3:]}}
+    pace = take(st.one_of(st.none(), st.builds(lambda k, w, one: {"k": k, "window_ns": w} | ({"in_flight": 1} if one
                                                                                              else {}),
                                                st.integers(1, 3), st.integers(1, 10 ** 9), st.booleans())))
-    reg = registration(blocks, draw(st.binary(min_size=64, max_size=64)))
-    record = {"windows": ws, "blocks": blocks, "appended": draw(st.integers(0, 5)),
-              "released": draw(st.integers(0, 5)), "lifetime": draw(st.integers(1, 4)), "pace": pace,
-              "appends": draw(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex))),
+    reg = registration(blocks, take(st.binary(min_size=64, max_size=64)))
+    record = {"windows": ws, "blocks": blocks, "appended": take(st.integers(0, 5)),
+              "released": take(st.integers(0, 5)), "lifetime": take(st.integers(1, 4)), "pace": pace,
+              "appends": take(st.one_of(st.none(), st.binary(min_size=64, max_size=64).map(bytes.hex))),
               "registration": reg.digest.hex()}
-    if (per_coin := draw(st.sampled_from([1, 2, 3]))) > 1:
+    if (per_coin := take(st.sampled_from([1, 2, 3]))) > 1:
         record["groups_per_coin"] = per_coin
         for a in range(0, len(ws), per_coin):
             xs = ws[a:a + per_coin]
             total = min(samples, sum(sum(w["lengths"]) for w in xs))
-            cuts = sorted(draw(st.lists(st.integers(0, total), min_size=len(xs) - 1, max_size=len(xs) - 1)))
+            cuts = sorted(take(st.lists(st.integers(0, total), min_size=len(xs) - 1, max_size=len(xs) - 1)))
             for w, lo, hi in zip(xs, [0, *cuts], [*cuts, total]):
                 w["drawn"] = hi - lo
     rj = M.registration_json(reg)
     v = {"record": record, "registration": rj, "samples": samples, "seen": seen, "per": per, "block_bytes": b,
-         "chip_bytes": draw(st.integers(0, 3 * b)), "node_bytes": draw(st.integers(1, 10 ** 6)),
-         "delta": draw(st.sampled_from(DELTAS)), "rates": rates}
-    if (clock := draw(st.sampled_from([None, *line.CLOCKS]))) is not None:
+         "chip_bytes": take(st.integers(0, 3 * b)), "node_bytes": take(st.integers(1, 10 ** 6)),
+         "delta": take(st.sampled_from(DELTAS)), "rates": rates}
+    if (clock := take(st.sampled_from([None, *line.CLOCKS]))) is not None:
         v["clock"] = clock
-    fault = {3: "seen", 4: "drawn", 5: "malformed", 6: "times", 7: "registration"}.get(draw(st.integers(0, 7)))
+    fault = {3: "seen", 4: "drawn", 5: "malformed", 6: "times", 7: "registration"}.get(take(st.integers(0, 7)))
     if fault == "registration":
-        other = draw(st.sampled_from(["blocks", "root", "record"]))
+        other = take(st.sampled_from(["blocks", "root", "record"]))
         if other == "record":
-            record["blocks"] = draw(st.integers(0, 2 * blocks).filter(lambda k: k != blocks))
+            record["blocks"] = take(st.integers(0, 2 * blocks).filter(lambda k: k != blocks))
         else:
             v["registration"] = M.registration_json(
                 registration(blocks + 1) if other == "blocks" else registration(blocks, bytes([1]) * 64))
     elif fault == "times" and seen:
-        draw(st.sampled_from(seen))[draw(st.sampled_from(["released_ns", "last_ns"]))] += 1
+        take(st.sampled_from(seen))[take(st.sampled_from(["released_ns", "last_ns"]))] += 1
     elif fault == "seen":
-        v["seen"] = draw(st.sampled_from([seen[:-1], [*seen, seen[-1]]])) if seen else [
+        v["seen"] = take(st.sampled_from([seen[:-1], [*seen, seen[-1]]])) if seen else [
             {k: 0 for k in line.SEEN}]
     elif fault == "drawn" and ws:
-        w = draw(st.sampled_from(ws))
-        w["drawn"] = draw(st.integers(0, sum(w["lengths"]) + 1).filter(lambda d: d != w["drawn"]))
+        w = take(st.sampled_from(ws))
+        w["drawn"] = take(st.integers(0, sum(w["lengths"]) + 1).filter(lambda d: d != w["drawn"]))
     elif fault == "malformed":
-        bad = draw(st.sampled_from([-1, "1", None, True, [], {}, "xyz", "AB" * 64]))
-        at = draw(st.sampled_from(["record", "window", "list", "heads", "pace", "appends", "seen", "input",
+        bad = take(st.sampled_from([-1, "1", None, True, [], {}, "xyz", "AB" * 64]))
+        at = take(st.sampled_from(["record", "window", "list", "heads", "pace", "appends", "seen", "input",
                                    "registration", "invalid"]))
         if at == "record":
-            record[draw(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime",
+            record[take(st.sampled_from(["windows", "blocks", "appended", "released", "lifetime",
                                          "groups_per_coin", "registration"]))] = bad
         elif at == "registration":
-            k = draw(st.sampled_from(sorted(rj)))
-            if k == "codec" and draw(st.booleans()):
-                rj["codec"] = {**rj["codec"], draw(st.sampled_from(sorted(rj["codec"]))): bad}
+            k = take(st.sampled_from(sorted(rj)))
+            if k == "codec" and take(st.booleans()):
+                rj["codec"] = {**rj["codec"], take(st.sampled_from(sorted(rj["codec"]))): bad}
             else:
                 rj[k] = bad
         elif at == "invalid":
-            k, x = draw(st.sampled_from(INVALID))
+            k, x = take(st.sampled_from(INVALID))
             rj[k] = x
         elif at == "window" and ws:
-            draw(st.sampled_from(ws))[draw(st.sampled_from(["released_ns", "deadline_ns", "opened_ns", "drawn"]))] = bad
+            take(st.sampled_from(ws))[take(st.sampled_from(["released_ns", "deadline_ns", "opened_ns", "drawn"]))] = bad
         elif at == "list" and ws:
-            w = draw(st.sampled_from(ws))
-            k = draw(st.sampled_from(["lengths", "steps", "post_seed", "stale", "arrived_ns", "heads"]))
-            w[k] = draw(st.sampled_from([bad, [*w[k], bad]]))
+            w = take(st.sampled_from(ws))
+            k = take(st.sampled_from(["lengths", "steps", "post_seed", "stale", "arrived_ns", "heads"]))
+            w[k] = take(st.sampled_from([bad, [*w[k], bad]]))
         elif at == "heads" and ws:
-            draw(st.sampled_from(ws))["heads"] = [draw(st.sampled_from(["ab", "abc", "AB", 5]))]
+            take(st.sampled_from(ws))["heads"] = [take(st.sampled_from(["ab", "abc", "AB", 5]))]
         elif at == "pace":
-            record["pace"] = draw(st.sampled_from([{"k": bad, "window_ns": 1}, {"k": 1}, bad]))
+            record["pace"] = take(st.sampled_from([{"k": bad, "window_ns": 1}, {"k": 1}, bad]))
         elif at == "appends":
-            record["appends"] = draw(st.sampled_from(["abc", "AB", 5]))
+            record["appends"] = take(st.sampled_from(["abc", "AB", 5]))
         elif at == "seen" and seen:
-            x = draw(st.sampled_from(seen))
-            x[draw(st.sampled_from(line.SEEN))] = bad
+            x = take(st.sampled_from(seen))
+            x[take(st.sampled_from(line.SEEN))] = bad
         elif at == "input":
-            v[draw(st.sampled_from(["samples", "seen", "record", "clock", "registration"]))] = bad
-        if draw(st.booleans()):
-            target = draw(st.sampled_from([v, record, rj, *ws[:1], *seen[:1]]))
-            target.pop(draw(st.sampled_from(sorted(target))))
+            v[take(st.sampled_from(["samples", "seen", "record", "clock", "registration"]))] = bad
+        if take(st.booleans()):
+            target = take(st.sampled_from([v, record, rj, *ws[:1], *seen[:1]]))
+            target.pop(take(st.sampled_from(sorted(target))))
     return v
 
 
@@ -390,9 +397,9 @@ def test_the_records_line_is_the_line_of_its_groups_and_windows(server, samples)
 
 def test_a_record_drawn_four_windows_a_coin_reads_its_draws(server) -> None:
     """Sampled four windows a coin (`groups_per_coin`), the record's line is `line`'s at the same groups and its three
-    draws, each four windows' receipts and draws summed (`line.draws_of`, the pooled bound's `audit.pooled_windows`),
-    the Lean's and line.py's alike; a sample that sampled other than min(s, U) is refused, word for word, and at one window
-    in flight the record has no line (`line.SHARED`)."""
+    samples, each four windows' receipts and samples summed (`line.draws_of`, the pooled bound's
+    `audit.pooled_windows`), the Lean's and line.py's alike; a sample that sampled other than min(s, U) is refused,
+    word for word, and at one window in flight the record has no line (`line.SHARED`)."""
     v = session(9, windows=[(5000, 10)], rates=line.Rates(3 * 10 ** 6, 3, 4.4e9, 5e10, B, 4.4e9, 6291456))
     r = recorded(v, 37)
     r["record"]["groups_per_coin"] = 4
