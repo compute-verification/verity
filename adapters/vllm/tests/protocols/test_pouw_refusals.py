@@ -2,8 +2,8 @@
 a transcript directory that is no string; `refusals`' of a tensor-parallel world, of a forward anchor under an executor
 that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a model with no linear layer and of two
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
-`circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, and the
-quantizer's of a value that is not finite."""
+`circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
+quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population."""
 from __future__ import annotations
 
 import random
@@ -21,6 +21,7 @@ from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES, Schedul
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
 from verity_vllm.protocols.pouw import circuit as PC
+from verity_vllm.protocols.pouw import native as PN
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.operands import quantize
 from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of
@@ -181,3 +182,39 @@ def test_the_quantizer_refuses_rows_with_a_value_that_is_not_finite_and_takes_th
     assert (q.dtype, scale.dtype) == (np.int8, np.float32)
     assert q.tolist() == [[63, -31], [0, 0], [63, -16]]
     assert scale.tolist() == [1.0, 1.0, float(np.float32(0.5) * (np.float32(1.0) / np.float32(63.0)))]
+
+
+class Rows:
+    """A weight's int7 rows and their FP32 scale encodings, as `circuit.Rows` hands them on."""
+
+    def __init__(self, b: np.ndarray, t: np.ndarray):
+        self.b, self.t, (self.n, self.k) = b, t, b.shape
+
+    def rows(self, lo: int, hi: int) -> tuple[np.ndarray, np.ndarray]:
+        return self.b[lo:hi], self.t[lo:hi]
+
+
+def _native(m: int, k: int, n: int) -> PN.Native:
+    """The native prover of a call of zeros at m × k → n, every scale FP32's 1 (its encoding ``0x3F800000``)."""
+    one = 0x3F800000
+    weight = Rows(np.zeros((n, k), np.int8), np.full(n, one, np.uint32))
+    call = PC.Call(np.zeros((m, k), np.int8), np.full(m, one, np.uint32), weight, np.zeros(n, np.uint16), bytes(32),
+                   forward=0, layer=0, site=0, weight=0, rowids=np.arange(m, dtype=np.uint32),
+                   colids=np.arange(n, dtype=np.uint32))
+    return PN.Native(call, "ncp-v2")
+
+
+def test_a_unit_outside_a_calls_population_or_its_weight_sides_is_refused():
+    """A call of 32 × 64 → 48 has 1,548 units, and its weight side has 3, one a 16-column strip.  The unit before the
+    first and the unit after the last have no place, no template and no outputs; the first and the last have theirs."""
+    nat = _native(32, 64, 48)
+    assert (nat.population, nat.side.population) == (1548, 3)
+    for u in (-1, 1548):
+        for read in (nat.locate, nat.template, nat.outputs):
+            with pytest.raises(IndexError, match=f"^unit {u} outside 0..1547$"):
+                read(u)
+    assert (nat.locate(0), nat.locate(1547)) == (("digest", (0,)), ("dequant", (1, 2, 255)))
+    for u in (-1, 3):
+        with pytest.raises(IndexError, match=f"^Y unit {u} outside 0..2$"):
+            nat.side.outputs(u)
+    assert [nat.side.outputs(u).shape for u in (0, 2)] == [(3088,), (3088,)]
