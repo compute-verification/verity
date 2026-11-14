@@ -219,7 +219,8 @@ theorem bindsOf_eq {k : Verity.Registration.Composite} {s : Verity.Sent} {ds : L
               exact ⟨ps, c, ev, ⟨hps, hc, hev⟩, hdig, hb⟩
             · cases h
   · rintro ⟨ps, c, ev, ⟨hps, hc, hev⟩, hdig, hb⟩
-    rw [bindsOf, hps, hc, hev, hdig, if_pos hb]
+    simp only [bindsOf, hps, hc, hev, hdig]
+    rw [if_pos hb]
 
 /-- **What a play reveals for the commitment `c`**: where what the prover sent has the commitment `c` and binds a list
 of digests (`bindsOf`), the message `bind` hashed over it (`bindMsg`); else none. -/
@@ -310,7 +311,7 @@ theorem digAt_isSome {σ : Strategy (V.game θ F c)} {x : CoinTape (V.game θ F 
     (hB : BindsAt k (CoinTape.run (V.game θ F c) σ x).sent ds) (hm : bindMsg k ds = bindMode V k θ F c σ)
     {dg : ByteArray} (hmem : (VStar.Recursive.Sampled.PROTOCOL, dg) ∈ ds) :
     (digAt V k θ F c σ x).isSome := by
-  rw [digAt, if_pos hv, bindsOf_eq.mpr hB, Option.some_bind, if_pos hm, Option.isSome_map]
+  rw [digAt, if_pos hv, bindsOf_eq.mpr hB, Option.bind_some, if_pos hm, Option.isSome_map]
   exact List.find?_isSome.2 ⟨_, hmem, by simp⟩
 
 /-- **The sample's digest at `σ`**: sampled proofs' digest in one of `σ`'s accepted plays whose message is the most
