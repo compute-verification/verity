@@ -1558,8 +1558,9 @@ def wait_remote(run_id: str, run_dir: Path, *, every_s: float, max_s: float = wa
         rec = fetch(run_dir)
         s = R.summarize(run_dir)
         if s["state"] in R.ENDED and not asker.started(s) and (twin := moved(run_dir)):
-            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name} is the run "
-                  "now, and this waits for it", file=sys.stderr)
+            on = (remote._read_json(twin / "remote.json") or {}).get("machine")
+            print(f"research: run {run_id} left its line without starting ({s['state']}); its late twin {twin.name}"
+                  f"{f' on {on}' if on else ''} is the run now, and this waits for it", file=sys.stderr)
             run_id, run_dir = twin.name, twin
             continue
         if s["state"] in R.ENDED:
