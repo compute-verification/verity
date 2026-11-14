@@ -2284,12 +2284,17 @@
       "paths": {
         "security/Definitions/NetworkCertifier/Guarantees/Period.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean",
         "security/Definitions/NetworkCertifier/Guarantees/PeriodChecked.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodChecked.lean",
+        "security/Definitions/NetworkCertifier/Guarantees/PeriodFails.lean": "security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriodFails.lean",
         "security/Definitions/NetworkCertifier/Period.lean": "security/Definitions/NetworkCertifier/MonitoringPeriod.lean",
         "security/Definitions/NetworkCertifier/PeriodChecked.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodChecked.lean",
         "security/Definitions/NetworkCertifier/PeriodConditions.lean": "security/Definitions/NetworkCertifier/MonitoringPeriodConditions.lean",
         "security/Proofs/NetworkCertifier/Period.lean": "security/Proofs/NetworkCertifier/MonitoringPeriod.lean",
         "security/Proofs/NetworkCertifier/PeriodChecked.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodChecked.lean",
         "security/Proofs/NetworkCertifier/PeriodCheckedChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodCheckedExclusion.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodCheckedExclusion.lean",
+        "security/Proofs/NetworkCertifier/PeriodFails.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodFails.lean",
+        "security/Proofs/NetworkCertifier/PeriodFailsChecks.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodFailsChecks.lean",
+        "security/Proofs/NetworkCertifier/PeriodLengths.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodLengths.lean",
         "security/Proofs/NetworkCertifier/PeriodSum.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodSum.lean",
         "security/Proofs/NetworkCertifier/PeriodWitnesses.lean": "security/Proofs/NetworkCertifier/MonitoringPeriodWitnesses.lean",
         "security/Proofs/Properties/NetworkCertifier/Check/LinkWindow.lean": "security/Proofs/Properties/NetworkCertifier/Check/TransferBlocks.lean",
@@ -2510,6 +2515,14 @@
         "benchmarks/network_traces/tests/test_window_chain.py": "verity/protocols/accounting/certifier/prover/tests/test_window_chain.py",
         "benchmarks/network_traces/tests/test_stop_verdicts.py": "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py",
         "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json": "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/certifier/prover/tests/test_block_certifier.py": "benchmarks/network_traces/tests/test_block_certifier.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_stop_verdicts.py": "benchmarks/network_traces/tests/test_stop_verdicts.py",
+        "verity/protocols/accounting/certifier/prover/tests/test_window_chain.py": "benchmarks/network_traces/tests/test_window_chain.py",
+        "verity/protocols/accounting/certifier/prover/tests/fixtures/certifier-period-answers.json": "benchmarks/network_traces/tests/fixtures/certifier-period-answers.json"
       }
     }
   ]

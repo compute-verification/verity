@@ -1464,7 +1464,8 @@ def test_close_waits_for_the_sessions_end_keeps_its_fetch_and_publishes_what_a_r
         RUN, 0, "ended", True, 20, f"research@{GATE_HOST}")
     assert doc["request"] == _asked(tmp_path)[0] and doc["keep"] == str(kept)
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
-    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER, "verifier": PEER}
+    assert CP.placement(serve, RUN)["parties"] == {"network_certifier": GATE_HOST, "prover": PEER,
+                                                   "verifier": CP.ran_on()["period"]}
     assert CP.open_sessions(serve / CP.PRIVATE) == []
     # with the session closed there is none to close, and the gate isn't asked
     asked = len(_asked(tmp_path))

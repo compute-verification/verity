@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import importlib.util
 import itertools
 import json
 import sys
@@ -28,11 +27,7 @@ import demo_stub as S  # noqa: E402
 from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
 from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
 
-_cases = importlib.util.spec_from_file_location(
-    "device_warden_serve_cases",
-    Path(__file__).resolve().parents[3] / "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py")
-T = importlib.util.module_from_spec(_cases)
-_cases.loader.exec_module(T)
+from verity.protocols.accounting.certifier.device.tests.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -333,7 +328,7 @@ def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_a
     out.mkdir()
     span = ws.group_windows(params, 24)
     assert span == 2
-    warden = T._run(out, tmp_path / "key", requests, responses, windows=span, params=params, id_payload=params.payload,
+    warden = _run(out, tmp_path / "key", requests, responses, windows=span, params=params, id_payload=params.payload,
                   servers=servers)
     assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
     for j, (server, response) in enumerate(zip(servers, responses)):
