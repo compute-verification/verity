@@ -44,7 +44,7 @@ def _load(name: str):
     return mod
 
 
-cr, n2 = _load("chain_record"), _load("n2_zk")
+cr = _load("chain_record")
 
 
 def test_custody(tmp_path):
@@ -302,8 +302,7 @@ def test_the_scans_block_round_is_accepted_like_its_honest_round_and_is_no_negat
 def test_leak_counts_the_scans_terms_on_the_warden_run(tmp_path):
     import math
     from dataclasses import asdict
-    sz = sys.modules.get("scan_zk") or _load("scan_zk")
-    sys.modules["scan_zk"] = sz
+    from verity.protocols.accounting.certifier.prover import scan_zk as sz
     run = tmp_path / "c1"
     (run / "out").mkdir(parents=True)
     (run / "out/deployment.json").write_text(json.dumps({"params": asdict(sz.PARAMS)}))

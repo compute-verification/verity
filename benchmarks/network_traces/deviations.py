@@ -124,7 +124,7 @@ if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 sys.path.append(str(Path(__file__).resolve().parents[2]))  # the root, for benchmarks.network_traces
 
-from runner_cli import _address, _announce  # noqa: E402
+from verity.protocols.accounting.certifier.device.runner_cli import _address, _announce  # noqa: E402
 import leak_bounds as LB  # noqa: E402
 import negatives as N  # noqa: E402
 from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402

@@ -710,7 +710,7 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     nothing holds its requests to one."""
     import leak_bounds as LB
     from verity.protocols.accounting.certifier.verifier import scan_answer as SA
-    import scan_zk as SZ
+    from verity.protocols.accounting.certifier.prover import scan_zk as SZ
     from verity.protocols.accounting.certifier.prover import ingress_scan as IS
     from verity.protocols.accounting.certifier.verifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
