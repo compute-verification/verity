@@ -129,7 +129,7 @@ theorem Rows.val_input (T : Rows) (X : (T.spec ops).toCircuit.Trace) {l : ℕ} (
 `Verity.Partition.compose`). -/
 theorem Spec.out_eq (S : Spec) (X : S.toCircuit.Trace) (hX : S.part.Correct X 0) {g : ℕ} (hg : g ∈ S.outs)
     (hlt : g < S.N) : val X g = val (S.toCircuit.eval X) g := by
-  have hw : S.part.wrong X = ∅ := by
+  have hw : S.part.incorrect X = ∅ := by
     ext u
     simp only [Verity.Partition.mem_incorrect, Finset.notMem_empty, iff_false, not_not]
     rwa [Subsingleton.elim u 0]

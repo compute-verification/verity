@@ -4,7 +4,7 @@
     format = "verity/config/v0"
     protocols = ["sampled-proofs", "pouw", "inference-only"]    the subprotocols, by their names
     [workload]  name, params                         the computation audited, and its public shape
-    [service]   law                                  the proof system's selection law (no ε, δ or threshold)
+    [service]   law                                  the proof system's sampling design (no ε, δ or threshold)
     [program]   commit                               the commit of the auditor-trusted code the parties run
     [params."<id>"]                                  a listed subprotocol's public structural parameters
     [[party]]   name, machine, principal             machine: `local`, or a name `verity run --on` gives
@@ -23,7 +23,7 @@ deployment with an id of its own (`UNACCEPTED`), which `verity run` doesn't run 
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
-service laws it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
+sampling designs it runs under) and what a workload declares (`Workload`: the hooks it provides, its parties as `Role`s, its
 parameters' schema) are handed in by the caller: this module imports no protocol and no workload. `check` refuses by
 name (`verity.channel.Refused`) an unknown key or version, a subprotocol whose requirements aren't listed or whose
 needs the workload doesn't provide, a set of subprotocols that is no composite's, a party or channel other than the
@@ -95,7 +95,7 @@ def _no_params(params: Mapping[str, Any]) -> dict[str, Any]:
 @dataclass(frozen=True)
 class Component:
     """What a protocol declares for a configuration. ``params`` checks its parameters (the file's, over
-    ``default_params``) and returns them normalized; ``law`` refuses a service law the subprotocol can't run under
+    ``default_params``) and returns them normalized; ``law`` refuses a sampling design the subprotocol can't run under
     (raising `Refused`), given its checked parameters; ``product``: whether the composite takes it (`COMPOSITES`)."""
 
     name: str
@@ -391,7 +391,7 @@ def digest(cfg: Mapping[str, Any]) -> str:
 def new(workload: str, protocols: Sequence[str], components: Mapping[str, Component],
         workloads: Mapping[str, Workload], commit: str, machine: str = LOCAL) -> dict[str, Any]:
     """A configuration of ``protocols`` on ``workload`` that states only its choices: every declared party on
-    ``machine``, the declared channels, and the first default law of a listed subprotocol that every listed subprotocol
+    ``machine``, the declared channels, and the first default sampling design of a listed subprotocol that every listed subprotocol
     runs under; parameters are left to their defaults. Refused by name like `check`, which it passes."""
     if unknown := [n for n in protocols if n not in components]:
         raise Refused("unknown-protocol", f"{', '.join(unknown)} (known: {', '.join(components)})")

@@ -85,8 +85,8 @@ def test_chosen_plan_recertifies_through_stratified(small, delta):
     r = T.recertify(plan, small.cands, delta)
     assert r["count_bound"] <= r["units"] + 1e-9
     assert r["ands"] <= r["density_bound"] * (1 + 1e-9) and r["certify"] == pytest.approx(r["ands"], rel=1e-9)
-    law = T.law(plan, small.cands)
-    assert law.miss(r["count_bound"]) >= delta > law.miss(r["count_bound"] + 1)
+    sampling_design = T.sampling_design(plan, small.cands)
+    assert sampling_design.miss(r["count_bound"]) >= delta > sampling_design.miss(r["count_bound"] + 1)
     if delta == T.DELTAS[0]:
         assert r["ands"] <= plan.certificate.harm * (1 + 1e-9)
 
@@ -101,7 +101,7 @@ def test_pooled_is_integrity_horizon_for_one_uniform_stratum():
             assert got == pytest.approx(log(1 / delta) * 1024 / 64, rel=2 ** -18) and ceil(got) == horizon
 
 
-def test_handoff_work_law_draws_the_plans_k_and_its_windows_are_integrity_period_logs(small):
+def test_handoff_work_sampling_design_samples_the_plans_k_and_its_windows_are_integrity_period_logs(small):
     h = T.handoff(small.plan, small.cands, small.dag)
     rec = h["record"]
     assert rec["law"] == "work:1" and [t for t, _ in rec["templates"]] == list(rec["work_table"])

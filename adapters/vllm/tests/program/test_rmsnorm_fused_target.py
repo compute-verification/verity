@@ -12,7 +12,7 @@ import pytest
 import torch
 from torch import nn
 from verity.circuits.defs import bind
-from verity.definitions.registry import b1
+from verity_vllm.definitions.registry import b1
 
 from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 from verity_vllm.observe.events import RunHeader
@@ -20,7 +20,7 @@ from verity_vllm.observe.fold.resolver import StepContext, Unsupported, resolve_
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend import targets as T
-from verity_torch.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     observe_target_profile,

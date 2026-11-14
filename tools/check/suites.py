@@ -235,10 +235,13 @@ AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-chec
               "verity/protocols/proofs/recursion/verifier/vstar_cli", "verity/protocols/proofs/flock/verifier/sigma", "verity-core-sampled-proofs",
               "verity/protocols/accounting/registration/verifier/lean",
               "verity/protocols/accounting/poub/verifier/lean", "verity/protocols/accounting/poub/verifier",
+              "verity/protocols/accounting/poub",
               "verity/protocols/accounting/certifier/verifier/network", "verity-pouw-window-difftest",
               "verity-pouw-check-difftest", "verity/protocols/accounting/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
               "memory-challenger-lean", "benchmarks/pous",
-              "verity/protocols/proofs/spot/verifier", "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
+              "verity/protocols/proofs/spot/verifier", "verity/protocols/proofs/spot/device", "verity/protocols/proofs/spot/prover",
+              "verity/protocols/accounting/certifier/verifier", "verity-pouw-benchmarks",
+              "verity/protocols/accounting/certifier/prover",
               "verity/circuits/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
               "verity/protocols/accounting/poub/device/live_verifier", "verity-network-traces", "verity-vllm", "benchmarks/verifier_cost",
@@ -2520,6 +2523,20 @@ def _first_sigterm_stops(signum: int, frame: object) -> None:
         raise KeyboardInterrupt
 
 
+def scratch_tmp(environ: dict[str, str] | None = None) -> str | None:
+    """Why ``TMPDIR`` may not hold the tests' temporary files, else None: it lies in the shared scratch beside the runs root of
+    this `research run` (`clone.py`'s `<runs root>/../scratch`), a directory other users can change, which the custody tests
+    refuse, and whose deep paths put a Unix socket's path past its 107 bytes."""
+    tmp, run_dir = SETTINGS.get("TMPDIR", environ), SETTINGS.get("RESEARCH_RUN_DIR", environ)
+    if not tmp or not run_dir:
+        return None
+    scratch = Path(run_dir).resolve().parent.parent / "scratch"
+    if not Path(tmp).resolve().is_relative_to(scratch):
+        return None
+    return (f"TMPDIR={tmp} is inside {scratch}, the runs' shared scratch, where tests that refuse a directory another user can "
+            f"change, or bind a Unix socket under it, fail: unset TMPDIR, or point it at a directory outside {scratch}")
+
+
 def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check's can hold tens of GB)
@@ -2584,6 +2601,9 @@ def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(line_buffering=True)
     if why := SETTINGS.refusals(of_record=False):
         print("\n".join(f"suites: {w}" for w in why), file=sys.stderr)
+        return 2
+    if not (a.list or a.explain) and (why := scratch_tmp()):
+        print(f"suites: {why}", file=sys.stderr)
         return 2
     if not in_git():
         print(f"suites: {ROOT} is not a git checkout, and suites are keyed from git's view of the tree: run them in a checkout "

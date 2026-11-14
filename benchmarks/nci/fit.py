@@ -49,8 +49,8 @@ from pathlib import Path
 
 import tiers as T
 
-sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "rho"))
-from rho.theorem import multiple_bound
+sys.path.insert(1, str(Path(__file__).resolve().parent.parent / "slowdown"))
+from slowdown.theorem import multiple_bound
 
 #: loss laws L(N, D) = E + A / N^alpha + B / D^beta in nats per token: Besiroglu et al.'s refit of Chinchilla's Approach 3
 #: (besiroglu-2024-chinchilla-replication/2) and Hoffmann et al.'s original Approach 3 fit, which the refit refutes and
@@ -130,7 +130,7 @@ def undersizing(fit: str, N: float, L: float) -> float:
 
 def params(wipe_gb: float, **over: float) -> dict:
     """``tiers``' defaults with a wipe residual of ``wipe_gb`` (memory the fill doesn't reach, no proof-of-space slack):
-    the monitored residual is the ladder's, PoUW's floor credit at the locked clock."""
+    the registered residual is the ladder's, PoUW's floor credit at the locked clock."""
     return T.DEFAULTS | {"unfilled_gb": wipe_gb, "pous_rounds": 1e9, "pous_floor": 0.0} | over
 
 
@@ -175,7 +175,7 @@ def share(p: dict, rate: float) -> float:
 def left_out(p: dict, periods: int) -> float:
     """What the fit bound leaves out, in ``share``'s unit: each server's first window of ``periods`` wipe periods, at mfu,
     over the horizon. That window builds its weights from a seed, so F1's weight half fails there, and
-    ``Nci.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
+    ``Slowdown.SecurityProofs.Fit.fitBoundSlots_init`` adds the counted multiplications inside it to the bound. The threads
     it starts need no F3: their work in later windows is paid for by their entry fees there. F3 is asked, outside the
     first windows, of the threads started later, which do no work in a first window when every server starts with the
     run. A server that joins later, or a recipe that seeds weights after a server's first window (progressive growth),
@@ -184,7 +184,7 @@ def left_out(p: dict, periods: int) -> float:
 
 
 def fit_mu(p: dict, wipe_bits: float, N: float, w_e: float, b: float | None = None) -> float:
-    """The fit bound's cap on monitored efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
+    """The fit bound's cap on registered efficiency: ``fit_rate``'s share plus ``left_out``; ``inf`` where it's void."""
     rate, periods = fit_rate(p, wipe_bits, N, w_e, b)
     return share(p, rate) + left_out(p, periods)
 
@@ -193,19 +193,19 @@ def closed_form(p: dict, wipe_bits: float) -> float:
     return 4 * wipe_bits * intake(p) / (p["kappa"] * p["d"] * p["b_w"] * p["b_a"] * p["node_flops"])
 
 
-def residual_with_lag(p: dict) -> float:
-    return min(1.0, T.residual_share(p) + p["identities"] * p["lag_s"] / (p["years"] * T.YEAR))
+def free_with_lag(p: dict) -> float:
+    return min(1.0, T.free_share(p) + p["identities"] * p["lag_s"] / (p["years"] * T.YEAR))
 
 
-def dampener(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
-    """D under a memory cap ``mu``, with nothing unmonitored: ``multiple_bound`` in Lean's form at
+def slowdown(p: dict, mu: float, declared: float, cheat: float = 0.0) -> float:
+    """D under a memory cap ``mu``, with nothing unregistered: ``multiple_bound`` in Lean's form at
     x = min(MFU_0 r + declared, m mu) + cheat, the residual training at MFU_0 (reference efficiency) and the rest counted
     multiplications."""
-    x = min(p["mfu"] * residual_with_lag(p) + declared, p["m"] * mu) + cheat
+    x = min(p["mfu"] * free_with_lag(p) + declared, p["m"] * mu) + cheat
     return multiple_bound(p["mfu"], 0.0, x, reference_efficiency=False)
 
 
-def attack_dampener(p: dict, efficiency: float) -> float:
+def attack_slowdown(p: dict, efficiency: float) -> float:
     """D of a developer whose only route to the target is an attack of this efficiency; ``inf`` when it never gets there."""
     return multiple_bound(p["mfu"], 0.0, efficiency, reference_efficiency=False)
 
@@ -218,7 +218,7 @@ def replica(p: dict, S: float, L: float, b_train: float, fit: str = "besiroglu",
     MFU_0 r F b_sync / (6 lambda_in) tokens, whatever its size."""
     N = S / b_train
     lam = intake(p)
-    r = residual_with_lag(p)
+    r = free_with_lag(p)
     m = multiplier * undersizing(fit, gain * N, L)
     sync_s = N * b_sync / lam
     return {
@@ -248,15 +248,15 @@ def row(wipe_gb: float, N: float, L: float, fit: str = "besiroglu") -> dict:
     return {
         "wipe_gb": wipe_gb, "state_gb": S / T.GB, "visits": visits(S, N, p["b_w"]), "periods": fits["central"][1],
         "mu_closed": closed_form(p, R),
-        "D_closed": multiple_bound(p["mfu"], *T.remote_terms(p, closed), reference_efficiency=False),
-        "mu_fit": mu["central"], "D_fit": dampener(p, mu["central"], declared),
-        "D_fit_low": dampener(p, mu["low"], declared), "D_fit_high": dampener(p, mu["high"], declared),
+        "slowdown_closed": multiple_bound(p["mfu"], *T.remote_terms(p, closed), reference_efficiency=False),
+        "mu_fit": mu["central"], "slowdown_fit": slowdown(p, mu["central"], declared),
+        "slowdown_fit_low": slowdown(p, mu["low"], declared), "slowdown_fit_high": slowdown(p, mu["high"], declared),
         "fit_over_closed": mu["central"] / closed_form(p, R),
         "visits_train": visits(S, N, B_TRAIN["central"]), "periods_train": periods_train, "mu_fit_train": mu_train,
-        "D_fit_train": dampener(p, mu_train, declared),
-        "replica": rep, "D_replica": attack_dampener(p, rep["efficiency"]),
-        "path": path, "D_path": attack_dampener(p, path["efficiency"]),
-        "D_none": dampener(p, math.inf, declared),
+        "slowdown_fit_train": slowdown(p, mu_train, declared),
+        "replica": rep, "slowdown_replica": attack_slowdown(p, rep["efficiency"]),
+        "path": path, "slowdown_path": attack_slowdown(p, path["efficiency"]),
+        "slowdown_none": slowdown(p, math.inf, declared),
     }
 
 
@@ -295,30 +295,31 @@ def main(argv: list[str] | None = None) -> int:
           f"{N['405b']['1e15'] / 1e9:.0f}B at 1e15 tokens, {N['405b']['1e14'] / 1e9:.0f}B at 1e14; "
           f"Hoffmann's fit {s['n_star_hoffmann']['405b'] / 1e9:.1f}B")
     print(f"K2-class target L* = {L['k2']:.4f}: N* at most {N['k2']['inf'] / 1e9:.0f}B")
-    print(f"r-hat = {T.audited_residual(T.DEFAULTS):.3g}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
+    print(f"r-hat = {T.audited_free(T.DEFAULTS):.3g}, mfu = {T.DEFAULTS['mfu']}, lambda_in = {s['intake']:.4g} bit/s, T_wipe = "
           f"{T.DEFAULTS['wipe_s']:.0f} s, b_w = {T.DEFAULTS['b_w']}, w_e = "
           + " / ".join(f"{w:.0f}" for w in BOUNDARY.values()) + " bits (low / central / high)\n")
     print("S and k' = N* b_w / S at one wipe period; L, the window in wipe periods at which the fit bound is least\n")
-    print(f"{'R_wipe':>7} {'S':>8} {'k':>5} {'mu_closed':>10} {'D_closed':>8} {'L':>3} {'mu_fit':>9} {'D_fit':>6} "
-          f"{'D_fit, w_e low-high':>19} {'fit/closed':>10}")
+    print(f"{'R_wipe':>7} {'S':>8} {'k':>5} {'mu_closed':>10} {'slowdown_closed':>15} {'L':>3} {'mu_fit':>9} "
+          f"{'slowdown_fit':>12} "
+          f"{'slowdown_fit, w_e low-high':>26} {'fit/closed':>10}")
     for r in s["rows"]:
         void = r["periods"] == 0
-        fit_cols = (f"{'-':>3} {'void':>9} {_d(r['D_none']):>6}" if void else
-                    f"{r['periods']:3d} {r['mu_fit']:9.3g} {_d(r['D_fit']):>6} "
-                    f"{_d(r['D_fit_low']) + ' - ' + _d(r['D_fit_high']):>19} {r['fit_over_closed']:10.2f}")
+        fit_cols = (f"{'-':>3} {'void':>9} {_d(r['slowdown_none']):>12}" if void else
+                    f"{r['periods']:3d} {r['mu_fit']:9.3g} {_d(r['slowdown_fit']):>12} "
+                    f"{_d(r['slowdown_fit_low']) + ' - ' + _d(r['slowdown_fit_high']):>26} {r['fit_over_closed']:10.2f}")
         print(f"{r['wipe_gb']:5.0f}GB {r['state_gb']:6.1f}GB {r['visits']:5.2f} {r['mu_closed']:10.3g} "
-              f"{_d(r['D_closed']):>8} {fit_cols}")
+              f"{_d(r['slowdown_closed']):>15} {fit_cols}")
     print(f"\nAt {B_TRAIN['central']:.0f} bits per trained weight (the training-storage premise): the fit bound, the "
           f"replica attack, and a x{PATH_GAIN['smalltalk']:.1f} path composition at m {PATH_MULTIPLIER['smalltalk']}")
-    print(f"{'R_wipe':>7} {'k':>5} {'L':>3} {'D_fit':>6} {'replica':>8} {'tokens to L*':>12} {'m':>7} {'D':>6} "
-          f"{'path, dense':>11} {'m':>7} {'D':>6}")
+    print(f"{'R_wipe':>7} {'k':>5} {'L':>3} {'slowdown_fit':>12} {'replica':>8} {'tokens to L*':>12} {'m':>7} {'slowdown':>8} "
+          f"{'path, dense':>11} {'m':>7} {'slowdown':>8}")
     for r in s["rows"] + s["replica_rows"]:
         rep, path = r["replica"], r["path"]
         void = r["periods_train"] == 0
         print(f"{r['wipe_gb']:5.0f}GB {r['visits_train']:5.2f} {'-' if void else r['periods_train']:>3} "
-              f"{'void' if void else _d(r['D_fit_train']):>6} "
-              f"{rep['params'] / 1e9:7.0f}B {rep['tokens']:12.3g} {rep['m']:7.2g} {_d(r['D_replica']):>6} "
-              f"{path['dense_params'] / 1e9:10.0f}B {path['m']:7.2g} {_d(r['D_path']):>6}")
+              f"{'void' if void else _d(r['slowdown_fit_train']):>12} "
+              f"{rep['params'] / 1e9:7.0f}B {rep['tokens']:12.3g} {rep['m']:7.2g} {_d(r['slowdown_replica']):>8} "
+              f"{path['dense_params'] / 1e9:10.0f}B {path['m']:7.2g} {_d(r['slowdown_path']):>8}")
     rep = s["replica_rows"][0]["replica"]
     print(f"\nA replica trains {rep['tokens_per_sync']:.3g} tokens between FP4 syncs whatever its size; the "
           f"{rep['params'] / 1e9:.0f}B one at {s['replica_rows'][0]['wipe_gb']:.0f} GB syncs every "

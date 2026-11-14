@@ -22,17 +22,17 @@ device did not obtain is uniform, and at rank `r` at most `256^(32−r)` of its 
 `Accounting.Guarantees.SketchRankFiber`); and `ε_ro`, the keys' distance from uniform.
 
 * `SketchBoundRun`: at every parameter.
-* `SketchBoundDeployed`: at the deployed receipts (`remote_bandwidth.receipts`: 4096-byte blocks of `m = 128` sectors,
+* `SketchBoundDeployed`: at the deployed receipts (`poub.receipts`: 4096-byte blocks of `m = 128` sectors,
   64 sign rows under 512-bit sign keys, SHA-512 tags, `h = 512`) and rank `r = 27`, with `Q` the SHA-512 compressions
-  the prover can make over the session, the node's `C` times the outside-compute factor `F` (grinding a seed reads no
-  block, so it can run off the node): at most `Q + P` candidate seeds and `Q` queries in all give, with the keys within
-  the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform,
+  the prover can make over the session, its budget `2^80` (`audit.QUERIES_LOG2`) on any hardware it reaches (grinding a
+  seed reads no block, so it can run off the node): at most `Q + P` candidate seeds and `Q` queries in all give, with
+  the keys within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform,
 
     `δs = Q/2^216 + (Q + P)·(ε + N/2^512) + (Q + P)²/2^513`,
 
-  `timing.sketch_failure(C, P, 64, blocks=N, outside=F)`, the error `ledger.sketch` puts in the memory line's δ. A
+  `timing.sketch_failure(P, 64, blocks=N, queries=Q)`, the error `ledger.sketch` puts in the memory line's δ. A
   16-row session's receipts (256-bit sign keys) are `SketchBoundRun`'s at `ks = 16`, `r = 12` and
-  `ε_ro = (Q + P)²/2^257`, `timing.sketch_failure(C, P, 16, blocks=N, outside=F)`.
+  `ε_ro = (Q + P)²/2^257`, `timing.sketch_failure(P, 16, blocks=N, queries=Q)`.
 
 What stays assumed: SHA-512's keys at the candidate seeds are within `ε_ro` of uniform (`SketchHashRandom`, claim
 `random-oracle`), the
@@ -62,9 +62,9 @@ def SketchBoundRun : Prop :=
     SketchBound T (((∑ j, G j : ℕ) : ℝ) * (ε + N / 2 ^ h) + ((∑ j, qtot j : ℕ) : ℝ) / 2 ^ (8 * r) + εro)
 
 /-- **The sketch bound at the deployed receipts.** `SketchBoundRun` at 4096-byte blocks (`m = 128`), 64 sign rows,
-SHA-512 tags and rank `r = 27`, for a prover of `Q` SHA-512 compressions over the session (the node's times the
-outside-compute factor `F`): at most `Q + P` candidate seeds and `Q` receipt-hash queries in all, with SHA-512's keys
-at them within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform. -/
+SHA-512 tags and rank `r = 27`, for a prover of `Q` SHA-512 compressions over the session (its budget, `2^80` in
+`audit.QUERIES_LOG2`, on any hardware it reaches): at most `Q + P` candidate seeds and `Q` receipt-hash queries in all,
+with SHA-512's keys at them within the 512-bit sign keys' birthday `(Q + P)²/2^513` of uniform. -/
 def SketchBoundDeployed : Prop :=
   ∀ (β Hs : Type) [Fintype β] [Fintype Hs] (P N S L q Q : ℕ) (G qtot : Fin P → ℕ) (ε : ℝ)
     (A : Remote.Sketch.Run β Hs P N 128 512 S L q 64 G) (T : Trace (Outcome β Hs N 128)),

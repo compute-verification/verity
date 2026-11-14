@@ -21,7 +21,7 @@
 #      the challenger re-starts the pass's epoch from its manifest under its own commitment, the request pass, salted by a
 #      beacon before epoch coins, as a recorded replay) and select (draw.json: the epoch's sampling coin opened after the
 #      registration, once, and the Lean verifier's sample --population N --k K' --stream over its key)
-#   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): stage_tile.py (Pc8TileSide{K=4096,1,1,sm120}), the --zk
+#   5. per sampled proof block u<t>, as a parallel fan-out (SZ_JOBS at once): hidden_zk/served_stage.py (stage_tile.py; Pc8TileSide{K=4096,1,1,sm120}), the --zk
 #      session, the opening check, Lean; the selftest build's controls on the first; a filler unit's the same, and the other request's tile staged
 #   6. deliver (the sampled proof blocks' session records' SHA-512) and outcome (one-stage's audit record over every sampled proof block and
 #      PoUW's public items, outcome-<case>/); each control on a stream of its own that replays the honest sample
@@ -73,7 +73,7 @@ source "$SRC/benchmarks/pouw/hidden_zk/job.sh"
 WORK=${WORK:-/workspace/pouw/mvp-e2e}
 PASSES=$WORK/passes/${SERVED_RUN:?serve.sh run id}
 export PYTHONPATH=$SRC:$SRC/tools/config:$SRC/adapters/vllm:$SRC/benchmarks/pouw:$SRC/verity/protocols/proofs/flock/prover/python:$SRC/tools/difftest/python
-SC="$Z/served_commit.py"
+SC="$SRC/benchmarks/pouw/served_zk/served_commit_run.py"   # served_commit.py with the checks of record's Lean side
 VPY=${SZ_PYTHON:-$WORK/venv312/bin/python}
 
 setup
@@ -226,7 +226,7 @@ summary() {      # summary.json
 stage_unit() {   # stage_unit TAG SIDE UNIT: $W/TAG staged, its stage.json, opening.json, pin.txt and pub.bin copied to $OUT/TAG
   local tag=$1 p=$2 t=$3
   mkdir -p "$W/$tag" "$OUT/$tag"
-  $TIME "$OUT/$tag/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $Z/stage_tile.py $W/$p $OUT/$p/params.json $t $W/$tag" \
+  $TIME "$OUT/$tag/stage.time" bash -c "$(vlimit "$STAGE_GB") exec $PY $SRC/benchmarks/pouw/hidden_zk/served_stage.py $W/$p $OUT/$p/params.json $t $W/$tag" \
     > "$OUT/$tag/stage.out" 2>&1 || { log "stage $tag FAILED: $(tail -3 "$OUT/$tag/stage.out")"; return 1; }
   cp "$W/$tag/stage.json" "$W/$tag/opening.json" "$W/$tag/pin.txt" "$W/$tag/pub.bin" "$OUT/$tag/"
   log "stage $tag (unit $t): $(jq_ "$OUT/$tag/stage.json" "(d['kind'], d['entry'], d['ands'], d['k_log'], d['seconds'])")"

@@ -1,6 +1,6 @@
-"""`remote-audit-protocol serve` (`RemoteAudit.Protocol`, onsite Verity's bandwidth component) against the Python verifier
+"""`poub-protocol serve` (`Poub.Protocol`, onsite Verity's bandwidth component) against the Python verifier
 of the same case (`protocol`: the case decoded as the Lean decodes it, its events through `audit.AuditRun` as
-`ra_cases.session` replays them, and `remote_bandwidth.period.answer` of the session after them): every field of the
+`ra_cases.session` replays them, and `poub.period.answer` of the session after them): every field of the
 answer but its reason, the certified `q_bytes`, `eps` and the profile among them. Both refuse a session paced at one
 window in flight, which no property of the Lean covers.
 
@@ -30,7 +30,7 @@ from verity.protocols.accounting.poub.verifier import audit, period
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 
-EXE = "remote-audit-protocol"
+EXE = "poub-protocol"
 
 
 def _keys(j, want: list[str], ctx: str) -> None:
@@ -76,7 +76,7 @@ def _check(p: dict, reg: audit.Registration, e: dict) -> tuple:
 
 
 def protocol(case) -> dict:
-    """`RemoteAudit.Protocol.protocol.answer` in Python."""
+    """`Poub.Protocol.protocol.answer` in Python."""
     return P.answer(period.PROTOCOL, case, params=_params, commitment=_registration, evidence=_evidence, check=_check,
                     digest=lambda r: r.digest)
 
@@ -143,11 +143,11 @@ def test_a_small_periods_answers_agree(server) -> None:
     honest = got["honest"]
     assert honest["public"]["q_bytes"] == honest["profile"]["receipts"] * 4096 > 0 and honest["profile"]["gaps"] == []
     assert sum(s for _, s in honest["profile"]["windows"]) < 2 * audit.SAMPLES, honest
-    assert Fraction(honest["public"]["eps"]) == Fraction(2 ** 24 + 2 * audit.SAMPLES, 2 ** 64), honest
+    assert Fraction(honest["public"]["eps"]) == Fraction(audit.DELTA) + Fraction(2 * audit.SAMPLES, 2 ** 64), honest
 
 
 def _covered(kw: dict) -> bool:
-    """A scenario's session is one the check replays (`RemoteAudit.Protocol.sessionOf`): not paced at one window in
+    """A scenario's session is one the check replays (`Poub.Protocol.sessionOf`): not paced at one window in
     flight."""
     pace = kw.get("pace")
     return pace is None or pace.in_flight == 2

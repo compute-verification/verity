@@ -469,7 +469,7 @@ def test_the_noise_derivation_refuses_anything_else():
     tag_in = comp("PortsTestNoiseTag", [("key", V32), ("t", V8)], V8, lambda B, S, key, t: B.call(Noise, key, t), ports=COIN)
     refused("E_PORT_KIND", lambda: Program(tag_in), "parameter 'tag' leaf 0: takes kind=static, a constant, but reads a run input")
     refused("E_PORT_KIND", lambda: Program(comp("PortsTestNoiseReg", [("key", V32)], V8, lambda B, S, key: B.call(Noise, key, B.call(Tag)),
-                                                ports=COIN), registered=("key",)), "drawn per run and never registered")
+                                                ports=COIN), registered=("key",)), "flipped per run and never registered")
     refused("E_PORT_KIND", lambda: Program(comp("PortsTestStaticIn", [("t", V8)], V8, lambda B, S, t: t,
                                                 ports=Ports(params={"t": In(kind="static")}))), "a static is a constant")
 

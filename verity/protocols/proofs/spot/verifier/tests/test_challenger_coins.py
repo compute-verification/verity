@@ -188,15 +188,15 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
     coins = T.ChallengerCoins(C.LiveRecord(client, "positions", itertools.count().__next__))
     segment = coins.commit(ROOT)
     source, read = _reading(coins)
-    law = {"law": "subset", "k": 1}
-    draw = T.draw_first(T.OwnRandomness(source), law, 6)
+    sampling_design = {"law": "subset", "k": 1}
+    draw = T.draw_first(T.OwnRandomness(source), sampling_design, 6)
     client.close()
     assert host.ended() is None
     commitment, roots = host.trusted()
     assert roots["positions"] == (ROOT, ROOT) and len(read) == 2 * 9 + 64
     doc = segment.to_json()
     assert T.read_reason(commitment, doc, ROOT, bytes(read), roots["positions"]) is None
-    assert draw == T.draw_first(T.OwnRandomness(T._on(T.challenger_stream(commitment, doc, ROOT))), law, 6)
+    assert draw == T.draw_first(T.OwnRandomness(T._on(T.challenger_stream(commitment, doc, ROOT))), sampling_design, 6)
 
 
 def test_the_proof_system_samples_from_the_challengers_coins_after_the_receipt():
@@ -334,10 +334,10 @@ def test_the_lean_run_refuses_a_sample_whose_coins_the_challenger_did_not_releas
     assert_only_honest_coins_accepted(outcomes)
     coins = T.ChallengerCoins(C.LiveRecord(C.LiveChallenger(test_remote.SCHEME, 0, test_remote.FAMILIES, entropy("x")),
                                            "positions/honest", itertools.count().__next__))
-    assert outcomes["honest"][0].digest == _stream().digest != _stream(sampler=lambda law, n: [0, 1]).digest
+    assert outcomes["honest"][0].digest == _stream().digest != _stream(sampler=lambda sampling_design, n: [0, 1]).digest
     with pytest.raises(ValueError, match="no sampler"):
-        _stream(coins=coins, sampler=lambda law, n: [0, 1])
-    sampled = _stream(sampler=lambda law, n: [0, 1])
+        _stream(coins=coins, sampler=lambda sampling_design, n: [0, 1])
+    sampled = _stream(sampler=lambda sampling_design, n: [0, 1])
     draw = sampled.select(sampled.register(_record(), _ports(6)))
     assert sampled.deliver(draw, [SESSION]) is None
     with pytest.raises(S.Refused, match="coins") as refused:

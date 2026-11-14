@@ -11,7 +11,8 @@ candidate and those above it are built again without them in the same tick.
                                                    (`research.stale`); then
                                                    every open PR whose body names no Linear issue (`named_issue`: a key
                                                    after a Linear magic word, a bare key of a team main's Slack registry
-                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`
+                                                   lists, or an `Issue: none: REASON` line); --json gives each its `issue`,
+                                                   stdout holding the JSON alone (the notices go to stderr)
     research queue sync [--dry-run]                rebuild `next` (Merges, below), refused unless `merge.on_drive` holds or with
                                                    --dry-run: the verified queue builds on `main`, never on `next`
     research queue eject PR --reason TEXT [--by HANDLE]
@@ -1306,7 +1307,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
-#: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
+#: grader, the certifier program, the inference-only check, PoUB's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "security/"
 #: the spec: the Lean the guarantees' statements read, `security/`'s Definitions library, and the Lake files of its package.
 #: A change to it, like a lock's, is a Lean change with or without a lock change
@@ -7169,8 +7170,10 @@ def main(argv: list[str]) -> int:
                 return lambda prs: stale_prs(q, prs, q.now(), got.stale_days,
                                              lambda n, h: [lab.ts for lab in labels.reviews(n, h)], keep=got.stale_keep)
 
-            entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
-            teams = q.issue_teams()
+            # under --json, stdout is one JSON document a program parses: what the reading says goes to stderr
+            with contextlib.redirect_stdout(sys.stderr) if a.json else contextlib.nullcontext():
+                entries = q.status(fetched=at_main, loop=True, reviews=labels.reviews)
+                teams = q.issue_teams()
             if a.json:
                 print(json.dumps([{"pr": e.pr.number, "head": e.pr.head, "owner": e.pr.owner, "draft": e.pr.draft, "state": e.state,
                                    "why": e.why, "position": e.position, "commit": e.commit, "after": list(e.after),

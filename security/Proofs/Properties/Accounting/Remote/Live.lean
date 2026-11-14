@@ -11,14 +11,14 @@ import Proofs.Properties.Accounting.Remote.Window
 The recorded run is taken at `W c a s`, the process's session `s` with the coins `c` and the append coins `a`.
 
 * Each event commutes with `W` (`step_W`, `sclose_W`, `sstep_W`) as long as the coins it reads agree: the challenge it
-  releases, its draw's openings coin and the next append coin. No event changes the coins (`sstep_keeps`), and
+  releases, its sample's openings coin and the next append coin. No event changes the coins (`sstep_keeps`), and
   `withCoin` only fills a coin not yet sent or pushes an append coin (`withCoin_le`), so every coin the process holds
   stays, and `Agree c a` at the end holds at every request before it (`step_le`). The event's `unset` check says each
   coin it read is sent and of a coin's size (`unset_released`, `unset_drew`), so `Agree` gives it in `c` (`event_W`).
 * A `verify`'s verdict is `checkWindowChunked`'s, which is `checkWindow`'s (`chunkedIsWhole`), at a point of the
   recorded run where the window awaits openings (`ChecksOK`). At its `settle`, later, the window still awaits them, and
-  `checkWindow` gives the same verdict there (`verdict_kept`): its draws, record, registration and digest are kept
-  (`Shared.recordKeptAfterSample`, `srun_kept`), and the appends only grow past the blocks its draws read, which are
+  `checkWindow` gives the same verdict there (`verdict_kept`): its samples, record, registration and digest are kept
+  (`Shared.recordKeptAfterSample`, `srun_kept`), and the appends only grow past the blocks its samples read, which are
   receipts of its plans (`Shared.SamplesIn`, `Shared.checkWindow_grow`). So the process's `verifyBy` on that verdict is
   the recorded `verify` (`verifyBy_congr`).
 
@@ -29,18 +29,18 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open RemoteAudit RemoteAudit.Session
+open Poub Poub.Session
 
-open private RemoteAudit.Session.live from RemoteAudit.Session
+open private Poub.Session.live from Poub.Session
 
-namespace Properties.RemoteAudit.Live
+namespace Properties.Poub.Live
 
 /-! ## The session on other coins -/
 
 /-- The session `s` with the coins `c` and the append coins `a`. -/
 abbrev W (c a : Array ByteArray) (s : State) : State := { s with coins := c, appendCoins := a }
 
-theorem live_W (c a : Array ByteArray) (s : State) : RemoteAudit.Session.live (W c a s) = RemoteAudit.Session.live s :=
+theorem live_W (c a : Array ByteArray) (s : State) : Poub.Session.live (W c a s) = Poub.Session.live s :=
   rfl
 
 theorem record_W (c a : Array ByteArray) (s : State) (t : Nat) : (W c a s).record t = s.record t := rfl
@@ -150,7 +150,7 @@ theorem receive_W {s : State} {c a : Array ByteArray} {t i : Int} {root : ByteAr
     intro x hx hx'
     dsimp only [jp] at hx
     dsimp only [jp', W] at hx'
-    simp only [State.deadline, Properties.RemoteAudit.staleBelow_staleOf, State.isReleased] at hx hx'
+    simp only [State.deadline, Properties.Poub.staleBelow_staleOf, State.isReleased] at hx hx'
     repeat' (split at hx <;> (try simp only [*] at hx'))
     all_goals (cases hx; cases hx'; exact ⟨rfl, rfl⟩)
   split at h₁ <;> split at h₂
@@ -164,7 +164,7 @@ theorem receive_W {s : State} {c a : Array ByteArray} {t i : Int} {root : ByteAr
     · exact key s₀ h₁ h₂
 
 /-- An event commutes with replacing the coins and the append coins, as long as the ones it reads agree: the challenge
-it releases, the openings coin it draws from, and the next append coin. -/
+it releases, the openings coin it samples from, and the next append coin. -/
 theorem step_W {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
     (he : Session.step s e = .ok (r, s₁))
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
@@ -333,7 +333,7 @@ theorem sstep_verify {g : Nat} (s : State) (t : Int) (o : Array Opening) :
     Shared.step g s (.verify t o) = Session.step s (.verify t o) :=
   sstep_nonclose fun _ _ h => by cases h
 
-/-- `step_W` at `g` windows a draw: a close reads its draw's openings coin, `W + t / g`. -/
+/-- `step_W` at `g` windows a sample: a close reads its sample's openings coin, `W + t / g`. -/
 theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s₁ : State} {c a : Array ByteArray}
     (he : Shared.step g s e = .ok (r, s₁))
     (hs : ∀ k, (∃ now, e = .start now ∨ e = .boundary now) → r = .released (some k) → c[k]! = s.coins[k]!)
@@ -343,7 +343,7 @@ theorem sstep_W {g : Nat} (hg : 1 ≤ g) {s : State} {e : Event} {r : Result} {s
     Shared.step g (W c a s) e = .ok (r, W c a s₁) := by
   rcases Nat.lt_or_ge g 2 with hg2 | hg2
   · obtain rfl : g = 1 := by omega
-    rw [RemoteAudit.Shared.step_one] at he ⊢
+    rw [Poub.Shared.step_one] at he ⊢
     exact step_W he hs (fun t now d he' hr => by simpa only [Nat.div_one] using hd t now d he' hr) ha
   · rcases Shared.sstep_of hg2 he with ⟨t, now, rfl, hc⟩ | ⟨hn, hs'⟩
     · rw [sstep_close hg2]
@@ -435,7 +435,7 @@ theorem awaiting_some {s : State} {t : Int} {w : WindowRecord} {d : Array (Nat �
       exact ⟨by omega, by omega, rfl, rfl⟩
 
 /-- What a run from `State.init` keeps from a point `sV` of it to a later one `s`: the invariant, each sampled window's
-draws in its plans (`Shared.SamplesIn`), `Frz`, and the registration. -/
+samples in its plans (`Shared.SamplesIn`), `Frz`, and the registration. -/
 theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
     (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
@@ -461,7 +461,7 @@ theorem srun_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration
     exact ⟨hSF.1.1, Shared.samplesIn_of_link hg hSF.1.1 hpre hSF.2 hL, hS.1.1, hf, hr⟩
 
 /-- A window's verdict on its openings is the same at any later point of the session where it still awaits them: its
-draws, its record, the registration and the digest are kept, and the appends only grow past the blocks it reads. -/
+samples, its record, the registration and the digest are kept, and the appends only grow past the blocks it reads. -/
 theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registration} {c a : Array ByteArray} {nb : Nat}
     {es₀ es₂ : List Event} {rs₀ rs₂ : Array Result} {sV s : State} (hm : 1 ≤ params.minPasses)
     (h₀ : Shared.srunL g (State.init params reg c a nb) es₀ = .ok (rs₀, sV))
@@ -522,7 +522,7 @@ theorem verifyBy_keeps (s : State) (t : Int) (f : Array (Nat × Nat) → Verdict
   have h2 := congrArg (fun x : Result × State => x.2.appendCoins) h
   exact ⟨h1, h2⟩
 
-/-- `verifyBy` reads its check only on the draws of a window that awaits openings. -/
+/-- `verifyBy` reads its check only on the samples of a window that awaits openings. -/
 theorem verifyBy_congr {s : State} {t : Int} {f g : Array (Nat × Nat) → Verdict}
     (h : ∀ w d, s.awaiting t = some (w, d) → f d = g d) : verifyBy s t f = verifyBy s t g := by
   unfold verifyBy
@@ -543,7 +543,7 @@ theorem verifyBy_congr {s : State} {t : Int} {f g : Array (Nat × Nat) → Verdi
     have hf : s.failed = none := by
       cases hs : s.failed with
       | none => rfl
-      | some _ => exact (hl _ (by unfold RemoteAudit.Session.live; rw [hs]; rfl)).elim
+      | some _ => exact (hl _ (by unfold Poub.Session.live; rw [hs]; rfl)).elim
     have ha : s.awaiting t = some (s.record t.toNat, d) := by
       unfold State.awaiting
       simp only [hf, Option.isSome_none, Bool.false_or]
@@ -735,9 +735,9 @@ theorem run_sim {chunk g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registra
       rw [results_snoc]
       exact srunL_snoc' ihr hstep
 
-end Properties.RemoteAudit.Live
+end Properties.Poub.Live
 
-namespace Properties.RemoteAudit
+namespace Properties.Poub
 
 open Live in
 theorem liveIsRun : LiveIsRun := by
@@ -745,4 +745,4 @@ theorem liveIsRun : LiveIsRun := by
   rw [Shared.srun_toArray]
   exact (run_sim hg hm qs h (c := c) (a := a) ⟨hc, ha⟩).1
 
-end Properties.RemoteAudit
+end Properties.Poub

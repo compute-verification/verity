@@ -14,15 +14,20 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import active as A, io_tie as IT
-from verity.protocols.accounting.certifier.verifier.release import with_release
+from verity.protocols.accounting.certifier.verifier import id_form as IDF, io_tie as IT
+from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
+from verity.protocols.accounting.certifier.verifier.release import RUN_ID_BYTES, with_release
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/compose/device/live_challenger"))
+sys.path.append(str(Path(__file__).resolve().parents[3]))  # the root, for benchmarks.network_traces
 import auditor as G  # noqa: E402
 import demo_stub as S  # noqa: E402
-import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.device import warden_serve as ws  # noqa: E402
+from verity.protocols.accounting.certifier.prover import scan_zk as sz  # noqa: E402
+
+from verity.protocols.accounting.certifier.device.tests.relay_runs import _run  # noqa: E402
 
 P = S.ID_PAYLOAD
 NAME = S.Shape().name
@@ -58,7 +63,7 @@ def respond(request: bytes, shape: S.Shape = S.Shape()) -> bytes:
 def ids_request(**kw) -> bytes:
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "temperature": 0.0, "top_p": 1.0,
               "seed": 12345} | kw
-    return A.id_request(**fields, frame_bytes=P + A.HEADER.size, offset=0)
+    return IDF.id_request(**fields, frame_bytes=P + HEADER.size, offset=0)
 
 
 def refused(data: bytes) -> str:
@@ -70,7 +75,7 @@ def refused(data: bytes) -> str:
 def test_the_class_is_eight_byte_ids_in_and_twenty_four_out_and_its_model_says_so():
     assert (S.PROMPT_IDS, S.TOKENS, S.VOCAB, S.ID_PAYLOAD) == (8, 24, 256, 503)
     assert NAME == "demo-stub/p8-g24-v256"
-    assert P == G.SCAN["--cell-bytes"] - A.HEADER.size
+    assert P == G.SCAN["--cell-bytes"] - HEADER.size
     for bad in ({"prompt_ids": 0}, {"tokens": 0}, {"vocab": 1}, {"vocab": 257}, {"payload": IT.ID_EVENT_BYTES - 1}):
         with pytest.raises(ValueError):
             S.Shape(**bad)
@@ -87,12 +92,12 @@ def test_a_wardens_id_request_of_the_class_is_answered_id_form_its_ids_below_the
     assert S.answer(PROMPT) == want and len(want) == 24 * P + len(IT.TRAILER)
     assert want == ws.id_response(ids, P)
     assert ws.parse_id_response(want, P)["complete"] and ws.parse_id_response(want, P)["ids"] == 24
-    for request in (ids_request(), with_release(ids_request(), 7, b"\x5a" * A.RUN_ID_BYTES),
+    for request in (ids_request(), with_release(ids_request(), 7, b"\x5a" * RUN_ID_BYTES),
                     with_release(ids_request(), 0)):
         assert respond(request) == want
     assert respond(ids_request(seed=1, user="user-9")) == want
     assert S.outputs(list(b"hello wp")) != ids
-    cells = [IT.data_cell(t, 1, P + A.HEADER.size)[A.HEADER.size:] for t in ids]
+    cells = [IT.data_cell(t, 1, P + HEADER.size)[HEADER.size:] for t in ids]
     assert b"".join(cells) == want[:24 * P]
 
 
@@ -115,9 +120,9 @@ def test_what_isnt_a_wardens_id_request_is_refused_and_the_models_list_is_the_on
     forwarded copy whose release header isn't where the network certifier puts it, a vLLM-shaped body and another path
     are none of the network certifier's id requests."""
     fields = {"model": NAME, "user": "user-0", "prompt": PROMPT, "max_tokens": 24, "seed": 12345}
-    assert len(ids_request()) < P and A.id_request(**fields, frame_bytes=4096, offset=0) == ids_request()
+    assert len(ids_request()) < P and IDF.id_request(**fields, frame_bytes=4096, offset=0) == ids_request()
     moved = ids_request().replace(b"\r\n\r\n", b"\r\nx-verity-release: 3\r\n\r\n", 1)
-    for other in (A.id_request(**fields, frame_bytes=256, offset=0), moved,
+    for other in (IDF.id_request(**fields, frame_bytes=256, offset=0), moved,
                   ws.http_request({"model": NAME, "prompt": PROMPT, "max_tokens": 24}, "h"),
                   ids_request().replace(b"POST /v1/completions", b"POST /v1/chat/completions", 1)):
         assert other != ids_request() and S.warden_request(other) is None
@@ -146,7 +151,7 @@ def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
         server = await asyncio.start_server(S.Endpoint(), "127.0.0.1", 0)
         host, port = server.sockets[0].getsockname()[:2]
         got = []
-        for request in (with_release(ids_request(), 2, b"\x01" * A.RUN_ID_BYTES), ids_request(max_tokens=2)):
+        for request in (with_release(ids_request(), 2, b"\x01" * RUN_ID_BYTES), ids_request(max_tokens=2)):
             reader, writer = await asyncio.open_connection(host, port)
             writer.write(request)
             await writer.drain()
@@ -165,7 +170,7 @@ def test_serve_prints_where_it_listens_and_answers_over_loopback(capsys):
 #: arriving together, one while they decode, two out of their ingress order, a Commit window cut at --window-steps
 #: with requests running (carried into the next) and one closed at idle, then one on an idle engine
 PLAN = [([0, 1], 3), ([2], 30), ([4, 3], 5), ([5], None), ([6], None)]
-RUN = b"\x5a" * A.RUN_ID_BYTES
+RUN = b"\x5a" * RUN_ID_BYTES
 
 
 def _served_with_records(out: Path, window_steps: int) -> tuple[dict[int, bytes], S.Endpoint]:
@@ -297,3 +302,40 @@ def test_on_the_served_node_the_endpoint_step_binds_its_records_to_the_certified
     published = b"".join(p.read_bytes() for p in out.iterdir())
     assert not any(n in published for n in [*SS.needles(prompts), b'"prompt_len"', b'"sampling"', b'"emitted"'])
     assert CR.warden_endpoint_step(rep)["in_the_clear"] == CR.CLEAR["warden_endpoint_served"]
+
+
+def test_the_gates_demo_traffic_through_the_warden_is_the_demo_stand_ins_class_and_the_check_accepts_its_answers(
+        tmp_path):
+    """`warden-rehearse --scan --prompts --tokens 24` of the demo stand-in's prompts (`demo_stub.py prompts`) sends each
+    prompt as it is, with exactly 24 tokens and greedy; on the network certifier at the scan's schedule, the stand-in,
+    given exactly what the network certifier sent the server (its release headers on), serves every request and answers
+    the bytes the network certifier certified, every connection ends within the two execution phases 24 tokens take at D
+    = 27, and the check accepts the run."""
+    from verity.protocols.accounting.certifier.verifier import relay_check as RC
+    from verity.protocols.accounting.certifier.verifier.release import release_of
+    prompts = S.prompts(4)
+    req = {"device": "warden", "requests": None, "tokens": 24, "height": 10, "minutes": 4, "scan": True,
+           "prompts": True, "temperature": 0.0, "top_p": 1.0}
+    (tmp_path / G.PROMPTS).write_bytes(G.warden_prompts(req, json.dumps(prompts).encode()))
+    args = ws.parser().parse_args(G.warden_command(req, tmp_path, "http://127.0.0.1:40001")[2:])
+    params = ws._params(args)
+    assert params == sz.PARAMS and (args.requests, args.max_tokens) == (4, 24)
+    traffic = ws.traffic_of(args, S.Shape().name)
+    assert [x["ids"]["prompt"] for x in traffic] == prompts
+    assert {(x["ids"]["max_tokens"], x["ids"]["temperature"], x["ids"]["top_p"]) for x in traffic} == {(24, 0.0, 1.0)}
+    requests = [ws.id_request(**x["ids"], frame_bytes=params.cell_bytes, offset=0) for x in traffic]
+    responses, servers, out = [S.answer(p) for p in prompts], [], tmp_path / "run"
+    out.mkdir()
+    span = ws.group_windows(params, 24)
+    assert span == 2
+    warden = _run(out, tmp_path / "key", requests, responses, windows=span, params=params, id_payload=params.payload,
+                  servers=servers)
+    assert len(warden.log) == 4 and all(c["failed"] is None and not c["cut"] for c in warden.log)
+    for j, (server, response) in enumerate(zip(servers, responses)):
+        sent = b"".join(data for _, data in server.writes)
+        fields = S.warden_request(sent)
+        assert release_of(sent)[0] == j and fields["user"] == f"user-{j}" and S.refusal(fields) is None
+        assert S.answer(fields["prompt"]) == response
+    result = RC.check(out)
+    assert result["accepted"], result["problems"]
+    assert (result["summary"]["ended"], result["summary"]["windows"]) == (4, span)

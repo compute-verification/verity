@@ -10,8 +10,7 @@ import dataclasses
 from fractions import Fraction
 
 import pytest
-from test_ledger import node
-from test_remote_bandwidth import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
+from test_poub import SCHEDULE, Entropy, N, drive, params, store  # noqa: F401
 from test_remote_coins import APPENDS, Service, sign  # noqa: F401
 
 from verity.protocols.accounting.poub.prover import audit_prover
@@ -88,10 +87,10 @@ def test_groups_per_coin_is_a_positive_integer_and_the_coins_are_the_sessions() 
 
 def test_a_session_refuses_coins_drawn_another_number_of_windows_a_coin(store) -> None:
     p, c = shared(store, 4)
-    with pytest.raises(ValueError, match="4 a draw"):
+    with pytest.raises(ValueError, match="4 a sample"):
         AuditRun(p, store.registration, None, coins.local(store.registration.digest, 0, 8, Entropy(b"coins"),
                                                          appends=APPENDS), not_before_ns=0, clock=lambda: 0)
-    with pytest.raises(ValueError, match="1 a draw"):
+    with pytest.raises(ValueError, match="1 a sample"):
         AuditRun(params(windows=8), store.registration, None, c, not_before_ns=0, clock=lambda: 0)
     assert coins.layout_reason(c.commitment, 0, 8, 4) is None
     assert "openings 8" in coins.layout_reason(c.commitment, 0, 8)
@@ -108,7 +107,7 @@ def test_an_honest_session_drawn_four_windows_a_coin_is_accepted(store) -> None:
     s, prover, passes, clock = drive(store, p, SCHEDULE8, coins_=c)
     clock.now = s.deadline(7) + 1
     for t in (0, 1, 2):
-        with pytest.raises(SessionError, match="drawn with its draw's last window, 3"):
+        with pytest.raises(SessionError, match="sampled with its sample's last window, 3"):
             s.close(t)
     with pytest.raises(SessionError, match="no draws awaiting"):
         s.verify(0, [])
@@ -162,13 +161,12 @@ def test_the_last_draw_may_hold_fewer_windows(store) -> None:
     r = s.record()
     assert audit.pooled_windows(r)[0] == [(7 * N, p.samples), (3 * N, p.samples)]
     assert r.samples == p.samples and ledger.rejection(r) == 2 * p.samples * 2.0 ** -ledger.REJECTION_LOG2
-    n = node(squarings=1e9)
     L = ledger.window_receipts(r.pace, r.blocks, r.append_coins, r.codec.max_blocks)
-    q = n.sketch_outside * ledger.compressions(r, n)
+    q = 2 ** audit.QUERIES_LOG2
     assert r.append_coins > 0 and (audit.STEP_LIMIT - 1) * r.codec.max_blocks == L
     per_sample, per_window = ledger.binding_over(2, 2 * L, p.samples, q), ledger.binding_over(3, L, p.samples, q)
-    assert ledger.binding(r, n) == per_sample != per_window
-    with pytest.raises(ValueError, match=r"the draw of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
+    assert ledger.binding(r) == per_sample != per_window
+    with pytest.raises(ValueError, match=r"the sample of windows 0…1 drew 7 of its 140 receipts, not min\(6, 140\)"):
         dataclasses.replace(r, samples=p.samples - 1)
 
 

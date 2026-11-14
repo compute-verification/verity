@@ -34,7 +34,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# What the line of record reads of its record (`Properties.RemoteAudit.Line`)
+# What the line of record reads of its record (`Properties.Poub.Line`)
 
 What ties the record a gate run's line reads (`Record`, through the Lean verifier's record of the session,
 `Record.summary`) to the trace (`Accounting.Remote.Held.Trace`) the memory model states its guarantees over. Nothing of
@@ -46,19 +46,19 @@ verifier's on the record.
   verifier can't see, and the model's store is the registration's. What the verifier sees, it checks: the line reads N
   off the Lean verifier's record (`Summary.blocks`, the registration's on an accepted run, `record_summary`), and the
   verifier's `line_record` refuses a record given bare that is not of the registration it is given, its digest and its
-  registered blocks (`RemoteAudit.Line.lineOfRegistered`, `Properties.RemoteAudit.Line.LineRegistered`).
+  registered blocks (`Poub.Line.lineOfRegistered`, `Properties.Poub.Line.LineRegistered`).
 
-The rest of what the line reads of its record is code, proved, at any windows a draw g (`Node.groupsPerCoin`). The
-draw's sizes are the record's: `LineHeld` reads the draw at `recordSample`, one draw for each of the session's `⌈W/g⌉`
-(`Node.samples`), draw `c`'s size the receipts its windows have in the state the record's session reaches, and on an
+The rest of what the line reads of its record is code, proved, at any windows a sample g (`Node.groupsPerCoin`). The
+sample's sizes are the record's: `LineHeld` reads the sample at `recordSample`, one sample for each of the session's `⌈W/g⌉`
+(`Node.samples`), sample `c`'s size the receipts its windows have in the state the record's session reaches, and on an
 accepted record those are the Lean verifier's record's (`Record.receipts`, `sampleReceipts`), which the line reads. Each
-is below `receiptMax + 1 = 2^64`, so the first SHA-512 block of each draw's stream holds at least four of its sampler
+is below `receiptMax + 1 = 2^64`, so the first SHA-512 block of each sample's stream holds at least four of its sampler
 words (`Accounting.Remote.Draw.width`): `receive` rejects a pass that would take its window's receipts to
-`RECEIPT_LIMIT` (`Properties.RemoteAudit.ReceiptsBelowLimit`), which bounds a draw at g = 1, and above it the line
-refuses a draw whose windows' receipts sum to `RECEIPT_LIMIT` or more (`RemoteAudit.Line.ofSummaryAt`). The line has
+`RECEIPT_LIMIT` (`Properties.Poub.ReceiptsBelowLimit`), which bounds a sample at g = 1, and above it the line
+refuses a sample whose windows' receipts sum to `RECEIPT_LIMIT` or more (`Poub.Line.ofSummaryAt`). The line has
 one group for each of the session's windows: an accepted session has its parameters' `windows` windows
 (`Session.State.outcome`, its parameters kept by `Shared.run` at every g), and the line's groups are its record's
-windows (`RemoteAudit.Line.ofSummaryAt`). The record's clock is the trace's: that each credited pass ran inside its
+windows (`Poub.Line.ofSummaryAt`). The record's clock is the trace's: that each credited pass ran inside its
 group's window on the record's clock is the model's own `Paced` premise read at `recordPace`.
 -/
 

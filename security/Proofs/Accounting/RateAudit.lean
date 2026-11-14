@@ -22,7 +22,9 @@ public import Proofs.Accounting.RateAudit.SketchHonest
 public import Proofs.Accounting.RateAudit.SketchInteractive
 public import Proofs.Accounting.RateAudit.SketchRank
 public import Proofs.Accounting.RateAudit.SketchTable
+public import Proofs.Accounting.RateAudit.SketchWitnesses
 public import Proofs.Accounting.RateAudit.Windows
+public import Proofs.Accounting.RateAudit.Witnesses
 public import Definitions.Accounting.RateAuditRemote
 
 /-! The rate audit's proofs: the guarantee in the random-oracle model (`Accounting.SecurityProofs.RateAudit`), its
@@ -50,10 +52,10 @@ route `Sampled` it gives a window (`Accounting.SecurityProofs.RateChainSampledRO
 with the compression naming words, not queries (`Accounting.SecurityProofs.RateConservationNamedRO`, `RatePaidNamedRO`),
 with its route `Sampled` (`Accounting.SecurityProofs.RateChainSampledNamedRO`), and the pooled sample of a window and of a
 session of windows, over the monitoring period and in every window (`Accounting.SecurityProofs.RateWindowSample`,
-`RateRunSample`), with its route `Sampled` (`Accounting.SecurityProofs.RateRunSampledNamedRO`), and the remote
-bandwidth audit as deployed, one guarantee over a session of ground, chained windows of devices with partial completion
+`RateRunSample`), with its route `Sampled` (`Accounting.SecurityProofs.RateRunSampledNamedRO`), and PoUB
+as deployed, one guarantee over a session of ground, chained windows of devices with partial completion
 (`Accounting.SecurityProofs.RemoteRunConservation`, at the deployed parameters
-`RemoteRunConservationDeployed`), and the same session as a run of the remote audit, meeting its routes
+`RemoteRunConservationDeployed`), and the same session as a run of PoUB, meeting its routes
 (`Accounting.SecurityProofs.RemoteRunRoutes`) and conserving over the monitoring period and in each window at the
 same `γ` (`RemoteMonitoringPeriodConservation`, `RemoteWindowRunConservation`), and all three with side sources that may relay
 receipts (`RemoteRunConservationRelay`, `RemoteMonitoringPeriodConservationRelay`, `RemoteWindowRunConservationRelay`),

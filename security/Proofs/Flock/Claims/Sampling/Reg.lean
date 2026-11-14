@@ -3,7 +3,6 @@ module
 public import Spot.Docket
 public import Proofs.Flock.Claims.Sampling.Code
 public import Proofs.Flock.Claims.Sampling.Select.SampleDesign
-public import Proofs.Flock.Claims.Sampling.Select.DrawDesign
 public import Properties.Spot.Second
 
 /-!

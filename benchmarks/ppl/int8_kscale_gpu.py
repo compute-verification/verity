@@ -20,12 +20,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 from tests.engine.int8_exact_gpu import pin, scratch_checkpoints
 from tests.engine.k_scale_calibrator import Calibrator
 from verity_vllm.engine import int8_k_scales as K
 
-PPL = Path(__file__).resolve().parents[0]
+PPL = Path(__file__).resolve().parent
 if str(PPL) not in sys.path:
     sys.path.insert(0, str(PPL))
 

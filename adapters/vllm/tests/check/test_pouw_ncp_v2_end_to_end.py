@@ -32,6 +32,9 @@ import torch
 from verity.protocols.accounting.pouw.prover.circuit import anchors as CA
 from verity.protocols.accounting.pouw.prover.circuit import plan as CPL
 from verity.protocols.accounting.pouw.prover.circuit import reference as CR
+from verity.protocols.accounting.pouw.prover.serving import LayerRows
+from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 
 from verity_vllm import protocols as PO
@@ -40,9 +43,6 @@ from verity_vllm.check.replay import evaluate as EV
 from verity_vllm.check.replay import index as IX
 from verity_vllm.check.replay import pouw_circuit as RC
 from verity_vllm.protocols import pouw
-from verity.protocols.accounting.pouw.prover.serving import LayerRows
-from verity.protocols.accounting.pouw.prover.serving import circuit as PC
-from verity.protocols.accounting.pouw.prover.serving import native as PN
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
@@ -313,7 +313,7 @@ def test_the_rows_native_evaluation_is_the_registered_definition():
     three scales, a row of subnormals and a zero row."""
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate
-    from verity.definitions.registry import pouw_rows
+    from verity_vllm.definitions.registry import pouw_rows
     rng = np.random.default_rng(1)
     d = bind(pouw_rows.NcpLinearRow, K=H, N=NU)
     for scale in (1e-3, 1.0, 50.0, 1e-39, 0.0):

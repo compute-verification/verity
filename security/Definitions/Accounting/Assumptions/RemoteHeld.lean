@@ -3,7 +3,7 @@ module
 public import Definitions.Accounting.Remote.Held
 
 /-!
-# What the memory line held under the remote audit assumes (trusted)
+# What the memory line held under PoUB assumes (trusted)
 
 The premises of `Accounting.Guarantees.Remote.Held` and its time-held forms, each a named `Prop` on a trace
 (`Accounting.Remote.Held.Trace`) taken as a hypothesis:
@@ -39,8 +39,8 @@ completing.
   (`Accounting.Assumptions.SketchHashRandom`).
 * `LiveCoins W δ`: except with probability `δ`, the credited passes' wrong receipts are at most `W`: each window's
   openings, from a live coin released after its roots, are uniform over its receipts, and pooled over the session they
-  bound the wrong ones (`audit.pooled`). It is derived from the deployed opening draw (`Accounting.Remote.Draw`) for
-  every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsSampled`), under the draw's own
+  bound the wrong ones (`audit.pooled`). It is derived from the deployed opening sample (`Accounting.Remote.Draw`) for
+  every `W` at least the record's pooled bound (`Accounting.Guarantees.Remote.LiveCoinsSampled`), under the sample's own
   premises (`Accounting.Remote.Draw.Assumptions`), at `δ` plus the sampler's rejections plus the coin function's
   advantage plus the receipts' binding term (`Accounting.Remote.Draw.Receipts.binding`: an opened receipt moved off
   the row its root holds, a SHA-512 collision between its held and presented openings).

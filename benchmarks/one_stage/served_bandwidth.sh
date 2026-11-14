@@ -5,12 +5,12 @@
 #
 #   BANDWIDTH_CMD='bash benchmarks/one_stage/served_bandwidth.sh "$1" "$2" "$3"'
 #
-# One remote bandwidth session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
+# One PoUB session over the node's registered store, PoUS's P2 C* (BW_STORE, mem69-v2's encoded store,
 # only ever read), each pass one engine step's weight reads from it through kernels' staging decode on the card, its
 # receipts sketched from the rows the decode reads (`benchmarks/pous/p2_v1/bandwidth.py session`), under a gpu-lease of
 # its own (BW_LEASE_MIN minutes, default 40: each pass reads the whole store from disk, about 140 GB at mem69-v2, which
 # takes the H200 node about 10 minutes, and the gpu-lease ends the session at its limit). The verifier is the auditor's,
-# never a process on this node: the `p2_party --listen` that the auditor device's gate starts for BW_PARTY, reached at
+# never a process on this node: the `p2_parties --listen` that the auditor device's gate starts for BW_PARTY, reached at
 # BW_PARTY_HOST; it holds its own docket, which the store's must be (BW_REGISTRATION, the tracked one). The gate
 # kills the party once the session's minutes run out, and BW_PARTY asks for BW_PARTY_MIN of them (`bw_party --fixture --minutes`,
 # default 40, the lease's; the gate takes 1 to 180), unless the key's forced command fixes its own: a session that
@@ -22,7 +22,7 @@
 # which has no reason), and DIR/served.json names the window, the session's times and its card. The session's core case
 # (PoUB-P2's, `p2_case`), the composite's bandwidth piece, and its answer go to SERVE_DIR/private/bandwidth (0700, its
 # files 0600, never DIR: the case holds the store's opened blocks and the verifier's coins), the answer the Lean's:
-# BW_CASE_EXE's, else `remote-audit-p2-protocol` built here in a scratch copy of the tree (as `served_piece.sh` builds
+# BW_CASE_EXE's, else `poub-p2-protocol` built here in a scratch copy of the tree (as `served_piece.sh` builds
 # it; lake-build.log in DIR), and one that doesn't build runs no session. DIR/session/session.json says where it went.
 #
 # The layout is the store's (`p2_store/store.py layout`), held to the store's setup.json; the lib is kernels' build
@@ -76,9 +76,9 @@ if [ -z "$CASE_EXE" ]; then
   tar -c --exclude=.lake --exclude=__pycache__ verity | tar -C "$S" -x
   export PATH="$HOME/.elan/bin:$PATH"
   command -v lake > /dev/null 2>&1 || bash tools/verity/lean/setup.sh "$S/$LEAN" > "$O/lake-setup.log" 2>&1
-  (cd "$S/$LEAN" && lake build remote-audit-p2-protocol) > "$O/lake-build.log" 2>&1
+  (cd "$S/$LEAN" && lake build poub-p2-protocol) > "$O/lake-build.log" 2>&1
   step case-exe $?
-  CASE_EXE=$S/$LEAN/.lake/build/bin/remote-audit-p2-protocol
+  CASE_EXE=$S/$LEAN/.lake/build/bin/poub-p2-protocol
 fi
 grep -qE " rc [1-9]" "$O/rc.txt" && { cat "$O/rc.txt"; tail -20 "$O/layout.log" "$O/build.log" "$O/lake-build.log" 2>/dev/null; }
 

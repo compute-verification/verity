@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.registry import stop_check as SC
+from verity_vllm.definitions.registry import stop_check as SC
 from verity_vllm.program.frontend import stop_rule as SR
 
 REST = {"max_tokens": 8, "prompt_len": 4, "max_model_len": 64, "outputs": 3, "finish": 1}

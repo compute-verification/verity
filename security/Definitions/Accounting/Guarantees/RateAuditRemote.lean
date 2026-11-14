@@ -10,7 +10,7 @@ public import Definitions.Accounting.RateAuditRemote
 The game is `RateAudit.lean`'s with interactive side sources (`Definitions/Accounting/RateAuditInteractive.lean`), and
 the tiers, correct receipts and chained passes of `Definitions/Accounting/RateAuditRemote.lean`; proofs are in
 `Security/Proofs/Accounting/RateAudit/Conservation.lean` and `Chain.lean`. No named assumption: as for `RateAudit`, the
-device's bounds define the class the guarantees quantify over, and the claims registry carries them to a deployed node
+device's bounds define the class the guarantees quantify over, and deployment premises carry them to a deployed node
 (`bandwidth-s-chip` at every pass boundary, `bandwidth-side-cap` at the node's NIC, `rate-codec-work` for `c_enc`,
 `random-oracle` for the receipt and the chained seed, `fiat-shamir` for its derivation from the prover's root).
 
@@ -26,7 +26,7 @@ rebuild work per word is `c_enc`, a parameter of every statement here, so the co
   did and whatever root they committed.
 * `RateChainRO`, `RateChain`: a window of chained passes certifies the sum over its passes.
 * `RatePaidRO`, `RatePaid`, `RateChainPaidRO`, `RateChainPaid`: conservation at every count of correct receipts, for a
-  pass and summed over a window's passes, with no sample: the remote audit's route `Paid`.
+  pass and summed over a window's passes, with no sample: PoUB's route `Paid`.
 * `RateGrindPaidRO`, `RateGrindPaid`: the same for a prover that grinds its roots against the Fiat–Shamir seed.
 -/
 
@@ -255,7 +255,7 @@ receipts' words exceed the run's reads of every tier, its rebuilt words, its on-
 is at most `N/2^h + 2^q/2^λ`.
 
 **The reading.** `RateConservationRO` with no threshold: whatever number of correct receipts the run made, except with
-that probability `#correct·b ≤ ∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ`. This is the route `Paid` of the remote audit
+that probability `#correct·b ≤ ∑ᵢ readsᵢ + rebuilt·b + S + (L − ρ) + λ`. This is the route `Paid` of PoUB
 for one pass, `correct·b ≤ paid + λ`. `2^q` counts every set of the run's `q` oracle queries the correct words could
 be; `λ = q + 40` makes the term `2^-40` for about `q/b` words of slack, negligible beside the store.
 
@@ -297,7 +297,7 @@ free link bits and `λ`,
 
 is at most `P·(N/2^h + 2^q/2^λ)`.
 
-**The reading.** The route `Paid` of the remote audit for a window, `correct·b ≤ paid + P·λ`: the reads summed over
+**The reading.** The route `Paid` of PoUB for a window, `correct·b ≤ paid + P·λ`: the reads summed over
 passes and tiers, the rebuilt words, state `S` and link bits `L − ρ` at each pass boundary, and `λ` a pass; nothing
 outside the node, whose side sources cannot query the oracle. No sample is sampled, so it holds with the window-wide
 sample, which the route `Sampled` prices. A word read in pass `j − 1` serves pass `j` only through the `S` bits on chip

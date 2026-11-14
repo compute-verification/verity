@@ -28,7 +28,6 @@ untraced = ["tests/test_difftest.py", "tests/test_known_rows.py", "tests/test_la
 # configuration.
 inputs = ["tools/difftest", "verity/__init__.py", 
           "verity/channel.py",
-          "verity/claims/__init__.py",
           "verity/protocols/accounting/pouw/verifier", "verity/protocols/accounting/pouw/prover",
           "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocols/proofs/spot",
           "benchmarks/pouw/h1_lanes/leaf.py", "benchmarks/pouw/h1_prove/h1unit.py",
@@ -50,5 +49,5 @@ inputs = ["tools/difftest", "verity/__init__.py",
           "verity/protocols/proofs/spot/verifier/one_stage/partition.py",
           "verity/protocols/proofs/spot/verifier/one_stage/produced.py",
           "verity/protocols/proofs/spot/verifier/one_stage/registered.py",
-          "verity/circuits/ops", "verity/circuits/silicon", "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
-          "verity/definitions/__init__.py"]
+          "verity/circuits/ops", "verity/circuits/silicon", "verity/protocols/__init__.py", "verity/protocols/proofs/__init__.py", "verity/protocols/accounting/__init__.py", "verity/protocols/accounting/pouw/__init__.py",
+          "adapters/vllm/verity_vllm/definitions/__init__.py"]

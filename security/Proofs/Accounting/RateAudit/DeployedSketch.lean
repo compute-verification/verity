@@ -11,7 +11,7 @@ public import Proofs.Accounting.RateAudit.SketchRank
 For fixed full-rank signs, one pass's correct receipts are paid for except when it guessed an unqueried tag or made a
 correct digest query without obtaining a sector. `card_guess_le` prices the former by `N/2^h`;
 `card_bad_le` and `SketchRankFiber` price the latter by `q/2^(8r)`. A union over a pass's ground candidates and passes,
-then the existing causal pooled-draw argument over windows, gives `RemoteRunConservationSketch`.
+then the existing causal pooled-sample argument over windows, gives `RemoteRunConservationSketch`.
 -/
 
 @[expose] public section
@@ -478,7 +478,7 @@ theorem pr_samples_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_samples_window_le_map id A Kw
 
-/-- Both pooled-draw readings, on any store sampled before the session's coins. -/
+/-- Both pooled-sample readings, on any store sampled before the session's coins. -/
 theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
@@ -491,7 +491,7 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K)
       (pr_samples_window_le_map store A Kw)))
 
-/-- Both pooled-draw readings. -/
+/-- Both pooled-sample readings. -/
 theorem pr_samples_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
@@ -593,7 +593,7 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono)
 
-/-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class**
+/-- **PoUB with deployed tensor-sketch receipts, for the verbatim class**
 (`Accounting.Guarantees.RemoteRunConservationSketch`). -/
 theorem RemoteRunConservationSketch : Accounting.Guarantees.RemoteRunConservationSketch := by
   intro n P N m ρ h S L q ks G d r X ε A dbar dw hn hP hN hm hr32 hdw hRank hX

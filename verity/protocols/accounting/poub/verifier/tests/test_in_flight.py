@@ -8,9 +8,9 @@ from __future__ import annotations
 import dataclasses
 
 import pytest
-from remote_bandwidth_fakes import Clock, Entropy
+from poub_fakes import Clock, Entropy
 from test_ledger import DOWN_NS, PASS_NS, UP_NS, paced
-from test_remote_bandwidth import A, N, challenger, finish, params, store  # noqa: F401
+from test_poub import A, N, challenger, finish, params, store  # noqa: F401
 
 from verity.protocols.accounting.poub.prover import audit_prover
 from verity.protocols.accounting.poub.verifier import audit, coins

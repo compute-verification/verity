@@ -510,29 +510,19 @@ def chain_given(monkeypatch) -> tuple[I.Window, list[dict]]:
 
 
 def test_a_wired_port_with_no_tree_of_its_own_is_its_writers_leaves(monkeypatch):
-    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root: its rows are its
-    writer's output value, its writer units' leaves of its writer's tree (`rows.Binding.held`, `held_leaves`), given as
-    `rows.WIRED`, and its ``b || c`` its writer's. The verifier's period and the record name it under its reader all
-    the same, at the leaves, the domain and the root of the port that holds it (`rows.wired_ports`): one tree at two
-    ports. Given as rows it is refused, and so is a wire of several members' units, which no one tree holds, and, in a
-    member with no tables, one that isn't its writer's rows in order."""
+    """With no wired trees (`rows.Member.wired_trees`), a wired port commits no tree, domain or root, and the verifier's
+    period derives no port for it: its rows are its writer's output value, its writer units' leaves of its writer's tree
+    (`rows.Binding.held`, `held_leaves`), given as `rows.WIRED`, and its ``b || c`` its writer's. Given as rows it is
+    refused, and so is a wire of several members' units, which no one tree holds, and, in a member with no tables, one
+    that isn't its writer's rows in order."""
     win, given = chain_given(monkeypatch)
     ms = tuple(replace(m, wired_trees=False) for m in win.window.members)
     held = replace(win.window, members=ms)
     data = [{**d, "rows": {**d["rows"], **{p: CS.WIRED for p, _o, _ws in m.wired}}} for d, m in zip(given, ms)]
     c, plain = CS.commit(held, data, salt_key=bytes(32)), win.close(salt_key=bytes(32))
     wired = {m.port(p) for m in ms for p, _o, _ws in m.wired}
-    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains))
-    lay, named = CS.expected_ports(held), CS.wired_ports(held)
-    assert named == {m.port(p): held.held(m, p) for m in ms for p, _o, _ws in m.wired} and set(named) == wired
-    assert all(lay[a] == {**lay[q], "wired": q} for a, q in named.items()) and not any("wired" in lay[q] for q in c.roots)
-    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(lay)
-
-    class Roots:
-        KINDS = ("served",)
-        record = staticmethod(lambda program, query, law, scheme, roots, window, **kw: {r["port"]: r for r in roots})
-    roots = CS.registration(c, {}, registrar=Roots)
-    assert set(roots) == set(lay) and all(roots[a] == {**roots[q], "port": a} for a, q in named.items())
+    assert len(wired) == 3 and not wired & (set(c.roots) | set(c.domains) | set(CS.expected_ports(held)))
+    assert set(plain.roots) == set(c.roots) | wired and set(CS.expected_ports(win.window)) == set(CS.expected_ports(held)) | wired
     assert (held.held(ms[0], "x"), held.held_leaves(ms[0], "x")) == (ms[0].port("x"), (0, 1))
     assert [(held.held(m, "x"), held.held_leaves(m, "x")) for m in ms[1:]] == [
         (ms[2].port("o0"), (0, 1)), (ms[0].port("o0"), (0, 1)), (ms[1].port("o0"), (0, 1))]
@@ -2453,6 +2443,30 @@ def test_a_listed_records_tables_table_reads_and_openings_count_as_a_stated_reco
         I.input_count(listed_embedding(("root", "o0", (5, 6))), pins=pins, roots=pins)
     with pytest.raises(ValueError, match="a wire or a row table fills it"):
         I.input_count(listed_embedding(("salt", "o0", (5, 6))), pins=pins, roots=pins)
+
+
+def test_an_opening_may_declare_the_output_that_returns_its_row():
+    """An opening may declare its ``row``, the output that returns the row opened: the first of its reader's two
+    outputs, the second its verdict, of a reader of six input rows. Nothing is filled or counted by it: the count is
+    the one without it, stated and listed. Its record names it only where it is declared, so a record that declares
+    none is the bytes it was, and it is read back as written. One that is the verdict's own output, no output of the
+    reader or an input row of it is refused, by the circuit, by the count and by the reading."""
+    c, pins = embedding(), {"embed": "ab" * 64}
+    reg = c.registered
+    opening = reg.openings[0]
+    assert opening.row is None and "row" not in opening.doc()
+    rowed = replace(reg, openings=(replace(opening, row="o0"),))
+    assert rowed.doc()["openings"] == [{**opening.doc(), "row": "o0"}]
+    assert I.Registered.of(rowed.doc()) == rowed and I.Registered.of(reg.doc()) == reg
+    stated = I.input_count(c.description(), pins=pins, roots=pins)
+    assert I.input_count(embedding(registered=rowed).description(), pins=pins, roots=pins) == stated
+    assert I.input_count(listed_embedding(registered=rowed), pins=pins, roots=pins) == {**stated, I.WINDOW_INGRESS: 0}
+    for row in ("o1", "o2", "row"):
+        bad = replace(reg, openings=(replace(opening, row=row),))
+        with pytest.raises(ValueError, match="the row it declares is the first of its reader's two outputs"):
+            embedding(registered=bad)
+        with pytest.raises(ValueError, match=f"outputs are not {row} then o1 over six input rows"):
+            I.input_count(listed_embedding(registered=bad), pins=pins, roots=pins)
 
 
 @pytest.mark.slow

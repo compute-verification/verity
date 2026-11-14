@@ -117,7 +117,7 @@ def main() -> int:
         m["base"] = base
 
     # one docket, before the sample
-    law = D.parse_design(f"subset:{a.k}")
+    sampling_design = D.parse_design(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:
         mine = a0.stand_in_ports(m["st"]["name"], m["st"]["content_digest"], m["st"]["meta"], m["n"])
@@ -132,9 +132,9 @@ def main() -> int:
             for m in members}
     window = {"kind": "stand-in", "of": "vllm-v1 commitment of the served Llama-3.2-1B row", "layer": a.layer, "sets": prov,
               "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
-    rec = R.record(program, query, law, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
+    rec = R.record(program, query, sampling_design, a0.SCHEME, roots, window, leaf_layer=leaf_layer)
     (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
-    checks = {"registration": V.check(rec, program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
+    checks = {"registration": V.check(rec, program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer).to_json()}
     for m in members:
         fv = m["header"]["frame_v3"]
         mine = {r["port"].split("/", 1)[1]: r for r in rec["roots"] if r["port"].startswith(m["name"] + "/")}
@@ -191,7 +191,7 @@ def main() -> int:
     union = {"law": "subset", "population": n, "k": a.k, "units": sorted(union_units)}
     # with --draw-file the audited sample is the verifier's Lean sample, and every session must have served exactly its share
     audited, served = (split, sorted(union_units)) if a.sample_file else (union, None)
-    result = V.audit_record(rec, receipt, audited, law, sorted(proved), instances, statement, verdicts, a.delta,
+    result = V.audit_record(rec, receipt, audited, sampling_design, sorted(proved), instances, statement, verdicts, a.delta,
                             sessions=sessions, served=served, session_roots=session_roots)
     result["split"] = {"counts": counts, "lean_draw_sha512": hashlib.sha512(canonical_json(split)).hexdigest(),
                        "served_is_lean_draw": sorted(union_units) == sorted(split["units"]),
@@ -203,11 +203,11 @@ def main() -> int:
     # negatives
     neg: dict[str, dict] = {}
     fewer = R2.program([(m["defn"], m["n"]) for m in members], mixed=True)
-    v = V.check(rec, fewer, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, fewer, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, program, P.template_instances_query([m["defn"] for m in members][:-1]), sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-query-drops-a-template"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check_draw({**union, "units": union["units"][:-1] + [n]}, rec, law)
+    v = V.check_draw({**union, "units": union["units"][:-1] + [n]}, rec, sampling_design)
     neg["union-draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
     for m in members:
         if counts[m["name"]]:
@@ -221,9 +221,9 @@ def main() -> int:
         moved[0] = next(u for u in range(n) if u not in union["units"])
         v = V.check_proved(union, sorted(moved), instances)
         neg["proved-unit-not-drawn"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(dict(rec, leaf_layer=None), program, query, law, a0.SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(dict(rec, leaf_layer=None), program, query, sampling_design, a0.SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    neg.update(a0.audit_negatives(result, law, a.delta, session_roots, served=served))
+    neg.update(a0.audit_negatives(result, sampling_design, a.delta, session_roots, served=served))
     (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
 
     summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "wrong_units")}

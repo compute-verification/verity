@@ -43,12 +43,12 @@ theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : 
     (hτ : (openedTrees Lg)[u]? = some τ)
     (hF : List.Forall₂ (fun a m => ∃ (j : Fin R) (k : ℕ) (x : Release) (L' : List Release),
       j.val / per = u ∧ slotOf tables.size per (j.val % per) = .rep (tab a).val (rep a) k ∧
-        (windowReadingAt tables per reveal record recordDigest).round j m x.frame ∧ Lg = m ++ x :: L') as ms)
+        (executionPhaseReadingAt tables per reveal record recordDigest).round j m x.frame ∧ Lg = m ++ x :: L') as ms)
     (hpw : ms.Pairwise (fun m m' => m.length < m'.length))
     (hcov : ∀ (j : Fin R) L₁, j.val / per = u →
-      PicksIn (windowReadingAt tables per reveal record recordDigest).round Lg j L₁ →
+      PicksIn (executionPhaseReadingAt tables per reveal record recordDigest).round Lg j L₁ →
         L₁ = L₀ ∨ L₁ ∈ ms ∨ slotOf tables.size per (j.val % per) = closeSlot tables.size)
-    (hL₀ : ∀ j : Fin R, PicksIn (windowReadingAt tables per reveal record recordDigest).round Lg j L₀ →
+    (hL₀ : ∀ j : Fin R, PicksIn (executionPhaseReadingAt tables per reveal record recordDigest).round Lg j L₀ →
       slotOf tables.size per (j.val % per) = .link)
     (hS : LogServed Lg) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup)
     (hfirst : ∀ L₁ x L₂ s n, Lg = L₁ ++ x :: L₂ → x.frame = .opening τ s n → τ ∉ openedTrees L₁ →
@@ -102,7 +102,7 @@ theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : 
         rw [he]
         exact openedOf_lt m hxn L₂
       obtain ⟨j, hju, hj⟩ := hcovL _ hk
-      have hpick : (windowReadingAt tables per reveal record recordDigest).round j m x.frame := by
+      have hpick : (executionPhaseReadingAt tables per reveal record recordDigest).round j m x.frame := by
         show sessionRound tables (j.val / per) (slotOf tables.size per (j.val % per)) m x.frame
         rw [hju, hj]
         exact ⟨τ, s, n, hxn, hsv, hv, hname.trans (slotStream_lt htl r).symm, rfl⟩
@@ -120,7 +120,7 @@ theorem session_stream_logs {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep : 
       obtain ⟨j', k', x', L'', -, hj', hP', he'⟩ := List.forall₂_zip hF hz
       obtain ⟨hxe, -⟩ := List.cons.inj (List.append_cancel_left (he.symm.trans he'))
       rw [← hxe] at hP'
-      have hjj : j' = j := windowReadingAt_unique ht (by omega) hper reveal record recordDigest hP' hpick
+      have hjj : j' = j := executionPhaseReadingAt_unique ht (by omega) hper reveal record recordDigest hP' hpick
       rw [hjj, hj] at hj'
       obtain ⟨ht't, hr'r, -⟩ := Slot.rep.inj hj'
       refine ⟨(a, m), hz, decide_eq_true ?_, rfl⟩
@@ -141,12 +141,12 @@ theorem session_stream_rounds {γ : Type _} {J : ℕ} (tab : γ → Fin J) (rep 
     (hτ : (openedTrees Lg)[u]? = some τ)
     (hF : List.Forall₂ (fun a m => ∃ (j : Fin R) (k : ℕ) (x : Release) (L' : List Release),
       j.val / per = u ∧ slotOf tables.size per (j.val % per) = .rep (tab a).val (rep a) k ∧
-        (windowReadingAt tables per reveal record recordDigest).round j m x.frame ∧ Lg = m ++ x :: L') as ms)
+        (executionPhaseReadingAt tables per reveal record recordDigest).round j m x.frame ∧ Lg = m ++ x :: L') as ms)
     (hpw : ms.Pairwise (fun m m' => m.length < m'.length))
     (hcov : ∀ (j : Fin R) L₁, j.val / per = u →
-      PicksIn (windowReadingAt tables per reveal record recordDigest).round Lg j L₁ →
+      PicksIn (executionPhaseReadingAt tables per reveal record recordDigest).round Lg j L₁ →
         L₁ = L₀ ∨ L₁ ∈ ms ∨ slotOf tables.size per (j.val % per) = closeSlot tables.size)
-    (hL₀ : ∀ j : Fin R, PicksIn (windowReadingAt tables per reveal record recordDigest).round Lg j L₀ →
+    (hL₀ : ∀ j : Fin R, PicksIn (executionPhaseReadingAt tables per reveal record recordDigest).round Lg j L₀ →
       slotOf tables.size per (j.val % per) = .link)
     (hS : LogServed Lg) (hn : ∀ sp ∈ helloSpecs Lg, sp.streams.toList.Nodup)
     (hfirst : ∀ L₁ x L₂ s n, Lg = L₁ ++ x :: L₂ → x.frame = .opening τ s n → τ ∉ openedTrees L₁ →

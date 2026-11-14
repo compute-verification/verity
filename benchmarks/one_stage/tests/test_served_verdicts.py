@@ -453,7 +453,7 @@ def test_the_front_line_says_the_sessions_public_fields_alone(tmp_path, capsys):
     """The CERTIFIER-FRONT line carries `FRONT_PUBLIC` of the front's session and none of its prompts, request, kept
     fetch, gate or verdict's cells; a refused front's line names no reason, and a missing session says so."""
     session = {"rc": 0, "run": "c1", "prompts": {"count": 4, "ids": 64}, "request": "warden-rehearse --requests 4",
-               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "the rehearsal ended",
+               "keep": "/serve/private/fetch.tar.gz", "gate": {"run": "g"}, "ended": "ended",
                "ended_utc": "t", "session_s": 128.0, "pinned": "ab" * 20, "leaked_removed": [], "origin_unix": 1,
                "verdict": {"cells": [7] * 3, "requests": 4, "wire_bits": 9}}
     (tmp_path / "session.json").write_text(json.dumps(session))
@@ -696,11 +696,12 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_device_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
-    and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
-    accept isn't read as the auditor's devices having placed it."""
-    premise = ("assumed, the auditor's devices not placed: the network certifier ran on 192.0.2.84, not the prover's "
-               "vy-dc-h200, but the chain's checks and draws, the period check and their proofs' coins ran on vy-dc-h200")
+    """The network certifier's answer as its piece writes it when it ran on the gate's machine and the piece's steps on
+    the served node: its accept's clause says the piece establishes no trusted-device and gives no bound, and which
+    machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices having placed it."""
+    premise = ("unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier "
+               "ran on 192.0.2.84, not the developer's vy-dc-h200; the chain's checks and samples ran on vy-dc-h200, and "
+               "the period check and its proofs' challenges on vy-dc-h200")
     (d := tmp_path / "certifier").mkdir()
     (d / "answer.json").write_text(json.dumps({
         "protocol": "verity/certifier/v0", "verdict": "accept", "reason": None, "commitment": "cd" * 64,
@@ -719,15 +720,16 @@ def test_an_accepted_certifier_answer_names_the_one_link_k_counts_and_a_local_ga
     states the premise alone."""
     node, host = "vy-dc-h200", "192.0.2.84"
     gated = {"kind": "not-placed", "parties": {"network_certifier": host, "prover": node, "verifier": node},
-             "trusted-device": f"assumed, the auditor's devices not placed: the network certifier ran on {host}, not the "
-                             f"prover's {node}",
+             "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
+                             f"network certifier ran on {host}, not the developer's {node}",
              "links": [{"name": "certified", "from": host, "to": node, "counted": True,
                         "via": "the warden's tunnel to the endpoint's port"},
                        {"name": "gate", "from": node, "to": host, "counted": False,
                         "via": "ssh, both ways: the session's request and prompts, its status and its fetch"}],
              "uncounted": f"every link of {node}'s but the certified one"}
     local = {"kind": "prover-node", "parties": {"network_certifier": node, "prover": node, "verifier": node},
-             "trusted-device": f"unmet: the network certifier ran on the prover's node {node} (the front's --gate local)",
+             "trusted-device": f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the "
+                             f"network certifier ran on the developer's node {node} (the front's --gate local)",
              "links": [], "uncounted": f"every link of {node}'s"}
     clause = {}
     for name, place in (("gated", gated), ("local", local)):
@@ -975,6 +977,9 @@ def test_remote_runs_no_onsite_piece_and_composes_spot_and_pouw_alone(tmp_path, 
     report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
     handed = {"host": "vy-auditor-2", "served_node": False, "from": S.HANDED_FROM}
     assert (line["composed_on"], report["composed_on"], line["steps"]) == (handed, handed, [5, 11])
+    assert S.TAKEN_AS_GIVEN == ("a verdict computed off the auditor's device and handed in is taken as given, for the "
+                                "whole chain")
+    assert S.HANDED_FROM.endswith(f"; {S.TAKEN_AS_GIVEN}") and S.TAKEN_AS_GIVEN not in S.COMPOSED_FROM
     assert json.loads(S.public_line("RECORD " + json.dumps(line)).removeprefix("RECORD "))["composed_on"] == handed
     with pytest.raises(SystemExit):
         S.main([*argv, "--steps", "5", "--off-node"])
@@ -2424,6 +2429,7 @@ def _circuits(tmp_path: Path, classes: str, answers: dict, **extra: str) -> tupl
     tree, bin_, venv = tmp_path / "tree", tmp_path / "bin", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", bin_, venv, tmp_path / "serve"):
         d.mkdir(parents=True)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_PROVE_PATH)
     (tree / "answers.json").write_text(json.dumps(answers))
     (tmp_path / "serve" / "weights_registration.json").write_text("{}")
@@ -2461,6 +2467,7 @@ def _weights(tmp_path: Path, **extra: str) -> tuple[int, list[str]]:
     tree, venv = tmp_path / "tree", tmp_path / "venv" / "bin"
     for d in (tree / "benchmarks" / "prove_path", venv, tmp_path / "serve"):
         d.mkdir(parents=True)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_WEIGHTS)
     (venv / "python").write_text(f'#!/bin/sh\nexec {sys.executable} "$@"\n')
     (venv / "python").chmod(0o755)
@@ -2548,12 +2555,12 @@ print("INFERENCE-ONLY POLICY at class 4,32,4: c 7 gates, k 3 fresh bits, n 16 se
       "INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a block, against c 7, k 3, n 16 "
       "(no count published: n is judged on the blocks' exact count, held on the node)")
 '''
-NCI_CHECK = "verity/protocols/policy/inference_only/verifier/nci/lean/.lake/build/bin/nci-check"
+INFERENCE_ONLY_CHECK = "verity/protocols/policy/inference_only/verifier/lean/.lake/build/bin/inference-only-check"
 
 
 def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str) -> tuple[int, list[str], list[list[str]]]:
     """`served_verdicts.sh ARGS` in a toy tree whose inference_only.py notes its arguments and says a line (or, with
-    IO_FAIL, exits 2 saying nothing), nci-check built where ``lean`` says (``extra`` adds to the environment): the exit
+    IO_FAIL, exits 2 saying nothing), inference-only-check built where ``lean`` says (``extra`` adds to the environment): the exit
     status, the verdict lines, and each call's arguments."""
     tree, venv, d = tmp_path / "tree", tmp_path / "venv" / "bin", tmp_path / "serve"
     _script(venv / "python", f'exec {sys.executable} "$@"')
@@ -2561,7 +2568,7 @@ def _inference_only(tmp_path: Path, *args: str, lean: bool = False, **extra: str
         p.mkdir(parents=True)
     (tree / "benchmarks" / "one_stage" / "inference_only.py").write_text(FAKE_INFERENCE_ONLY)
     if lean:
-        _script(tree / NCI_CHECK, "exit 0")
+        _script(tree / INFERENCE_ONLY_CHECK, "exit 0")
     env = {"PATH": os.defpath, "HOME": str(tmp_path), "VENV": str(venv.parent), "D": str(d), "OUT": str(tmp_path / "out"),
            "ORDER": str(tmp_path / "order"), "RESEARCH_SOURCE_SHA": SHA, "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
     rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *args], cwd=tree, env=env, check=False).returncode
@@ -2593,11 +2600,11 @@ def test_with_no_class_but_record_there_is_no_inference_only_policy_or_verdict(t
 
 
 @pytest.mark.parametrize("lean", [False, True])
-def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_nci_check_where_the_build_built_it(
+def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_inference_only_check_where_the_build_built_it(
         tmp_path, lean):
     """The verdict reads the policy, the serve dir, window K's circuit record at the class, its docket and the
     weights docket's pins, and writes the public verdict into the record and the full one in the serve dir; it
-    runs `nci-check --count` only where the build built it. $OUT names no window."""
+    runs `inference-only-check --count` only where the build built it. $OUT names no window."""
     rc, lines, calls = _inference_only(tmp_path, "inference-only", "7", lean=lean)
     d, out = tmp_path / "serve", tmp_path / "out"
     assert rc == 0 and lines == ["INFERENCE-ONLY accept: session abab… (the registered one), 7 gates and 3 fresh bits a "
@@ -2606,7 +2613,7 @@ def test_the_inference_only_verdict_judges_the_windows_record_at_the_class_with_
     assert calls == [["verdict", "--policy", str(out / "inference-only-policy.json"), "--serve-run", str(d), "--circuit",
                       str(d / "window-circuit-w7-4-32-4.json"), "--registration", str(d / "advice" / "w7" / "registration.json"),
                       "--pins", str(d / "weights_registration.json"),
-                      *(["--lean", str(tmp_path / "tree" / NCI_CHECK), "--lean-timeout", "1800"] if lean else []),
+                      *(["--lean", str(tmp_path / "tree" / INFERENCE_ONLY_CHECK), "--lean-timeout", "1800"] if lean else []),
                       "--out", str(out / "record" / "inference-only.json"), "--private", str(d / "private" / "inference-only.json")]]
     assert not _window_data(out, 7)
 
@@ -2629,7 +2636,7 @@ def test_block_counts_publishes_the_judgment_against_the_policy_and_keeps_the_co
     """`served_verdicts.sh block-counts 0` on a window of two slots (two blocks) at the class runs the real
     `verity-vllm block-counts` against the policy at IO_POLICY's default: its line and its public judgment hold n and no
     count, and the exact count is in the serve dir's private/ alone (0600); with no policy it says so and judges nothing."""
-    from verity.definitions.registry.catalog import load
+    from verity_vllm.definitions.registry.catalog import load
     from verity.commitments.periods import interface as IF
 
     load()
@@ -2754,6 +2761,7 @@ def _v3c(tmp_path: Path, args: tuple[str, ...] = ("v3c",), *, prove_path: str = 
               tree / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "lean", tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod", bin_, venv,
               d / "advice" / "w7" / "private", tmp_path / "row"):
         p.mkdir(parents=True, exist_ok=True)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(prove_path)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "records_audit.py").write_text(records_audit)
     (tree / "verity" / "protocols" / "proofs" / "flock" / "prover" / "pod" / "60-circuit.sh").write_text("exit 0\n")
@@ -2875,6 +2883,7 @@ def _tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProcess, lis
     cmd = argv[argv.index("--h1-window-commit") + 1]
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     (tree / "benchmarks" / "prove_path").mkdir(parents=True)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
@@ -2927,19 +2936,19 @@ def test_a_tie_whose_advice_is_pending_or_whose_commit_is_refused_writes_no_reco
 
 
 #: R's sample in `_tied_commit`: the design a stratified rate names over three tables' readers, a proof block of each
-TIED_LAW = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3 * i, 3 * i + 3]], "k": 1}
+TIED_SAMPLING_DESIGN = {"law": "stratified", "k": 1, "strata": [{"template": t, "units": [[3 * i, 3 * i + 3]], "k": 1}
                                                    for i, t in enumerate(("a@0", "ids@0", "ids@1"))]}
 
 
-def _tied_commit(tmp_path: Path, bound: str | None, law: dict | None = TIED_LAW) -> None:
-    """Window 7's commit as the tie left it in the toy serve dir: its docket R (its sample ``law``; None, none) and
+def _tied_commit(tmp_path: Path, bound: str | None, sampling_design: dict | None = TIED_SAMPLING_DESIGN) -> None:
+    """Window 7's commit as the tie left it in the toy serve dir: its docket R (its sample ``sampling_design``; None, none) and
     circuit, which reads H1's tables, its answer, and H1's log naming W and, unless ``bound`` is None, the record H1 bound
     (``same``: R; ``other``: another)."""
     d = tmp_path / "serve"
     vw = d / f"v3c-w7-{W63K4.replace(',', '-')}" / "window"
     vw.mkdir(parents=True)
     (d / "h1" / "w7").mkdir(parents=True)
-    r = {"format": "toy", "after": W_OF_7, **({"law": law} if law else {})}
+    r = {"format": "toy", "after": W_OF_7, **({"law": sampling_design} if sampling_design else {})}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab", "tables": "h1"}))
     (d / "h1" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
@@ -2974,7 +2983,7 @@ def test_under_h1_tie_v3c_audits_the_commit_h1_bound_and_makes_none_of_its_own(t
 COIN_FLAGS = ("--challenger", "--peer", "--challenger-key", "--gate-key")
 
 
-def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--law", "--tie", "--tie-prefix", "--ports")) -> dict[str, str | None]:
+def _audited(tmp_path: Path, flags: tuple[str, ...] = ("--sampling-design", "--tie", "--tie-prefix", "--ports")) -> dict[str, str | None]:
     """The flags `flags` the toy records_audit.py's audit got (by default the sampling design's, the tie's and the ports')."""
     a = json.loads((tmp_path / "order.audit").read_text())
     return {f: a[a.index(f) + 1] if f in a else None for f in flags}
@@ -2992,8 +3001,8 @@ def test_under_h1_tie_v3cs_audit_is_tied_to_h1s_w_at_a_stratum_of_each_tables_re
     rc, lines, order, _limits = _v3c(tmp_path, **({"H1_TIE": "1"} if tied else {}), **extra)
     assert rc == 0 and "audit" in order, (lines, order)
     w = str(tmp_path / "serve" / "h1" / "w7" / "registration.json")
-    assert _audited(tmp_path) == ({"--law": TIED_RULE, "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
-                                  else {"--law": RULE, "--tie": None, "--tie-prefix": None, "--ports": ports})
+    assert _audited(tmp_path) == ({"--sampling-design": TIED_RULE, "--tie": w, "--tie-prefix": "h1/", "--ports": ports} if tied
+                                  else {"--sampling-design": RULE, "--tie": None, "--tie-prefix": None, "--ports": ports})
     assert tied or (tmp_path / "order.law").read_text() == RULE
 
 
@@ -3038,14 +3047,14 @@ def test_the_preflight_refuses_a_day_it_cant_declare_or_audit(tmp_path, extra, t
     assert (rc, lines, order) == (3, [line], [])
 
 
-@pytest.mark.parametrize("extra, law", [({}, RULE), ({"V3C_LAW": TIED_RULE}, TIED_RULE)])
-def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, law):
+@pytest.mark.parametrize("extra, sampling_design", [({}, RULE), ({"V3C_LAW": TIED_RULE}, TIED_RULE)])
+def test_an_untied_v3c_registers_its_window_at_the_sampling_design_its_audit_samples_by(tmp_path, extra, sampling_design):
     """Untied, window-commit registers the window at the sampling design V3C_LAW's rate names and the audit samples by that
     one: R1 holds a sample to the docket's design, so a commit at one rate under another's audit is refused before
     its sample."""
     rc, lines, order, _limits = _v3c(tmp_path, **extra)
     assert rc == 0 and order.index("window-commit") < order.index("audit"), (lines, order)
-    assert (tmp_path / "order.law").read_text() == law and _audited(tmp_path, ("--law",)) == {"--law": law}
+    assert (tmp_path / "order.law").read_text() == sampling_design and _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": sampling_design}
 
 
 def test_v3c_on_an_existing_serve_dir_needs_no_row_dir_taps_or_gpu_lease(tmp_path):
@@ -3078,7 +3087,7 @@ def test_v3c_warm_composes_the_windows_templates_before_its_audit_which_then_tak
     vw, jobs = tmp_path / "serve" / f"v3c-w7-{W63K4.replace(',', '-')}", extra["V3C_WARM_JOBS"]
     assert order.count("warm") == 1 and order.index("warm") < order.index("audit"), order
     assert json.loads((tmp_path / "order.warm").read_text()) == [
-        "warm", "--window", str(vw / "window"), "--law", TIED_RULE if tied else RULE,
+        "warm", "--window", str(vw / "window"), "--sampling-design", TIED_RULE if tied else RULE,
         "--compose-cache", str(vw / "compose-cache"), "--jobs", jobs]
     assert audit[audit.index("--compose-cache") + 1] == str(vw / "compose-cache")
     assert limits.count(limit) == 1 + (limit == "180m"), limits
@@ -3111,6 +3120,24 @@ def test_the_preflight_refuses_a_warm_at_no_positive_number_of_jobs_or_on_a_tree
     with every compose inside the audit's limit: before anything runs."""
     rc, lines, order, _limits = _v3c(tmp_path, records_audit=records_audit, V3C_WARM_JOBS=jobs)
     assert (rc, lines, order) == (3, [line], [])
+
+
+@pytest.mark.parametrize("given, want, line", [
+    (None, None, None), ("7", "7", None),
+    ("0", None, "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not 0"),
+    ("all", None, "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, "
+                  "not all"),
+])
+def test_v3cs_audit_runs_its_negatives_side_by_side_only_where_v3c_negative_workers_says(tmp_path, given, want, line):
+    """V3C_NEGATIVE_WORKERS reaches the audit as a5's --negative-workers; unset, the audit gets no such flag, so its
+    negatives run one after another as before; one that isn't a positive integer is refused before anything runs."""
+    rc, lines, order, _limits = _v3c(tmp_path, **({"V3C_NEGATIVE_WORKERS": given} if given else {}))
+    if line:
+        assert (rc, lines, order) == (3, [line], [])
+        return
+    assert rc == 0 and "audit" in order, (lines, order)
+    audit = json.loads((tmp_path / "order.audit").read_text())
+    assert (audit[audit.index("--negative-workers") + 1] if "--negative-workers" in audit else None) == want
 
 
 @pytest.mark.parametrize("given", ["MAIN_FILE", "MAIN_SHA"])
@@ -3442,7 +3469,7 @@ def test_the_script_parses_whole():
 
 def test_under_h1_tie_v3c_runs_no_audit_whose_ports_rs_sample_cannot_size(tmp_path):
     """A tied audit's ports default to the size of R's sample, so an R with no strata gets no audit, and V3c says why."""
-    _tied_commit(tmp_path, "same", law=None)
+    _tied_commit(tmp_path, "same", sampling_design=None)
     rc, lines, order, _limits = _v3c(tmp_path, H1_TIE="1")
     assert rc == 1 and "audit" not in order, (lines, order)
     assert "V3C-AUDIT: R, the window's registration, has no strata to size the audit's ports by: set V3C_PORTS" in lines
@@ -3474,6 +3501,7 @@ def _pearl_tie(tmp_path: Path, **extra: str) -> tuple[subprocess.CompletedProces
     tree, d, venv = tmp_path / "tree", tmp_path / "serve", tmp_path / "venv" / "bin"
     for p in (tree / "benchmarks" / "prove_path", tree / "adapters" / "vllm", tmp_path / "piece"):
         p.mkdir(parents=True)
+    (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit").mkdir(parents=True, exist_ok=True)
     (tree / "verity" / "protocols" / "proofs" / "spot" / "prover" / "audit" / "prove_path.py").write_text(FAKE_V3C_PROVE_PATH)
     (tree / "benchmarks" / "one_stage").symlink_to(HERE.parent, target_is_directory=True)
     (tmp_path / "advice.py").write_text(FAKE_ADVICE)
@@ -3623,7 +3651,7 @@ def test_under_pearlplus_tie_the_window_serve_serves_pearl_c_on_its_one_engine(t
         "--challenger-gate": GATE, "--challenger-peer": "vy-dc-h200", "--challenger-lane": "compute-accounting"}
     assert gated.count("--protocols") == 1 and "--h1-prover" not in gated
     calls, d = (tmp_path / "calls").read_text().splitlines(), tmp_path / "serve" / "pearlplus"
-    assert [c.split("prove_path/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
+    assert [c.split("audit/prove_path.py ", 1)[-1] for c in calls[-4:-2]] == [
         f"serve-phi --model unsloth/Llama-3.2-1B --revision 9535bd9b1d1dea6acafbdc4813b728796aeb28da --out {d}/serve-phi.json",
         f"class-circuit --serve {d}/serve-phi.json --class 4,32,4 --pearl-tables pearl-c-h100-v1-h3 --out "
         f"{d}/circuit-record.json"] and "inference_only.py policy" in calls[-2] and "serve-openai" in calls[-1], calls
@@ -3687,7 +3715,7 @@ def _pearl_tied_commit(tmp_path: Path, chained: bool = True) -> None:
     (d / "pearlplus" / "w7").mkdir(parents=True)
     (d / "pearlplus" / "w7" / "registration.json").write_text(json.dumps(PEARL_WREC))
     (d / "pearlplus" / "w7" / "window-commit.json").write_text(json.dumps({"run": "ab", "circuit": "cd", "population": 37}))
-    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_LAW}
+    r = {"format": "toy", "previous": REG.digest(PEARL_WREC) if chained else "ef" * 64, "law": TIED_SAMPLING_DESIGN}
     (vw / "registration.json").write_text(json.dumps(r))
     (vw / "circuit.json").write_text(json.dumps({"run": "ab"}))
 
@@ -3706,7 +3734,7 @@ def test_under_pearlplus_tie_v3c_audits_the_commit_tied_to_pearls_w_with_records
     w = REG.digest(PEARL_WREC)
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} in Pearl+'s piece, its registration chained right after "
                                f"Pearl+'s window record W before Pearl+'s coin (W {w[:16]}…, R "), lines
-    assert _audited(tmp_path) == {"--law": TIED_RULE, "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
+    assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(tmp_path / "serve" / "pearlplus" / "w7" / "registration.json"),
                                   "--tie-prefix": None, "--ports": "3"}
     assert f"V3C-TIE: the audit read its records tied to W {'cd' * 8}…, R chained right after it: PASS" in lines
     d, tag = tmp_path / "serve", W63K4.replace(",", "-")
@@ -3781,13 +3809,13 @@ def test_under_pearlplus_tie_v3c_goes_on_at_the_stratified_rate_its_launch_state
     _pearl_tied_commit(tmp_path)
     rc, lines, order, _limits = _v3c(tmp_path, **{**PEARL_TIED, "V3C_LAW": stated})
     assert rc == 0 and "audit" in order and not any(x.startswith("PREFLIGHT") for x in lines), (lines, order)
-    assert _audited(tmp_path, ("--law",)) == {"--law": stated}
+    assert _audited(tmp_path, ("--sampling-design",)) == {"--sampling-design": stated}
 
 
-def _no_transfer_gates(part: str, law: str, templates: list[str]) -> str:
+def _no_transfer_gates(part: str, sampling_design: str, templates: list[str]) -> str:
     return (f"PREFLIGHT: unsloth/Llama-3.2-1B's compiler of record lists ['RoPEHead_v1{{D=64}}'] as transfer gates "
             f"(prove_path.GATES_OF_RECORD), every unit of which step 3 proves beside work:K of the rest, and PP_PARTITION "
-            f"{part} is {law} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
+            f"{part} is {sampling_design} over {templates}: give a work:K partition that holds them, and in PP_SETS their input sets")
 
 
 def _partition_preflight(tmp_path: Path, tie: bool, **extra: str) -> tuple[int, list[str], list[str], list[str]]:
@@ -3973,9 +4001,9 @@ NO_TIE = ("PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables t
           "--tie, which this tree's records_audit.py doesn't take")
 
 
-def _no_reader(law: str) -> str:
+def _no_reader(sampling_design: str) -> str:
     return ("PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only a stratified rate "
-            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {law}")
+            f"(stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is {sampling_design}")
 
 
 @pytest.mark.parametrize("args, extra, records_audit, line", [
@@ -4157,7 +4185,7 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert lines[2].startswith(f"WINDOW-COMMIT class {W63K4} at H1's close") and lines[3].endswith("PASS")
     assert [x.split(" ")[0] for x in lines[4:]] == ["V3C-AUDIT", "V3C-PERIOD", "RECORD", "COMPOSITE:"]
     assert lines[-1] == "COMPOSITE: composed on cpu-6" and limits == ["180m"]
-    assert _audited(tmp_path) == {"--law": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
+    assert _audited(tmp_path) == {"--sampling-design": TIED_RULE, "--tie": str(d / "h1" / "w7" / "registration.json"),
                                   "--tie-prefix": "h1/", "--ports": "3"}
     argv = json.loads((tmp_path / "order.record").read_text())
     assert argv[:-4] == [
@@ -4167,6 +4195,42 @@ def test_the_follow_on_holds_the_copy_to_the_served_nodes_sums_then_audits_and_c
     assert (argv[-4], len(argv[-3]), argv[-2:]) == ("--key-sha512", 128, ["--lane", "vllm"])
     assert (tmp_path / "order.composite").read_text().split() == ["vy-dc-h200", str(d), str(out)]
     assert not _window_data(out, 7), _window_data(out, 7)
+
+
+def _pool(tmp_path: Path) -> dict[str, str | None]:
+    """The audit's memory and Lean workers as V3c's audit was run with them, None for a flag it wasn't given."""
+    a = json.loads((tmp_path / "order.audit").read_text())
+    return {f: a[a.index(f) + 1] if f in a else None for f in ("--lean-workers", "--audit-mem-gb")}
+
+
+@pytest.mark.parametrize("given, want", [
+    ({}, {"--lean-workers": "1", "--audit-mem-gb": "290"}),
+    ({"V3C_LEAN_WORKERS": "2", "V3C_AUDIT_MEM_GB": "400", "NODE_MEM_GB": "755"}, {"--lean-workers": "2", "--audit-mem-gb": "400"}),
+])
+def test_a_served_nodes_audit_runs_one_lean_check_at_a_time_within_v3c_audit_mem_gb_unless_told(tmp_path, given, want):
+    """On the node that served, V3c's audit shares the node: one Lean check at a time and V3C_AUDIT_MEM_GB as the audit's
+    memory, each a default its command can set."""
+    rc, lines, order, _limits = _v3c(tmp_path, **given)
+    assert rc == 0 and "audit" in order, (lines, order)
+    assert _pool(tmp_path) == want
+
+
+@pytest.mark.parametrize("given, want", [
+    ({}, {"--lean-workers": None, "--audit-mem-gb": None}),
+    ({"V3C_LEAN_WORKERS": "2"}, {"--lean-workers": "2", "--audit-mem-gb": None}),
+    ({"V3C_AUDIT_MEM_GB": "650"}, {"--lean-workers": None, "--audit-mem-gb": "650"}),
+])
+def test_a_follow_ons_audit_takes_its_memory_from_v3c_audit_mem_gb_only_where_its_command_sets_it(tmp_path, given, want):
+    """A follow-on's audit has its node: a5's own default of one Lean check at a time, within what the node has free
+    each time the audit reads it (as its sessions start, and as its negatives' workers and its registered reads' pool
+    are made), unless its command says otherwise. V3C_AUDIT_MEM_GB set on the follow-on's command reaches the
+    audit as its memory, which its Lean checks and its negatives' workers then start within; left unset, its default
+    is only what the node must have, and the audit is given no figure. The follow-on ends without failing: 0, or 2
+    where its record is pending, composed off its node."""
+    assert _deferred(tmp_path).returncode == 0
+    rc, lines, order, _limits = _follow(tmp_path, **given)
+    assert rc in (0, 2) and order[0] == "audit", (lines, order)
+    assert _pool(tmp_path) == want
 
 
 FOLLOW_FAIL = ("FOLLOW-ON on cpu-6, 755 GB: V3c's audit, which the served node vy-dc-h200 deferred, "

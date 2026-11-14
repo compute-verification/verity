@@ -163,14 +163,14 @@ structure Case where
   evidence : Json
 
 /-- A window's evidence: its challenger session's files `{close, hellos, log, record}` and its cases. -/
-structure WindowEvidence where
+structure RunEvidence where
   session : Json
   audits : Array Case
 
 /-- The evidence: the host's pins log and each window's, in the ledger's order. -/
 structure Evidence where
   pins : Json
-  windows : Array WindowEvidence
+  windows : Array RunEvidence
 
 def EVIDENCE_FORM : String :=
   "a period's evidence is {pins, windows}: the host's pins log and, for each window in the ledger's order, " ++
@@ -187,7 +187,7 @@ def Evidence.of (j : Json) : V Evidence := do
       unless keys? a == some #["evidence", "public", "registration"] do throw EVIDENCE_FORM
       let .str pub := getD a "public" | throw EVIDENCE_FORM
       pure ({ registration := getD a "registration", pub, evidence := getD a "evidence" } : Case)
-    pure ({ session := getD w "session", audits } : WindowEvidence)
+    pure ({ session := getD w "session", audits } : RunEvidence)
   return { pins := getD j "pins", windows }
 
 def CASE_COINS : String :=
@@ -300,7 +300,7 @@ reject refuses the period (`audit`), and an undecided is kept as the period's, t
 still checked. The sampled registrations and the cases are matched as lists: a property of the check splits a list's
 match, and Lean generates no equations for an array literal's. -/
 def executionPhaseAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress)
-    (w : Window) (ev : WindowEvidence) : Except (Code × String) Progress := do
+    (w : Window) (ev : RunEvidence) : Except (Code × String) Progress := do
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
   if let some why := Challenger.pinsReason a.session opened pins then throw (Code.coin, why)
   if let some why := Challenger.firstParentReason a.session a.pinned p.main then throw (Code.coin, why)
@@ -337,7 +337,7 @@ def registrationOf (r : Read) (ses : String) : Option String :=
 and every other session of the lane is another registration's, returned with that registration's circuit; or the
 first refusal, the windows first, then the others that are of no registration, then the others that are this
 registration's. -/
-def registeredIn (p : AuditParams) (r : Read) (ws : Windows) : Except (Code × String) (Array Other) := do
+def registeredIn (p : AuditParams) (r : Read) (ws : Runs) : Except (Code × String) (Array Other) := do
   if let some w := ws.windows.find? fun w => registrationOf r w.session != some p.registration then
     throw (Code.period, s!"period {w.period}, which lists session {w.session}, does not commit this " ++
       s!"registration's circuit {p.registration.take 16}")
@@ -357,7 +357,7 @@ first refusal. -/
 def run (inner : Inner) (p : AuditParams) (c : Commitment) (e : Evidence) (bs : Core.Blobs) :
     Except (Code × String) (Array Other × Progress) := do
   let r ← read p.ledger c.ledger
-  let ws ← windowsIn p.ledger r
+  let ws ← runsIn p.ledger r
   let others ← registeredIn p r ws
   unless e.windows.size == ws.windows.size do
     throw (Code.evidence, s!"the evidence holds {e.windows.size} windows' sessions, and the ledger lists " ++
@@ -446,7 +446,8 @@ audit is handed are run without a proof. -/
 def stubInner : Inner := fun p _ e _ =>
   match getD e.base.statement "stub" with
   | .str "accept" =>
-    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none }
+    .accept { drawn := #[], proved := #[], bound := p.base.verifier.log.size, perTemplate := none,
+              complete := Spot.Record.allRan e.base.verdicts }
       { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := p.base.delta,
         drawn := #[] }
   | .str "undecided" => .undecided "the stand-in leaves it undecided"

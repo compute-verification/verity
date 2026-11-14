@@ -3,10 +3,10 @@ module
 public import Definitions.Accounting.Requirement
 
 /-!
-# A declared circuit's requirement, from what the audit credits (trusted)
+# A registered circuit's requirement, from what the audit credits (trusted)
 
-The remote bandwidth audit credits blocks of its store: the registered store and the memory map beside it (I3), and
-the blocks each pass's receipts cover. The program's theorem is about a declared circuit `W`'s requirement instead: the
+PoUB credits blocks of its store: the registered store and the memory map beside it (I3), and
+the blocks each pass's receipts cover. The program's theorem is about a registered circuit `W`'s requirement instead: the
 bits `W`'s execution keeps live and the bits it reads (`Definitions/Accounting/Requirement.lean`). These guarantees turn
 one into the other, at each engine step, once the store and the plan hold `W`'s credited blocks (`StoreMatches`,
 `PlanMatches`). Other blocks may be resident or planned too (filler, dead or another workload's): they earn `W`
