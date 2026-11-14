@@ -622,14 +622,16 @@ def test_a_refusal_before_the_engine(tmp_path, stand_ins, capsys, argv, why):
 
 
 def test_a_flipped_weight_is_registered_and_named(tmp_path, stand_ins, capsys):
-    """``--flip-weight``: the element changes before the weights' registration, and the verdict names the negative."""
+    """``--flip-weight``: the element changes before the weights' registration, the change is printed under the committer's
+    kind, and the verdict names the negative."""
     stand_ins.verdicts = [(True, None)]
     ended = run(tmp_path, capsys, "--flip-weight", "head.weight:0")
     [com] = MADE
     flipped = weights_root(stand_ins.engine.model)
+    change = {"param": "head.weight", "index": 0, "before": 0.0, "after": 1.0, "numel": 256, "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}
     assert flipped != weights_root(Model()) and float(stand_ins.engine.model.head.weight[0, 0]) == 1.0
-    assert ended.exit is None and ended.doc("verdict.json") == verdict_doc(com.roots[1:], negatives={"flip_weight": {
-        "param": "head.weight", "index": 0, "before": 0.0, "after": 1.0, "numel": 256, "expect": "weights pin FAIL naming the field; Commit FAIL rc 3"}})
+    assert ended.exit is None and ended.doc("verdict.json") == verdict_doc(com.roots[1:], negatives={"flip_weight": change})
+    assert f"[delta] FLIP-WEIGHT NEGATIVE TEST ({PLUGIN}): {change} -- checkpoint_binding (the weights pin) MUST FAIL naming head.weight" in ended.printed
     assert less_coins(ended.rows())[1] == instrumented_row(tmp_path, 0, 1, com.roots[1], weights=flipped)
 
 
@@ -653,6 +655,63 @@ def test_a_root_other_than_the_expected_one(tmp_path, stand_ins, capsys):
     assert [row["root_equal_expected"] for row in rows] == [False, False]
     assert [row["commit"]["value_correspondence"]["result"] for row in rows] == [False, False]
     assert [f"[delta] ROOT MISMATCH: run root {root} != expected {'ab' * 64}" in ended.printed for root in MADE[0].roots[1:]] == [True, True]
+
+
+def test_classes_required_on_the_command_line_take_the_place_of_the_engines_default_set(tmp_path, stand_ins, capsys):
+    """``--required-classes``: the classes named are the ones the attachment of record, each run's verdict and the Commit's
+    verdict hold, the attachment is told they were given, and the verdict says where they came from."""
+    stand_ins.verdicts = [(True, None)]
+    given = ("input_token_ids", "weights")
+    ended = run(tmp_path, capsys, "--required-classes", ",".join(given))
+    attached = [kw for name, kw in stand_ins.calls if name == "attach_of_record"]
+    assert ended.exit is None and [(kw["required_classes"], kw["required_classes_cli"], kw["hidden_family"]) for kw in attached] == [(given, True, None)]
+    assert [kw["required_classes"] for name, kw in stand_ins.calls if name == "commit_verdict"] == [given, given]
+    assert "[delta] engine attention: vllm_flash_attn_version=None; required classes input_token_ids,weights" in ended.printed
+    assert ended.doc("verdict.json") == verdict_doc(MADE[0].roots[1:], required_classes=list(given), required_classes_source="cli")
+
+
+def test_the_options_handed_on_are_the_ones_whose_staging_is_resolved(tmp_path, stand_ins, capsys, monkeypatch):
+    """The staging is resolved once, before the engine (`resolve_staging`: here the window and whether the staging is bounded,
+    neither given), and the options the attachment of record and each run's binding record are handed are the resolved
+    ones, not the ones `main` was given."""
+    stand_ins.verdicts = [(True, None)]
+    resolved, handed = [], []
+    resolve, attach, binding = commit.resolve_staging, commit.attach_of_record, commit.binding_record
+
+    def resolve_staging(args):
+        resolved.append((args, resolve(args)))
+        return resolved[-1][1]
+
+    def attach_of_record(com, eng, args, manifest, out, **kw):
+        handed.append(args)
+        return attach(com, eng, args, manifest, out, **kw)
+
+    def binding_record(com, rc, reqs, sampling, args, pair, **kw):
+        handed.append(args)
+        return binding(com, rc, reqs, sampling, args, pair, **kw)
+
+    for name, value in [("resolve_staging", resolve_staging), ("attach_of_record", attach_of_record), ("binding_record", binding_record)]:
+        monkeypatch.setattr(commit, name, value)
+    ended = run(tmp_path, capsys)
+    [(given, settled)] = resolved
+    assert ended.exit is None and (given.window_mb, given.bounded_staging) == (None, None)
+    assert (settled.window_mb, settled.bounded_staging) == (0, False) and handed == [settled] * 3
+
+
+def test_every_request_of_every_run_is_served_under_the_workloads_sampling(tmp_path, stand_ins, capsys, monkeypatch):
+    """The two warm-ups' requests and the four measured runs' are each given their parameters from the workload's sampling
+    record, as the workload's reader hands it (`vllm_adapter.load_workload`)."""
+    stand_ins.verdicts = [(True, None)]
+    under = []
+    params = va.sampling_params
+
+    def sampling_params(req, sampling):
+        under.append(sampling)
+        return params(req, sampling)
+
+    monkeypatch.setattr(va, "sampling_params", sampling_params)
+    ended = run(tmp_path, capsys)
+    assert ended.exit is None and under == [va.load_workload(str(tmp_path / "workload.json"))["sampling"]] * (6 * len(WORKLOAD["requests"]))
 
 
 NOT_RUN = "oracle compare not run: "

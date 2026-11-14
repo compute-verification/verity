@@ -46,6 +46,7 @@ untraced = [
     "tests/test_env_credentials.py",
     "tests/test_evict_src.py",
     "tests/test_evict_src_local.py",
+    "tests/test_evict_src_worktrees.py",
     "tests/test_executor.py",
     "tests/test_fixture_fetch.py",
     "tests/test_fleet.py",

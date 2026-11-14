@@ -139,7 +139,7 @@ class AcquireCorrespondence:
             return None                                          # an input of the module: no return slot
         if port == "out":
             return ReturnSlot()
-        if port.isdigit():
+        if port.isdecimal():
             return ReturnSlot(index=int(port))
         if self.owning_module(call) == RUNNER_PATH:
             return ReturnSlot(attr=port)                         # `sampled_token_ids` / `seed` / `splits` of the runner's sample()

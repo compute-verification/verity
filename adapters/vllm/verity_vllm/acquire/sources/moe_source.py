@@ -540,8 +540,19 @@ class MoeBlockSource:
                               "flushed off the device right after staging (its workspace is the block's own w2 output: cache1/cache3 alias), "
                               "and on Marlin act and down after the w2 launch (moe_sum's output is carved from act's workspace) -- "
                               f"{self.stats['plane_flushes']} flushes; identity_check requires exactly "
-                              f"{per_layer} per layer per step; shapes seen {self.stats['shapes']}; value correspondence, the block's "
-                              "registry.moe Definitions bit-exact vs vLLM's fused_experts (Triton experts, bf16, routing given): "
+                              f"{per_layer} per layer per step; shapes seen {self.stats['shapes']}; value correspondence, each "
+                              "kernel's words on a GPU against its Definitions': nothing in the tree checks "
+                              "silu_and_mul_per_block_quant (the fused activation quant, whose outputs the w2 launch binds as act_q "
+                              "and act_scale); the others' checks are topk_softmax (the ordered router, 64 and 128 experts, top 8): "
+                              "tests.properties.router_tap_exactness; grouped_topk (sigmoid scores, one group, top 8 of 256): "
+                              "tests.properties.sigmoid_router_capture_gpu; dsv4_topk, topk_hash_softplus_sqrt and "
+                              "silu_and_mul_with_clamp: tests.properties.dsv4_moe_capture_gpu; moe_wna16_marlin_gemm: "
+                              "tests.properties.dsv4_marlin_capture_gpu; the group quant (through vLLM's per_token_group_quant_fp8) "
+                              "and the block-FP8 fused_moe_kernel, both with ue8m0 scales, beside silu_and_mul and moe_sum: "
+                              "tests.properties.glm53_block_fp8_capture_gpu; per_token_group_quant_fp8 and the block-FP8 "
+                              "fused_moe_kernel, both with f32 scales: the property blackwell_fp8_capture, which "
+                              "verity_vllm.records.property_record registers; "
+                              "the bf16 fused_moe_kernel, silu_and_mul and moe_sum (Triton experts, routing given): "
                               "verity_vllm.program.moe_difftest")}]
 
 

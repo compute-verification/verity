@@ -59,10 +59,11 @@ Open premises (`open`):
 - **Python**: `verity.protocols.accounting.certifier.verifier`. Code outside this directory imports every module but `boundary`,
   `capacity` and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
   scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
-  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; the tests of `../../pouw/verifier` and
-  `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`, `prove_path`, `one_stage`,
-  `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network check's tests (`network/tests`)
-  and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and `../../../proofs/recursion` import none.
+  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `demos/onsite_served`; the tests of
+  `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`,
+  `prove_path`, `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network
+  check's tests (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and
+  `../../../proofs/recursion` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../device/lean`, `../../../compose/verifier/onsite` and `security/Properties` require by path. Its executables:
@@ -90,10 +91,10 @@ Open premises (`open`):
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
   `nci_check` (`../../../policy/inference_only/verifier/nci/lean`), `core_protocol` (`../../../interface`), and `lms` and
-  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package.
-  The modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier`
-  and, `coin_link` alone, `verity.protocols.proofs.spot.device`, never the prover side, which
-  `../device/program/lean/scripts/window_vectors.py` and the tests import.
+  `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
+  modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
+  `coin_link` alone, `verity.protocols.proofs.spot.device`, and, `parties` alone, `verity.protocol` and `verity.channel`;
+  never the prover side, which `../device/program/lean/scripts/window_vectors.py` and the tests import.
 - **Not here**: the certifier's host programs (`benchmarks/network_traces`).
 
 ## What this package holds
@@ -284,7 +285,9 @@ A spec-level reference for network accounting's timing channel:
   one chunked `POST /verity/watermark` carrying one line `t n l…` a tick, meaning bucket t has closed, the releases of
   buckets ≤ t are exactly N < n, and each l is one of bucket t's that its server connection lost. Line t goes out once
   each release of bucket t is written or lost. An engine that admits at a logical time in certifier buckets waits on
-  that line and on each N < n it doesn't name.
+  that line and on each N < n it doesn't name. A client's request that opens as one to that path is refused
+  (`release.to_watermark`, read on its first cell and, whole, at its `END`), unreleased; so is one a server would
+  read a second request in, or read without the headers (`release.one_request`, read whole at its `END`).
   The headers and the stream never appear in a cell or record, so nothing certified changes;
 - the network certifier's cells as rows (`warden_rows`): each execution phase's cells committed one `hm96-sha512/row/v2`
   row a bucket, padding and empty slots included, under a frame-v3-sha512 root the network certifier signs with the
@@ -296,10 +299,11 @@ A spec-level reference for network accounting's timing channel:
   (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
   (`content_rows`: its request, response and end rows; under form 2 a class's held rows alone, whose count the head
-  makes public), all committed as the cells' rows are and listed under one
+  makes public; with `request_words`, a fourth of its request's words), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
+- its deployment manifest (`parties`): no party of it runs under the runtime;
 - the output value the certifier relayed as a registered value (`out_commit`): `commit_out` commits its rows at the
   reading program's registered shape (`OutShape`: its program, the value, ``words`` a row and ``rows``, both sides
   taking them from the circuit's registered read) under the domain the verifier derives for that pinned value, with the
@@ -349,8 +353,7 @@ A spec-level reference for network accounting's timing channel:
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. The period check, the
-  step from a period's records to the network bound, is not in the public tree, because it reads the inference-only
-  policy's layout check, which is withheld. Programs start at
+  step from a period's records to the network bound, reads the inference-only policy's layout check. Programs start at
   fixed slots a network timestep: a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   execution phase, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
