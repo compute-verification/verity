@@ -666,7 +666,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
     "verity/protocols/proofs/spot/device/challenger_session.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
-    "benchmarks/pous/p2_v1/store.py::Store":
+    "verity/protocols/accounting/pous/prover/p2/p2_store/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
         "homonym, what a clear audit's prover publishes: rename (compute-accounting)",
@@ -751,7 +751,7 @@ KNOWN: dict[str, str] = {
     "adapters/vllm/verity_vllm/commit/memory_map.py::Layout": "homonym, the engine's KV pool map: rename (circuits)",
     "adapters/vllm/verity_vllm/pipeline/advice_code/codec.py::Record":
         "duplicate of `NetworkCheck.Check.Certificate`: becomes its certified record (vllm)",
-    "adapters/vllm/verity_vllm/program/frontend/registration.py::Registration":
+    "adapters/torch/verity_torch/frontend/registration.py::Registration":
         "homonym, the builder's allocation of registered inputs: rename (circuits)",
     "verity/protocols/accounting/pouw/prover/serving/credit_gate.py::Trace":
         "homonym, one linear call's recorded ops and their writers: rename (vllm)",

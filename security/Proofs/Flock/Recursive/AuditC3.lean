@@ -196,7 +196,7 @@ noncomputable abbrev checkedC3 {S : ℕ} {Vs : Fin S → VStmt} {Reg' A B D : Ty
 
 /-- **The prover's strategy against the checked sessions**: its strategy against the typed sessions (`transported`),
 whose games the checked sessions' are. -/
-noncomputable def checkedT {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+noncomputable def checkedT {n : ℕ} {L : SamplingDesign n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type} {dg : ByteArray → ByteArray} {N : ℕ} (ish : RecVStar.Inner)
     (cs : List (Cm × I.Coin) → Option Flock.RecVStar.InnerCommits)
     (coins : List (Cm × I.Coin) → Option Flock.RecCoins.Source) (bind : Fin S → VStar.Bindings)
@@ -212,7 +212,7 @@ transcript and V*'s outer proof at its leaf) decodes (`decodedV`) to an inner tr
 table at the cap `cap` (`outHL`, which reads only its statement's cap) to an outcome with an opening of R's level-0
 position `pos` to the row `col` that verifies against `cap`. -/
 def RunOpensReg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-    (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
+    (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
     {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
@@ -233,7 +233,7 @@ run opens there against `cap` (`RunOpensReg`), one row for all lanes, and zero w
 runs that open one position to different rows against one cap are a collision of SHA-512, so every run opens this
 word, up to an inner fork. -/
 noncomputable def regWord {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
-    [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ}
+    [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ}
     {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
@@ -244,7 +244,7 @@ noncomputable def regWord {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Typ
 /-- **The inner statement the prover's runs make**: at each sample, the word they open at R's level 0 (`regWord`) and
 R's cap. -/
 noncomputable def regStmt {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
-    [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : Law n} {Reg Cm : Type} {S : ℕ}
+    [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) {n : ℕ} {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ}
     {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (holoInnerAt T CT st hp).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAt T CT st hp).Msg)
@@ -258,7 +258,7 @@ prover typed at that table's protocol (`holoInnerAtτ`). The guarantee reads it 
 and in its conclusion at the registered typing `hp.τ`, each application explicitly at its own typing's protocol, so no
 statement of it ever compares two typings' protocols. -/
 def RunOpensRegτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-    (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) {n : ℕ} {L : Law n}
+    (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) {n : ℕ} {L : SamplingDesign n}
     {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
@@ -279,7 +279,7 @@ open Classical in
 (`RunOpensRegτ`). -/
 noncomputable def regWordτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) {n : ℕ}
-    {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAtτ T CT st hp τv).Msg)
@@ -290,7 +290,7 @@ noncomputable def regWordτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → T
 /-- **`regStmt` at the typing `τv`**: at each sample, the word the runs open at `τv`'s table (`regWordτ`) and R's cap. -/
 noncomputable def regStmtτ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] (st : Flock.Stmt) (hp : HoloParams) (τv : Fin (2 ^ hp.sLog) → Fin (2 ^ hp.tLog)) {n : ℕ}
-    {L : Law n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
+    {L : SamplingDesign n} {Reg Cm : Type} {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type}
     (zs : Reg → L.Ω → List (Cm × (holoInnerAtτ T CT st hp τv).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ)
     (wmsg : ((j : Fin S) → (Vs j).Bits) → List (holoInnerAtτ T CT st hp τv).Msg)
@@ -348,7 +348,7 @@ the inner shape `ish`, and every prover `σ` of the recursive audit
 with candidate 3's compiled table as its inner protocol (`holoInnerAt`, its messages of the stages' types `holoTys`
 and its coins of types `CT st hp`),
 at the sampling design of the registration's samples
-(`sampleLaw`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
+(`sampleDesign`): V*'s statements `Vs`, one for each of the verifier's list (`vstarCount ish`), V*'s sessions `zr R ω t R₂ j`
 as the prover supplies them (`ZkOuterR`), their records' custody `_hCust`, their registrants' records covering the
 rows their reads files name `_hRC`, the table's prefix `tbl` and the `b ‖ c`
 `bc` at which the map `im` says where each round's commitment and coins go in the inner session's records, and those
@@ -424,7 +424,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap salt bcs')
     -- V*'s statements over the verifier's inner shape's list, as the prover supplies their sessions
     {Vs : Fin (vstarCount ish) → VStmt}
-    (zr : Reg → (sampleLaw draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
+    (zr : Reg → (sampleDesign draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -448,7 +448,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover, at the audit's game written out (`recGame` at the inner protocol's parameter-level coin
     -- type and round count), so its type reads no typing's protocol
-    (σ : Strategy (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
+    (σ : Strategy (Game.send Reg fun R => Game.coin (sampleDesign draw).Ω fun ω =>
       rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
         (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
@@ -495,7 +495,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
-        (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
+        (Game.send Reg fun R => Game.coin (sampleDesign draw).Ω fun ω =>
           rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
             (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ = 0 ∨
     ∃ h : Typed zr,
@@ -552,7 +552,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
                   (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
                 (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
-          (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
+          (Game.send Reg fun R => Game.coin (sampleDesign draw).Ω fun ω =>
             rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
               (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ ≤
         expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -562,7 +562,7 @@ def RecursiveAuditC3At {r : Flock.Stmt → HoloParams → ℕ}
             (fun R₂ j τ =>
               (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t R₂
-                j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+                j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((r st hp + 1 : ℕ) : ℝ≥0∞) *
             expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>
@@ -606,7 +606,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (_hstk : StackedTopAt (holoAt st hp).rsch.sch.level₀ st reg cap salt bcs')
     -- V*'s statements over the verifier's inner shape's list, as the prover supplies their sessions
     {Vs : Fin (vstarCount ish) → VStmt}
-    (zr : Reg → (sampleLaw draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
+    (zr : Reg → (sampleDesign draw).Ω → List (Cm × ((k : Fin (r st hp)) → CT st hp k)) → Reg₂ →
       (j : Fin (vstarCount ish)) → (Vs j).OuterR Reg')
     -- the records' custody
     (_hCust : Flock.Premises.RecordCustody zr)
@@ -630,7 +630,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the recursive prover, at the audit's game written out (`recGame` at the inner protocol's parameter-level coin
     -- type and round count), so its type reads no typing's protocol
-    (σ : Strategy (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
+    (σ : Strategy (Game.send Reg fun R => Game.coin (sampleDesign draw).Ω fun ω =>
       rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
         (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)))
     -- the messages V*'s layers hold, the rounds' commit strings and commitments
@@ -675,7 +675,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
     prob (fun o => (AcceptsPublic obj prog st ∧ AcceptsC3 ish st (wr o.2.2.1).1 (wr o.2.2.1).2 reg) ∧
           VerifiesVStar ish bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2 ∧
           ChecksVR ish (innerHeld wr st reg o.2.2.1) (coins (wr o.2.2.1).2) bind rows (zr o.1 o.2.1 o.2.2.1) o.2.2.2)
-        (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
+        (Game.send Reg fun R => Game.coin (sampleDesign draw).Ω fun ω =>
           rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
             (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ = 0 ∨
     ∃ h : Typed zr,
@@ -732,7 +732,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
                   (fun t => coins (wr t).2) bind rows zr _hCust h) dg N k Rw wmsg
                 (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                   (fun t => coins (wr t).2) bind rows zr _hCust h σ) cap o.1 o.2.1))
-          (Game.send Reg fun R => Game.coin (sampleLaw draw).Ω fun ω =>
+          (Game.send Reg fun R => Game.coin (sampleDesign draw).Ω fun ω =>
             rounds Cm ((k : Fin (r st hp)) → CT st hp k) (r st hp + 1) fun t =>
               (outerVR (zr R ω t) dg N).map fun b => (R, ω, t, b)) σ ≤
         expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
@@ -742,7 +742,7 @@ def RecursiveAuditC3AtNoA3 {r : Flock.Stmt → HoloParams → ℕ}
             (fun R₂ j τ =>
               (checkedC3 (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ.1 ω t R₂
-                j).boundCR dg N (Vs j).law.model k Rw M ρ τ) s) +
+                j).boundCR dg N (Vs j).samplingDesign.model k Rw M ρ τ) s) +
           ((r st hp + 1 : ℕ) : ℝ≥0∞) *
             expAt (checkedT (I := holoInnerAtτ (holoTys st hp) (CT st hp) st hp hp.τ) ish (innerHeld wr st reg)
                 (fun t => coins (wr t).2) bind rows zr _hCust h σ) (fun ω t s =>

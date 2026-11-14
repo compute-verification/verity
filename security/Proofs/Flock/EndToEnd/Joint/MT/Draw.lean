@@ -16,13 +16,13 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Soundness.Discharge.Exec.LawSample
+import Proofs.Flock.Soundness.Discharge.Exec.SamplingDesignSample
 import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
 
 /-!
 # The challenger's live-coin part's stratified sample at `J` tables
 
-`sampleOkZKHJ_of_accepts_stratified`: at a sample of the live stratified sampling design (`Law.execOS` at `stratified Kd St`) that
+`sampleOkZKHJ_of_accepts_stratified`: at a sample of the live stratified sampling design (`SamplingDesign.execOS` at `stratified Kd St`) that
 verity-verify-proof `--zk` accepts, at any number of tables, `SampleOkZKHJ` holds at `mPtsOf c.g ((∑ s, ks s) / nTab I)` link
 points, from the record's custody alone (`RecordsLiveZKJ`, and `SampleFileZK` at the stratified sampling design). The sample file
 decodes only to the verifier's sample of the sampled proof blocks, `∑ s, ks s` of them (`execOS_sample_card_or`; a run that reads
@@ -45,17 +45,17 @@ variable {n mPts : ℕ} {Reg : Type}
 /-- **`SampleOkZKHJ` at an accepted outcome of the live stratified sampling design, at any count.** -/
 theorem sampleOkZKHJ_of_accepts_stratified (I : Inputs) (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
-    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
-    (St : Fin m → Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
+    {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (SamplingDesign.stratum σs s).card)
+    (St : Fin m → Draw.Stratum) (hS : SamplingDesign.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (dj : Finset (Fin n) → Lean.Json) (hdj : SampleFileZK dj (.stratified Kd (Array.ofFn St)) pop)
     {Jf : Finset (Fin n) → Reg → ℕ} {wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (Jf S R) mPts → Exec.Transcript}
     (hRec : RecordsLiveZKJ I dj Jf wr) (ω : Ω) (R : Reg)
-    (o : LiveOutJ (Jf ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
-    (hacc : AcceptsZK I (wr ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
+    (o : LiveOutJ (Jf ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R) mPts)
+    (hacc : AcceptsZK I (wr ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) R o)) :
     SampleOkZKHJ I dj (mPtsOf c.g ((∑ s, ks s) / nTab I))
-      ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
-  have hsz : ∀ D, Draw.UnitSample.ofJson (dj ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)) =
+      ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω) := by
+  have hsz : ∀ D, Draw.UnitSample.ofJson (dj ((SamplingDesign.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)) =
       .ok D → D.units.size = ∑ s, ks s := by
     intro D hD
     have hD' := hD

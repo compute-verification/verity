@@ -8,11 +8,11 @@ public import Proofs.Properties.Verity.SampledTwo.CouplingOf
 # The two-stage leg's coupling at the form's accept, from the coin map's distribution
 
 `coupling_at` (`CouplingOf.lean`) gives `CouplingTargetTwo`'s body (`CouplingTwoAt`) from a projection's bound and a
-majority's at one commitment and strategy. Here the projection's is the join's (`joinedOfLaw`, at the join's frame
+majority's at one commitment and strategy. Here the projection's is the join's (`joinedOfDistribution`, at the join's frame
 `joinFrame`), and the majority's is MAJORITY's at that frame (`majorityBound_opens`), with the two bounds' sum as the
 coupling's terms (`joinCRBound`: `joinBound` with the blob finder's term under `ecr/sha-512`, `blobCR`; `bindBound`).
 
-**One premise a commitment and strategy.** `joinedCouplingOfLaw` takes the coin map's distribution (`CoinMap.CoinMapHolds`) and,
+**One premise a commitment and strategy.** `joinedCouplingOfDistribution` takes the coin map's distribution (`CoinMap.CoinMapHolds`) and,
 at each commitment `c` and strategy `σ`, one structure, `CouplesAt`: the join's premise (`JoinsAt`), what the majority's
 piece owes and the coupling's two clauses (the scope and the published `δ`). `joinedCoupling` (`JoinedForm.lean`) is
 it at COINMAP's proof of the sampling design. The statement, the files, the stages' families, the deployment and the readings are
@@ -118,7 +118,7 @@ structure CouplesAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
       V.delta θ .sampled (V.cost θ F c σ)
 
 /-- **The two-stage leg's coupling at one commitment and strategy, from the coin map's distribution**: `coupling_at` at the
-join's frame, with the join's projection bound (`joinedOfLaw`, its blob term under `blobCR`) and MAJORITY's majority
+join's frame, with the join's projection bound (`joinedOfDistribution`, its blob term under `blobCR`) and MAJORITY's majority
 bound there (`majorityBound_opens`), from the coin map's distribution and `CouplesAt` there. -/
 theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) {c : ByteArray} {σ : Verity.Game.Strategy (V.game θ F c)} (x : Msg) (C : CaseOf)
@@ -144,7 +144,7 @@ theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A
       have hP : ProjectionBound V k A x θ F c σ
           (joinFrame V A x θ F c σ C (joinSessions A C Ms tab ℓ₁ ℓ₂) (joinLocate A tab ℓ₁ ℓ₂) Dg)
           (joinBound V A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut) :=
-        joinedOfLaw V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' hHolds h.joins
+        joinedOfDistribution V k A x θ F c σ C Ms tab ℓ₁ ℓ₂ Dg q P fs₁ fs₂ cut P' hHolds h.joins
       unfold ProjectionBound joinBound at hP
       unfold ProjectionBound joinCRBound
       exact le_trans hP (add_le_add le_rfl (add_le_add le_rfl (add_le_add le_rfl (blobPr_le h.blobCR)))))
@@ -155,7 +155,7 @@ theorem joinedCouplingAt (V : Vocab d α) (k : Verity.Registration.Composite) (A
 
 /-- **The two-stage leg's coupling at the form's accept, from the coin map's distribution**: `joinedCouplingAt` at each
 commitment and strategy, from the coin map's distribution and one `CouplesAt` at each. -/
-theorem joinedCouplingOfLaw (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
+theorem joinedCouplingOfDistribution (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg) (C : CaseOf)
     (Ms : SessionReading) (tab : ℕ → String) (ℓ₁ ℓ₂ : String) (Dg : Verity.Exchange → ℕ → Option Msg) (q : ℕ)
     (P : Sessions.Deployment) (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Verity.Release → ℕ)

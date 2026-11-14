@@ -239,7 +239,7 @@ theorem coupled_sample_coins_v2 {V : Vocab d α} {k : Verity.Registration.Compos
     logged_sample_v2 hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl
   have hn := n_of_popTied ht hv.2.1 hθ hd
   exact ⟨dr, L, n, ξ, units, hd, fun ω hp => (extend_sample A _ ω).trans
-    (sample_of_drew hd A ω.1 (law_of_setsUp hA hv.2.1 hθ hd hn) hn
+    (sample_of_drew hd A ω.1 (samplingDesign_of_setsUp hA hv.2.1 hθ hd hn) hn
       (List.IsPrefix.trans hs (by rw [hsrc]; exact fresh_prefix_coinBytes hp)))⟩
 
 /-- **The leg's constructions, assembled**: `K`'s with the binding's read finder and forger at the pinned tables'

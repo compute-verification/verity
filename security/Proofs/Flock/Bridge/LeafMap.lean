@@ -270,7 +270,7 @@ def _root_.Flock.Bridge.TransportsLiveCR : Prop :=
     -- the verify command's tags, and live-verifier
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
-    (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
+    (τ : Strategy (auditLive (SamplingDesign.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr))),
     let P := (keyProg D.unroll hU n).partition (Discharge.Layout.outsOf D.unroll hU n)
     let vb := (rsZHJS dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub).bindingZ
       (rsZHJS_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpub)
