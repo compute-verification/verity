@@ -709,7 +709,8 @@ def _box(w: Mapping[str, Any], lo: int, hi: int) -> tuple[int, int]:
     return low, high
 
 
-def _kahn(templates: Mapping[str, Any], wires: Sequence[Mapping[str, Any]]) -> list[tuple[str, int, int]] | tuple[str, int]:
+def _kahn(templates: Mapping[str, Any],
+          wires: Sequence[Mapping[str, Any]]) -> list[tuple[str, int, int]] | tuple[str, int]:
     """`Spot.Wires.kahn`: the templates placed one by one, the first by name that reads none not yet placed by a wire
     from another, each cut at the first and the end reader unit of each wire it reads itself by; where every one left
     reads one, the cycle's refusal, naming the first wire from one left of the template that walking back from the
@@ -795,16 +796,19 @@ def _local(m: Mapping[str, Any], x: int) -> int | None:
     return None
 
 
-def wired_why(ms: Mapping[str, Mapping[str, Any]], rows: Mapping[str, tuple[list[tuple[str, int]], Callable[[str, int], bytes | None]]],
-              units: Sequence[int]) -> str | None:
+Rows = tuple[list[tuple[str, int]], Callable[[str, int], "bytes | None"]]
+
+
+def wired_why(ms: Mapping[str, Mapping[str, Any]], rows: Mapping[str, Rows], units: Sequence[int]) -> str | None:
     """`OneStageZk.wiresHeldOn`: the members `ms` (by name, in order, as `_parsed` leaves them) on their rows `rows`
-    (each member's rows, its name and words, and the string of its unit's row), at the sampled units `units` (the
+    (each member's rows, its name and words, and the string of its unit's row), at the sampled proof blocks `units` (the
     population's): `WIRES_SAMPLED`'s refusal naming the wiring's code and wire (`wiring_refusal`), or the first
-    sampled unit's wired row that is not its writer's row; None where none is."""
+    sampled proof block's wired row that is not its writer's row; None where none is."""
     wires = [w for name, m in ms.items() for w in (_wired_of(name, m["wired"]) if "wired" in m else [])]
     templates = {name: (_count(m), dict(rows[name][0])) for name, m in ms.items()}
     if (r := wiring_refusal(templates, wires)) is not None:
-        return f"{WIRES_SAMPLED}: the members' wiring is refused: {r[0]}" + (f" at wire {r[1]}" if r[1] is not None else "")
+        at = f" at wire {r[1]}" if r[1] is not None else ""
+        return f"{WIRES_SAMPLED}: the members' wiring is refused: {r[0]}{at}"
     for x in units:
         t, u = next(((name, u) for name, m in ms.items() if (u := _local(m, x)) is not None), (None, None))
         if t is None:
@@ -816,12 +820,12 @@ def wired_why(ms: Mapping[str, Mapping[str, Any]], rows: Mapping[str, tuple[list
                 v = _writer_at(w, (u - w["at"]) * w["c"] + j)
                 mine, theirs = rows[t][1](w["port"], u), rows[w["writer"]][1](w["out"], v) if v >= 0 else None
                 if mine is None or theirs is None or mine != theirs:
-                    return (f"{WIRES_SAMPLED}: member {t}'s sampled unit {u}: its row {w['port']} is not row {w['out']} "
-                            f"of member {w['writer']}'s unit {v}")
+                    return (f"{WIRES_SAMPLED}: member {t}'s sampled proof block {u}: its row {w['port']} is not row "
+                            f"{w['out']} of member {w['writer']}'s unit {v}")
     return None
 
 
-def member_rows(circuit: Path, public: Path) -> tuple[list[tuple[str, int]], Callable[[str, int], bytes | None]]:
+def member_rows(circuit: Path, public: Path) -> Rows:
     """`OneStageZk.Member.rows` on files the run held: the circuit's rows (META ``ports``), each its name and words,
     and the string of a unit's row in the public file (`OneStageZk.bcAt`): a shared-row file's, the row of the port's
     table its ref names. `Outside` where the files are not read so."""

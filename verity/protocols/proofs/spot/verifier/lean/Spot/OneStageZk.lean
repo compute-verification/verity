@@ -65,7 +65,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `{"members"}` (`membersOf`), an object from each member's name to exactly
   `{"circuit", "public", "registered", "units", "vus_per_block"}` and optionally `"wired"`: its
   statement's files, as the one statement's, its units as `[lo, hi)` ranges, ascending, no unit in two members', its
-  circuit's units a proof block, and the wires it reads by (`Member.wired`). Its evidence's `proofs` is exactly `{"statements"}` (`statementsOf`), a list of
+  circuit's units a proof block, and the wires it reads by (`Member.wired`). Its evidence's `proofs` is exactly
+  `{"statements"}` (`statementsOf`), a list of
   exactly `{"member", "sessions"}`, the statements' sessions in order being v1's `sessions`. The statements are held as
   public structure before any session is read (`membersHeld`): each names a member of the parameters that no earlier
   statement named, in the members' order (by first unit), with exactly one session, on live coins and never retried;
@@ -97,8 +98,8 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   one value that differ in its root, leaves, row width, domain or leaf schema refuse, whether or not either is sampled.
   After the run and before v1's check at the coins, the members' wiring is held (`wiresHeld`): where a member names
   wires, the wires of every member, each counting its reader's and its writer's own units, pass `Spot.Wires.check`
-  over the members' rows, and each sampled unit's wired rows are its writers' rows, compared as the strings (`b ‖ c`)
-  the members' public files hold (`Spot.Wires.Summary.drawnOk`), else `WIRES_SAMPLED` refuses before
+  over the members' rows, and each sampled proof block's wired rows are its writers' rows, compared as the strings
+  (`b ‖ c`) the members' public files hold (`Spot.Wires.Summary.drawnOk`), else `WIRES_SAMPLED` refuses before
   `MULTI_REFUSED` (`checkMembersAt_wires`). The wiring is the verifier's parameter, fixed before any coin as the
   members' units are; no statement may read it as the policy's wiring until a check ties the two.
 
@@ -1410,8 +1411,8 @@ theorem membersRun_proved {p : Params} {ms : Array Member} {c : OneStage.Commitm
   obtain ⟨_, _, h⟩ := Flock.HmNets.bind_ok h
   exact runMembers_proved h hall
 
-/-- The refusal of the members' wiring (`wiresHeld`): a wiring `Spot.Wires.check` refuses, or a sampled unit's wired
-row that is not its writer's row. -/
+/-- The refusal of the members' wiring (`wiresHeld`): a wiring `Spot.Wires.check` refuses, or a sampled proof
+block's wired row that is not its writer's row. -/
 def WIRES_SAMPLED : String := "wires-sampled"
 
 /-- What the wiring reads of a member's files: its rows, each its name and words, and the string (`b ‖ c`) of its unit
@@ -1457,12 +1458,13 @@ def Member.localOf (m : Member) (x : Nat) : Option Nat :=
     | some _ => acc
     | none => if lo ≤ x ∧ x < hi then (some (acc.2 + (x - lo)), acc.2) else (none, acc.2 + (hi - lo))) (none, 0)).1
 
-/-- The sampled units `units` (the population's) as `(member, its own unit)`. -/
+/-- The sampled proof blocks `units` (the population's units) as `(member, its own unit)`. -/
 def sampledOf (ms : List Member) (units : Array Nat) : List (String × Nat) :=
   units.toList.filterMap fun x => ms.findSome? fun m => (m.localOf x).map (m.name, ·)
 
 /-- Reader row `(member, unit, port, _)` holds the string of its writer's row `(member, unit, out)`. -/
-def sameRow (ms : List (Member × MemberRows)) (q : String × Nat × String × Nat) (wr : String × Int × String) : Bool :=
+def sameRow (ms : List (Member × MemberRows)) (q : String × Nat × String × Nat) (wr : String × Int × String) :
+    Bool :=
   match ms.find? (·.1.name == q.1), ms.find? (·.1.name == wr.1) with
   | some (_, r), some (_, w) =>
     match r.bc q.2.2.1 q.2.1, w.bc wr.2.2 wr.2.1.toNat with
@@ -1470,13 +1472,14 @@ def sameRow (ms : List (Member × MemberRows)) (q : String × Nat × String × N
     | _, _ => false
   | _, _ => false
 
-/-- **The members' wiring on their rows `ms` at the sampled units `units`**: `Spot.Wires.check` passes on
-`wiringOf`, and every sampled unit's wired row is its writer's (`Spot.Wires.Summary.drawnOk`, at `sameRow`), else
-`WIRES_SAMPLED` naming the code and wire, or the first sampled row that is not its writer's. -/
+/-- **The members' wiring on their rows `ms` at the sampled proof blocks `units`**: `Spot.Wires.check` passes on
+`wiringOf`, and every sampled proof block's wired row is its writer's (`Spot.Wires.Summary.drawnOk`, at
+`sameRow`), else `WIRES_SAMPLED` naming the code and wire, or the first sampled row that is not its writer's. -/
 def wiresHeldOn (ms : List (Member × MemberRows)) (units : Array Nat) : V Unit :=
   match Spot.Wires.check (wiringOf ms) with
   | .error r =>
-    throw s!"{WIRES_SAMPLED}: the members' wiring is refused: {r.code.name}{(r.wire.map fun i => s!" at wire {i}").getD ""}"
+    let at_ := (r.wire.map fun i => s!" at wire {i}").getD ""
+    throw s!"{WIRES_SAMPLED}: the members' wiring is refused: {r.code.name}{at_}"
   | .ok s =>
     let sampled := sampledOf (ms.map (·.1)) units
     if s.drawnOk (sameRow ms) sampled then pure ()
@@ -1485,11 +1488,12 @@ def wiresHeldOn (ms : List (Member × MemberRows)) (units : Array Nat) : V Unit 
         ((s.rowsAt t u).find? fun ((p, row), wr) => !sameRow ms (t, u, p, row) wr).map (t, u, ·)
       match bad with
       | some (t, u, (p, _), (w, v, o)) =>
-        throw s!"{WIRES_SAMPLED}: member {t}'s sampled unit {u}: its row {p} is not row {o} of member {w}'s unit {v}"
-      | none => throw s!"{WIRES_SAMPLED}: a sampled unit's wired row is not its writer's row"
+        throw (s!"{WIRES_SAMPLED}: member {t}'s sampled proof block {u}: its row {p} is not row {o} of member " ++
+          s!"{w}'s unit {v}")
+      | none => throw s!"{WIRES_SAMPLED}: a sampled proof block's wired row is not its writer's row"
 
-/-- **The members' wiring held at the sampled units `units`** (module docstring, **per member**): nothing where no
-member names a wire; else every member's rows (`Member.rows`) and `wiresHeldOn`. The wiring is the verifier's
+/-- **The members' wiring held at the sampled proof blocks `units`** (module docstring, **per member**): nothing
+where no member names a wire; else every member's rows (`Member.rows`) and `wiresHeldOn`. The wiring is the verifier's
 parameter; no statement may read it as the policy's wiring until a check ties the two. -/
 def wiresHeld (ms : Array Member) (units : Array Nat) (bs : Core.Blobs) : V Unit :=
   if ms.all (·.wired.isEmpty) then pure ()
@@ -1498,8 +1502,8 @@ def wiresHeld (ms : Array Member) (units : Array Nat) (bs : Core.Blobs) : V Unit
     wiresHeldOn rows units
 
 /-- **The per-member form's check at the coins `ξ`** (module docstring, **per member**): the statements' sessions'
-verdicts (`membersRun`), the members' wiring at the evidence's sampled units (`wiresHeld`), then v1's `checkAt` at `ξ`
-on the verdicts, as the one statement's check; and what would accept is refused (`MULTI_REFUSED`). -/
+verdicts (`membersRun`), the members' wiring at the evidence's sampled proof blocks (`wiresHeld`), then v1's
+`checkAt` at `ξ` on the verdicts, as the one statement's check; and what would accept is refused (`MULTI_REFUSED`). -/
 def checkMembersAt (p : Params) (ms : Array Member) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (sts : Array StatementFiles) (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
   match membersRun p ms c e sts bs with
@@ -1856,7 +1860,8 @@ private def wireT (writer : String := "a") (base step : Int := 0) : Spot.Wires.W
 /-- Member `a` (units `[0, 2)`) writes row `out`, member `b` (units `[2, 4)`) reads it at row `x` by the wire `w`,
 the strings of `b`'s `x` rows `bx`. -/
 private def wiredT (w : Spot.Wires.Wire) (bx : List ByteArray := [sT 1, sT 2]) : List (Member × MemberRows) :=
-  [(memberT "a" #[(0, 2)], rowsT [("out", [sT 1, sT 2])]), ({ memberT "b" #[(2, 4)] with wired := [w] }, rowsT [("x", bx)])]
+  [(memberT "a" #[(0, 2)], rowsT [("out", [sT 1, sT 2])]),
+    ({ memberT "b" #[(2, 4)] with wired := [w] }, rowsT [("x", bx)])]
 
 #guard whyT (wiresHeldOn (wiredT (wireT (step := 1))) #[0, 1, 2, 3]) == ""
 #guard whyT (wiresHeldOn (wiredT (wireT "c" (step := 1))) #[2]) ==
@@ -1866,15 +1871,16 @@ private def wiredT (w : Spot.Wires.Wire) (bx : List ByteArray := [sT 1, sT 2]) :
 #guard whyT (wiresHeldOn (wiredT (wireT (base := 1) (step := 1))) #[2]) ==
   s!"{WIRES_SAMPLED}: the members' wiring is refused: bounds at wire 0"
 #guard whyT (wiresHeldOn (wiredT (wireT (base := 1) (step := -1))) #[3]) ==
-  s!"{WIRES_SAMPLED}: member b's sampled unit 1: its row x is not row out of member a's unit 0"
+  s!"{WIRES_SAMPLED}: member b's sampled proof block 1: its row x is not row out of member a's unit 0"
 #guard whyT (wiresHeldOn (wiredT (wireT (step := 1)) [sT 1, sT 3]) #[0, 3]) ==
-  s!"{WIRES_SAMPLED}: member b's sampled unit 1: its row x is not row out of member a's unit 1"
+  s!"{WIRES_SAMPLED}: member b's sampled proof block 1: its row x is not row out of member a's unit 1"
 #guard whyT (wiresHeldOn (wiredT (wireT (step := 1)) [sT 1, sT 3]) #[0, 1, 2]) == ""
 #guard whyT (wiresHeldOn (wiredT (wireT (step := 0))) #[2]) == ""
 #guard whyT (wiresHeldOn (wiredT (wireT (step := 0))) #[3]) ==
-  s!"{WIRES_SAMPLED}: member b's sampled unit 1: its row x is not row out of member a's unit 0"
+  s!"{WIRES_SAMPLED}: member b's sampled proof block 1: its row x is not row out of member a's unit 0"
 #guard (whyT (wiresHeld #[memberT "a" #[(0, 2)]] #[0] ⟨#[]⟩)) == ""
-#guard (whyT (wiresHeld #[{ memberT "b" #[(2, 4)] with wired := [wireT] }] #[2] ⟨#[]⟩)).startsWith "member b: circuit: "
+#guard (whyT (wiresHeld #[{ memberT "b" #[(2, 4)] with wired := [wireT] }] #[2] ⟨#[]⟩)).startsWith
+  "member b: circuit: "
 
 #guard (memberT "m0" #[(0, 1), (5, 6)]).first == 0
 #guard (memberT "m" #[(2, 4), (7, 8)]).indices == #[2, 3, 7]

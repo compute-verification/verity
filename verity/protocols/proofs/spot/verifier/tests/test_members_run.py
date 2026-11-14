@@ -331,7 +331,7 @@ def test_a_wire_a_swapped_writer_and_a_flipped_string_are_each_refused_by_name_b
         f"{M.WIRES_SAMPLED}: the members' wiring is refused: template at wire 0",
         f"proofs: {M.WIRES_SAMPLED}: the members' wiring is refused: template at wire 0")
     assert _wires(tmp_path / "swapped", _wire(base=1, step=[-1]))[1] == (
-        f"proofs: {M.WIRES_SAMPLED}: member {B}'s sampled unit 0: its row x is not row out of member {A}'s unit 1")
+        f"proofs: {M.WIRES_SAMPLED}: member {B}'s sampled proof block 0: its row x is not row out of member {A}'s unit 1")
 
     def flipped(at: int):
         def strings(member: str, unit: int, row: str) -> bytes:
@@ -340,7 +340,7 @@ def test_a_wire_a_swapped_writer_and_a_flipped_string_are_each_refused_by_name_b
             return bytes(s)
         return strings
     assert _wires(tmp_path / "flipped", _wire(), flipped(0))[1] == (
-        f"proofs: {M.WIRES_SAMPLED}: member {B}'s sampled unit 0: its row x is not row out of member {A}'s unit 0")
+        f"proofs: {M.WIRES_SAMPLED}: member {B}'s sampled proof block 0: its row x is not row out of member {A}'s unit 0")
     assert _wires(tmp_path / "unsampled", _wire(), flipped(1)) == (None, M.ALL_PASSED)
 
 
@@ -353,16 +353,20 @@ def _rows(rows: dict[str, list[bytes]]):
     return [(p, 4) for p in rows], lambda p, u: rows[p][u] if p in rows and 0 <= u < len(rows[p]) else None
 
 
+OTHER_0 = "member b's sampled proof block 1: its row x is not row out of member a's unit 0"
+OTHER_1 = "member b's sampled proof block 1: its row x is not row out of member a's unit 1"
+
+
 @pytest.mark.parametrize("wire, bx, units, why", [
     (_wire(writer="a", step=[1]), None, [0, 1, 2, 3], None),
     (_wire(writer="c", step=[1]), None, [2], "the members' wiring is refused: template at wire 0"),
     (_wire(writer="a", out="y", step=[1]), None, [2], "the members' wiring is refused: port at wire 0"),
     (_wire(writer="a", base=1, step=[1]), None, [2], "the members' wiring is refused: bounds at wire 0"),
-    (_wire(writer="a", base=1, step=[-1]), None, [3], "member b's sampled unit 1: its row x is not row out of member a's unit 0"),
-    (_wire(writer="a", step=[1]), [b"\1", b"\3"], [0, 3], "member b's sampled unit 1: its row x is not row out of member a's unit 1"),
+    (_wire(writer="a", base=1, step=[-1]), None, [3], OTHER_0),
+    (_wire(writer="a", step=[1]), [b"\1", b"\3"], [0, 3], OTHER_1),
     (_wire(writer="a", step=[1]), [b"\1", b"\3"], [0, 1, 2], None),
     (_wire(writer="a", step=[0]), None, [2], None),
-    (_wire(writer="a", step=[0]), None, [3], "member b's sampled unit 1: its row x is not row out of member a's unit 0"),
+    (_wire(writer="a", step=[0]), None, [3], OTHER_0),
 ])
 def test_the_wiring_on_its_rows_is_leans_on_the_same_cases(wire, bx, units, why):
     """`wired_why` on `OneStageZk`'s own cases of `wiresHeldOn` (its ``#guard`` lines), with their reasons: member
