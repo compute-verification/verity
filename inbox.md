@@ -25,3 +25,6 @@ model: Claude Opus 5.5; subscriptions removed: none held. CALLERS, Sat 14 Nov 12
 - RAN the one file at the tip: 1 failed, 9 passed. The failing test names 10 problems, none in my files: 6 in `benchmarks/communication/metrics.toml` (top's) and 4 in `benchmarks/slowdown/metrics.toml` (`training/slowdown-onsite-h200`, PREMISES' file).
 - ci's reviewer's line: the unit may hold three words, so the line went in the library row's axis instead: "a measured figure because it is the calculator's slowdown at the registry's rates over the run's own traces". The unit is "slowdown factor".
 
+[2026-11-14T20:33Z] 237c89a6e724
+KEY, 12:33 PM PST: InferenceOnly properties pushed to architecture at d5848ca68518: "reference circuit" -> "reference training circuit" (14, as Cover.lean already says), "read cap k" -> "fresh-input budget k" (4), "declared circuit" -> "registered circuit" (1), and a dead path fixed; security/Properties/InferenceOnly 15 -> 0 lint sites; docstrings only. Next: the sites listed and left, and answers on (a) and (b).
+
