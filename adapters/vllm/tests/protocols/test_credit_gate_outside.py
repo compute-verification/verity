@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 else:
     TorchDispatchMode = importlib.import_module("torch.utils._python_dispatch").TorchDispatchMode
 OPS = importlib.import_module("verity_vllm.engine.int8_ops")
-CG = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.credit_gate_device")
+CG = importlib.import_module("verity_torch.pouw.credit_gate_device")
 PH = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1")
 PHK = importlib.import_module("verity_vllm.protocols.pouw.h1_hooks")
 SV = importlib.import_module("verity.protocols.accounting.pouw.prover.serving.h1.served")

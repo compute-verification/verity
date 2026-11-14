@@ -319,8 +319,8 @@ class _Held:
         from verity.protocols.accounting.pouw.verifier.audit import weights_root
         from verity.protocols.accounting.pouw.verifier.coins import Challenger
         from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y_device import DeviceTrees
+        from verity_torch.pouw.pearl_c import run_device as PPDR
+        from verity_torch.pouw.pearl_c.served_y_device import DeviceTrees
 
         self.arm, self.key, self.users = arm, key, 0
         self.w = _bf16(operands.b, shape.n, shape.k)
@@ -375,7 +375,7 @@ class _YTree:
     no allocation and no torch."""
 
     def __init__(self, trees: Any, m: int, n: int, index: int) -> None:
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+        from verity_torch.pouw.pearl_c import run_device as PPDR
         from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y as SY
 
         run = trees.run
@@ -444,7 +444,7 @@ class _Call:
         _on(K, stream, self.steps)
         if self.hashing:
             import torch
-            from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+            from verity_torch.pouw.pearl_c import run_device as PPDR
 
             _on(K, stream, self.y_steps)
             size = self.pipe.size["tree_a"]
@@ -474,7 +474,7 @@ class _Call:
         """The gate: the launch's outputs against the served call's, byte for byte; y's tree against the one the served
         call retains over its y (`served_y_device.y_tree`)."""
         import torch
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import served_y_device as SYD
+        from verity_torch.pouw.pearl_c import served_y_device as SYD
 
         mine = {name: t if name == "y" else t.clone() for name, t in self.views.items()}
         y = self.reference()
@@ -490,7 +490,7 @@ class _Call:
         import torch
         from verity.protocols.accounting.pouw.verifier.protocol import Matmul
         from verity.protocols.accounting.pouw.verifier.protocol import Shape as Unit
-        from verity.protocols.accounting.pouw.prover.serving.pearl_c import run_device as PPDR
+        from verity_torch.pouw.pearl_c import run_device as PPDR
 
         if not self.hashing:
             raise RuntimeError(f"{SCHEME}: only a hashing call has a transcript")

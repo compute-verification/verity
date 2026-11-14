@@ -248,7 +248,7 @@ def test_a_point_is_the_least_target_its_budget_buys(world, panel, target):
 def test_a_one_stage_or_request_point_is_what_lean_certifies(world, monkeypatch):
     """Each one-stage and request-level point's design goes to Lean's checker in one run: a leak point becomes the bits
     Lean certifies, a point at the trivial bound has no design, and a design Lean refuses is an error.  Lean's answers
-    are stubbed; the sampled-proofs suite runs the checker on the planner's designs (`test_plancheck.py`)."""
+    are stubbed; the SPOT suite runs the checker on the planner's designs (`test_plancheck.py`)."""
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
     pts = [(m, d, t, f.point(m, d, t, 0.01 * s.gpu_seconds)) for d in ("one-stage", "request") for t in ("leak", "work")]
@@ -276,7 +276,7 @@ def test_lean_two_sends_the_planners_design_in_each_form(monkeypatch):
     replay blocks and the planner's θ): every bit charged, or each replay block at most the bits it serves in the
     capped sets' form or the patterns'.  The count is the bits Lean certifies, rounded up to a float, with the
     planner's bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the
-    sampled-proofs suite runs it."""
+    SPOT suite runs it."""
     cells = (Cell(3, 16), Cell(1, 64, stratum=64))
     row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
     seen = []
