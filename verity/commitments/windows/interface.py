@@ -1953,9 +1953,9 @@ def listed_reads(members: Sequence[CS.Member], templates: Sequence[Sequence[Any]
 
 
 def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
-    """``circuit``'s ``circuit.json`` less its `RUN_FIELDS` (`circuit_of`), from its description alone: what a compiler emits
-    before any unit runs. Its partition is the one `members` tiles, its members stated by ``cap``, its wires and its cuts, so
-    building it is work per template and per wire, never per unit."""
+    """``circuit``'s ``circuit.json`` less its `RUN_FIELDS` (`circuit_of`) but ``cap``, from its description alone: what a
+    compiler emits before any unit runs, at the cap its members are stated by. Its partition is the one `members` tiles, its
+    members stated by ``cap``, its wires and its cuts, so building it is work per template and per wire, never per unit."""
     if isinstance(cap, bool) or not isinstance(cap, int) or cap < 1:
         raise ValueError(f"a statement holds at least one unit, not {cap!r}")
     program, query = circuit.program()
@@ -1969,7 +1969,7 @@ def descriptor_record(circuit: Circuit, cap: int) -> dict[str, Any]:
            **_stated(cap, circuit.wires, circuit.declared()),
            **({"boundary": circuit.boundary} if circuit.boundary is not None else {}),
            **({"blocks": circuit.blocks.doc(sum(circuit.units.values()), PO.digest(part))} if circuit.blocks else {})}
-    return circuit_of(json.loads(circuit_bytes(doc)))
+    return {**circuit_of(json.loads(circuit_bytes(doc))), "cap": cap}
 
 
 def templates_of(w: CS.Binding) -> list[tuple[str, int]]:
@@ -1977,9 +1977,10 @@ def templates_of(w: CS.Binding) -> list[tuple[str, int]]:
     return [(t, n) for _k, t, _lo, n in CS.template_partition(w.program, w.query).ranges]
 
 
-#: the circuit record's fields its window's run fixes rather than its circuit (the run root, the coins' context), which the
-#: registration binds itself: a compiler's output is the record less these (`circuit_of`)
-RUN_FIELDS = ("run", "context")
+#: the circuit record's fields its window's run fixes rather than its circuit (the run root, the coins' context, the cap its
+#: members are cut at), which the registration binds itself (`window.circuit`, the whole record, before any coin): a
+#: compiler's output is the record less these (`circuit_of`), so a circuit's digest holds at whatever cap a serve commits
+RUN_FIELDS = ("run", "context", "cap")
 
 
 def circuit_of(doc: Mapping[str, Any]) -> dict[str, Any]:
