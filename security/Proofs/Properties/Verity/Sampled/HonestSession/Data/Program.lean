@@ -7,8 +7,8 @@ public import Flock.HmRow
 /-!
 # The honest session's program, query, law and partition
 
-The registered program: a root that reads one 16-word input and calls one composite on it, the session's one proof
-block (`nUnits`). Its query names that composite's one instance (`Q_template_instance` v0), its law samples one unit
+The registered program: a root that reads one 16-bit input and calls one composite, `Unit_v1`, on it, whose one gate
+is the primitive `Not16_v1`: the session's one proof block (`nUnits`). Its query names that composite's one instance (`Q_template_instance` v0), its law samples one unit
 (`subset`, `k = 1`), and its partition object is the one `Spot.Partition.build` writes at the program's SHA-512.
 Every digest is a term (`programSha`, `partitionDigestB`), never a literal, so a proof about these values compares hashes
 of terms and evaluates none.
@@ -29,34 +29,48 @@ def nUnits : Nat := 1
 /-- The template the query names: the composite each proof block lowers. -/
 def templateId : String := "Unit_v1"
 
-/-- The program's 16-word input type, `["Array",16,["Value",16]]`. -/
-def arr16 : Json := .arr #[.str "Array", jn 16, .arr #[.str "Value", jn 16]]
+/-- A 16-bit value's type, `["Value",16]`. -/
+def v16 : Json := .arr #[.str "Value", jn 16]
 
-/-- The registered descriptor without `annotations`, the object its SHA-512 is taken of. -/
-def programBare : Json := Json.mkObj [
-  ("callees", .arr #[.str "Input16_v1", .str templateId]),
+/-- The root's id. -/
+def rootId : String := "Root[HsProg_v0]_v1"
+
+/-- The descriptor's members other than `annotations`, in ascending key order. -/
+def bareMembers : List (String × Json) := [
+  ("callees", .arr #[.str "Not16_v1", .str "Input16_v1", .str templateId]),
   ("definitions", Json.mkObj [
     ("Input16_v1", Json.mkObj [("form", .str "primitive"), ("id", .str "Input16_v1"), ("params", .arr #[]),
-      ("ret", .arr #[.str "Value", jn 16])]),
-    (templateId, Json.mkObj [("bindings", Json.mkObj []),
-      ("body", Json.mkObj [("nodes", .arr #[]), ("params", .arr #[.arr #[.str "x", arr16]]),
-        ("ret", Json.mkObj [("affine", .arr #[.str "p", jn 0, jn 0, jn 16])]), ("ret_type", arr16)]),
-      ("form", .str "composite"), ("id", .str templateId)]),
-    ("Root_v1", Json.mkObj [("bindings", Json.mkObj []),
+      ("ret", v16)]),
+    ("Not16_v1", Json.mkObj [("form", .str "primitive"), ("id", .str "Not16_v1"),
+      ("params", .arr #[.arr #[.str "a", v16]]), ("ret", v16)]),
+    (rootId, Json.mkObj [("bindings", Json.mkObj []),
       ("body", Json.mkObj [
         ("nodes", .arr #[
-          Json.mkObj [("args", .arr #[]), ("axes", .arr #[]), ("fn", jn 0), ("form", .str "batch"), ("n", jn 16),
-            ("out", jn 0)],
-          Json.mkObj [("args", .arr #[Json.mkObj [("refs", Json.mkObj [("affine", .arr #[.str "n", jn 0, jn 0, jn 16])]),
-              ("type", jn 1)]]), ("fn", jn 1), ("form", .str "call"), ("out", jn 1)]]),
-        ("params", .arr #[]), ("ret", Json.mkObj [("affine", .arr #[.str "n", jn 1, jn 0, jn 16])]),
-        ("ret_type", arr16)]),
-      ("form", .str "composite"), ("id", .str "Root_v1")])]),
-  ("format", .str "verity-ir/descriptor/v1"),
-  ("root", .str "Root_v1")]
+          Json.mkObj [("args", .arr #[]), ("axes", .arr #[]), ("fn", jn 1), ("form", .str "batch"), ("n", jn 1),
+            ("out", jn 1)],
+          Json.mkObj [("args", .arr #[Json.mkObj [("refs", Json.mkObj [("affine", .arr #[.str "n", jn 0, jn 0, jn 1])]),
+              ("type", jn 0)]]), ("fn", jn 2), ("form", .str "call"), ("out", jn 0)]]),
+        ("params", .arr #[]), ("ret", Json.mkObj [("affine", .arr #[.str "n", jn 1, jn 0, jn 1])]),
+        ("ret_type", v16)]),
+      ("form", .str "composite"), ("id", .str rootId)]),
+    (templateId, Json.mkObj [("bindings", Json.mkObj []),
+      ("body", Json.mkObj [
+        ("nodes", .arr #[Json.mkObj [("args", .arr #[Json.mkObj [
+            ("refs", Json.mkObj [("affine", .arr #[.str "p", jn 0, jn 0, jn 1])]), ("type", jn 0)]]),
+          ("fn", jn 0), ("form", .str "primitive"), ("out", jn 0)]]),
+        ("params", .arr #[.arr #[.str "x", v16]]),
+        ("ret", Json.mkObj [("affine", .arr #[.str "n", jn 0, jn 0, jn 1])]), ("ret_type", v16)]),
+      ("form", .str "composite"), ("id", .str templateId)])]),
+  ("program_fn", .str "HsProg_v0"),
+  ("root", .str rootId),
+  ("schema", .str "verity-ir/descriptor/v1"),
+  ("types", .arr #[v16, .arr #[.str "Array", jn 1, v16]])]
+
+/-- The registered descriptor without `annotations`, the object its SHA-512 is taken of. -/
+def programBare : Json := Json.mkObj bareMembers
 
 /-- The registered descriptor: `programBare` with empty `annotations`. -/
-def programJ : Json := programBare.setObjVal! "annotations" (Json.mkObj [])
+def programJ : Json := Json.mkObj (("annotations", Json.mkObj []) :: bareMembers)
 
 /-- The registered program file, its descriptor's canonical text. -/
 def programFile : ByteArray := ((Flock.canon programJ).toOption.getD "").toUTF8
@@ -87,8 +101,8 @@ def partitionText : String := (Flock.canon partitionObj).toOption.getD ""
 def partitionDigestB : ByteArray :=
   Flock.Sha512.hash (Flock.HmRow.PARTITION_V1.toUTF8.push 0 ++ partitionText.toUTF8)
 
-/-- The template's digest as the circuit's META `program_digests` names it. Piece P4 fixes this term to the one
-`HmRow.deriveTemplateUnits` compares, and piece P1's META splices it. -/
+/-- The template's digest as the circuit's META `program_digests` names it: SHA-512 of its Definition's canonical entry.
+`HmRow.deriveTemplateUnits` reads only the key. -/
 def templateDigest : ByteArray := Flock.Sha512.hash ((Flock.canon (programBare.getObjValD "definitions" |>.getObjValD templateId)).toOption.getD "").toUTF8
 
 end Verity.Sampled.Instance.HonestSession
