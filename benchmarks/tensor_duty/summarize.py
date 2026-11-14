@@ -236,8 +236,8 @@ def price_readings(sku: str = SKU, base_mhz: float = BASE_MHZ, base_source: str 
     sm, tensor = clock["sm"]["value"], clock["tensor"]["value"]
     rows = [("per-clock", ADD_PRICE, "W1: the tensor and the FP32 pipe at one SM clock"),
             ("sheet-clocks", ADD_PRICE * tensor / sm, f"the card's clock.tensor {tensor} MHz over clock.sm {sm} MHz"),
-            ("cautious", ADD_PRICE * base_mhz / sm, f"a base clock of {base_mhz:g} MHz over clock.sm {sm} MHz: "
-                                                     f"{base_source}")]
+            ("cautious", ADD_PRICE * base_mhz / sm, (f"a base clock of {base_mhz:g} MHz over clock.sm {sm} MHz: "
+                                                      f"{base_source}"))]
     return [{"reading": n, "price": p, "threshold": p * (1 - MARGIN), "source": src} for n, p, src in rows]
 
 
