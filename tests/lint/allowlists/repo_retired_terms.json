@@ -3041,8 +3041,6 @@
     {"file": "verity/commitments/attest/__init__.py", "count": 17},
     {"file": "verity/commitments/attest/lean/Attest.lean", "count": 2},
     {"file": "verity/commitments/attest/tests/test_attest.py", "count": 13},
-    {"file": "verity/claims/__init__.py", "count": 62},
-    {"file": "verity/claims/tests/test_claims_registry.py", "count": 8},
     {"file": "verity/protocols/accounting/pous/device/challenger_party.py", "count": 6},
     {"file": "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Difftest.lean", "count": 3},
     {"file": "verity/protocols/accounting/pous/device/lean/MemoryChallenger/Records.lean", "count": 8},
