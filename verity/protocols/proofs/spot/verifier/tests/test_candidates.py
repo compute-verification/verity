@@ -66,7 +66,7 @@ def test_a_shape_past_c_flocks_block_is_never_a_proof_block():
     cands, alts, hints = cuts("tile", tile, N, costs, OBJECTIVE, grid=21)
     assert all(u != "Tile2" for key in alts.values() for u, _ in key) and {c.cap for c in cands} == {4096}
     assert not [h for h in hints if h.node == "Tile2"]
-    with pytest.raises(ValueError, match=r"^Huge has no legal cut: it is past C-Flock's block \(cap 0\)"):
+    with pytest.raises(ValueError, match=r"^Huge has no legal cut: it is past Flock's block \(cap 0\)"):
         cuts("huge", Shape("Huge", 1, 1, 16, cap=0), N, costs, OBJECTIVE)
 
 

@@ -855,7 +855,7 @@ def test_a_proof_block_c_flock_would_refuse_is_refused_at_lowering():
         I.check_proof_block(wide, {"w": 256})
     with pytest.raises(ValueError, match=f"{re.escape(GID)} cut .*: no row past 111 B.*bind the Definition larger"):
         I.check_proof_block(GEMM, {"w": 16})
-    with pytest.raises(ValueError, match=r"need a C-Flock block of 2\^28 bits, past 2\^27: bind the Definition smaller"):
+    with pytest.raises(ValueError, match=r"need a Flock block of 2\^28 bits, past 2\^27: bind the Definition smaller"):
         I.check_proof_block(bind(G.Gemm, K=2048, N=48, **G.GEMM_AMPERE))
 
 
