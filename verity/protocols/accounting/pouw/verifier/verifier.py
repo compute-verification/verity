@@ -159,9 +159,9 @@ def of_record(fn: str, value: Any, python: Any) -> Any:
     try:
         got = lean(fn, value)
     except (LeanError, TypeError, ValueError) as e:
-        return {"refused": [DISAGREE, f"the Lean verifier of record gave no answer to {fn}, so it stands refused: {e}"]}
+        return {"refused": [DISAGREE, f"the Lean verifier gave no answer to {fn}, so it stands refused: {e}"]}
     if got != json.loads(json.dumps(python)):
-        return {"refused": [DISAGREE, f"the Lean verifier of record and its Python twin disagree on {fn}, so it "
+        return {"refused": [DISAGREE, f"the Lean verifier and its Python twin disagree on {fn}, so it "
                                       f"stands refused: the Lean answered {_said(got)}, the Python {_said(python)}"]}
     return got
 
@@ -178,10 +178,10 @@ def serve_of_record(exe: str, case: Any, python: dict) -> dict:
     try:
         got = _serves[exe].exchange(case, "a serve case")
     except (LeanError, TypeError, ValueError) as e:
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier of record ({exe} serve) gave no answer, so the "
+        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) gave no answer, so the "
                                     f"case stands refused: {e}"}
     if _canonical(got) != _canonical(python):
-        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier of record ({exe} serve) and its Python twin "
+        return {**refuse, "reason": f"{DISAGREE}: the Lean verifier ({exe} serve) and its Python twin "
                                     f"disagree, so the case stands refused: the Lean answered {_said(got)}, the "
                                     f"Python {_said(python)}"}
     return got
