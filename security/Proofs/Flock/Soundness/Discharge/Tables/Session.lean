@@ -108,13 +108,13 @@ at every sample `L.draw ω`, registration `R` and table `j` of the plan, on ever
 verity-verify-proof accepts, table `j`'s reps run on the tapes decoded from its streams and its proof files, and the salted
 table's verdict on those runs, with the cap `root_B` decodes to and the openings and salts the proof files decode to,
 holds. -/
-def DecodesOnJ (L : Law n) : Prop :=
+def DecodesOnJ (L : SamplingDesign n) : Prop :=
   ∀ ω R (j : Fin (plan (L.draw ω) R).length),
     DecodesTable (fun _ cap pend os => tableOutL H E Lf cap pend os) (fun _ o => o.accepted = true)
       (fun o => Accepts I (wr (L.draw ω) R o)) (opn (L.draw ω) R) (dec (L.draw ω) R) (one (L.draw ω) R)
       (fin (L.draw ω) R) (capOf (L.draw ω) R) (fun j => repsOf (D := D) execArith ((plan (L.draw ω) R).get j)) j
 
-variable {L : Law n}
+variable {L : SamplingDesign n}
 
 /-- **The simulated audit strategy**, from the decoder at the sampling design's samples: the live prover's registration, and at each
 sample the simulated session strategy against its live session. -/

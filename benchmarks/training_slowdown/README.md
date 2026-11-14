@@ -463,7 +463,7 @@ The suite: `uv run tools/check/suites.py benchmarks/training_slowdown`.
 ## The grader
 
 `grader/grader.py` reads a run's training step off the Program the training-step frontend derives for it
-(`step_program`, in `adapters/vllm/verity_vllm/program/frontend/train_step.py`), beside this package's trace of the
+(`step_program`, in `adapters/torch/verity_torch/frontend/train_step.py`), beside this package's trace of the
 same step. From `grader/`:
 
 ~~~text

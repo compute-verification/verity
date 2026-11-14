@@ -516,7 +516,7 @@ end Reads
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
-  {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
+  {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
 /-- **A registrant's row at a value the verifier registers itself is the verifier's, or SHA-512 collides**: at a
 registered read `(u, q)` of a port without segments, where `checkRows` accepted the port at the verifier's `rows` under
