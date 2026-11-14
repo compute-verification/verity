@@ -51,3 +51,32 @@ ratchet gate 512644d14fbc..22b13e289392: 1 change(s), 1 failed
 
 Marked nothing. TIMER: none.
 
+[2026-11-14T07:01Z] 1098820ce2e0
+TERMGB to network-accounting (lead), Fri 13 Nov 11:02 PM PST. **#9329's mend is pushed: head `269fa3fd85a1`, one commit on `caac9630b3d3`, a fast-forward. The gate exits 0.**
+
+**The gate's last line** [ran, from a tree at `main` `512644d14fbc`, `python3 adapters/vllm/tools/ratchet_gate.py origin/main 269fa3fd85a1`, exit 0]:
+"ratchet gate 512644d14fbc..269fa3fd85a1: 1 change(s), 0 failed" and under it "89605f38f901..269fa3fd85a1 (269fa3fd85a1): passed: ruff finds nothing new in the 8 Python file(s) it changes; no direct environment read is new in the 8 Python file(s) it changes; no silent except handler is new in the 8 Python file(s) it changes; no lane-text site is new in the 9 file(s) it changes; no retired-term site is new in the 9 file(s) it changes".
+
+**The counts, base to head** [ran, the base's lint on each file]: `records_audit.py` 64 to 64, `tests/test_prove_path.py` 96 to 91, `tests/test_records_audit.py` 112 to 112. Before the mend they were 66, 106 and 120.
+
+**The difference, 4 files, +78 -48** [ran: numstat]. No check of `forged_outcome` changes; the same windows pass and fail.
+- `records_audit.py` (+17 -9), three things:
+  - The ZK server's refusal word is no longer spelled. `zk_server_refused()` returns the prover's own name for it on `main`, `verity_flock.rec_live.refused("")`. That is the word with its colon and space, as Lean's `REFUSED` and the prover's Rust write it, so the prefix it tests is two characters longer than before.
+  - Whether the sessions ran behind the ZK server is read from the summary's `arm` (`== "fw"`) in place of the key that names the server's binary. a5 writes the two on one line: `arm` is `fw` exactly where the binary is named, `dev` where none is, and none for a plain audit. This is the one line a reader should look at: it reads another key of the same record, and I chose it over `"plain" not in s`, which would differ for an audit with no ZK server that is not plain.
+  - The local you named: `released` is now `no_proof_released`, the check's name.
+- `tests/test_prove_path.py` (+38 -24): one helper, `_summary`, holds a5's keys for the sample and the checks before it, and both fabricated summaries are built on it. The forged verdict's checks are compared through `_stopped`: the three checks on where the window was stopped by name, the other two required to hold. The fabricated records drop a verdict key that `forged_outcome` never reads. Lean's refusal at setup is now "setup: one statement per table expected", Lean's own text for another setup refusal, since the old one quoted the retired word.
+- `tests/test_records_audit.py` (+22 -14): `_audit_args` holds the argument list that two of `main`'s tests and the new one each spelled whole; the three now read it. That is what brings this file back to 112: the stub's summary still names two of a5's keys, which have no name on `main` to read them through.
+- `benchmarks/one_stage/tests/test_audit_two_members.py` (+1 -1): the name's one other user.
+
+**A mutation I ran and undid** [ran]: with `arm` read as "anything but `dev`", 7 of the 27 forged-verdict tests fail, the six plain ones among them.
+
+**Run** [ran on the VM at `269fa3fd85a1`]: `test_prove_path.py` 103 passed, 2 skipped; `test_records_audit.py` and `test_run_rules.py` 54 passed; the six files of `tests/lint/` 40 passed; `tests/test_boundaries.py` 24 passed (the import of `rec_live` opens no new edge); ruff clean on the four files.
+**Running on the pool:** `r20261114-070058-2323`, the six lint files and `suites.py --changed 89605f38f901 --quick`, which runs `test_audit_two_members.py` whole on the real prover. I send its end and then set the body. The weights tie's arm is not run again.
+
+**Not told you before, one line:** the mend touches three lines each of two of `main`'s tests in `test_records_audit.py` (the tied audit's and the history audit's), far from #9319's hunks, which are all in the test after the new one.
+
+Next, in your order: #9501's 15 sites, #9811's 17, Job 1's, then Job 1's run end and its pull request. Your 10:47 PM PST order for the three sizes by Sat 14 Nov 11 AM PST is read.
+
+Held running: `r20261114-070058-2323` (#9329), `r20261114-053645-27a4` (Job 1).
+TIMER: none.
+
