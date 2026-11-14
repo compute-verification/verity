@@ -374,7 +374,7 @@ theorem adm_not_readsBy (rd : Unit → (Fin 1 → List (Obs 1 1 1)) → Unit →
 
 /-- **Without the read-back, `MonitoringPeriodLeakChecked`'s count fails.** At `posL`, one window, a server that is never late and
 the format `bitFmt`, with the secret the connection's admission bucket: the coins are a nonempty type and `δ = 0` is
-nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning, `TrustedHost` at a
+nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning, `TrustedDevice` at a
 host that runs the network certifier's code, and the channel all hold; the network certifier registers its
 observations at both secrets, at an operator that reads nothing; no reader reads the record back under the one
 registered parameter; and the two secrets, each of whose windows meets its good event, are counted against
@@ -383,7 +383,7 @@ theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
-      Verity.Assumptions.TrustedHost ()
+      Verity.Assumptions.TrustedDevice ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Unit) => recordingCode bitFmt p.1 (bitArr false))
         (fun p => recordingCode bitFmt p.1 (bitArr false)) ∧
       MonitoringPeriodChannelReg bitFmt (fun (_ : Unit) (_ : CertifierSchedule Unit) => True) {()} (Set.univ : Set Bool) admSched
@@ -419,7 +419,7 @@ theorem MonitoringPeriodLeakChecked_readsBy_exclusion :
 /-- **`MonitoringPeriodLeakChecked`'s premises hold together at a monitoring period of one placed window that meets its good
 event**, at a verifier that rejects every run: they are consistent there, and no honest run passes. At `posL`, the format `bitFmt`, the one schedule `oneSched` and the one secret of a server that is not late:
 `Compiled.KS`, the commitment's binding, the window's placement (`ExecutionPhasesPlaced`), its check's pinning at no checked
-input (`CheckedUnique`), `TrustedHost` at a host that runs the network certifier's code, the read-back under the one
+input (`CheckedUnique`), `TrustedDevice` at a host that runs the network certifier's code, the read-back under the one
 registered parameter (`RecordFormat.ReadsBy`) and the channel of the secret (`MonitoringPeriodChannelReg`); the network certifier
 registers the window's observations at the operator whose move is the unset bit (`CertifierRegisters`); and the window
 meets its good event (`ExecutionPhaseGoodChecked`), at the check every run passes. -/
@@ -427,7 +427,7 @@ theorem MonitoringPeriodLeakChecked_placed :
     (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
-      Verity.Assumptions.TrustedHost ()
+      Verity.Assumptions.TrustedDevice ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
         (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧

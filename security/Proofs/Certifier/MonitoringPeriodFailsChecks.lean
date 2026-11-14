@@ -144,7 +144,7 @@ theorem failsFactor_one : ∑ i ∈ Finset.range (1 + 1), failPatterns (fun _ : 
 /-- **The failures' factor is met.** At `posL`, one window, the connection of `oneSched` under the host that runs
 `recordingCode bitFmt`, and the operator whose ingress is whether the connection failed: the coins are a nonempty type
 and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement, its check's pinning,
-`TrustedHost`, the read-back under the one registered parameter and the channel all hold; the network certifier
+`TrustedDevice`, the read-back under the one registered parameter and the channel all hold; the network certifier
 registers its observations at both secrets; the two secrets, each with at most one failure below the bound 1 and a
 window that meets its good event, are counted against `#Θ · executionPhasesCount = 1`, which fails; and the factor of
 `MonitoringPeriodLeakFailsAtMost` there is 2. -/
@@ -152,7 +152,7 @@ theorem MonitoringPeriodLeakFailsAtMost_factor_met :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
-      Verity.Assumptions.TrustedHost ()
+      Verity.Assumptions.TrustedDevice ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
         (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧
@@ -215,14 +215,14 @@ theorem MonitoringPeriodLeakCharged_nontrivial :
 /-- **Without `KraftWeights`, `MonitoringPeriodLeakCharged`'s count fails.** At `posL`, one window, the connection of `oneSched`
 under the host that runs `recordingCode bitFmt`, and the operator whose ingress is whether the connection failed: the
 coins are a nonempty type and `δ = 0` is nonnegative; `Compiled.KS`, the commitment's binding, the window's placement,
-its check's pinning, `TrustedHost`, the read-back under the one registered parameter and the channel all hold; the
+its check's pinning, `TrustedDevice`, the read-back under the one registered parameter and the channel all hold; the
 network certifier registers its observations at both secrets; the weights `w_j = 1` sum to 2 over the failures of one
 connection; and the two secrets, each charged at most `log2 1`, are counted against `T = 1`. -/
 theorem MonitoringPeriodLeakCharged_kraft_exclusion :
     Nonempty Bool ∧ (0 : ℝ) ≤ 0 ∧ (posL Bool).KS id ∧ (posL Bool).commit.Binds id ∧
       ExecutionPhasesPlaced (posL Bool).partition 0 (fun _ : Fin 1 => posStmt false) (fun _ => notPart) (fun _ => 0) ∧
       CheckedUnique notProg notPart (⟨[.all]⟩ : Design) notLay 1 ∅ (fun _ => True ∧ True) ∧
-      Verity.Assumptions.TrustedHost ()
+      Verity.Assumptions.TrustedDevice ()
         (fun (_ : Unit) (p : CertifierSchedule Unit × Bool) => recordingCode bitFmt p.1 (bitArr p.2))
         (fun p => recordingCode bitFmt p.1 (bitArr p.2)) ∧
       bitFmt.ReadsBy (fun (_ : Unit) => bitFmt.read oneSched) (fun _ s => s = oneSched) ∧
