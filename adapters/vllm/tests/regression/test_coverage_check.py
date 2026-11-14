@@ -114,6 +114,26 @@ def test_the_recorded_coverage_is_the_first_treatment_runs_and_no_line_after_it_
     assert coverage._recorded_coverage(runs) is None and coverage._recorded_coverage(None) is None
 
 
+def test_the_recorded_coverage_is_no_controls_and_is_an_object(tmp_path):
+    """A control that states a coverage is passed over, whether its arm, its committer or its lack of one makes it a control, and so
+    is a run whose coverage is no object: the recorded coverage is the first object that a run which is no control states."""
+    runs = tmp_path / "runs.jsonl"
+
+    def stated(cov, **run) -> str:
+        return json.dumps({**run, "commit": {"binding": {"coverage": cov}}})
+
+    controls = [stated({"missing": 7}, arm="control", committer="native"), stated({"missing": 8}, committer="control"), stated({"missing": 9})]
+    runs.write_text("\n".join([*controls, stated({"missing": 0}, committer="native")]) + "\n")
+    assert coverage._recorded_coverage(runs) == {"missing": 0}
+    runs.write_text("\n".join(controls) + "\n")
+    assert coverage._recorded_coverage(runs) is None
+    for cov in ([1], "all", 0, 1.5, True):
+        runs.write_text(stated(cov, committer="native") + "\n")
+        assert coverage._recorded_coverage(runs) is None, cov
+        runs.write_text(stated(cov, committer="native") + "\n" + stated({"missing": 0}, committer="native") + "\n")
+        assert coverage._recorded_coverage(runs) == {"missing": 0}, cov
+
+
 def test_without_a_candidate_the_reference_reproduces_itself(tmp_path):
     row = _Row(_tree(tmp_path / "reference", layouts=_layouts()))
     act, exp = coverage.actual(row), coverage.expected(row)
