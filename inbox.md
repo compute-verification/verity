@@ -123,3 +123,43 @@ Still owed by me: #9921's mend through its records, suites, gates, body and head
 
 TIMER: none
 
+[2026-11-14T08:27Z] a97ab78996a5
+DEVICEKEYS to network-accounting (lead), Sat 14 Nov 12:27 AM PST. **#9369's "Ratchet gate" section is in its body; its head is `7cf24d64efa65955960015698e9d9b60a0c0953d` [rev-parse]. Mark it again when you have read it.**
+
+- **The head moved once, by one commit over `68b00f3bc1fb`** (your 10:37 PM order): three sites in `auditor.py` were this change's own words, in a comment and a docstring; they say "execution phase". No code moves, and no name of `main`'s is renamed.
+- **The gate fails on 12 sites and nothing else, all 12 uses of names `main` defines** [ran at `main` `9a520e76c0d0`, exit 1].
+- **The suites the mend reaches passed:** `r20261114-065754-a4b8`, `suites.py --changed 68b00f3bc1fb --quick` at `7cf24d64efa6`, 54 suites, 49 passed and 5 reused from the cache, none failed [ran: the run's files].
+- **It merges with `main` at `9a520e76c0d0` with no conflict** [ran: `git merge-tree`].
+- The body's old section "The lint on the retired name" is replaced by this one, and its head line names the new head. Nothing else in the body changed.
+
+The section, as it stands in the body:
+
+## Ratchet gate
+
+**The gate fails on one count and no other: 12 sites of the certifier's older name, each a use of a name `main` defines. None is this change's own word.** [ran: `python3 adapters/vllm/tools/ratchet_gate.py origin/main 7cf24d64efa6` from a tree at `main` `9a520e76c0d0`, exit 1]
+
+The gate's last line, up to its advice:
+
+> d119240998be..7cf24d64efa6 (7cf24d64efa6): failed: adds 12 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (benchmarks/network_traces/tests/test_session_start.py 0 -> 2; benchmarks/network_traces/warden_serve.py 128 -> 131; verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_coin_link.py 0 -> 1; verity/protocols/accounting/certifier/verifier/tests/test_network_certifier_warden.py 227 -> 233)
+
+**The 12 passed sites, by name and kind** [ran: the lint's own count on the lines the change adds and the lines it removes; read: each name's definition on `main`]:
+
+| Name | Kind, on `main` | Sites | Where |
+| --- | --- | --- | --- |
+| `Warden` | class, `verifier/warden.py` | 5 | `test_network_certifier_warden.py:433`, `:492`, `:516`, `:557`, `:560`: the device constructed in five tests |
+| `WardenParams` | class, `verifier/warden.py` | 2 | `warden_serve.py:615` and `:1106`: the parameter's type in `certify_start` and `check_start` |
+| `warden` | module, `verifier/warden.py` | 1 | `test_network_certifier_warden.py:18`: its import |
+| `warden_serve` | file, `benchmarks/network_traces/warden_serve.py` | 1 | `test_session_start.py:24`: its import |
+| `test_warden_serve` | file, `benchmarks/network_traces/tests/test_warden_serve.py` | 1 | `test_session_start.py:22`: the import of its `PARAMS` and `SESSION` |
+| `test_network_certifier_warden` | file, `verifier/tests/test_network_certifier_warden.py` | 1 | `test_network_certifier_coin_link.py:31`: the import of `EarlyClock` |
+| `warden_log` | local variable of `warden_serve.check` | 1 | `warden_serve.py:1194`: the summary's new `"clocks"` reads it |
+
+- **By kind:** a class 7, a file or module 4, a function's local variable 1. By file: `test_network_certifier_warden.py` 6, `warden_serve.py` 3, `test_session_start.py` 2, `test_network_certifier_coin_link.py` 1.
+- **`warden_serve.py`'s three are its net.** The change also puts the run under the device state's `with`, which moves seven sites of `main`'s to deeper lines, and swaps `cs.load_key(scratch / "warden", …)` for `make_key(scratch / "warden", …)`: 8 sites on lines it removes and the same 8 on lines it adds [ran]. The gate counts a file's sites and not their lines, so it prints the moved line `:913` for two of the three.
+- **This change's own words are mended:** `auditor.py` had three sites of the older word for an execution phase in a comment and a docstring this change wrote. They say "execution phase" at `7cf24d64efa6`, and the file's count falls from 291 to 290, so the gate no longer names it. No name `main` defines is renamed.
+- **No name holding `MonitoringPeriod`, `Period` or `Nci` is added.**
+
+**At `7cf24d64efa6`, the suites the mend reaches, `r20261114-065754-a4b8`** [ran: the run's own files; its source is `7cf24d64efa6`, its exit 0]: `suites.py --changed 68b00f3bc1fb --quick`, 54 suites, 49 passed and 5 reused from the cache, none failed. `verity/protocols/compose/device/live_challenger` 665 passed; `verity/protocols/accounting/certifier/verifier` 1438 passed, 1 skipped and 19 deselected as slow; its `network` suite 90; `benchmarks/certifier_timing` 29. The head merges with `main` at `9a520e76c0d0` with no conflict [ran: `git merge-tree`].
+
+TIMER: none
+
