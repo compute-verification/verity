@@ -72,3 +72,27 @@ Read at `0b9785f7ba0` (`cursor/circuits-cir274-eight-6f04`). Paths are under
   - Or `window_replay` reading the prompt's unit ranges from `Circuit.ingress`, which already holds
     `(reader, port, at, units)` for each rank (`interface.py:822-833`).
 - **Nothing can narrow the ids' output today.**
+
+## What each rank's combine o0 feeds, and the other ranks' ids (at `9ce331c`)
+
+- **Built:** each select's combine port, `GreedyCombine_v2{..}/o0`, is in `Circuit.external`.
+  - It is added at `node_window_select.py:149` and emitted by `NodeWindow.circuit`.
+  - The joined circuit carries every rank's (`node_window_join.py:214`).
+  - The prompt stays under `ingress` alone.
+- **What rank r's combine o0 feeds inside the joined window: its own rank only.**
+  - Its next decode step's embedding read, `tok` (`node_window_embed.py:144`, `w.take(node, 0)`).
+  - Its own `GreedyStopCheck_v1` unit's `ids` row (`node_window_select.py:174`).
+- **Nothing across ranks.**
+  - `join` keeps each rank's own wires within that rank (`node_window_join.py:166`, `shift(w, x.rank, x.rank)`).
+  - The only wires it adds between ranks are to `peers_*` inputs (`:175`, `:198`): all-reduce partials and the logits
+    all-gather's parts. No combine output is one of them.
+- **Nothing holds ranks 1 to 7's ids equal to rank 0's.** No wire, unit or check compares them.
+  - Each rank has its own chunk and combine units, and the same Definitions (`node_window_select.py:142`, `:146`).
+  - Their logits rows are wired to the same writer rows: a rank's own lanes to its LM head, the others' lanes through
+    `join` to the writer rank's.
+  - So each rank's ids are equal to rank 0's exactly when each of those units computes its Definition. That is a
+    statement about every unit, which only a sampled proof checks, not a constraint in the circuit.
+- **If b.egress is tied to rank 0's selects alone, ranks 1 to 7's ids are interior values.**
+  - They are explained, not output.
+  - A wrong one changes that rank's next step, whose partials reach rank 0 through the all-reduce wires. So it is a
+    wrong block like any other, not a separate output.
