@@ -39,9 +39,12 @@ seen, and the Choose last seen per page (`chosen`; its first pass records every 
    LANE_RING_S, naming the issues, until it holds (a slipped ask holds once a `slip:` comment follows its last move); once
    a day after 15:00Z, top with the totals and their change from the line 24 h earlier, and the registry's teams the app
    can't read (`unread`), which the audit skips.
-7. The Goals page as this hour has it, saved as <state dir>/goals/goals-<YYYYMMDDTHHMMZ>.json.gz: the earlier dump `research
-   velocity` compares the page with. The pod holds no Cursor identity, so it reads the page with the site key in <state
-   dir>/goals.key (one line, `events:read`). A dump older than KEEP_S goes. It rings nobody.
+7. The Goals page as this hour has it, saved as <state dir>/goals/goals-<YYYYMMDDTHHMMZ>.json.gz and put in the store,
+   preserved, as a `goals-dump/v1` by `research velocity`'s own save (`velocity.save`): the earlier dumps `research velocity`
+   compares the page with. Each pass also puts in up to SAVE_MAX of the earlier copies the store doesn't hold yet, oldest first.
+   A copy is deleted once it is older than KEEP_S and the store has reported it preserved (`goals_preserved` in the state,
+   each with its `art:` id), never before; a failed save is logged and tried again at the next pass. The pod holds no Cursor
+   identity, so it reads the page with the site key in <state dir>/goals.key (one line, `events:read`). It rings nobody.
 
 `--seed` runs one pass that records every reply, comment, post and finding as seen or rung and rings nothing (a page's pending
 tick is left to the next pass), so a loop taking over from top's timers starts where they are; the watchers supervisor waits for
@@ -67,10 +70,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-from research import goals, linear, slack
+from research import goals, linear, slack, velocity
 
 QUOTE_MAX = 600
 KEEP_S = 14 * 86400
+SAVE_MAX = 24                           # the earlier copies of the Goals page a pass puts in the store, besides this hour's
 SINCE_MARGIN_S = 600
 UNANSWERED_H = 1
 RULES_THREAD = "1792037552.043289"
@@ -494,20 +498,44 @@ def goals_page(key: Path) -> list[dict]:
     return goals.Route(key=key.read_text().strip()).call()
 
 
-def save_goals(now: float, page: Callable[[], list[dict]], out: Path | None) -> None:
-    """The Goals page as `page` reads it, saved in `out` under its minute (None: a dry run, which saves nothing); the dumps
-    older than KEEP_S go."""
+def store_copy(path: Path, save: Callable) -> tuple[str | None, str]:
+    """One saved copy of the page put in the store by `save` (`velocity.save`): its `art:` id, and why it isn't preserved there
+    ('' when it is). The goals and the minute are the file's own, so every save of one copy makes the one artifact."""
+    try:
+        return save(json.loads(gzip.decompress(path.read_bytes())), velocity.when(velocity.DUMP_NAME.fullmatch(path.name)[1]))
+    except Exception as e:  # noqa: BLE001 (one copy that can't be put leaves the others, and the pass, to go on)
+        return None, f"{type(e).__name__}: {e}"
+
+
+def save_goals(now: float, page: Callable[[], list[dict]], out: Path | None, state: dict, save: Callable | None = None) -> None:
+    """The Goals page as `page` reads it, saved in `out` under its minute (None: a dry run, which saves nothing) and put in the
+    store by `save` (default `velocity.save`): this pass's copy, then up to SAVE_MAX of the earlier ones `state` doesn't name as
+    preserved, oldest first. A copy older than KEEP_S is deleted only once the store has reported it preserved."""
     dump = gzip.compress(json.dumps(page(), ensure_ascii=False).encode(), mtime=0)
     if out is None:
         return
+    save = save or velocity.save
     out.mkdir(parents=True, exist_ok=True)
     name = time.strftime(GOALS_STAMP, time.gmtime(now))
     tmp = out / f"{name}.tmp"
     tmp.write_bytes(dump)
     tmp.replace(out / name)
-    for old in out.glob("goals-*.json.gz"):
-        if old.name < time.strftime(GOALS_STAMP, time.gmtime(now - KEEP_S)):
-            old.unlink()
+    names = sorted(p.name for p in out.glob("goals-*.json.gz"))
+    kept = {n: a for n, a in (state.get("goals_preserved") or {}).items() if n in names}
+    state["goals_preserved"] = kept
+    todo = [name] + [n for n in names if n not in kept and n != name][:SAVE_MAX]
+    for n in todo:
+        art, why = store_copy(out / n, save)
+        if art and not why:
+            kept[n] = art
+        else:
+            log(f"goals: {n} is not preserved in the store ({why}); the next pass puts it again")
+    if left := sum(n not in kept for n in names):
+        log(f"goals: {left} of the {len(names)} copies here are not preserved in the store yet")
+    for n in names:
+        if n in kept and n < time.strftime(GOALS_STAMP, time.gmtime(now - KEEP_S)):
+            (out / n).unlink()
+            del kept[n]
 
 
 def sweep_pass(state: dict, ring: Ringer | None, checks: dict[str, Callable[[], None]]) -> None:
@@ -592,7 +620,7 @@ def main(argv: list[str] | None = None) -> int:
                     "h200": lambda: h200s(state, ring, now, fleet_samples),
                     "linear": lambda: linear_check(state, ring, reg, now, None if ns.dry_run else state_path.parent / AUDIT_LOG),
                     "goals": lambda: save_goals(now, lambda: goals_page(state_path.parent / GOALS_KEY),
-                                                None if ns.dry_run else state_path.parent / GOALS_DIR)})
+                                                None if ns.dry_run else state_path.parent / GOALS_DIR, state)})
                 prune(state, now)
             if not ns.dry_run:
                 tmp = state_path.with_suffix(".tmp")
