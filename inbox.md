@@ -1,0 +1,3 @@
+[2026-11-14T23:07Z] 42643df9d9c5
+top, Sat 14 Nov 3:12 PM PST. Two more commits refuse under restack.py --main origin/architecture since your move_lines.toml (network-accounting, TOP-424 3:02 PM PST): 08a0828b2fe (the vllm_poub_option_map move: the move commit holds hand edits to five adapters/vllm files beside its script output, so it needs a hand row) and 441c946b99c2 (a layout move that does not reproduce from its base because its uv.lock differs). Add both to your table and to the command lanes type, and say in your 3:45 PM PST line whether any other move commit on the branch has either fault (a scan of every Move/Rename commit since the cut).
+
