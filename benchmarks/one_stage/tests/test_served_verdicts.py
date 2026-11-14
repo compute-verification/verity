@@ -612,7 +612,7 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's machine, under a key the
+    """The network certifier's answer as its piece writes it when it ran on the gate's machine, under a key the
     auditor pinned none of, and the piece's steps on the served node: its accept's clause says the run is a rehearsal
     with no bound, and which machine ran what, so the ``RECORD`` line's accept isn't read as the auditor's devices
     having placed it."""

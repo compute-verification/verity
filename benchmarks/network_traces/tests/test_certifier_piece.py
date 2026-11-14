@@ -732,9 +732,9 @@ def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refu
         CP.placement(d, RUN)
 
 
-def _session_key(tmp_path: Path, warden: dict) -> str:
+def _session_key(tmp_path: Path, run: dict) -> str:
     """`session_key` of the synthetic run, read from its kept fetch as the piece reads it."""
-    with tarfile.open(warden["fetch"], "r:gz") as tar:
+    with tarfile.open(run["fetch"], "r:gz") as tar:
         tar.extractall(tmp_path / "unpacked", filter="data")
     return CP.session_key(CP.warden_run(tmp_path / "unpacked"))
 
