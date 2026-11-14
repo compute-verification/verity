@@ -35,7 +35,7 @@ What it reads (`read`, "grader-products/v1"):
   circuit's products, by phase, op and dims: their count, N, O, operand widths, token dims and |C| (the trace's at its
   gates a MAC), and both sides' |C| of the step, of each op's products and of the rest.
 
-A pure function of its inputs: no network, nothing published. It doesn't compute the bound ρ.
+A pure function of its inputs: no network, nothing published. It doesn't compute a record's slowdown.
 """
 from __future__ import annotations
 
