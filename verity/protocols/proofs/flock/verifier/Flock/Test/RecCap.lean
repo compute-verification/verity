@@ -1,13 +1,3 @@
-/-
-RecCap, V*'s statements that hold each level's committed tops at fixed rows (`rec-cap/n<N>` at level 0,
-`rec-cap/n<N>-l<l>` at a later level, `VStar.capUnit`): `RecVStar.checkCapListed` refuses a V* list without one at a level,
-at another node count, twice, or past the last level; `RecVStar.checkTopsListed` refuses later levels' caps that are not
-the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-top-L<l>` (level `l`'s `out`, its RecCap's
-`top`) without the verifier's shared rows registering it, or at another registration; `RecCoins.checkCap` refuses reads of
-a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words, and a table whose instances are not
-labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
-read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
--/
 module
 
 public import Flock.RecCoins
@@ -20,6 +10,17 @@ meta import Flock.Sizes
 meta import Std.Data.HashMap
 meta import Std.Data.HashSet
 meta import Std.Data.TreeMap.Raw.Lemmas
+
+/-!
+RecCap, V*'s statements that hold each level's committed tops at fixed rows (`rec-cap/n<N>` at level 0,
+`rec-cap/n<N>-l<l>` at a later level, `VStar.capUnit`): `RecVStar.checkCapListed` refuses a V* list without one at a level,
+at another node count, twice, or past the last level; `RecVStar.checkTopsListed` refuses later levels' caps that are not
+the reps' schedule's tops; `RecVStar.checkShared` refuses a port reading `rec-top-L<l>` (level `l`'s `out`, its RecCap's
+`top`) without the verifier's shared rows registering it, or at another registration; `RecCoins.checkCap` refuses reads of
+a level's tops other than node `i` in instance `i` of its `N` nodes of 64 words, and a table whose instances are not
+labelled `0` to `n - 1` in order; `RecCoins.check` refuses a `rec-cap/` unit whose name `VStar.capParams` does not
+read. The unit is the cap row's words past its node, then zeros, and lays out as V*'s file.
+-/
 
 @[expose] public section
 
