@@ -56,6 +56,12 @@ def gate(host, argv, *, key=LANE, active=lambda r: False, token="ab12", stdin=No
                   read=lambda n: pytest.fail("read stdin") if stdin is None else stdin[:n])
 
 
+def ended_why(host, end: dict) -> str:
+    """The sentence a run's end's `ended` word stands for, which the gate writes to the run's `witness/` alone."""
+    assert end["ended"] in A.ENDED
+    return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
+
+
 def refused(rc: int, out: bytes) -> str:
     assert rc == 3, out
     return json.loads(out)["refused"]
@@ -85,7 +91,8 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
         assert "still runs: one at a time" in refused(*gate(host, write, active=lambda r: r == run, token="ef56"))
         ends.append(A.certifier_run(host, run, pinned=PIN, now=lambda: T1, wait=lambda proc, s: proc.wait()))
     for end, status in zip(ends, ("written", "present")):
-        assert end["device"] == "weights" and end["rc"] == 0 and end["ended"] == "the rehearsal ended", end
+        assert end["device"] == "weights" and end["rc"] == 0 and end["ended"] == "ended", end
+        assert ended_why(host, end) == "the rehearsal ended"
         assert end["store"] == {"status": status, "format": LR.STORE_FORMAT, "shape": LR.TINY.name,
                                 "model": LR.model_id(LR.TINY), "stream_bytes": 34240,
                                 "fold": LR.STORE_DIGESTS[LR.TINY.name]}
@@ -227,7 +234,9 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_rel
     d = stored.certifier / run
     assert req["load"]["shape"] == "tiny" and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert kw == {"sinks": [("127.0.0.1", p) for p in locals_], "store": stored.store}
-    assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
+    assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "ended"
+    assert ended_why(stored, end) == "the rehearsal ended"
+    assert end["load"] == RELAY == json.loads((d / "out" / "load-relay.json").read_text())
     assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                        "load": LOAD_SUMMARY}
     assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "cells-registrations.jsonl",
@@ -246,10 +255,41 @@ def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_w
     end = A.certifier_run(stored, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
                           sink_argv=lambda s, l, r: TUNNEL, up=lambda t, p: not ups.append(p) and len(ups) < 3,
                           command=lambda *a, **k: pytest.fail("ran without its sink's tunnels"))
-    assert end["rc"] == 2 and end["ended"] == \
-        "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
+    assert end["rc"] == 2 and end["ended"] == "tunnel" and LOAD[2] not in json.dumps(end)
+    assert ended_why(stored, end) == "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
     assert len(ups) == 3 and end["verdict"] is None and "load" not in end
     assert end["files"] == {} and end["witness"] == {"tunnel.log": 0}
+
+
+def test_a_refused_load_publishes_one_word_of_why_and_its_sentence_stays_in_the_witness(stored):
+    """Of a refused load, `out/load-relay.json` and the end hold one word, the gate's own list's (`LOAD_REFUSED`,
+    the relay's `REFUSALS` and `other`): the relay's sentence may name a value, a path of this host's store or what
+    the developer's sink said, and stays in the witness's `check.json`. Whatever the relay wrote in the word's place
+    is `other`."""
+    assert A.LOAD_REFUSED == (*LR.REFUSALS, "other"), (
+        "auditor.LOAD_REFUSED is the relay's words (load_relay.REFUSALS) and `other`: rule a word there first")
+    said = "the sink acknowledged 1,024 bytes of the weights and 0 of the witness, of 34,240 and 6,144 sent"
+    for token, wrote, word in (("ab12", "sink", "sink"), ("cd34", said, "other"), ("ef56", ["sink"], "other")):
+        rc, out = gate(stored, LOAD, token=token)
+        run = json.loads(out)["run"]
+        files = (f'(out / "load-relay.json").write_text(json.dumps({{"refused": {wrote!r}}}))\n'
+                 f'(out / "check.json").write_text(json.dumps({{"accepted": False, "problems": [{"load: " + said!r}], '
+                 '"summary": {}}))\nraise SystemExit(1)\n')
+        end = A.certifier_run(
+            stored, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, sink_argv=lambda s, l, r: TUNNEL,
+            up=lambda t, p: True, wait=lambda proc, s: proc.wait(),
+            command=lambda req, work, url, **kw: [
+                sys.executable, "-c", f"import json, pathlib; out = pathlib.Path({str(work)!r})\n{files}"])
+        d = stored.certifier / run
+        assert (end["rc"], end["ended"], end["load"]) == (1, "exited", {"refused": word})
+        assert json.loads((d / "out" / "load-relay.json").read_text()) == {"refused": word}
+        assert end["verdict"] == {"accepted": False, "problems": 1}
+        public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+        assert b"acknowledged" not in public and b"34,240" not in public
+        assert said in (d / A.WITNESS / "check.json").read_text()
+    assert A.load_relay_public({"refused": "digest"}) == {"refused": "digest"}
+    assert A.load_relay_public({"refused": None, "streams": [1]}) == {"refused": "other"}
+    assert A.load_relay_public(["refused"]) is None and A.load_relay_public(RELAY) == RELAY
 
 
 def test_a_loads_rehearsal_is_warden_serves_with_its_load_flags_after_the_rehearsals(tmp_path):

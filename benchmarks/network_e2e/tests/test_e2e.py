@@ -232,7 +232,7 @@ def _rehearsal(d: Path, strategies, verdicts: dict) -> Path:
 def test_a_gate_runs_directory_and_a_tarball_are_read_as_the_rehearsal(tmp_path):
     gate = tmp_path / "r1"
     _rehearsal(gate / "out", ["honest"], {"honest": "accepted"})
-    (gate / "end.json").write_text(json.dumps({"run": "r1", "rc": 0, "ended": "the rehearsal ended", "pinned": "abc",
+    (gate / "end.json").write_text(json.dumps({"run": "r1", "rc": 0, "ended": "ended", "pinned": "abc",
                                                "runs": {"honest": {"verdict": "accepted", "network": True}}}))
     (gate / "request.json").write_text(json.dumps({"run": "r1", "peer": "vy-nebius-1", "port": 18080}))
     local = _rehearsal(tmp_path / "local" / "planned-40", ["late", "extra"], {"late": "refused", "extra": "refused"})

@@ -276,6 +276,12 @@ def tar_names(blob: bytes) -> set[str]:
         return set(tar.getnames())
 
 
+def ended_why(host, end: dict) -> str:
+    """The sentence a run's end's `ended` word stands for, which the gate writes to the run's `witness/` alone."""
+    assert end["ended"] in A.ENDED
+    return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
+
+
 def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_and_certificates(host):
     seen = []
     run, end = run_warden(host, WARDEN_FILES, seen)
@@ -283,7 +289,8 @@ def test_a_warden_rehearsal_writes_witness_apart_and_publishes_its_deployment_an
     (req, work, url), = seen
     assert work == d / A.WITNESS and url.startswith("http://127.0.0.1:") and req["device"] == "warden"
     assert (d / A.WITNESS).stat().st_mode & 0o777 == 0o700
-    assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
+    assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "ended"
+    assert ended_why(host, end) == "the rehearsal ended"
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-24T11:20:00Z" and "runs" not in end
     assert end["verdict"] == {"accepted": True, "problems": 0, **{k: CHECK["summary"][k] for k in A.WARDEN_COUNTS
                                                                    if k != "load"},
@@ -391,8 +398,9 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
     """The keys `out/` publishes of a cells' registration are the one list `ROW_LINE`. A line with a key the list
     names neither as published nor as left out, at any depth, a published value that could hold such a key, or a
     line that isn't the writer's own form, which the gate couldn't cut to the same bytes, is not published, nor is
-    any line of its file: the rehearsal's end is nonzero and says the line and what to change. The certificates
-    and the deployment are published as before."""
+    any line of its file: the rehearsal's end is nonzero and says `unruled`, and the line and what to change are
+    the sentence in its `witness/`, of which the end and `out/` hold no word. The certificates and the deployment
+    are published as before."""
     with pytest.raises(A.Unruled, match=why):
         A.row_registration(line)
     for torn, said in ((_line()[:-1], "the line isn't JSON"), (json.dumps([_line()]), "the line isn't one JSON object")):
@@ -406,13 +414,17 @@ def test_a_registration_line_the_list_does_not_rule_is_not_published(host, line,
     assert bad != WARDEN_FILES
     run, end = run_warden(host, bad)
     d = host.certifier / run
-    assert end["rc"] == 2 and end["ended"].startswith("cells.jsonl line 2: ") and why in end["ended"]
-    assert end["ended"].endswith("; out/cells-registrations.jsonl is not written")
+    said = ended_why(host, end)
+    assert end["rc"] == 2 and end["ended"] == "unruled"
+    assert said.startswith("cells.jsonl line 2: ") and why in said
+    assert said.endswith("; out/cells-registrations.jsonl is not written")
     assert "unruled" not in end and end["verdict"]["accepted"] is True
+    public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
+    assert b"line 2" not in public and b"is not written" not in public and b"ROW_LINE" not in public
     assert set(end["files"]) == {"deployment.json", "certificates.jsonl", "cells-certificates.jsonl",
                                  "rows-certificates.jsonl"} == {p.name for p in (d / "out").iterdir()}
-    if "ROW_LINE names neither" in end["ended"] or "holds the key" in end["ended"]:
-        assert "Rule whether it is public, and write it there (auditor.py) as PUBLIC or WITHHELD" in end["ended"]
+    if "ROW_LINE names neither" in said or "holds the key" in said:
+        assert "Rule whether it is public, and write it there (auditor.py) as PUBLIC or WITHHELD" in said
 
 
 @pytest.mark.parametrize("argv, witness", [
@@ -468,12 +480,15 @@ def test_a_warden_rehearsal_that_never_ran_publishes_nothing_and_its_end_says_wh
     run = json.loads(out)["run"]
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL,
                           up=lambda t, p: False, command=lambda *a: pytest.fail("ran without its tunnel"))
-    assert end["rc"] == 2 and "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in end["ended"]
+    assert end["rc"] == 2 and end["ended"] == "tunnel"
+    assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
+    assert REQUEST[2] not in json.dumps(end)
     assert end["verdict"] is None and "registrations" not in end and end["witness"] == {"tunnel.log": 0}
     assert end["files"] == {}
 
     run, end = run_warden(host, "raise SystemExit(1)", token="cd34")
-    assert end["rc"] == 1 and end["ended"] == "the rehearsal exited 1" and end["verdict"] is None
+    assert end["rc"] == 1 and end["ended"] == "exited" and end["verdict"] is None
+    assert ended_why(host, end) == "the rehearsal exited 1"
 
 
 def test_the_warden_rehearsal_runs_warden_serve_on_the_gates_traffic_through_the_tunnels_local_end(tmp_path):
@@ -767,7 +782,8 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
     ((local, back),) = forwards
     assert got == req and work == d / A.WITNESS and url == f"http://127.0.0.1:{local}"
     assert back == (8012, listen) and listen != local
-    assert end["rc"] == 0 and end["ended"] == "the session ended" and end["device"] == "warden"
+    assert end["rc"] == 0 and end["ended"] == "ended" and end["device"] == "warden"
+    assert ended_why(host, end) == "the session ended"
     assert (end["verdict"]["accepted"], end["verdict"]["problems"]) == (True, 0)
     assert {k: end["verdict"][k] for k in ("windows", "certified_windows", "certificates")} == {
         k: CHECK["summary"][k] for k in ("windows", "certified_windows", "certificates")}
@@ -782,27 +798,28 @@ def test_a_relay_sessions_one_ssh_brings_the_peers_clients_to_its_relay_and_its_
 def test_a_relay_session_whose_ssh_exits_is_stopped_there_and_its_end_says_the_tunnel_closed(host):
     """A session's clients reach its relay through the unit's ssh alone. When that ssh exits (the peer refused a
     forward, or the link dropped) the unit stops the session's runner rather than let it run out its execution
-    phases with no client, and the end is nonzero and says the tunnel closed, whatever the check then reads; a
-    session whose runner fails says so as a rehearsal does."""
+    phases with no client, and the end is nonzero and says `tunnel`, whatever the check then reads; the sentence,
+    which names the peer, is the witness's. A session whose runner fails says so as a rehearsal does."""
     rc, out = gate(host, SESSION, started=[])
     run = json.loads(out)["run"]
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l, back: [sys.executable, "-c", ""],
                           up=lambda t, p: True, command=session("import signal; signal.pause()", []),
                           wait=lambda proc, s: proc.wait())
     assert end["rc"] != 0 and end["verdict"] is None
-    assert end["ended"] == (f"the tunnel to {REQUEST[2]} closed before the session ended, and with it the clients' "
-                            "way to the relay and the relay's to the endpoint (tunnel.log)")
+    assert end["ended"] == "tunnel" and REQUEST[2] not in json.dumps(end)
+    assert ended_why(host, end) == (f"the tunnel to {REQUEST[2]} closed before the session ended, and with it the "
+                                    "clients' way to the relay and the relay's to the endpoint (tunnel.log)")
 
     rc, out = gate(host, SESSION, started=[], token="cd34")
     end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
                           tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: True,
                           command=session("raise SystemExit(1)", []), wait=lambda proc, s: proc.wait())
-    assert end["rc"] == 1 and end["ended"] == "the session exited 1"
+    assert end["rc"] == 1 and end["ended"] == "exited" and ended_why(host, end) == "the session exited 1"
     rc, out = gate(host, SESSION, started=[], token="ef56")
     end = A.certifier_run(host, json.loads(out)["run"], pinned=PIN, now=lambda: T1,
                           tunnel_argv=lambda s, l, back: TUNNEL, up=lambda t, p: False,
                           command=lambda *a, **k: pytest.fail("ran without its tunnel"))
-    assert end["rc"] == 2 and "didn't come up (tunnel.log)" in end["ended"]
+    assert end["rc"] == 2 and end["ended"] == "tunnel" and "didn't come up (tunnel.log)" in ended_why(host, end)
 
 
 PROMPTS = [[70001, 3], [5], [7]]

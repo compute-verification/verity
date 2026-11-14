@@ -129,6 +129,12 @@ def test_a_key_that_reads_only_starts_no_rehearsal(host):
     assert not host.certifier.exists()
 
 
+def ended_why(host, end: dict) -> str:
+    """The sentence a run's end's `ended` word stands for, which the gate writes to the run's `witness/` alone."""
+    assert end["ended"] in A.ENDED
+    return (host.certifier / end["run"] / A.WITNESS / A.ENDED_WHY).read_text().removesuffix("\n")
+
+
 def started_run(host, *extra, token="ab12") -> str:
     rc, out = gate(host, REQUEST + list(extra), started=[], token=token)
     assert rc == 0, out
@@ -163,7 +169,7 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
                           command=rehearsal(SUMMARY), wait=wait)
     ssh, local = tunnels[0]
     assert ssh == ["-i", "/var/lib/vy-challenger/.ssh/vy-challenger-tunnel", "research@10.0.0.2"] and waited == [30 * 60]
-    assert end["rc"] == 0 and end["ended"] == "the rehearsal ended"
+    assert end["rc"] == 0 and end["ended"] == "ended" and ended_why(host, end) == "the rehearsal ended"
     assert end["runs"] == {"honest": {"verdict": "accepted", "network": True, "audit": True, "salt": True,
                                       "salt_again": "refused: already revealed"}}
     assert end["pinned"] == PIN and end["ended_utc"] == "2026-10-23T11:30:00Z"
@@ -178,6 +184,7 @@ def test_a_rehearsal_runs_through_the_tunnel_and_its_end_is_status_and_fetch(hos
     with tarfile.open(fileobj=io.BytesIO(tgz)) as tar:
         assert {f"{run}/request.json", f"{run}/end.json", f"{run}/out/summary.json",
                 f"{run}/out/honest/check.json"} <= set(tar.getnames())
+        assert not [n for n in tar.getnames() if n.startswith(f"{run}/{A.WITNESS}")]
     with pytest.raises(A.Refused, match="has run already"):
         A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                         command=rehearsal(SUMMARY), wait=wait)
@@ -215,12 +222,14 @@ def test_a_rehearsal_past_its_minutes_is_stopped_and_a_tunnel_that_never_came_up
 
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: True,
                           command=rehearsal("import signal; signal.pause()"), wait=past_its_minutes)
-    assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped at --minutes 30" and end["runs"] == {}
+    assert end["rc"] == -signal.SIGTERM and end["ended"] == "stopped" and end["runs"] == {}
+    assert ended_why(host, end) == "stopped at --minutes 30"
 
     run = started_run(host, "--minutes", "5", token="cd34")
     end = A.certifier_run(host, run, pinned=PIN, now=lambda: T1, tunnel_argv=lambda s, l: TUNNEL, up=lambda t, p: False,
                           command=lambda *a: pytest.fail("ran without its tunnel"))
-    assert end["rc"] == 2 and "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in end["ended"]
+    assert end["rc"] == 2 and end["ended"] == "tunnel" and "vy-nebius-1" not in json.dumps(end)
+    assert "the tunnel to vy-nebius-1's 127.0.0.1:8011 didn't come up" in ended_why(host, end)
     assert set(end["files"]) == {"tunnel.log"}
 
 

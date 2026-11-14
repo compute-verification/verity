@@ -205,7 +205,7 @@ def test_custody(tmp_path):
     (run / "out" / "honest").mkdir(parents=True)
     (run / "out" / "honest" / "a.json").write_text("{}")
     digest = hashlib.sha512(b"{}").hexdigest()
-    (run / "end.json").write_text(json.dumps({"ended": "the rehearsal ended", "files": {"honest/a.json": digest}}))
+    (run / "end.json").write_text(json.dumps({"ended": "ended", "files": {"honest/a.json": digest}}))
     assert cr.custody(tmp_path)["verdict"] == "accepted"
     (run / "out" / "honest" / "a.json").write_text("{ }")
     got = cr.custody(tmp_path)

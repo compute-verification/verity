@@ -525,8 +525,25 @@ def _work(args: tuple[Task, bytes]) -> tuple[int, int, bytes, int, bytes | None]
 
 # --- the relay ----------------------------------------------------------------------------------------------------------
 
+#: a refusal's word, which is all a run publishes of it (``load-relay.json``'s ``refused``, a store's record's): the
+#: certifier's own nine, of its store, its link's source and its signer, and ``sink`` for every way the developer's
+#: sink failed, since which way is the developer's to choose
+REFUSALS = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
+            "store-size", "sink")
+
+
 class Refused(Exception):
-    """The certifier refuses the load: it signs nothing."""
+    """The certifier refuses the load: it signs nothing. `code` is its word among `REFUSALS`; the sentence (``str``)
+    may name a value, a path of the auditor's device or what the sink said, and stays with the run's witness."""
+
+    def __init__(self, code: str, why: str) -> None:
+        if code not in REFUSALS:
+            raise ValueError(f"{code!r} is none of REFUSALS' words: a refusal is published by one of them")
+        super().__init__(why)
+        self.code = code
+
+    def __reduce__(self) -> tuple:
+        return type(self), (self.code, self.args[0])
 
 
 @dataclass
@@ -555,8 +572,8 @@ class _Digests:
             k, self.at = k + n, self.at + n
             if self.at == v.offset + v.nbytes:
                 if self.h.hexdigest() != self.want[self.i]:
-                    raise Refused(f"{v.name}: its bytes' SHA-256 {self.h.hexdigest()[:16]}… isn't interface 1's "
-                                  f"{self.want[self.i][:16]}…: the store isn't interface 1's weights")
+                    raise Refused("digest", f"{v.name}: its bytes' SHA-256 {self.h.hexdigest()[:16]}… isn't interface "
+                                  f"1's {self.want[self.i][:16]}…: the store isn't interface 1's weights")
                 self.i, self.h = self.i + 1, hashlib.sha256()
 
 
@@ -660,9 +677,9 @@ def relay(values: Sequence[Value], source: BinaryIO, sink: BinaryIO | None, doma
     if errors:
         if not all(isinstance(e, ValueError) for e in errors):
             raise next(e for e in errors if not isinstance(e, ValueError))
-        raise Refused(f"the link doesn't decode: {errors[0]}") from errors[0]
+        raise Refused("decode", f"the link doesn't decode: {errors[0]}") from errors[0]
     if pos != length:
-        raise Refused(f"the link carried {pos} bytes, and the load is {length}")
+        raise Refused("length", f"the link carried {pos} bytes, and the load is {length}")
     roots = {}
     for i, v in enumerate(values):
         level, d = [got[i][c] for c in range(len(got[i]))], chunk_bits(v, chunk_bytes)
@@ -693,7 +710,7 @@ def sign_heads(issuer: Issuer, heads_: Sequence[TR.TransferHead]) -> list[dict[s
     for head in heads_:
         cert = issuer.sign(head.link, head.direction, head.window, head.digest())
         if cert is None:
-            raise Refused(f"{head.value}: the network certifier's signer refused: {issuer.refused}")
+            raise Refused("signer", f"{head.value}: the network certifier's signer refused: {issuer.refused}")
         out.append(TR.registration(head, cert))
     return out
 
@@ -797,9 +814,9 @@ def write_store(store: Path, shape: Shape, *, workers: int = 1, seed: bytes = DE
     fold to the pinned one (``written``; else removed and refused). Returns the record with ``status``."""
     values, want = manifest(shape), pinned.get(shape.name)
     if want is None:
-        raise Refused(f"no pinned digests of {shape.name}: the store holds {sorted(pinned)}")
+        raise Refused("no-digests", f"no pinned digests of {shape.name}: the store holds {sorted(pinned)}")
     if not store.is_dir():
-        raise Refused(f"no store directory {store}")
+        raise Refused("no-store", f"no store directory {store}")
     data, rec = store_paths(store, shape)
     length = values[-1].offset + values[-1].nbytes
     if data.exists():
@@ -818,10 +835,11 @@ def write_store(store: Path, shape: Shape, *, workers: int = 1, seed: bytes = DE
                else f"its tensors' digests fold to {fold[:16]}…, not interface 1's {want[:16]}…")
         if status == "written":
             path.unlink()
-            raise Refused(f"the generated {shape.name} stream isn't interface 1's ({why}): nothing is kept")
+            raise Refused("not-interface-1",
+                          f"the generated {shape.name} stream isn't interface 1's ({why}): nothing is kept")
         rec.unlink(missing_ok=True)
-        raise Refused(f"the store's {data} isn't interface 1's {shape.name} weights stream ({why}): it is left as it is, "
-                      "unrecorded; remove it and write the store again")
+        raise Refused("not-interface-1", f"the store's {data} isn't interface 1's {shape.name} weights stream ({why}): "
+                      "it is left as it is, unrecorded; remove it and write the store again")
     if status == "written":
         os.replace(path, data)
     doc = {"format": STORE_FORMAT, "shape": shape.name, "model": model_id(shape, seed), "stream_bytes": length,
@@ -840,17 +858,18 @@ def read_store(store: Path, shape: Shape, pinned: Mapping[str, str] = STORE_DIGE
     try:
         doc = json.loads(rec.read_text())
     except (OSError, ValueError):
-        raise Refused(f"no store record {rec}: write the store first (weights-write)") from None
+        raise Refused("no-record", f"no store record {rec}: write the store first (weights-write)") from None
     values, want = manifest(shape), pinned.get(shape.name)
     sha = doc.get("sha256") if isinstance(doc, dict) else None
     if not (isinstance(sha, list) and len(sha) == len(values) and all(isinstance(x, str) for x in sha)
             and doc.get("format") == STORE_FORMAT and doc.get("shape") == shape.name and want is not None
             and doc.get("fold") == want == digests_fold(values, sha)):
-        raise Refused(f"the store record {rec} isn't interface 1's {shape.name} stream: write the store again "
-                      "(weights-write)")
+        raise Refused("not-interface-1", f"the store record {rec} isn't interface 1's {shape.name} stream: write the "
+                      "store again (weights-write)")
     length = values[-1].offset + values[-1].nbytes
     if not data.is_file() or data.stat().st_size != length:
-        raise Refused(f"the store's {data} isn't its {length:,} bytes: write the store again (weights-write)")
+        raise Refused("store-size",
+                      f"the store's {data} isn't its {length:,} bytes: write the store again (weights-write)")
     return data, sha
 
 
@@ -898,7 +917,7 @@ class Streams:
                 self.socks[-1].sendall(HELLO.pack(MAGIC, relay_id, len(self.socks) - 1, len(addresses)))
         except OSError as e:
             self._close()
-            raise Refused(f"the sink at {a[0]}:{a[1]} doesn't answer: {e}") from None
+            raise Refused("sink", f"the sink at {a[0]}:{a[1]} doesn't answer: {e}") from None
         self.queues = [queue.Queue(depth) for _ in self.socks]
         self.errors: list[str] = []
         self._turn, self._lock = 0, threading.Lock()
@@ -923,7 +942,7 @@ class Streams:
 
     def _put(self, kind: int, offset: int, data: bytes | memoryview) -> None:
         if self.errors:
-            raise Refused(f"the link to the sink failed: {self.errors[0]}")
+            raise Refused("sink", f"the link to the sink failed: {self.errors[0]}")
         with self._lock:
             self._start()
             i, self._turn = self._turn, (self._turn + 1) % len(self.queues)
@@ -954,22 +973,22 @@ class Streams:
         acks = []
         try:
             if self.errors:
-                raise Refused(f"the link to the sink failed: {self.errors[0]}")
+                raise Refused("sink", f"the link to the sink failed: {self.errors[0]}")
             for i, s in enumerate(self.socks):
                 got = _read_exactly(s, TOTALS.size)
                 if got is None:
-                    raise Refused(f"the sink closed stream {i} before acknowledging it")
+                    raise Refused("sink", f"the sink closed stream {i} before acknowledging it")
                 w, x = TOTALS.unpack(got)
                 acks.append({"weights": w, "witness": x})
         except OSError as e:
-            raise Refused(f"the sink's acknowledgement didn't arrive: {e}") from None
+            raise Refused("sink", f"the sink's acknowledgement didn't arrive: {e}") from None
         finally:
             self._close()
         sent, acked = (self.weights_bytes, self.witness_bytes), (sum(a["weights"] for a in acks),
                                                                  sum(a["witness"] for a in acks))
         if acked != sent:
-            raise Refused(f"the sink acknowledged {acked[0]:,} bytes of the weights and {acked[1]:,} of the witness, of "
-                          f"{sent[0]:,} and {sent[1]:,} sent")
+            raise Refused("sink", f"the sink acknowledged {acked[0]:,} bytes of the weights and {acked[1]:,} of the "
+                          f"witness, of {sent[0]:,} and {sent[1]:,} sent")
         return acks
 
     def abort(self) -> None:
@@ -1139,7 +1158,8 @@ def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], prog
     stream a sink address (`Streams`), each value's bytes held to interface 1's digest and committed as they cross
     under the verifier's domain for `program`, the salts sent to the sink with them, never kept here. Writes
     ``load-heads.json`` (`heads_doc`, what the signer signs) and ``load-relay.json`` (the relay's counts and the sink's
-    acknowledgements) to `out`; a refusal is ``load-relay.json``'s ``refused`` and raised, and leaves no heads."""
+    acknowledgements) to `out`; a refusal is ``load-relay.json``'s ``refused``, its word alone (`REFUSALS`), and raised
+    with its sentence, and leaves no heads."""
     out.mkdir(parents=True, exist_ok=True)
     report = out / "load-relay.json"
     try:
@@ -1155,7 +1175,7 @@ def relay_load(store: Path, shape: Shape, sinks: Sequence[tuple[str, int]], prog
             link_to.abort()
             raise
     except Refused as e:
-        report.write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        report.write_text(json.dumps({"refused": e.code}, indent=1) + "\n")
         raise
     (out / "load-heads.json").write_text(json.dumps(heads_doc(shape, program, got.roots, link), indent=1) + "\n")
     rep = {"shape": shape.name, "model": model_id(shape), "values": len(values), "rows": sum(v.leaves for v in values),
