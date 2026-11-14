@@ -24,9 +24,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. For the slowdown's 
 these stems: `rho` for the slowdown (`bracket.py`'s stored key `"rho"`); `efficiency` or `eta` for the older efficiency
 term, written η in older text and replaced by the slowdown (`tiers.py`'s `efficiency`, `exposure.py`'s `eta`; today's η is
 the success threshold, and `exposure.py`'s docstring says 1/eta is not the slowdown D); `residual` for free compute
-(`residual_share`, `memory_caps_residual`); `unmonitored` for unregistered hardware's share, ε_unreg (`tiers.py`'s key
-`unmonitored`); and `dampener` for the slowdown, in functions and prose (`fit.py`'s `dampener`), with the output keys that
-begin `D_` in `fit.py` and `statement.py` and `statement.py`'s key `D`. These are not older names: `tiers.py`'s `rho_T`,
+(`residual_share`, `memory_caps_residual`). These are not older names: `tiers.py`'s `rho_T`,
 `rho_PoS` and `rho_NCI`, which are rates; `exposure.py`'s `wipe_residual`, the memory the fill misses; `kappa.py`'s
 `RESIDUAL`, the model's residual stream; `fit.py`'s `D_max` and its loop variable `D` over `DATA_LIMITS`, token counts in
 the loss law; `kappa.py`'s `c.D` and the `D` of its softmax comment; `reference_efficiency`, the reference-efficiency

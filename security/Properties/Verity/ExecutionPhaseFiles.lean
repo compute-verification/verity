@@ -22,19 +22,19 @@ value at the same root, never a wire.
   (`Circuit.append`), so `C`'s gates come first (`Fin.castAdd`), then `D`'s (`Fin.natAdd`), each gate with its own
   circuit's width, input flag, wires and operation, and both circuits' outputs. `Partition.beside P Q` is `P`'s
   units, then `Q`'s, each gate in its own circuit's unit.
-* **The window's read** (`WindowFiles`): its first member's files and the later members'. A window has a member, so a
-  window of one member is that member's read and nothing else (`WindowFiles.one`).
-* **Its circuit** (`WindowFiles.circuit`, `units`, `parts`, `consts`): the members' circuits side by side, their units
+* **The window's read** (`ExecutionPhaseFiles`): its first member's files and the later members'. A window has a member, so a
+  window of one member is that member's read and nothing else (`ExecutionPhaseFiles.one`).
+* **Its circuit** (`ExecutionPhaseFiles.circuit`, `units`, `parts`, `consts`): the members' circuits side by side, their units
   summed, each member's units after the earlier members' (`Partition.beside`), and each member's constants at its own
-  gates. At a window of one member each is that member's, by definition (`WindowFiles.one_circuit`, `one_units`;
+  gates. At a window of one member each is that member's, by definition (`ExecutionPhaseFiles.one_circuit`, `one_units`;
   `FileRead.circuitWith`, `unitsWith`, `partsWith` and `constsWith` at no later member).
-* **A member's place** (`WindowFiles.base k`): where the member at place `k` starts in the window's units, the earlier
+* **A member's place** (`ExecutionPhaseFiles.base k`): where the member at place `k` starts in the window's units, the earlier
   members' units summed.
 
-`Vocab.read` (`Properties.Verity.Game`) reads `WindowFiles`, and `circuitOf`, `units`, `partsOf`, `Opens` and
-`extract` are over `WindowFiles.circuit`, `units`, `parts` and `consts`: the claim at a window is the claim at one
+`Vocab.read` (`Properties.Verity.Game`) reads `ExecutionPhaseFiles`, and `circuitOf`, `units`, `partsOf`, `Opens` and
+`extract` are over `ExecutionPhaseFiles.circuit`, `units`, `parts` and `consts`: the claim at a window is the claim at one
 statement, over the members' circuits side by side. The lemmas about `beside` are
-`Proofs.Properties.Verity.WindowFiles`'s.
+`Proofs.Properties.Verity.ExecutionPhaseFiles`'s.
 -/
 
 @[expose] public section
@@ -153,13 +153,13 @@ end FileRead
 
 /-- **How v2 reads a window's committed files**: its first member's files and the later members', in the members'
 order, each as v2 reads one statement's (`FileRead`). -/
-structure WindowFiles where
+structure ExecutionPhaseFiles where
   first : FileRead
   rest : List FileRead
 
-namespace WindowFiles
+namespace ExecutionPhaseFiles
 
-variable (w : WindowFiles)
+variable (w : ExecutionPhaseFiles)
 
 /-- The members' reads, in the members' order. -/
 def members : List FileRead := w.first :: w.rest
@@ -178,7 +178,7 @@ noncomputable def consts : Fin w.circuit.N → Option Bool := w.first.constsWith
 
 /-- **A window of one member**: that member's read. Its circuit, units, partition and constants are the member's, by
 definition. -/
-def one (r : FileRead) : WindowFiles := ⟨r, []⟩
+def one (r : FileRead) : ExecutionPhaseFiles := ⟨r, []⟩
 
 /-- A window of one member has that member's circuit, by definition. -/
 theorem one_circuit (r : FileRead) : (one r).circuit = r.circuit := rfl
@@ -189,6 +189,6 @@ theorem one_units (r : FileRead) : (one r).units = r.units := rfl
 /-- **Where the member at place `k` starts in the window's units**: the earlier members' units summed. -/
 noncomputable def base (k : ℕ) : ℕ := ((w.members.take k).map FileRead.units).sum
 
-end WindowFiles
+end ExecutionPhaseFiles
 
 end Verity

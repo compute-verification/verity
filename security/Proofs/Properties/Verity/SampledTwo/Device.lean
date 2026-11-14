@@ -13,7 +13,7 @@ windows printed the play's log (`PrintsTwo`, through `BindsOfPrints`), and it si
 * **The runs** (`runsAt`, `ledgerAt`): a session's run is the one-stage history's (`Sampled.Device.dev`) at that
   session's releases, kept where its release log reads as coin trees (`treesOk`), which `PrintsOn` asks of every run
   and which a prover's frame can break (an opening's `after` of another length than a digest's).
-* **The history** (`logs`, `dev₂`): on one window (`oneWindow`), the two sessions are one (a ledger opens a window's
+* **The history** (`logs`, `dev₂`): on one window (`oneExecutionPhase`), the two sessions are one (a ledger opens a window's
   root once), and the history is the first setup's run at the whole log. On two, the play's log is the first session's
   releases, `log.take (cut log)`, then the interior's, `log.drop (cut log)`; the history holds the first setup's run
   at the first and the second setup's at the second, with both setups' ledger lines.
@@ -116,23 +116,23 @@ theorem run_facts {S : RunSetup} {log : List Release} {pk : ByteArray} {r : Prop
 /-! ## The history -/
 
 /-- Whether the parameters' two windows are one (`windowsOf`); one where they name none. -/
-def oneWindow (θ : ByteArray) : Bool :=
+def oneExecutionPhase (θ : ByteArray) : Bool :=
   match windowsOf θ with
   | some (w₁, w₂) => decide (w₁ = w₂)
   | none => true
 
-theorem oneWindow_true {θ : ByteArray} {w₁ w₂ : String} (hw : windowsOf θ = some (w₁, w₂)) (h : w₁ = w₂) :
-    oneWindow θ = true := by
-  simp [oneWindow, hw, h]
+theorem oneExecutionPhase_true {θ : ByteArray} {w₁ w₂ : String} (hw : windowsOf θ = some (w₁, w₂)) (h : w₁ = w₂) :
+    oneExecutionPhase θ = true := by
+  simp [oneExecutionPhase, hw, h]
 
-theorem oneWindow_false {θ : ByteArray} {w₁ w₂ : String} (hw : windowsOf θ = some (w₁, w₂)) (h : w₁ ≠ w₂) :
-    oneWindow θ = false := by
-  simp [oneWindow, hw, h]
+theorem oneExecutionPhase_false {θ : ByteArray} {w₁ w₂ : String} (hw : windowsOf θ = some (w₁, w₂)) (h : w₁ ≠ w₂) :
+    oneExecutionPhase θ = false := by
+  simp [oneExecutionPhase, hw, h]
 
 /-- **Each session's releases at the parameters `θ`**: on one window, the whole log and none; on two, the first
 `cut log` releases, then the rest. -/
 def logs (cut : List Release → ℕ) (θ : ByteArray) (log : List Release) : List Release × List Release :=
-  bif oneWindow θ then (log, []) else (log.take (cut log), log.drop (cut log))
+  bif oneExecutionPhase θ then (log, []) else (log.take (cut log), log.drop (cut log))
 
 /-- The runs the history holds under `pk`: on one window (`one`), the first setup's at the first part; on two, the
 first's at the first part and the second's at the second. -/
@@ -148,8 +148,8 @@ noncomputable def ledgerOf (S₁ S₂ : RunSetup) (one : Bool) (pk : ByteArray) 
 session) and `S₂ o` (the interior's), the first session's releases the first `cut o.log` of the play's log: the runs
 that released each session's releases (`runsOf`, `logs`) and the setups' ledger lines (`ledgerOf`). -/
 noncomputable def dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) (o : Exchange) : History :=
-  ⟨runsOf (S₁ o) (S₂ o) (oneWindow o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2,
-    ledgerOf (S₁ o) (S₂ o) (oneWindow o.params)⟩
+  ⟨runsOf (S₁ o) (S₂ o) (oneExecutionPhase o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2,
+    ledgerOf (S₁ o) (S₂ o) (oneExecutionPhase o.params)⟩
 
 /-! ## The device printed the play's log -/
 
@@ -186,26 +186,26 @@ theorem printsOn_part {h : History} {S S' : RunSetup} {log log' : List Release} 
   · rw [runsAt_id h2] at ho
     exact absurd ho (hno pk)
 
-theorem logs_one {cut : List Release → ℕ} {θ : ByteArray} {log : List Release} (h : oneWindow θ = true) :
+theorem logs_one {cut : List Release → ℕ} {θ : ByteArray} {log : List Release} (h : oneExecutionPhase θ = true) :
     logs cut θ log = (log, []) := by
   simp only [logs, h, Bool.cond_true]
 
-theorem logs_two {cut : List Release → ℕ} {θ : ByteArray} {log : List Release} (h : oneWindow θ = false) :
+theorem logs_two {cut : List Release → ℕ} {θ : ByteArray} {log : List Release} (h : oneExecutionPhase θ = false) :
     logs cut θ log = (log.take (cut log), log.drop (cut log)) := by
   simp only [logs, h, Bool.cond_false]
 
 theorem runs_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {o : Exchange}
-    (h : oneWindow o.params = false) (pk : ByteArray) :
+    (h : oneExecutionPhase o.params = false) (pk : ByteArray) :
     (dev₂ S₁ S₂ cut o).runs pk =
       runsAt (S₁ o) (o.log.take (cut o.log)) pk ++ runsAt (S₂ o) (o.log.drop (cut o.log)) pk := by
-  show runsOf (S₁ o) (S₂ o) (oneWindow o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2 pk = _
+  show runsOf (S₁ o) (S₂ o) (oneExecutionPhase o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2 pk = _
   simp only [logs_two h, h, runsOf, Bool.cond_false]
 
 theorem ledger_two (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {o : Exchange}
-    (h : oneWindow o.params = false) (pk : ByteArray) :
+    (h : oneExecutionPhase o.params = false) (pk : ByteArray) :
     ∀ x ∈ (dev₂ S₁ S₂ cut o).ledger pk, x ∈ (S₁ o).ledger ++ (S₂ o).ledger := by
   intro x hx
-  change x ∈ ledgerOf (S₁ o) (S₂ o) (oneWindow o.params) pk at hx
+  change x ∈ ledgerOf (S₁ o) (S₂ o) (oneExecutionPhase o.params) pk at hx
   rw [h] at hx
   rcases List.mem_append.1 hx with hx | hx
   · exact List.mem_append.2 (.inl (mem_ledgerAt hx))
@@ -220,14 +220,14 @@ theorem printsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release
   unfold PrintsTwo
   by_cases hww : w₁ = w₂
   · rw [if_pos hww]
-    have h1 := oneWindow_true hw hww
+    have h1 := oneExecutionPhase_true hw hww
     refine printsOn_one (S := S₁ o) fun pk r hr => ?_
     have e : (dev₂ S₁ S₂ cut o).runs pk = runsAt (S₁ o) o.log pk := by
-      show runsOf (S₁ o) (S₂ o) (oneWindow o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2 pk = _
+      show runsOf (S₁ o) (S₂ o) (oneExecutionPhase o.params) (logs cut o.params o.log).1 (logs cut o.params o.log).2 pk = _
       simp only [logs_one h1, h1, runsOf, Bool.cond_true]
     rwa [e] at hr
   · rw [if_neg hww]
-    have h2 := oneWindow_false hw hww
+    have h2 := oneExecutionPhase_false hw hww
     obtain ⟨hA₁, hA₂⟩ := hA hww
     refine ⟨_, _, (List.take_append_drop (cut o.log) o.log).symm, ?_, ?_⟩
     · refine printsOn_part (S := S₁ o) (S' := S₂ o) (log' := o.log.drop (cut o.log)) (fun pk r hr => ?_)
@@ -350,7 +350,7 @@ under each setup's key, the run that released that part. -/
 theorem holdsTwo_dev₂ (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {fs : List (String × ℕ)}
     {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
     (h : Verity.Game.Reaches (Verity.play fs D θ F c) o)
-    (h2 : oneWindow o.params = false) (hno : NoHello (o.log.take (cut o.log)))
+    (h2 : oneExecutionPhase o.params = false) (hno : NoHello (o.log.take (cut o.log)))
     (hf₁ : Fits (S₁ o).families (o.log.take (cut o.log))) (hf₂ : Fits (S₂ o).families (o.log.drop (cut o.log)))
     (ht₁ : TreesRead (S₁ o) (o.log.take (cut o.log))) (ht₂ : TreesRead (S₂ o) (o.log.drop (cut o.log))) :
     ∃ lines₁ lines₂, runOf (S₁ o) (o.log.take (cut o.log)) lines₁ ∈ (dev₂ S₁ S₂ cut o).runs (S₁ o).key ∧
@@ -413,7 +413,7 @@ the layout as the play's log does (`fits_play`, `fits_parts`). -/
 theorem holdsTwo_play (S₁ S₂ : Exchange → RunSetup) (cut : List Release → ℕ) {fs : List (String × ℕ)}
     {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
     (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
-    (h2 : oneWindow o.params = false) (hno : NoHello (o.log.take (cut o.log)))
+    (h2 : oneExecutionPhase o.params = false) (hno : NoHello (o.log.take (cut o.log)))
     (ht₁ : TreesRead (S₁ o) (o.log.take (cut o.log))) (ht₂ : TreesRead (S₂ o) (o.log.drop (cut o.log))) :
     ∃ lines₁ lines₂, runOf (S₁ o) (o.log.take (cut o.log)) lines₁ ∈ (dev₂ S₁ S₂ cut o).runs (S₁ o).key ∧
       runOf (S₂ o) (o.log.drop (cut o.log)) lines₂ ∈ (dev₂ S₁ S₂ cut o).runs (S₂ o).key := by
@@ -466,7 +466,7 @@ whose first session holds no hello (`noHello_firstLen`). -/
 theorem holdsTwo_first (S₁ S₂ : Exchange → RunSetup) (ℓ : String) {fs : List (String × ℕ)}
     {D : Verity.Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {o : Exchange}
     (h : Verity.Game.Reaches (Verity.play fs D θ F c) o) (hfs : (S₁ o).families = fs ∧ (S₂ o).families = fs)
-    (h2 : oneWindow o.params = false)
+    (h2 : oneExecutionPhase o.params = false)
     (ht₁ : TreesRead (S₁ o) (o.log.take (firstLen ℓ o.log)))
     (ht₂ : TreesRead (S₂ o) (o.log.drop (firstLen ℓ o.log))) :
     ∃ lines₁ lines₂, runOf (S₁ o) (o.log.take (firstLen ℓ o.log)) lines₁ ∈ (dev₂ S₁ S₂ (firstLen ℓ) o).runs (S₁ o).key ∧
@@ -506,12 +506,12 @@ def setup₂ (fs₂ : ByteArray → List (String × ℕ)) (cut : List Release �
 
 /-- The ledger lines the device signs before any coin: the first session's on one window, both sessions' on two. -/
 def opensAt (θ a : ByteArray) : List Json :=
-  bif oneWindow θ then P.one.opens θ a else P.one.opens θ a ++ P.two.opens θ a
+  bif oneExecutionPhase θ then P.one.opens θ a else P.one.opens θ a ++ P.two.opens θ a
 
 /-- The ledger lines the device signs at the close, each session's at its releases. -/
 def closesAt (cut : List Release → ℕ) (θ a : ByteArray) (log : List Release) (b : ByteArray) (ρ : List Bool) :
     List Json :=
-  bif oneWindow θ then P.one.closes θ a (logs cut θ log).1 b ρ
+  bif oneExecutionPhase θ then P.one.closes θ a (logs cut θ log).1 b ρ
   else P.one.closes θ a (logs cut θ log).1 b ρ ++ P.two.closes θ a (logs cut θ log).2 b ρ
 
 /-- **What the device holds at the close**: the runs the two-session history holds (`runsOf`, at the deployment's
@@ -519,7 +519,7 @@ setups) and the ledger lines at the close. -/
 noncomputable def closing (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (θ a : ByteArray)
     (log : List Release) (b : ByteArray) (ρ : List Bool) : History :=
   ⟨runsOf (setupAt P.one fs₁ θ a (logs cut θ log).1 b ρ) (setupAt P.two fs₂ θ a (logs cut θ log).2 b ρ)
-      (oneWindow θ) (logs cut θ log).1 (logs cut θ log).2,
+      (oneExecutionPhase θ) (logs cut θ log).1 (logs cut θ log).2,
     fun _ => P.closesAt cut θ a log b ρ⟩
 
 /-- **The deployed device's signer at the parameters `θ`**: before any coin, the messages of the ledger lines the
@@ -534,11 +534,11 @@ noncomputable def signer (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut
 
 theorem ledger_opens (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (o : Exchange) {x : Json}
     (hx : x ∈ P.opensAt o.params o.request) :
-    x ∈ ledgerOf (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) (oneWindow o.params) (pubOf o.params) := by
+    x ∈ ledgerOf (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) (oneExecutionPhase o.params) (pubOf o.params) := by
   unfold opensAt at hx
   unfold ledgerOf
   simp only [ledgerAt, setup₁, setup₂, setupAt, ↓reduceIte]
-  generalize oneWindow o.params = w at hx ⊢
+  generalize oneExecutionPhase o.params = w at hx ⊢
   cases w
   · simp only [Bool.cond_false, List.mem_append] at hx ⊢
     rcases hx with hx | hx
@@ -549,11 +549,11 @@ theorem ledger_opens (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : L
 
 theorem ledger_closes (fs₁ fs₂ : ByteArray → List (String × ℕ)) (cut : List Release → ℕ) (o : Exchange) {x : Json}
     (hx : x ∈ P.closesAt cut o.params o.request o.log o.close o.drawn) :
-    x ∈ ledgerOf (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) (oneWindow o.params) (pubOf o.params) := by
+    x ∈ ledgerOf (P.setup₁ fs₁ cut o) (P.setup₂ fs₂ cut o) (oneExecutionPhase o.params) (pubOf o.params) := by
   unfold closesAt at hx
   unfold ledgerOf
   simp only [ledgerAt, setup₁, setup₂, setupAt, ↓reduceIte]
-  generalize oneWindow o.params = w at hx ⊢
+  generalize oneExecutionPhase o.params = w at hx ⊢
   cases w
   · simp only [Bool.cond_false, List.mem_append] at hx ⊢
     rcases hx with hx | hx
@@ -587,7 +587,7 @@ theorem ledger_length (cut : List Release → ℕ) (θ a : ByteArray) (log : Lis
   unfold opensAt closesAt
   have h1 := P.one.ledger_le θ a (logs cut θ log).1 b ρ
   have h2 := P.two.ledger_le θ a (logs cut θ log).2 b ρ
-  generalize oneWindow θ = w
+  generalize oneExecutionPhase θ = w
   cases w
   · simp only [Bool.cond_false, List.length_append]
     omega

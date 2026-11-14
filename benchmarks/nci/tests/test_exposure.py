@@ -66,7 +66,7 @@ def test_at_the_design_eta_is_the_residual():
 
 @pytest.mark.parametrize("scenario, key, tier, rising", [
     ("defaults", "residual", "T1", True),
-    ("defaults", "unmonitored", "T4", True),
+    ("defaults", "unregistered", "T4", True),
     ("served today", "K", "T4", True),
     ("served today", "b_a", "T4", False),
     ("served today", "d", "T4", False),

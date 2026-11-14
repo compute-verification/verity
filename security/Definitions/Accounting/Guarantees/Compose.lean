@@ -93,8 +93,8 @@ a uniform `K_d`-subset), with the proofs' coins `Ξ`, each sampled tile proved w
 * the play's ideal game the service's at share `1` per unit of each skipped tile's late cone (`tileCone`, tiles of no
   words included), and sampled (I8)'s pieces on the window's proofs, the IR's layer (`Declared.layer` at the run's `pr`:
   positions the IR's gates, its slots, writers, cuts, coins and sample defined from the circuit): `Of`, binding at
-  `δ_bind` in the round (`MovedIn`; WindowDelta: `Σ_c δlink_c`, which needs `LayerCommitted`'s order), proof soundness
-  jointly over the samples at `δ_ks` (`JointSound`; WindowDelta: `max_c κ_c + coll`) and `Pins`;
+  `δ_bind` in the round (`MovedIn`; ExecutionPhaseDelta: `Σ_c δlink_c`, which needs `LayerCommitted`'s order), proof soundness
+  jointly over the samples at `δ_ks` (`JointSound`; ExecutionPhaseDelta: `max_c κ_c + coll`) and `Pins`;
 * the four claims: (H-μ) (`OperandHMu` at its kind's `μ`) and B′ (`ReceiptLuckAt` at its kind's `r_B`) for every
   credited tile folded at its stage, the guess bound (`GuessLuckAt` at its kind's guess) for every one whole, and the
   fixed-words claim, `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and

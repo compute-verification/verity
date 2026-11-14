@@ -9,7 +9,7 @@ import Proofs.Pous.Prob
 # B2, proved
 
 `LengthCode`: the code's last `1` sits at the string's length, so equal codes have equal lengths, then equal bits.
-`TimelyTicks`: by induction on `j`, each window adding at most `span`.
+`TimelyTicks`: by induction on `j`, each period adding at most `span`.
 
 `B2` is a choice construction. The responder's state before challenge `j` is `stateOf`: `lengthCode M` of `X`'s state's
 content at `t x j`, a `τ`-bit code of `t x j` (injective on the ticks challenge `j` takes on the runs on time, `ticks`),
@@ -19,8 +19,8 @@ state, with content of at most `M` bits, a tick among `ticks j`, and whose chall
 returns that run's answer and its next state. At an outcome on time where `mem_X(t_j) ≤ M`, the pick has the same
 content (`LengthCode`, with `content_length_le`), the same tick and the same help (the codes are injective), so the same
 ingress until the earlier of the two next ticks, so by `CausalFrom` the same `acts` until then, so by `ArrivalRule` the
-same next tick (`next_tick_eq`), so the same window, `acts` and answer, and the same state at the next tick
-(`image_state_eq_of_acts`: what `X` does during a window includes its state at the window's end). `seqAnswers_eq` and
+same next tick (`next_tick_eq`), so the same period, `acts` and answer, and the same state at the next tick
+(`image_state_eq_of_acts`: what `X` does during a period includes its state at the period's end). `seqAnswers_eq` and
 `seqState_eq` fold that over the challenges.
 
 `B2Audit` applies PoUS's guarantee to that responder at `M = N − 1 − τ − H`: an outcome that passes with
@@ -76,7 +76,7 @@ theorem TimelyTicks : Guarantees.TimelyTicks := by
 
 namespace Responder
 
-/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (its state at the end of the window's
+/-- What `X` does during `[t, u)`, `t < u`, fixes its state at `u` as seen (its state at the end of the period's
 last tick is among what it does). -/
 theorem image_state_eq_of_acts {L : Type*} [LinearOrder L] {Ω : Type*} {S : Ω → Actual.Run L} {X : Finset L}
     {t u : ℕ} (htu : t < u) {r r' : Ω} (h : (S r).acts X (Set.Ico t u) = (S r').acts X (Set.Ico t u)) :
@@ -292,7 +292,7 @@ noncomputable def out (j : ℕ) (σ : Pous.Bits N) (i : Fin sch.B) : Pous.Bits s
   if hj : j < k then
     if h : ∃ x : Pous.Outcome sch k, x.2.2 ⟨j, hj⟩ = i ∧ ((S x).content X (t x j)).length ≤ M ∧
         t x j ∈ ticks t span j ∧ stateOf sch S X t help M τ H N c ct x j = σ then
-      (ans j ((S (Classical.choose h)).acts X (window (t (Classical.choose h)) j)),
+      (ans j ((S (Classical.choose h)).acts X (period (t (Classical.choose h)) j)),
         stateOf sch S X t help M τ H N c ct (Classical.choose h) (j + 1))
     else (fun _ => false, σ)
   else (fun _ => false, σ)
@@ -327,7 +327,7 @@ does and, unless `j` is the last challenge, moves to `X`'s next state. -/
 theorem out_spec (x : Pous.Outcome sch k) (hx : Timely (t x) span k) (j : ℕ) (hj : j < k)
     (hm : ((S x).content X (t x j)).length ≤ M) :
     (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j) (x.2.2 ⟨j, hj⟩)).1 =
-        ans j ((S x).acts X (window (t x) j)) ∧
+        ans j ((S x).acts X (period (t x) j)) ∧
       (j + 1 < k → (out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j)
         (x.2.2 ⟨j, hj⟩)).2 = stateOf sch S X t help M τ H N c ct x (j + 1)) := by
   have hxt : t x j ∈ ticks t span j := ⟨x, hx, rfl⟩
@@ -347,15 +347,15 @@ theorem out_spec (x : Pous.Outcome sch k) (hx : Timely (t x) span k) (j : ℕ) (
   rw [← htick] at hcont
   have hacts := hc X (t x' j) (t x' (j + 1)) x' x hcont (by rw [hnext]; exact hcr)
   have e : out sch S X t ans help span M τ H N c ct j (stateOf sch S X t help M τ H N c ct x j) (x.2.2 ⟨j, hj⟩) =
-      (ans j ((S x').acts X (window (t x') j)), stateOf sch S X t help M τ H N c ct x' (j + 1)) := by
+      (ans j ((S x').acts X (period (t x') j)), stateOf sch S X t help M τ H N c ct x' (j + 1)) := by
     unfold out
     rw [dite_eq_left hj]
     exact dite_eq_left h
   rw [e]
-  have hw : window (t x') j = window (t x) j := by simp only [window, htick, hnext]
+  have hw : period (t x') j = period (t x) j := by simp only [period, htick, hnext]
   refine ⟨?_, fun _ => ?_⟩
   · rw [← hw]
-    exact congrArg (ans j) (by simpa only [window, hnext, htick] using hacts)
+    exact congrArg (ans j) (by simpa only [period, hnext, htick] using hacts)
   · have hst := image_state_eq_of_acts (hinc x' ⟨j, hj⟩) hacts
     have hc' : (S x').content X (t x' (j + 1)) = (S x).content X (t x (j + 1)) := by
       unfold Actual.Run.content
@@ -369,13 +369,13 @@ theorem seqAnswers_resp (hset : SetupFixed W S X t help) (x : Pous.Outcome sch k
     Pous.seqAnswers ((Pous.ringRO B w p).answer x.1)
         ((resp sch S X t ans help span M τ H N c ct).step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
         (pre sch W S X t help M τ H N c ct W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-      List.ofFn fun j : Fin k => ans j ((S x).acts X (window (t x) j)) := by
+      List.ofFn fun j : Fin k => ans j ((S x).acts X (period (t x) j)) := by
   have hl : ∀ j (hj : j < k), ((S x).content X (t x j)).length ≤ M := fun j hj =>
     (Actual.content_length_le _ _ _).trans (hm ⟨j, hj⟩)
   let is : ℕ → Fin sch.B := fun j => if hj : j < k then x.2.2 ⟨j, hj⟩ else ⟨0, sch.B_pos⟩
   have key := seqAnswers_eq ((Pous.ringRO B w p).answer x.1) ((resp sch S X t ans help span M τ H N c ct).step W
     (sch.enc W x.1 x.2.1).1) k (stateOf sch S X t help M τ H N c ct x)
-    (fun j => ans j ((S x).acts X (window (t x) j))) is
+    (fun j => ans j ((S x).acts X (period (t x) j))) is
     (fun j hj => by
       simp only [resp, Pous.OracleAlgorithm.run, is, dite_eq_left hj]
       exact out_spec hc hinc hin har hct hcode hN x hx j hj (hl j hj)) k 0 (by omega)
@@ -483,7 +483,7 @@ namespace Responder
 def PassesFixed {L : Type*} {I : Pous.IdealModel} (sch : Pous.Scheme I) {k : ℕ} (W : Pous.Bits sch.n)
     (S : Pous.Outcome sch k → Actual.Run L) (X : Finset L) (t : ℕ → ℕ) (ans : ℕ → Actual.Acts L → Pous.Bits sch.ℓ)
     (x : Pous.Outcome sch k) : Prop :=
-  ∀ j : Fin k, ans j ((S x).acts X (window t j)) = (sch.enc W x.1 x.2.1).2 (x.2.2 j)
+  ∀ j : Fin k, ans j ((S x).acts X (period t j)) = (sch.enc W x.1 x.2.1).2 (x.2.2 j)
 
 section
 variable {L : Type*} [LinearOrder L] {I : Pous.IdealModel} {sch : Pous.Scheme I} {k : ℕ} {W : Pous.Bits sch.n}
@@ -505,9 +505,9 @@ omit [LinearOrder L] in
 theorem fixed_arrival : ArrivalRule S X (fun _ => t) help := fun _ _ _ _ _ _ _ _ _ h => h
 
 theorem fixed_ingress (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
-    (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j)) :
+    (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j)) :
     IngressFixed S X (fun _ => t) help :=
-  fun x x' j hh hi _ => by simpa only [min_self, window] using hin x x' j hh hi
+  fun x x' j hh hi _ => by simpa only [min_self, period] using hin x x' j hh hi
 
 theorem fixed_setup (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
     (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') : SetupFixed W S X (fun _ => t) help :=
@@ -526,13 +526,13 @@ theorem B2_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch : Pou
     (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
     (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
-      (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j))
+      (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j))
     (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) (hN : M + 1 + H ≤ N) :
     ∃ (A₁ : Pous.Preprocessor sch N) (A₂ : Pous.SeqResponderOn sch N 0 0 0),
       ∀ x, (∀ j : Fin k, (S x).mem X (t j) ≤ M) →
         Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) (A₂.step W (sch.enc W x.1 x.2.1).1) 0 (List.ofFn x.2.2)
             (A₁ W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-          List.ofFn fun j : Fin k => ans j ((S x).acts X (window t j)) := by
+          List.ofFn fun j : Fin k => ans j ((S x).acts X (period t j)) := by
   obtain ⟨A₁, A₂, hA⟩ := B2 sch k W S X (fun _ => t) (t k) ans help M 0 H N hc (fun _ j => ht (Nat.lt_succ_self j))
     (fixed_setup hset) (fixed_ingress hin) fixed_arrival fixed_ticksIn hcount (by omega)
   exact ⟨A₁, A₂, fun x hm => hA x (fixed_timely ht k) hm⟩
@@ -547,7 +547,7 @@ theorem B2Audit_fixed {L : Type*} [LinearOrder L] {B w p : ℕ} [NeZero p] (sch 
     (hset : ∀ x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x')
     (hin : ∀ x x' (j : Fin k), help x = help x' → x.2.2 j = x'.2.2 j →
-      (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j))
+      (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j))
     (hcount : (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) :
     Pous.pr (fun x => PassesFixed sch W S X t ans x ∧ ∀ j : Fin k, (S x).mem X (t j) + 1 + H ≤ N) ≤ δ + ε :=
   (pr_mono fun _ hx => ⟨⟨fixed_timely ht k, hx.1⟩, hx.2⟩).trans
@@ -567,7 +567,7 @@ theorem B2P2Ring_fixed :
           (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
         (S x).content X (t 0) = (S x').content X (t 0) ∧ help x = help x') →
       (∀ x x' (j : Fin 105), help x = help x' → x.2.2 j = x'.2.2 j →
-        (S x).crossing (↑X)ᶜ ↑X (window t j) = (S x').crossing (↑X)ᶜ ↑X (window t j)) →
+        (S x).crossing (↑X)ᶜ ↑X (period t j) = (S x').crossing (↑X)ᶜ ↑X (period t j)) →
       (Set.range help).encard ≤ ((2 ^ H : ℕ) : ℕ∞) →
       Pous.pr (fun x => Responder.PassesFixed (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432) W S X t ans x ∧
           ∀ j : Fin 105, (S x).mem X (t j) + 1 + H ≤
@@ -587,7 +587,7 @@ theorem B2Determines_fixed :
     (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
       (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
     (∀ z x x' (j : Fin k), help z x = help z x' → x.2.2 j = x'.2.2 j →
-      (S z x).crossing (↑X)ᶜ ↑X (window t j) = (S z x').crossing (↑X)ᶜ ↑X (window t j)) →
+      (S z x).crossing (↑X)ᶜ ↑X (period t j) = (S z x').crossing (↑X)ᶜ ↑X (period t j)) →
     (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
     (∀ z x (j : Fin k), (S z x).mem X (t j) ≤ M) →
     (∀ z x (j : Fin k), ζ j ((S z x).content X (t j)) = z) →
@@ -598,7 +598,7 @@ theorem B2Determines_fixed :
           ((List.ofFn x.2.2).take j) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1)) = z) ∧
       ∀ z x, Pous.seqAnswers ((Pous.ringRO B w p).answer x.1) ((A₂ z).step W (sch.enc W x.1 x.2.1).1) 0
           (List.ofFn x.2.2) (A₁ z W (sch.enc W x.1 x.2.1).1 (sch.enc W x.1 x.2.1).2 x.1) =
-        List.ofFn fun j : Fin k => ans j ((S z x).acts X (window t j)) := by
+        List.ofFn fun j : Fin k => ans j ((S z x).acts X (period t j)) := by
   intro L _ B w p _ sch k q W S X t ans α help ζ M H hc ht hset hin hcount hm hζ
   exact B2Determines sch k q W S X (fun _ _ => t) (t k) ans help ζ M 0 H hc (fun _ _ j => ht (Nat.lt_succ_self j))
     (fun z => fixed_setup (hset z)) (fun z => fixed_ingress (hin z)) (fun _ => fixed_arrival)
@@ -616,7 +616,7 @@ theorem B2Adds_fixed :
       (∀ z x x', x.1 = x'.1 → sch.enc W x.1 x.2.1 = sch.enc W x'.1 x'.2.1 →
         (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
       (∀ z x x' (j : Fin c), help z x = help z x' → x.2.2 j = x'.2.2 j →
-        (S z x).crossing (↑X)ᶜ ↑X (window t j) = (S z x').crossing (↑X)ᶜ ↑X (window t j)) →
+        (S z x).crossing (↑X)ᶜ ↑X (period t j) = (S z x').crossing (↑X)ᶜ ↑X (period t j)) →
       (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
       (∀ z x (j : Fin c), (S z x).mem X (t j) ≤ M) →
       (∀ z x (j : Fin c), ζ j ((S z x).content X (t j)) = z) →
@@ -639,7 +639,7 @@ theorem B2AddsP2Ring_fixed :
       (∀ z x x', x.1 = x'.1 → (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x.1 x.2.1 = (Pous.p2ring (2 ^ 19) 16448 (2 ^ 16448 - 21065) 16432).enc W x'.1 x'.2.1 →
         (S z x).content X (t 0) = (S z x').content X (t 0) ∧ help z x = help z x') →
       (∀ z x x' (j : Fin 105), help z x = help z x' → x.2.2 j = x'.2.2 j →
-        (S z x).crossing (↑X)ᶜ ↑X (window t j) = (S z x').crossing (↑X)ᶜ ↑X (window t j)) →
+        (S z x).crossing (↑X)ᶜ ↑X (period t j) = (S z x').crossing (↑X)ᶜ ↑X (period t j)) →
       (∀ z, (Set.range (help z)).encard ≤ ((2 ^ H : ℕ) : ℕ∞)) →
       (∀ z x (j : Fin 105), (S z x).mem X (t j) ≤ M) →
       (∀ z x (j : Fin 105), ζ j ((S z x).content X (t j)) = z) →

@@ -43,10 +43,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_8192 : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((1648180439 / 446072750000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, 16384³**: `PearlCSampledByDeadline` at
@@ -68,10 +68,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_16384 : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((1058166877 / 294158650000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Qwen3-8B's served layout**:
@@ -93,10 +93,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((74663501 / 19190030000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 /-- **Pearl-C v1 under rev1 on sm_120 at the cap 1/1,000 by the deadline, on Llama-3.1-8B's served layout**:
@@ -118,10 +118,10 @@ def PearlCSm120Rev1Cap1000ByDeadline_llama31_8b : Prop :=
     ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            PearlC.blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
+          AcceptsBy run td x.1 x.2.1 (PearlC.goodTiles P TR U x.1 x.2.1 (A.trace U x.1 x.2.1) ∪
+            PearlC.blankTiles TR U (A.trace U x.1 x.2.1)) x.2.2 ∧
           T < (1 - ((3045273083 / 782596025000 : ℚ) : ℝ)) *
-            (PearlC.claimedWref TR U (A.transcript U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
+            (PearlC.claimedWref TR U (A.trace U x.1 x.2.1) - εs * PearlC.tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + PearlC.δPearlC q U.layout.N
 
 end Pouw.Guarantees

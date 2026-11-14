@@ -72,7 +72,7 @@ open scoped ENNReal
 open Bandwidth (pr_mono)
 
 /-- **The layout steered on the accepted coins.** On coins `acc` at which the schedule check at the committed cap `cap`
-accepts, the verifier's layout (`sessionLayout`) is the slot of the schedule's `cap + 1` padded bits:
+accepts, the verifier's layout (`runLayout`) is the slot of the schedule's `cap + 1` padded bits:
 `Properties.RemoteAudit.steered_of_checked` at each prefix, over the coins `acc` holds of there. -/
 theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
     {dflt : Pfx → Fin N ↪ Fin T × Fin M} {appended sent : Pfx → Y → Array (ℕ × ℕ)}
@@ -80,10 +80,10 @@ theorem steered_on {Pfx Y : Type} {N T M blocks cap : ℕ} {idx : Pfx → ℕ}
     (hacc : ∀ c y, acc c y → ∃ sc passes b, RemoteAudit.Schedule.check sc blocks cap passes (appended c y) = .ok b ∧
       (passes[idx c]?).map Prod.snd = some (sent c y)) :
     ∃ (sched : Pfx → Y → Pous.Bits (cap + 1)) (slot : Pfx → Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
-      ∀ c y, acc c y → Properties.RemoteAudit.sessionLayout blocks dflt appended sent c y = slot c (sched c y) := by
+      ∀ c y, acc c y → Properties.RemoteAudit.runLayout blocks dflt appended sent c y = slot c (sched c y) := by
   classical
   have h : ∀ c, ∃ (sched : {y // acc c y} → Pous.Bits (cap + 1)) (slot : Pous.Bits (cap + 1) → Fin N ↪ Fin T × Fin M),
-      ∀ y : {y // acc c y}, Properties.RemoteAudit.sessionLayout blocks dflt appended sent c y.1 = slot (sched y) := by
+      ∀ y : {y // acc c y}, Properties.RemoteAudit.runLayout blocks dflt appended sent c y.1 = slot (sched y) := by
     intro c
     obtain ⟨sched, slot, hs⟩ := Properties.RemoteAudit.steered_of_checked (Pfx := Unit) (Y := {y // acc c y})
       (blocks := blocks) (a := cap) (idx := fun _ => idx c) (dflt := fun _ => dflt c)

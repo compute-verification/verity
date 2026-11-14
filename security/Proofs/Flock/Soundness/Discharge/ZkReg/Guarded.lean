@@ -263,7 +263,7 @@ theorem sampleOkZKHJ_of_accepts (I : Inputs) (ht : I.tags.typed = false) {c : Fl
     rw [hn, ← SampleFileZK.size_execOS σs ks hks St hS Kd pop Lb src hdj ω u hu]
     exact hdu
 
-/-- **`SampleOkZKHJ` from `RecordCustodyZKJS`**, the custody `JointStratifiedMT` and `JointStratifiedHorizonMT` take: at
+/-- **`SampleOkZKHJ` from `RecordCustodyZKJS`**, the custody `JointStratifiedMT` and `JointStratifiedPooledMT` take: at
 a sample of the live stratified sampling design `stratified Kd (Array.ofFn St)` that `verify --zk --session-tables J` accepts, at any
 `J`, several tables included (verity-verify-proof takes one stratified sample over the sampling block there when `J` divides its
 units, and gives table `j` its `j`-th part), `SampleOkZKHJ` holds at `(Σ_s k_s) / nTab I` units a table:

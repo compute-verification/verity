@@ -58,7 +58,7 @@ def drawnOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
     (Credit.drawn (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k"))
 
-def windowDrawnOf (j : Json) : Except String Json := do
+def executionPhaseDrawnOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
     (Credit.descriptorDrawn (← f "window") (← f "draw") (← f "descriptor") (← f "k"))
@@ -69,10 +69,10 @@ def outcomeOf (j : Json) : Except String Json := do
     (Credit.Internal.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k")
       (← f "proofs"))
 
-def windowOf (j : Json) : Except String Json := do
+def executionPhaseOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
-    (Credit.window (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
+    (Credit.executionPhase (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
       (← f "calls") (← f "served") (← f "commit") (← f "rounds") (← f "draw") (← f "descriptor") (← f "entries")
       (← f "proofs") (← f "live") (← f "k") (← f "rows"))
 
@@ -140,8 +140,8 @@ def commitParsersOf (j : Json) : Except String Json := do
   pure (Json.mkObj [("core", read Json.parse), ("total", read Flock.JsonParse.parse)])
 
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("commit-parsers", commitParsersOf), ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", windowDrawnOf), ("outcome", outcomeOf),
-  ("window", windowOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
+  ("commit-parsers", commitParsersOf), ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", executionPhaseDrawnOf), ("outcome", outcomeOf),
+  ("window", executionPhaseOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
   ("passes-distinct", passesDistinctOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
