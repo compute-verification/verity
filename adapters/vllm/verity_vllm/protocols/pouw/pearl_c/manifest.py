@@ -64,6 +64,9 @@ def manifest_epoch(man: dict, coins: CoinCommitment | LiveCommitment | None, rec
             raise DomainError("the pass has no salt coin")
         if coins is None:
             raise DomainError("the pass's salt coin opens against the epoch's published coin commitment, which the verifier holds")
+        for key in ("salt_opening", "coins"):
+            if key in man and not isinstance(man[key], dict):
+                raise DomainError(f"the pass's coins are malformed: {key} is not an object")
         live = isinstance(man.get("coins"), dict) and man["coins"].get("scheme") == LIVE_SCHEME
         try:
             opening = (LiveOpening if live else CoinOpening).from_json(man["salt_opening"])

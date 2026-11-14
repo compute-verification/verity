@@ -4,8 +4,8 @@ that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a
 layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
-a kernel directory without one cubin, of a pass whose coins don't parse and of B̃'s prefetch on a kernel without it,
-and the in-process certifier's of fewer coin bytes than it asks for."""
+a kernel directory without one cubin, of a pass whose coins don't parse or are no object and of B̃'s prefetch on a
+kernel without it, and the in-process certifier's of fewer coin bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -246,12 +246,18 @@ def test_a_certifier_given_fewer_coin_bytes_than_it_asks_for_opens_no_window():
     assert list(cert.windows) == [0]
 
 
+def _coin_pass() -> tuple[Challenger, dict]:
+    """A challenger and a pass of no matmul and no weight whose coins are its commitment and its salt coin, opened after
+    zeros."""
+    ch = Challenger(0, random.Random(0).randbytes)
+    return ch, {"schema": CC.MANIFEST_SCHEMA, "matmuls": [], "weights": {}, "coins": ch.commitment.to_json(),
+                "salt_opening": ch.open("salt", bytes(PF.ROOT_BYTES)).to_json()}
+
+
 def test_a_pass_whose_coins_do_not_parse_is_refused_in_those_words():
     """A coin commitment or a salt coin that its parser refuses is refused as malformed, with the parser's words; the
     same pass with both parsed goes on to the coins' own checks, here that its salt coin was opened after zeros."""
-    ch = Challenger(0, random.Random(0).randbytes)
-    man = {"schema": CC.MANIFEST_SCHEMA, "matmuls": [], "weights": {}, "coins": ch.commitment.to_json(),
-           "salt_opening": ch.open("salt", bytes(PF.ROOT_BYTES)).to_json()}
+    ch, man = _coin_pass()
     malformed = "the pass's coins are malformed: "
     cases: tuple[tuple[str, str], ...] = (("coins", f"{malformed}a coin commitment's scheme is 'verity/pouw/epoch-coins/v1'"),
                                           ("salt_opening", f"{malformed}'epoch'"))
@@ -260,6 +266,20 @@ def test_a_pass_whose_coins_do_not_parse_is_refused_in_those_words():
             PPD.manifest_epoch({**man, key: {}}, ch.commitment)
     with pytest.raises(DomainError, match="^the salt's coin was not opened after what the verifier recorded$"):
         PPD.manifest_epoch(man, ch.commitment)
+
+
+def test_a_pass_whose_coins_are_no_object_is_refused_as_malformed_before_a_parser_reads_them():
+    """A coin commitment or a salt coin that is no JSON object is refused as malformed by its name, and never escapes as
+    the parser's own error: a pass is the prover's bytes."""
+    ch, man = _coin_pass()
+    values: tuple[object, ...] = ("", "00", [], [{}], 0, True, None)
+    for key in ("coins", "salt_opening"):
+        said = f"the pass's coins are malformed: {key} is not an object"
+        for value in values:
+            with pytest.raises(DomainError, match=f"^{re.escape(said)}$"):
+                PPD.manifest_epoch({**man, key: value}, ch.commitment)
+    with pytest.raises(DomainError, match="^the pass's coins are malformed: 'coins'$"):
+        PPD.manifest_epoch({k: v for k, v in man.items() if k != "coins"}, ch.commitment)
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
