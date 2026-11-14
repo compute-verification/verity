@@ -18,8 +18,12 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_capture_loopback.py",
     "tests/test_certifier_piece.py",
+    "tests/test_certifier_term.py",
     "tests/test_chain_record.py",
+    "tests/test_chain_record_guard.py",
+    "tests/test_kept_scan.py",
     "tests/test_negatives.py",
     "tests/test_out_request_values.py",
     "tests/test_scan_zk_challenger.py",
@@ -54,16 +58,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
           "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/second_stage.py",
           "benchmarks/spot_figures/breakeven",
-          "adapters/vllm/workloads",
-          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/definitions",
-          "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/advice.py",
-          "adapters/vllm/verity_vllm/pipeline/cli.py",
-          "adapters/vllm/verity_vllm/config.py", "adapters/vllm/verity_vllm/settings.py",
-          "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/handle.py",
-          "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/step_trace.py",
-          "adapters/vllm/verity_vllm/engine/scheduler_step.py", "adapters/vllm/verity_vllm/engine/runner_step.py",
-          "adapters/vllm/verity_vllm/records/__init__.py", "adapters/vllm/verity_vllm/records/fields.py",
-          "adapters/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
+          "adapters/vllm/workloads", "benchmarks/network_e2e/chain.py",
           "verity/protocols/compose/device/live_challenger",
           "verity/protocols/proofs/spot/device/challenger_session.py",
           "verity/protocols/proofs/spot/prover/audit/template_audit.py", "benchmarks/one_stage/a7.py",
@@ -72,7 +67,6 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "verity/protocols/proofs/flock/prover/python/verity_flock",
           "benchmarks/network_e2e/encodings/replay.py", "benchmarks/network_e2e/encodings/replay_vectors.py",
           "benchmarks/network_e2e/encodings/cache_vectors.py", "benchmarks/network_e2e/encodings/derived.py",
-          "adapters/vllm/verity_vllm/pipeline/advice_code", "adapters/vllm/verity_vllm/compiler",
           "benchmarks/network_e2e/encodings/tests/fixtures",
           "verity/protocols/accounting/certifier/verifier/network/tests/fixtures/slot_entry.json",
           "verity/protocols/accounting/certifier/verifier/network/tests/fixtures/select_entry.json",
@@ -82,7 +76,17 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py", "benchmarks/census/deployments.json",
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "verity/protocols/accounting/certifier/verifier/network/tests/period_case.py", "tools/difftest/python/verity_difftest",
-          "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/compose/device/__init__.py"]
+          "verity/__init__.py", "verity/protocols/compose/__init__.py", "verity/protocols/compose/device/__init__.py",
+          # test_kept_scan's window classes are the vLLM integration's (`program.predict.window_circuit`), which import
+          # across its package and the PyTorch adapter's; demo_stub's `verity-vllm advice`, the encodings' replay and
+          # compile_slice_zk's compiler read the vLLM package too. Both packages are listed whole, as they move often. SPOT's
+          # prove_path, which test_kept_scan runs, reads its sources' list. test_certifier_term runs `verity bench
+          # certifier_term`'s runner, test_block_certifier holds the block certifier to the block record's period-0
+          # fixture, and test_certifier_piece holds the CLI's served_table to scan_zk's scan class.
+          "adapters/vllm/verity_vllm", "adapters/torch/verity_torch",
+          "benchmarks/certifier_term/run.py",
+          "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
+          "benchmarks/prove_path/sources.json", "tools/verity/cli/verity_cli/served_table.py"]
 # network-rows, the compiled audit of the network certifier's records, which test_certifier_piece builds in its package
 # (as the piece does) and runs on the synthetic run's records; the Lean verifier, whose statement setup test_warden_zk
 # and test_egress_zk run on their staged members.
