@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.ExecDraw
-public import Proofs.Flock.Soundness.KeyedDraw
+public import Proofs.Flock.Soundness.ExecSample
+public import Proofs.Flock.Soundness.KeyedSample
 public import Properties.Pous.EndToEndAt
 public import Proofs.Pous.Sanity
 import Mathlib.Algebra.Order.Floor.Semifield
@@ -22,8 +22,8 @@ import VCVio.Prelude.Core
 # PoUS's ring game at any block count, proved
 
 * `drawAtMost : DrawAtMost`: the code's sampler is Flock's (`uniformOn N` is `uniformL` on the stream's bytes,
-  `FlockSoundness.Audit.KeyedDraw.uniformOn_streamOf`), whose rejection loop gives each index at most `1/N`
-  (`FlockSoundness.Audit.DrawExec.uniformL_le`): `card_draw_le`. Over the 105 independent streams the indices' fibre is
+  `FlockSoundness.Audit.KeyedSample.uniformOn_streamOf`), whose rejection loop gives each index at most `1/N`
+  (`FlockSoundness.Audit.SampleExec.uniformL_le`): `card_draw_le`. Over the 105 independent streams the indices' fibre is
   a product of single-stream fibres (`card_draws_le`), and a union bound over the indices (`pr_draw_le`) moves any
   event from the streams to uniform indices.
 * `endToEndRingAt : EndToEndRingAt`: `endToEndRing`'s proof with that inequality in place of `pr_passes`'s equality,
@@ -54,12 +54,12 @@ theorem streamOf_eq_bytesOf {n : ℕ} (x : Bytes n) : FlockSoundness.Audit.Law.s
 theorem card_draw_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
     (Finset.univ.filter fun s : Bytes DRAW_BYTES =>
         FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i).card * N ≤ Fintype.card (Bytes DRAW_BYTES) := by
-  have hle := FlockSoundness.Audit.DrawExec.uniformL_le N hN (fun r _ => r = i)
+  have hle := FlockSoundness.Audit.SampleExec.uniformL_le N hN (fun r _ => r = i)
     (fun r => if r = i then 1 else 0)
     (fun r _ ℓ => by
       show FlockSoundness.Game.prCoin (fun _ : Fin ℓ → Fin 256 => r = i) ≤ if r = i then 1 else 0
       split_ifs with h
-      · exact FlockSoundness.Audit.DrawExec.prCoin_le_one _
+      · exact FlockSoundness.Audit.SampleExec.prCoin_le_one _
       · simp only [h]
         exact FlockSoundness.Game.prCoin_false.le)
     (DRAW_BYTES + 1) DRAW_BYTES
@@ -70,7 +70,7 @@ theorem card_draw_le (N : ℕ) (hN : 0 < N) (i : ℕ) :
   have hp : FlockSoundness.Game.prCoin (fun s : Bytes DRAW_BYTES =>
       FlockSoundness.Randomness.uniformOn N (bytesOf s) = some i) ≤ (N : ℝ≥0∞)⁻¹ := by
     refine le_trans (FlockSoundness.Game.prCoin_mono fun s hs => ?_) (hle.trans ?_)
-    · rw [← streamOf_eq_bytesOf, FlockSoundness.Audit.KeyedDraw.uniformOn_streamOf] at hs
+    · rw [← streamOf_eq_bytesOf, FlockSoundness.Audit.KeyedSample.uniformOn_streamOf] at hs
       obtain ⟨⟨r, rest⟩, hu, hr⟩ := Option.map_eq_some_iff.1 hs
       exact ⟨r, rest, hu, hr⟩
     · rw [← one_div]

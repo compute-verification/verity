@@ -22,7 +22,7 @@ here, and its theorem is below it.
   takes no other sample at `J > 1`.
 * `AcceptsTables`: verity-verify-proof's acceptance at `count > 1`: the record's sample, when there is one, is a subset sample;
   the session's units (the sample's, without one the population's) split into `count` equal parts; and table `j` is
-  `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partDraw` of part `j`.
+  `setupH`'s statement under `Tags.tableIdentity count j` at the subset sample `partSample` of part `j`.
 
 The decoder (`DecodesTable`, inside `DecodesOnJ`) is a named hypothesis per sample, registration and table: at one table
 it is `DecodesOn`'s, which `decodesOn_exec` (`Discharge/DecodeZL`) discharges for the plain headline's tables, and its
@@ -180,7 +180,7 @@ theorem headline_tables_subset : HeadlineTablesSubset := by
 open Lean (Json) in
 /-- Part `j` of `count` equal consecutive parts of the session's units, as the subset sample of the population that
 `Stmt.setupTables` sets table `j` up at. -/
-def partDraw (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
+def partSample (population : ℕ) (units : Array ℕ) (count j : ℕ) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson population),
     ("k", Lean.toJson (units.size / count)),
     ("units", Json.arr ((units.extract (j * (units.size / count)) (j * (units.size / count) + units.size / count)).map
@@ -198,14 +198,14 @@ def AcceptsTables : Prop :=
       Flock.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok () ∧
       I.tags.manyTables.isSome ∧ I.count ≤ Flock.Tags.MAX_TABLES ∧
       ∃ (population : ℕ) (units : Array ℕ),
-        (∀ d, recordDraw t.record = some d → ∃ u, Flock.Draw.UnitDraw.ofJson d = .ok u ∧
+        (∀ d, recordDraw t.record = some d → ∃ u, Flock.Draw.UnitSample.ofJson d = .ok u ∧
           ((∃ k', u.law = .subset k') ∨ ∃ K st, u.law = .stratified K st) ∧
           u.population = population ∧ u.units = units) ∧
         (recordDraw t.record = none → units = Array.range population) ∧
         0 < units.size ∧ units.size % I.count = 0 ∧ sts.size = I.count ∧
         ∀ (j : ℕ) (hj : j < sts.size),
           Flock.Stmt.setupH (tagsAt I.tags I.count j) I.circuitFile I.publicFile I.coins I.tables
-            (some (partDraw population units I.count j)) I.partition I.program = .ok sts[j]
+            (some (partSample population units I.count j)) I.partition I.program = .ok sts[j]
 
 theorem accepts_tables : AcceptsTables := by
   intro I t hh hc h

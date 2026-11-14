@@ -14,7 +14,7 @@ import all Lean.Data.Json.Basic
 The two-stage form's last step holds the interior audit's sample to a sampling design it computes (`secondDesignOf`), from the `draw`
 the run of record returned. That `draw` is the first stage's sample of record:
 
-* `run_draw`: a run of record whose symbol is `accept` ran the sample of record (`Select.select`, under
+* `run_sample`: a run of record whose symbol is `accept` ran the sample of record (`Select.select`, under
   `Select.resolve`'s rule and the work table the rule expands) on the bytes it was handed, held that sample to the
   registration (`Draw.checkDraw`, under the sampling design the rule gives the population), and its `draw` is that
   sample. A refused run names no symbol, and the entry a second stage adds to the answer is named `interior`.
@@ -113,7 +113,7 @@ private theorem run_path {i : Spot.Run.Input} {form : Bool} {j : Json} (h : Spot
 whose symbol is `accept` drew the sample of record (`Select.select` under `Select.resolve`'s rule and the work table
 `Rule.tableOver` expands) on the bytes it was handed, held it to the registration (`Draw.checkDraw` under the
 sampling design `Rule.over` gives the population), and lists it as its `draw`. -/
-theorem run_draw {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.run i form = .ok run)
+theorem run_sample {i : Spot.Run.Input} {form : Bool} {run : Json} (h : Spot.Run.run i form = .ok run)
     (ha : Spot.jeq (Spot.getD run "symbol") (Json.str "accept") = true) :
     ∃ n rule law workTable derived resolved draw rest read,
       nat? (getD i.record "population") = some n ∧
@@ -182,7 +182,7 @@ theorem accepted_secondLaw {form : Bool} {p : Params} {c : OneStage.Commitment} 
   obtain ⟨-, c₂, ξ₂, r, i, run, hi, hr, -, -, hj, law, hl, htwo⟩ := accepted_steps h
   obtain ⟨-, -, -, -, vs, received₂, j₁, j₂, -, hio, hj₁, -⟩ := inputAt_ok hi
   obtain ⟨n, rule, law₁, workTable, derived, resolved, draw, rest, read, hn, hrule, hlaw, htab, hder, hres, hsel,
-    hchk, hd⟩ := run_draw hr hj
+    hchk, hd⟩ := run_sample hr hj
   obtain ⟨grain, replay, k, ns, ids, ks, hk, hns, hids, hks, hlaw₂⟩ := secondLawOf_ok hl
   rw [hd] at hlaw₂
   obtain ⟨h1, h2, h3, h4, h5⟩ := inputOf_first p { c with record := j₁ } ξ ξ₂

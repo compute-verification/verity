@@ -84,8 +84,8 @@ theorem plain_setupH {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false 
 /-- **The table of a sample that sets up `st` is `plainTab` at `st`**: the layout is a proposition, and the schedule is
 `fast100`'s at `st.m`. -/
 theorem tableAt_plainTab {I : Exec.Inputs} (ht : I.tags.typed = false) {n : ℕ} (dj : Finset (Fin n) → Json)
-    {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : Integrate.DrawSetup I spec.mPts S₀ (dj S₀))
-    {S : Finset (Fin n)} (x : Integrate.DrawSetup I spec.mPts S (dj S)) {st : Stmt} (hx : x.st = st) (L : Layout st)
+    {spec : SessionSpec} {S₀ : Finset (Fin n)} (x₀ : Integrate.SampleSetup I spec.mPts S₀ (dj S₀))
+    {S : Finset (Fin n)} (x : Integrate.SampleSetup I spec.mPts S (dj S)) {st : Stmt} (hx : x.st = st) (L : Layout st)
     (m k0 : ℕ) (l₀ l₁ : Accounting.Level) (rest : List Accounting.Level) (ext : ℕ)
     (hsch : Accounting.fast100 st.m = some ⟨m, k0, l₀ :: l₁ :: rest, ext⟩)
     (hm : 13 ≤ (L.model (Refine.regionsOf st)).m)
@@ -155,9 +155,9 @@ theorem plain_hdec {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Re
     cases hf : Flock.fast100 st.m with
     | none => rw [hf] at e; cases e
     | some sch => exact ⟨sch, rfl⟩
-  obtain ⟨pop, -, hdr⟩ := Layout.setupH_drawn hst
-  obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
-  obtain ⟨x₀, hx₀⟩ := Integrate.drawSetup_of_setupH (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc ho hst
+  obtain ⟨pop, -, hdr⟩ := Layout.setupH_sampled hst
+  obtain ⟨D, hD, -⟩ := Layout.sampled_spec hdr
+  obtain ⟨x₀, hx₀⟩ := Integrate.sampleSetup_of_setupH (S := (∅ : Finset (Fin 0))) (mPts := st.spec.mPts) ht hc ho hst
     hf hD (fun u hu => absurd hu (Finset.notMem_empty u)) rfl
   have e : Integrate.tablesAt (Reg := Unit) ht (fun _ : Finset (Fin 0) => d) x₀ =
       fun _ _ => plainTab L m k0 l₀ l₁ rest ext hsch hm PT_LOCAL hlay := by
@@ -165,7 +165,7 @@ theorem plain_hdec {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Re
     obtain rfl : S = ∅ := Finset.eq_empty_of_isEmpty S
     exact tableAt_plainTab ht (fun _ : Finset (Fin 0) => d) (spec := st.spec) (S := ∅) x₀ x₀ hx₀ L m k0 l₀ l₁ rest ext
       hsch hm hlay
-  have hS : DecodeZL.DrawOk ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
+  have hS : DecodeZL.SampleOk ins.read.I (fun _ : Finset (Fin 0) => d) st.spec.mPts ∅ :=
     ⟨fun _ _ u hu => absurd hu (Finset.notMem_empty u), fun st' hst' => by
       obtain rfl := Except.ok.inj (hst.symm.trans hst')
       rfl⟩

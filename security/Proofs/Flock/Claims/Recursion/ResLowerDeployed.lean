@@ -86,7 +86,7 @@ are `openSetupSt`).
   holds the unit's input and output leaves to V\*'s, its words in order).
 * `resTie_copyOf`, `resTie_site`: check 5's tie at a piece's copy; `resTie_site` takes the setup's site facts from
   `CopySite.copySite_staged`.
-* `VVTie`: the coin tie, `vvAt` at the coins is check 5's row at the V\* statement (`staged_rep_drawn`).
+* `VVTie`: the coin tie, `vvAt` at the coins is check 5's row at the V\* statement (`staged_rep_sampled`).
 * `ResLowered`: the share at the layout of record and `bdR rd wE final w`, per algebra part; `resLowered_parts` gives
   it at every part where the pieces are owned by algebra parts only, which is `DecompBR.ResLowJ`'s conclusion at each
   part of a `Joint` acceptance.
@@ -1679,7 +1679,7 @@ theorem resPieces_computesAt {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin
 /-- **The coin tie**: at a V\* statement `xO` part `s` stages at `x` and shows the coins `c` at, wherever check 5 loads
 a `rec-residuals` statement's inner session and computes its `v` rows (`residualRows`), the verifier's values the coins give
 at a key (`vvAt` at the inner statement and the coins, keyed `(jj, o, g, 0)` by the part's group) are the elements
-of instance `o + g`'s row, at the verifier's part `(S, ns, nv)`. `staged_rep_drawn` is its coin side. -/
+of instance `o + g`'s row, at the verifier's part `(S, ns, nv)`. `staged_rep_sampled` is its coin side. -/
 def VVTie (untr : TrReader) (b : Brings) (vvAt : Msg → List Coin → ℕ × ℕ × ℕ × ℕ → ℕ → _root_.Flock.F128)
     (Bk : Msg → ℕ) (s : ℕ) (x : Msg) (c : ℕ → Coin) : Prop :=
   ∀ (xO : Msg), showsPart untr b s x xO c → ∀ (i : RecIns) (spec : SessionSpec) (sts : Array Stmt),

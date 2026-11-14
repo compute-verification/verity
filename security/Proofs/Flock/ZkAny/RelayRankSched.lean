@@ -167,7 +167,7 @@ theorem ofLoop_rank_sched (T : ZKMal.CoinLayer.TableData)
     rfl
   have hcc : ∀ p, p < c'.order.size → c'.order[p]! < c'.h.size := by
     rw [hc']
-    exact Claims.ZKServer.ofDraws_order _ _ _
+    exact Claims.ZKServer.ofSamples_order _ _ _
   have hj1 := Ranked.repState_rankFails hcc hal hs (by rw [htm]; exact hm14) (by rw [htk]; exact hk6) hmb hdg
     (placeholder_cap hph') hdom hlay hj' hF hr
   have hsc : ∀ b, schedOf (real x w ρ) x cs = some b →

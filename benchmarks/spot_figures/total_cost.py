@@ -632,7 +632,7 @@ LOG_LINES, TABLE_LINES = challenger.MAX_TREE_LINES, 2 * 86
 DRAW_BYTES = challenger.MAX_COINS * challenger.COIN_BYTES
 
 
-def draw_width(n: int) -> int:
+def sample_width(n: int) -> int:
     """The bytes of one uniform sample below `n` (`Flock.Draw.width`)."""
     return (n.bit_length() + 71) // 8
 
@@ -655,7 +655,7 @@ def limits(cells: Sequence[Cell], row: dict) -> dict:
     sizes: dict = {}
     for c in split:
         sizes[c.stratum] = sizes.get(c.stratum, 0.0) + c.n
-    draw = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * draw_width(ceil(n)) + 64) for t, n in sizes.items())
+    draw = count * fsum(min(1.0, n) * (2 * min(k[t], ceil(n)) * sample_width(ceil(n)) + 64) for t, n in sizes.items())
     tables = ceil(row["tables"] - 1e-9)
     past = [f"{what} {n:,}" for n, what in TABLE_LIMITS if tables > n]
     limit = None

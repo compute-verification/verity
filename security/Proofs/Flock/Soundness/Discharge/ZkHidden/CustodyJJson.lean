@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+public import Proofs.Flock.Soundness.Discharge.ZkLink.SampleOkJson
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -20,8 +20,8 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # `zk_session_soundHJ_custody` from the printed sample file
 
 `Composed/CustodyJJson.lean` under hidden outputs: `zk_session_soundHJ_custody_json` takes `RecordsLiveZKJ` as it is
-and, for `DrawFileZK`, that each sample file is the JSON value `verity-verify-proof draw` printed for the verifier's own sample
-under `subset kd` (`drawFileZK_of_toJson_subset`).
+and, for `SampleFileZK`, that each sample file is the JSON value `verity-verify-proof draw` printed for the verifier's own sample
+under `subset kd` (`sampleFileZK_of_toJson_subset`).
 -/
 
 @[expose] public section
@@ -47,7 +47,7 @@ theorem zk_session_soundHJ_custody_json
     (hscope : Layout.scopeOkH c = true)
     (kd : ℕ) (hkd : kd ≤ n) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
-    {d₀ : Lean.Json} (y₀ : DrawSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
+    {d₀ : Lean.Json} (y₀ : SampleSetupZHJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
       LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
@@ -66,7 +66,7 @@ theorem zk_session_soundHJ_custody_json
       (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
       (decodesOnZKJ_of_runsOnZCJ execArith hs512 _ I wr _ _ _ _ _
         (runsZCJH_live I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ hTags hRec
-          fun _ => drawOkZKHJ_of_file I ht hc kd n hdiv dj (drawFileZK_of_toJson_subset dj kd n hdj) _)) τ
+          fun _ => sampleOkZKHJ_of_file I ht hc kd n hdiv dj (sampleFileZK_of_toJson_subset dj kd n hdj) _)) τ
     (∀ ω j, TableCRZ execArith hs512 (planZHJ dj y₀ ((Law.execOS (n := n) src (.subset kd) n).draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) qF qS) →
     prob (fun o => LiveAcceptsZK I o ∧
@@ -81,6 +81,6 @@ theorem zk_session_soundHJ_custody_json
           ((rsZHJ dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZHJ_computes dj y₀ ht hc hscope hU hpub hpt))
           k Rw M ρ t' (reg σ) (cont σ) :=
   zk_session_soundHJ_custody I ht hc hU hpub hpt hscope kd hkd hdiv dj y₀ wr dg N Lb src hA3 hTags
-    ⟨hRec, drawFileZK_of_toJson_subset dj kd n hdj⟩ hk hRw hM hρ hr ht' K₀ τ
+    ⟨hRec, sampleFileZK_of_toJson_subset dj kd n hdj⟩ hk hRw hM hρ hr ht' K₀ τ
 
 end FlockSoundness.Discharge.ZkHidden

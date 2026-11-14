@@ -114,7 +114,7 @@ noncomputable def bitK (v : ValK c) (g : Fin ((keyProg c hU n).circuit (Layout.o
   v.2 (idxK c hU n g)
 
 /-- A sample of `Lv` reads commit string `pos`: a sampled proof block reads a wire it holds. -/
-def ReadsDrawK (Lv : Law n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
+def ReadsSampleK (Lv : Law n) (pos : PosK c hU n) (ω : Lv.Ω) : Prop :=
   ∃ u ∈ Lv.draw ω, ∃ g ∈ ((keyProg c hU n).partition (Layout.outsOf c hU n)).io u, posK c hU n g = pos
 
 /-- **Every sample of `Lv` reads every wire of the commit strings `Sk`**: each is a wire of a sampled proof block. -/
@@ -126,7 +126,7 @@ open Classical in
 it over `1 − ρ`. -/
 noncomputable def candWeightK (Lv : Law n) (Sk : Finset (PosK c hU n)) (ρ : ℝ) (pos : PosK c hU n) : ℝ≥0∞ :=
   if pos ∈ Sk then
-    ENNReal.ofReal ((Fintype.card {ω // ReadsDrawK c hU n Lv pos ω} : ℝ) / Fintype.card Lv.Ω / (1 - ρ))
+    ENNReal.ofReal ((Fintype.card {ω // ReadsSampleK c hU n Lv pos ω} : ℝ) / Fintype.card Lv.Ω / (1 - ρ))
   else 0
 
 end Fixed
@@ -231,7 +231,7 @@ theorem candWeight_vb (Sk : Finset (PosK c hU nv)) (ρ : ℝ) (pos : PosK c hU n
   split_ifs with h1 h2 h2
   · exact congrArg (fun x : ℕ => ENNReal.ofReal ((x : ℝ) / Fintype.card Lv.Ω / (1 - ρ)))
       (Fintype.card_congr (Equiv.subtypeEquivRight fun ω => by
-        unfold ReadsDrawZ ReadsZ ReadsDrawK
+        unfold ReadsSampleZ ReadsZ ReadsSampleK
         simp only [vb_pos]
         exact Iff.rfl))
   · exact absurd h1 h2

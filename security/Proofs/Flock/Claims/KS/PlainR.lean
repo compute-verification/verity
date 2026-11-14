@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainDrawRColsE
+public import Proofs.Flock.Claims.KS.PlainSampleRColsE
 public import Proofs.Flock.Claims.Recursion.FlockKSLin
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -102,7 +102,7 @@ namespace FlockDeploy.KS
 open Flock FlockSoundness.Discharge.Exec
 open FlockSoundness.Refine (ebind_ok)
 open Claims.Bridge.Custody (checksAtJ_ok checksAtJ_scope)
-open Claims.Bridge.PlainDraw (decideR_sha512)
+open Claims.Bridge.PlainSample (decideR_sha512)
 open Claims.Recursion
 
 local notation "𝔽" => FlockLevel3.GF128

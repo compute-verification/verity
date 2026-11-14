@@ -43,7 +43,7 @@ read no `pub.tables = none`, so a shared-row public file is in.
 
 Each table's statement commits the committed circuit `cs` (`HmOut.unrolled cs = c`), and `checkRegistered` reads it
 there. Unrolling changes only the unit net and the template (`Hidden.Committed.unrolled_eq`), and the registered check,
-the public file's load and the sample read neither (`check_unrolledOf`, `loadPublic_unrolledOf`, `drawn_unrolledOf`), so the
+the public file's load and the sample read neither (`check_unrolledOf`, `loadPublic_unrolledOf`, `sampled_unrolledOf`), so the
 check at `cs` is the check at `c`.
 -/
 
@@ -69,7 +69,7 @@ theorem loadPublic_unrolledOf (t : Tags) (pf : ByteArray) :
     HmOut.loadPublic t { cs with nets := nets, tmpl := none } pf = HmOut.loadPublic t cs pf :=
   rfl
 
-theorem drawn_unrolledOf (pub : Public) (d : Lean.Json) :
+theorem sampled_unrolledOf (pub : Public) (d : Lean.Json) :
     HmOut.drawn { cs with nets := nets, tmpl := none } pub d = HmOut.drawn cs pub d :=
   rfl
 
@@ -79,7 +79,7 @@ end unrolled
 statement circuit (`checked_of_acceptsHJ` at `HmOut.parseStmt`). -/
 theorem checked_of_acceptsHJSt (I : Inputs) (ht : I.tags.typed = false) (own : Array Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
     (hv1 : Hidden.Any.RowsFitS c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub) (hscope : Layout.scopeOkH c = true)
@@ -108,7 +108,7 @@ theorem checked_of_acceptsHJSt (I : Inputs) (ht : I.tags.typed = false) (own : A
   rw [loadPublicH_tagsAt, ← loadPublic_unrolledOf _ nets, ← hce, hpub] at hpop'
   cases hpop'
   have hdr' := hdr _ rfl
-  rw [← drawn_unrolledOf _ nets, ← hce, hdp] at hdr'
+  rw [← sampled_unrolledOf _ nets, ← hce, hdp] at hdr'
   have hpd : sts[(partOf I d u.val).val].pub = dp := (Except.ok.inj hdr').symm
   have hdpR : HmRow.drawn { c with outPorts := #[] } pub (drawJ I d (partOf I d u.val)) = .ok dp := hdp
   have hck := checkRegistered_ok (array_forM_ok hreg _ hjs)
@@ -119,7 +119,7 @@ theorem checked_of_acceptsHJSt (I : Inputs) (ht : I.tags.typed = false) (own : A
   obtain ⟨p', positions, paths, hp', hent, hall⟩ := checkPort_at (hports _ hmem)
   rw [hfind] at hp'
   cases hp'
-  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.drawn_spec hdpR
+  obtain ⟨D', hD', -, hn, -, -⟩ := Layout.sampled_spec hdpR
   rw [hD] at hD'
   cases hD'
   have hi : D.proved.idxOf u.val < D.proved.size := Array.idxOf_lt_length_of_mem hu
@@ -144,7 +144,7 @@ theorem checked_of_acceptsHJSt (I : Inputs) (ht : I.tags.typed = false) (own : A
     exact this
   have hdig : pub.digest u.val q.val c.ports.size =
       Registered.tableRow dp tb q.val (Registered.ref tb c.ports.size q.val (D.proved.idxOf u.val)) := by
-    have h1 := Hidden.drawn_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
+    have h1 := Hidden.sampled_digestW (Hidden.loadPublic_nil hpub) hdpR hD (Layout.proved_lt_population hD) hi q.isLt
     rw [hget] at h1
     rw [← h1]
     simp only [Public.digest, htb, Registered.tableRow, Registered.ref]
@@ -157,7 +157,7 @@ checked**, at the session's statement circuit (`zk_session_soundHJR` at `HmOut.p
 theorem zk_session_soundHJRSt
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's statement circuit, its rows' fit, and the public file
@@ -169,7 +169,7 @@ theorem zk_session_soundHJRSt
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
