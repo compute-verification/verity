@@ -167,18 +167,18 @@ def RunPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
 def PoolResetOnce (v : Registration.Verifier) : Prop :=
   (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
 
-/-- The record's window names the registration log's compiler by its digest and advice of at most its cap in bits, and
-neither a compiler nor advice where the log registers none (`Registration.Verifier.builder`); anything when the verifier
-reads no log's compiler. -/
+/-- The record's window names the registration log's compiler by its digest and advice of at most its public length ℓ in
+bits, and neither a compiler nor advice where the log registers none (`Registration.Verifier.compiler`); anything when
+the verifier reads no log's compiler. -/
 def RunCompiler (rec : Json) (v : Registration.Verifier) : Prop :=
-  Registration.compilerOk (getD rec "window") v.builder = true ∧
-    Registration.adviceOk (getD rec "window") v.builder = true
+  Registration.compilerOk (getD rec "window") v.compiler = true ∧
+    Registration.adviceOk (getD rec "window") v.compiler = true
 
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
 window name both, and its window names the verifier's seed salt (`RunSeedSalt`) and its pool's reset, week and
 spent mark (`RunPoolReset`, `RunPoolWeek`, `RunPoolSpent`), at most one reset a week (`PoolResetOnce`), and the log's
-registered compiler and advice within its cap (`RunCompiler`). -/
+registered compiler and advice within its length (`RunCompiler`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null

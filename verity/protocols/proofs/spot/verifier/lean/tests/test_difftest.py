@@ -6364,41 +6364,42 @@ def test_a_seed_salt_the_server_chose_is_refused_by_name(pieces):
 
 
 def test_advice_no_registered_compiler_reads_is_refused_by_name(pieces):
-    """Lean and Python agreeing on the registered compiler (`builder`, the registration log's `builder` item): a window
-    naming it by its digest with advice of at most its cap in bits is accepted, one naming another compiler or none is
-    refused by name (`R6-compiler`), and advice over the cap, in another form or none too (`R6-advice-cap`). Where the
-    log registers none (`builder` null), a window naming a compiler or advice is refused (`R6-compiler`); a verifier that
-    reads no log's compiler holds the window to nothing. A compiler in another form refuses the verifier's inputs."""
+    """Lean and Python agreeing on the registered compiler (`compiler`, the registration log's item, with the public
+    length ℓ of the advice it reads): a window naming it by its digest with advice of at most ℓ bits is accepted, one
+    naming another compiler or none is refused by name (`R6-compiler`), and advice over ℓ, in another form or none too
+    (`R6-advice-length`). Where the log registers none (`compiler` null), a window naming a compiler or advice is refused
+    (`R6-compiler`); a verifier that reads no log's compiler holds the window to nothing. A compiler in another form
+    refuses the verifier's inputs."""
     s, values = REGISTERED_SETUPS[0], {"D": 1, "W": 3}
     law = {"k": 1, "law": "subset"}
     digest, other = "c1" * 64, "c2" * 64
-    builder = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
+    item = {"advice": "verity/advice/v1", "cap": 32, "digest": digest, "kind": "builder"}
 
     def named(d, bits):
         return {**WINDOW, "compiler": {"digest": d, "name": "c"}, "advice": {"bits": bits, "root": "ad" * 64}}
 
     rec = _record_of(s, values, law, named(digest, 8), leaf_layer=LEAF, window_root=WROOT)
-    params = {"anchors": [], "builder": builder, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [],
+    params = {"anchors": [], "compiler": item, "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [],
               "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
               "registered": values, "scheme": SCHEME, "window_root": WROOT, "work_table": None}
-    unread = {k: v for k, v in params.items() if k != "builder"}
+    unread = {k: v for k, v in params.items() if k != "compiler"}
+    none = {**params, "compiler": None}
 
     def codes(window, p=params):
         kind, out = D.replay(REGISTRATION, _json({"params": p, "record": {**rec, "window": window}}), pieces)
         return json.loads(out)["codes"] if kind == "output" else kind
 
     cases = [(named(digest, b), params, []) for b in (0, 32)]
-    cases += [(named(digest, b), params, ["R6-advice-cap"]) for b in (33, -1, "8", None, True)]
-    cases += [(named(other, 8), params, ["R6-compiler"]), (WINDOW, params, ["R6-compiler", "R6-advice-cap"]),
-              (named(digest, 8), {**params, "builder": None}, ["R6-compiler"]),
-              ({**WINDOW, "advice": {"bits": 0, "root": "ad" * 64}}, {**params, "builder": None}, ["R6-compiler"]),
-              (WINDOW, {**params, "builder": None}, []), (named(other, 99), unread, []), (WINDOW, unread, [])]
+    cases += [(named(digest, b), params, ["R6-advice-length"]) for b in (33, -1, "8", None, True)]
+    cases += [(named(other, 8), params, ["R6-compiler"]), (WINDOW, params, ["R6-compiler", "R6-advice-length"]),
+              (named(digest, 8), none, ["R6-compiler"]),
+              ({**WINDOW, "advice": {"bits": 0, "root": "ad" * 64}}, none, ["R6-compiler"]), (WINDOW, none, []),
+              (named(other, 99), unread, []), (WINDOW, unread, [])]
     for window, p, want in cases:
-        assert codes(window, p) == want, (window, p.get("builder"))
-    for bad in ({**builder, "kind": "theta"}, {**builder, "cap": -1}, {**builder, "cap": True}, {**builder, "digest": 5},
-                {**builder, "digest": digest.upper()}, {k: v for k, v in builder.items() if k != "advice"},
-                {**builder, "extra": 1}, "builder"):
-        assert codes(rec["window"], {**params, "builder": bad}) == "reject", bad
+        assert codes(window, p) == want, (window, p.get("compiler"))
+    for bad in ({**item, "kind": "theta"}, {**item, "cap": -1}, {**item, "digest": 5}, {**item, "digest": digest.upper()},
+                {k: v for k, v in item.items() if k != "advice"}, {**item, "extra": 1}, "c"):
+        assert codes(rec["window"], {**params, "compiler": bad}) == "reject", bad
 
 
 def test_a_window_opens_the_pool_its_chain_left(pieces):

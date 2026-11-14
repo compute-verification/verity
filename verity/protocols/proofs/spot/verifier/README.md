@@ -537,9 +537,9 @@ Lean `Challenger.seedSaltOf`), and R6 holds the window to it (`R6-seed-salt`, `t
 
 ### The registered compiler
 
-A verifier that reads the registration log's registered compiler (`builder`: the log's `builder` item as its view
-publishes it, or null when the log registers none) holds the record's window to name that compiler by its digest
-(`window.compiler.digest`, `R6-compiler`) and advice of at most its cap in bits (`window.advice.bits`, `R6-advice-cap`);
-where the log registers none, a window naming a compiler or advice is `R6-compiler`. Lean `Registration.compilerOk` and
-`adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and the difftest's
-`test_advice_no_registered_compiler_reads_is_refused_by_name`.
+A verifier that reads the registration log's registered compiler (`compiler`: the log's item as its view publishes it,
+with its digest and the public length ℓ of the advice it reads, or null when the log registers none) holds the record's
+window to name that compiler by its digest (`window.compiler.digest`, `R6-compiler`) and advice of at most ℓ bits
+(`window.advice.bits`, `R6-advice-length`); where the log registers none, a window naming a compiler or advice is
+`R6-compiler`. Lean `Registration.compilerOk` and `adviceOk`, in `RunCompiler` of R6; `tests/test_registered.py` and
+the difftest's `test_advice_no_registered_compiler_reads_is_refused_by_name`.

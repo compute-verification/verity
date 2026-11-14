@@ -790,12 +790,12 @@ theorem poolMarks_nil (w : Json) (pool : Option Registration.Pool) (log : Array 
   rw [Registration.poolMarks, kept_nil, kept_nil, kept_nil, kept_nil]
   exact ⟨fun ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩ => ⟨a, r, wk, s, o⟩, fun ⟨a, r, wk, s, o⟩ => ⟨⟨⟨⟨a, r⟩, wk⟩, s⟩, o⟩⟩
 
-/-- R6's compiler codes (`Registration.builderMarks`) add none exactly when the window names the log's compiler and
-advice within its cap. -/
-theorem builderMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
-    Registration.builderMarks w b c = #[] ↔ c = #[] ∧ Registration.compilerOk w b = true ∧
+/-- R6's compiler codes (`Registration.compilerMarks`) add none exactly when the window names the log's compiler and
+advice within its length. -/
+theorem compilerMarks_nil (w : Json) (b : Option (Option (String × Nat))) (c : Array String) :
+    Registration.compilerMarks w b c = #[] ↔ c = #[] ∧ Registration.compilerOk w b = true ∧
       Registration.adviceOk w b = true := by
-  rw [Registration.builderMarks, kept_nil, kept_nil, and_assoc]
+  rw [Registration.compilerMarks, kept_nil, kept_nil, and_assoc]
 
 /-- R8's codes (`Registration.r8Codes`) add none exactly when R8 holds. -/
 theorem r8Codes_nil (v : Registration.Verifier) (c : Array String) :
@@ -882,10 +882,10 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     simp only [j13]
     by_cases hv : v2 = true
     · simp only [hv, ↓reduceIte, true_implies]
-      rw [h14, kept_nil, checkOutputs_nil, builderMarks_nil, poolMarks_nil, kept_nil, poolChained_iff]
+      rw [h14, kept_nil, checkOutputs_nil, compilerMarks_nil, poolMarks_nil, kept_nil, poolChained_iff]
       exact ⟨fun ⟨⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, b⟩, q⟩, e⟩ => ⟨a, s, r, wk, p, o, cm, ⟨b, q⟩, e⟩,
         fun ⟨a, s, r, wk, p, o, cm, ⟨b, q⟩, e⟩ => ⟨⟨⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, b⟩, q⟩, e⟩⟩
-    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, builderMarks_nil, kept_nil, poolMarks_nil]
+    · simp only [hv, Bool.false_eq_true, ↓reduceIte, false_implies, h14, compilerMarks_nil, kept_nil, poolMarks_nil]
       exact ⟨fun ⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, e⟩ => ⟨a, s, r, wk, p, o, cm, trivial, e⟩,
         fun ⟨a, s, r, wk, p, o, cm, _, e⟩ => ⟨⟨⟨⟨a, s⟩, r, wk, p, o⟩, cm⟩, e⟩⟩
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
