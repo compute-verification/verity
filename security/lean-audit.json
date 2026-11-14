@@ -21942,7 +21942,19 @@
    "unfolded_hash": "f5db05faad237b32a0f201ae3cb4b9673fd1cd9c7baea419c54066ea8cb521ae"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_honest": {
-   "owner": "@memory-accounting"
+   "owner": "@memory-accounting",
+   "signature": [
+    "Pous.SecurityProofs.StreamedWipeMeetsH200_honest :",
+    "  Exists fun prf => Exists fun P => Eq (Pous.pr fun x => Pous.StreamedWipe.Accepts P x.fst.fst (prf x.snd) x.fst.snd) 1"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "c868959c5124dd0d192f3ac36bb9c35aa9cc1345eb2fd3147e433c837b4876d2"
   },
   "Pous.SecurityProofs.StreamedWipeMeetsH200_nontrivial": {
    "owner": "@memory-accounting",
