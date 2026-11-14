@@ -5,7 +5,7 @@
     gpus     every live gpu-lease lease whose owner line names the run (`run=`, gpu-lease's RESEARCH_RUN_ID)
     slot     the check slot (slot.py) or Lean slot (lean_slot.py) whose holder names the run
     waits    a live gpu-lease wait file naming the run: its place among the directory's waiters and how many GPUs are
-             unlocked there; on node 1, the lease pool's record and the cap that binds it (`n1_cap`).  A check-line or
+             unlocked there; on node 1, the lease pool's record and the limit that binds it (`n1_limit`).  A check-line or
              Lean-line ticket naming the run: its place in line, and the slots it may take (a lane's check never takes a
              trains-only slot) or its pool's N
 """
@@ -56,8 +56,8 @@ def gpus(run_id: str, node: dict[str, Any]) -> list[str]:
     return out
 
 
-def n1_cap(lease_dir: str, n: int, waits: list[dict], limits: str | None, now: datetime, desc: Path = DESCRIPTION) -> str | None:
-    """The cap node 1's lease pool in `lease_dir` holds a request for `n` GPUs to (n1_lease.py): at most its queue's nominal quota,
+def n1_limit(lease_dir: str, n: int, waits: list[dict], limits: str | None, now: datetime, desc: Path = DESCRIPTION) -> str | None:
+    """The limit node 1's lease pool in `lease_dir` holds a request for `n` GPUs to (n1_lease.py): at most its queue's nominal quota,
     less what the queue's other admitted Workloads reserve, and `borrow` GPUs more only while every waiter is --preemptible
     and before `borrow-until`, never more than `max`.  The quota is the description's; max, borrow and borrow-until are the
     pool's `n1-lease.limits` when it writes one (under a policy command), else unknown here.  None without the description."""
@@ -74,17 +74,17 @@ def n1_cap(lease_dir: str, n: int, waits: list[dict], limits: str | None, now: d
     try:
         mx, borrow = int(lim["max"]), int(lim["borrow"])
     except (KeyError, ValueError):
-        cap = None if every else quota
+        most = None if every else quota
         why = (f"node 1's {name} pool grants at most the {queue} queue's quota, {quota} GPU(s), less its other Workloads'"
                + (", and borrows more only while every waiter is --preemptible (its limits are unrecorded: no n1-lease.limits)" if every
                   else ", while a waiter isn't --preemptible"))
     else:
         until = lim.get("borrow-until") or ""
         lending = every and (not until or now.strftime("%Y-%m-%dT%H:%M:%SZ") < until)
-        cap = min(mx, quota + (borrow if lending else 0))
-        why = (f"node 1's {name} pool grants at most {cap} GPU(s): the {queue} queue's quota {quota}" + (f" + borrow {borrow}" if lending else "")
+        most = min(mx, quota + (borrow if lending else 0))
+        why = (f"node 1's {name} pool grants at most {most} GPU(s): the {queue} queue's quota {quota}" + (f" + borrow {borrow}" if lending else "")
                + f", max {mx}, less its other Workloads' ({limits.strip()})")
-    return why + (f"; this asks for {n}, more than that" if cap is not None and n > cap else "")
+    return why + (f"; this asks for {n}, more than that" if most is not None and n > most else "")
 
 
 def gpu_waits(run_id: str, machine: str | None, node: dict[str, Any], now: datetime) -> list[str]:
@@ -101,8 +101,8 @@ def gpu_waits(run_id: str, machine: str | None, node: dict[str, Any], now: datet
             if pool:
                 line += f"; pool {pool.get('pool')} GPU(s), {pool.get('pending_holders')} holder(s) pending" + \
                         (f", BLOCKED: {pool['blocked']}" if pool.get("blocked") else "")
-            if machine == NODE1 and (cap := n1_cap(d, n, waits, ld.get("limits"), now)):
-                line += f"; {cap}"
+            if machine == NODE1 and (limit := n1_limit(d, n, waits, ld.get("limits"), now)):
+                line += f"; {limit}"
             out.append(line)
     return out
 

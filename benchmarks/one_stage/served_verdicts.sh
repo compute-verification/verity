@@ -27,6 +27,16 @@
 #     block the one the run audits (a period that admits a single block, say). A front that failed before a window
 #     closed stops the endpoint at once, with no window to seal; one that failed after (its leak guard holding a file,
 #     say) leaves its exit to the certifier's verdict, and the run goes on with the window it sealed.
+#     With LOAD=session the load is the caller's own, through a relay session of the network certifier's, and the run
+#     sends nothing itself: CERTIFIER_FRONT, passing `--session` to `certifier_piece.py front`, opens the session and
+#     returns once its relay listens; LOAD_CMD, the caller's command, run as `bash -c LOAD_CMD _ RELAY D` in TREE within
+#     LOAD_TIMEOUT (default 170m, the gate's longest session), sends the load to the client address RELAY names (the
+#     session's relay.json, in the serve dir's private/), its output the serve dir's load.log; and CERTIFIER_CLOSE
+#     (`certifier_piece.py close "$1" "$2"`, given D and the front's directory), within CERTIFIER_CLOSE_TIMEOUT
+#     (default 180m), waits for the session's end and keeps and publishes its fetch as a rehearsal's front does. The
+#     CERTIFIER-FRONT line is then the close's, and the step's exit the load's; a front that opened no session runs no
+#     load, and the close says why. LOAD=session without all three, and LOAD_CMD, CERTIFIER_CLOSE or a front passing
+#     `--session` under any other LOAD, are refused before the lease.
 #     CERTIFIER_FRONT runs within CERTIFIER_FRONT_TIMEOUT (default 20m), and a flag it passes to `certifier_piece.py front`
 #     that this tree's front doesn't take, or a front whose endpoint isn't on the warden's id form (SERVE_ARGS without
 #     `--protocol ids`), is refused before the lease. The
@@ -35,7 +45,7 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
+#     control compares to, and LOAD=session, whose relay-paced one none does either) less the load's counts and span, and verdict lines that name no window and count none of a
 #     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
 #     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
 #     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
@@ -169,8 +179,9 @@
 # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
 # the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
 # `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
-# (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
-# vy-auditor-2's public address, where the gate admits senders (set it for any other COMPOSE_NODE), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
+# (`verity/protocols/accounting/poub/device/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@
+# the address VY_AUDITOR_2_HOST holds, vy-auditor-2's public one, where the gate admits senders (set it for any other COMPOSE_NODE;
+# with neither, the preflight refuses), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt sampled proofs Lean; COMPOSE_TREE_ON the branch
 # infra pinned it on, which the record's composed_on names beside the commit) and answers its $OUT, written to
 # $OUT/compose with the gate's pin in gate.json, one GATE-COMPOSE line saying what it composed.
@@ -188,7 +199,8 @@
 # 3's audit is the one of record, and the preflight refuses its local or loopback session unless DEVELOPMENT=1. A record
 # composed after V3c (a follow-on's, or the compose's from its hand-off) reads V3c's audit where it wrote its summary,
 # else step 3's (`sampled_of_record`). With H1_GATE (the lane's gate command, by default LANE_GATE below: ssh as
-# research on the gate's host under the lane's own key $HOME/.ssh/vllm_lane_ed25519, which the gate registers
+# research on the gate's host, the address VY_CHALLENGER_1_HOST holds, without which the preflight refuses a serve on
+# that default, under the lane's own key $HOME/.ssh/vllm_lane_ed25519, which the gate registers
 # under lane vllm, so each reserve reads by vllm; COMPOSE_GATE keeps vllm_gate_ed25519; empty, no
 # H1) the endpoint serves PoUW H1 (--protocols pouw:eps1-sm120-h1fx1 --challenger-gate H1_GATE --challenger-peer H1_PEER,
 # default vy-dc-h200, at the engine's T and S WINDOW_STEPS 16, the Program build H1 affords), each window's coins from a
@@ -434,7 +446,7 @@ PEARLPLUS_INODES=${PEARLPLUS_INODES:-772388}  # two commits of the tied window a
 H1_KEY_SHA512=${H1_KEY_SHA512:-27271eaf917d1a817198cbcfe7684debd9bdb11b9e386460948bb981642fab3ae065c0a877330a0da68ae76969550eb786dc172319876aaca21fd116e5a193bc}
 POUW=${POUW:-h1}
 H1_PEER=${H1_PEER:-vy-dc-h200}
-LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@204.12.178.84"
+LANE_GATE="ssh -i $HOME/.ssh/vllm_lane_ed25519 -o IdentitiesOnly=yes -o BatchMode=yes research@${VY_CHALLENGER_1_HOST:-}"
 if [ "$POUW" = pearlplus ]; then
   H1_GATE=${H1_GATE-}
   PEARLC_CHALLENGER_GATE=${PEARLC_CHALLENGER_GATE-$LANE_GATE}
@@ -455,7 +467,7 @@ else WINDOW_STEPS=${WINDOW_STEPS:-256}; fi
 MAIN_SHA=${MAIN_SHA-$(git -C "$TREE" rev-parse HEAD 2>/dev/null)}
 PRODUCT=${PRODUCT:-onsite}
 COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE:-1} COMPOSE_NODE=${COMPOSE_NODE:-vy-auditor-2}
-COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@204.12.191.199}
+COMPOSE_GATE=${COMPOSE_GATE:-ssh -i $HOME/.ssh/vllm_gate_ed25519 -o BatchMode=yes -o IdentitiesOnly=yes research@${VY_AUDITOR_2_HOST:-}}
 export COMPOSE_OFF_NODE
 if [ -n "${ONSITE_PIECES:-}" ]; then
   case $ONSITE_PIECES in /*) ;; *) ONSITE_PIECES=$TREE/$ONSITE_PIECES ;; esac
@@ -478,10 +490,24 @@ export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 SV=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/served_verdicts.py SAY_PY=$(command -v python3 || echo "$PY")
 publish_lines() { "$SAY_PY" "$SV" public-lines --private "$D/private/verdicts.txt" | tee -a "$OUT/verdicts.txt"; }
 say() { printf '%s\n' "$*" | publish_lines; }
+# No file holds a host's address: a gate left to its default reaches the host whose address the environment holds, the
+# challenger host's in VY_CHALLENGER_1_HOST (LANE_GATE) and the compose node's in VY_AUDITOR_2_HOST (COMPOSE_GATE), and
+# with that unset its command ends at research@. host_set VAR GATE...: the preflight's refusal of such a GATE, by VAR's
+# name, for the verbs that ask a gate something; the others never reach one and run without the address
+host_set() {
+  local var=$1 gate
+  shift
+  for gate; do
+    case $gate in
+      *@) say "PREFLIGHT: $var is unset, the address of the host the default gate command reaches ($gate): set it, or give the gate's whole command"
+        return 3 ;;
+    esac
+  done
+}
 keep() { [ -d "$D" ] && (umask 077; mkdir -p "$D/private" && printf '%s\n' "$*" >> "$D/private/verdicts.txt"); }
 count() { cat "$1" 2>/dev/null | grep -c .; }
 vv() { "$PY" -m verity_vllm.pipeline.cli "$@"; }
-case ${LOAD:=varied} in varied | fixed | front) ;; *) say "PREFLIGHT: LOAD is varied, fixed or front, not $LOAD"; exit 3 ;; esac
+case ${LOAD:=varied} in varied | fixed | front | session) ;; *) say "PREFLIGHT: LOAD is varied, fixed, front or session, not $LOAD"; exit 3 ;; esac
 case $POUW in h1 | pearlplus) ;; *) say "PREFLIGHT: POUW is h1 or pearlplus, not $POUW"; exit 3 ;; esac
 [ "$POUW" = h1 ] || [ -z "$H1_GATE" ] \
   || { say "PREFLIGHT: POUW=pearlplus is PoUW's piece, so the endpoint serves no H1, and H1_GATE is set: set it empty"; exit 3; }
@@ -996,9 +1022,28 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     (cd "$TREE" && timeout -k 1m "${CERTIFIER_FRONT_TIMEOUT:-20m}" bash -c "$CERTIFIER_FRONT" _ "$PORT" "$D" "$D/private/certifier-front") \
       > "$D/private/certifier-front.log" 2>&1
     rc=$?
-    say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
+    [ "$LOAD" = session ] \
+      || say "CERTIFIER-FRONT (exit $rc): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
   fi
-  if [ "$LOAD" != front ]; then
+  if [ "$LOAD" = session ]; then  # the caller's load through the relay session the front opened, then the session's close
+    local relay= f sent_rc closed
+    for f in "$D"/private/certifier/*/relay.json; do  # the open session's: no fetch kept beside it yet
+      [ -f "$f" ] && [ ! -e "${f%/*}/fetch.tar.gz" ] && { relay=$f; break; }
+    done
+    if [ "$rc" = 0 ] && [ -n "$relay" ]; then
+      (cd "$TREE" && timeout -k 1m "${LOAD_TIMEOUT:-170m}" bash -c "$LOAD_CMD" _ "$relay" "$D") > "$D/load.log" 2>&1
+      sent_rc=$?
+      say "REQUESTS (exit $sent_rc): the caller's load, sent through the network certifier's relay session (the serve dir's load.log, on the node)"
+    else
+      sent_rc=$((rc ? rc : 1))
+      say "REQUESTS: none sent: the front opened no relay session (exit $rc)"
+    fi
+    (cd "$TREE" && timeout -k 1m "${CERTIFIER_CLOSE_TIMEOUT:-180m}" bash -c "$CERTIFIER_CLOSE" _ "$D" "$D/private/certifier-front") \
+      >> "$D/private/certifier-front.log" 2>&1
+    closed=$?
+    say "CERTIFIER-FRONT (exit $closed): $("$PY" "$TREE/benchmarks/one_stage/served_verdicts.py" front-line "$D/private/certifier-front/session.json" 2>&1 | cut -c1-600)"
+    rc=$sent_rc  # the step's exit is the load's, as under the run's own loads: the close's is the certifier's verdict
+  elif [ "$LOAD" != front ]; then
     release=$("$PY" -c 'import uuid; print(uuid.uuid4().hex)')
     local load=(--varied "$REQUESTS" --rate "$RATE" --max-tokens "$MAX_TOKENS")
     [ "$LOAD" = fixed ] && load=(--fixed "$SLOTS" --window-steps "$WINDOW_STEPS")
@@ -1013,8 +1058,8 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
     [ -f "$D/load.timings.json" ] || say "TIMINGS: no $D/load.timings.json"
   fi
   c=$(count "$D/$F_WINDOW"); s=$(count "$D/seals.jsonl")
-  # a front that failed before a window closed sent the run's only requests, so none will
-  if [ "$LOAD" != front ] || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
+  # a front that failed before a window closed sent the run's only requests, so none will; a session's load likewise
+  if { [ "$LOAD" != front ] && [ "$LOAD" != session ]; } || [ "$rc" = 0 ] || [ "$c" -gt 0 ]; then
     for _ in $(seq 1 "$polls"); do     # every closed window's seal line
       c=$(count "$D/$F_WINDOW"); s=$(count "$D/seals.jsonl")
       [ "$c" -gt 0 ] && [ "$s" -ge "$c" ] && break
@@ -1136,9 +1181,26 @@ pous_pins_ok() {  # preflight: this tree's PoUS piece pins the checkpoint the ru
   esac
   return 3
 }
-front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT passes to the tree's front, it takes
+front_ok() {  # preflight: LOAD=front has a front, LOAD=session its three commands and no other LOAD any of a session's,
+  # and each flag CERTIFIER_FRONT passes to the tree's front, it takes
   [ "$LOAD" != front ] || [ -n "${CERTIFIER_FRONT:-}" ] \
     || { say "PREFLIGHT: LOAD=front sends the front's group alone, and CERTIFIER_FRONT is unset"; return 3; }
+  local v session=
+  case " ${CERTIFIER_FRONT:-} " in *" --session "*) session=1 ;; esac
+  if [ "$LOAD" = session ]; then
+    for v in CERTIFIER_FRONT LOAD_CMD CERTIFIER_CLOSE; do
+      [ -n "${!v:-}" ] \
+        || { say "PREFLIGHT: LOAD=session is the caller's load through a relay session, which CERTIFIER_FRONT opens (certifier_piece.py front with --session), LOAD_CMD sends to and CERTIFIER_CLOSE closes (certifier_piece.py close), and $v is unset"; return 3; }
+    done
+    [ -n "$session" ] \
+      || { say "PREFLIGHT: LOAD=session sends the caller's load through a relay session, and CERTIFIER_FRONT passes no --session, so its front would send a group of its own"; return 3; }
+  else
+    for v in LOAD_CMD CERTIFIER_CLOSE; do
+      [ -z "${!v:-}" ] || { say "PREFLIGHT: $v is LOAD=session's, and LOAD is $LOAD: unset it"; return 3; }
+    done
+    [ -z "$session" ] \
+      || { say "PREFLIGHT: CERTIFIER_FRONT passes --session, which opens a relay session for a caller's load, and LOAD is $LOAD, which sends none through it: LOAD=session, or a front without --session"; return 3; }
+  fi
   case ${CERTIFIER_FRONT:-} in *"certifier_piece.py front"*) ;; *) return 0 ;; esac
   case " ${SERVE_ARGS:-} " in *" --protocol ids "*) ;; *)
     say "PREFLIGHT: the certifier front's warden sends id-form requests, which serve-openai answers only under" \
@@ -1226,7 +1288,7 @@ day_held() {  # a follow-on under DAY: the deferral's copy of the day's log, whi
   local got
   got=$("$TREE/.venv/bin/python" -c 'import json, sys
 from verity import device as S
-from verity.hardware import registration as G
+from verity.protocols.accounting.registration.verifier import registration as G
 decl, day = json.load(open(sys.argv[1])), int(sys.argv[3])
 composite, log = G.log_of(json.load(open(sys.argv[2])))
 p = G.params_of(json.load(open(sys.argv[4]))) if len(sys.argv) > 4 else (composite, S.Auditor())
@@ -1474,9 +1536,9 @@ follow_handoff() {  # whether $1 (handoff, gate-compose) may write a deferral's 
     || { say "${1^^} refused: the serve dir holds V3c's audit, so the hand-off names the host it ran on: $2"; return 3; }
 }
 
-if [ "${1:-}" = serve ]; then serve; exit $?; fi
+if [ "${1:-}" = serve ]; then host_set VY_CHALLENGER_1_HOST "$H1_GATE" "${PEARLC_CHALLENGER_GATE:-}" || exit 3; serve; exit $?; fi
 if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
-if [ "${1:-}" = pearl-tie ]; then shift; pearl_tie "$@"; exit $?; fi
+if [ "${1:-}" = pearl-tie ]; then host_set VY_CHALLENGER_1_HOST "${PEARLC_CHALLENGER_GATE:-}" || exit 3; shift; pearl_tie "$@"; exit $?; fi
 if [ "${1:-}" = circuits ]; then K=${2:?served_verdicts.sh circuits WINDOW}; circuits; exit $?; fi
 if [ "${1:-}" = inference-policy ]; then mkdir -p "$D" && inference_policy; exit $?; fi
 if [ "${1:-}" = weights ]; then weights; [ -f "$WREG" ]; exit $?; fi  # D a serve dir with its serve.json: the registration alone
@@ -1503,6 +1565,7 @@ if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose
 if [ "${1:-}" = gate-compose ]; then  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: on a deferral's
   # serve dir at its settings, HOST where V3c's audit ran, as `handoff`'s
   V3C_AUDITED=${4:-${V3C_AUDITED:-}}
+  host_set VY_AUDITOR_2_HOST "$COMPOSE_GATE" || exit 3
   [ -z "$FOLLOW" ] || follow_handoff gate-compose "served_verdicts.sh gate-compose PIECES VERDICT HOST" || exit 3
   gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]}" "${3:-}"; exit $?
 fi
@@ -1537,6 +1600,7 @@ elif [ -n "$COMPOSE" ]; then  # a compose follow-on: no serve, row dir, card or 
 elif [ "${1:-}" = v3c ]; then  # V3c alone on an existing serve dir serves nothing: no row dir, taps or gpu-lease
   [ -e "$PY" ] || { say "PREFLIGHT: no $PY (VENV, which a node without vLLM's venv sets to the tree's .venv)"; exit 3; }
 else
+  host_set VY_CHALLENGER_1_HOST "$H1_GATE" "${PEARLC_CHALLENGER_GATE:-}" || exit 3
   for f in "$ROW/manifest.json" "$ROW/build_summary.json" "$HIDDEN_SO" "$NORM_TAP_SO" "$PY"; do [ -e "$f" ] || { say "PREFLIGHT: no $f"; exit 3; }; done
   command -v gpu-lease >/dev/null || { say "PREFLIGHT: no gpu-lease on this node"; exit 3; }
   if [ -n "$PEARLPLUS_TIE" ] && [ "$PEARLPLUS_INODES" != 0 ]; then  # the tied window's commit goes to the serve dir's filesystem
@@ -1907,6 +1971,8 @@ cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
   say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
+elif [ "$LOAD" = session ]; then
+  say "OVERHEAD: none with LOAD=session (the relay paces the caller's requests, so no stock control compares)"
 else
   "$PY" "$TREE/benchmarks/one_stage/served_overhead.py" metrics "$D" > "$OUT/serve/overhead.json" 2> "$D/overhead.err" \
     || { say "OVERHEAD: no aggregate: $(cut -c1-300 "$D/overhead.err")"; rm -f "$OUT/serve/overhead.json"; }

@@ -237,7 +237,7 @@ EXCEPTIONS = (
          writes=((f"{V}/pipeline/serve_commit.py", r"from verity\.protocols\.accounting\.certifier\.verifier"),
                  (f"{V}/pipeline/serve_tie.py", r"verity\.protocols\.proofs\.spot\.verifier")),
          calls=tuple(f"{PROTOCOLS}/{p}/verifier" for p in ("accounting/certifier", "accounting/poub", "accounting/pous",
-                                                           "accounting/pouw", "proofs/spot"))),
+                                                           "accounting/pouw", "accounting/registration", "proofs/spot"))),
     _exc("verifier call", "`--remote-verifier HOST:PORT`: the endpoint connects to the bandwidth audit's verifier itself and "
          "writes `remote_session.json`", writes=((f"{V}/pipeline/serve_remote.py", r'option\("--remote-verifier"'),),
          reads=((f"{ONE_STAGE}/plan_shards.py", r"remote_session\.json"),)),

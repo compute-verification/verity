@@ -135,7 +135,13 @@ Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). What a replay
 block returns is read only at the boundary record's port for it: an interior registration that registers a value of
-that name is refused (`second-return`).
+that name is refused (`second-return`). It refuses an interior registration that registers a value the verifier
+doesn't hold, unless the value is the opened row of a read against a table round 1's record registers (its root and
+domain id those of one port of that record, its leaves the read's rows), at a key that is a port of that record or a
+value the verifier holds, its verdict held to 1 (`second-inputs`): any other is the prover's choice after the first
+stage's sample. A read is a template the auditor's params record as one (`"read": {"V", "H"}` beside its circuit
+file's SHA-512, `template_reads`): the record that `flock-read-tmpl check V H` accepted that file, made where the
+params are; round 2 runs no template check.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -288,6 +294,9 @@ from verity.protocols.proofs.spot.prover.costfit import fit
   the prover (`MESSAGES`, `CHANNELS`), among them the messages that serve more than one protocol; `parties` takes `REPLAY`
   from it, and `tests/test_workload_messages.py` holds the list.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
+- `window_place`: `of`, `family` and `run`, the place a registration record's window names in its window's session, the
+  family of challenges of that place and the root the session opens on; a stream holds a sample's challenger source
+  to that family.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's
   challenger, and `challenger_stream`, `read_reason` and `coins_reason`, the verifier's replay of them from the record.
