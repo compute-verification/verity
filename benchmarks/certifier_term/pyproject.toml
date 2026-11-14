@@ -47,6 +47,6 @@ inputs = [
     "verity/protocols/reporting.py",
     "verity/protocols/certifier",
     "verity/protocols/spot",
-    "verity/protocols/inference_only/rho/data/reference.toml",
-    "verity/protocols/inference_only/rho/data/hardware.toml",
+    "benchmarks/rho/data/reference.toml",
+    "benchmarks/rho/data/hardware.toml",
 ]
