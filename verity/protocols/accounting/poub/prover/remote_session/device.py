@@ -68,9 +68,10 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "codec_tensor"))
-sys.path.insert(0, str(HERE.parents[1]))
+sys.path.insert(0, str(HERE.parent / "word_codec"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[6]))
 
-from benchmarks.word_codec import cuda_lib  # noqa: E402
+import cuda_lib  # noqa: E402
 from verity.protocols.accounting.poub.verifier import audit, coins, receipts as rb  # noqa: E402
 from verity.protocols.accounting.poub.verifier import codec as rcodec  # noqa: E402
 from verity.protocols.accounting.poub.verifier.store import PAYLOAD_LABEL, SALT_DOMAIN, store_salt  # noqa: E402
@@ -1475,7 +1476,7 @@ class GpuBackend:
         return out
 
     def gate_session(self, small: DeviceStore, reg: audit.Registration, dropped: set[int]) -> dict:
-        """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` draws a window,
+        """Two windows of two passes each over `small` under a clock the gate turns, `gate_samples` samples a window,
         checked by `audit.AuditRun`."""
         now = [0]
         params = audit.Params(reg.blocks, 1000, 2, self.gate_samples, 2.0 ** -40, window_ns=1, codec=reg.codec,

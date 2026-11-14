@@ -9,7 +9,7 @@
 #     --send /tmp/p2lib.tar --send h200-manifest.json --send store-layout.json \
 #     -- bash benchmarks/torch_gpu/p2_stage/full.sh
 #
-# (h200-manifest.json: `benchmarks.torch_gpu.p2_stage.served_weights manifest --digests`; store-layout.json: `p2_v1/store.py
+# (h200-manifest.json: `benchmarks.torch_gpu.p2_stage.served_weights manifest --digests`; store-layout.json: `p2_store/store.py
 # layout`.) ENC is memory-accounting's finished store (mem69-v2: every segment's `.c` and `.json`, `setup.json`
 # and `store.json`), only ever read: nothing here writes, moves or deletes anything under it.
 #
@@ -36,7 +36,7 @@ SEED=${SEED:-text:verity/cmp92/h200/weights/v1}
 # the deployment's coin of record and W's commitment under the frozen layout
 SOURCE=${SOURCE:-dd56f549e504fa8a48db829588683baa66d5ab0c8c381665a87c3b53ffeb3ced}
 COMMITMENT=${COMMITMENT:-9aaaf192b1a7c0962b6139b7bad5b6a2abc9809d889ed5da5890628d1799dfe4291ce318bc8ba410b41886e30d52278f89686f429839257eab1728ac5902706a}
-# p2_v1/store.py's LAYOUT_SHA512, and h200-manifest.json's
+# p2_store/store.py's LAYOUT_SHA512, and h200-manifest.json's
 LAYOUT_SHA512=${LAYOUT_SHA512:-45436c2a341cfef20219a071b9b27bd9013535b1de9001ae22d0bf3bd25a825e6aa7c82a60734047d1de59c38e572e126e3c7c64c78f1176e258cb8cb833b783}
 MANIFEST_SHA256=${MANIFEST_SHA256:-28a29668627351e0118b02bbb4dddd0d3f25e2dfa6860b82f3048c0871792f27}
 LAYERS=${LAYERS:-}
