@@ -22,7 +22,7 @@ import hashlib
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from . import NAME, WIRE_VERSION, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
+from verity.channel import NAME, WIRE_VERSION, Body, Hex, Int, Message, MessageTypes, Phase, Refused, Schema, Str
 
 HELLO = Schema("Hello", 1, "structure", {"wire": Int(1, (1 << 16) - 1), "party": Str(64, NAME.pattern),
                                          "peer": Str(64, NAME.pattern), "protocol": Str(128),
