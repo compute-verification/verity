@@ -130,13 +130,13 @@ class GateOptions:
     """serve-openai's ``--challenger-gate``, ``--challenger-peer`` and ``--challenger-lane`` (its ``gate`` group,
     `sessions_of`, `serve_pearl.live`)."""
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD",
-                                         help="with --protocols: the auditor host's challenger gate, its command as one string "
+                                         help="with --protocols: the auditor device's challenger gate, its command as one string "
                                               "(e.g. 'ssh -i KEY -o BatchMode=yes research@HOST'); each H1 window reserves a "
                                               "session of its own there and draws its coins from it (serve_h1.GateSessions), "
                                               "each Pearl+ window a salt-only session (serve_pearl.live); "
                                               "without it they are in-process and credit nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME",
-                                         help="with --challenger-gate: this machine's name in the auditor host's peers, where its "
+                                         help="with --challenger-gate: this machine's name in the auditor device's peers, where its "
                                               "challenger reaches the server (ssh -R)")
     challenger_lane: str | None = option("--challenger-lane", default=None, metavar="LANE",
                                          help="with --challenger-gate under Pearl+'s arm: the lane whose gate key the gate's "
@@ -220,7 +220,7 @@ def refusal(opts: Any) -> str | None:
     gate, peer = opts.gate.challenger_gate, opts.gate.challenger_peer
     if bool(gate) != bool(peer):
         return ("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in the "
-                "auditor host's peers, where its challenger reaches the server (ssh -R)")
+                "auditor device's peers, where its challenger reaches the server (ssh -R)")
     if opts.gate.challenger_lane:
         from verity_vllm.pipeline.serve_pearl import ENTRY as PEARL
 

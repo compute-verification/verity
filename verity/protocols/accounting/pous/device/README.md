@@ -3,7 +3,7 @@
 The memory challenger is the auditor-trusted device that runs PoUS's timed rounds and the streamed-label wipe's timed
 reads, and signs what it saw. It is the auditor's hardware, on a machine the developer doesn't control at the developer's site
 and reached in-region, never a process on the developer's node. Trust in it and its host is the named assumption
-`trusted-host`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
+`trusted-device`. For the timed rounds it commits its coins in a coin tree before the run; for a wipe it fills the
 server's memory with labels it derives itself and flips its coins once the fill is complete. It reads each answer's
 receipt time on its own clock and signs the run's records once, under LMS over SHA-512. The verifier checks a signed run
 against the commitment released with it and publishes the verdict, and for a wipe the survivor bound it certifies.

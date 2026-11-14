@@ -1486,7 +1486,7 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST[:DIR]`: each file the
   if [ "$kind" = deferred ]; then
     for n in "$composer" "${COMPOSE_NODE%%.*}"; do
       [ -z "$n" ] || [ "${host%%.*}" != "$n" ] \
-        || { say "COPY refused: the deferral's list holds the window's witness, and $host is COMPOSE_NODE, an auditor host where no witness goes: copy it to a prover node"; return 3; }
+        || { say "COPY refused: the deferral's list holds the window's witness, and $host is COMPOSE_NODE, an auditor device where no witness goes: copy it to a prover node"; return 3; }
     done
   else
     [ "${host%%.*}" != "$served" ] \

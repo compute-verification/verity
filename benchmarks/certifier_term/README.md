@@ -33,7 +33,7 @@ under the label: the row's own `with_set_time_card` is the label, where every ot
 print the row's name with the label.
 
 The card is an input of the document, `set_time_card`, the one input marked `simulated`. Its source is what a
-figure under the label rests on, a clause of `trusted-host`: the network certifier's card releases each bucket at
+figure under the label rests on, a clause of `trusted-device`: the network certifier's card releases each bucket at
 the tick its record names, whatever the host and the server send it. The clause holds only of a calibrated hardware
 card; no such card is deployed, and the software pacer that stands in for it does not meet it.
 

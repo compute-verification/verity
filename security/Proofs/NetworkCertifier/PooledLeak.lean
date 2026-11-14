@@ -61,7 +61,7 @@ The count half: a family of incorrect sets with fewer than `Fmax` proof blocks i
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` at any operator
 (`encard_leakAt_le`, from `encard_acceptedFaulty_le` at `AsReg`), and the window's operator is the one the earlier
 windows' observations fix (`runsBefore`), so the periods number at most the product of the windows' bounds, by
-induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the
+induction over the windows (`encard_chain_le`); the faulty bits sum to at most `b · Fmax`. Under `trusted-device` the
 cells the client receives read back from the network certifier's record under the schedule, one its record format
 holds (`certifier_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);

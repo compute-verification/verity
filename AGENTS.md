@@ -179,7 +179,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   to the same floor.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
   witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
-  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-host`.
+  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-device`.
   Nothing the developer runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,

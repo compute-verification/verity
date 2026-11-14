@@ -45,7 +45,7 @@ GPU servers ──data diode──▶ CPU servers ──releases──▶ verifi
 - **The verifier sends the live coins to the workers and to the ZK server directly.** Its challenger sends each coin
   to both at once, after the ZK server's message that the coin answers. *Realizes:* the trusted base's live coins
   (`Claims.trustedBase`: each coin uniform, and hidden from the developer's side until the verifier opens it), and
-  `trusted-host` for the challenger (`Verity.Assumptions.TrustedDevice`). The direct route is what lets the ZK server
+  `trusted-device` for the challenger (`Verity.Assumptions.TrustedDevice`). The direct route is what lets the ZK server
   send the workers nothing (below); today the ZK server relays the coins to them (§10.3, §10.4).
 - **The ZK server runs on CPU servers of its own, from another vendor than the GPU servers'.** Physical machines, not
   VMs, that run nothing else, with as many instances side by side as keep up with the windows (Its size, below).

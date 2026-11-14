@@ -1,6 +1,6 @@
 """The memory challenger's session as PoUS runs it: the wire both sides speak, the prover's side, the request and the id
 a session runs under, and how PoUS starts the challenger's side and talks to it. The challenger's side is the
-auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-host`),
+auditor-trusted device (`challenger_party`, on a host the developer doesn't control: the challenger host, `trusted-device`),
 which imports this module and which this module never imports; how it runs a session is its docstring's.
 
 The two sides are parties of the deployment layer (`verity.runtime`), the challenger (`challenger_party.Challenger`)
@@ -27,7 +27,7 @@ its own host under `SETUPS`, from which PoUB's verifier on the same host builds 
 `side_of(period, node, device)` is where `period.json` puts the challenger's side (`stream.Side`, started by `command`),
 `salt(side, audit, commitment)` asks it for a salt, and `session(side, request, respond)` is PoUS's: it starts the
 side, connects to it and answers each index with `respond(index)` (`answer`). `placement` says which host ran each
-party and whether `trusted-host`'s premise holds.
+party and whether `trusted-device`'s premise holds.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ END = 2 ** 64 - 1
 #: the untimed exchanges before round 0 (`challenger_party`'s docstring); the index is public, so they reveal no coin
 WARMUPS, WARMUP_INDEX = 8, 0
 MODULE = "verity.protocols.accounting.pous.device.challenger_party"
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 ID = "verity/pous/memory-challenger"
 VERSION = 1
 CHALLENGER, PROVER = "memory-challenger", "prover"
@@ -204,7 +204,7 @@ def side_of(period: Mapping[str, Any], node: str, device: str | Path) -> Side:
 
 
 def placement(node: str, host: str, *, verifier: str | None = None) -> dict[str, Any]:
-    """Which host ran each party, and whether `trusted-host`'s premise holds: that the memory challenger ran on a
+    """Which host ran each party, and whether `trusted-device`'s premise holds: that the memory challenger ran on a
     machine the developer doesn't control, which is never the developer's node."""
     held = host != node
     return {"parties": {"memory_challenger": host, "prover": node, "verifier": verifier or node},

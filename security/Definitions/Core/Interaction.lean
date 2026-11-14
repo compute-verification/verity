@@ -371,7 +371,7 @@ def trustedBase : List String :=
      "coin that the --zk verifier sends at Hello and opens round by round",
    "the decoder's count: the deployed decoder's step count (Flock.Deploy.dec) is the cost of running it, one step " ++
      "per field operation (arithmetic or a comparison), per position compared and per column entry read",
-   "trusted-host: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
+   "trusted-device: the auditor's device runs its stated code, timing included, on a host the prover doesn't control, " ++
      "with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier state"]
 
 /-! ## The claims -/

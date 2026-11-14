@@ -341,7 +341,7 @@ two halves: level 0's inputs at its sizes (`Loop.Level0Src`: the host's packed w
 reads) and the rep samples (`Loop.RepSrc`: the bytes `Frames.startRep` and `Finish.serve` read for each rep). Why it is
 reasonable: the loop runs on the developer's own host, whose operating system's random bytes are the uniform samples the
 tape models, and which hands the loop the witness `w` the statement is served at. The host is the developer's, not an
-auditor-trusted one (`trusted-host`), and that is the host to trust here: zero knowledge protects the developer. -/
+auditor-trusted one (`trusted-device`), and that is the host to trust here: zero knowledge protects the developer. -/
 def Loop.Src
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

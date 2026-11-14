@@ -112,7 +112,7 @@ def client_of(run: PH.H1Run) -> remote.RemoteChallenger:
     the window is open and unclosed."""
     client = getattr(run.rounds, "challenger", None)
     if run.coin_source != PH.CHALLENGER or not isinstance(client, remote.RemoteChallenger):
-        raise ValueError(f"{run.entry}: only a window whose coins are the auditor host's session hands off")
+        raise ValueError(f"{run.entry}: only a window whose coins are the auditor device's session hands off")
     if run.closed or run._salt is None or run._unopened is not None or client._ended is not None:
         raise ValueError(f"{run.entry}: a window hands off once its salt is open, before its close, its session live")
     if getattr(run.served, "tap", None) is not None:

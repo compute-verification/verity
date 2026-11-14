@@ -168,7 +168,7 @@ def of_options(args: Any, runs: int, gate_run: Run | None = None) -> ChallengePh
     gate, peer = getattr(args, "challenger_gate", None), getattr(args, "challenger_peer", None)
     if bool(gate) != bool(peer):
         raise SystemExit("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in "
-                         "the auditor host's peers, where its challenger reaches the Commit")
+                         "the auditor device's peers, where its challenger reaches the Commit")
     if not gate or not peer:
         return None
     if getattr(args, "replay_challenge", None):
@@ -245,7 +245,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     if not runs or len(runs) != len(roots):
         return f"the Commit's coins name {len(runs)} runs' draws, not one for each of its {len(roots)} runs of record"
     if any(r.get("source") != CHALLENGER for r in runs):
-        return ("the Commit's coins were drawn in its own process, not by the auditor host's challenger: a measurement, "
+        return ("the Commit's coins were drawn in its own process, not by the auditor device's challenger: a measurement, "
                 "which credits nothing")
     roots = [bytes(r) for r in roots]
     if any(len(r) != ROOT_BYTES for r in roots):

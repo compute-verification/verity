@@ -2,7 +2,7 @@
 it rebuilds the framing of every connection it carries, and that releases a server's bytes only in the egress record's
 one form.
 
-The network certifier runs on an auditor device (`trusted-host`; co-located with the server for the demo, a named
+The network certifier runs on an auditor device (`trusted-device`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
 bytes unchanged in content or not at all: no tokenizer, API, request or stop string is the network certifier's. The one
 addition is on the server's side (`release`): each HTTP request's place in the release order and its release bucket on
