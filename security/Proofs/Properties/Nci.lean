@@ -8,6 +8,7 @@ public import Proofs.Properties.Nci.ClosureDigest
 public import Proofs.Properties.Nci.DigestEntries
 public import Proofs.Properties.Nci.DigestDecode
 public import Proofs.Properties.Nci.DigestRefs
+public import Proofs.Properties.Nci.DigestParts
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
@@ -22,7 +23,8 @@ Each statement of `Properties.Nci`, proved of `NciCheck.evaluate` from the lemma
 (`Proofs.Properties.Nci.DefinitionDigest`), what a closure digest hashes (`Proofs.Properties.Nci.ClosureDigest`) and
 that one closure digest gives one canonical entry for each Definition reached (`Proofs.Properties.Nci.DigestEntries`),
 what the decoder reads alike from equivalent entries (`Proofs.Properties.Nci.DigestDecode`) and that its references are
-the canonical entry's flat parts (`Proofs.Properties.Nci.DigestRefs`), which no statement here reads.
+the canonical entry's flat parts (`Proofs.Properties.Nci.DigestRefs`), equivalent one by one in equivalent entries
+(`Proofs.Properties.Nci.DigestParts`), which no statement here reads.
 -/
 
 @[expose] public section
