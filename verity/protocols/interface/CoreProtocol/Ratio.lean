@@ -1,11 +1,12 @@
-/-
+module
+
+public import Base.Bytes
+
+/-!
 Exact non-negative rationals, for probabilities and δ. Canonical JSON carries no non-integer number (`Flock.canon`
 refuses one), so a ratio is written as a string in Python's `str(Fraction)` form: `"n/d"` in lowest terms, or `"n"` when
 the denominator is 1.
 -/
-module
-
-public import Base.Bytes
 
 @[expose] public section
 set_option backward.privateInPublic true

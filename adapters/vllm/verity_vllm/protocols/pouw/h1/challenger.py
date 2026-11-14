@@ -8,7 +8,7 @@ verifier's check that a served window's coins are that challenger's.
   and the auditor's signed ledger, which opens and ends the one session of the window (`remote.trusted_session`): the coin
   commitment the challenger signed and the roots its signed release log shows it received. The window's coins must be
   that commitment's, its salt coin must have followed its own open root, the root the ledger opened its session on
-  (PoUW's salt rule of record, Lean `PouwCheck.saltCheck`, `core_check.salt_of_record`, `core_check.salt` its Python
+  (PoUW's salt rule of record, Lean `PouwCheck.saltCheck`, `core_check.salt_of_record`, `core_check.salt_twin` its Python
   twin and a disagreement a refusal: that root is `salt.window_open_root` of the
   window's weights' root, its round-0 request table's root, round 0's ``requests`` in its log, and the session the
   ledger's signed reserve entry names, each read from the ledger and the session's own files, never the prover's; a salt
@@ -147,7 +147,7 @@ def address(raw: Any) -> str | None:
     if raw is None:
         return None
     host, sep, port = raw.rpartition(":") if isinstance(raw, str) else ("", "", "")
-    if not (sep and host and port.isdigit()):
+    if not (sep and host and port.isdecimal()):
         raise ValueError(f"pouw setting 'challenger' is the auditor device's challenger as HOST:PORT, not {raw!r}")
     return raw
 
