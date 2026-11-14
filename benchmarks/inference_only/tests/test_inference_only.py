@@ -137,6 +137,12 @@ def test_the_count_refuses_the_session_program_on_k(counted) -> None:
     assert (few["verdict"], few["failed"]) == ("refused", "n")
 
 
+@pytest.mark.parametrize(("value", "word"), [(1000, "within target"), (999.999, "misses"), (1, "misses")])
+def test_the_metrics_verdict_holds_its_value_to_the_goals_target(value, word) -> None:
+    """The goal wants a slowdown of at least 1,000: 1,000 itself is within target, and anything below misses."""
+    assert report.verdict(value) == word
+
+
 def test_the_report_puts_the_served_number_first_and_labels_a_refused_policy(capsys, tmp_path) -> None:
     """The command on the served file and a small built record: the served number is first and is the JSON's value, the
     built class is labelled as not served, its refusal prints the verdict and what failed, and its number is the

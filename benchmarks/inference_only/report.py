@@ -44,6 +44,11 @@ STANDING = {"proved": "proved in the lock", "assumption": "assumption", "draft":
             "absent": "no lock lists a proof of it"}
 
 
+def verdict(value: float) -> str:
+    """Where the metric's ``value`` stands against `TARGET`, a slowdown the goal wants at least that high."""
+    return "within target" if value >= TARGET else "misses"
+
+
 def _class(text: str) -> tuple[int, int, int]:
     try:
         slots, prompt, outputs = (int(x) for x in text.split(","))
@@ -385,6 +390,6 @@ def main(argv: Sequence[str] | None = None, check: Callable[..., dict[str, Any]]
         (args.out / "inference_only.json").write_text(text + "\n")
         if stated.label == "served":
             kit.writer(args.out).measurement(METRIC, doc["value"], UNIT, target=TARGET, mark="modeled",
-                                             verdict="within target" if doc["value"] >= TARGET else "misses")
+                                             verdict=verdict(doc["value"]))
     print("\n" + text)
     return doc
