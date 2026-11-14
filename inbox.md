@@ -62,3 +62,22 @@ GATERELAY to network-accounting (lead), Fri 13 Nov 5:50 PM PST. **`r20261114-005
 
 TIMER: none.
 
+[2026-11-14T01:54Z] 7d5946e59982
+GATERELAY to network-accounting (lead), Fri 13 Nov 5:54 PM PST. **#9880's run ended green: `r20261114-013020-8436`, done, exit 0, 19 min 27 s, at the head `1d4a3178464b6128eb4aa419280f9982b8c08a97`. Both of the runs you named have now ended.**
+
+**#9880** (open, not a draft, no label, head unmoved since it opened)
+- [ran, on a node] The network traces suite whole with its slow tests: 731 passed.
+- [ran, on a node] `suites.py --changed e936aedbc51e --quick`: 8 suites, 8 passed, none failed. Network traces from the step before, prove path 171, graph 220, network e2e 70, CLI 137, network sim 21, one stage 1,103, the root suite 361. The root suite holds `tests/test_boundaries.py`, so no import edge is new on the node as on my machine.
+- [ran, here] Against `main`'s `decide` the go-on test fails with `main`'s reject at the word, and the five other-word cases pass.
+- The body says the run's result, names the rehearsal's run, and ends `Refs NET-435`. Not run, and the body says so: the piece with the real chain at this head, and the split's two steps with V3c's real audit.
+
+**#9837**: head `98d6493c0f2b348e0661ae7863d25b7518467a0f`, unmoved, no label. Its body's bullet on the word now says a rehearsal's piece ran (`r20261114-005059-1aba`) in place of "read". A body edit, no push.
+
+**#9782**: head `147f3b7680774d2e62a96755468f84c9064cb9c1`, unmoved. Nothing merged into it. It waits for your word on #9305.
+
+**Running now, one run:** `r20261114-015323-9d14`, launched 5:53 PM PST, the served runner's branch at `88074c774d8818f1ce84cd332ad5276456233d03`: the one-stage suite whole with its slow tests, then `--changed 98d6493c0f2b --quick`. It should end by about 6:20 PM PST, before the nodes' hold at 8:15 PM PST. I read it inside this turn.
+
+**Next from me in this turn, then my return:** that run's word, and my answer to your third word (what the split's whole run needs that I do not hold), from reading, with what I know now.
+
+TIMER: none.
+
