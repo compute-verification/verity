@@ -204,10 +204,15 @@ def Output.append (o : Output) (b : Phase o) : Output where
 end Compiler
 
 /-- **A registered value of θ** (weights, initial state, tables), as the registration's information entry registers
-it: its name and its committed root. -/
+it: its name, its committed root, its rows (`leaves`) of `words` words of `wordBits` bits each, and the domain its leaves
+are hashed under. -/
 structure Registration.Theta where
   value : String
   root : String
+  leaves : ℕ
+  words : ℕ
+  wordBits : ℕ
+  domain : String
   deriving DecidableEq
 
 /-- **The registered compiler** `B`, fixed at setup: the most bits of advice it reads in one phase (`ℓa`, a public
