@@ -164,8 +164,10 @@ def WIDE320_CLAIMS : List String := WIDE_CLAIMS ++ ["prf/sha-512"]
 
 /-- `p2.wide320_certificate`: `Pous.SecurityProofs.ObligationWide320` for a store at the registered width and prime of
 any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
-state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
-beside `2^eps_log2 = 2^-128`. `certificate` doesn't take it. -/
+state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20` at uniform indices: `δ` is
+that `2^-20`, the theorem's whole bound. `2^eps_log2 = 2^-127` is the advantage of `prf/sha-512` for the memory
+challenger's SHA-512 indices, assumed at that figure: `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter,
+which no model fixes, and the theorem doesn't read it. `certificate` doesn't take it. -/
 def wide320Certificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
