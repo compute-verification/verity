@@ -83,7 +83,6 @@
     {"file": "benchmarks/pouw/rt2_hopper/li_window_sat.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/pouw/rt2_hopper/sass_count.py", "rule": "E731", "count": 1},
     {"file": "benchmarks/pouw/rt_hopper/ffill_absorb.py", "rule": "RUF100", "count": 1},
-    {"file": "benchmarks/pouw/tests/test_pearl_c_sm90_glm53.py", "rule": "E731", "count": 6},
     {"file": "benchmarks/pouw/tests/test_pearl_c_vllm.py", "rule": "E402", "count": 14},
     {"file": "benchmarks/pouw/tests/test_pearl_c_vllm.py", "rule": "E731", "count": 18},
     {"file": "benchmarks/pouw/tests/test_price_twins_accounting.py", "rule": "RUF100", "count": 2},
