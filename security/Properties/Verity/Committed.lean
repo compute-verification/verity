@@ -22,7 +22,7 @@ units are held to. The committed circuit's units each commit their own rows, and
 row to the output row the record wires it to. The statement reads the wiring on the commitment:
 
 * **the record's wiring** (`RecordWiring`): the wires of the text whose SHA-512 the record's `window.circuit` is,
-  as SPOT's reader reads them (`InferenceOnlyCheck.RecordText.wiring`);
+  as SPOT's reader reads them (`Spot.RecordText.wiring`);
 * **a row's root** (`RecordRoot`, `rowName`): the root the record's `roots` hold for the row's name, a port's own
   name or, of a port cut into several rows, the port's name, `#` and the row;
 * **a unit's leaf under a root** (`Vocab.ReadsLeaf`, `Vocab.WritesLeaf`): the registered position (`Vocab.place`) of
@@ -60,12 +60,12 @@ def GateARow : Prop :=
 
 /-- **The record names the wiring `W`**: the record's `window.circuit` is the SHA-512 of a text, the circuit
 record's, that parses to a document whose cuts and wires SPOT's reader reads as `W`
-(`InferenceOnlyCheck.RecordText.wiring`: no template and no order, which no wire's rows read). -/
+(`Spot.RecordText.wiring`: no template and no order, which no wire's rows read). -/
 def RecordWiring (record : Lean.Json) (W : Spot.Wires.Wiring) : Prop :=
   ∃ (text : String) (doc : Lean.Json),
     InferenceOnlyCheck.Theta.strAt (InferenceOnlyCheck.Theta.getD record "window") "circuit" =
         some (Flock.hexOf (Flock.Sha512.hash text.toUTF8)) ∧
-      Flock.JsonParse.parse text = .ok doc ∧ InferenceOnlyCheck.RecordText.wiring doc = .ok W
+      Flock.JsonParse.parse text = .ok doc ∧ Spot.RecordText.wiring doc = .ok W
 
 /-- **The record names `R` as the root of its row `name`**: one of its `roots` has the port `name` and the root
 `R`, in hex. -/
