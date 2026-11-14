@@ -33,7 +33,6 @@
 set -uo pipefail
 SERVE=$1 K=$2 O=$3
 mkdir -p "$O"
-P2=benchmarks/pous/p2_v1
 PY=${PY:-/workspace/cp/venv312/bin/python}
 STORE=${BW_STORE:-/workspace/research/pous-store/mem69-v2}
 NODE=${BW_NODE:-vy-dc-h200-2}
@@ -89,12 +88,12 @@ args=(session --store "$STORE" --layout "$LAYOUT" --lib "$LIB" --node "$NODE" --
 [ "${BW_REF_DECODE:-0}" = 1 ] && args+=(--ref-decode)
 [ -n "${BW_WORKERS:-}" ] && args+=(--workers "$BW_WORKERS")
 [ "${BW_CHEAT:-}" = cache ] && args+=(--cache)
-export PY P2 O
+export PY O
 run() {
   date -u +%Y-%m-%dT%H:%M:%SZ > "$O/started.txt"
   nvidia-smi --query-gpu=index,uuid,name,memory.total ${GPU_LEASE_UUID:+-i "$GPU_LEASE_UUID"} --format=csv,noheader \
     > "$O/gpu.txt" 2>/dev/null
-  "$PY" "$P2/bandwidth.py" "$@" > "$O/session.log" 2> "$O/session.err"
+  "$PY" benchmarks/pous/p2_v1/bandwidth.py "$@" > "$O/session.log" 2> "$O/session.err"
   local rc=$?
   date -u +%Y-%m-%dT%H:%M:%SZ > "$O/ended.txt"
   return $rc

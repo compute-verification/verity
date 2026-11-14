@@ -71,7 +71,7 @@ cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/MANIFEST.sha256" "$O/" 2>/
 so=$(sha256sum < "$S/lib/lib/libp2v1.so" | cut -c1-64)
 echo "lib from $LIB_FROM: libp2v1.so $so (kernels' build's: $([ "$so" = "$LIB_SO_SHA256" ] && echo same || echo other)); layout $LAYOUT" \
   > "$O/inputs.txt"
-"$PY" "$D/bandwidth.py" registration --store "$ENC" --node "$NODE" --layout "$LAYOUT" --out "$O/registration.json" \
+"$PY" benchmarks/pous/p2_v1/bandwidth.py registration --store "$ENC" --node "$NODE" --layout "$LAYOUT" --out "$O/registration.json" \
   > "$O/registration.log" 2>&1 \
   && "$PY" - "$REG" "$O/registration.json" <<'EOF'
 import json, sys
@@ -80,8 +80,8 @@ sys.exit(0 if a == b else f"the store's registration {b['digest'][:16]}, plan {b
                           f"{a['digest'][:16]}, plan {a.get('plan')}")
 EOF
 step registration $?
-"$PY" "$D/bandwidth.py" toy "$S/toy" > "$O/toy.log" 2>&1 \
-  && "$PY" "$D/bandwidth.py" session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
+"$PY" "$D/bandwidth_toy.py" "$S/toy" > "$O/toy.log" 2>&1 \
+  && "$PY" benchmarks/pous/p2_v1/bandwidth.py session --store "$S/toy/store" --layout "$S/toy/layout.json" --node p2-toy-node \
     --registration "$S/toy/registration.json" --device cpu --ref-decode --samples 16 --window-s 0.001 --deadline-s 0.001 \
     --verifier "$PY -m verity.protocols.accounting.poub.verifier.p2_parties --registration $S/toy/registration.json --stdio \
       --windows 2 --passes 2 --samples 16 --window-ns 1000000 --deadline-ns 1000000" \
@@ -123,14 +123,14 @@ env -u GPU_LEASE_TIMED gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
   if [ "$MODE" != cheat ]; then
     to=(--verifier "$VERIFIER"); [ -n "$CONNECT" ] && to=(--connect "$CONNECT")
     [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
-    "$PY" "$D/bandwidth.py" "${base[@]}" "${to[@]}" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES" \
+    "$PY" benchmarks/pous/p2_v1/bandwidth.py "${base[@]}" "${to[@]}" --windows "$WINDOWS" --passes "$PASSES" --samples "$SAMPLES" \
       --out "$O/honest" --expect accept > "$O/honest.log" 2> "$O/honest.err"
     step honest $?; tail -n 1 "$O/honest.log" >> "$O/verdicts.txt"
   fi
   if [ "$MODE" != honest ]; then
     to=(--verifier "$VERIFIER"); [ -n "$CHEAT_CONNECT" ] && to=(--connect "$CHEAT_CONNECT")
     [ -n "$PARTY" ] && to=(--party "$PARTY" --party-host "$PARTY_HOST")
-    "$PY" "$D/bandwidth.py" "${base[@]}" "${to[@]}" --windows 1 --passes 1 --samples "$CHEAT_SAMPLES" \
+    "$PY" benchmarks/pous/p2_v1/bandwidth.py "${base[@]}" "${to[@]}" --windows 1 --passes 1 --samples "$CHEAT_SAMPLES" \
       --skip-layer "$SKIP_LAYER" --out "$O/cheat" --expect reject > "$O/cheat.log" 2> "$O/cheat.err"
     step cheat $?; tail -n 1 "$O/cheat.log" >> "$O/verdicts.txt"
   fi

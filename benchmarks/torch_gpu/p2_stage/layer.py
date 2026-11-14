@@ -50,6 +50,7 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str((Path(__file__).resolve().parents[3] / "benchmarks/torch_gpu/p2_stage/stage.py").parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "kernels" / "s8_linear"))
 import int_mm as IM
 

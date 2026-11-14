@@ -1,7 +1,6 @@
 """A PoUB session over PoUS's P2 store on the card that serves from it: the prover's side of
 `verity.protocols.accounting.poub.verifier.p2_parties`, whose verifier runs on another host.
 
-    bandwidth.py toy OUT                                  # the toy's C* as an encoded store, and its registration
     bandwidth.py registration --store ENC --node NODE --layout F --out FILE
     bandwidth.py session --store ENC --layout F --lib DIR --node NODE --out DIR
                  (--verifier CMD | --connect HOST:PORT | --party CMD --party-host HOST)
@@ -14,7 +13,7 @@ with it: `tensor_plan`, the units holding a tensor's block, so not the store's p
 PoUS's, and the decode never reads it). `registration --layout` writes it into the registration.
 
 **The step.** Each pass of the session is one engine step's weight reads: every tensor of the store, in block order, from
-its segment files onto the device (`full.Segments`, kernels' reader) and through kernels' staging decode
+its segment files onto the device (`stage.Segments`, kernels' reader) and through kernels' staging decode
 (`stage.decode_matrix`) into a staging buffer, as a forward step reads them. The decode reads each chunk's rows from
 `stage.EncodedRows.decode_rows`, whose attached sketch (`store.sketch`, `Sketch.read`) sketches those same device rows under
 the pass's seed just before they go to the decode kernel (`Sketch.add`: π of each block by an exact int8 matmul against its four offsets' signs, summed into
@@ -68,11 +67,8 @@ from typing import Any
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-ROOT = HERE.parents[2]
-STAGE = ROOT / "benchmarks" / "torch_gpu" / "p2_stage"
-if __package__ in (None, ""):
-    sys.path.insert(0, str(HERE.parent))
+ROOT = Path(__file__).resolve().parents[3]
+STAGE = (ROOT / "benchmarks/torch_gpu/p2_stage/stage.py").parent
 sys.path.insert(0, str((ROOT / "verity/protocols/accounting/pous/prover/p2/p2_store/store.py").parents[1]))
 sys.path.insert(0, str(STAGE))
 
@@ -471,14 +467,13 @@ class Engine:
 
     def __init__(self, store: Path, layout: Path, lib: str, registration: p2.Registration, *, device: str = "cuda",
                  chunk: int = 1 << 16, readers: int = 6, skip_layer: int | None = None, ref_decode: bool = False) -> None:
-        import full as F
         import layout as L
         import stage as S
         import torch
 
-        self.torch, self.F, self.L, self.S = torch, F, L, S
+        self.torch, self.L, self.S = torch, L, S
         self.device = torch.device(device)
-        F.DEVICE = self.device
+        S.DEVICE = self.device
         if ref_decode:
             S.gpu.Kernels = RefDecode
         torch.backends.cuda.matmul.allow_tf32 = False
@@ -498,7 +493,7 @@ class Engine:
 
     def step(self, seed: bytes) -> tuple[Any, dict]:
         """One step under `seed`: σ on the device of every unit up to the plan's last, and the step's timings."""
-        torch, F, S = self.torch, self.F, self.S
+        torch, S = self.torch, self.S
         bps = self.lay.params.blocks_per_segment
         sk = Sketch(torch, seed, self.registration.rows, self.units, self.device)
         times = {"rows_s": 0.0, "decode_s": 0.0, "skipped_blocks": 0}
@@ -507,11 +502,11 @@ class Engine:
         times["skipped_blocks"] = sum(len(p.blocks) for p in self.pieces) - sum(len(p.blocks) for p in read)
         segments = sorted({s for p in read for s in range(p.blocks.start // bps, (p.blocks.stop - 1) // bps + 1)})
         with ThreadPoolExecutor(self.readers) as pool:
-            segs = F.Segments(self.store, bps, segments, pool, self.readers)
+            segs = S.Segments(self.store, bps, segments, pool, self.readers)
             for p in read:
                 a = time.perf_counter()
                 rows = segs.rows(p.blocks)
-                F.sync()
+                S.sync()
                 b = time.perf_counter()
                 if p.tensor is None:
                     for j0 in range(p.blocks.start, p.blocks.stop, self.chunk):
@@ -523,7 +518,7 @@ class Engine:
                     w = torch.empty(t.n, t.k, dtype=torch.int8, device=self.device)
                     S.decode_matrix(store, t.layer, t.name, w)
                     del w, store
-                F.sync()
+                S.sync()
                 times["rows_s"] += b - a
                 times["decode_s"] += time.perf_counter() - b
                 del rows
@@ -641,43 +636,6 @@ class Prover:
 
 def registration_file(reg: p2.Registration, path: Path, plan: receipts.Plan | None = None) -> None:
     path.write_text(json.dumps(p2_parties.registration_json(reg, plan), indent=1, sort_keys=True) + "\n")
-
-
-# --- the toy as an encoded store ---------------------------------------------------------------------------------------
-
-def toy(out: Path) -> p2.Registration:
-    """The toy's C* (`store-toy/`) as an encoded store under `out/store` (`setup.json`, `store.json`, `seg/`, `rows/`)
-    and `out/layout.json`, with the verifier's registration of it (PoUS's setup decoding C* to the committed W) and its
-    tensors' plan in `out/registration.json`: what `session --ref-decode` serves at fixture scale."""
-    from p2_v1 import serve as SV
-    from p2_store import store as ST
-
-    s, doc, c_star = SV.toy()
-    reg = SV.registration(s, doc, c_star, SV.NODE)
-    params, root = s.params, out / "store"
-    bps = params.blocks_per_segment
-    (root / "seg").mkdir(parents=True, exist_ok=True)
-    (root / "rows").mkdir(exist_ok=True)
-    (out / "layout.json").write_text(json.dumps(doc["layout"]))
-    lsha = hashlib.sha512((out / "layout.json").read_bytes()).hexdigest()
-    salt = bytes.fromhex(doc["salt"])
-    (root / "setup.json").write_text(json.dumps({"commitment": doc["commitment"], "layout_sha512": lsha,
-                                                 "manifest": doc["layout"]["params"], "source": doc["source"],
-                                                 "salt": doc["salt"]}))
-    for k in range(params.segments):
-        data = c_star[BLOCK * bps * k:BLOCK * bps * (k + 1)]
-        rows = b"".join(V.row_digest(BLOCK, data[BLOCK * v:BLOCK * (v + 1)]) for v in range(bps))
-        (root / "seg" / f"{k:05d}.c").write_bytes(data)
-        (root / "rows" / f"{k:05d}.rows").write_bytes(rows)
-        meta = {"segment": k, "sha512": hashlib.sha512(data).hexdigest(), "rows_sha512": hashlib.sha512(rows).hexdigest()}
-        if bps & (bps - 1) == 0:
-            meta["root"] = ST.segment_root(params, salt, k, rows).hex()
-        (root / "seg" / f"{k:05d}.json").write_text(json.dumps(meta))
-    leaves = [V.leaf_hash(params, salt, j, c_star[BLOCK * j:BLOCK * (j + 1)]) for j in range(params.blocks)]
-    (root / "store.json").write_text(json.dumps({"commitment": doc["commitment"], "salt": doc["salt"],
-                                                 "source": doc["source"], "root": V.MerkleTree(leaves).root.hex()}))
-    registration_file(reg, out / "registration.json", tensor_plan(doc["layout"], reg.blocks))
-    return reg
 
 
 # --- the session -------------------------------------------------------------------------------------------------------
@@ -823,8 +781,6 @@ def session(a: argparse.Namespace) -> int:
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="command", required=True)
-    t = sub.add_parser("toy")
-    t.add_argument("out", type=Path)
     r = sub.add_parser("registration")
     r.add_argument("--store", type=Path, required=True)
     r.add_argument("--node", required=True)
@@ -862,10 +818,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     a = ap.parse_args(argv)
     if a.command == "session" and a.case_dir is not None and a.case_dir.resolve().is_relative_to(a.out.resolve()):
         raise SystemExit("--case-dir is private: it can't be under --out")
-    if a.command == "toy":
-        reg = toy(a.out)
-        print(json.dumps({"registration": reg.digest.hex(), "units": reg.blocks, "out": str(a.out)}))
-        return 0
     if a.command == "registration":
         reg = registration_of_store(a.store, a.node.encode())
         plan = tensor_plan(json.loads(a.layout.read_text()), reg.blocks)
