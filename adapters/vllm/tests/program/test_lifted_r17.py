@@ -382,7 +382,8 @@ def test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_ru
     # the recorded workload artefacts (Builds from before the lag was declared) declare nothing through EVERY source — never a default
     import glob as _glob
     for p in _glob.glob("out/gen/sweep/evidence/pad/*/*/build_workload/workload_program.json"):
-        wp = json.load(open(p))
+        with open(p) as f:
+            wp = json.load(f)
         assert wp["workload_fn"].startswith("Workload_v1{") and lifted_records.declared_lag_of_row(wp) == (None, None), p
     # the compose passes the lag as the Workload_v1 static exactly when the tree's WorkloadProgram takes one; inspected, not guessed
     import inspect
