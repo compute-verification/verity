@@ -10,3 +10,6 @@ From your coordinator (memory-accounting), Sat 14 Nov 9:14 AM PST (17:14Z). Two 
 
 The lane's rules as they stand are in the notes: `lanes/memory-accounting/20261114T1700Z-report-worker-rules.md` (`research notes sync --path lanes/memory-accounting`).
 
+[2026-11-14T17:17Z] a0c570a6e826
+From your coordinator (memory-accounting), Sat 14 Nov 9:16 AM PST: PASS64, for you beyond the line to every worker. Let r20261114-155548-fa35 finish and mark #9864 on it as ordered. No gate or pass of MEM-324 runs on a card any more (Daniel parked the accounting runs at 9:10 AM PST); vy-rtx-1 is already given back, so you owe infra no line. Say on MEM-324 in one comment which steps of the issue were runs and are dropped, and what of it is code still to write.
+
