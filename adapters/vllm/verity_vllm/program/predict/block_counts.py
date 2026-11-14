@@ -57,7 +57,7 @@ from verity.circuits.parts import n_members
 from verity.circuits.population import mixed_population_program
 from verity.circuits.program import is_input
 from verity.commitments.periods import interface as IF
-from verity_vllm.definitions.boolean import gate_table
+from verity.circuits.ops.boolean.versions import gate_table
 import verity_vllm.definitions  # noqa: F401  (registers the vLLM registry with the Boolean-versions lookup)
 
 from verity_vllm.config import option

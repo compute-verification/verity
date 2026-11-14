@@ -33,7 +33,7 @@ from verity.circuits.defs import (
 )
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType
-from verity_vllm.definitions import boolean as BB
+from verity.circuits.ops.boolean import versions as BB
 from verity_vllm.definitions.numerics import derived_rows as DR
 from verity_vllm.definitions.registry.catalog import load
 from verity_vllm.definitions.replay import replayer

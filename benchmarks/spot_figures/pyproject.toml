@@ -22,7 +22,7 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # serves by its response cap.
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "benchmarks/harness/verity_bench/__init__.py", "benchmarks/harness/verity_bench/boolean.py",
-          "benchmarks/harness/verity_bench/prove.py", "adapters/vllm/verity_vllm/definitions/boolean.py", "verity/circuits/call_scope.py",
+          "benchmarks/harness/verity_bench/prove.py", "verity/circuits/ops/boolean/versions.py", "verity/circuits/call_scope.py",
           "adapters/vllm/verity_vllm/definitions/registry", "verity/circuits/ops", "adapters/vllm/verity_vllm/definitions/numerics",
           "verity/circuits/silicon/fp32.py", "verity/circuits/silicon/fp4.py", "verity/circuits/silicon/tc_step.py",
           "verity/channel.py", "verity/protocols/proofs/spot/verifier/profile.py", "verity/protocol.py",

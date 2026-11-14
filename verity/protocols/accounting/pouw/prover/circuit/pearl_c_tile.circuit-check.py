@@ -1,4 +1,4 @@
-"""circuit-check's bindings of `verity_vllm.definitions.registry.pearl_c_tile`'s Definitions, in `circuit_check.targets`' forms
+"""circuit-check's bindings of `verity.protocols.accounting.pouw.prover.circuit.pearl_c_tile`'s Definitions, in `circuit_check.targets`' forms
 (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     from verity.circuits.defs import bind
     from verity.circuits.ops.boolean import gemm as BG
     from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-    from verity_vllm.definitions.registry import pearl_c_tile as PT
+    from verity.protocols.accounting.pouw.prover.circuit import pearl_c_tile as PT
 
     return [
         ("PearlCTileRead_v1", lambda: bind(PT.PearlCTileRead, K=160, TM=2, TN=2, DOT=HopperE4m3QgmmaDot32, G=4)),
