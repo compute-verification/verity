@@ -25,8 +25,8 @@ paths = ["verity"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_population_recorded.py"]
-paths = ["verity/errors.py", "verity/circuits", "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon", "verity/circuits/kernels"]
+paths = ["verity/errors.py", "verity/circuits", "verity/circuits/ops", "verity/circuits/silicon", "verity/circuits/kernels"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_settings.py"]
-paths = ["verity/circuits", "verity/definitions/circuits", "verity/circuits/ops", "verity/circuits/silicon"]
+paths = ["verity/circuits", "verity/circuits/ops", "verity/circuits/silicon"]

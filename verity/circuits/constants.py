@@ -18,7 +18,7 @@ anywhere else is data the Program still holds, and `program_data` lists it by th
 
 A table a primitive reads by index is no gate, so the primitive declares it (`PrimitiveDefinition.tables`): a ``library``
 table is an operation's own definition, and a ``registered`` one is the program's, which the primitive still holds. `verity.circuits`
-names no operations and no library tables; the guard is `verity.definitions.circuits.operations.program_data`, which passes in both.
+names no operations and no library tables; the guard is `verity.circuits.operations.program_data`, which passes in both.
 """
 from __future__ import annotations
 
