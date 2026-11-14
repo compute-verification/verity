@@ -856,7 +856,7 @@
         ".agents/skills/",
         "tests/",
         "fixtures/",
-        "demos/README.md",
+        "demos/",
         "tools/verity/cli/tests/lifecycle/",
         "benchmarks/tree/",
         "benchmarks/communication/",
