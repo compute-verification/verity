@@ -8,7 +8,8 @@ copying verity/protocols/proofs/flock/prover/live to crates/flock-live. It appli
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
 copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, has the device arena take small blocks from its top,
 moves zerocheck round 1's GF(2^8) products from its shared-memory log tables onto clmad on sm_90
-(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3).
+(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3), without
+upstream's -lineinfo (`--lineinfo` keeps it).
 """
 import os
 import pathlib
@@ -275,6 +276,12 @@ b = pathlib.Path("crates/flock-cuda-ffi/build.rs")
 s = b.read_text()
 s = s.replace("arch=compute_120,code=sm_120", f"arch=compute_{sm},code=sm_{sm}")
 s = s.replace('"/usr/local/cuda/lib64"', f'"{cuda}/lib64"').replace('"/usr/local/cuda/lib64/stubs"', f'"{cuda}/lib64/stubs"')
+# -lineinfo writes a line table naming each source file's path into the cubin, so the device code would differ by where
+# the tree sits. --lineinfo keeps it, for a listing with source lines (nvdisasm -g, compute-sanitizer, Nsight Compute).
+lineinfo = "--lineinfo" in sys.argv[1:]
+if not lineinfo:
+    assert s.count('"-O3", "-std=c++17", "-lineinfo"') == 1, "build.rs's nvcc flags changed upstream"
+    s = s.replace('"-O3", "-std=c++17", "-lineinfo"', '"-O3", "-std=c++17"')
 b.write_text(s)
-print(f"build.rs: sm_{sm}, {cuda}")
+print(f"build.rs: sm_{sm}, {cuda}, {'with' if lineinfo else 'no'} -lineinfo")
 sys.exit(0)
