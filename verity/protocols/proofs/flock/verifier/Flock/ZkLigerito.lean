@@ -1,4 +1,9 @@
-/-
+module
+
+public import Flock.Ligerito
+public import Flock.ZkProof
+
+/-!
 Live PROTOCOL.md §7 (`--zk`): Ligerito with level 0's hiding (VEIL Figs. 8–9), as the verifier sees it. Every lane's message
 is padded by `(Ŵ_n + c)·μ` with `t_pad` uniform coefficients `μ` and `c = x`; four padded uniform lanes follow the witness's,
 a pair per rep. Rep `r` folds its own pair `ρ_0 R_{2r} + ρ_1 R_{2r+1}` after its lane rounds, sends the pair's sums `e`
@@ -6,10 +11,6 @@ before `ρ` and the blinded claim `T'` and the padding's combination `ybar` afte
 `ybar`'s codeword. The lane phase's claim is masked, so its checks are not made here: `ligerito` returns what `Flock.Zk`
 turns into constraints (`L0Rec`), and from `T'` on it is `Flock.Ligerito`'s verifier.
 -/
-module
-
-public import Flock.Ligerito
-public import Flock.ZkProof
 
 @[expose] public section
 

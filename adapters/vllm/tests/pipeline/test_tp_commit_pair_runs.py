@@ -1,7 +1,7 @@
 """`tp-commit` (`verity_vllm.pipeline.tp.commit`) around its pairs: what the ranks' answers to the driver's make and installs gate
 (a call that did not reach every rank, an MoE block source, a rank whose Program is not the manifest's), the checkpoint of record
 it has every rank pin its weights against (`--checkpoint-dir`), the value-check run after the pairs (`--value-check`), the traced
-run (`--trace-dir`) and a run of one arm (`--only-arm`).
+run (`--trace-dir`), a run of one arm (`--only-arm`) and the rows a Commit leaves in an out dir an earlier Commit wrote.
 CPU-only, in the frames of `tests.pipeline.test_tp_commit_options` (to the ranks' make) and `tests.pipeline.test_tp_commit_pair`
 (a whole Commit over two ranks)."""
 from __future__ import annotations
@@ -236,3 +236,35 @@ def test_a_run_of_one_arm_is_that_arm_alone_and_its_summary_says_what_was_decide
     rows, summary = pair.rows(), pair.read("summary.json")
     assert [(row["arm"], row["pair"], "commit" in row) for row in rows] == [(arm, 0, arm != "control"), (arm, 1, arm != "control")]
     assert (summary["only_arm"], summary["runs"], summary["commit_pass"], summary["pass"]) == (arm, 2, decided, not fails)
+
+
+# a Commit into the out dir of an earlier one: the rows are of the Commit `versions.json` is of
+
+def test_a_commit_into_an_earlier_commits_out_leaves_its_own_rows_alone(pair):
+    assert pair.run() == 0
+    earlier = pair.rows()[1]["commit"]["tp_run_root"]
+    assert pair.run() == 0
+    rows = pair.rows()
+    assert [(row["arm"], row["pair"]) for row in rows] == [("control", 0), ("instrumented", 0)]
+    assert rows[1]["commit"]["tp_run_root"] == TP.RT.tp_run_root(2, pair.roots()).hex() != earlier
+    # the record's readers name the same run: the last such row is the only one
+    assert TPCM.SRT.record(pair.out)["tp_run_root"] == rows[1]["commit"]["tp_run_root"]
+
+
+def test_a_commit_refused_at_its_ranks_make_leaves_no_row_of_an_earlier_one(pair):
+    assert pair.run() == 0
+    pair.lose("tp2_commit_make", 1)
+    with pytest.raises(SystemExit, match="^fail-closed: committer constructed on 1/2 ranks$"):
+        pair.run("--value-check")
+    assert pair.read("versions.json")["value_check"] is True and not (pair.out / "runs.jsonl").exists()
+
+
+def test_a_commit_refused_before_its_versions_keeps_an_earlier_ones_rows(pair):
+    assert pair.run() == 0
+    record = [(pair.out / name).read_bytes() for name in ("versions.json", "runs.jsonl")]
+    for r in (0, 1):
+        pair.lose(TPCM.SV.read_rank, r)
+    with pytest.raises(SystemExit, match="^fail-closed: served switches: no rank answered$"):
+        pair.run("--value-check")
+    assert [(pair.out / name).read_bytes() for name in ("versions.json", "runs.jsonl")] == record
+    assert pair.read("summary.json")["pass"] is False

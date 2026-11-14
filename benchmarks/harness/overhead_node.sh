@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # `verity bench overhead`'s job on a GPU node, run from the shipped source by the `research run --on NODE --cwd source` that
-# `verity_bench.overhead_records` launches, under `gpu-lease 1 --wait --max-min M`: it builds the PoUW harness for the card (native/build.sh at the
+# `verity_bench.overhead_records` launches, under `gpu-lease 1 --wait --max-min M`: it builds the PoUW harness for the card (verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh at the
 # card's PH_ARCH, its cache under POUW_HARNESS_BUILD on the node, so a timed run compiles only a changed harness) and runs
 # `python -m verity_bench.overhead_node` on the lease's GPU, with a scratch directory outside $OUT for the Nsight report.
 #
@@ -29,7 +29,7 @@ if [[ $arch == sm_120a ]]; then
   export LD_LIBRARY_PATH=$CUDA_HOME/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}
 fi
 POUW_HARNESS_LIB=$(PH_ARCH=$arch POUW_HARNESS_BUILD=${POUW_HARNESS_BUILD:-/workspace/research/cache/pouw-harness-build} \
-  bash benchmarks/pouw/harness/native/build.sh 2> "$O/harness-build.log")
+  bash verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh 2> "$O/harness-build.log")
 export POUW_HARNESS_LIB
 cp "$(dirname "$POUW_HARNESS_LIB")/build.json" "$O/harness-build.json"
 sub=$1

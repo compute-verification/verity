@@ -10,7 +10,7 @@ above 0 at π* (Σ_r π*_r·c_kr > 0). The programs:
 - every table of census-class counts in the device's data: the honest kernels' profiles, the designs (folds,
   `[fold_routes]`, fillers, baselines, operand floors) and `headline.toml`;
 - sm_120's attack families that hold at the vector's epoch (`data/attacks/`);
-- `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`, where it has them;
+- `test_lean_headline.py`'s `FOLDS` and `UNIFORM_FOLD`;
 - every program `facet_break/generate.py` emits, each family's targeted part, by the SASS its gate pins (`expect_of`);
 - the red-team witnesses' timed loops (`fixtures/census_cover_sass.json`: cpw_routes' modes, rt3_dc's lane loops).
 
@@ -99,13 +99,13 @@ def statements() -> list[Statement]:
     """Every headline statement the exporters write: its vector, its π* and each class's price there."""
     i = H.instance()
     m = H.measured(i)
-    fam, cat = H.SM120, getattr(H, "CATCH_ALL", {})
+    fam, cat = H.SM120, H.CATCH_ALL
     out = [Statement(f"{fam.ns}SheetHeadline", fam.key, fam.data, fam.device, {i.pistar: Fraction(1)},
                      {k: H.coef(i, i.pistar, k) for k in i.classes}, cat.get(fam.key) or cat.get(fam.device),
                      "lean_headline.py"),
            Statement(f"{fam.ns}MeasuredHeadline", fam.key, fam.data, H.VECTOR, {m.pistar: Fraction(1)},
                      {k: m.c[k].get(m.pistar, Fraction(0)) for k in i.classes}, cat.get(H.VECTOR), "lean_headline.py")]
-    cat = getattr(D, "CATCH_ALL", {})
+    cat = D.CATCH_ALL
     for f in D.FAMILIES:
         for v, kind in ((f.sheet, "Sheet"), (f.measured, "Measured")):
             x = D.reading(f, v).data
@@ -150,11 +150,8 @@ def data_programs(key: str, data: Path) -> list[Program]:
 
 def fold_programs() -> list[Program]:
     """`test_lean_headline.py`'s bit-exact fx1 folds, lane instructions a word, and its uniform route."""
-    out = [Program("sm_120", f"test_lean_headline.py FOLDS[{n!r}]", dict(f), False)
-           for n, f in getattr(T, "FOLDS", {}).items()]
-    if hasattr(T, "UNIFORM_FOLD"):
-        out.append(Program("sm_120", "test_lean_headline.py UNIFORM_FOLD", dict(T.UNIFORM_FOLD), False))
-    return out
+    return [*(Program("sm_120", f"test_lean_headline.py FOLDS[{n!r}]", dict(f), False) for n, f in T.FOLDS.items()),
+            Program("sm_120", "test_lean_headline.py UNIFORM_FOLD", dict(T.UNIFORM_FOLD), False)]
 
 
 def facet_break_programs() -> list[Program]:

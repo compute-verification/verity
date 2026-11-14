@@ -609,7 +609,7 @@ def test_pull_batches_by_count_and_by_bytes():
     assert CP._batches(hexes, None) == [hexes]
     sizes = {h: 200 * 2**20 for h in hexes}               # 200 MiB each: two per 512 MiB batch
     assert [len(b) for b in CP._batches(hexes, sizes)] == [2, 2, 2, 2, 2]
-    sizes[hexes[0]] = 5 * 2**30                           # one blob over the byte cap still travels, alone
+    sizes[hexes[0]] = 5 * 2**30                           # one blob over the byte limit still travels, alone
     assert [len(b) for b in CP._batches(hexes, sizes)] == [1, 2, 2, 2, 2, 1]
     assert [h for b in CP._batches(hexes, sizes) for h in b] == hexes, "order preserved"
 

@@ -4,23 +4,20 @@
    window (and dropout 0, D % 8 == 0, no alibi).  A mirror of `max_seqlen_q == 1 and H > Hk` alone declares the swapped geometry for
    Gemma-2's sliding layers at decode, which the kernel refuses (arm check b*h <= vt.H) -> named COMMIT FAIL, never a wrong binding.
 2. The oracle's softcap parameters are the kernel's (flash_api.cpp:156-159) and `apply_softcap` follows the measured MUFU.TANH rules
-   (identity below 2^-8, saturation at |x| >= 8) -- the GPU bit-exactness itself is fa2_tap_xcheck.py --cases gemma on a pod.
+   (identity below 2^-8, saturation at |x| >= 8).  Nothing in the tree runs the oracle against a GPU.  Two GPU runs check the softcap
+   kernel itself: `tests/properties/fa2_softcap_capture_gpu.py` (`tanh.approx.f32` on every word against `MufuTanh_v1`, and every
+   output row of the installed softcap kernel against `AttentionSoftcap_v2`) and `tests/properties/fa_tap_exactness_gpu.py` (the tap
+   build's output against the installed kernel's on the softcap and sliding-window cases).
 """
 from __future__ import annotations
 
 import importlib.util
 import os
-import sys
 
 import numpy as np
 import pytest
 
-REPO = os.path.abspath(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
-for p in (REPO, os.path.join(REPO, "vllm-poc")):
-    if p not in sys.path:
-        sys.path.insert(0, p)
-
-from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped  # noqa: E402
+from verity_vllm.acquire.sources.hidden_source import fa2_kblock_n, fa2_swapped
 
 
 def _oracle():
