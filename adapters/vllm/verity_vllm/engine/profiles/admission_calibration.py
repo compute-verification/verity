@@ -93,7 +93,7 @@ CALIBRATION: dict[str, dict[str, Any]] = {
                                  "source": "r22 laneC anon+shmem before commit_delta: 2512-2521 MiB; r23 commit.prepare 987-2955 MiB"},
     "margin.kernel_unreclaimable": {"value": 2 * GiB, "unit": "bytes", "what": "kernel memory charged to the cgroup that the OOM path could not reclaim (slab, page tables of a 250 GB heap, dirty pages)",
                                         "source": "#67: 175 GiB limit = 154 GiB anon+shmem + 18 GiB file at the kill; #11 memory.peak = memory.max"},
-    "instances_per_layer_token": {"unit": "instances per (layer x token)", "what": "fold instance count law: n_instances = c x layers x (prompt tokens + decode rows)",
+    "instances_per_layer_token": {"unit": "instances per (layer x token)", "what": "fold instance count rule: n_instances = c x layers x (prompt tokens + decode rows)",
                                       "source": "llama_b8 698398/(16 x 4313) = 10.1; phi3 1315324/(32 x 4090) = 10.05; r22 1622848/(16 x 10034) = 10.1; r11 747358/(16 x 4608) = 10.1; r60 1211108/(32 x 3758) = 10.07; r57 gemma2-2b 4368950/(26 x 4150) = 40.5; r67 olmoe 5745046/(16 x 9967) = 36.0"},
     "fa2.tap_window.device": {"value": int(24.53 * GiB), "unit": "bytes (device)", "what": "FA2 hidden-M1 tap window on device: heads x prompt x NB for the largest step, ring of 8 x 256 MiB + scratch",
                                   "source": "F-r17-23: 24.53 GiB device; r23 commit.log 'windowed staging (P0): 8 x 256 MiB ring + scratch (largest tensor bound 25120 MiB)'"},
