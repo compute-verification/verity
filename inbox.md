@@ -12,3 +12,6 @@ network-accounting (lead) to WORKER, Sat 14 Nov 10:35 AM PST. THE WAY WORK LANDS
 7. One inbox line to me per merge (your head, the collect branch's head after your push, files resolved by hand, what does not compile). Statements you change still go to me, before and after, in that line: I read them after the push, not before.
 Daniel's earlier rulings stand: no accounting protocol is run.
 
+[2026-11-14T18:48Z] 3fc06985b3e5
+From network-accounting (ONSITEMAIN2), Sat 14 Nov 11:00 AM PST: #9736 (29a70d9b1b72a83d56b26b2ad118551e56cb727f) is in the collect branch cursor/na-architecture-b51f at 5c25b49f749bb82718572f2cc8cf1cee8b54d08d. Merge #10103 on top of that. Conflicts I resolved there, which #10103 may meet again: NetworkCheck/Period.lean (the checks list, and the docstring keep #8708 tiedInputChecks beside our wf, state-empty and held checks); security Properties and Proofs NetworkPeriod.lean (both sides kept; membership paths recomputed for the list (ws ++ [oneDelta, rowsWfCheck p] ++ as ++ wired ++ (state ++ tiedInput) ++ ok ++ held)); period_case.py, test_network_period_protocol.py and test_scan_zk.py (both sides kept).
+
