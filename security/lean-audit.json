@@ -50,10 +50,18 @@
   }
  },
  "domain": {
+  "Accounting.AtLinkEnds": {
+   "owner": "@network-accounting",
+   "why": "A scope: the strategies placed at the places a registered link may end at, a host with everything in it one leaf; a run with a gate at a device or at a memory leaf is outside it, and the leak limit is not stated of one."
+  },
   "Accounting.JointBridge.PhaseLeaks": {
    "owner": "@lean",
    "digest": "937bce3d120eb67c95c25010a046778163f84256a3da9ae4111bf840c669b50b",
    "why": "The layer below's guarantee at each execution phase: the leak relation (LeakAt) at the incorrect set of the witness computed before the sample, which a live sampled leak guarantee would give, as PooledLeakAccepted takes it."
+  },
+  "Accounting.RecordsWithin": {
+   "owner": "@network-accounting",
+   "why": "What K is: a cap on each device's record over the window whatever the developer's hardware sends: across the strategy, device y's record cells placed in the window take at most 2 ^ K y values; a record of a stated format has it at its size in bits. The same c at a memory challenger that is a trusted device."
   },
   "Claims.Complete": {
    "owner": "@proofs",
@@ -484,6 +492,10 @@
    "owner": "@lean",
    "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
    "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
+  },
+  "Verity.Registration.Valid": {
+   "owner": "@network-accounting",
+   "why": "A scope: the registration log the auditor accepted, whose Site the subtree, its auditor's devices and its links are read off."
   },
   "Verity.Site.HostsWhole": {
    "owner": "@network-accounting",
@@ -8288,6 +8300,12 @@
    },
    "type_hash": "8ddbe820be5ee526c6b0591abcd1fb70f4139afa78a498283c181ba91c461d99",
    "unfolded_hash": "c0d6bd0ffe2b6dd82831ce8b37d620c41ddd0e060b03119e8c80a716ea25bd7d"
+  },
+  "Accounting.SecurityProofs.LeakParts": {
+   "owner": "@network-accounting"
+  },
+  "Accounting.SecurityProofs.LeakPartsRegistered": {
+   "owner": "@network-accounting"
   },
   "Accounting.SecurityProofs.LengthCode": {
    "owner": "@memory-accounting",
@@ -27626,6 +27644,14 @@
    },
    "Accounting.SecurityProofs.EgressRegistered": {
     "function": ["Accounting.Placed.egress", "Accounting.linkCapacity"],
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LeakParts": {
+    "function": "Accounting.Actual.Run.acts",
+    "outcome": "none"
+   },
+   "Accounting.SecurityProofs.LeakPartsRegistered": {
+    "function": "Accounting.Actual.Run.acts",
     "outcome": "none"
    }
   },
