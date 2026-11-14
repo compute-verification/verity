@@ -1,4 +1,4 @@
-"""The window class a window circuit is of (`window_circuit`): its public caps and its slots' timing (`WindowClass`, N1's
+"""The window class a window circuit is of (`window_circuit`): its public limits and its slots' timing (`WindowClass`, N1's
 scan class, and `CLASS_OF_RECORD`), the windows its slots take (`takes`), and the layout of PoUW's tables of a window that
 its circuit reads, a parameter of the circuit with two instances on one fixed load (`FixedLoad`): H1's (`Tables`), which
 the circuit reads where the model makes them, and Pearl+'s (`PearlTables`), for a circuit cut at its linears.
@@ -50,7 +50,7 @@ GREEDY = {"kind": "greedy"}
 
 @dataclass(frozen=True)
 class WindowClass:
-    """A window class's public caps (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
+    """A window class's public limits (N1's scan `Class`: its slots, its prompt ids and its KO) and its slots' timing (fixed
     slots a network timestep): ``slots`` class Programs a window, each of at most ``prompt`` prompt ids and
     ``outputs`` outputs, ``lanes`` of them anchored at each boundary, one every ``every`` scan buckets from the window's
     start (lanes 0: every slot at the window's one boundary). Slots are lane-major: slot ``nb · j + b`` is boundary b's lane j

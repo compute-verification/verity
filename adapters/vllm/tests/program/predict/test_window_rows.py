@@ -52,7 +52,7 @@ from verity_vllm.program.predict.naming import write_build
 from verity_vllm.program.predict.steps import compile_steps
 
 PROGRAM = "test/model"
-LAW = {"law": "stratified", "k": 2}
+DESIGN = {"law": "stratified", "k": 2}
 RUN = "ab" * 64
 #: the lanes of the scan state row both slots read (bucket 0's), each (occupancy, prompt length, max_tokens, ids): slot 0 a
 #: prompt of 4 (its first output from position 3's select), slot 1 a prompt of 3, each keeping 2 outputs
@@ -160,7 +160,7 @@ def test_every_unit_holds_its_nodes_value_or_its_definitions_function(window):
     """Every unit is filled: an embedding read's row is the table's at its token and its opening (row, salt and path, as
     `gates.embedding.arguments` encodes them) opens to the table's root, its verdict 1; each token select's group units, ``x0``
     and combine give the node's token, every position's but the last's a row of its collector; each feed (every position
-    but the first below the prompt cap) holds its token and carried slot; each slot's scan read every lane's first token and
+    but the first below the prompt limit) holds its token and carried slot; each slot's scan read every lane's first token and
     carried slot, occupancy word and head of the state row at its anchor (`io_shell.scan_reference`), its last collector
     (the next-to-last position's) the outputs so far from its prompt's last position on and its entry the read bit (its
     occupancy word's bit 0), the 2 outputs' count and ids; each head's first
@@ -253,8 +253,8 @@ def test_a_standin_scan_state_gives_each_slot_its_row_and_max_tokens(window):
 
 def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[int, tuple[int, ...]]]:
     """Id requests (`active.id_request`, ``max_tokens`` 2) of ``prompts`` arriving at buckets ``arrivals``, request i
-    answered ids 100 + i and 200 + i, through the network certifier at ``cls``'s scan schedule for 3 link-windows of its
-    buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
+    answered ids 100 + i and 200 + i, through the network certifier at ``cls``'s scan schedule for the transfer blocks of
+    3 execution phases of its buckets (`scan_traffic.serve`, the certifier tests' driver): its registered ingress rows and each request's outputs by
     ordinal."""
     import importlib.util
     import sys
@@ -276,12 +276,12 @@ def _traffic(cls: WC.WindowClass, prompts, arrivals) -> tuple[list[bytes], dict[
 
 def test_the_scans_state_starts_each_request_at_its_anchor_in_its_lane():
     """`scan_state` on the network certifier's traffic at the class of record's slots (`SLOTS_CLASS`: 4 lanes, boundaries
-    at buckets 0 and 16 of a 32-bucket window, TINY's caps): three requests admitted at bucket 0 are anchored at bucket 16
+    at buckets 0 and 16 of a 32-bucket window, TINY's limits): three requests admitted at bucket 0 are anchored at bucket 16
     (WITHIN 12 on), in lanes 0, 1 and 2, so window 0's class Programs 1, 3 and 5 start them (slot nb·j + b); a fourth
     admitted at 5 is anchored at 32 (`scan_anchors`), window 1's first boundary, in lane 3: window 1's Program 6. Each
     started slot's lane of the row at its anchor holds its prompt and every other none; the rows are the scan's, from the
     empty state's, and carry what the scan does past the slots' rows, so a stand-in (`standin_state`) giving the same
-    slots the same rows is another value. A prompt past the class's prompt cap (the scan's KI) and rows short of the
+    slots the same rows is another value. A prompt past the class's prompt limit (the scan's KI) and rows short of the
     window's last are refused."""
     prompts = ((17, 3, 250, 9), (5, 77, 42), (1, 2), (9, 8, 7, 6))
     ingress, outputs = _traffic(SLOTS_CLASS, prompts, (0, 0, 0, 5))
@@ -724,7 +724,7 @@ def test_a_windows_rows_are_what_its_definitions_compute_on_its_committed_inputs
     rows_, store = _served(low, slots[0], T=1)
     s0 = WR.Slot(low.fn, CLASS, SLOTS[0], weights, WR.Served(rows_, *_read(store)))
     rows = WR.Rows(low, [s0, slots[1]], values)
-    win = IF.Window(low.circuit, RUN, LAW, 64, registered=values, forms=WR.FORMS)
+    win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=values, forms=WR.FORMS)
     win.supply(CR)
     rows.record(win)
     bad: dict[str, list[int]] = {}
@@ -888,7 +888,7 @@ def test_two_windows_differing_in_occupancy_and_lengths_have_one_public_record(w
     pub = {}
     for name, (state, slots) in _two(window).items():
         vals = {**values, SS.SCAN_STATE: state}
-        win = IF.Window(low.circuit, RUN, LAW, 64, registered=vals, forms=WR.FORMS)
+        win = IF.Window(low.circuit, RUN, DESIGN, 64, registered=vals, forms=WR.FORMS)
         win.supply(CR)
         WR.Rows(low, slots, vals).record(win)
         c = win.close()

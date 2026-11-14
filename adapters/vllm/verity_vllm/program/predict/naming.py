@@ -21,7 +21,7 @@ node lowers either: no occurrence. A linear is one
 `triton_launch` GEMM, or under the exact-int8 linears `row_quant` then `scaled_mm`. An fx node is named by its op, counted over
 the request (`embedding`, `embedding_1`, ...). Every node of the emitted body is held to the kind its place names
 (`build._Specs`), so a body these names don't fit is refused, never misnamed; the dead units' Calls are named, then dropped with
-them (`prune.kept_records`). Anything else (the fused MoE, q/k norms, biases, Gemma-2's chains and caps, an activation other than
+them (`prune.kept_records`). Anything else (the fused MoE, q/k norms, biases, Gemma-2's chains and soft caps, an activation other than
 SiLU, a sliding window, a step wrapper, tensor parallelism, the DSA and DSV4 decoders) is `Unexpressible`: its names are its
 trace's.
 

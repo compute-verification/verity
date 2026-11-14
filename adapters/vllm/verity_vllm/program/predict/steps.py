@@ -70,7 +70,7 @@ its account in the output accounting (the advice through `reads.gate`):
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
 - Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
-  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
+  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its length limits.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with bound T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
@@ -302,7 +302,7 @@ def advice_of(registered: Registered, advice: Any, record: Any = None) -> Any:
     if record is not None:
         raise Unexpressible("a certified record is for the advice code, and the registration selects none: its advice is I1's")
     data = _advice_bytes(advice)
-    _within_cap(registered, data)
+    _within_cap_bits(registered, data)
     return _window_advice(data)
 
 
@@ -317,7 +317,7 @@ def _advice_bytes(advice: Any) -> bytes:
     raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
 
 
-def _within_cap(registered: Registered, data: bytes) -> None:
+def _within_cap_bits(registered: Registered, data: bytes) -> None:
     if 8 * len(data) > registered.cap_bits:
         raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
 
@@ -338,7 +338,7 @@ def _coded_advice(registered: Registered, advice: Any, record: Any) -> Any:
     """A v1 string's I1 v0, held to ℓ before any of it is read and decoded under the registered code at that ℓ."""
     if type(advice) is not bytes:
         raise Unexpressible(f"under the advice code its advice is a v1 string's bytes, not a {type(advice).__name__}")
-    _within_cap(registered, advice)
+    _within_cap_bits(registered, advice)
     if record is None:
         raise Unexpressible("the advice code decodes against the session's certified record, and none was given")
 
@@ -422,8 +422,8 @@ def launch_class(phi: Phi) -> None:
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
         facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
                      f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
-    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
-              if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {limit}" for k, limit in CLASS_G_LIMITS.items()
+              if type(eng.get(k)) is not int or not 0 < eng[k] <= limit]
     if type(eng.get("enable_prefix_caching")) is not bool:
         facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not stated True or False")
     if facts:

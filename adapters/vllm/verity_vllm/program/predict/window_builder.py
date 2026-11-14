@@ -277,7 +277,7 @@ class _Builder:
             except ValueError as e:
                 why.append(str(e))
         if why:
-            raise Unexpressible(f"{len(why)} templates C-Flock's composer wouldn't prove: " + "; ".join(why))
+            raise Unexpressible(f"{len(why)} templates Flock's composer wouldn't prove: " + "; ".join(why))
         for f in self.feeds:
             self._wire(f.tid, f.port, f.at, f.count, f.rows, f.lead)
 

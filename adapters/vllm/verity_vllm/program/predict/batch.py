@@ -199,7 +199,7 @@ def templates(phi: Phi, *, max_tokens: int = 2048, max_seqs: int = 64, max_model
     return out
 
 
-# --- the compile-unit rule -------------------------------------------------------------------------------------------------------
+# --- the compile slice's proof block rule ----------------------------------------------------------------------------------------
 
 
 def _prompt(body: Any) -> tuple[int, ...] | None:

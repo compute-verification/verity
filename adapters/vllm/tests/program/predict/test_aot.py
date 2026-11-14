@@ -214,8 +214,8 @@ def test_the_compare_command_prints_a_line_a_rank_and_its_verdict_last(tmp_path,
 
 
 def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(tmp_path, monkeypatch):
-    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
-                      for i, (lp, cap) in enumerate([(5, 3), (7, 2), (5, 3)])])
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": mt, "arrive_step": i}
+                      for i, (lp, mt) in enumerate([(5, 3), (7, 2), (5, 3)])])
     monkeypatch.setattr(A, "phi_at", lambda row, rank, config: phi)
     (tmp_path / "result.json").write_text(json.dumps({"M": 1, "pos0": 8}))
     names = [f"build_request_LP{lp}_T{t}" for lp, t in phi.request_shapes()]
@@ -230,8 +230,8 @@ def test_a_predicted_rows_workload_is_one_gm01_verifies_by_its_descriptor(tmp_pa
     the descriptor beside it and holds the `lag` block to the Program's `lag` static, and refuses either edited."""
     from verity_vllm.check.match.declaration import from_gprog
     from verity_vllm.pipeline.global_program import request_id_of
-    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": cap, "arrive_step": i}
-                      for i, (lp, cap) in enumerate([(5, 3), (7, 2)])])
+    phi = _phi(TINY, [{"request_id": f"u{i}", "index": i, "prompt_len": lp, "max_tokens": mt, "arrive_step": i}
+                      for i, (lp, mt) in enumerate([(5, 3), (7, 2)])])
     wl, p = A.write_workload(phi, {}, str(tmp_path)), tmp_path / "workload_program.json"
     g = from_gprog(str(p))
     assert g["workload_digest"] == wl.digest == S.predict_workload(phi)["digest"]

@@ -218,7 +218,7 @@ def _diff(u: RequestUnit | None, w: RequestUnit | None) -> set[str]:
 
 def _lengths(cut: WA.Advice, ingress: dict) -> list[tuple[int, int, str]]:
     """Each request ``cut`` leaves with outputs to keep, at each other length its body allows past the outputs it kept (the
-    least and the cap), with a finish that length can have: the cap's, else an abort, or a stop token unless ``ignore_eos``."""
+    least and the length limit), with a finish that length can have: the limit's, else an abort, or a stop token unless ``ignore_eos``."""
     out = []
     for c in WA.close(cut):
         q, body = cut.requests[c.request], ingress[cut.requests[c.request].id]
@@ -310,7 +310,7 @@ def test_a_class_g_window_is_prefix_stable_at_every_step(tmp_path):
 
 def _past_topk(tmp_path) -> tuple[Registered, WA.Advice, dict]:
     """Class G at INDEX_TOPK 4 (GLM-5.3 cut to its first 4 layers, `TOPK`): a (3 prompt tokens, 5 outputs, its rows past
-    INDEX_TOPK from position 4) and b (2 and 3, stopping before its cap of 5, within INDEX_TOPK unless it runs on) in one
+    INDEX_TOPK from position 4) and b (2 and 3, stopping before its max_tokens of 5, within INDEX_TOPK unless it runs on) in one
     window."""
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})

@@ -22,7 +22,7 @@ computes (`Served`).
 Every other unit holds its Definition's function of the window's values:
 - a slot's `ScanSlots_v2` every lane's first token and slot, occupancy word and head of the scan state row at its anchor
   (`io_shell.scan_reference`; its lane's row is the slot's, `scan_slots`), every later position's `TokenFeed_v1` below the
-  prompt cap its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
+  prompt limit its token and the slot it carries (`io_shell.feed_reference`), each token select's `SelectCollect_v1` its
   second row, the select collected on from the lane's head (`io_shell.collect_reference`), and the last position's
   `SelectEntry_v1` the slot's entry (`io_shell.entry_reference`);
 - each token select's group units each group's first maximum above -inf of its logits and its index in the group
@@ -156,7 +156,7 @@ class Slot:
     None for an empty slot; ``cut`` the nodes a circuit cut at its linears takes as registered (`Lowered.cut`), whose
     served value is taken under any statics of its Definition and at every prompt position, a pruned one's too
     (`Served`'s ``cut``). Each node's value (its return fields) and source, each
-    position's token and, below the class's prompt cap, the slot its `TokenFeed_v1` reads and the one it carries on."""
+    position's token and, below the class's prompt limit, the slot its `TokenFeed_v1` reads and the one it carries on."""
 
     def __init__(self, fn: Any, cls: WindowClass, row: Sequence[int], weights: Weights, served: Served | None = None,
                  cut: Collection[int] = frozenset()) -> None:
@@ -206,7 +206,7 @@ class Slot:
 
     def _token(self, p: int, tok: Any) -> None:
         """Position ``p``'s token (`window_lowering._Program._token`): the first position's its slot row's first id, below the
-        prompt cap `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
+        prompt limit `TokenFeed_v1`'s of the slot carried and the previous select, past it the previous select."""
         NP = self.cls.prompt
         sel = None if p == 0 else int(self.operand(tok)[0])
         slot = self.row[1:] if p == 0 else self.carried[-1]

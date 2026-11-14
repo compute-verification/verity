@@ -54,7 +54,7 @@ target nothing else; in class G then, for its rows past INDEX_TOPK keys, the bit
 ones, and for a request the window leaves with outputs to keep, its edge (`build.build_program`'s ``edge``). It returns no
 terminator and no finish reason: its ids end where its shape does, at ``output_len``, which its length rule
 (`RequestUnit.stop`: `StopCheck_v1` over `StopRule_v1`) checks against the ids (no stop token before the last output, which
-is a stop token or the cap's); a finish reason is the advice's, eos or length held by the same rule to the ids and the cap,
+is a stop token or the length limit's); a finish reason is the advice's, eos or length held by the same rule to the ids and the limit,
 and abort the client's. The egress record (the network certifier's, per request) is n ``DATA`` cells, the token ids in
 order, then one ``END`` at cell n, and ``PAD`` elsewhere; it sends no finish reason. Its ``DATA`` cells are the Program's
 ids, and its ``END`` sits at ``output_len``.
@@ -80,7 +80,7 @@ SEED = (("body", "seed"), ("window", "seed_salt"))
 #: the request Program's output that holds its sampler to that seed (`frontend.seed_rule.NAME`, its Call)
 SEED_RULE = ("program", "seed_rule")
 _SEED_WHY = ("a stochastic request's seed is certified, its body's seed or derived from its id and the window's seed salt, and "
-             "its Program's seed rule holds the seed its sampler reads to it: never a value the server draws or fills in")
+             "its Program's seed rule holds the seed its sampler reads to it: never a value the server samples or fills in")
 #: the registration's switch the prefix-cache hit's fields are under
 PREFIX_CACHE = "enable_prefix_caching"
 #: a certified body's field roles: the prompt (read apart, `ingress_policy.request_of`); how the response travels, which computes
@@ -153,7 +153,7 @@ def seed_of(i: int, request_id: str, seed: int | None, seed_salt: bytes | None, 
                "read" if carried else "the compile has no window seed salt to derive one from" if seed_salt is None else
                f"the window's seed salt isn't non-empty bytes ({type(seed_salt).__name__} {seed_salt!r})")
         raise Unexpressible(f"request {i} ({request_id!r}): stochastic with no seed in its certified body, and {why}: a seed serving "
-                            f"fills in (`served_seed.DEFAULT_SEED`) or draws is neither its body's nor derived from its id and the "
+                            f"fills in (`served_seed.DEFAULT_SEED`) or samples is neither its body's nor derived from its id and the "
                             f"window's seed salt (`served_seed.derived`)")
     return served_seed.derived(seed_salt, request_id)
 

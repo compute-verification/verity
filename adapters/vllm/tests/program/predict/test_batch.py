@@ -107,7 +107,7 @@ def test_the_frozen_v0_models_templates_hold_their_declared_verdicts():
     assert sum(1 for v in vs if v.got == (True, True)) == 13
 
 
-# --- the compile-unit rule on I1 v0's advice, against a stand-in planner ---------------------------------------------------------
+# --- the compile slice's proof block rule on I1 v0's advice, against a stand-in planner ------------------------------------------
 
 
 @dataclass(frozen=True)

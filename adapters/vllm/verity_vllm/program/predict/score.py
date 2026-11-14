@@ -117,8 +117,8 @@ def workload_program(phi: Phi, comps: dict | None = None):
             comps[(LP, T)] = request_component(build_program(phi, "request", LP=LP, T=T))
     wreqs = []
     for i, q in enumerate(reqs):
-        lp, cap = int(q["prompt_len"]), int(q["max_tokens"])
-        wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, cap, int(q.get("arrive_step") or 0), comps[(lp, cap - 1)], T=cap - 1))
+        lp, mt = int(q["prompt_len"]), int(q["max_tokens"])
+        wreqs.append(W.WorkloadRequest(request_id_of(i), i, lp, mt, int(q.get("arrive_step") or 0), comps[(lp, mt - 1)], T=mt - 1))
     return W.WorkloadProgram(wreqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 
 

@@ -33,11 +33,11 @@ parameter holds, a checkpoint not of record or of another model, and a template 
 another parameter's.
 
     verity-vllm weights-tie commit --phi PHI --checkpoint-dir X [--manifest M] --key-file K --registration-out REG \\
-        --out DIR [--law work:N] [--cap 16] [--run-id ID] [--grain 512,9,64] [--served-dir Y --served-manifest MY [--forge-digest]]
-    verity-vllm weights-tie verify --phi PHI --checkpoint-dir X [--manifest M] --registration REG --out DIR [--law ...] \\
+        --out DIR [--design work:N] [--cap 16] [--run-id ID] [--grain 512,9,64] [--served-dir Y --served-manifest MY [--forge-digest]]
+    verity-vllm weights-tie verify --phi PHI --checkpoint-dir X [--manifest M] --registration REG --out DIR [--design ...] \\
         [--cap ...] [--run-id ...] [--grain ...]
     verity-vllm weights-tie pins --phi PHI --checkpoint-dir X [--manifest M] --registration REG --summary SUMMARY --out PINS \\
-        [--law ...] [--cap ...] [--run-id ...] [--grain ...]
+        [--design ...] [--cap ...] [--run-id ...] [--grain ...]
 
 ``commit``: the committer's registration (its key in ``--key-file``, made 0600 when absent and never printed) and its tie
 window, written by core's registrar. ``--served-dir``: a committer serving another checkpoint's words as X's (the refused
@@ -221,9 +221,9 @@ class Tie:
         return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=G.SCHEMA_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
-    def digest(self, law: dict[str, Any], cap: int) -> str:
+    def digest(self, design: dict[str, Any], cap: int) -> str:
         """The SHA-512 of the tie's circuit record, the one the verifier holds the window's registration to."""
-        return hashlib.sha512(IF.circuit_bytes(self.window(law, cap).circuit_record())).hexdigest()
+        return hashlib.sha512(IF.circuit_bytes(self.window(design, cap).circuit_record())).hexdigest()
 
     def units(self) -> int:
         return sum(len(c.rows) for c in self.chains)
@@ -288,7 +288,7 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
                              "reads a field whose rows are its source tensors' bytes in order (1:1, fused along dim 0 or "
                              "tied), uncast and unsharded")
         if row < 112:
-            raise ValueError(f"{p}: its rows are {row} bytes; C-Flock proves a unit only with a row of at least 112 bytes "
+            raise ValueError(f"{p}: its rows are {row} bytes; Flock proves a unit only with a row of at least 112 bytes "
                              "(one that compresses before its last block), so a tie reads rows of at least 56 words")
         for s in srcs:
             n = ck.tensors[s][4] - ck.tensors[s][3]
@@ -339,7 +339,7 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
 
 
 def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifest: str | None = None, *,
-           law: dict[str, Any] | None = None, cap: int, run_id: str = "", served: dict[str, np.ndarray] | None = None, grain: Grain = _GRAIN,
+           design: dict[str, Any] | None = None, cap: int, run_id: str = "", served: dict[str, np.ndarray] | None = None, grain: Grain = _GRAIN,
            kv_cache_dtype: str = "auto", forge_digest: bool = False) -> tuple[dict[str, Any], Tie, IF.Window]:
     """The committer's weights registration of X under its 32-byte ``key`` (`records.weights_registration`: each rooted
     weight parameter's `window_weights.weight_value`, the roots `weights_registration` registers) and its tie window of X,
@@ -354,19 +354,19 @@ def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifes
         raise ValueError(f"no words served for {missing}")
     registration = WeightsRegistration(program=t.program, repo=t.model["repo"], revision=t.model["revision"], grain=t.grain,
                                        values={p: v.entry() for p, v in values.items()}, unrooted=t.unrooted).dump()
-    win = t.window(law or t.design(), cap, values)
+    win = t.window(design or t.design(), cap, values)
     t.record(win, {p: WW._rows(p, words[_field(p)]) for p in t.entries}, forge_digest)
     return registration, t, win
 
 
-def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, law: dict[str, Any], cap: int) -> dict[str, Any]:
+def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, design: dict[str, Any], cap: int) -> dict[str, Any]:
     """What the verifier hands the records audit of the committer's tie window: ``registered``, its ``--registered`` file
     (the registration's entries, held to the verifier's weights record's shapes by `window_weights.registration_pins`,
     and the tie's supplied values under the window's partition digest); ``circuit`` and ``run``, the tie's circuit
     record's SHA-512 and run root; ``units``. Refused (ValueError) where the registration isn't the record's."""
     WW.registration_pins(registration, record)
     reg = WeightsRegistration.of(registration, "the weights registration")
-    win = t.window(law, cap)
+    win = t.window(design, cap)
     supplied = {n: v.entry() for n, v in t.supplied_values(win.window.partition_digest).items()}
     return {"circuit": hashlib.sha512(IF.circuit_bytes(win.circuit_record())).hexdigest(), "run": t.run,
             "units": t.units(),
@@ -374,14 +374,14 @@ def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, law: dict[st
                            {"program": win.window.partition_digest, "values": supplied}]}
 
 
-def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dict[str, Any], law: dict[str, Any],
+def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dict[str, Any], design: dict[str, Any],
                  cap: int) -> dict[str, str]:
     """The verifier's pins of the registration's roots (`window_weights.registration_pins`), only once the records audit
     of its tie window accepted it: refused (ValueError) unless ``summary`` (``records_audit.py audit``'s ``summary.json``)
     is an accepting audit, not a forged arm's, of the verifier's own tie circuit and run root, whose sample holds every unit
     of the tie and nothing else, and that held the registration's root for every weight, as the pin and as the window's
     root."""
-    pins, want = WW.registration_pins(registration, record), audit_inputs(registration, record, t, law, cap)
+    pins, want = WW.registration_pins(registration, record), audit_inputs(registration, record, t, design, cap)
     if summary.get("ok") is not True or "forged" in summary:
         raise ValueError("the records audit of the tie didn't accept it: no root is pinned")
     if (summary.get("circuit"), summary.get("run_root")) != (want["circuit"], want["run"]):
@@ -424,7 +424,7 @@ class Checkpoint:
     default_seed: int = option("--default-seed", type=int, default=7)
     checkpoint_dir: str = option("--checkpoint-dir", help="checkpoint X's safetensors shards and config.json")
     manifest: str | None = option("--manifest", default=None, help="the checkpoints manifest pinning X (default the repository's)")
-    law: str | None = option("--law", default=None, help="the window's design (default the tie's own, work over every unit)")
+    design: str | None = option("--design", default=None, help="the window's design (default the tie's own, work over every unit)")
     cap: int = option("--cap", type=int, default=16)
     run_id: str = option("--run-id", default="")
     grain: str | None = option("--grain", default=None, help="gemm_words,rows,select (default the window grain's)")
@@ -434,7 +434,7 @@ class Checkpoint:
 class CommitOptions:
     """The committer's weights registration of X and its tie window, every unit recorded."""
     x: Checkpoint = group(Checkpoint)
-    key_file: str = option("--key-file", help="the committer's 32-byte key, drawn and written 0600 when absent")
+    key_file: str = option("--key-file", help="the committer's 32-byte key, made at random and written 0600 when absent")
     registration_out: str = option("--registration-out")
     out: str = option("--out", help="the tie window's directory")
     served_dir: str | None = option("--served-dir", default=None, help="serve this checkpoint's words as X's (the refused arm)")
@@ -471,10 +471,10 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     x = a.x
     manifest = x.manifest or str(CHECKPOINTS)
     grain = Grain(*(int(g) for g in x.grain.split(","))) if x.grain else _GRAIN
-    registered, law = _registered(x.phi, x.default_seed), D.parse_design(x.law) if x.law else None
+    registered, design = _registered(x.phi, x.default_seed), D.parse_design(x.design) if x.design else None
     if isinstance(a, CommitOptions):
         served = WW.record_words(registered, a.served_dir, a.served_manifest) if a.served_dir else None
-        registration, t, win = commit(registered, _key(a.key_file), x.checkpoint_dir, manifest, law=law, cap=x.cap,
+        registration, t, win = commit(registered, _key(a.key_file), x.checkpoint_dir, manifest, design=design, cap=x.cap,
                                       run_id=x.run_id, served=served, grain=grain, forge_digest=a.forge_digest)
         bad = win.mismatches(kernel="auto")
         Path(a.registration_out).write_text(json.dumps(registration, indent=1, sort_keys=True) + "\n")
@@ -486,11 +486,11 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
         return 0
     record = WW.weights_record(registered, x.checkpoint_dir, manifest, grain=grain)
     t = tie(registered, x.checkpoint_dir, manifest, run_id=x.run_id, grain=grain, record=record)
-    law = law or t.design()
+    design = design or t.design()
     registration = json.loads(Path(a.registration).read_text())
     out = Path(a.out)
     if isinstance(a, VerifyOptions):
-        got = audit_inputs(registration, record, t, law, x.cap)
+        got = audit_inputs(registration, record, t, design, x.cap)
         out.mkdir(parents=True, exist_ok=True)
         (out / "registered.json").write_text(json.dumps(got["registered"], indent=1, sort_keys=True) + "\n")
         shown = {k: got[k] for k in ("circuit", "run", "units")}
@@ -498,7 +498,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
         print(json.dumps(shown))
         return 0
     try:
-        pins = checked_pins(registration, record, t, json.loads(Path(a.summary).read_text()), law, x.cap)
+        pins = checked_pins(registration, record, t, json.loads(Path(a.summary).read_text()), design, x.cap)
     except ValueError as e:
         print(json.dumps({"pinned": False, "why": str(e)}))
         return 1
