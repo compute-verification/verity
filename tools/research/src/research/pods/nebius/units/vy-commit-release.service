@@ -1,5 +1,5 @@
 [Unit]
-Description=node 1's Commit pacer: releases suspended Commits within their caps (sky/release.py)
+Description=node 1's Commit pacer: releases suspended Commits within their limits (sky/release.py)
 After=network-online.target k3s.service
 Wants=network-online.target
 RequiresMountsFor=/workspace
