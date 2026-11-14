@@ -2803,6 +2803,11 @@
       "paths": {
         "tools/verity/check/": "tools/check/"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/engine/int8_kscale_gpu.py": "benchmarks/ppl/int8_kscale_gpu.py"
+      }
     }
   ]
 }
