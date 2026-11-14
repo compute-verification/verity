@@ -14,6 +14,9 @@ scope = "prose"
 
 [words]
 
+[rewrite]
+exclude = ["tools/move/**", "fixtures/**", "**/fixtures/**", "**/CHANGELOG.md", "tests/test_retired_terms.py", "tests/lint/test_repo_retired_terms.py"]
+
 [keep]
 patterns = ['\w-[Ll]aws?\b', '\b[Ll]aws?-\w', '''["']laws?["']''']
 
