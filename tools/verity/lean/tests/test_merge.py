@@ -1809,7 +1809,7 @@ _uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent 
 U = importlib.util.module_from_spec(_uspec)
 _uspec.loader.exec_module(U)
 UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
-FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/InferenceOnly", "Proofs/Hash"
+FL, PW, INFERENCE_ONLY, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/InferenceOnly", "Proofs/Hash"
 
 
 def unread(**areas: tuple[int, int]) -> str:
