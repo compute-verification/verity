@@ -100,7 +100,7 @@ RULES: Counter[str] = Counter()
 
 
 def reference(case) -> dict:
-    a = CC.case(case)
+    a = CC.case_twin(case)
     RULES[f"{a['verdict']} {a['reason'].split(':')[0]}" if a["reason"] else a["verdict"]] += 1
     return a
 
