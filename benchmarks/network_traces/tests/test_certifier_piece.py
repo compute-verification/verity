@@ -6,7 +6,7 @@ and its outcome. The piece, on a serve dir whose window was the network certifie
 requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
 accept (`period_case`), its
 profile with the placement (the certifier on the kept gate's machine and each of the piece's steps on the machine that
-ran it, labels by which the piece establishes no `trusted-host`), then goes through `served_verdicts.py record` into the window
+ran it, labels by which the piece establishes no `trusted-device`), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier entry, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
@@ -250,7 +250,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
                                                                 "verifier": node})
     assert where["steps"] == {"chain": node, "period": node}
     assert where[CP.PREMISE] == (
-        f"unmet: this piece establishes no trusted-host and gives no bound on that ground; the network certifier ran "
+        f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier ran "
         f"on {GATE_HOST}, not the developer's {node}; the chain's checks and samples ran on {node}, and the period "
         f"check and its proofs' challenges on {node}")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
@@ -743,9 +743,9 @@ def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refu
         CP.placement(d, RUN)
 
 
-def test_the_steps_machines_are_labels_and_the_piece_establishes_no_trusted_host(tmp_path, warden):
+def test_the_steps_machines_are_labels_and_the_piece_establishes_no_trusted_device(tmp_path, warden):
     """The machines ``steps`` names are the placement's labels for the chain and the period check, the period's machine
-    the verifier's, and whatever they say, `trusted-host` reads `UNMET`, at the gate's machine and at a local gate."""
+    the verifier's, and whatever they say, `trusted-device` reads `UNMET`, at the gate's machine and at a local gate."""
     d = _serve_dir(tmp_path / "serve", warden)
     steps = {"chain": "chain-machine", "period": "period-machine"}
     names = (f"the network certifier ran on {GATE_HOST}, not the developer's {socket.gethostname()}; the chain's "
@@ -1621,7 +1621,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     lanes and EVERY."""
     from verity.protocols.accounting.certifier.prover import scan_zk as SZ
 
-    spec = importlib.util.spec_from_file_location("served_table", ROOT / "demos/onsite_served/served_table.py")
+    spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
     table = importlib.util.module_from_spec(spec)
     sys.modules["served_table"] = table
     spec.loader.exec_module(table)

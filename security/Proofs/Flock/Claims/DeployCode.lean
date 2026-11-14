@@ -101,6 +101,8 @@ open FlockSoundness FlockSoundness.Model
 
 local notation "𝔽" => FlockLevel3.GF128
 
+variable {wideLeaf : Bool}
+
 /-! ## A plain run's opened level-0 columns -/
 
 /-- **The round of level 0's query coins** in a plain rep's stream: after zerocheck's `3 + (m − 6)` rounds, lincheck's
@@ -178,7 +180,7 @@ theorem plainRunCols_length_lt_plainNMinD {agree : ℝ} (ha0 : 0 < agree) (ha1 :
 
 /-! ## The masked code's threshold and query bound -/
 
-/-- The masked level-0 rate is largest at `m = 25`: `(2^cols + t)/2^d ≤ (2^12 + 554)/2^13` at every `m` served. -/
+/-- The masked level-0 rate is largest at `m = 25`: `(2^cols + t)/2^d ≤ (2^12 + 554)/2^13` at every table served. -/
 theorem zkRate_le : ∀ i : ZkIdx, (2 ^ zkCols i + zkPad i) * 2 ^ zkLen 0 ≤ (2 ^ zkCols 0 + zkPad 0) * 2 ^ zkLen i := by
   decide +kernel
 
@@ -205,21 +207,21 @@ theorem zkAgree_le_one : zkAgree ≤ 1 := by
     norm_num
   linarith
 
-/-- The masked level-0 code's dimension is at least `4650` at every `m` served. -/
+/-- The masked level-0 code's dimension is at least `4650` at every table served. -/
 theorem zkDim_ge : ∀ i : ZkIdx, 4650 ≤ 2 ^ zkCols i + zkPad i := by
   decide +kernel
 
 /-- The masked level 0 makes at most `277` queries at every `m` (none where `Zk.schedule` refuses `m`). -/
-theorem zkLevel0_q_le (m : ℕ) : (zkLevel0 m).q ≤ 277 := by
+theorem zkLevel0_q_le (m : ℕ) : (zkLevel0 wideLeaf m).q ≤ 277 := by
   by_cases hm : 25 ≤ m ∧ m ≤ 35
-  · obtain ⟨i, rfl⟩ : ∃ i : ZkIdx, i.m = m := ⟨⟨m - 25, by omega⟩, by simp only [ZkIdx.m]; omega⟩
-    have h : ∀ i : ZkIdx, (zkLevel0 i.m).q ≤ 277 := by decide +kernel
-    exact h i
-  · have hq : ∃ e, _root_.Flock.Zk.queries0 m = .error e := by
+  · have h : ∀ i : ZkIdx, (zkLevel0 i.wideLeaf i.m).q ≤ 277 := by decide +kernel
+    rw [← (ZkIdx.of_at wideLeaf hm.1 hm.2).level0]
+    exact h _
+  · have hq : ∃ e, _root_.Flock.Zk.queries0 wideLeaf m = .error e := by
       unfold _root_.Flock.Zk.queries0
       split_ifs <;> first | exact ⟨_, rfl⟩ | (exfalso; simp only [beq_iff_eq] at *; omega)
     obtain ⟨e, he⟩ := hq
-    have h : _root_.Flock.Zk.schedule m = .error e := by
+    have h : _root_.Flock.Zk.schedule wideLeaf m = .error e := by
       unfold _root_.Flock.Zk.schedule
       rw [he]
       rfl
@@ -379,8 +381,9 @@ def saltLenOf (zk : Bool) (tab : Setup) : Option ℕ :=
 
 /-- **What the column reader takes of a run's table `j`**, with no hash: from the last message's statement, record and
 proof files, table `j`'s `m`, `kLog`, claim count and Merkle widths (its setup's, its claims at the session's link
-points), and its two reps' recorded rounds (the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in
-`spec.repStreams` order) and proof files (at the same two places, as `verify` reads them). -/
+points), its statement version at the masked record (the plain reader reads none), and its two reps' recorded rounds
+(the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in `spec.repStreams` order) and proof files (at the
+same two places, as `verify` reads them). -/
 def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let f ← lastFinal s
   let (_, spec, sts) ← setupOf zk f.stmt
@@ -389,7 +392,7 @@ def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun :=
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
-         saltLen := saltLenOf zk tab,
+         saltLen := saltLenOf zk tab, wideLeaf := zk && tab.wideLeaf,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
@@ -400,8 +403,9 @@ variable [S : ZkSetup]
 
 /-- **What the column reader takes of a run's table `j`**, with no hash: from the last message's statement, record and
 proof files, table `j`'s `m`, `kLog`, claim count and Merkle widths (its setup's, its claims at the session's link
-points), and its two reps' recorded rounds (the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in
-`spec.repStreams` order) and proof files (at the same two places, as `verify` reads them). -/
+points), its statement version at the masked record (the plain reader reads none), and its two reps' recorded rounds
+(the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in `spec.repStreams` order) and proof files (at the
+same two places, as `verify` reads them). -/
 def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let f ← lastFinal s
   let (_, spec, sts) ← setupOf zk f.stmt
@@ -410,7 +414,7 @@ def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun :=
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
-         saltLen := saltLenOf zk tab,
+         saltLen := saltLenOf zk tab, wideLeaf := zk && tab.wideLeaf,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
@@ -490,8 +494,8 @@ def acct (spec : SessionSpec) (st : Stmt) : Accounting.Stmt := ⟨st.c.kLog, st.
 at its parameters bounded by `Numbers.innerUp`. -/
 noncomputable def tableErr (zk : Bool) (spec : SessionSpec) (st : Stmt) : ℝ :=
   if zk then
-    Accounting.padLinkError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) +
-      (Accounting.padRepError (Accounting.m1Schedule st.m) (acct spec st) (Accounting.m1Pad st.m) 2 +
+    Accounting.padLinkError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) +
+      (Accounting.padRepError (Accounting.m1Schedule st.wideLeaf st.m) (acct spec st) (Accounting.m1Pad st.wideLeaf st.m) 2 +
         (Claims.Flock.Numbers.innerUp : ℝ)) ^ 2
   else Accounting.tableError ((Accounting.fast100 st.m).getD default) (acct spec st)
 
@@ -510,7 +514,7 @@ end KS.Gen
 
 /-- A table's level-0 codeword length, `2^{d₀}`. -/
 noncomputable def tableLen (zk : Bool) (st : Stmt) : ℝ :=
-  2 ^ (if zk then Claims.Flock.zkLevel0 st.m else Claims.Flock.plainLevel0 st.m).d
+  2 ^ (if zk then Claims.Flock.zkLevel0 st.wideLeaf st.m else Claims.Flock.plainLevel0 st.m).d
 
 /-- **`N₀`**: the session's tables' level-0 codeword lengths, summed: table 0's `2^{d₀}` at one table. -/
 noncomputable def N₀ (zk : Bool) (x : Claims.Msg) : ℝ := ((tables zk x).map fun p => tableLen zk p.2).sum
@@ -528,8 +532,8 @@ end KS.Gen
 /-- A table's weight: `Numbers.weightOf` at its schedule, and under `--zk` at its pads' domain. -/
 noncomputable def tableWeight (zk : Bool) (st : Stmt) : ℝ :=
   if zk then
-    Claims.Flock.Numbers.weightOf (Accounting.m1Schedule st.m)
-      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.m).1.k0))
+    Claims.Flock.Numbers.weightOf (Accounting.m1Schedule st.wideLeaf st.m)
+      (Claims.Flock.Numbers.padDomain (Zk.PadLayout.new st.m st.c.kLog (Claims.Flock.zkSched st.wideLeaf st.m).1.k0))
   else Claims.Flock.Numbers.weightOf ((Accounting.fast100 st.m).getD default) 0
 
 /-- **The weight `C` of `γ`**: the session's tables' weights, summed. -/

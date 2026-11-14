@@ -7,7 +7,8 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
 1. **Before any card is asked for** it holds the run to its point: the identity it was launched with is the one this
    tree gives the point (`steady_spec.point_identity`: a changed file of the closure is another point); the run's
    environment is the spec's; the node can run `gpu-lease` (`lease_tool`); the prover is the one the setup built
-   (`VERITY_BENCH_STEADY_BIN`); and the run's CPUs are exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
+   (`VERITY_BENCH_STEADY_BIN`); the toolkit's version, from the node's nvcc, is the spec's (`toolkit`); and the run's
+   CPUs are exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
    `benchmarks/served_units/stage.py`, or takes the one the row names as `staged`: a copy of a directory on the node,
    or a directory of an artifact fetched from the store (`fetched`), onto the node's disk and never into its memory.
    It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
@@ -77,6 +78,8 @@ NODES, DEVICES = Path("/sys/devices/system/node"), Path("/sys/bus/pci/devices")
 CARDS = ("nvidia-smi", "--query-gpu=index,pci.bus_id", "--format=csv,noheader")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
+#: the name a passed point's rate is written under in its result: the metric's id, OWNER/NAME
+RATE = "benchmarks/flock-steady.statements-per-s"
 
 #: a command's exit code, its output to a log file
 Runner = Callable[[Sequence[str], Path], int]
@@ -315,6 +318,19 @@ def toolkit_on_node(ask: Asker) -> str:
     return found.group(1)
 
 
+def toolkit(spec: steady_spec.SteadySpec, ask: Asker) -> str:
+    """The toolkit's version (`toolkit_on_node`), read before any statement is staged or fetched and any card is asked
+    for, since it needs neither: a node at another toolkit is refused for nothing. The timed step reads it again inside
+    the lease, beside the driver's, which only the lease's card gives."""
+
+    read = toolkit_on_node(ask)
+    if read != spec.cuda_toolkit:
+        raise Refused(f"the node's CUDA toolkit is {read} (its nvcc), and spec {spec.id!r} says {spec.cuda_toolkit}: a "
+                      "row at another toolkit is another point. Set the spec's `cuda_toolkit` to the node's, which times "
+                      "its rows again there")
+    return read
+
+
 def snapshot(path: Path, run_id: str, ask: Asker, now: Callable[[], float]) -> None:
     """What else is on the node now, as `steady.card_file` says a run keeps it: each card another run's lease holds and
     each compute process on a card, or a line saying which of the two the node gave no answer on."""
@@ -412,24 +428,28 @@ def kept(run_dir: Path) -> list[str]:
 
 def write_result(run_dir: Path, identity: str, item: steady_spec.SteadyPoint, why: str | None,
                  row: Mapping[str, Any] | None, host: Mapping[str, Any] | None = None) -> None:
-    """The run's result (`kit.RESULT_SCHEMA`): its validation, which is the point's verdict, written here, and, for a
-    passed point, its rate, the one measurement, appended by the kit's writer under `host`, the stamp the timed step
-    ran under."""
+    """The run's result (`kit.RESULT_SCHEMA`, of `KIND`), through the kit's writer: what ran, the files a verdict reads
+    (the rates as its measurement file, the rest of `kept` as artifacts), for a passed point its rate, the one
+    measurement, under `host`, the stamp the timed step ran under, and last its validation, which is the point's
+    verdict, so that a result cut short holds none."""
 
     rate = row.get("statements_per_s") if row is not None and why is None else None
-    evidence = [path for path in (steady.RATES, VERDICT_FILE, POINT_FILE) if (run_dir / path).is_file()]
-    _write(run_dir / kit.RESULT, {
-        "schema": kit.RESULT_SCHEMA, "kind": KIND, "run_id": settings.RESEARCH_RUN_ID,
-        "workload_fingerprint": {"identity": identity, "point": item.to_json()},
-        "validation": {"status": "passed" if why is None else "failed", "checker": "verity_bench.steady_spec.point_why",
-                       "detail": why or f"{item.id}: the ten checks pass", "evidence": evidence},
-        "measurements": [],
-        "measurement_files": [steady.RATES] if (run_dir / steady.RATES).is_file() else [], "artifacts": kept(run_dir)})
+    if rate is not None and host is None:
+        raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
+                         "measurement is written under")
+    writer = kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host or {}, KIND)
+    writer.fingerprint(identity=identity, point=item.to_json())
+    rates = (run_dir / steady.RATES).is_file()
+    if rates:
+        writer.measurement_file(steady.RATES)
+    for path in kept(run_dir):
+        if path != steady.RATES or not rates:
+            writer.artifact(path)
     if rate is not None:
-        if host is None:
-            raise ValueError(f"{item.id} passed and {TIMED_FILE} holds no host stamp of its timed step, which its "
-                             "measurement is written under")
-        kit.Writer(run_dir, settings.RESEARCH_RUN_ID, host).measurement("statements_per_s", rate, "1/s", mark="measured")
+        writer.measurement(RATE, rate, "1/s", mark="measured")
+    evidence = [path for path in (steady.RATES, VERDICT_FILE, POINT_FILE) if (run_dir / path).is_file()]
+    writer.validation("passed" if why is None else "failed", "verity_bench.steady_spec.point_why",
+                      why or f"{item.id}: the ten checks pass", evidence)
 
 
 def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: Callable[[], float] = time.time,
@@ -469,6 +489,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     try:
         lease_tool(ask)
         record["prover"] = prover()
+        record["cuda_toolkit"] = toolkit(spec, ask)
         own = own_cores(spec, cpus())
         record["cores"] = {"count": spec.cores, "list": _spans(own)}
         record["lease_on"] = cards_near(own, ask)

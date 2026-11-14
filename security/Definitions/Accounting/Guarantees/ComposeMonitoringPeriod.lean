@@ -151,7 +151,7 @@ proof block reads by the sample. A window with one salt, opened before its activ
 salt, which reaches the prover before its operands are committed, so the window is seeded. A live window needs the
 live challenger's coins, under a coin commitment the challenger signs with its LMS key and the verifier reads. Coins
 from a challenger that runs in the prover's process are seeded. A window whose salt and round coins come from one live
-session on the auditor host's challenger, read under the auditor's key (`remote.trusted_session`), is still seeded
+session on the auditor device's challenger, read under the auditor's key (`remote.trusted_session`), is still seeded
 when its salt is opened after the weights' root alone, before the activations are committed, as a certified one is.
 The seeded pair has no period form: its premium is per window, so it would not divide by `j`.
 
@@ -191,7 +191,7 @@ for, and a period picked from `N` execution phases after the fact would pay `ln 
 `δ_ks` has a value here. `Pouw.Guarantees.MonitoringPeriodBindingPerProver` bounds `δ_bind` by `|L|·√(q/2^256 + κ)` under
 `ecr/sha-512` at the prover's fork finder: `L` is the period's positions, `n` times a verification phase's, `q` is
 that finder's SHA-512 calls, its two runs from a position's cut and the checks of their openings, and `κ` is its
-unverified-opening and split terms, which no statement bounds. `δ_ks` is `Pouw.Guarantees.Window.WindowDelta`'s
+unverified-opening and split terms, which no statement bounds. `δ_ks` is `Pouw.Guarantees.Window.ExecutionPhaseDelta`'s
 `max_c κ_c + coll`, stated and not proved.
 
 What it doesn't say: no window's own `ε` (an accepted prefix may hold windows skipped whole, `Λ·ln(1/δ_s)` of

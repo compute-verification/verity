@@ -51,7 +51,7 @@ This module imports `Proofs.Flock.SoundAtBridge`, whose imports make `X` a token
 
 open Accounting.TS Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
 /-- **A window of proofs is sound at `δs + δ` through its Flock sessions**
-(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so flock-verify accepted its session
+(`Accounting.Guarantees.TS.SessionSoundAt`). An unsound proof is accepted, so verity-verify-proof accepted its session
 (`AcceptedLive`), and its relation fails at its opening. If every sampled proof block is right at its owned reads,
 `ServedChecksHold` gives the relation at the session's value layer, so that layer isn't the opening:
 `ServedRootsLinked`'s event, at most `δs`. Otherwise some sampled proof block is wrong or off, `RowsSession.BadU`, at most
@@ -61,13 +61,13 @@ theorem Accounting.SecurityProofs.TS.SessionSoundAt : Accounting.Guarantees.TS.S
   refine soundAt_of_sessions pf (Out := fun s : RowsSession => s.Out) (fun s => s.G)
     (fun s => s.τ) (fun s => s.BadU) sess out
     (fun x w i => LiveAcceptsZKR (sess x w i).I (sess x w i).own (out x w i) ∧
-      (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
+      (∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u) ∧
       rows (sess x w i) (sess x w i).Xv ≠ pf.opened x w i) δs δ hLaw hLink
     (fun x w i => (RowsSession.prob_badU_le Flock.SecurityProofs.EndToEndRegisteredRows _ (hCR x w i)).trans
       (hδ x w i)) hδ0 ?_
   rintro x w i ⟨hA, hR⟩
   have hL := hAcc x w i hA
-  by_cases hD : ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).WrongAt u ∧ (sess x w i).RowsAt (out x w i) u
+  by_cases hD : ∀ u ∈ (out x w i).2.1, ¬ (sess x w i).IncorrectAt u ∧ (sess x w i).RowsAt (out x w i) u
   · refine Or.inl ⟨hL, hD, fun hs => hR ?_⟩
     rw [← hs]
     exact hChk x w i hL hD

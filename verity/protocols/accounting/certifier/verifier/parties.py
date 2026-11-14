@@ -73,11 +73,11 @@ CERTIFICATE, REGISTRATION, RECORDS, CELLS_SALTS = "certificate", "registration",
 DEPLOYMENT, GROUPS = "deployment", "groups"
 #: a link-window's three records, by the name its ``records`` message's head gives
 RECORD_NAMES = ("requests", "responses", "fails")
-#: a frame's largest body (`channel.HEADER`: a u32 length) in whole salts: the most rows one opening carries
+#: a frame's largest body (`runtime.framing.HEADER`: a u32 length) in whole salts: the most rows one opening carries
 MAX_OPENING = ((1 << 32) - 1) // O.SALT_BYTES * O.SALT_BYTES
 #: a record is its head and one certificate, whose signature is about 70 kB in hex at `lms.DEPLOYED`
 MAX_RECORD = 1 << 20
-#: a frame's largest body (`channel.HEADER`: a u32 length): a link-window's packed record
+#: a frame's largest body (`runtime.framing.HEADER`: a u32 length): a link-window's packed record
 MAX_PACKED = (1 << 32) - 1
 #: a link-window's rows' salts and the wiring's, a whole number of the wiring's salt bytes, which a row's are a multiple of
 MAX_SALTS = MAX_PACKED // WR.WIRING_SALT_BYTES * WR.WIRING_SALT_BYTES

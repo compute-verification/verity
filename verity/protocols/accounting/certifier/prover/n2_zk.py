@@ -6,7 +6,7 @@ decided by `LinkWindows.outcome`: the verifier's own Lean `verify --zk` of the p
 the verifier's own copy and its output row read. No host check reads the opening; `--debug-clear` adds the in-the-clear
 comparison to each verdict, which decides nothing.
 
-    python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run DIR --bin flock-circuit --lean verity-verify-proof --out DIR
       [--jobs 1] [--gpu] [--debug-clear] [--dry] [--draw K] [--witness FILE]
 
 * **The run** (``--warden-run``): an active network certifier's run (`warden_serve.py`'s, or the gate's
@@ -80,7 +80,7 @@ DELTA = 2.0 ** -40
 OTHER = "other_subset"
 ROUNDS = ("honest", "tampered")
 #: AGENTS.md's design rule, which `one_session` holds every driver's ``--jobs`` to
-ONE_SESSION = "outer proofs go through the firewall one at a time (AGENTS.md, 'Live coins only')"
+ONE_SESSION = "outer proofs go through the ZK server one at a time (AGENTS.md, 'Live coins only')"
 #: what the verifier receives per execution phase, by file (`member`)
 RECEIVED = {"registration.json": "the registration record", "draw.json": "the stream's draw",
             "certificates.json": "the certificates' public fields (the certifier's)", "syncs.json": "the declared syncs",
@@ -311,11 +311,11 @@ def stage(M, sg: SimpleNamespace, members: dict[str, SimpleNamespace], secret: b
 
 
 def zk_server_env(M, sg: SimpleNamespace) -> dict:
-    """A firewalled prover's environment (`FC_FIREWALL=1`, its Lean frame named by ``FC_FIREWALL_LEAN``) on the
+    """A zk_served prover's environment (`FC_ZK_SERVER=1`, its Lean frame named by ``FC_ZK_SERVER_LEAN``) on the
     statement's partition and Program."""
-    if not os.environ.get("FC_FIREWALL_LEAN"):
-        raise SystemExit("FC_FIREWALL_LEAN names no Lean firewall frame (flock-verify's flock-firewall)")
-    return {"FC_FIREWALL": "1", **M.a0.firewall_env({"partition_file": sg.partition_file,
+    if not os.environ.get("FC_ZK_SERVER_LEAN"):
+        raise SystemExit("FC_ZK_SERVER_LEAN names no Lean ZK server frame (verity-verify-proof's flock-zk-server)")
+    return {"FC_ZK_SERVER": "1", **M.a0.zk_server_env({"partition_file": sg.partition_file,
                                                      "program_file": sg.program_file})}
 
 
@@ -323,7 +323,7 @@ def one_session(jobs: int) -> None:
     """A driver's ``--jobs``: 1, its members proved one after another, each session behind the ZK server alone
     (`ONE_SESSION`); any other count is refused before anything runs."""
     if jobs != 1:
-        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one firewalled session at a time: --jobs 1")
+        raise SystemExit(f"--jobs {jobs}: {ONE_SESSION}, so a prover runs one ZK server session at a time: --jobs 1")
 
 
 # --- the rounds -------------------------------------------------------------------------------------------------------

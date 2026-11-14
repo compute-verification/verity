@@ -437,7 +437,7 @@ def answersRead (e : Evidence) : Array Core.Answer := e.audits ++ e.windows.map 
 /-- What `AnswersVerified` says of a period its check accepted: each answer the check reads is the one one-stage's
 compiled verifier gives (`Spot.OneStage.protocol.answer`) on some parameters, commitment and evidence. The answer's
 digest is that commitment's, which the check holds to the registration (`answered`), and an accepting one-stage check
-holds its parameters' Program to that registration's; the parameters' query, law and δ are not yet the period's. -/
+holds its parameters' Program to that registration's; the parameters' query, samplingDesign and δ are not yet the period's. -/
 def AnswersVerifiedAt (e : Evidence) : Prop :=
   ∀ a ∈ answersRead e, ∃ params commitment evidence : ByteArray,
     Spot.OneStage.protocol.answer params commitment evidence = a
@@ -544,7 +544,7 @@ ordinal and its schedule under the entry's key in the entry's session; the liste
 consecutive ordinals in the entries' order; and each such session's signed base is where the list's execution phases
 put it, after every execution phase of its predecessor's stretch (`RowsSessionsCompleteAt`). The network certifier's
 device state gives each session it starts the next ordinal and none twice, and moves the key's life on by the
-session's whole span (`certificate.DeviceState`, on `trusted-host`), so no session of the key started between two such
+session's whole span (`certificate.DeviceState`, on `trusted-device`), so no session of the key started between two such
 entries' sessions.
 
 The base condition is read off the certificates, through `heldTo` and the entries' order, which the check holds itself

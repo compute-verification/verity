@@ -8,12 +8,12 @@ public import Definitions.Pouw.Game.Defs
 
 A run realizes PoUW's game at cost model `CM`, protocol `P` and workload `U` when its compute coins are the game's (the
 oracle, the salt and the `t` tickets), and at each value of the other audits' coins `o` the device's PoUW interaction is
-an adversary `adv o` of the game: the compute audit's verdict is PoUW's audit of that adversary's transcript, the
+an adversary `adv o` of the game: the compute audit's verdict is PoUW's audit of that adversary's trace, the
 adversary's cost is covered by the compute account's priced work, and its oracle calls by the compute account's oracle
 queries.
 
-The cost field is where double counting is ruled out. The adversary's cost counts every op its transcript depends on,
-so every op the PoUW transcript needs is charged to the compute account. An op charged to another account (a PoUS
+The cost field is where double counting is ruled out. The adversary's cost counts every op its trace depends on,
+so every op the PoUW trace needs is charged to the compute account. An op charged to another account (a PoUS
 decode's, say) is not credited to PoUW's work, and the device's limits (`Step.Fits`) bound the two accounts' ops
 together.
 -/
@@ -35,9 +35,9 @@ structure RealizesPouw {Q R S : Type} (CM : Pouw.CostModel Q R S) (P : Pouw.Prot
     (p : Price) where
   /-- the adversary the device is in PoUW's game at the other audits' coins -/
   adv : ΩQ × ΩS → Pouw.Adversary CM
-  /-- the compute audit is PoUW's audit of the adversary's transcript -/
+  /-- the compute audit is PoUW's audit of the adversary's trace -/
   accepts_iff : ∀ x o, r.accepts .compute (x, o) ↔
-    Pouw.AuditAccepts (Pouw.correctSet P U x.1 x.2.1 ((adv o).transcript U x.1 x.2.1)) x.2.2
+    Pouw.AuditAccepts (Pouw.correctSet P U x.1 x.2.1 ((adv o).trace U x.1 x.2.1)) x.2.2
   /-- the compute account's priced work covers the adversary's online cost -/
   cost_le : ∀ x o, CM.cost (adv o).online x.1 U (adv o).act ((adv o).pre.eval x.1) x.2.1 ≤ (r.work p (x, o) : ℝ)
   /-- the compute account's oracle queries cover the adversary's oracle calls -/

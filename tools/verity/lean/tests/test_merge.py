@@ -318,6 +318,17 @@ def test_an_assumption_s_digest_changed_two_ways_or_removed_against_changed_merg
     assert A.judge(regen, tree, FILES)[0] == [] and "P.Hyp" not in regen.get("assumptions", {})
 
 
+def test_a_premise_s_claim_id_merges_apart_from_its_owner_and_digest():
+    """A premise entry's `id` is written by hand, as its owner is: one side's new id and the other's new owner and digest
+    both stand."""
+    base = record(t=thm([F]))
+    def hyp(**entry):
+        return base | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "due": "2026-12-01"} | entry}}
+    merged, why = M.merge(hyp(), hyp(id="trusted-device"), hyp(owner="@proofs", digest="b" * 64), candidate := [])
+    assert why == [] and merged["open"]["P.Hyp"] == {"id": "trusted-device", "owner": "@proofs", "digest": "b" * 64,
+                                                      "due": "2026-12-01"}
+
+
 def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_changed_its_owner_which_keeps_it():
     """A restatement is the build's, so the removal applies over it; an owner is a person's, so the side that changed it
     keeps the guarantee, named (a changed side beats a removed one)."""
@@ -1177,7 +1188,7 @@ path = "../../pouw/window"
 [[lean_lib]]
 name = "Properties"
 roots = ["Properties.Pouw", "Proofs.Properties.Pouw",
-  "Properties.Nci", "Proofs.Properties.Nci"]
+  "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly"]
 '''
 
 
@@ -1196,21 +1207,21 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     def req(n):
         return f'\n[[require]]\nname = "{n}"\npath = "../../{n}"\n'
     anchor = 'path = "../../pouw/window"\n'
-    tail = '"Proofs.Properties.Nci"]'
-    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]')
+    tail = '"Proofs.Properties.InferenceOnly"]'
+    ours = LAKEFILE.replace(anchor, anchor + req("pous_check")).replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]')
     theirs = LAKEFILE.replace(anchor, anchor + req("network_check")).replace(
-        tail, '"Proofs.Properties.Nci", "Properties.Network"]')
+        tail, '"Proofs.Properties.InferenceOnly", "Properties.Network"]')
     text, left = _lakefile(tmp, LAKEFILE, ours, theirs)
     assert left == 0, text
     doc = tomllib.loads(text)
     assert [r["name"] for r in doc["require"]] == ["security", "pouw_window", "pous_check", "network_check"]
-    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.Nci",
-                                           "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"]
+    assert doc["lean_lib"][0]["roots"] == ["Properties.Pouw", "Proofs.Properties.Pouw", "Properties.InferenceOnly",
+                                           "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"]
     assert text.startswith("# Properties: the code's properties.\n") and all(len(s) <= M.WIDTH for s in text.splitlines())
     gone = LAKEFILE.replace(', "Proofs.Properties.Pouw"', "")
-    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.Nci", "Properties.Pous"]'), theirs)
+    text, left = _lakefile(tmp, LAKEFILE, gone.replace(tail, '"Proofs.Properties.InferenceOnly", "Properties.Pous"]'), theirs)
     assert left == 0 and tomllib.loads(text)["lean_lib"][0]["roots"] == [
-        "Properties.Pouw", "Properties.Nci", "Proofs.Properties.Nci", "Properties.Network", "Properties.Pous"], text
+        "Properties.Pouw", "Properties.InferenceOnly", "Proofs.Properties.InferenceOnly", "Properties.Network", "Properties.Pous"], text
     def comment(s):
         return LAKEFILE.replace("the code's properties.", s)
     text, left = _lakefile(tmp, LAKEFILE, comment("ours."), comment("theirs."))
@@ -1607,8 +1618,13 @@ def test_two_branches_that_each_move_the_ratchet_caps_merge_them_three_way(tmp_p
                            capture_output=True, text=True)
     assert plain.returncode == 2, "git alone conflicts on both cap lines"
     assert _caps(tmp_path, base, ours, theirs) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp_path / n).write_text(t)
+    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0, \
+        "the flag's older name, which the registered command passes until origin/main's copy knows --limits"
+    assert (tmp_path / "ours").read_text() == want
 
 
 def test_a_cap_key_a_side_adds_or_lacks_counts_0_there(tmp_path):
@@ -1645,7 +1661,7 @@ def test_a_cap_one_side_lowers_survives_a_merge_whose_other_side_kept_it(tmp_pat
     want = packages({SEC: 232, PROPS: props, FLOCK: flock}, {SEC: 890, PROPS: 132, FLOCK: 6}, doc="only shrinks")
     assert _caps(tmp_path, base, base, lowered) == (lowered, 0)
     assert _caps(tmp_path, base, main, lowered) == _caps(tmp_path, base, lowered, main) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
 
 
@@ -1710,7 +1726,7 @@ def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_bel
     base, checked, pr = (packages({SEC: n, PROPS: 191}, inline) for n in (331, 311, 307))
     want = packages({SEC: 311, PROPS: 191}, inline)
     assert _caps(tmp_path, base, checked, pr) == _caps(tmp_path, base, pr, checked) == (want, 0)
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 0
     assert (tmp_path / "ours").read_text() == want and capsys.readouterr().err == ""
 
 
@@ -1724,7 +1740,7 @@ def test_a_conflict_beyond_the_cap_lines_and_comments_stays_git_s(tmp_path, caps
     text, left = _caps(tmp_path, base, ours, theirs)
     assert left == 1 and f"UNWITNESSED = {json.dumps({SEC: 355, PROPS: 185})}\n" in text
     assert "<<<<<<< ours\n    \"\"\"A lock's `unwitnessed` shrinks.\"\"\"\n" in text and ">>>>>>> theirs\n" in text
-    assert M.main(["--caps", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
+    assert M.main(["--limits", *(str(tmp_path / n) for n in ("base", "ours", "theirs")), "tests/test_lean_packages.py"]) == 1
     assert "merge.py: tests/test_lean_packages.py: 1 conflict(s) beyond the ratchet caps" in capsys.readouterr().err
     text, left = _caps(tmp_path, base, packages({SEC: 355, PROPS: 184}, inline).replace("UNWITNESSED = ", "INLINE = "),
                        packages({SEC: 354, PROPS: 185}, inline))
@@ -1744,7 +1760,7 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     git(repo, "init", "-q", "-b", "main")
     inline = {SEC: 1422, PROPS: 129, FLOCK: 6}
@@ -1760,8 +1776,10 @@ def test_git_merges_two_branches_that_each_move_a_cap_with_the_installed_driver(
     assert plain.returncode and "CONFLICT (content): Merge conflict in tests/test_lean_packages.py" in plain.stdout
     git(repo, "merge", "--abort")
     subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
-    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
-    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ")
+    driver = git(repo, "config", f"merge.{M.LIMITS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.LIMITS}.driver"] == M.driver(M.LIMITS_FLAG)
+    assert git(repo, "config", f"merge.{M.OLD_LIMITS}.driver").stdout.strip() == driver == RECORD_DRIVER[f"merge.{M.OLD_LIMITS}.driver"], \
+        "the old name stays registered with the same command, for a branch whose .gitattributes still names it"
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == packages({SEC: 355, PROPS: 184, FLOCK: 7}, inline)
 
@@ -1777,7 +1795,7 @@ def test_git_merges_caps_and_comments_over_two_merge_bases_with_the_installed_dr
     (repo / "tests").mkdir()
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
-    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"tests/test_lean_packages.py merge={M.LIMITS}\n")
     caps = repo / "tests" / "test_lean_packages.py"
     inline = {SEC: 1422}
 
@@ -1809,7 +1827,7 @@ _uspec = importlib.util.spec_from_file_location("unread_for_merge", HERE.parent 
 U = importlib.util.module_from_spec(_uspec)
 _uspec.loader.exec_module(U)
 UNREAD = f"{M.DIR}/{M.UNREAD_CAPS}"
-FL, PW, NCI, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/Nci", "Proofs/Hash"
+FL, PW, INFERENCE_ONLY, HASH = "Proofs/Flock", "Proofs/Pouw", "Proofs/InferenceOnly", "Proofs/Hash"
 
 
 def unread(**areas: tuple[int, int]) -> str:
@@ -1820,7 +1838,7 @@ def unread(**areas: tuple[int, int]) -> str:
 def _unread(tmp: Path, base: str, ours: str, theirs: str) -> tuple[int, str]:
     for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
         (tmp / n).write_text(t)
-    return M.main(["--caps", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
+    return M.main(["--limits", *(str(tmp / n) for n in ("base", "ours", "theirs")), UNREAD]), (tmp / "ours").read_text()
 
 
 def test_the_driver_reads_and_writes_the_unread_caps_as_unread_py_does():
@@ -1866,21 +1884,21 @@ def test_an_unread_area_one_side_adds_or_drops_and_a_count_below_zero(tmp_path):
     """An area the base lacks counts 0 there: one side adds is that side's, and one both add holds both. An area a side
     lacks counts 0 on that side: one the lock run dropped (its modules all read) while the other side raised it keeps only
     that raise. No count goes below 0, and an area left with no modules is dropped, as `ratchet` drops it."""
-    base = unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4))) == (
-        0, unread(Proofs_Flock=(274, 2310), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(2, 9)),
-                   unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(1, 3))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4), Proofs_Hash=(3, 12)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(2, 7))) == (
-        0, unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 3)))
-    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_Nci=(1, 4))) == (
+    base = unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4))) == (
+        0, unread(Proofs_Flock=(274, 2310), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(2, 9)),
+                   unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(1, 3))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4), Proofs_Hash=(3, 12)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(2, 7))) == (
+        0, unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 3)))
+    assert _unread(tmp_path, base, unread(Proofs_Flock=(273, 2309)), unread(Proofs_Flock=(273, 2309), Proofs_InferenceOnly=(1, 4))) == (
         0, unread(Proofs_Flock=(273, 2309)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(3, 10)), unread(Proofs_Nci=(2, 2)), unread(Proofs_Nci=(3, 3))) == (
-        0, unread(Proofs_Nci=(2, 0)))
-    assert _unread(tmp_path, unread(Proofs_Nci=(2, 5)), unread(), unread(Proofs_Nci=(1, 2))) == (0, unread())
-    assert _unread(tmp_path, "", unread(Proofs_Nci=(1, 2)), unread(Proofs_Nci=(2, 3))) == (0, unread(Proofs_Nci=(3, 5)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(3, 10)), unread(Proofs_InferenceOnly=(2, 2)), unread(Proofs_InferenceOnly=(3, 3))) == (
+        0, unread(Proofs_InferenceOnly=(2, 0)))
+    assert _unread(tmp_path, unread(Proofs_InferenceOnly=(2, 5)), unread(), unread(Proofs_InferenceOnly=(1, 2))) == (0, unread())
+    assert _unread(tmp_path, "", unread(Proofs_InferenceOnly=(1, 2)), unread(Proofs_InferenceOnly=(2, 3))) == (0, unread(Proofs_InferenceOnly=(3, 5)))
 
 
 def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict(tmp_path, capsys):
@@ -1911,7 +1929,7 @@ def test_an_unread_caps_side_the_merge_can_t_vouch_for_is_left_to_git_s_conflict
 
 
 def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installed_driver(tmp_path, monkeypatch):
-    """The `lean-caps` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
+    """The `lean-limits` driver `--install` registers, and every clone and the queue already set (`RECORD_DRIVER`), passes the
     path (`%P`), so `.gitattributes` naming it for `unread-caps.json` is all a clone needs: `git merge` of two branches that
     each raise an area's cap merges, and a side in another schema leaves git's conflict."""
     from research.clone import RECORD_DRIVER
@@ -1923,7 +1941,7 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     (repo / M.DIR).mkdir(parents=True)
     for f in ("merge.py", "check.py", "modules.py"):
         shutil.copy(HERE.parent / f, repo / M.DIR / f)
-    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.CAPS}\n")
+    (repo / ".gitattributes").write_text(f"{UNREAD} merge={M.LIMITS}\n")
     caps = repo / UNREAD
     git(repo, "init", "-q", "-b", "main")
     for name, start, text in (("main", None, unread(Proofs_Flock=(273, 2309), Proofs_Pouw=(49, 412))),
@@ -1940,8 +1958,8 @@ def test_git_merges_two_branches_that_each_raise_an_unread_cap_with_the_installe
     assert plain.returncode and f"CONFLICT (content): Merge conflict in {UNREAD}" in plain.stdout
     git(repo, "merge", "--abort")
     subprocess.run([sys.executable, f"{M.DIR}/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
-    driver = git(repo, "config", f"merge.{M.CAPS}.driver").stdout.strip()
-    assert driver == RECORD_DRIVER[f"merge.{M.CAPS}.driver"] == M.driver("--caps ") and '"$f" --caps %O %A %B %P;' in driver
+    driver = git(repo, "config", f"merge.{M.LIMITS}.driver").stdout.strip()
+    assert driver == RECORD_DRIVER[f"merge.{M.LIMITS}.driver"] == M.driver(M.LIMITS_FLAG) and '"$f" --caps %O %A %B %P;' in driver
     git(repo, "merge", "--no-edit", "b")
     assert caps.read_text() == unread(Proofs_Flock=(280, 2471), Proofs_Pouw=(50, 416))
     refused = git(repo, "merge", "--no-edit", "v2", check=False)

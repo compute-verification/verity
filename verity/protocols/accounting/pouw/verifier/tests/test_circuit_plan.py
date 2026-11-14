@@ -112,7 +112,7 @@ def test_a_plan_proves_each_drawn_tile_with_its_closure_once():
 
 def test_the_work_table_and_design_object_are_362s():
     """`work_table` is the verifier's `--work-table` (W_ref per tile, 0 elsewhere, and each template's floor f_s);
-    `design_object` is the sampling design `flock-verify draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
+    `design_object` is the sampling design `verity-verify-proof draw --work K` derives from it (`Draw.deriveWork`, `Law.toJson`). A floor from the
     verifier's table raises a zero-work stratum's samples to it."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
     tile, deq = _by_role(lay)["tile"], _by_role(lay)["dequant"]
@@ -157,7 +157,7 @@ def test_traced_as_is_the_compositions_entry_point():
     assert t.weight is ncp2.weight(ncp2.Shape(32, 64, 32)) and t.kind == "shift24"
 
 
-def test_the_default_work_law_draws_a_calls_share_of_the_windows_budget():
+def test_the_default_work_sampling_design_samples_a_calls_share_of_the_windows_budget():
     """K = 27,713 is an execution phase's budget: alone, a call is capped at its units instead of raising; in an execution phase each
     call samples ⌈K·W_c/W_window⌉, so C equal calls sample about K between them, not C·K."""
     lay = PL.layout(ncp2.Shape(32, 64, 32))
@@ -210,7 +210,7 @@ def test_y_is_drawn_at_root_s_option_b_floors_over_the_window():
 
 
 def test_a_work_table_with_a_calls_work_in_two_strata_is_refused():
-    """The execution phase pin's `covers_window` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
+    """The execution phase pin's `covers_executionPhase` holds only when each call's work is in one stratum (`hone`): with the cap K_c ≤ N_c,
     a counterexample (4 units at work 2 and 2 at work 5, K = 8) samples 3 of the first where covering needs 3.6. The
     verifier's own layouts give work to the tile template only, and `work_table`, `WorkLaw` and `window_laws`
     refuse any layout that doesn't."""
@@ -285,9 +285,9 @@ def test_a_window_with_no_y_cells_is_refused():
 
 def test_the_window_law_is_the_window_pin_s():
     """`Audit/Window.lean`'s definitions, recomputed on ℕ from their formulas on random small execution phases, against
-    `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `windowK` = workRule(K_c, w_s, n_s, W_c, f_s)
+    `window_laws`: `callK` = min(N_c, max(1, ⌈K·W_c/W⌉)) is `WorkLaw.budget`, `executionPhaseK` = workRule(K_c, w_s, n_s, W_c, f_s)
     is `WorkLaw.sizes`, and the pin's hypotheses hold: `hone` (each call's work in one stratum), `hfy` (y's floors, v = 1 on
-    the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_window_split_of_record` reads."""
+    the dequantization strata) and so `Covers` of w at K and of v at K_y, which `audit_executionPhase_split_of_record` reads."""
     def ceil(a, b):                                           # Lean's (a + b - 1) / b on ℕ
         return (a + b - 1) // b
 
@@ -319,7 +319,7 @@ def test_the_window_law_is_the_window_pin_s():
             sizes, table = law.sizes(lay.strata), PL.work_table(lay, law)
             for s in lay.strata:
                 n_s, w_s, f_s, v_s = len(s.units), table[s.name]["work"], table[s.name]["floor"], int(s.role == "dequant")
-                assert sizes[s.name] == work_rule(k_c, w_s, n_s, w_c, f_s)                  # windowK
+                assert sizes[s.name] == work_rule(k_c, w_s, n_s, w_c, f_s)                  # executionPhaseK
                 assert w_s == 0 or w_c == w_s * n_s                                         # hone
                 assert k * v_s * n_s <= f_s * big_n                                         # hfy at K_y = K
                 assert k * w_s * n_s <= sizes[s.name] * big_w or sizes[s.name] == n_s       # Covers w K

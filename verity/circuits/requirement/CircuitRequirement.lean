@@ -3,9 +3,9 @@ module
 public import Std.Data.HashSet
 
 /-!
-# A declared circuit's requirement, computed
+# A registered circuit's requirement, computed
 
-`Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a declared circuit's
+`Accounting.Requirement` (`Security/Definitions/Accounting/Requirement.lean`) on one instance: a registered circuit's
 wiring, one scheduled execution of it and a layout of its values (`Instance`), the audit's store (`Store`), and a
 placement of the execution on devices (`Placement`), whose regions, ingress and credits are PoUW's over the placed
 execution (`Proofs/Accounting/Lemmas/RequirementPouw.lean`). A step is always an engine step, never a device tick.
@@ -33,7 +33,7 @@ def subsetOf (a b : List Nat) : Bool :=
   let hb := Std.HashSet.ofList b
   a.all hb.contains
 
-/-- A declared circuit's wiring, one scheduled execution of it and a layout of its values, value by value. -/
+/-- A registered circuit's wiring, one scheduled execution of it and a layout of its values, value by value. -/
 structure Instance where
   /-- each value's width in bits (`Wiring.width`); the values are `0 … n - 1`, `n` this array's length -/
   width : Array Nat

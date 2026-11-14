@@ -31,7 +31,7 @@ import pytest
 from verity.circuits.codec import canonical_json, encode_program
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 
 
@@ -817,8 +817,8 @@ def _program(T: int) -> tuple:
 def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every one of its 2T + 1 proof blocks sampled, one level sampled
-    stratified over the three templates, its bound 0, for its registration, and the tied values R8 let through in its
-    public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a refused
+    stratified over the three templates, its bound 0, for its registration, whether every verdict ran as the audit record says it (``complete``, false of a
+    record that doesn't), and the tied values R8 let through in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a refused
     audit a reject of the same registration naming why; an accepted record of another registration the driver's
     error."""
     from verity.protocols.accounting.pouw.verifier import core_check as CC
@@ -835,6 +835,9 @@ def test_an_execution_phases_answer_is_one_stages_on_its_registration():
     assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
     assert "rests_on_period_check" not in a["public"]
+    whole = SA.window_answer(reg, {**record, "complete": True}, sz.Fraction(1, 100), "unused")
+    assert whole["public"] == {**a["public"], "complete": True} and a["public"]["complete"] is False
+    assert sz.AU.answer_complete(whole) and not sz.AU.answer_complete(a)
     tied = SA.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog0", "prog1"])
     assert CC.answer_of(tied)["verdict"] == "accept"
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog0", "prog1"]}
@@ -1420,7 +1423,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
 
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
-        law, table = sz.S.params_law(rule, program, query, None)
+        law, table = sz.S.params_sampling_design(rule, program, query, None)
         return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok

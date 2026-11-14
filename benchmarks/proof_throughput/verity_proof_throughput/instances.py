@@ -5,7 +5,7 @@ core's ``population_program``), each instance one unit of ``Q_template_instance`
 one stratum. Its lanes are the ones ``verity_flock.class_statement.class_lanes`` gives that one size class: uniform words sampled
 from ``partition_units.derive(SOURCE, DOMAIN, {program digest, seed 0})``, each instance its own x and weight row. The point
 job stages exactly these (``--program-module``, ``--batch fixed --n n_max``, seed 0) once, whatever B, and each session proves
-the B units the verifier samples by the stratified sampling design (``law``: core's ``one_stage.draw.derive`` of ``stratified:B`` over the
+the B units the verifier samples by the stratified sampling design (``sampling_design``: core's ``one_stage.draw.derive`` of ``stratified:B`` over the
 program and query, which every verifier derives for itself). The words are uniform 16-bit encodings, non-finite ones
 included (the statement's domain is ``total``): a Boolean circuit's proving cost doesn't depend on the values it carries.
 
@@ -87,7 +87,7 @@ def class_lanes(w: Workload, n: int | None = None) -> dict[str, Any]:
 
 def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any]:
     """The ``verity/partition/v1`` object the workload's statement binds, derived from its own program as the verifier must
-    (``flock-verify --partition``), refused unless it is the one the circuit's META names."""
+    (``verity-verify-proof --partition``), refused unless it is the one the circuit's META names."""
     from verity.circuits import partition_object as PO
 
     us = units(w)
@@ -100,15 +100,15 @@ def partition_object(w: Workload, circuit_meta: dict[str, Any]) -> dict[str, Any
 
 
 def program_file(w: Workload) -> bytes:
-    """The program as the verifier reads it (``flock-verify --program``): its canonical descriptor encoding."""
+    """The program as the verifier reads it (``verity-verify-proof --program``): its canonical descriptor encoding."""
     from verity.circuits.codec import canonical_json, encode_program
 
     return canonical_json(encode_program(w.population()))
 
 
-def law(w: Workload, b: int) -> dict[str, Any]:
+def sampling_design(w: Workload, b: int) -> dict[str, Any]:
     """The verifier's stratified sampling design for B: ``stratified:B`` expanded over the population's program and query (core's
-    ``one_stage.draw.derive``), the object ``flock-circuit serve --draw-law`` samples each session's units by."""
+    ``one_stage.draw.derive``), the object ``flock-circuit serve --sample-design`` samples each session's units by."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     us = units(w)

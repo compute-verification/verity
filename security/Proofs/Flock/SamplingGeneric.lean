@@ -29,6 +29,7 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
+public import Proofs.Flock.SamplingGeneric.TwoRankinThreshold
 public import Proofs.Flock.SamplingGeneric.TwoReg
 public import Proofs.Flock.SamplingGeneric.TwoRegMiss
 public import Proofs.Flock.SamplingGeneric.TwoRegX
@@ -90,7 +91,7 @@ count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), and it mee
 the frozen hypotheses (`sessions_ofDeploy`). Its knowledge soundness is the one guarantees read at the deployed sampled
 verifier; `Claims.Sampling` holds no extractor or knowledge-soundness claim of its own. At the deployed
 record `deployOf F c` (`SamplingDeploy.compiled`), four of those are facts about the sampled verifier's code
-(`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the compiler's KS and committed form
+(`Code.SampleDesign`, `Code.Refuses`, `Code.InteriorFixed`, `Code.SampleFixed`), and the compiler's KS and committed form
 there take exactly them, Flock's KS at `F`, the commitment's binding and the sessions' runs, numbers and openings
 (`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`). At Flock's masked record and SHA-512, Flock's KS,
 the decoder's list bound and the commitment's binding are proved (`SamplingGeneric/Masked.lean`: `ks_masked`,
@@ -110,6 +111,8 @@ at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N 
 `Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance. At a first stage below independent catches at
 rates `q_ρ`, the admissible sets' count and their patterns' count are at most `δ^{−θ}` times a product over the replay
 blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
+A replay block's patterns' factor only grows with its requests' thresholds, so requests serving at most `S` bits have
+it at most the factor at `S` (`SamplingGeneric/TwoRankinThreshold.lean`: `rankinFactorPatterns_le_at`).
 At a first stage that catches each replay block at rate `r₁` and a second stage that samples each cell at rate `r₂`,
 `P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
 every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved). At two stages, the
@@ -186,16 +189,16 @@ variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.
 from Flock's KS at `F` and its deployed decoder's list bound, the commitment's binding, the code's four facts and the
 sessions' runs, numbers and openings (`flockKS`, `sessions_compiled`). -/
 theorem ks_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
-    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.DrawLaw)
-    (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.SampleDesign)
+    (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c iroots).KS H :=
   Claims.SamplingGeneric.flockKS H F _ hKS hlist hB (sessions_compiled F c iroots H hd hr hi hf hruns hnum hopens)
 
 /-- **The committed form at the deployed record**: as `ks_compiled`, `KSReg` (`flockKSReg`). -/
 theorem ksReg_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F)
-    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.DrawLaw)
-    (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+    (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H) (hd : c.SampleDesign)
+    (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c iroots).KSReg H :=
   Claims.SamplingGeneric.flockKSReg H F _ hKS hlist hB (sessions_compiled F c iroots H hd hr hi hf hruns hnum hopens)

@@ -12,7 +12,7 @@ run's last close for its last execution phase (`warden.Released`, by slot stride
 The certifier writes them from the cells it cut and released itself, never from the
 server's report, so they say what its records of the same execution phases say, in another order (`of_records` is
 that reading of the records in the clear): that the two agree rests on the network certifier's own code
-(`trusted-host`), and no proof ties them. Each table is T / `every` rows,
+(`trusted-device`), and no proof ties them. Each table is T / `every` rows,
 row j slot stride j's releases in release order in its first slots, K = `WardenParams.stride_releases` slots a row and
 the rest zero, every field little-endian:
 
@@ -39,7 +39,7 @@ refused (`content_rows.tables`), and a release that ended in a `FAIL` before any
 the two words the network certifier reads from the request of `request.i`'s row r (`content_rows.request_words`:
 its `max_tokens` and the count of its prompt's ids). The filing rule is called in one place (`_filing`), which
 `tables` lays the content tables by.
-They rest on `trusted-host` as the lengths and fails tables do.
+They rest on `trusted-device` as the lengths and fails tables do.
 
 **The filed releases** (`filed`, `filed_record`, `not_filed`). Which class a release is filed in turns on how the
 network certifier ended it (`content_rows`' "The filing"), which no server computes. So with each execution phase's
@@ -113,7 +113,7 @@ collision across the two tags). An execution phase with neither has not ended ye
 it has no certificate, and fails closed as a record without one does. Which of the two an execution phase ends in
 is a function of which execution phases' records were published complete, which their certificates already say, so
 the word makes nothing else public. That an execution phase gets one of the two and never both rests on the network
-certifier's own code (`trusted-host`): its signer signs the digest it is asked to. Under form 1 an execution phase
+certifier's own code (`trusted-device`): its signer signs the digest it is asked to. Under form 1 an execution phase
 that isn't handed has no certificate of either kind.
 
 **The registration** (`registration`) is the head and its certificate as one JSON object, kept on a run's private

@@ -1,7 +1,9 @@
 module
 
 public import PouwCheck.Credit
+public import PouwCheck.CreditOnce
 public import PouwCheck.Difftest
+public import PouwPearlPlus.Load
 
 /-!
 # The difftest's functions for a served execution phase's credit (`PouwCheck.Credit`)
@@ -32,6 +34,12 @@ Beside `PouwCheck.Difftest`'s, behind the same `pouw-check-difftest` (`PouwCheck
   `steps`, its rounds, and `salt`, its Program salt):
   `{"file": …, "partition": …}`, `Credit.registeredFile` and `Credit.partitionOf` over the `layoutOf` and `shapeOf` of
   the descriptor's Program (`credit.registered_file` and `credit.partition_of`), or `{"refused": [code, why]}`.
+* `passes-distinct` (`passes`, the Pearl-C pass manifests credited together, as `credit.passes_distinct` takes them):
+  Pearl+'s `PouwCheck.PearlPlus.passesDistinct`, null, or `{"refused": [code, why]}`.
+* `commit-parsers` (`commit`, a Commit record as `credit` takes it): `{"core": [value], "total": [value]}`, the value
+  Lean's own JSON parser and the total one (`Flock.JsonParse.parse`, which `Credit.commitOf?` reads the record with)
+  each read the record's text as; `[]` for a parser that refuses the text, and for both when `commit` is not bytes in
+  lowercase hex (`Credit.isHexBytes`) of UTF-8.
 -/
 
 @[expose] public section
@@ -50,7 +58,7 @@ def drawnOf (j : Json) : Except String Json := do
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
     (Credit.drawn (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k"))
 
-def windowDrawnOf (j : Json) : Except String Json := do
+def executionPhaseDrawnOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("drawn", toJson out)])
     (Credit.descriptorDrawn (← f "window") (← f "draw") (← f "descriptor") (← f "k"))
@@ -61,10 +69,10 @@ def outcomeOf (j : Json) : Except String Json := do
     (Credit.Internal.outcome (← f "coin") (← f "stream") (← f "registration") (← f "receipt") (← f "layout") (← f "k")
       (← f "proofs"))
 
-def windowOf (j : Json) : Except String Json := do
+def executionPhaseOf (j : Json) : Except String Json := do
   let f := PouwCheck.Difftest.get j
   PouwCheck.Difftest.refusal (fun out => Json.mkObj [("credited", toJson out)])
-    (Credit.window (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
+    (Credit.executionPhase (← f "key") (← f "ledger") (← f "pins") (← f "main") (← f "window") (← f "session") (← f "salt")
       (← f "calls") (← f "served") (← f "commit") (← f "rounds") (← f "draw") (← f "descriptor") (← f "entries")
       (← f "proofs") (← f "live") (← f "k") (← f "rows"))
 
@@ -115,9 +123,26 @@ def registeredFileOf (j : Json) : Except String Json := do
     pure (Json.mkObj [("file", file), ("partition", Credit.partitionOf program shape)])
   PouwCheck.Difftest.refusal id got
 
+def passesDistinctOf (j : Json) : Except String Json := do
+  let .arr passes ← PouwCheck.Difftest.get j "passes" | throw "passes is not a list"
+  pure <| match PouwCheck.PearlPlus.passesDistinct passes.toList with
+    | some (code, why) => Json.mkObj [("refused", toJson [code, why])]
+    | none => Json.null
+
+def commitParsersOf (j : Json) : Except String Json := do
+  let commit ← PouwCheck.Difftest.get j "commit"
+  let text := (PouwCheck.str? commit).bind fun s =>
+    if Credit.isHexBytes s then (PouwCheck.hex? commit).bind String.fromUTF8? else none
+  let read := fun (parse : String → Except String Json) =>
+    match text.bind fun t => (parse t).toOption with
+    | some v => Json.arr #[v]
+    | none => Json.arr #[]
+  pure (Json.mkObj [("core", read Json.parse), ("total", read Flock.JsonParse.parse)])
+
 def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
-  ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", windowDrawnOf), ("outcome", outcomeOf),
-  ("window", windowOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf)]
+  ("commit-parsers", commitParsersOf), ("credit", creditOf), ("drawn", drawnOf), ("window-drawn", executionPhaseDrawnOf), ("outcome", outcomeOf),
+  ("window", executionPhaseOf), ("period", periodOf), ("a-link", aLinkOf), ("weights", weightsOf), ("registered-file", registeredFileOf), ("leaf-words", leafWordsOf),
+  ("passes-distinct", passesDistinctOf)]
 
 /-- `pouw-check-difftest`'s functions: `PouwCheck.Difftest.table`'s, then these. -/
 def all (name : String) : Option _root_.Difftest.Fn := PouwCheck.Difftest.table name <|> table name

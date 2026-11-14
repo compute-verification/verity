@@ -9,8 +9,10 @@
 # Per "NAME<TAB>SPEC<TAB>ARGS" line of the file FM_SPECS (ARGS: more m1_unit.py arguments, or none; default: SPECS below,
 # an expert GEMM at two widths, whose programs are about one size and whose circuits are not), $OUT/NAME gets m1.log,
 # the member's verify call (verify.argv), members.json and each process's output and stage lines (flock_members.py's
-# docstring). A spec whose session the verifier refuses is not timed, and the job exits 1.
-# env: FM_MEM_GB (the job's --mem-gb)  FM_SPECS  FM_MEMBERS=3  FM_ROUNDS=2  FM_CACHE  FM_PORT=7611  FM_CORE
+# docstring). A spec whose session the verifier refuses is not timed, and the job exits 1. FM_ORDER (0,0,1,0: the
+# members by their spec's index) adds $OUT/mixed: the specs' members in one kept process in that order, so a member
+# whose circuit file is another than the one before's is timed and the process's peak RSS holds the change of file.
+# env: FM_MEM_GB (the job's --mem-gb)  FM_SPECS  FM_MEMBERS=3  FM_ROUNDS=2  FM_ORDER  FM_CACHE  FM_PORT=7611  FM_CORE
 #      MIMALLOC_PURGE_DELAY (the allocator setting flock_members.py's processes run under; unset: the verifier's own,
 #      proofs.py's VERIFIER_ENV)
 set -uo pipefail
@@ -37,6 +39,7 @@ exec "$LEAN" "\$@"
 EOF
 chmod +x "$RECORDED"
 rc=0
+staged=()
 while IFS=$'\t' read -r name spec more; do
   [ -n "$name" ] || continue
   O=$OUT/$name
@@ -54,12 +57,25 @@ while IFS=$'\t' read -r name spec more; do
       --members "${FM_MEMBERS:-3}" --rounds "${FM_ROUNDS:-2}" ${FM_CORE:+--core "$FM_CORE"} < /dev/null 2>&1 | tee -a "$OUT/job.log"
     m=${PIPESTATUS[0]}
     [ "$m" = 0 ] || { log "$name: flock_members.py exited $m"; rc=1; }
-    sed -i "s#$W#W#g" "$FM_ARGV"
+    staged+=("$name")
   else
     log "$name: m1_unit.py exited $r: $(tail -4 "$O/m1.log" | cut -c1-300 | tr '\n' '|')"
     rc=1
+    rm -rf "${W:?}/$name"
   fi
-  rm -rf "${W:?}/$name"
 done <<< "$SPECS"
+if [ -n "${FM_ORDER:-}" ] && [ "$rc" = 0 ]; then
+  mkdir -p "$OUT/mixed"
+  log "mixed: ${staged[*]} in the order $FM_ORDER; load $(cut -d' ' -f1-3 /proc/loadavg)"
+  # shellcheck disable=SC2046
+  "$PYM" benchmarks/verifier_cost/flock_members.py --lean "$LEAN" $(printf -- "--argv $OUT/%s/verify.argv " "${staged[@]}") \
+    --order "$FM_ORDER" --out "$OUT/mixed" --rounds "${FM_ROUNDS:-2}" ${FM_CORE:+--core "$FM_CORE"} < /dev/null 2>&1 | tee -a "$OUT/job.log"
+  m=${PIPESTATUS[0]}
+  [ "$m" = 0 ] || { log "mixed: flock_members.py exited $m"; rc=1; }
+fi
+for name in ${staged[@]+"${staged[@]}"}; do
+  sed -i "s#$W#W#g" "$OUT/$name/verify.argv"
+  rm -rf "${W:?}/$name"
+done
 log "flock-members: done, rc $rc"
 exit "$rc"

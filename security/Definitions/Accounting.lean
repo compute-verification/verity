@@ -55,6 +55,7 @@ public import Definitions.Accounting.Records
 public import Definitions.Accounting.RecordsToy
 public import Definitions.Accounting.Remote
 public import Definitions.Accounting.Remote.Deployed
+public import Definitions.Accounting.Remote.DrawInstances
 public import Definitions.Accounting.Requirement
 public import Definitions.Accounting.Requirement.Placed
 public import Definitions.Accounting.Responder
@@ -89,7 +90,7 @@ The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's,
   bound at the deployed receipts.
 * `Accounting.Guarantees.Remote.AuditRO` (`Definitions.Accounting.Guarantees.RemotePass`): the bandwidth audit in the
   random-oracle model. It is the bandwidth audit's row in `security/README.md`.
-* `Properties.RemoteAudit.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
+* `Properties.Poub.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
   link-charged. It is PoUB's row in `security/README.md`.
 
 The area's other guarantees are `Accounting.Guarantees.X`, stated in the module named under
@@ -143,7 +144,8 @@ This module imports the area's definitions; the lock's `layers` lists what they 
 * The bandwidth audit. `Bandwidth` is its game in the random-oracle model, and `BandwidthAudit` that game as the
   bandwidth audit of a joint run. `RateAudit` and the modules named after it are the rate audit's games. `Tag` is the
   block tags, `Schedule` a deterministic schedule and `Carrier` device memory whose contents are a circuit's values.
-  `Remote` is PoUB's vocabulary: the node, its parameters, a run and its routes.
+  `Remote` is PoUB's vocabulary: the node, its parameters, a run and its routes. `Remote.DrawInstances` holds the
+  instances its sampled draw's witnesses are stated at.
 * The overhead lower bound's inputs. `Slowdown` is tasks, classes, thresholds and slowdown, and `ServingBlocks` server
   blocks and a training class's counts.
 

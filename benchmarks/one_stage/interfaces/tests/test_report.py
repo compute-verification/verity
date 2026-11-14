@@ -152,7 +152,7 @@ def test_a_report_with_an_unfilled_number_is_refused() -> None:
         D.render([_load("block-record-r2-period0")])
 
 
-def test_part_1_states_the_guarantee_the_draw_certifies() -> None:
+def test_part_1_states_the_guarantee_the_sample_certifies() -> None:
     doc = {**_proved(), "values": _planned(JOINT_LOCKED={"value": True, "source": "the lock"})}
     doc["proved"]["rows"] = [{"what": "the guarantee at δ = 1%: wrong proof blocks at most", "value": 1_367_366_590,
                               "unit": "of 3,124,276,224 proof blocks (43.77%)", "run": "r20261027-013000-abcd",
@@ -352,7 +352,7 @@ def test_m3_stays_the_fallback_until_then(kw: dict) -> None:
     assert "None: every number above met its target." not in out.split("## Visible failures")[1]
 
 
-def test_a_drawn_proof_block_with_no_verdict_line_is_a_visible_failure() -> None:
+def test_a_sampled_proof_block_with_no_verdict_line_is_a_visible_failure() -> None:
     doc = _proved()
     doc["proved"]["lines"] = [x for x in doc["proved"]["lines"] if '"block": 104' not in x]
     out = _draft([], doc)

@@ -13,7 +13,7 @@
 - **Command**: `python -m datacenter.demo`, run from this directory. There is no console script.
 - **Lean**: none. `physical` mirrors the Lean physical model, and no Lake package is here.
 - **Documents**: none. The package writes no file and defines no schema.
-- **Loads from**: `verity.circuits`, `verity.commitments`, `verity.definitions`, the registration log
+- **Loads from**: `verity.circuits`, `verity.commitments`, `verity_vllm.definitions`, the registration log
   (`verity.protocols.accounting.registration.verifier`), `verity.protocols.proofs.spot.verifier` and PoUB's `timing`
   and `codec` (`verity.protocols.accounting.poub.verifier`).
 
@@ -23,7 +23,7 @@ A datacenter as Verity accounts for it, in a small Python API: a Program, the ha
 them, the verifier's plan, a run with what the trusted devices record, the audit's claims, and the account.
 
 The accounting layer has two layers. The **logical layer** is where the cryptography happens: `logical` (a
-`verity.circuits` Program, the one circuit format the sampled proofs, PoUW's compiler and the census all read, at the
+`verity.circuits` Program, the one circuit format SPOT, PoUW's compiler and the census all read, at the
 census's grain: its root nodes, the census values they pass each other, each Call's work by kind and its ANDs, the
 credit; its evaluation, a Call at a time through `verity.circuits.evaluation`'s kernels; and the hm96-sha512
 commitments to its registered inputs, with the occupancy profiles the developer may choose from, and to a run's census

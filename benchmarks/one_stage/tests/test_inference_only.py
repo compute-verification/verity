@@ -1,18 +1,19 @@
 """`inference_only.py`: a served run's inference-only verdict, its declared circuit's blocks against the (c, k, n) it
-registered before it served, by `NciCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
-primitive, input by input; the verdict's rule is the count rule's reference (`nci_reference.check_count_detail`) on its
+registered before it served, by `InferenceOnlyCheck.Count`'s rule. `BitAtx32_v1`'s price is an explicit circuit that computes the
+primitive, input by input; the verdict's rule is the count rule's reference (`inference_only_reference.check_count_detail`) on its
 rows, and the Lean instance it makes is one on which that reference counts the verdict's gates; n is the H200's sessions
 at the declared utilization over the lease, rounded up to the grid, from the class's fixed load alone; the policy is its
-session's gates and fresh bits with every weight held, and n, under an H200 int8 serve's φ or the one ``--serve`` states,
+session's gates and fresh bits with every weight held, those by kind (a split the verdict recomputes and holds the
+policy to, and a policy written before the split is read as before), and n, under an H200 int8 serve's φ or the one ``--serve`` states,
 cut at Pearl+'s linears where it says, and a BF16 checkpoint under the int8 serve's φ is refused by name; and on toy
 serve dirs over small circuit records the verdict
 accepts within (c, k, n), refuses past each, and refuses as undecided what the rule can't decide (no policy, one written
 after the serve began unless said retroactive, a primitive with no price, a closed window with no seal, a window the
 class doesn't take), its public form naming no window and publishing no count: it judges n on the exact count, which
 only the private form holds, so runs whose counts differ publish one verdict, unless n falls between them, and then
-differ in their judgment alone. Of `nci-check --count` it takes the whole verdict, with ``--detail`` where the binary's
+differ in their judgment alone. Of `inference-only-check --count` it takes the whole verdict, with ``--detail`` where the binary's
 usage names it, into the private form alone, and publishes its gates a block, fresh bits and ``complies``, or its
-refusal, and none of its counts, total or failure. The slow test runs `nci-check --count`."""
+refusal, and none of its counts, total or failure. The slow test runs `inference-only-check --count`."""
 from __future__ import annotations
 
 import json
@@ -29,10 +30,10 @@ sys.path.insert(0, str(HERE.parent))
 
 import inference_only as IO  # noqa: E402
 import served_verdicts as SV  # noqa: E402
-from verity.definitions import boolean as BL  # noqa: E402
-from verity.definitions.registry.catalog import load  # noqa: E402
-from verity.definitions.registry.sampling import bit_at  # noqa: E402
-from verity.commitments.windows import interface as IF  # noqa: E402
+from verity_vllm.definitions import boolean as BL  # noqa: E402
+from verity_vllm.definitions.registry.catalog import load  # noqa: E402
+from verity_vllm.definitions.registry.sampling import bit_at  # noqa: E402
+from verity.commitments.periods import interface as IF  # noqa: E402
 from verity_vllm.program.predict import block_counts as BC  # noqa: E402
 
 GEMM = 'Gemm_v2{K=64,N=8,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
@@ -60,6 +61,27 @@ def small() -> dict:
     circuit = IF.Circuit("test/blocks", ((_fn(GEMM), 4), (_fn(ROPE), 6)),
                          blocks=IF.Blocks(slots=2, steps=3, inference=entries))
     return IF.descriptor_record(circuit, 1)
+
+
+@pytest.fixture(scope="module")
+def kinded() -> dict:
+    """Two slots of two `GEMM` units whose ``x`` rows are the scan state row's and ``w`` rows a cut linear's y, each a
+    registered read of a parameter no pin holds: a block's 18,432 fresh bits, 2,048 of the scan state and 16,384 of
+    the linears' outputs."""
+    from verity_vllm.program.predict.scan_state import SCAN_STATE
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.window import y_value
+
+    fn = _fn(GEMM)
+    gid, rows = IF.descriptor_id(fn), dict(IF.layout(fn).rows)
+    reads = (IF.Read(gid, "x", SCAN_STATE, 0, (4,), 0, (rows["x"],)), IF.Read(gid, "w", y_value(0, 0), 0, (4,), 0, (rows["w"],)))
+    reg = IF.Registered({SCAN_STATE: 4 * rows["x"], y_value(0, 0): 4 * rows["w"]}, reads=reads)
+    entries = (IF.InferenceEntry(GEMM, 0, (2, 2), ("slot", "-"), 0),)
+    return IF.descriptor_record(IF.Circuit("test/kinded", ((fn, 4),), registered=reg,
+                                           blocks=IF.Blocks(slots=2, steps=1, inference=entries)), 1)
+
+
+#: `kinded`'s fresh bits a block by kind
+KINDED = {"linears": 16_384, "scan_state": 2_048}
 
 
 @pytest.fixture(scope="module")
@@ -142,17 +164,22 @@ def test_n_is_the_cards_sessions_over_the_lease_on_the_grid():
             IO.capacity(*bad)
 
 
-def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_and_n(small, monkeypatch):
+def test_the_policy_is_the_sessions_gates_and_fresh_bits_with_the_weights_held_and_n(kinded, small, monkeypatch):
     """The policy's c and k are its session's gates and fresh bits with every weight parameter held (and nothing else:
-    a scan state's row stays fresh), its n `capacity` of the class's session work, each input to n with its source, and
-    the time it was written as given."""
+    a scan state's row stays fresh), k by kind as the same count splits it, its n `capacity` of the class's session
+    work, each input to n with its source, and the time it was written as given. A class with fresh bits of no kind
+    writes no policy."""
     assert IO.weight_pins(["weights/a@4", "weights/a@4/table", "scan_state/s@1", "weightsx/b@2"]) == \
         {"weights/a@4": "00", "weights/a@4/table": "00"}
-    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (small, ["scan_state/s@1"]))
+    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (kinded, ["scan_state/s@1"]))
     pol = IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
-    row = IO.session_row(small, {}, {})
+    row = IO.session_row(kinded, {}, {})
     work = IO.session_work(IO.window_class("2,2,2"), MODEL)
     assert (pol["c"], pol["k"], pol["n"]) == (row["gates"], row["fresh"], IO.capacity(work["theta_macs"], 60, Fraction(1, 4))["n"])
+    assert pol["k_by_kind"] == row["k_by_kind"] == KINDED and sum(KINDED.values()) == pol["k"]
+    monkeypatch.setattr(IO, "class_doc", lambda serve, cls, scheme=None: (small, []))
+    with pytest.raises(ValueError, match="a fresh bit of no kind of linears, scan_state"):
+        IO.policy("2,2,2", MODEL, "rev", 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
     assert pol["written_utc"] == BEFORE and pol["session"]["definition"] == row["definition"] and pol["tree"] == "abc"
     assert pol["class"] == {"slots": 2, "prompt": 2, "outputs": 2, "positions": 3} and pol["serve"]["model"] == MODEL
     i = pol["n_inputs"]
@@ -170,7 +197,7 @@ def _stated(**over) -> dict:
                                   "default_seed": DEFAULT_SEED, **over}))
 
 
-def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(small, monkeypatch, tmp_path):
+def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(kinded, monkeypatch, tmp_path):
     """With φ stated (``--serve``: serve-phi's statement of the serve.json a serve will write, or a serve.json, its
     execution under its engine), the policy's session is the class's circuit under that φ, cut at a PoUW scheme's
     linears where ``--pearl-tables`` names one, and the policy records both; a statement of another model or revision
@@ -179,7 +206,7 @@ def test_a_policy_on_a_stated_phi_is_that_phis_circuit_cut_where_it_says(small, 
 
     def doc(serve, cls, scheme=None):
         seen.append((serve, scheme))
-        return small, []
+        return kinded, []
 
     monkeypatch.setattr(IO, "class_doc", doc)
     args = ("2,2,2", *BF16, 60, Fraction(1, 4), "the declared share", BEFORE, "abc")
@@ -260,6 +287,43 @@ def test_a_run_within_its_policy_is_accepted_and_its_public_form_holds_no_count(
         3, [[row["definition"], row["gates"], row["fresh"], 6]], 6, {})
     assert IO.line(pub).startswith("accept: session ") and IO.line(pub).endswith(
         "n 6 (no count published: n is judged on the blocks' exact count, held on the node)")
+
+
+@pytest.mark.parametrize(("split", "why"), [
+    (None, None),
+    (KINDED, None),
+    ({"linears": 16_383, "scan_state": 2_049}, "is not the run's circuit's"),
+    ({"linears": 16_384, "scan_state": 2_047}, "doesn't sum to its k = 18432"),
+])
+def test_a_policys_k_by_kind_is_the_run_circuits_and_sums_to_its_k(kinded, tmp_path, split, why):
+    """The verdict recomputes the run's circuit's k by kind and accepts a policy whose ``k_by_kind`` is that and sums to
+    its k, or that has none, as a policy written before the key; a split that is another, or doesn't sum to k, is
+    refused."""
+    row = IO.session_row(kinded, None, None)
+    assert row["k_by_kind"] == KINDED and row["fresh"] == 18_432
+    pol = _policy(row) if split is None else _policy(row, k_by_kind=split)
+    pub, _ = IO.verdict(pol, kinded, _serve(tmp_path / "s", FULL), None, None)
+    if why is None:
+        assert (pub["verdict"], pub["complies"]) == ("accept", True)
+    else:
+        assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ") and why in pub["reason"]
+
+
+@pytest.mark.parametrize("split", [
+    {"linears": "16384", "scan_state": 2_048},
+    {"linears": 16_384.0, "scan_state": 2_048},
+    {"linears": 16_384, "scan_state": True},
+    {"linears": [16_384], "scan_state": 2_048},
+    {**KINDED, "salt": 0},
+    [16_384, 2_048],
+])
+def test_a_policys_k_by_kind_holds_only_its_kinds_each_an_int(kinded, tmp_path, split):
+    """A split whose keys are not of `KINDS`, or a value that is not an integer (a string of digits, a float, a bool, a
+    list), or that is no object, is refused as undecided, saying so, before any sum."""
+    row = IO.session_row(kinded, None, None)
+    pub, _ = IO.verdict(_policy(row, k_by_kind=split), kinded, _serve(tmp_path / "s", FULL), None, None)
+    assert pub["verdict"] == "refuse" and pub["reason"].startswith("undecided: the policy's k_by_kind ")
+    assert "is not an object of linears, scan_state, each an integer of bits" in pub["reason"]
 
 
 @pytest.mark.parametrize(("over", "why"), [
@@ -347,7 +411,7 @@ def test_a_policy_written_after_the_serve_began_is_read_only_when_said_retroacti
 
 
 def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(small, tmp_path, capsys):
-    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `nci-check --count --detail`'s
+    """`verdict` writes the public verdict to --out and the full one, 0600, to --private, `inference-only-check --count --detail`'s
     whole verdict in the private one alone, and prints the public line."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
@@ -355,7 +419,7 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
     (tmp_path / "circuit.json").write_text(json.dumps(small))
     (tmp_path / "registration.json").write_text(json.dumps({}))
     (d / "private").mkdir(mode=0o700)
-    lean = _nci_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
+    lean = _inference_only_check(tmp_path / "lean", NEW_USAGE, {"complies": False}, _whole(row))
     assert IO.main(["verdict", "--policy", str(tmp_path / "policy.json"), "--serve-run", str(d), "--circuit",
                     str(tmp_path / "circuit.json"), "--registration", str(tmp_path / "registration.json"), "--pins",
                     str(tmp_path / "no-weights.json"), "--lean", str(lean), "--out", str(tmp_path / "out" / "inference-only.json"),
@@ -373,37 +437,37 @@ def test_the_command_line_writes_the_public_verdict_and_the_private_one_0600(sma
 
 
 def test_lean_counts_refusal_is_said_not_judged(small, tmp_path):
-    """An `nci-check` that exits non-zero or prints no JSON object gives no Lean count, which the verdict says beside its
+    """An `inference-only-check` that exits non-zero or prints no JSON object gives no Lean count, which the verdict says beside its
     own; what it printed stays in the private verdict."""
     row = IO.session_row(small, None, None)
     d = _serve(tmp_path / "s", FULL)
     for body, why, said in (("echo no >&2; exit 2", "exit 2", "no"), ("echo hello", "printed no JSON object", "hello"),
                             ("echo '[7, 9]'", "printed no JSON object", "[7, 9]")):
-        exe = tmp_path / "nci-check"
+        exe = tmp_path / "inference-only-check"
         exe.write_text(f"#!/bin/sh\n{body}\n")
         exe.chmod(0o755)
         pub, full = IO.verdict(_policy(row), small, d, None, None, lean=exe, scratch=tmp_path)
-        assert pub["verdict"] == "accept" and pub["lean"] == {"error": f"nci-check --count {why}"}
-        assert full["lean_detail"] == {"flags": ["--count"], "error": f"nci-check --count {why}", "said": said}
+        assert pub["verdict"] == "accept" and pub["lean"] == {"error": f"inference-only-check --count {why}"}
+        assert full["lean_detail"] == {"flags": ["--count"], "error": f"inference-only-check --count {why}", "said": said}
         assert list(tmp_path.glob("tmp*.json")) == []
 
 
-#: `nci-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
-OLD_USAGE = "usage: nci-check [--unrolled] INSTANCE TRUSTED | nci-check --policy [--unrolled] INSTANCE | nci-check --count INSTANCE"
+#: `inference-only-check`'s usage while ``--count`` printed its whole verdict, and once it prints that only with ``--detail``
+OLD_USAGE = "usage: inference-only-check [--unrolled] INSTANCE TRUSTED | inference-only-check --policy [--unrolled] INSTANCE | inference-only-check --count INSTANCE"
 NEW_USAGE = OLD_USAGE.replace("--count INSTANCE", "--count [--detail] INSTANCE")
 #: a count of blocks no other number in the verdict holds
 COUNT = 987654321
 
 
-def _nci_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
-    """A stand-in `nci-check` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
+def _inference_only_check(where: Path, usage: str, count: dict, detail: dict | None) -> Path:
+    """A stand-in `inference-only-check` that answers as the built one does: ``--count INSTANCE`` prints ``count``, ``--count --detail
     INSTANCE`` prints ``detail`` where it has one, and anything else gets ``usage``, exit 2. It logs each call's
     arguments to ``args.log`` beside it."""
     where.mkdir(parents=True)
     (where / "count.json").write_text(json.dumps(count))
     if detail is not None:
         (where / "detail.json").write_text(json.dumps(detail))
-    exe = where / "nci-check"
+    exe = where / "inference-only-check"
     exe.write_text(f"""#!/bin/sh
 echo "$*" >> '{where}/args.log'
 if [ "$1" = --count ] && [ $# -eq 2 ]; then cat '{where}/count.json'; exit 0; fi
@@ -416,7 +480,7 @@ exit 2
 
 
 def _whole(row: dict) -> dict:
-    """`NciCheck.Count`'s whole verdict on the session Program with θ empty: its row's fresh bits past k, and a count."""
+    """`InferenceOnlyCheck.Count`'s whole verdict on the session Program with θ empty: its row's fresh bits past k, and a count."""
     return {"blocks": [[row["key"], row["gates"], row["fresh"] + 5, COUNT]], "total": COUNT, "complies": False,
             "failure": [0, "fresh"]}
 
@@ -425,57 +489,57 @@ def _whole(row: dict) -> dict:
     (OLD_USAGE, None, ["--count"]),
     (NEW_USAGE, {"complies": False}, ["--count", "--detail"]),
 ], ids=["count-prints-all", "detail-prints-all"])
-def test_the_record_takes_nci_checks_gates_fresh_bits_and_verdict_and_none_of_its_counts(small, tmp_path, usage, public,
+def test_the_record_takes_inference_only_checks_gates_fresh_bits_and_verdict_and_none_of_its_counts(small, tmp_path, usage, public,
                                                                                          flags):
-    """An `nci-check` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
+    """An `inference-only-check` whose ``--count`` prints its whole verdict, and one that prints only ``{complies}`` unless given
     ``--detail``, which its usage names: each is called for its whole verdict, rows, total and failure, which the private
     verdict keeps whole, and the public verdict and its line take only its gates a block, whether they agree, and with θ
     empty its fresh bits and ``complies``, and none of its counts."""
     row = IO.session_row(small, None, None)
-    exe = _nci_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
+    exe = _inference_only_check(tmp_path / "lean", usage, public or _whole(row), _whole(row) if public else None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"] == {
         "gates": row["gates"], "agrees_on_gates": True, "with_theta_empty": {"fresh": row["fresh"] + 5, "complies": False}}
     assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub) and "lean_detail" not in pub
-    assert IO.line(pub).endswith(f"; nci-check --count: {row['gates']} gates a block (agrees)")
+    assert IO.line(pub).endswith(f"; inference-only-check --count: {row['gates']} gates a block (agrees)")
     assert full["lean_detail"] == {"flags": flags, "out": _whole(row)}
     calls = (tmp_path / "lean" / "args.log").read_text().splitlines()
     assert calls[0] == "" and len(calls) == 2 and calls[1].startswith(" ".join(flags) + " " + str(tmp_path))
 
 
 def test_a_binary_whose_usage_hides_detail_gives_no_rows_which_is_said(small, tmp_path):
-    """An `nci-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
+    """An `inference-only-check` that prints only ``{complies}`` for ``--count`` and whose usage names no ``--detail`` gives no row
     of the block: the verdict says so beside its own, and takes nothing from it."""
     row = IO.session_row(small, None, None)
-    exe = _nci_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
+    exe = _inference_only_check(tmp_path / "lean", OLD_USAGE, {"complies": False}, _whole(row))
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "accept" and pub["lean"] == {"error": "nci-check --count printed no row of the block"}
+    assert pub["verdict"] == "accept" and pub["lean"] == {"error": "inference-only-check --count printed no row of the block"}
     assert full["lean_detail"] == {"flags": ["--count"], "out": {"complies": False}}
 
 
 @pytest.mark.parametrize(("usage", "flags"), [(OLD_USAGE, ["--count"]), (NEW_USAGE, ["--count", "--detail"])],
                          ids=["count-prints-all", "detail-prints-all"])
-def test_an_nci_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
-    """`nci-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, the
+def test_an_inference_only_check_refusal_lands_in_lean_with_its_code_and_message_alone(small, tmp_path, usage, flags):
+    """`inference-only-check`'s refusal, with or without ``--detail``, lands in ``lean`` as its ``error`` and ``message``, the
     verdict accepting beside it; anything else it carries, a count here, stays in the private verdict."""
     row = IO.session_row(small, None, None)
     refusal = {"error": "program", "message": "E_REINTERPRET: a reference reads a leaf at another width"}
     said = {**refusal, "blocks": [[row["key"], row["gates"], row["fresh"], COUNT]], "total": COUNT}
-    exe = _nci_check(tmp_path / "lean", usage, said, said)
+    exe = _inference_only_check(tmp_path / "lean", usage, said, said)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
-    assert pub["verdict"] == "accept" and pub["lean"] == refusal and IO.line(pub).endswith("; nci-check --count: program")
+    assert pub["verdict"] == "accept" and pub["lean"] == refusal and IO.line(pub).endswith("; inference-only-check --count: program")
     assert str(COUNT) not in json.dumps(pub) and str(COUNT) not in IO.line(pub)
     assert full["lean_detail"] == {"flags": flags, "out": said}
 
 
 @pytest.mark.slow
-def test_nci_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
-    """The compiled `nci-check --count` on `small`'s session Program counts the verdict's gates a block: the Lean the
+def test_inference_only_check_counts_the_verdicts_gates_on_the_session_program(small, tmp_path):
+    """The compiled `inference-only-check --count` on `small`'s session Program counts the verdict's gates a block: the Lean the
     verdict runs beside its own count reads the instance it is given, as only the built executable can show (the
-    reference test holds the instance to the Python count, and `nci-count-difftest` the Lean to the reference)."""
+    reference test holds the instance to the Python count, and `inference-only-count-difftest` the Lean to the reference)."""
     import served_cases as SC
 
-    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "nci-check")
+    exe = SC.build(SC.INFERENCE_ONLY_LEAN[0], "inference-only-check")
     row = IO.session_row(small, None, None)
     pub, full = IO.verdict(_policy(row), small, _serve(tmp_path / "s", FULL), None, None, lean=exe, scratch=tmp_path)
     assert pub["verdict"] == "accept" and pub["lean"]["agrees_on_gates"] is True and pub["lean"]["gates"] == row["gates"]

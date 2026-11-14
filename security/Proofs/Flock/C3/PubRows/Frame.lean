@@ -176,7 +176,7 @@ theorem holoSteps_iff_framed (e : ExecHolo) (l : List Step) :
   ⟨framed_of_holoSteps, holoSteps_of_framed⟩
 
 variable {nT r : ℕ} {T : Fin nT → Type} {CT : Fin r → Type} [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
-  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : Law n} {Reg Cm Reg' Reg₂ : Type}
+  {st : Flock.Stmt} {hp : HoloParams} {xR : HoloReg GF128 Dig} {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg' Reg₂ : Type}
 
 /-- **(n1) The inner transcript's steps are framed around the decoded stages**, at every accepted outcome: V*'s layers
 hold the cap first, then the link points, and after the stages only the openings. An obligation on the family's

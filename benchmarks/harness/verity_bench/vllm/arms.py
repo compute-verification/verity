@@ -137,6 +137,7 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
 
     if not arm.protocols:
         return ()
+    from verity.errors import Refused
     from verity_vllm import protocols as PO
 
     ctx = PO.Context(stage="serve", enabled=arm.protocols, world=world)
@@ -145,7 +146,7 @@ def build_bound(arm: Arm, world: int = 1) -> tuple[str, ...]:
         try:
             if PO.requires_build(entry, ctx):
                 bound.append(entry)
-        except PO.Refused as e:
+        except Refused as e:
             log.info("arm %r: protocol entry %r refused (%s), so it binds no Build here; the engine's build refuses it",
                      arm.id, entry, e)
     return tuple(bound)
@@ -195,9 +196,9 @@ def protocols_config(arm: Arm, environ: Mapping[str, str]) -> dict[str, dict[str
     config = {p: {k: expand(v, f"{p}.{k}") for k, v in s.items()} for p, s in (arm.protocols_config or {}).items()}
     if is_h1(arm) or not any(e.partition(":")[0] == "pouw" for e in arm.protocols):
         return config
-    from verity_vllm.protocols import pouw
+    from verity_vllm.protocols.pouw import challenged
 
-    return pouw.challenged(config, arm.protocols)
+    return challenged(config, arm.protocols)
 
 
 def is_h1(arm: Arm) -> bool:

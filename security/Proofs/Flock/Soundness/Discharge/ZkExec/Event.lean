@@ -6,9 +6,9 @@ import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Real
 
 /-!
-# flock-verify's `--zk` acceptance, as an event of the audit
+# verity-verify-proof's `--zk` acceptance, as an event of the audit
 
-`flock-verify verify --zk` (`Main.verifyCmd` with `--zk`, live/PROTOCOL.md, `Flock.Zk`) checks a
+`verity-verify-proof verify --zk` (`Main.verifyCmd` with `--zk`, live/PROTOCOL.md, `Flock.Zk`) checks a
 `flock-circuit --zk` session directory. It reads the same flags as a plain `verify` (`Exec.Inputs`) and differs in four
 places, all of which this file restates:
 
@@ -48,7 +48,7 @@ def zkTags (I : Inputs) : Flock.Tags :=
 /-- `I` as `verify --zk` sets the session up: `--zk`'s tags and coins in place of `--statement`'s and `--coins`'. -/
 def zkInputs (I : Inputs) : Inputs := { I with tags := zkTags I, coins := zkCoins I }
 
-/-- **flock-verify accepts the `--zk` transcript**: the session's statement sets up from `zkInputs I` and the record's
+/-- **verity-verify-proof accepts the `--zk` transcript**: the session's statement sets up from `zkInputs I` and the record's
 sample, every table passes `Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
 def AcceptsZK (I : Inputs) (t : Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
@@ -56,7 +56,7 @@ def AcceptsZK (I : Inputs) (t : Transcript) : Prop :=
 
 variable {n : ℕ} {Reg : Type}
 
-/-- flock-verify `--zk` accepts the live audit's transcript. -/
+/-- verity-verify-proof `--zk` accepts the live audit's transcript. -/
 def LiveAcceptsZK (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop := AcceptsZK I o.2.2
 
 /-! ## The `--zk` tags change only the identity -/

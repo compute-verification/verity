@@ -94,7 +94,7 @@ PROTOCOL_ID = "p2/v4"
 SEED_DOMAIN = b"verity/pous/p2/seed/v1"
 
 P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "random-oracle", "perfect-isolation",
-             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-host")
+             "cr/sha-512", "live-verifier", "designated-verifier", "trusted-device")
 """What P2's certificate rests on:
 - abstract M1 (the proof's model);
 - the SMS-to-M1 instantiation (not accepted);
@@ -105,7 +105,7 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
   held plus the help it received, and nothing attests the developer's machine;
 - SHA-512 collision resistance for the commitment to W and for `vk`;
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
-  that the developer doesn't control and nothing attests (core's `trusted-host`)."""
+  that the developer doesn't control and nothing attests (core's `trusted-device`)."""
 
 WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
@@ -153,6 +153,19 @@ RTT_ALLOWANCE_CAP_NS = 354_000
 """The cap on the measured RTT allowance: the largest whole µs with `Δ + cap < ROOT_CALL_NS`, so `Δ + RTT ≤ 854 µs`.
 The certificate refuses every whole µs past it, and the verifier any RTT past it or any Δ but `DELTA_NS`
 (`P2.deadline_refusals`), which the certificate's sum alone admits up to `ROOT_CALL_NS − 1`."""
+
+CAPACITY_KEYS = ("root_call_ns",)
+
+
+def capacities(j: object) -> int:
+    """The capacity a P2 run's verifier is handed, `{root_call_ns}`: half the fastest root on the allowed hardware, which
+    the certificate publishes as its `call_ns`.  The certificate is proved at `ROOT_CALL_NS` alone, so any other value
+    is refused, as is any other key set."""
+    if type(j) is not dict or sorted(j) != list(CAPACITY_KEYS):
+        raise ValueError(f"P2's capacities are an object of exactly {', '.join(CAPACITY_KEYS)}")
+    if type(j["root_call_ns"]) is not int or j["root_call_ns"] != ROOT_CALL_NS:
+        raise ValueError(f"root_call_ns is {j['root_call_ns']!r}; P2's certificate is proved at {ROOT_CALL_NS} ns alone")
+    return j["root_call_ns"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -520,8 +533,10 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
     """`Pous.SecurityProofs.ObligationWide320` for a v4 store at the registered width and prime of any block count in
     `CERT_WIDE_BLOCKS`, in any number of segments: a window of `CERT_K_WIDE320` reads at the store's snapshot, the state
     at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, read at `N` = the store's
-    blocks, under `WIDE_CLAIMS`. `delta` is `2^-20 − 2^-128`, so that `delta + 2^eps_log2` is the statement's `2^-20`.
-    The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
+    blocks, under `WIDE_CLAIMS`, at uniform indices.  `delta` is that `2^-20`, the theorem's whole bound.  `2^eps_log2`
+    is `2^-127`, the advantage of `prf/sha-512` for the memory challenger's SHA-512 indices, assumed at that figure:
+    `Hash.Assumptions.Sha512Prf` takes the advantage as a parameter, which no model fixes, and the theorem doesn't read
+    it.  The run protocol doesn't take it (`period.certificate`, `PousCheck.RunProtocol.certificate`)."""
     lo, hi = CERT_WIDE_BLOCKS
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
@@ -530,8 +545,8 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
                          segments=None, claims=WIDE320_CLAIMS)
 
 
-__all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
+__all__ = ["CAPACITY_KEYS", "CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
            "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "WIDE320_CLAIMS", "P2", "P2ChaCha", "P2Params",
-           "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
+           "below", "block_keys", "capacities", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
            "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
            "wide_certificate"]

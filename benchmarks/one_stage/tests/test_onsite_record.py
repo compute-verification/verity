@@ -14,7 +14,7 @@ discharge, taking no assumption but a standing one, and otherwise charges ℓ_a 
 phase, ℓ_a the cap of the run's published advice registration (no figure where it published none, and an error where an
 audit's own registration binds an advice), with what is open named and no tighter figure beside it. A tied audit
 drawn in part charges its slot entries in k_{skip,j}; each cell states its share of the schedule's egress capacity,
-and the served egress is missing. Sampled proofs' coins are live only where
+and the served egress is missing. SPOT's coins are live only where
 every COINS line names the live challenger at a named peer, and the network certifier's chain draws only where each
 takes everything; otherwise, or with none, live-coins is open by name (each chain draw by its own), the figure of
 record charges ℓ_a + 1 for each tied audit whatever else holds, and it and its cells are conditional on the coins, and
@@ -24,15 +24,15 @@ at its pinned statement taking hA, hr and hkey as auditor-record and the run's c
 its certifier-key record's key, LMS parameters and session are the period's, and its registration, which checks,
 holds that key for a network certifier its log places. Where a circuit file the period lists isn't the one V3c's
 published period names, or the scan's files are listed, an accepted network verdict is not established and there is
-no bound; so it is, and the composite of record's verdict too, where a file remote's sampled proofs case registers
+no bound; so it is, and the composite of record's verdict too, where a file remote's SPOT case registers
 isn't, by SHA-512, the one its params name, or its public file the one V3c's audit pinned at staging, before the draw,
-and where those params name no public file, sampled proofs' verdict is not established. Where V3c's audit's window
+and where those params name no public file, SPOT's verdict is not established. Where V3c's audit's window
 commits the scan's state in its activations, the network verdict and the composite of record's stand only where its
 registered reads opened that state at the entry's value, root and domain (its published summary's registered.own), the
 audit accepted and its record reported each member's reads; otherwise, its evidence missing included, neither is
 established and there is no bound. The figure of record says which charge K applied each tied audit: stateFree only
 where the lock holds RowsStateHeld at its pinned statement over stateHeldIn and auditStateEntries, else free, with no
-figure where it is free and a tied audit states its circuit record. Sampled proofs credits only the drawn members whose
+figure where it is free and a tied audit states its circuit record. SPOT credits only the drawn members whose
 --registered files its audit completed and whose Lean verdicts reported exactly their reads, naming each other member
 as not credited. PoUW's freed compute is never credited or claimed, whatever its row states, and neither is one
 program a day, each open by name beside what the run's lines say. The run's `publish` leaves the record as written.
@@ -41,8 +41,8 @@ credited, PoUW's verdict aside: the record claims nothing of it, and lists it as
 the network certifier's composite without PoUW, that is the composite of record, named by its id: the run is of record
 over its verdict and its subprotocols', remote's aside too, its error has no PoUW term, and no verified compute is
 credited.
-Sampled proofs' guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for
-each monitoring period's node, datacenter and world with its share of their proof blocks, the line stating both; a law
+SPOT's guarantee is its window's ε at δ beside its pooled count over any number of windows, and that count for
+each monitoring period's node, datacenter and world with its share of their proof blocks, the line stating both; a sampling_design
 other than a k-subset has no pooled figure, a draw of several members is named refused, and an answer not accepted
 states none. Its caller's serving settings, S and MAX_TOKENS, both or neither, label the record and its line, missing
 where it states none; runs' records at two settings go beside each other, each run's figures labelled with its own
@@ -135,7 +135,7 @@ def site_registration(held: str = CERT_KEY["public"], placed: str | None = None,
 
 
 def auditor_args(out: Path) -> dict[str, Path]:
-    """The auditor's inputs `served_out` writes beside ``out``, and remote's sampled proofs case under the serve dir
+    """The auditor's inputs `served_out` writes beside ``out``, and remote's SPOT case under the serve dir
     beside it with V3c's audit's pin of its public files, as `OR.record` takes them."""
     return {"certifier_key": out.parent / "auditor" / "certifier-key.json",
             "site_registration": out.parent / "auditor" / "site-registration.json",
@@ -143,7 +143,7 @@ def auditor_args(out: Path) -> dict[str, Path]:
             "public_pin": out.parent / "serve" / "v3c" / "audit" / "window" / "public-pin.json"}
 
 
-#: the circuit and public files remote's sampled proofs case registers, its first two blobs (`proofs.evidence_v2`), the
+#: the circuit and public files remote's SPOT case registers, its first two blobs (`proofs.evidence_v2`), the
 #: public file, which the evidence names, a header line and its body
 FILES_REGISTERED = (b"toy circuit\n", b"toy public header\ntoy public body")
 
@@ -165,7 +165,7 @@ def registration_of(pin: dict) -> str:
 
 
 def sampled_case(out: Path, proofs: dict | None = None, public: str | None = None, member: str | None = None) -> Path:
-    """Remote's sampled proofs case beside ``out`` (`auditor_args`), as `served_cases.sampled_case` writes one: its blobs
+    """Remote's SPOT case beside ``out`` (`auditor_args`), as `served_cases.sampled_case` writes one: its blobs
     `FILES_REGISTERED` and a session's file, its params θ naming ``proofs`` (the one statement's circuit file by SHA-512
     unless given; with ``member``, that member's under proofs.members), its commitment the registration holding the leaf
     layer of a5's pin of the public file at staging, written beside it (`pin_of`), and its evidence naming the
@@ -286,7 +286,7 @@ def lock(tmp_path_factory, monkeypatch) -> Path:
 
 def answer(public: dict | None, verdict: str = "accept") -> dict:
     return {"protocol": OR.NETWORK, "verdict": verdict, "reason": None, "commitment": "ab" * 64, "public": public,
-            "profile": {"link": "served", "windows": 1, "placement": {"trusted-host": "the certifier on the gate's host"}}}
+            "profile": {"link": "served", "windows": 1, "placement": {"trusted-device": "the certifier on the gate's host"}}}
 
 
 def network_row(public: dict | None) -> dict:
@@ -305,10 +305,10 @@ def coins_line(said: str, lead: str = "") -> str:
             "vy-auditor-2's bw_party, inside PoUS's piece")
 
 
-#: sampled proofs' one drawn member, and its audit's published record (`served_integrity.public_copy`) crediting it:
+#: SPOT's one drawn member, and its audit's published record (`served_integrity.public_copy`) crediting it:
 #: its --registered file completed and its Lean verdict of record reporting exactly its reads
 MEMBER = "ToyGemm"
-#: sampled proofs' window, N proof blocks, and its profile's δ
+#: SPOT's window, N proof blocks, and its profile's δ
 N, DELTA = 16, Fraction(1, 2 ** 40)
 #: the run of record's draw, one member (subset:1), and a member of each of two templates' strata (stratified:1)
 SUBSET1 = {"law": "subset", "k": 1, "units": [3]}
@@ -317,7 +317,7 @@ STRATIFIED1 = {"law": "stratified", "k": 2, "units": [3, 12],
 
 
 def integrity_answer(draw: dict, bound: int) -> dict:
-    """Sampled proofs' accepted answer as `served_integrity.answer` writes it: its audit's profile under ``draw`` over
+    """SPOT's accepted answer as `served_integrity.answer` writes it: its audit's profile under ``draw`` over
     N proof blocks at DELTA, and ``bound`` incorrect proof blocks there."""
     profile = A.profile({"population": N, "partition": "toy", "program": "ab" * 64}, draw, float(DELTA)).to_json()
     return {"protocol": "verity/sampled-proofs/one-stage/v1", "verdict": "accept", "reason": None, "commitment": "ab" * 64,
@@ -338,14 +338,14 @@ def audit_record(completed: tuple[str, ...] = (MEMBER,), reported: dict[str, boo
 
 AUDITED = audit_record()
 CREDITED = {"credited": [MEMBER], "not_credited": {}, "from": str(OR.AUDIT), "is": OR.CREDIT}
-#: the credit of sampled proofs where its verdict is not established: none
+#: the credit of SPOT where its verdict is not established: none
 UNESTABLISHED = {"credited": [], "missing": OR.UNESTABLISHED_CREDIT, "is": OR.CREDIT}
 
 
 def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None = None, case: dict | None = None,
                composites: dict[str, dict] | None = None, coins: str | None = GATE,
                audit: dict | None = AUDITED, draw: dict = SUBSET1, bound: int = N - 1) -> Path:
-    """A toy $OUT: sampled proofs accepted under ``draw`` with ``bound`` (`integrity_answer`), its audit's record
+    """A toy $OUT: SPOT accepted under ``draw`` with ``bound`` (`integrity_answer`), its audit's record
     ``audit`` (none where None), PoUW and the network certifier missing unless given, the given composites and
     certifier case, and its COINS line, its sampled-proofs part ``coins`` (none where None); and beside it the auditor's
     inputs (`auditor_files`)."""
@@ -375,8 +375,8 @@ def served_out(tmp_path: Path, *, network: dict | None = None, work: dict | None
 
 
 def chain_report(n2: str = "all", scan: str = "all") -> dict:
-    """The network certifier's published chain report (`certifier_piece.PUBLIC`), its draws at these laws."""
-    return {"steps": {s: {"eps_at_delta": {"law": law, "eps": "0"}} for s, law in (("n2", n2), ("scan", scan))}}
+    """The network certifier's published chain report (`certifier_piece.PUBLIC`), its draws at these sampling_designs."""
+    return {"steps": {s: {"eps_at_delta": {"law": sampling_design, "eps": "0"}} for s, sampling_design in (("n2", n2), ("scan", scan))}}
 
 
 #: the chain report whose draws each take everything, and the record's chain draws read from it
@@ -409,7 +409,7 @@ def composed(out: Path, f: Path | None = None) -> str:
 
 
 def sampled_stated(out: Path) -> dict[str, str]:
-    """What a composite states of remote's sampled proofs case beside OUT (`sampled_case`): its params' SHA-512 and its
+    """What a composite states of remote's SPOT case beside OUT (`sampled_case`): its params' SHA-512 and its
     commitment, "00" where there is none."""
     f = auditor_args(out)["sampled_case"]
     return {"params_sha512": composed(out, f),
@@ -420,7 +420,7 @@ def with_composite(out: Path, name: str, product: str, ids: tuple[str, ...], ver
                    missing: tuple[str, ...] = (), inference_only: str = "accept") -> Path:
     """``out`` with ``product``'s composite.json in composite/NAME: a case of each of ``ids`` but those ``missing``,
     which it names, inference-only's answering ``inference_only`` and each other accepting, the network certifier's
-    with the params of OUT's case and remote's sampled proofs' with the params and commitment of its case beside OUT
+    with the params of OUT's case and remote's SPOT's with the params and commitment of its case beside OUT
     (`composed`, `sampled_case`), and Lean's ``verdict``."""
     stated = {OR.NETWORK: {"params_sha512": composed(out), "commitment": "00"}, SAMPLED_V1: sampled_stated(out)}
     cases = [{"id": i, "verdict": inference_only if i == OR.INFERENCE_ONLY else "accept"}
@@ -441,7 +441,7 @@ def remote_composite(verdict: str = "accept") -> dict:
 
 def with_onsite(out: Path, sampled: str = "accept") -> Path:
     """``out`` with onsite's composite, accepting, its network certifier's case the params of OUT's (`composed`) and
-    remote's sampled proofs case, answering ``sampled``, the params and commitment of the case beside OUT
+    remote's SPOT case, answering ``sampled``, the params and commitment of the case beside OUT
     (`sampled_stated`)."""
     cases = [c for c in remote_composite()["cases"] if c["id"] != "verity/sampled-proofs/one-stage/v1"] + [
         {"id": SAMPLED_V1, "verdict": sampled} | sampled_stated(out),
@@ -547,7 +547,7 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
-    assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
+    assert rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
@@ -642,9 +642,9 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
     assert all(x in OR.PREMISES["padding-out-of-free"]["is"] for x in ("refuses a tied audit whose units read into",
                                                                        "a column no unit reads", "`TIGHT`"))
     wrong = OR.PREMISES["wrong-bounds"]["is"]
-    assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.lawOver n",
+    assert all(x in wrong for x in ("RegMatches", "`sampled-leg-bridge`", "v.law is g.rule.samplingDesignOver n",
                                     "Draw.sameLaw", "jeq a (toJson n) → nat? a = some n"))
-    assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-host",
+    assert all(x in OR.PREMISES[OR.CERTIFIER_KEY]["is"] for x in ("certifier-key/v1", "beside trusted-device",
                                                                  "`NOT_ESTABLISHED`", "`UNCHARGED`", "hA, hr and hkey"))
     assert all(x in OR.CHECKED[OR.AUDITOR_RECORD] for x in ("never the prover's node or its deployment.json",
                                                             "an obligation on the auditor's configuration"))
@@ -653,12 +653,12 @@ def test_with_no_discharge_in_the_lock_every_premise_is_open_by_name_though_both
 @pytest.mark.parametrize("given, open_", [
     ({}, []),
     ({"Properties.NetworkPeriod.rowsHeld": ["NetTiming.Assumptions.SampledCodeRuns"]}, ["held-performed"]),
-    ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedHost"]}, []),
+    ({"Properties.NetworkPeriod.rowsHeld": ["Verity.Assumptions.TrustedDevice"]}, []),
     ({COUNTED: None}, ["free-count"]),
     ({COVERED: None}, ["schedules-covered"]),
-    ({COVERED: ["Verity.Assumptions.TrustedHost"]}, []),
+    ({COVERED: ["Verity.Assumptions.TrustedDevice"]}, []),
     ({ACCEPTED: ["NetTiming.Assumptions.SampledCodeRuns"]}, ["NetTiming.Assumptions.SampledCodeRuns"]),
-    ({ACCEPTED: ["Verity.Assumptions.TrustedHost"]}, []),
+    ({ACCEPTED: ["Verity.Assumptions.TrustedDevice"]}, []),
     ({ACCEPTED: ["Accounting.Covered"]}, []),
     ({ACCEPTED: ["NetTiming.CertifierRegisters"]}, []),
     ({ACCEPTED: None}, [ACCEPTED])])
@@ -667,9 +667,9 @@ def test_the_tight_K_is_of_record_only_where_every_premise_is_discharged_and_non
     """Both checks held: a premise whose discharge the lock doesn't list, or lists taking an assumption that doesn't
     stand (SampledCodeRuns, a premise about our own Python), is open, and so is an assumption of a guarantee the tight
     K rests on that is neither standing nor named in what it takes, by its name, and that guarantee where the lock
-    doesn't list it. trusted-host and certifier-coverage stand, and a premise its takes names is that premise's: so
+    doesn't list it. trusted-device and certifier-coverage stand, and a premise its takes names is that premise's: so
     schedules-covered is open by its name until the Lean audit's Property is in the lock, and discharged once it is,
-    resting on trusted-host alone. With one check open too, both are open under the figure of record."""
+    resting on trusted-device alone. With one check open too, both are open under the figure of record."""
     write_lock(lock, given)
     rec = held_both(tmp_path / "held")
     of = rec["bound"]["of_record"]
@@ -716,7 +716,7 @@ def with_coins(tmp_path: Path, said: list[str]) -> dict:
 ])
 def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_conditional_on_them(tmp_path, capsys, said):
     """A run whose COINS lines name a local development challenger session (the served node's, a deferral's or its
-    follow-on's), a gate at no named peer, another challenger or no sampled proofs' coins, or that published none, has
+    follow-on's), a gate at no named peer, another challenger or no SPOT's coins, or that published none, has
     its coins open, live-coins by name: the sampled-proofs verdict, the run's being of record, the figure of record and
     each of its cells are conditional on them, and the figure of record charges ℓ_a + 1 for the tied audit though both
     checks are held and every premise discharged, with no tight K beside it."""
@@ -823,7 +823,7 @@ def test_an_assumption_a_premise_stands_for_is_open_only_while_that_premise_is(t
     monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, dict(OR.RESTS_ON[ACCEPTED], takes=takes))
     write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
     assert held_both(tmp_path / "a")["bound"]["of_record"]["open"] == []
-    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], "Properties.NetworkCertifier.circuitWiresFit": None})
+    write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"], "Properties.Certifier.circuitWiresFit": None})
     assert held_both(tmp_path / "b")["bound"]["of_record"]["open"] == ["wires-fit"]
     monkeypatch.setitem(OR.RESTS_ON, ACCEPTED, RESTS_ON[ACCEPTED])
     write_lock(lock, {ACCEPTED: ["NetTiming.WiresFit"]})
@@ -1322,8 +1322,8 @@ def with_deltas(out: Path, **deltas: object) -> Path:
 @pytest.mark.parametrize("eps, stated, vacuous", [("1/1048576", "262145/524288", False),
                                                   ("524289/1048576", "524289/524288", True)])
 def test_the_composites_error_sums_each_subprotocols_delta_with_its_source(tmp_path, eps, stated, vacuous):
-    """Sampled proofs at its served δ = 1/2 and PoUW at 2^-20 from their rows, and the network certifier's eps from its
-    bound: one tied audit's draw read at sampled proofs' 1/2 and again inside the network's eps is two terms. Their sum is
+    """SPOT at its served δ = 1/2 and PoUW at 2^-20 from their rows, and the network certifier's eps from its
+    bound: one tied audit's draw read at SPOT's 1/2 and again inside the network's eps is two terms. Their sum is
     stated as a lower bound on the error, inference-only's δ missing and the rest unvalued."""
     public = dict(PUBLIC, eps=eps, audits=[{"delta": str(Fraction(eps) - Fraction(1, 2 ** 20)), "drawn": 1,
                                             "units": 16, "wrong_units": 8}])
@@ -1525,7 +1525,7 @@ def test_a_test_runs_measured_advice_charge_is_beside_the_bound_as_that_runs(tmp
 
 def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path):
     """With no composite of record, nothing states the parameters the period's check read, so auditor-record doesn't
-    hold and the network certifier's accepted verdict is not established, nor is sampled proofs', its leg there, which
+    hold and the network certifier's accepted verdict is not established, nor is SPOT's, its leg there, which
     credits no member; onsite's composite, accepting, makes the run of record, and its rejection leaves it not."""
     out = accepted(tmp_path, onsite=False)
     rec = record(out)
@@ -1562,7 +1562,7 @@ def test_the_run_is_of_record_only_with_the_onsite_composite_accepting(tmp_path)
 ])
 def test_sampled_proofs_verdict_is_its_leg_in_the_composite_of_record_never_the_records_audits_v1_row(
         tmp_path, leg, row, verdict):
-    """Sampled proofs' verdict is the outcome of remote's sampled proofs case in the composite of record
+    """SPOT's verdict is the outcome of remote's SPOT case in the composite of record
     (VStar.Recursive.Sampled on OneStageZk's case), whatever the window report's integrity row, the records audit's
     one-stage v1 answer, says: a v1 verdict is no verdict. Where the composite of record has no such case, or the run
     no composite of record, it is not established, the row's answer beside it, crediting no member and stating no
@@ -2067,7 +2067,7 @@ NOT_PINNED = ("the public file the case registers isn't, by SHA-512, one --publi
 def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_only_where_each_file_is_the_one_theta_names(
         tmp_path, how, why):
     """auditor-listing's registered-files condition, the remote theorem's on its sampled leg: for each statement of
-    remote's sampled proofs case, the one statement or a drawn member's, the circuit file its params θ name for it is,
+    remote's SPOT case, the one statement or a drawn member's, the circuit file its params θ name for it is,
     by SHA-512, one the case registers, θ the one the composite reading the case states, and its public file, the one of
     the case's files its evidence names, is one V3c's audit pinned (``--public-pin``): as
     staged before the draw, or as a5 completed it once the tie held, its completed entry, its body the member's staged
@@ -2081,7 +2081,7 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     member of θ's, θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
     case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
-    verdict, the composite of record's and sampled proofs', its leg there, are not established, each its Lean accept
+    verdict, the composite of record's and SPOT's, its leg there, are not established, each its Lean accept
     beside it, with no bound and no member credited, and the run isn't of record."""
     out = accepted(tmp_path)
     circuit, public = (sha512_hex(b) for b in FILES_REGISTERED)
@@ -2185,7 +2185,7 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
     under its completed header, and an instance-major member's (the staged entry's ``relaid``) is the staged body re-laid
     port-major under identity refs (`flock_inputs.relay`), its instances read off the completed header. A member with no
     draw is held to its staged pair alone. Any other completed entry is refused, naming the member."""
-    from verity.commitments.windows import flock_inputs as FI
+    from verity.commitments.periods import flock_inputs as FI
 
     n, ports = 4, 2
     body = bytes(i % 251 for i in range(n * ports * FI.BC_BYTES))
@@ -2221,7 +2221,7 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
 ])
 def test_sampled_proofs_credits_only_members_whose_registered_file_was_completed_and_names_each_other(
         tmp_path, capsys, audit, credited, not_credited, missing):
-    """Sampled proofs credits a drawn member only where its audit completed the member's --registered file at the
+    """SPOT credits a drawn member only where its audit completed the member's --registered file at the
     window's committed roots and the member's Lean verdict of record accepted it reporting exactly its reads: a member
     completed but not so reported, one reported whose file the audit's record lists no completion of, and one the audit
     couldn't complete are each listed as not credited, by name, with why, and an audit record stating no completion,
@@ -2377,7 +2377,7 @@ def test_a_draw_of_a_member_of_each_stratum_has_no_pooled_figure_and_is_named_re
 
 @pytest.mark.parametrize("coins", [None, "a local development challenger session"])
 def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_accepted_answer(tmp_path, coins):
-    """The guarantee reads the records audit's answer's profile and bound only once sampled proofs' verdict, its leg in
+    """The guarantee reads the records audit's answer's profile and bound only once SPOT's verdict, its leg in
     the composite of record, accepted: rejected there, or not established, it states no bound."""
     out = with_onsite(served_out(tmp_path, coins=coins))
     g = record(out)["sampled_proofs"]
@@ -2402,10 +2402,9 @@ def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_a
 def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_its_name(tmp_path, capsys, n2, scan,
                                                                                          named):
     """The network certifier's period draw or its scan's draw taking K of what it draws from (subset:K, stratified:k),
-    or a run that published no chain report: each such draw is open under live-coins by its name, though sampled
-    proofs' COINS line names the live challenger, so the network certifier's figure of record charges ℓ_a + 1 for the
+    or a run that published no chain report: each such draw is open under live-coins by its name, though SPOT's COINS line names the live challenger, so the network certifier's figure of record charges ℓ_a + 1 for the
     tied audit though both checks are held and every premise discharged, and it, its cells, the composite's error and
-    the run's being of record are conditional on the coins; sampled proofs' verdict, on live coins, isn't."""
+    the run's being of record are conditional on the coins; SPOT's verdict, on live coins, isn't."""
     out = accepted(tmp_path, dict(PUBLIC, held=["free", "circuit"]), draws=None if n2 is None else chain_report(n2, scan))
     assert main([str(out)]) == 0
     rec, cond = json.loads((out / "record" / "onsite.json").read_text()), [OR.COINS_OPEN]
@@ -2451,7 +2450,7 @@ def test_a_remote_run_whose_report_drops_the_certifier_takes_its_period_checks_a
     rec = record(out)
     assert rec["verdicts"]["the network certifier"] == {"protocol": OR.NETWORK, "verdict": "accept",
                                                         "from": "pieces/certifier/answer.json"}
-    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
+    assert rec["bound"]["K"] == K and rec["placement"] == {"trusted-device": "the certifier on the gate's host"}
     assert rec == record(accepted(tmp_path / "onsite")) | {"verdicts": rec["verdicts"]}
 
 

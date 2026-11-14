@@ -2,9 +2,9 @@
 (`a5_warden.main` does, through `a5.audit`, on a node): each transfer-gate chunk's registered port's rows, the warden's
 bucket rows committed under its salts, open the warden's signed root at the rows the verifier's own reads name, each
 unit's read (q, k) the Program's units' (`warden_rows.Units`, from public structure alone) placed by the wiring the warden
-signed on connection q's own cell, and the header names the units' value and the same rows; the registration passes the
+signed on connection q's own cell, and the header names the units' value and the same rows; the docket passes the
 verifier's check with every transfer-gate unit proved (work 0, floor all of them); the window's provenance is the
-verifier's read of the warden's registrations; the prover's own root under the warden's certificate, provenance naming
+verifier's read of the warden's dockets; the prover's own root under the warden's certificate, provenance naming
 another root, a foreign, a duplicate, a padding-slot and a past-the-cells read, and a statement made for another units'
 wiring (a pad in a data cell's place, its rows under the Program's value, two units swapped) are refused by name; and the
 altered window's unit 0 doesn't open."""
@@ -22,7 +22,7 @@ import pytest
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import HEADER
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D, verifier as V
-from verity.commitments.windows import rows as SR
+from verity.commitments.periods import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
@@ -85,7 +85,7 @@ def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
                                                                                              for s in x.opening.salts}
 
 
-def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(run):
+def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest(run):
     tmp, at = run
     mine, c, rec, _win = committed(tmp, at, "law")
     tg, rid = mine.members[0].template, mine.members[-1].template
@@ -164,7 +164,7 @@ def test_the_altered_cell_is_committed_under_the_wardens_salt_and_doesnt_open(ru
 @pytest.mark.parametrize("made", sorted(AW.MADE_FOR))
 def test_a_statement_made_for_another_units_wiring_is_refused_by_the_registered_reads(run, made):
     """``--made-for``'s window: c1's header made for another units' wiring, its rows the warden's under the warden's salts
-    (they open the signed root at the positions the header names), its provenance the Program's, so the registration's
+    (they open the signed root at the positions the header names), its provenance the Program's, so the docket's
     checks pass and only the verifier's port of the Program's units refuses it, by `MADE_FOR`'s reason; c0 stays honest."""
     tmp, at = run
     mine, c, rec, win = committed(tmp, at, f"made-{made}", made=made)
@@ -199,7 +199,7 @@ def test_the_audits_case_is_written_where_replay_names_the_network_certifiers_mo
     """A process that holds `network_traces`' `replay` under that name holds a module with none of what a5 writes an
     audit's case with. a5 reads the `replay.py` beside it by its path, so the case is written and no error stands in
     its place."""
-    import a5
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
     monkeypatch.syspath_prepend(str(HERE.parent / "network_traces"))
     spec = importlib.util.spec_from_file_location("replay", HERE.parent / "network_traces" / "replay.py")
     theirs = importlib.util.module_from_spec(spec)

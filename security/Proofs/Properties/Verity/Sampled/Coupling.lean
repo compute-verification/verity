@@ -3,7 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled.Messages
 
 /-!
-# Sampled proofs' coupling: the target off the binding and the logged coupling
+# SPOT's coupling: the target off the binding and the logged coupling
 
 `CouplingTarget` at the leg's constructions with the messages' two-continuation finders (`Constructions.withMessages`,
 whose finders are `msgFinder` and `recordFinder`, so `couplingTarget_of_noMiss` applies by `rfl`), from three bounds on
@@ -65,7 +65,7 @@ def DigestBound (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array Byt
 /-- **(b), the logged coupling, at the cut `P`**: at the session `A`, the parameters `θ` and the committed files `F`, a
 play whose sampled verdict at `k` accepts and that `P` at its commitment and strategy holds of, on a tape that misses at
 no round and not at the record at the readings `rd` (`NoMiss`), is at most as likely as the live audit's plays, at the
-session widened by the projection's coins and the strategy projected there, that flock-verify `--zk` accepts at `own`,
+session widened by the projection's coins and the strategy projected there, that verity-verify-proof `--zk` accepts at `own`,
 plus the hiding term. -/
 def LoggedCoupling (rd : Readings) (K : Constructions V) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (P : (c : ByteArray) → Game.Strategy (V.game θ F c) → Exchange → Prop) : Prop :=

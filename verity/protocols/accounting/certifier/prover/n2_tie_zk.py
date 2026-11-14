@@ -7,7 +7,7 @@ and the warden's release (`IngressTie.outcome(advice=…, releases=…, head=…
 the link and the stream's registrations built from the stream's outcomes of record alone (`IngressTie.tie`, read
 through `tie_service.Ties`, the verifier's tie source).
 
-    python benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --bin flock-circuit --lean flock-verify --out DIR
+    python benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --bin flock-circuit --lean verity-verify-proof --out DIR
       [--class test|served|warden] [--warden-run RUN] [--windows K] [--gpu] [--jobs 1] [--debug-clear] [--dry]
 
 * **The link** (`PARAMS`, the pinned size class): a span, three id requests of 5, 40 and 5 prompt tokens
@@ -451,7 +451,7 @@ def member(M, a, sg: SimpleNamespace, tie: TS.IngressTie, name: str, rd: SimpleN
     stream = tie.stream(budget=len(rd.windows), delta=Z.DELTA, challenger="n2-tie-zk", coins=Z._no_coins,
                         clock=time.monotonic)
     # the ZK server rechecks a witness the host computed, so a device prover takes the host's (flock-circuit's
-    # FIREWALL-REFUSED otherwise), as a8's fw arm does
+    # ZK-SERVER-REFUSED otherwise), as a8's fw arm does
     env = {**Z.zk_server_env(M, sg), **({"FC_HOST_WITNESS": "1"} if a.gpu else {})}
     av = SimpleNamespace(bin=a.bin, lease=[], gpu=a.gpu)
     vdir = out / "verifier"

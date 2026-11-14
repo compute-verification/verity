@@ -25,6 +25,7 @@ public import Definitions.Core.Site
 public import Definitions.Core.SiteSubtree
 public import Definitions.Core.ValueSalts
 public import Definitions.Core.MemCheck
+public import Definitions.Core.InProofs
 
 /-!
 # Core: the model every area states its guarantees in
@@ -44,6 +45,7 @@ the ones here.
   the hardware model's).
 * Coins and soundness: `Game` (`Sound`, live-coin interactions), `Draw` (sampling designs), `Challenger`, `Decisive`.
 * Memory checking: `MemCheck` (a multiset's fingerprint and a key's print over a finite field).
+* A check moved inside proofs: `InProofs` (an accepted run leaves fewer than `K₀` proof blocks failing a check).
 * Word semantics: `Scalar`, `Prims`, `Fp32`, `TC` (the tensor cores); `NaiveStrassen` (two tilings in the tensor-core
   model).
 

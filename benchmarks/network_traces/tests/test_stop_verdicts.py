@@ -35,7 +35,7 @@ from verity.protocols.accounting.certifier.verifier import connection_rows as C 
 from verity.protocols.accounting.certifier.verifier import content_rows as CT  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate, Direction  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R  # noqa: E402
 
 LINK = "responses"
 ZEROS = bytes(64)

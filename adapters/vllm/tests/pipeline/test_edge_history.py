@@ -5,13 +5,15 @@ windows and refuses tampered history by name."""
 from __future__ import annotations
 
 import pytest
-
-from tests.program.test_workload_program import _edge_wl, _groups
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R
 from verity.circuits.codec import descriptor_id, program_digest
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.partition_object import calls
 from verity.circuits.types import Array, Value, field_starts, field_types
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registered as REG
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
+
+from tests.program.test_workload_program import _edge_wl, _groups
 from verity_vllm.pipeline import edge as E
 from verity_vllm.program import workload as W
 
@@ -63,7 +65,7 @@ def two():
                     {**SERVED, "row": 0})
     roots1 = [{"port": p, "root": "cd" * 64, **own1[p]} for p in own1]
     rec1 = R.record(w1.program, _query(w1), LAW, SCHEME, roots1, {**SERVED, "row": 1}, previous=R.digest(rec0), registered=E.entries(com))
-    kw = {"law": LAW, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS)}
+    kw = {"sampling_design": LAW, "scheme": SCHEME, "ports": own1, "window_root": OPEN[1], **E.history(w1.ports, WORDS)}
     return {"w0": w0, "w1": w1, "com": com, "ports0": ports0, "rec0": rec0, "rec1": rec1, "roots1": roots1, "kw": kw}
 
 

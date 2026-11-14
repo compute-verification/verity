@@ -18,7 +18,7 @@ inputs `own`, at the session's statement circuit `c` (`HmOut.parseStmt`): the pr
 inputs), its outputs `Layout.outsOfP`, the sites `sitesAtHP`, and the registration the population's public file `pop`
 (`HmIn.loadPublic`, with or without shared rows):
 
-* `sitesAtHP_bcSite`: `BcSiteHP` at every satisfiable site, from `tableHP_bcSite` at a sample flock-verify sets up and
+* `sitesAtHP_bcSite`: `BcSiteHP` at every satisfiable site, from `tableHP_bcSite` at a sample verity-verify-proof sets up and
   `tableAtHP_unsat` elsewhere;
 * `layAtHP`, `rsAtHP`: `keyLayoutHP`, `keyRowsHP` at `sitesAtHP`, `KeysRowP` from the statement circuit
   (`Layout.keysRowP_of_keysRow`, `Hidden.keysRow_stmt`);
@@ -32,16 +32,16 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
   (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (hscope : Layout.scopeOkH c = true)
-  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupHP I own mPts S₀ (dj S₀))
+  (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : SampleSetupHP I own mPts S₀ (dj S₀))
   (hU : Built c.unit) {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
   {pop : Public} (hpub : HmIn.loadPublic I.tags c pi I.publicFile = .ok pop) {Reg : Type}
 
 include hU hpi hpub in
-/-- **The site fact at a sampled table at `own`** (`tableH_bcSiteS`): at a sample flock-verify sets up with
+/-- **The site fact at a sampled table at `own`** (`tableH_bcSiteS`): at a sample verity-verify-proof sets up with
 `Stmt.setupHidden … own`, each sampled proof block's site is `BcSiteHP`: the sample `dj S` decodes to `D`, its proved units are in
 its population, its public file loads (`HmIn.loadPublic`) to `pop`, and the unit's block and template instance index
 its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2_stmt`). -/
-theorem tableHP_bcSite {S : Finset (Fin n)} (x : DrawSetupHP I own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
+theorem tableHP_bcSite {S : Finset (Fin n)} (x : SampleSetupHP I own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     BcSiteHP (x.table.acc ht hcS (rowsFit_of_stmt ht hcS hscope)) pop (x.table.o u h) (x.table.vu u h) u.val := by
   have hcx : HmOut.unrolled x.st.c = c := x.table.unrolled_eq ht hcS
   have hC : Hidden.Committed I.tags I.circuitFile I.tables x.st.c := x.table.committed
@@ -60,7 +60,7 @@ theorem tableHP_bcSite {S : Finset (Fin n)} (x : DrawSetupHP I own mPts S (dj S)
     exact x.proved_rank h
 
 include hU hpi hpub in
-/-- **`BcSiteHP` at every satisfiable site** of the one-table hidden plan at `own`: at a sample flock-verify sets up by
+/-- **`BcSiteHP` at every satisfiable site** of the one-table hidden plan at `own`: at a sample verity-verify-proof sets up by
 `tableHP_bcSite`; at a refused sample no message satisfies the table (`tableAtHP_unsat`). -/
 theorem sitesAtHP_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
@@ -71,7 +71,7 @@ theorem sitesAtHP_bcSite :
   intro S R u h M hM
   show BcSiteHP ((tableAtHP dj x₀ S).acc ht hcS (rowsFit_of_stmt ht hcS hscope)) pop ((tableAtHP dj x₀ S).o u h)
     ((tableAtHP dj x₀ S).vu u h) u.val
-  by_cases hS : Nonempty (DrawSetupHP I own mPts S (dj S))
+  by_cases hS : Nonempty (SampleSetupHP I own mPts S (dj S))
   · have e : tableAtHP dj x₀ S = (Classical.choice hS).table := by
       unfold tableAtHP
       rw [dite_eq_left_of_eq_true (eq_true hS)]

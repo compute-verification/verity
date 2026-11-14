@@ -15,7 +15,7 @@ caller's blobs.
 
     {"coins": epoch coins, "draws": t, "record": {"commitment": hex, "draw": sample, "schema": s, "source": hex}}
 
-the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor host's challenger, or an in-process one's), the
+the epoch's coins (`EpochCoins.ofJson`: a live session's on the auditor device's challenger, or an in-process one's), the
 number of samples, and the verifier's record of the coin it drew on this run's commitment (`CoinRecord`, as `verify_run`
 writes it: its schema and its sample), which pins the source (`after-coin`): a bare source, which `check` also takes, is no
 input here, so the coin is always the one sampled on the run. The verdict is of record (`ofRecord`, `--of-record` as
@@ -27,17 +27,17 @@ node's sample and a v1 record are refused as `of-record`.
     {"manifests": [manifest, …], "record": hex, "window": {"dropped": [s, …], "record": W, "rounds": [s, …] | null}}
 
 the retained passes' manifests, a nonempty list; the SHA-512 digest (lowercase hex) of the registration record the
-run is on, the record the policy and sampled proofs commit to, which remote ties it to (`Core.Remote.V1.run`); and the
+run is on, the record the policy and SPOT commit to, which remote ties it to (`Core.Remote.V1.run`); and the
 window record W the passes are tied to (`served_passes.py retain --window-record`'s, the record that registration is
 chained right after, which remote ties it to too, `Core.Remote.V1.window`), with the rounds the passes are, in their
 order (`null`: pass i is round i), and the rounds dropped from the retention before the coin. The check holds the
-passes to W (`tieOf`, `verify_run.tie`): W registers exactly each call's A rows and y and each weight's B rows among its
+passes to W (`tieOf`, `verify_run.tie`): W registers exactly each call's A rows and y and each fixed operand's B rows among its
 ``pearl-a/``, ``pearl-y/`` and ``pearl-b/`` values, beside the dropped rounds' calls', each B at the root the pass's
-tiles open B against (`Pass.weightRoots`, which the weights' root folds), so a run whose passes or whose rootB are not
-the ones W registers is refused before its coin, a version-2 W that registers no weight among them. That is a W at
+tiles open B against (`Pass.weightRoots`, which the fixed operands' root folds), so a run whose passes or whose rootB are not
+the ones W registers is refused before its coin, a version-2 W that registers no fixed operand among them. That is a W at
 version 2, its header's ``version`` (`wVersion`). A W that states none is version 1, written before W registered the
-weights: it is held to the calls alone, as it was then, and the verdict's tie names its weights untied
-(`WEIGHTS_UNTIED`), so its accept says that no weight it credits is a registered value. Its digest is
+fixed operands: it is held to the calls alone, as it was then, and the verdict's tie names its fixed operands untied
+(`WEIGHTS_UNTIED`), so its accept says that no fixed operand it credits is a registered value. Its digest is
 SHA-512(`commitmentTag` ‖ 0 ‖ the commitment's bytes).
 
 **Evidence**, canonical JSON `{"files": [files, …]}`, one object per pass in the commitment's order: each manifest path
@@ -45,7 +45,7 @@ the pass's openings read, mapped to the SHA-512 (lowercase hex) of the blob hold
 that digest, held to its manifest entry (`held`); a path the object doesn't name, or a digest no blob has, is the tile's
 `FileNotFoundError` or the opening's failure, which rejects the run.
 
-**The check** is `check` on them: it accepts with the run's credit at Pearl's assumption at δ = `DELTA`, or rejects with
+**The check** is `check` on them: it accepts with the run's credit at its scheme's named assumption at δ = `DELTA`, or rejects with
 `check`'s reason. It never leaves a run undecided.
 
 **Public**, on acceptance: the credit (`credited`, `credited_tiles`, `macs`, `rho`, `epsilon`) and `delta`.
@@ -68,7 +68,7 @@ def commitmentTag : String := "verity/pouw/pearl-plus/manifests/v1"
 def paramsKeys : List String := ["coins", "draws", "record"]
 def recordKeys : List String := ["commitment", "draw", "schema", "source"]
 def commitmentKeys : List String := ["manifests", "record", "window"]
-def windowKeys : List String := ["dropped", "record", "rounds"]
+def executionPhaseKeys : List String := ["dropped", "record", "rounds"]
 def evidenceKeys : List String := ["files"]
 
 structure Params where
@@ -124,7 +124,7 @@ def commitmentOf (b : ByteArray) : V Commitment := do
   let record ← bytesOf j "record"
   unless record.size == 64 do throw "record is not a SHA-512 digest"
   let w := (get? j "window").getD .null
-  unless keys? w == some windowKeys do throw s!"window: keys are not {", ".intercalate windowKeys}"
+  unless keys? w == some executionPhaseKeys do throw s!"window: keys are not {", ".intercalate executionPhaseKeys}"
   let window := (get? w "record").getD .null
   unless window matches .obj _ do throw "window: record is not an object"
   let windowDigest ← match Flock.WindowRecord.digest window with
@@ -209,12 +209,12 @@ private def recordOf (schema : String) : String :=
     ",\"schema\":" ++ schema ++ ",\"source\":\"" ++ String.ofList (List.replicate 64 '0') ++ "\"}"
 private def record : String := recordOf ("\"" ++ COIN_SCHEMA ++ "\"")
 private def reasonOf (p c e : ByteArray) : Option String := (protocol.answer p c e #[]).reason
-private def windowRec : String := "{\"format\":\"verity/registration/v2\",\"registered\":[]}"
-private def windowOf (w : String) : String := "{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}"
+private def executionPhaseRec : String := "{\"format\":\"verity/registration/v2\",\"registered\":[]}"
+private def executionPhaseOf (w : String) : String := "{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}"
 private def runIn (manifests window : String) : ByteArray :=
   ("{\"manifests\":" ++ manifests ++ ",\"record\":\"" ++ String.ofList (List.replicate 128 '0') ++ "\",\"window\":" ++
     window ++ "}").toUTF8
-private def run (manifests : String) : ByteArray := runIn manifests (windowOf windowRec)
+private def run (manifests : String) : ByteArray := runIn manifests (executionPhaseOf executionPhaseRec)
 
 -- every input gets a verdict: parameters, a commitment or evidence of another shape is refused, naming the input
 #guard protocolId == "verity/pouw/pearl-plus/v1"
@@ -226,18 +226,18 @@ private def run (manifests : String) : ByteArray := runIn manifests (windowOf wi
 #guard reasonOf (params record) (run "[]") "{}".toUTF8 == some "commitment: the run holds no pass"
 #guard reasonOf (params record) (run "{}") "{}".toUTF8 ==
   some "commitment: the retained passes' manifests are not a list"
-#guard reasonOf (params record) ("{\"manifests\":[{}],\"record\":\"00\",\"window\":" ++ windowOf windowRec ++ "}").toUTF8
+#guard reasonOf (params record) ("{\"manifests\":[{}],\"record\":\"00\",\"window\":" ++ executionPhaseOf executionPhaseRec ++ "}").toUTF8
     "{}".toUTF8 ==
   some "commitment: record is not a SHA-512 digest"
 -- the window record the passes are tied to: W, the rounds the passes are and the dropped rounds
 #guard reasonOf (params record) (runIn "[{}]" "{}") "{}".toUTF8 ==
   some "commitment: window: keys are not dropped, record, rounds"
-#guard reasonOf (params record) (runIn "[{}]" (windowOf "[]")) "{}".toUTF8 ==
+#guard reasonOf (params record) (runIn "[{}]" (executionPhaseOf "[]")) "{}".toUTF8 ==
   some "commitment: window: record is not an object"
-#guard reasonOf (params record) (runIn "[{}]" ("{\"dropped\":[],\"record\":" ++ windowRec ++ ",\"rounds\":[-1]}"))
+#guard reasonOf (params record) (runIn "[{}]" ("{\"dropped\":[],\"record\":" ++ executionPhaseRec ++ ",\"rounds\":[-1]}"))
     "{}".toUTF8 ==
   some "commitment: window: rounds is not a list of nonnegative integers"
-#guard reasonOf (params record) (runIn "[{}]" ("{\"dropped\":null,\"record\":" ++ windowRec ++ ",\"rounds\":[0]}"))
+#guard reasonOf (params record) (runIn "[{}]" ("{\"dropped\":null,\"record\":" ++ executionPhaseRec ++ ",\"rounds\":[0]}"))
     "{}".toUTF8 ==
   some "commitment: window: dropped is not a list of nonnegative integers"
 #guard reasonOf (params record) (run "[{}]") "{}".toUTF8 == some "evidence: keys are not files"
@@ -245,7 +245,7 @@ private def run (manifests : String) : ByteArray := runIn manifests (windowOf wi
 -- the check runs tied to the commitment's W, at its rounds and dropped rounds
 #guard (do
     let p ← paramsOf (← Core.canonicalJson (params record))
-    let c ← commitmentOf (runIn "[{}]" ("{\"dropped\":[2],\"record\":" ++ windowRec ++ ",\"rounds\":[1]}"))
+    let c ← commitmentOf (runIn "[{}]" ("{\"dropped\":[2],\"record\":" ++ executionPhaseRec ++ ",\"rounds\":[1]}"))
     let i := inputOf p c
     pure (i.tie == some c.window && i.rounds == some [1] && i.dropped == [2] &&
       some (Flock.hexOf c.windowDigest) == (Flock.WindowRecord.digestHex c.window).toOption)).toOption == some true

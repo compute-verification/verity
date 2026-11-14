@@ -12,13 +12,13 @@ import Mathlib.Basic.ENNReal.Real
 (`Pous.EndToEnd.AcceptedAt`, read by `AuditsOf.Accepts`) accepts a period with no break while the node held too few
 bit-ticks, over an audit whose verifier's keys and session id are fixed and whose setup commitment, `C*`, setup outputs
 and table are functions of the coins flipped before the memory challenger's (`AuditsOf`). Onsite's verifier
-runs `PousCheck.RunProtocol.protocol` on bytes instead: the one theorem's leg for PoUS turns that protocol's acceptance
+runs `PousCheck.RunProtocol.protocol` on bytes instead: protocol soundness's leg for PoUS turns that protocol's acceptance
 into `AcceptedAt` on fields of that kind.
 Each statement below is one step of it, about one function of the code, in the shape of the code's properties.
 
 * `RunAccepts`: what the compiled check accepts is `AcceptedAt` at the auditor's point, keys and session id, on the
   case's setup, table and session, and what it publishes is `certify` of the point alone. With
-  `Properties.Composition.DecodedAccepted` at `Verity.component .pous`, which yields `RunProtocol.protocol.Accepts`, it
+  `Properties.Composition.DecodedAccepted` at `Verity.Subprotocol.protocolAt .pous`, which yields `RunProtocol.protocol.Accepts`, it
   gives the event `PeriodHeldAt` bounds.
 * `RunDigest`: the digest the composition binds for PoUS's case is SHA-512 of the commitment's bytes, so the
   composition's commitment, fixed before the coins, fixes those bytes outside a SHA-512 collision, and they decode to
@@ -27,8 +27,8 @@ Each statement below is one step of it, about one function of the code, in the s
   runs' trees and blocks hold a SHA-512 collision (`forkStrings`): the fork form of the commit-then-coin step, which
   makes `AuditsOf`'s `commitment`, `store` and `digests` functions of the coins before PoUS's.
 
-The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is no component of onsite yet; its statements are
-the same steps for the composition that takes it.
+The wipe (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`) is onsite's component too
+(`Core.Onsite.components`); its statements are the same steps.
 
 * `WipeChecked`: the signed session passes every check of the wipe judge of record (`StreamedWipe.verdict`), as
   propositions: a signature under a trusted key on the session's message, the session's commitment, batch size 1,

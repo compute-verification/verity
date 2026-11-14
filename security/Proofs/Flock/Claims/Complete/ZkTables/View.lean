@@ -5,6 +5,8 @@ public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 public import Proofs.Flock.Claims.Complete.ZkTables.Table
 public import Proofs.Flock.Claims.Complete.Zk.InnerGo
 public import Proofs.Flock.Claims.Complete.Zk.ReplayPos
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Flock.With.ZkEq
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -104,6 +106,8 @@ theorem ringSwitchWith_checks (hs : Hashes V) (m : ℕ) (claims : Array Claim) (
   · exact RetV.bind fun _ _ _ => RetV.pure h₁
 
 namespace Rs
+
+variable {wideLeaf : Bool}
 
 variable {tr : Trace} {c₁ c₂ : Array Claim}
 
@@ -396,17 +400,22 @@ theorem basis_size (sws : Array Switched) (q : Array F256) (e : ℕ) : (basis sw
   rw [← Array.foldl_toList]
   exact foldl_size_const (fun _ _ => by simp) _ _ (by simp)
 
-theorem zkSchedule_n {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule m = .ok v) : v.1.n = m - 7 := by
-  unfold Zk.schedule at h
-  obtain ⟨q0, -, h⟩ := except_ok_bind h
-  cases hf : fast100 m with
-  | none => rw [hf] at h; cases h
-  | some sch =>
-    rw [hf] at h
-    cases h
-    obtain ⟨hd, hm⟩ := FlockSoundness.Refine.fast100_dims m sch hf
-    show sch.n = m - 7
-    rw [hd.1, hm]
+theorem zkSchedule_n {wideLeaf : Bool} {m : ℕ} {v : Schedule × ℕ} (h : Zk.schedule wideLeaf m = .ok v) :
+    v.1.n = m - 7 := by
+  by_cases hm : m < 40
+  · have key : ∀ (w : Bool) (m : Fin 40), (match Zk.schedule w m.val with
+        | .ok v => decide (v.1.n = m.val - 7)
+        | .error _ => true) = true := by
+      decide +kernel
+    have := key wideLeaf ⟨m, hm⟩
+    simp only [h, decide_eq_true_eq] at this
+    exact this
+  · exfalso
+    unfold Zk.schedule at h
+    obtain ⟨q0, hq0, -⟩ := except_ok_bind h
+    unfold Zk.queries0 at hq0
+    simp [show ¬m ≤ 24 by omega, show m ≠ 25 by omega, show m ≠ 26 by omega, show m ≠ 27 by omega,
+      show ¬m ≤ 31 by omega, show ¬m ≤ 35 by omega] at hq0
 
 end FlockComplete.Replay
 
@@ -501,7 +510,7 @@ theorem view (hV : Level0.Verifier) (h64 : Claims.Out64 H) (st : Flock.Stmt) (tr
     simp only [hlL, tPiop, Rs.tEnd_k, LcZ.tEnd_k, ZcZ.tEnd_k, hcs, piopSends]
     show l.size + (3 + _ + 3 + _ + (2 + e.size + 1)) = l.size + (0 + 3 + _ + 3 + _ + (2 + e.size) + 1)
     omega
-  obtain ⟨hLgV, htIk⟩ := hV resp (Claims.hOf H) (Setup.ofCircuit st).m v
+  obtain ⟨hLgV, htIk⟩ := hV (Setup.ofCircuit st).wideLeaf resp (Claims.hOf H) (Setup.ofCircuit st).m v
     (Rs.T tr (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e)) cm
     (packed tr (Setup.ofCircuit st).m)
     (basisVals (Rs.sws (claimsR resp (Setup.ofCircuit st) tr l.size e) (rsCoinsR resp (Setup.ofCircuit st) l.size e))

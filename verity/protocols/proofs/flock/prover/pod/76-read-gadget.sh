@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # The hidden-read kill experiment (read_gadget.py): GemmCoordinate<K> class statements with and without two hidden Merkle reads
 # a template instance, each proved in loopback --zk sessions on the CPU under /usr/bin/time, every case with the same instances, cores and
-# session counts, each session sampling every unit (--draw subset:N); then Lean's flock-verify on each case's last session,
+# session counts, each session sampling every unit (--draw subset:N); then Lean's verity-verify-proof on each case's last session,
 # which it refuses: the read gadget's circuit is composed here, not a Program's, and a session without the verifier's
 # program is outside what the soundness proof covers. Each case's sessions take their coin trees from its own
 # challenger (challenger.sh: serve --tree-from), and their records are held to its release log. Run from the verity tree
@@ -47,18 +47,18 @@ trap 'kill $SAMPLER $CORES 2>/dev/null; rm -rf $S' EXIT
 [ -x /usr/bin/time ] || { apt-get install -y -qq time >/dev/null 2>&1 || { apt-get update -qq >/dev/null 2>&1 && apt-get install -y -qq time >/dev/null 2>&1; }; }
 [ -x /usr/bin/time ] || { echo "no /usr/bin/time: the prover's peak memory is the measurement" >&2; exit 1; }
 
-# Lean's flock-verify (nothing fetched), built once per source in this lane's own directory, while the prover builds
+# Lean's verity-verify-proof (nothing fetched), built once per source in this lane's own directory, while the prover builds
 LEAN_BIN=
 if [ "${LEAN:-1}" = 1 ]; then
   LSHA=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py key verity/protocols/proofs/flock/verifier)
-  LEAN_BIN=$L/lean-$LSHA/flock-verify
+  LEAN_BIN=$L/lean-$LSHA/verity-verify-proof
   (
     export PATH=$HOME/.elan/bin:$PATH
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ]; then
       rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/proofs/flock/prover/pod/lake_closure.py copy verity/protocols/proofs/flock/verifier $L/lean-src) \
-        && (cd $LEAN_SRC && lake build flock-verify) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_BIN
+        && (cd $LEAN_SRC && lake build verity-verify-proof) && mkdir -p $L/lean-$LSHA && cp $LEAN_SRC/.lake/build/bin/verity-verify-proof $LEAN_BIN
     fi
   ) > $O/build-lean.log 2>&1 &
   LP=$!

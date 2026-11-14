@@ -21,12 +21,16 @@ import pytest
 
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
 from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as REG, registration as R, \
-    verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage import (
+    partition as P,
+    registered as REG,
+    docket as R,
+    verifier as V,
+)
 from verity.circuits.codec import canonical_json, descriptor_id
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.program import Program
-from verity.commitments.windows import flock_inputs as FI, wiring as WI
+from verity.commitments.periods import flock_inputs as FI, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import toy as T
@@ -81,8 +85,8 @@ def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
     assert (stream.cells, stream.counts, stream.n_rho) == (T.N_T, (1,) * len(T.N_T), T.N_RHO)
     win = T.interior_window("00" * 64, SAMPLE)
     assert P.program_digest(stream.interior_program(Q)) == P.program_digest(win.program)
-    law = S.second_law(list(SAMPLE), stream.cells, stream.counts)
-    assert [tuple(u) for s in law["strata"] for u in s["units"]] == [
+    sampling_design = S.second_sampling_design(list(SAMPLE), stream.cells, stream.counts)
+    assert [tuple(u) for s in sampling_design["strata"] for u in s["units"]] == [
         (m.base + i * n, m.base + (i + 1) * n) for m, n in zip(win.members, T.N_T) for i in range(Q)]
 
 
@@ -243,7 +247,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     def sha512(j) -> str:
         return hashlib.sha512(canonical_json(j)).hexdigest()
 
-    # what `flock-verify verify`'s verdict of record names of each session it checked
+    # what `verity-verify-proof verify`'s verdict of record names of each session it checked
     verified = SS.verified_of({f"lean-verify/m{k}": {
         "of_record": True, "accepted": True, "public_header_sha512": sha512(s["header"]), "unit_draw": s["draw"],
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}
@@ -252,7 +256,7 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     def check(sample, refs, verified=verified, ref_reads=ref_reads, wires=wires, rows=rows) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
                      verified=verified, refs=refs, ref_reads=ref_reads, wires=wires, rows=rows)
-        return SS.check(True, own, stmts).to_json()
+        return SS.check_twin(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
     assert check(SAMPLE, refs, ref_reads=())["codes"] == ["second-values"]

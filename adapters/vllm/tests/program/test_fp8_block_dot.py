@@ -22,13 +22,13 @@ from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
-from verity.definitions import boolean as SW
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3QgmmaDot32
-from verity.definitions.registry import boolean_fp8 as BF
-from verity.definitions.registry import deepgemm as DG
-from verity.definitions.registry import fp8 as F
-from verity.definitions.registry import fp8_vocab
+from verity_vllm.definitions import boolean as SW
+from verity_vllm.definitions.registry import boolean_fp8 as BF
+from verity_vllm.definitions.registry import deepgemm as DG
+from verity_vllm.definitions.registry import fp8 as F
+from verity_vllm.definitions.registry import fp8_vocab
 
 from tests.program import test_fp8_profile as FP
 from tests.program.test_boolean_fp8 import BF16_SPECIALS, _flat, _inputs
@@ -40,7 +40,7 @@ from verity_vllm.observe.fold.patterns.fp8 import (
 from verity_vllm.observe.fold.resolver import Compute, Unsupported, spec_label
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
-from verity_vllm.program.frontend.derive import Alloc
+from verity_torch.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     observe_target_profile,
