@@ -98,3 +98,37 @@ The three runs at 7:32 PM PST: all still running, no failed line in any. #9902's
 
 TIMER: none yet. I set one of my own for the three runs as this turn ends.
 
+[2026-11-14T03:35Z] 3fd2e8cf632b
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 7:35 PM PST. **Draft (2) is revised: file it on this line. P1's first scratch push is done, and no proof moved.**
+
+**1. Draft (2), revised for lean's (b), the three conditions and the new name.**
+- **Note:** `lanes/network-accounting/20261114T0018Z-draft-issue-leak-limit-as-a-sum-over-the-auditors-devices-scancount.md`, synced in notes commit `a9b45ddc9c`.
+- **The name I propose for `Site.loc`: `Site.placesIn`.** `S.placesIn X` is the places whose id is in the set `X`, which is its definition word for word. Second choice `Site.placesOf`; it is second because every `…Of` name there (`certifiersOf`, `challengersOf`, `auditorsOf`, `sharedOf`) takes a subtree's root id, and this takes a set. Draft (1)'s note carries the name too; NET-438's notes are yours to change.
+- **(b):** `LeakPartsRegistered_honest` is a listed theorem with no `witnesses` entry. The other half is under "Not here" as not built, with what a reader loses by it.
+- **The three conditions** are in "Done when", and "The honest lemma" answers each. The instance is `main`'s `[Registration.Example.onsite]`, which `main` proves valid; the subtree is the host's; the strategy is over two secret bits, one recorded, `K = 1`. The statement is written out, with the device set `S.placesIn (S.certifiersOf "node0" ∪ ∅)`. [argued; the lemma is not written and nothing of it ran]
+- **Two things in it go beyond lean's words, for you to carry or strike:**
+  - A third conjunct of mine: the device set is not empty, so `RecordsWithin` is not concluded of no device.
+  - The statement stands in place in the proofs tree, because its log is the proofs tree's `Registration.Example`. If lean holds the instance to the definitions tree, either that example moves, which is lean's file, or the lemma states a second log.
+- I have not read lean's 6:58 PM PST comment myself. The draft cites your 7:15 PM PST line for it.
+
+**2. P1's first scratch push.**
+- **Branch** `cursor/network-accounting-p1-schedule-scratch-b51f`, **head** `3bc3ad47746f`, three commits of mine on `db7faae396f5`.
+- **Tries at that tree, each launched once:**
+  - `NetworkCheck/Period.lean`: `r20261114-032535-1368`, `lean exit 0`, siblings clean, every `#guard` holds. [ran]
+  - `security/Proofs/Properties/NetworkPeriod.lean`: `r20261114-032930-7631`, `lean exit 0`; none of its 77 theorems uses an axiom beyond the three. [ran]
+  - `security/Proofs/Properties/NetworkScan.lean`: `r20261114-033108-616c`, in flight.
+- **No proof moved** for the finding in `check`: it sits in the list beside `oneDelta` and `rowsWfCheck`. [ran: the second try, which built the period check and its properties fresh]
+- **It refuses by name** a schedule with lengths rows or content rows, in `paramsOf` and in `check` (`connectionRowsCheck`). A `#guard` runs `check` itself: accepted under the plain schedule, refused by that name with lengths rows. [ran]
+- **Not run:** the Python suite. The mirror was exercised by hand on one built case, without the Lean server.
+- **Checkpoint note:** `lanes/network-accounting/20261114T0333Z-checkpoint-p1-schedule-scratch-first-push-scancount.md`. P2's question on `lanes · windows · window` is in it under "For P2".
+
+**3. NET-438's two days: neither is wrong by what I know.**
+- Open and unmarked by Mon 16 Nov 6 PM PST: mine, and it waits on nothing in another lane. I start it now.
+- On `main` by Thu 19 Nov 6 PM PST: it waits on lean's read of the `Core` diff, the other worker's attack and the queue. None of those is mine to date.
+
+**4. One slip, owned.** My line stamped 7:07 PM PST went at 7:06 PM PST: I wrote the stamp a minute ahead of the clock.
+
+**Next:** NET-438's pull request, then the rest of P1: the Python suite, then `request_words` last.
+
+TIMER: none
+
