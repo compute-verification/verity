@@ -1608,10 +1608,16 @@ def proof_server(a: argparse.Namespace, out: Path, sts: Sequence[dict] = (), rel
     devices = getattr(a, "gpus", None)
     if not zk_server:
         return ProofServer(a.bin, out / "proof-server", devices=devices, env=a0.DIRECT, **trees)
-    envs = [a0.prover_env(zk_server, st) for st in sts]
+    envs = [device_env(a0.prover_env(zk_server, st), devices) for st in sts]
     if not envs or any(e != envs[0] for e in envs):
         return None
     return ProofServer(a.bin, out / "proof-server", devices=devices, env=envs[0], **{**trees, "verify_ahead": 0})
+
+
+def device_env(env: dict, devices: list | None) -> dict:
+    """``env``, a session's prover environment behind the ZK server, for provers on ``devices``: the ZK server refuses a
+    session whose witness the device would build (live PROTOCOL.md §10.4), so on a device the host builds it."""
+    return {**env, "FC_HOST_WITNESS": "1"} if devices and any(d is not None for d in devices) else env
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:

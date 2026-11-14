@@ -40,6 +40,7 @@ import datetime as dt
 import json
 import os
 import subprocess
+import sys
 import tomllib
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -65,7 +66,8 @@ def parse_time(s: Any) -> float | None:
         return s.timestamp() if s.tzinfo else None
     try:
         d = dt.datetime.fromisoformat(str(s).strip())
-    except ValueError:
+    except ValueError as e:
+        print(f"budgets: {str(s)[:40]!r} is not a time ({e})", file=sys.stderr)
         return None
     return d.timestamp() if d.tzinfo else None
 

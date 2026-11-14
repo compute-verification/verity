@@ -132,8 +132,9 @@ def learned():
     global _learned
     if _learned is None:
         try:
-            _learned = {k: float(v) for k, v in json.loads(SIZES.read_text()).items()}
-        except (OSError, ValueError):
+            _learned = {k: float(v) for k, v in json.loads(SIZES.read_text()).items()} if SIZES.exists() else {}
+        except (OSError, ValueError) as e:
+            log(f"{SIZES} unread, so no size is learned yet ({type(e).__name__}: {e})")
             _learned = {}
     return _learned
 
@@ -143,8 +144,9 @@ def learn(flying, written, jobs):
     GB per (batch x tokens) if its Job succeeded. A bundle on disk is no measure: its replay deletes it and may keep leaves, and
     a failed Commit's is partial."""
     try:
-        track = json.loads(TRACK.read_text())
-    except (OSError, ValueError):
+        track = json.loads(TRACK.read_text()) if TRACK.exists() else {}
+    except (OSError, ValueError) as e:
+        log(f"{TRACK} unread, so tracking starts again ({type(e).__name__}: {e})")
         track = {}
     for w in flying:
         t = track.setdefault(w["row"], {"gb": 0.0, "job": w.get("job", "")})

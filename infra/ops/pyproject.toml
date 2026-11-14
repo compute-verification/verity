@@ -29,6 +29,7 @@ untraced = [
     "tests/test_agent_watch_relay.py",
     "tests/test_control_door.py",
     "tests/test_deploy.py",
+    "tests/test_deploy_register.py",
     "tests/test_drive_sh.py",
     "tests/test_gh_read_token.py",
     "tests/test_keeper.py",
@@ -80,6 +81,8 @@ inputs = ["tools/research/src/research/pods", ".agents/skills/using-slack/regist
           "infra/control/vy-control-gate", "infra/control/door_setup.sh",
           # the coordinators' launcher, whose `tell` is tested here with the registry above
           "infra/cursor/launch_coordinator.py",
+          # the watchers' ssh config, a template deploy fills from the register of machines, and the ssh that reads what it wrote
+          "infra/control/watchers_ssh_config", "infra/control/bin/ssh",
           # the pod's loops' numbers, sent with research's sender, their rows (the compute row's floor is the limit the script
           # reads), and the store index loop whose pass record they read
           "infra/control/loop_metrics.py", "infra/control/metrics.toml", "infra/control/store_index.sh",

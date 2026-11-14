@@ -62,11 +62,14 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+
+from . import settings
 
 SCHEMA = "research/monitors-{}/v1"
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
@@ -299,7 +302,7 @@ def booked(text: str) -> list[list]:
         f = body.split()
         try:
             s = datetime.fromisoformat(f[0])
-            s = (s if s.tzinfo else s.replace(tzinfo=timezone.utc)).timestamp()
+            s = (s if s.tzinfo else s.replace(tzinfo=UTC)).timestamp()
             out.append([s, s + 60 * float(f[1] if len(f) > 1 else 30), who.strip()[:80]])
         except (IndexError, ValueError) as e:
             print(f"monitors: a window line skipped ({type(e).__name__}: {e})", file=sys.stderr, flush=True)
@@ -714,13 +717,18 @@ def redirected_base(url: str, key: str) -> str:
     """The base that `url` redirects `key` to, or `url` itself when it doesn't redirect. The site's edge denies a burst of
     anonymous HEADs from one address (`X-Vercel-Mitigated: deny`), so the burst goes to where the site redirects."""
     import urllib.error
+    import urllib.parse
     import urllib.request
+
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"the public export's URL is not an http or https URL (scheme {scheme!r})")
 
     class Stay(urllib.request.HTTPRedirectHandler):
         def redirect_request(self, *a, **k):
             return None
 
-    req = urllib.request.Request(f"{url}/{key}", method="HEAD", headers={"User-Agent": "research-store-fetch"})
+    req = urllib.request.Request(f"{url}/{key}", method="HEAD",  # noqa: S310 (http or https, checked above)
+                                 headers={"User-Agent": "research-store-fetch"})
     try:
         urllib.request.build_opener(Stay).open(req, timeout=30).close()
     except urllib.error.HTTPError as e:
@@ -1044,7 +1052,7 @@ def unit_states(ctx: Ctx, scope: str, names: list[str]) -> dict[str, dict[str, s
     """`systemctl show`'s load, unit-file and active state of each of `names` in `scope` (`systemd`, or research's user manager)."""
     argv = ["systemctl", *(["--user"] if scope == "user-systemd" else []), "show", "--no-pager",
             "-p", "LoadState", "-p", "UnitFileState", "-p", "ActiveState", "-p", "SubState", *names]
-    env = {**os.environ, "XDG_RUNTIME_DIR": os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
+    env = {**os.environ, "XDG_RUNTIME_DIR": settings.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"}
     r = ctx.run(argv, capture_output=True, text=True, timeout=ctx.bound(30), env=env)
     if r.returncode:
         raise RuntimeError(f"`{' '.join(argv[:3])}` exited {r.returncode}: {(r.stderr or '').strip()[-200:]}")
@@ -1603,7 +1611,8 @@ MONITORS: list[Monitor] = [
             "line's head is a waiter no run passes (slot.py's line rule: one that would start if the runs that passed it "
             "ended, a priority one, or one whose ticket names no ask), and it holds those behind; where they don't, set "
             "`peaks=` on them. Lean: the machine's Lean slots. "
-            "Peers: put every CPU machine in the /etc/vy/peers of each machine it names, with the key accepted.",
+            "Peers: `research deploy roll /etc/vy/peers --by WHO` (a dry run; `--apply` does it) writes each machine's "
+            "/etc/vy/peers from the register of machines and has it take the key from every machine its list names.",
             every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
@@ -1687,8 +1696,11 @@ def message(ev: dict, tag: Callable[[str], str] = lambda h: "@" + h) -> str:
 
 
 def webhook_post(url: str, text: str) -> None:
-    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=10) as r:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        raise ValueError(f"${WEBHOOK_ENV} is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(),  # noqa: S310 (http or https, checked above)
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:  # noqa: S310 (http or https, checked above)
         r.read()
 
 
@@ -2034,7 +2046,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
     from . import slack
 
     reg = slack.load_registry(slack.registry_path())
-    api = slack.Slack(os.environ.get("SLACK_BOT_TOKEN"), dry_run=dry)
+    api = slack.Slack(settings.get("SLACK_BOT_TOKEN"), dry_run=dry)
     alerts, front, routes = slack.channel_id_for(reg, "agent-alerts"), slack.channel_id_for(reg, slack.FRONT_DOOR), slack.Routes()
 
     def tag(h: str) -> str:
@@ -2084,7 +2096,7 @@ def slack_post(dry: bool) -> Callable[[dict, dict | None], dict]:
 # ---- the command line -----------------------------------------------------------------------------------------------------------
 
 def _ctx_for(ns: argparse.Namespace, now: float, act: bool = False) -> Callable[[dict], Ctx]:
-    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=os.environ.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
+    return lambda memo: Ctx(now=now, memo=memo, act=act, n2_host=settings.get("VY_N2", "vy-n2"), node=getattr(ns, "node", "n2"),
                             node_state=getattr(ns, "node_state", STATE), machine=getattr(ns, "machine", None) or os.uname()[1],
                             peers=tuple(getattr(ns, "peer", None) or ()))
 
@@ -2139,7 +2151,7 @@ def run_once(ns: argparse.Namespace, where: str, state_path: Path, alerts: Path,
     try:
         state = load(state_path)
         evs = step(state, select(where, ns.only), _ctx_for(ns, now, act=True), now, AlertDir(alerts), by=ns.by,
-                   webhook=os.environ.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
+                   webhook=settings.get(WEBHOOK_ENV) or None, checkpoint=lambda: save(state_path, state),
                    pass_s=PASS_S if where in ("node", "machine") else None)
         save(state_path, state)
         return state, evs

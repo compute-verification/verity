@@ -92,8 +92,9 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   member, byte for byte, or the measurement fails, and its seconds are beside the audit's in one record.
 - `cold_sessions.sh` (`cold_sessions.py`): one cold session a member of a kept audit window behind the ZK server, on one
   card (`prove --zk --gpu`, a lease a session, after a check that no other run's lease or compute process is on the card)
-  and on the CPU prover in turn, each on a proof server of its own and the member's own sample from the audit, then Lean's
-  verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
+  then on the CPU prover (every member on one arm before the next, so the card is held only while the gpu arm runs, until
+  its own end hour `COLD_END_gpu`), each on a proof server of its own and the member's own sample from the audit, then
+  Lean's verdict on it beside the next session. Each session's seconds by part (each side's load, the Lean loop's start, the
   clock's witness, proving and wait, and the ZK server's rest of it), its host and card peak memory, or its refusal's
   text. `COLD_STAGE=probe` checks the window's files and the tools, `build` builds alone and `run` builds and proves.
   `a5.py --gpus` hands an audit's proof server the same devices.
@@ -265,13 +266,16 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   each unit's served MACs and the bits of each of its ports; `--steps all` takes every request step.
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
-  row itself when it fits Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
+  row itself when it fits Flock's block and a size class and is no longer than its family's `WHOLE_UP_TO`, else each slot
+  of its split at its coarsest fitting unit, else
   a gap with the reason; a `COLS` row or slot, and the block-scaled FP8 GEMM's coordinates (`WIDE_COORDS`), at its fitting
   width of least leakage-weighted proving cost, `width_pick`),
   and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
-  `benchmarks/sampling_plan/glm53.py`).
+  `benchmarks/sampling_plan/glm53.py`). `block_recut.sh ART` makes a stored census again from its families (its
+  `census-rank<r>.json`) with this tree's unit templates, sizing and `block_census.py`, for a change to the cut or to a
+  family's units that needs no Commit Build, and writes `compare.json` against the planner's card.
   `m1_unit.py` builds one family's unit through Flock's circuit prover's `UnitStager`, flat or `--structural`, and with `--bin`
   and `--lean` proves one round of it on stand-in bf16 values under `--zk` and verifies it with the Lean verifier.
   `m1_forms.sh` runs it on one Definition per form, side by side, with the Lean call's seconds and peak memory beside each
@@ -288,9 +292,13 @@ input. What the guarantee rests on: `verity/protocols/proofs/spot/verifier/READM
   private/out/serve/overhead.json, and `table --public` publishes ratios alone. It reports time per output
   token, time to first token and tokens per second as composed over stock, the composed run's window open and close on
   the engine loop, and `verity-bench served-table`'s single-protocol rows beside them.
-- `served_composite.sh`: `served_verdicts.sh`'s step after its record. It names PoUS's and the wipe's composite cases as
-  their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's and onsite's Lean verdicts on the run's cases
-  (soundness's composite reader), all on the node. Only the verdict lines reach the run's `verdicts.txt`.
+- `served_composite.sh`: `served_verdicts.sh`'s composite: in the compose follow-on, on an auditor host off the served
+  node, the step before the final record, whose verdict is its product's compiled Lean answer there when the
+  composite names the record's window (`served_verdicts.py record --composite`); in a deferral's follow-on, on a
+  prover node, and on the served node, a development check that leaves the record pending (`COMPOSE_DEVELOPMENT`). It
+  names PoUS's and the wipe's composite cases as their pieces wrote them (PoUS's `onsite_pieces.sh`), then gets remote's
+  and onsite's Lean verdicts on the run's cases (soundness's composite reader). Only the verdict lines reach the run's
+  `verdicts.txt`.
 - `onsite_periods.py`: the onsite record (`verity/onsite-network-record/v1`) per monitoring period, a week, a month and a
   year by the node, a datacenter and the world, each cell its K, share of the weights and δ_net beside K over one
   execution phase, marked proved or scaled by the record's rules. It refuses a record whose labels its rules contradict:

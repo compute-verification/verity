@@ -167,6 +167,11 @@ inputs = [".agents/skills", "verity/README.md", ".gitignore", "fixtures", "bench
           "tools/verity/graph/verity_graph/__init__.py",
           "hardware/nodes/rtx-pro-6000-server-x8.toml", "hardware/cards/rtx-pro-6000-server.toml"]
 parallel = true
+# the suite takes about 11 minutes on 3 workers and over an hour in one process (`held_workers`; on fewer, `bound` stretches
+# timeout_s in proportion)
+workers = 3
+timeout_s = 3600
+timeout_workers = 3
 # What the suites of packages depending on research read of it, and so key on in place of this directory: the store and its
 # telemetry, running and recording a run (`python -m research`, its CLI's other commands imported only when run), the merge
 # gate and queue `check` drives (with the Linear client the queue imports), the memory reservations a check slot holds (`mem`),
@@ -182,7 +187,8 @@ exports = ["tools/research/src/research/__init__.py", "tools/research/src/resear
            "tools/research/src/research/quick_tier.py", "tools/research/src/research/record.py",
            "tools/research/src/research/remote.py", "tools/research/src/research/result.py", "tools/research/src/research/runs.py",
            "tools/research/src/research/treelock.py", "tools/research/src/research/withdraw.py",
-           "tools/research/src/research/secret_hint.py", "tools/research/src/research/timefmt.py",
+           "tools/research/src/research/secret_hint.py", "tools/research/src/research/settings.py",
+           "tools/research/src/research/timefmt.py",
            "tools/research/src/research/waitcap.py",
            "tools/research/src/research/pods/__init__.py", "tools/research/src/research/pods/registry.py",
            "tools/research/src/research/pods/runpod.py", "tools/research/src/research/pods/nebius/tool_rules.py",
