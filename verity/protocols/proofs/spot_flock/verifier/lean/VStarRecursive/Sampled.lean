@@ -7,11 +7,12 @@ soundness covers the one-stage form only, and the verifier refuses every form it
 `Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
 
 * **params**: `{"form": "one-stage" | "recursive", ...}`, the rest that form's params. The auditor fixes the form with the
-  rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; the recursive form is
-  refused before its rest is read;
+  rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused; those naming one are
+  v2's, the one statement's or the per-member form's (`OneStageZk.paramsEitherOfJson`); the recursive form is refused
+  before its rest is read;
 * **commitment**: the registration record (`OneStage.commitmentOf`), as both forms read it;
 * **evidence**: `{"form", ...}`, the rest that form's evidence. One-stage evidence naming no `proofs` is v1's, and
-  refused;
+  refused; evidence naming one is v2's, in either of its forms (`OneStageZk.evidenceEitherOf`);
 * **check**: that form's check on the blobs, its acceptance held to the caller's check (`Caller.gate`) against that
   form's verifier; evidence of the other form rejects, so with the recursive params refused only one-stage v2's check
   runs.
@@ -59,7 +60,7 @@ def paramsOfJson (j : Json) : V Params := do
   let (form, rest) ← split j "parameters"
   if form == ONE_STAGE then
     if (field? rest "proofs").isNone then throw s!"the parameters name no proofs: {V1_REFUSED}"
-    return .inl (← OneStageZk.paramsOfJson rest)
+    return .inl (← OneStageZk.paramsEitherOfJson rest)
   if form == RECURSIVE then throw RECURSIVE_REFUSED
   throw s!"the parameters' form {form} is not \"{ONE_STAGE}\" or \"{RECURSIVE}\""
 
@@ -67,7 +68,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   let (form, rest) ← split (← Core.canonicalJson b) "evidence"
   if form == ONE_STAGE && (field? rest "proofs").isNone then throw s!"the evidence names no proofs: {V1_REFUSED}"
   let rest := (← Flock.canon rest).toUTF8
-  if form == ONE_STAGE then return .inl (← OneStageZk.evidenceOf rest)
+  if form == ONE_STAGE then return .inl (← OneStageZk.evidenceEitherOf rest)
   if form == RECURSIVE then return .inr (← Recursive.evidenceOf rest)
   throw s!"the evidence's form {form} is not \"{ONE_STAGE}\" or \"{RECURSIVE}\""
 

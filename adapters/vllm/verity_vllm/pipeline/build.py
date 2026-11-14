@@ -209,7 +209,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
     `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
     `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`).
     `dead_free`: a TP rank's request wrapper in the registered compiler's form too (`program.prune.dead_free`), as one rank's always is:
-    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row).  `batched`: that form batched (`program.prune.BATCHED`), class G's.
+    the rank Programs `predict.steps.compile_steps` compiles.  A TP workload of record keeps every unit (its Match counts every collective row).  `batched`: that form batched (`program.prune.BATCHED`), class G's.
     `table_reads`: in that form, DSA's rows past TOPK keys by table reads (`program.dsa_table`, `Registered.dsa_table_reads`).
     `stop`: the request's length rule over its outputs (`frontend.stop_rule.spec`), the derive config's ``stop``: its last check."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -636,7 +636,7 @@ class Options:
     emit_root: str | None = option("--emit-root", default=None, help="with --emit-ranks: rank r's files go to <root>/rank<r>/<name of --out>")
     dead_free: bool = option("--dead-free", action="store_true", default=False,
                              help="a TP rank's request wrapper in the registered compiler's form (program.prune.dead_free), as one rank's always is: "
-                                  "the rank Programs predict.steps.compile_steps compiles; a TP row of record keeps every unit")
+                                  "the rank Programs predict.steps.compile_steps compiles; a TP workload of record keeps every unit")
     batched: bool = option("--batched", action="store_true", default=False, help="the request wrapper's registered compiler's form batched (program.prune.batched_form): class G's, as predict.steps.compile_steps compiles it; with --dead-free at a TP rank")
     dsa_table_reads: bool = option("--dsa-table-reads", action="store_true", default=False,
                                    help="with --batched: DSA's rows past TOPK keys read their history by table (program.dsa_table), as "

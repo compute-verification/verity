@@ -30,7 +30,8 @@ check the stream ran on it, in the stream's order.
   sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
-  public-items rule on the interior values, the population (else `interior-population`), its window (else
+  public-items rule on the interior values, the population (else `interior-population`), its strata those parts, the
+  check's templates in its order and each one range (else `interior-parts`, `cellParts`), its window (else
   `interior-window`: the boundary registration's, or the one the verifier computes from the boundary registration's
   digest and the sample, `interiorWindowOk`), R1–R8 against its copies under `subset:Q·n` (all of them committed),
   `population-order`, and its receipt; and `second`: the second stage on its own
@@ -44,10 +45,9 @@ check the stream ran on it, in the stream's order.
   names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
-  (`SecondStage.checkAny`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
-  symbol accepts when every audit
-  record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
-  their own roots (`own_reads`), whose rows round 2 holds.
+  (`SecondStage.check`, the two-stage form allowed only when `run`'s `form` is, by default `SecondStage.FORM`); the
+  symbol accepts when every audit record does. Each audit record takes the sessions' reads of its registration's own
+  ports at their own roots (`Record.lessOwnReads`); under a two-stage rule round 2 holds their rows.
 
 A step's refusal is `{"step", "codes"}`; a decided run is `{"receipt", "draw", "read", "symbol", "public", "audit"}`, the
 audit record as the text of Python's `canonical_json`, and under a two-stage rule `interior`, the interior registration's
@@ -213,15 +213,13 @@ def coinsCode (key : Option Challenger.ChallengerKey) (main coins record : Json)
       if why == Challenger.FAMILY_ROOT then "family" else "coins"
   | _, _, _, _ => some "coins"
 
-/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions, taking reads of
-the registration's own ports at their own roots under a two-stage rule. -/
+/-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions. -/
 def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
     (served sessionRoots : Json) : V Json :=
   do Record.record (← Record.inputOf (Json.mkObj [("registration", record), ("receipt", receipt),
     ("draw", draw), ("law", law), ("proved_units", Json.arr (proved.map Lean.toJson)),
     ("instances", Lean.toJson instances), ("statement", i.statement), ("verdicts", Json.mkObj i.verdicts.toList),
-    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots),
-    ("own_reads", Json.bool (i.rule matches .twoStage ..))]))
+    ("delta", i.delta), ("sessions", Json.arr i.sessions), ("served", served), ("session_roots", sessionRoots)]))
 
 /-- Under a two-stage rule, the check's query is the rule's `grain`. -/
 private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
@@ -237,6 +235,11 @@ is sampled on no other window. -/
 def interiorWindowOk (boundary interior : Option String) (digest : String) (sample : Array Nat) : Bool :=
   interior == boundary || (interior.isSome && interior == SecondStage.interiorRoot digest sample)
 
+/-- **The parts the replay block's cells give** a sample of `q` replay blocks: the templates `ids`, in that order,
+template `t` the `q · ns[t]` slots from `q · Σ_{s<t} ns[s]`. -/
+def cellParts (q : Nat) (ids : Array String) (ns : Array Nat) : Array SecondStage.Part :=
+  ((List.range ids.size).map fun t => ⟨ids.toList.getD t "", q * (ns.toList.take t).sum, ns.getD t 0⟩).toArray
+
 /-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
 in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
 and codes. -/
@@ -246,9 +249,13 @@ def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Arra
   let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
   if !pub.codes.isEmpty then return .error ("interiors", pub.codes)
   let ns ← Select.replayCells it.replay v.query
-  let ks ← k.over (← Select.templateIds v.query) ns
+  let ids ← Select.templateIds v.query
+  let ks ← k.over ids ns
   let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
+  let strata ← Partition.strata v.program v.query
+  if SecondStage.parts sample.size strata ≠ some (cellParts sample.size ids ns) then
+    return .error ("interiors", #["interior-parts"])
   let boundary ← Registration.digestHex i.record
   if !interiorWindowOk i.params.verifier.windowRoot v.windowRoot boundary sample then
     return .error ("interiors", #["interior-window"])
@@ -273,9 +280,9 @@ def secondStage (i : Input) (sample : Array Nat) :
   | _, none => return .ok none
 
 /-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
-(`SecondStage.checkAny`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`: whether
+(`SecondStage.check`, the two-stage form allowed where `form` is) over the first stage's replay sample `sample`: whether
 it accepts, and the run's `interior` entry; nothing under a one-stage rule. -/
-private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
+def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
   | none => return (true, [])
   | some (it, receipt, draw, law, read) => do
@@ -290,17 +297,19 @@ private def interiorAudit (form : Bool) (i : Input) (sample : Array Nat) :
         refs := it.circuits.map fun (t, _, h, _) => (t, h), refReads := it.circuits.map fun (t, _, _, r) => (t, r),
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
+        widths := SecondStage.replayWidths i.params.verifier.program.prog it.replay.prog.programFn,
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record,
         supplied := it.params.verifier.supplied,
         fixed := it.params.verifier.pinned.map (·.1) ++ it.params.verifier.outputs.map (·.1),
         reads := it.reads }
-    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny form own it.statements)
+    let rec_ := SecondStage.attach rec_ (SecondStage.check form own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])
 
-/-- The run, step by step; an error where the Python raises. Round 2 allows the two-stage form where `form` does, by
-default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs it at `form := true`. -/
+/-- The run, step by step; an error where the Python raises. The second stage's statement check allows the two-stage
+form where `form` does, by default the switch (`SecondStage.FORM`); a caller that decides last by the switch itself runs
+it at `form := true`. -/
 def run (i : Input) (form : Bool := SecondStage.FORM) : V Json := do
   let v := i.params.verifier
   if !grainHolds i.rule v.query then return refused "register" #["grain"]

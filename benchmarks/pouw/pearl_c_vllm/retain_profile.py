@@ -40,31 +40,31 @@ HERE = Path(__file__).resolve().parent
 GiB = 1 << 30
 #: (module, attribute) of each part timed by `serve`, by its name in the profile; a dotted attribute is a class's method
 PARTS = {
-    "gemm": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun._gemm"),
-    "after": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun._after"),
-    "begin": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.begin"),
-    "poison": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.poison"),
-    "join_sides": ("verity_vllm.protocols.pouw.pearl_c", "PearlCDeviceRun.join_sides"),
-    "retained_call": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._retained"),
-    "excluded": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded"),
-    "excluded_host": ("verity_vllm.protocols.pouw.pearl_c.ends", "excluded_host"),
-    "y_tree": ("verity_vllm.protocols.pouw.pearl_c.served_y", "y_tree"),
-    "write_behind": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_behind"),
-    "copies": ("verity_vllm.protocols.pouw.pearl_c.host", "_Copies.start"),
-    "arena_take": ("verity_vllm.protocols.pouw.pearl_c.host", "_Arena.take"),
+    "gemm": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun._gemm"),
+    "after": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun._after"),
+    "begin": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.begin"),
+    "poison": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.poison"),
+    "join_sides": ("verity.protocols.accounting.pouw.prover.serving.pearl_c", "PearlCDeviceRun.join_sides"),
+    "retained_call": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds._retained"),
+    "excluded": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "excluded"),
+    "excluded_host": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "excluded_host"),
+    "y_tree": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.served_y", "y_tree"),
+    "write_behind": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "write_behind"),
+    "copies": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_Copies.start"),
+    "arena_take": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_Arena.take"),
     "stream_sync": ("torch.cuda.streams", "Stream.synchronize"),
     "event_sync": ("torch.cuda.streams", "Event.synchronize"),
-    "landed": ("verity_vllm.protocols.pouw.pearl_c.host", "_landed"),
-    "writer": ("verity_vllm.protocols.pouw.pearl_c.host", "_write_host"),
-    "join": ("verity_vllm.protocols.pouw.pearl_c.ends", "joined"),
-    "write_retained": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds._write_retained"),
-    "weights_files": ("verity_vllm.protocols.pouw.pearl_c.ends", "_linked"),
-    "pass_files": ("verity_vllm.protocols.pouw.pearl_c.ends", "_write"),
-    "manifest": ("verity_vllm.protocols.pouw.pearl_c.ends", "write_manifest"),
-    "readback": ("verity_vllm.protocols.pouw.pearl_c.ends", "_bytes"),
-    "end": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.end"),
-    "retained_ends": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.retained_ends"),
-    "finish": ("verity_vllm.protocols.pouw.pearl_c.ends", "PassEnds.finish"),
+    "landed": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_landed"),
+    "writer": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.host", "_write_host"),
+    "join": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "joined"),
+    "write_retained": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds._write_retained"),
+    "weights_files": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "_linked"),
+    "pass_files": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "_write"),
+    "manifest": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "write_manifest"),
+    "readback": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "_bytes"),
+    "end": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds.end"),
+    "retained_ends": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds.retained_ends"),
+    "finish": ("verity.protocols.accounting.pouw.prover.serving.pearl_c.ends", "PassEnds.finish"),
 }
 
 
@@ -246,12 +246,12 @@ def serve(args: argparse.Namespace, rest: list[str]) -> int:
         import random
 
         from verity.protocols.accounting.pouw.verifier import verifier
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
         draw = random.Random(args.seed)
         verifier.coins = draw.randbytes
         PPD.new_salt_key = lambda scheme: draw.randbytes(32)
     if args.wait_ends:
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
         PPD.PearlCDeviceRun.retain_behind = False
     prof = _Profile()
     parts = _install(prof)

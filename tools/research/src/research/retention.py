@@ -79,7 +79,7 @@ meanwhile stays. Its `remote.json` is deleted last (`_delete`), so a deletion cu
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
 then the oldest expiry, until it is under low-pct. A filesystem's use is the larger of its blocks' and its inodes' (`inode_usage`):
 a disk out of inodes refuses every write as one out of blocks does, even with most of its blocks free. One pass deletes at most
---max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. Launches refused before they ran go first, oldest
+--max-paths paths (MAX_PATHS; 0 lifts the limit), and the next takes the rest. Launches refused before they ran go first, oldest
 expiry first, with --max-paths of their own: each is a few files, so however many wait they never take the place of what frees
 the disk, and the n-th of them is gone by the ceil(n / --max-paths)-th pass that acts. A path qualifies only with a valid record (explicit or
 implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
@@ -1195,11 +1195,11 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
     """The policy (module docstring) over `root`: the plan, and with `apply` its deletions. `jobs_dirs` None means the
     DEFAULT_JOBS_DIRS that exist; `remote_check` None is `store_check(store_root, now)`; `in_use` None is `JobScripts(jobs_dirs)`;
     `inodes` (`inode_usage`) makes the filesystem's use the larger of its blocks' and its inodes', None its blocks' alone;
-    `max_paths` caps the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
+    `max_paths` limits the paths this pass deletes, None not at all; `unpreserved` (--unpreserved-runs) lets it delete the
     unpreserved runs, which it otherwise lists and leaves; `launcher` (--launcher-copies) gives the launchers' copies of runs
     their records and holds the pass to them: an --apply deletes one only on `copy_check`'s answer (None is
     `launcher_check(now)`), and every other path the pass would have taken is listed as left (ONLY_LAUNCHER). The plan's
-    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the cap left
+    `stored` counts the remote checks' answers (STORED) over the paths an --apply asked about, `capped` the paths the limit left
     for the next pass, and `unpreserved` the unpreserved runs, apart from every other path (`unpreserved_runs`), with the
     `deleted` ones this pass deleted, or in a dry run would."""
     if policy not in POLICIES:
@@ -1687,7 +1687,7 @@ def main(argv: list[str]) -> int:
                                                                             "every qualifying path)")
         ap.add_argument("--force", action="store_true", help="act under --high-pct too")
         ap.add_argument("--max-paths", type=int, default=MAX_PATHS, metavar="N", help="delete at most N paths in this pass and leave "
-                        "the rest for the next (default %(default)s; 0: no cap)")
+                        "the rest for the next (default %(default)s; 0: no limit)")
         ap.add_argument("--jobs-dir", action="append", default=[], metavar="D", help="more job-script directories (beside "
                         + " and ".join(map(str, DEFAULT_JOBS_DIRS)) + " when they exist): a path a file there names is in use")
         ap.add_argument("--store", default=None, metavar="ROOT", help="the evidence store that says what became of a preserved path's "
@@ -1705,7 +1705,7 @@ def main(argv: list[str]) -> int:
                         "when a deletion failed or a stored copy could not be asked about")
         ns = ap.parse_args(rest)
         if ns.max_paths < 0:
-            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no cap", file=sys.stderr)
+            print(f"research retention gc: --max-paths {ns.max_paths}: give a count, or 0 for no limit", file=sys.stderr)
             return 2
         if missing := [d for d in [ns.root, *ns.jobs_dir] if not Path(d).is_dir()]:
             print(f"research retention gc: {missing[0]} is not a directory", file=sys.stderr)

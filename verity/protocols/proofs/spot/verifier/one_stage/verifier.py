@@ -51,7 +51,7 @@ from verity.circuits import codec
 from verity.circuits.codec import canonical_json
 from verity.circuits.program import Program
 
-from . import audit, draw as D, hello as H, registration as R
+from . import audit, draw as D, hello as H, link_points as LP, registration as R
 from .verdict import Verdict
 
 RECORD_VERDICT = "lean"
@@ -290,18 +290,24 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None, tied: Sequence[str] | None = None,
-          history: Mapping[str, Any] | None = None, compiler: Any = R.UNREAD) -> Verdict:
+          history: Mapping[str, Any] | None = None, members: Sequence[LP.Member] = (),
+          compiler: Any = R.UNREAD) -> Verdict:
     """`registration.check` (R1-R8) by the verifier, with R2's declared day when it passes `day` and `declarations`,
     R6's seed salt when it passes `seed_salt`, R6's registered compiler when it passes `compiler`, R6's pool reset, week and spent mark, a reset at most once a week,
     and R7's pool chain when it passes `pool`, R8's tied values when it passes `tied`, and the roots of the history
     tables it passes as `history`, which the Lean computes from the members' public bodies and puts in place of the
-    supplied values' `history` sources. History tables both verifiers refuse fail it with `R.HISTORY` alone."""
-    log = list(log)
+    supplied values' `history` sources. History tables both verifiers refuse fail it with `R.HISTORY` alone. With
+    `members`, the per-member form's (each its units' ``[lo, hi)`` ranges and its circuit's units a proof block), both
+    hold them to `link-points` after R8 (`registration.check`'s ``members``, `Registration.linkRefused`: a sample
+    that ends misses no member and gives each one count of link points), as the compiled check of that form does the
+    members its parameters name (`OneStageZk.membersParamsOfJson`); with none, the one-statement form's, neither does."""
+    log, members = list(log), [([list(r) for r in us], g) for us, g in members]
     try:
         py: Verdict | None = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                      work_table, registered, supplied, pinned, binding, outputs=outputs, schemas=schemas,
-                                     window_root=window_root, held=held, day=day, declarations=declarations,
-                                     seed_salt=seed_salt, pool=pool, tied=tied, history=history, compiler=compiler)
+                                     window_root=window_root, held=held, members=members, day=day,
+                                     declarations=declarations, seed_salt=seed_salt, pool=pool, tied=tied, history=history,
+                                     compiler=compiler)
         why = None
     except R.HistoryRefused as e:
         py, why = None, str(e)
@@ -309,7 +315,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
                                                   work_table, registered, supplied, pinned, binding, schemas,
                                                   window_root, held, outputs, day, declarations, seed_salt, pool, tied,
                                                   history, compiler),
-                       "record": dict(rec)})
+                       "record": dict(rec),
+                       **({"members": [{"units": us, "vus_per_block": g} for us, g in members]} if members else {})})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"],
                **{k: got[k] for k in ("fanout", "rests_on_period_check") if k in got}}
@@ -549,18 +556,13 @@ def _record_summary(r: Mapping[str, Any]) -> dict[str, Any]:
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
                  law: Mapping[str, Any], proved_units: Sequence[int], instances: int, statement: Mapping[str, Any],
                  verdicts: Mapping[str, Mapping[str, Any]], delta: float, sessions: Sequence[str] = (),
-                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None, *,
-                 own_reads: bool = False) -> dict[str, Any]:
+                 served: Sequence[int] | None = None, session_roots: Mapping[str, str] | None = None) -> dict[str, Any]:
     """`audit.audit_record` by the verifier, with `session_registered` the verdicts' own for the registration's
-    values (`audit.session_registered(verdicts, registration)`), with `own_reads` (a two-stage run's, whose round 2
-    holds those reads' rows) less the reads of the registration's own ports at their own roots (`Record.lessOwnReads`):
-    the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each side's acceptance and failed
-    checks)."""
+    values (`audit.session_registered(verdicts, registration)`) less the reads of its own ports at their own roots
+    (`audit.less_own_reads`): the record of record, with `verifiers` (`{"of_record", "lean", "python", "agree"}`, each
+    side's acceptance and failed checks)."""
     verdicts = {k: dict(verdicts[k]) for k in sorted(verdicts)}
-    opened = audit.session_registered(verdicts, registration)
-    if own_reads and opened is not None:
-        roots = {r["port"]: r["root"] for r in registration["roots"]}
-        opened = {v: r for v, r in opened.items() if not (v in roots and roots[v] == r)}
+    opened = audit.less_own_reads(audit.session_registered(verdicts, registration), registration)
     py = audit.audit_record(registration, receipt, draw, law, list(proved_units), instances, statement, verdicts, delta,
                             sessions, served, session_roots, opened)
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
@@ -568,8 +570,7 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
                           "law": dict(law), "proved_units": list(proved_units), "instances": instances,
                           "statement": dict(statement), "verdicts": verdicts, "delta": exact,
                           "sessions": list(sessions), "served": None if served is None else list(served),
-                          "session_roots": None if session_roots is None else dict(session_roots),
-                          **({"own_reads": True} if own_reads else {})})
+                          "session_roots": None if session_roots is None else dict(session_roots)})
     if isinstance(got, str):
         try:
             got = json.loads(got)

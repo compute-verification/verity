@@ -162,7 +162,7 @@ def cut(w: Path, params: Mapping[str, int], calls: Sequence[Sequence[int]], sche
     for a call's (K, N), every call's (K, N) has a weight, and no (K, N) has more weights than calls. At version 1 W
     registers no weight. A weight's rows that aren't a call's, or past its calls' count, and a call's (K, N) with no
     weight are among `differ`."""
-    from verity_vllm.protocols.pouw.pearl_c import window as PWR
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
     rec = read_json(w)
     version = PWR.version_of(rec)

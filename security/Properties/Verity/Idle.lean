@@ -96,7 +96,7 @@ def forger : Hash.Assumptions.LmsForger where
 
 /-- **The idle deployment's names**, publishing the error `δ` for every subprotocol and the work certificate `W`. -/
 noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
-  read _ _ := fileRead
+  read _ _ := .one fileRead
   place _ _ _ _ := none
   programDigest θ := some (sha512 θ.data.toList)
   publicDigest θ := some (sha512 θ.data.toList)
@@ -123,10 +123,6 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   capacity _ := ()
   world_window _ _ _ _ _ := rfl
   world_capacity _ _ _ _ _ := rfl
-  theta _ _ := ∅
-  theta_input _ _ _ h := absurd h (Finset.notMem_empty _)
-  gates _ := 0
-  fresh _ := 0
   spans _ _ := 1
   schedule _ _ := blocks
   boundary _ _ := 0

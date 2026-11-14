@@ -695,11 +695,13 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
   rename_i rowDebit hrd
   obtain ⟨words, hw, hrd⟩ := bind_ok hrd
   obtain ⟨elems, he, hrd⟩ := bind_ok hrd
+  obtain ⟨endsA, hea, hrd⟩ := bind_ok hrd
+  obtain ⟨endsB, heb, hrd⟩ := bind_ok hrd
   obtain rfl := (Except.ok.inj hrd).symm
   split at hc
   · cases hc
   rename_i hcap
-  refine ⟨words, elems, hw, he, Nat.not_lt.mp hcap, ?_⟩
+  refine ⟨words, elems, endsA, endsB, hw, he, hea, heb, Nat.not_lt.mp hcap, ?_⟩
   obtain ⟨st, hst, hc⟩ := bind_ok hc
   have hall := forIn_ok_all (fun x : Nat × Nat => x.2 * Rule.CAP_DEN ≤
       Rule.CAP_NUM * creditOf 1 r.kKept r.matmul.n * cc.length * (if s.censusKs.contains r.matmul.k then 4 else 1)) _
@@ -714,9 +716,11 @@ theorem tileKeepsTheCap : TileKeepsTheCap := by
       cases hc)
   have hlw : words.length = cr.length := mapM_ok_length hw
   have hle : elems.length = cr.length := by rw [mapM_ok_length he, List.length_zip, hlw, Nat.min_self]
+  have hla : endsA.length = cr.length := mapM_ok_length hea
   intro d hd
   obtain ⟨i, hi⟩ := mem_zip_snd (l := cr)
-    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, hlw, hle, Nat.min_self])) d hd
+    (Nat.le_of_eq (by rw [List.length_map, List.length_zip, List.length_zip, hlw, hle, hla, Nat.min_self,
+      Nat.min_self])) d hd
   exact hall (i, d) hi
 
 /-! ## The run's acceptance -/

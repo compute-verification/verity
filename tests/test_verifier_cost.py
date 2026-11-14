@@ -23,6 +23,11 @@ iterations, as `NciCheck.Desc` does (its docstring), so a Definition's summary s
 
 What may stay is listed in ``ALLOWED``, one line of reason each: the gate-by-gate references a description-sized
 verifier is difftested against, and the walks still open. An entry that no longer matches anything fails too.
+
+One walk no form above shows, since the caller's text is the same either way: `Slots.popOk` is stated on `Slots.layout`,
+which builds a proof block for every input gate of the root, and runs from the query's ranges only in a module compiled
+with `Spot.PopOrder`'s `@[csimp]` equality among its imports. So a Lean file under `verity/` whose code calls `popOk`
+imports `Spot.PopOrder`, itself or through the spot verifier's modules it imports.
 """
 
 from __future__ import annotations
@@ -203,6 +208,47 @@ def test_no_verifier_of_record_walks_the_unrolled_circuit():
     assert not bad, f"{FIX}:\n" + "\n".join(bad)
     stale = [p for p in ALLOWED if not found.get(p)]
     assert not stale, f"ALLOWED entries that match nothing (remove them): {stale}"
+
+
+#: the spot verifier's Lean package, and in it `popOk`'s module and the module of its `@[csimp]` equality
+SPOT = "verity/protocols/proofs/spot/verifier/lean"
+SLOTS, POP_ORDER = f"{SPOT}/Spot/Slots.lean", f"{SPOT}/Spot/PopOrder.lean"
+#: a call of `popOk` (`popOkRanges` and `popOk_eq_popOkRanges` are other names)
+POP_OK = re.compile(r"(?<![\w'])popOk\b(?!')")
+#: a module of the spot verifier's package a Lean file imports for its own code (a `meta import` is not one)
+SPOT_IMPORT = re.compile(r"^(?:public\s+)?import\s+(?:all\s+)?(Spot(?:\.[\w']+)*)\s*$", re.M)
+
+
+def _spot_imports(path: str, have: set[str]) -> set[str]:
+    """The spot verifier's modules `path` imports, itself or through them."""
+    seen: set[str] = set()
+    todo = [path]
+    while todo:
+        for mod in SPOT_IMPORT.findall((ROOT / todo.pop()).read_text()):
+            q = f"{SPOT}/{mod.replace('.', '/')}.lean"
+            if q in have and q not in seen:
+                seen.add(q)
+                todo.append(q)
+    return seen
+
+
+def test_a_call_of_popOk_is_compiled_with_its_equality():
+    have = set(_tracked())
+    assert "@[csimp] theorem popOk_eq_popOkRanges" in (ROOT / POP_ORDER).read_text(), \
+        f"{POP_ORDER} no longer holds the @[csimp] equality popOk_eq_popOkRanges: this test names the module that does"
+    callers = [p for p in sorted(have) if p.startswith("verity/") and p.endswith(".lean") and p not in (SLOTS, POP_ORDER)
+               and POP_OK.search(COMMENT.sub("", (ROOT / p).read_text()))]
+    bad = [p for p in callers if POP_ORDER not in _spot_imports(p, have)]
+    assert not bad, ("these call Slots.popOk without Spot.PopOrder among their imports, so their call is compiled as "
+                     "stated, off Slots.layout, a proof block for every input gate of the root (AGENTS.md \"Design "
+                     f"rules\", verifier cost): add `public import Spot.PopOrder` to each: {bad}")
+
+
+def test_the_popOk_scan_reads_calls_and_imports():
+    assert POP_OK.search("  | some n => if Slots.popOk v.program v.query n then pure () else throw E")
+    assert not POP_OK.search("theorem popOk_eq_popOkRanges : @popOkRanges = f := popOk' x")
+    assert SPOT_IMPORT.findall("module\n\npublic import Spot.PopOrder\nimport all Spot.Run\nmeta import Spot.Slots\n"
+                               "import Spot\npublic import Flock\n") == ["Spot.PopOrder", "Spot.Run", "Spot"]
 
 
 def test_the_scan_sees_each_form():

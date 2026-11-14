@@ -7,7 +7,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `work-rate:NUM/DEN`, which names its sampling design and work table over the program's population (`design`); the
   protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's soundness statement
   doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
-  what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
+  what its layout derives, a port whose rows are the leaves of another port's tree naming that port too, `"wired"`, a
+  string), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
   `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
@@ -68,7 +69,7 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R8 (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
-  the registered one). It rejects when one fails or
+  the registered one, and a read of the record's own port taken at that port's own root, `Record.lessOwnReads`). It rejects when one fails or
   a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
 * on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
@@ -263,7 +264,8 @@ def paramsParsed (j : Json) : V Params := do
   let (law, workTable) ← design program query (getD j "law") workTable
   let .str scheme := getD j "scheme" | throw "scheme is not a string"
   let ports ← (entries (← obj (getD j "ports") "ports")).mapM fun (p, v) => do
-    exactly v #["domain", "leaves"] s!"port {p}"
+    exactly v (if getD v "wired" matches .str _ then #["domain", "leaves", "wired"] else #["domain", "leaves"])
+      s!"port {p}"
     if (nat? (getD v "leaves")).isNone || !(getD v "domain" matches .str _) then
       throw s!"port {p}: leaves is not a natural number or domain not a string"
     pure (p, v)
@@ -466,13 +468,13 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-- `audit_record`'s checks after the sample's (`Record.checks`): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
-values (`Record.ownRegistered`). -/
+values (`Record.ownRegistered`), less the reads of its own ports at their own roots (`Record.lessOwnReads`). -/
 def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
   let units := match getD e.draw "units" with | .arr us => us.filterMap int? | _ => #[]
   let roots := e.sessionRoots.map entries
   let cs := Record.checks rec e.receipt e.draw Json.null units (e.provedUnits.map Lean.toJson) (Lean.toJson e.instances)
     digest (e.served.map (·.map fun (n : Nat) => (n : Int))) roots
-    (Record.ownRegistered rec (Record.sessionRegistered e.verdicts))
+    (Record.lessOwnReads rec (Record.ownRegistered rec (Record.sessionRegistered e.verdicts)))
   (cs.filter fun (n, c) => n != "draw" && !c.codes.isEmpty).map (·.1)
 
 

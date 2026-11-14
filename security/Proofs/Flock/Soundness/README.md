@@ -66,7 +66,7 @@ after its level-0 cap):
   §2). Each runs `P*` to a cap and continues it twice, and every pair it counts is a SHA-512 collision
   (`op₀_conflict_collision`, `opR_conflict_collision`). Level 0 is opened by both reps, hence `2Q_0`.
 - **`Adv_×`** is the probability that one run opens a position two ways, both verifying under one cap. Every such run
-  is a collision (`SelfClash.collision`).
+  outputs a collision (`selfCands_spec`).
 - **Under the generic bound** this is at most `2^-205 + t·2^{17.3−256} + t²/2^511` for a prover making `t` hash
   evaluations. That is at most 2^-128 up to `t ≈ 2^110.7` (m = 35) to `2^117` (m = 22).
 - **No random oracle and no knowledge assumption** is used.
@@ -173,7 +173,7 @@ binding error per audit.
 | The link points reduce region checks to opened claims | 1a | `link_sound` (`Soundness.lean`), `link_sound_of_card` (`BindSound.lean`) | proved |
 | Masking's padded level 0 (§1.1): Ligerito with the padded code and the extra lanes, and the table theorem for any padding `t` and extra lanes `e` | 1a | `ligeritoPad_sound`, `table_sound_pad` (`LigeritoPad*.lean`, `SoundnessPad.lean`) | proved; the inner proof's soundness separately |
 | The padded bound at Flock ZK's values: 2^-205 per table at m = 25–35 | 1a | `table_sound_pad_m1` (`Accounting/PaddedNumbers.lean`) | proved |
-| Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
+| Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.openCollPair_spec` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
 | Session binding: the challenger's live-coin part keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
@@ -347,7 +347,7 @@ term below 2^-170.
   in place of the standalone one) is not Diamond–Posen's. Its soundness follows from the paper's Appendix B argument
   (injective recombination over GF(2)) plus Schwartz–Zippel. ArkLib's ring switching (legacy layer, 18 admits, the
   other variant) is not used.
-- **Merkle binding.** Two different openings of one position against one cap give a collision: `Merkle.opening_binding`,
+- **Merkle binding.** Two different openings of one position against one cap give a collision that `Merkle.openCollPair` computes: `Merkle.openCollPair_spec`,
   proved, as VCVio proves for its trees.
 - **Johnson list bounds.** ArkLib's `irs_lambda_le_johnson_mds`, proved.
 - **Sumcheck rounds and univariate steps.** Root counting in Mathlib (`Polynomial.card_roots'`,
@@ -410,7 +410,7 @@ The masked protocol and the reference prover are in DESIGN.md §6, and the sessi
 - **Lemma C**, the same for the pre-final transcript against a verifier that adapts its coin openings and aborts to the
   prover's messages and has its own tape, within `2·|L|·δ₁` for `L` the pre-final view's leaves:
   `adaptive_prefinal_hm96_tape` (`ZK/AdaptivePrefinal.lean`), from T5 (`card_run_eq`).
-- The coin tree's openings bind under SHA-512 collision resistance (T6, `coin_opening_binding_keyed`), and T7's numeric step
+- The coin tree's openings bind under SHA-512 collision resistance (T6, `coinCollKeyed_isColl`), and T7's numeric step
   (`gk_ratio_le_third`).
 - **Theorem GK**, the Goldreich–Kahan simulator (`ZK/GK/`): `gk` makes a dummy run, estimates the completion rate from
   fresh dummy runs, and rewinds at most `4t/p̃` times with fresh dummy openings, under a cap `M`. `Model.gk_simulate`: for a

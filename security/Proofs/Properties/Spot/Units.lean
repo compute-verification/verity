@@ -2,6 +2,7 @@ module
 
 public import Spot.OneStageZk
 public import Flock.With.SetupEq
+public import Proofs.Flock.Claims.JsonField
 public import Proofs.Flock.Claims.JsonNorm
 public import Proofs.Flock.Claims.Complete.Json.Parse
 public import Proofs.Flock.Claims.Recursion.SetupValues
@@ -17,7 +18,8 @@ the sample as `Flock.Witness.recordDraw` keeps it, and the header as `Flock.HmIn
 agree:
 
 * `getD_norm`, `nat?_norm`: a field of a rebuilt well-formed value is the field rebuilt, and a number reads the same
-  rebuilt; `wf_getD`: a field of a well-formed value is well formed;
+  rebuilt, over `field?_obj` and `wf_getD` (a field of a well-formed value is well formed), which
+  `Proofs.Flock.Claims.JsonField` declares in this namespace;
 * `headerOf_of`: v2's `FilePart.header` reads the header `RecDeploy.SetupValues.headerOf` reads, its first line up to the
   first newline (`headerLine_of_findByte`), so it reads the header the session's public file load keeps
   (`headerOf_loadPublic`, through `RecDeploy.SetupValues.loadPublic_counts`);
@@ -37,10 +39,6 @@ open Spot (getD field? nat?)
 namespace Properties.Spot.Units
 
 /-! ## Fields of rebuilt values -/
-
-theorem field?_obj (m : Std.TreeMap.Raw String Json compare) (k : String) : field? (.obj m) k = m.get? k := by
-  simp only [field?, Json.getObjVal?]
-  cases m.get? k <;> rfl
 
 theorem get?_of_getObjVal {m : Std.TreeMap.Raw String Json compare} {k : String} {v : Json}
     (h : (Json.obj m).getObjVal? k = .ok v) : m.get? k = some v := by
@@ -78,16 +76,6 @@ theorem nat?_norm (e : Json) : nat? (Flock.norm e) = nat? e := by
   | arr a => rw [FlockDeploy.norm_arr]; rfl
   | obj m => rw [FlockDeploy.norm_obj]; rfl
   | _ => rfl
-
-/-- A field of a well-formed value is well formed. -/
-theorem wf_getD {u : Json} (hu : Claims.Json.Wf u) (k : String) : Claims.Json.Wf (getD u k) := by
-  cases hu with
-  | obj hm h =>
-    simp only [getD, field?_obj]
-    cases hk : Std.TreeMap.Raw.get? _ k with
-    | none => exact .null
-    | some v => exact h k v hk
-  | _ => exact .null
 
 /-! ## Reading in `V` and in `Option` -/
 

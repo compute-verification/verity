@@ -25,8 +25,12 @@ outputs and the profile exist only in the `accept` case.
 
 `Protocol.answer P params commitment evidence` is the only entry point. It requires the parameters to be canonical
 JSON (`Core.canonicalJson`, the bytes `Flock.canon` writes), turns every decoding failure into a rejection prefixed
-`params: `, `commitment: ` or `evidence: `, and runs `check`. Every input gets a verdict. `Answer.canonical` writes the
-outcome's one canonical form:
+`params: `, `commitment: ` or `evidence: `, and runs `check`. Every input gets a verdict. `canonicalJson` reads its
+text with the total parser (`Flock.JsonParse.parse`), so what it accepts is exactly the canonical texts of JSON values
+whose numbers are integers (`Verity.CanonicalJson.canonicalJson_accepts`, `security/Proofs/Core/CanonicalJson.lean`).
+`core-canonical-json-difftest` (`CoreProtocol/CanonicalJsonDifftest.lean`) serves its answer under that parser and
+under Lean core's, which `tools/difftest/tests/test_canonical_json_port.py` holds alike and to a Python mirror, value
+and refusal text; the difftest harness builds it by name. `Answer.canonical` writes the outcome's one canonical form:
 
 ```json
 {"commitment":"<hex digest, or null when the commitment didn't decode>","profile":<JSON or null>,
@@ -56,7 +60,9 @@ profile's types derive `DecidableEq`.
 A case is read in place by `Core.Canonical` (`CoreProtocol/Protocol/Canonical.lean`), which gives `canonicalJson`'s and
 `Flock.unhex`'s answers at any size, and a protocol's decoder reads evidence that can be gigabytes with it too (PoUS's,
 a composition's). Those two go through `String.toList`, whose runtime counts characters in 32 bits and spends about 30
-bytes on each: they refuse a canonical text holding a string of `2^32` characters or more, or read a prefix of it.
+bytes on each: `canonicalJson`, which reads its whole text through it with the total parser (`Flock.JsonParse.parse`),
+refuses a canonical text of `2^32` characters or more, and `Flock.unhex` reads a prefix of one. `Canonical`'s readers
+are held to them by `#guard`s over texts at every edge of canonical JSON, a test and not a theorem.
 `Canonical` imports only what `Protocol` does, so it sits in `Protocol`'s layer. `serve` frees a case's line before it
 decodes the evidence, and its peak memory is about 2.6 times the line.
 
@@ -110,7 +116,7 @@ format:
 
 | format | what it registers |
 | --- | --- |
-| `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
+| `verity/registration/site/v2` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
 | `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
