@@ -27,8 +27,8 @@ from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.active import DATA, VirtualClock
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.warden import (END, REFUSED, Shim, Warden, WardenParams, cells, read_cell,
-                                                    reason_frame)
+from verity.protocols.accounting.certifier.verifier.warden import (END, REFUSED, Shim, Warden, WardenParams, audit, cells,
+                                                    read_cell, reason_frame)
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, record_files as RF
 
 HERE = Path(__file__).resolve().parents[1]
@@ -55,7 +55,7 @@ def _load():
 
 ws = _load()
 import runner_parts as rp  # noqa: E402
-from verity.protocols.accounting.certifier.verifier import warden as warden_, link_frame  # noqa: E402
+from verity.protocols.accounting.certifier.verifier import link_frame  # noqa: E402
 
 
 async def _no_sleep(_: float) -> None:
@@ -988,7 +988,7 @@ def test_a_session_serves_its_length_to_clients_not_its_own_and_its_check_accept
 
     records = RC.read_records(out, p)
     audited = {c["ordinal"]: c for c in
-               warden_.audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])["connections"]}
+               audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])["connections"]}
     schedule = RC.egress_cells(records[RC.EGRESS], p)
     assert len(own["connections"]) == len(audited) == len(arrive)
     for conn in own["connections"]:
@@ -1170,7 +1170,7 @@ def test_a_connection_still_open_when_a_session_ends_is_cut_and_the_records_say_
         own = json.loads((out / "client.json").read_text())["connections"]
         (out / "client.json").unlink()
         records = RC.read_records(out, p)
-        return relay, own, RC.check(out), warden_.audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
+        return relay, own, RC.check(out), audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
 
     relay, own, result, audit_ = run("ends", [end - p.span - 1])
     assert result["accepted"] and relay.log[0]["ended"] == end - 1 and not relay.log[0]["cut"]
@@ -1210,7 +1210,7 @@ def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_cli
                  params=p, id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
     (out / "client.json").unlink()
     records = RC.read_records(out, p)
-    audit_ = warden_.audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
+    audit_ = audit(p, records[RC.INGRESS], records[RC.EGRESS], records[RC.FAILS])
     result = RC.check(out)
     assert sorted(e["failed"] or "" for e in relay.log) == ["", "", "", "format"]
     assert [(c["failed"], c["ended"] is not None) for c in audit_["connections"]] == \
@@ -1245,8 +1245,6 @@ def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tm
     assert not result["accepted"] and result["problems"] == [f"audit: {why}"]
     assert result["audit_windows"] == [
         {"window": 0, "accepted": True, "problems": []}, {"window": 1, "accepted": False, "problems": [why]}]
-
-    audit = warden_.audit
 
     def many(*records) -> dict:
         verdict = audit(*records)

@@ -2877,7 +2877,7 @@
     {"file": "benchmarks/network_traces/tests/test_stall_probe.py", "count": 17},
     {"file": "benchmarks/network_traces/tests/test_tick_load.py", "count": 2},
     {"file": "benchmarks/network_traces/tests/test_warden_chain.py", "count": 53},
-    {"file": "benchmarks/network_traces/tests/test_warden_serve.py", "count": 169},
+    {"file": "benchmarks/network_traces/tests/test_warden_serve.py", "count": 163},
     {"file": "benchmarks/network_traces/tests/test_warden_serve_phase10.py", "count": 31},
     {"file": "benchmarks/network_traces/tests/test_warden_zk.py", "count": 14},
     {"file": "benchmarks/network_traces/tests/test_wipe_egress.py", "count": 9},
