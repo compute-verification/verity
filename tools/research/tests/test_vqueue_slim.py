@@ -1286,7 +1286,7 @@ ___________ test_a_stage_timeout_ends_the_runs_workers_outside_its_group _______
 >       assert trun.main(argv) == 0
 E       AssertionError: assert 75 == 0
 ----------------------------- Captured stderr call -----------------------------
-[tele run] refused to start the workload: this machine caps each login session at MemoryMax=80% (/etc/systemd/system/session-.scope.d), but this run's cgroup /user.slice/check.scope has memory.max max, so its workload would run with no cap of its own.
+[tele run] refused to start the workload: this machine caps each login session at MemoryMax=80% (/etc/systemd/system/session-.scope.d), but this run's cgroup /user.slice/check.scope has memory.max max, so its workload would run with no limit of its own.
 =========================== short test summary info ============================
 FAILED tests/test_telemetry.py::test_a_stage_timeout_ends_the_runs_workers_outside_its_group - AssertionError: assert 75 == 0
 """
