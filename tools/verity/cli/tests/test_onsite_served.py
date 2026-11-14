@@ -256,8 +256,8 @@ COVERED = ("verity/onsite/v0 (bandwidth, certifier, inference-only, pous, pouw, 
            "verity/remote/v1 (inference-only, pearl-plus, sampled-proofs)")
 #: each of `served_table.SETS`: its set as the refusal names it, and what a dry run resolves were the set a composite's
 SETS = {
-    "onsite_network": {"taken": "certifier, sampled-proofs, wipe", "channels": 9, "entries": 10},
-    "onsite_compute": {"taken": "certifier, inference-only, pouw, sampled-proofs, wipe", "channels": 10, "entries": 14},
+    "onsite_network": {"taken": "certifier, sampled-proofs, wipe", "channels": 9, "entries": 11},
+    "onsite_compute": {"taken": "certifier, inference-only, pouw, sampled-proofs, wipe", "channels": 10, "entries": 15},
 }
 NAMES = sorted(SETS)
 
