@@ -4364,6 +4364,11 @@
         "verity/protocols/accounting/certifier/prover/tests/test_scan_zk_lean_one.py": "benchmarks/network_traces/tests/test_scan_zk_lean_one.py",
         "verity/protocols/accounting/certifier/prover/tests/test_warden_zk.py": "benchmarks/network_traces/tests/test_warden_zk.py"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/streamed_wipe/wipe_on_node.py": "verity/protocols/accounting/pous/prover/wipe_on_node.py"
+      }
     }
   ]
 }
