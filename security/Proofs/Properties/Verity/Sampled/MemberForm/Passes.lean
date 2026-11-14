@@ -221,7 +221,7 @@ theorem filesPass_of_held {R : Array ByteArray} {s : Verity.Sent} (ht : TablesSe
 parameters' members on the registered files, on blobs sent where v2 reads each member's files among the registered
 files, each pinned table the blobs hold is its registered file and the run held each member's files at its slice
 of the registration. -/
-theorem ExecutionPhaseOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem ExecutionPhaseOn.passes {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : ExecutionPhaseOn V θ F W) {s : Verity.Sent} (ht : TablesSent s)
     {p : _root_.Spot.OneStageZk.Params} {ms : Array _root_.Spot.OneStageZk.Member} (hp : ParamsAt θ p)
     (hms : p.members = some ms)
@@ -259,7 +259,7 @@ theorem FilesPass.checked_all {nJ : ℕ} {m : Member nJ} (h : FilesPass m) (t : 
 
 /-- **At a window the verifier sets up, every member's roots fix their domains**, the members the sample holds and
 those it misses. -/
-theorem MembersSetUp.rootsFix {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : Window}
+theorem MembersSetUp.rootsFix {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {W : ExecutionPhase}
     (h : MembersSetUp V θ F W) : W.RootsFix :=
   fun m hm => (h.passes m hm).rootsFix
 
