@@ -23,11 +23,11 @@ import Mathlib.Algebra.Order.BigOperators.Group.Finset
 * `EgressRegistered_nonvacuous`: at the example's remote Site, a circuit with a gate at a device, read at the outside
   across the host's uplink, meets the guarantee's two premises at the host's subtree, and its egress there is above
   0.
-* `Site.uncertified_registered_eq`: where every registered link ends at places, the model's `β°` at the Site's links is
-  the sum of `β` over the uncovered links (`Site.uncovered`).
+* `Site.uncertified_sealed`: where every registered link ends at places and a sink is linked only into `X`, the
+  model's `β°` at the Site's links and any rates moves the sink from the location to the covering set.
 * `Site.leak_le_registered`: `leak_le_sum_K` at a subtree, its certifiers and a set of its memory challengers the
   trusted devices and its other challengers sinks, which the registration seals (`Site.challengers_sealed`,
-  `Site.uncovered_sealed`).
+  `Site.uncertified_sealed`).
 * `LeakPartsRegistered`: that at a valid log's Site (`Registration.Valid.linkKinds`, `Registration.Valid.ends_known`),
   the guarantee.
 -/
@@ -103,38 +103,31 @@ theorem egress_le_registered (i : String) (A : Accounting.Placed S.Place)
   rw [← Accounting.Placed.egress_onto A S.linkPlace _ _ hX]
   exact Accounting.SecurityProofs.Actual.egress_le (A.onto S.linkPlace) h _ a b
 
-/-- **The uncovered term is read off the registered links**: where every registered link ends at places of the Site,
-the model's `β°` at the registered links, each at the rate `b` gives it, a covering set `cov` and a location `X` is
-the sum of `b` over the registered links with exactly one end in `X` and neither end in `cov` (`uncovered`). -/
-theorem uncertified_registered_eq (b : Link → ℕ) (cov X : Finset String)
-    (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places) :
-    Accounting.uncertifiedCapacity S.placeEnds (b ∘ S.links.get) (S.placesIn cov) (S.placesIn X) =
-      ((S.uncovered cov X).map b).sum := by
+/-- **A sealed sink moves from the location to the covering set**, at the Site's links and any rates `β`: where every
+registered link ends at places of the Site and every link at a sink has its other end in `X`, the model's `β°` of
+`X ∪ sink` under `cert` is that of `X` under `cert ∪ sink`. The two sum `β` over the same links. -/
+theorem uncertified_sealed (β : Fin S.links.length → ℕ) (cert X sink : Finset String)
+    (hends : ∀ k ∈ S.links, k.ends.1 ∈ S.places ∧ k.ends.2 ∈ S.places)
+    (h : ∀ k ∈ S.links, (k.ends.1 ∈ sink → k.ends.2 ∈ X) ∧ (k.ends.2 ∈ sink → k.ends.1 ∈ X)) :
+    Accounting.uncertifiedCapacity S.placeEnds β (S.placesIn cert) (S.placesIn (X ∪ sink)) =
+      Accounting.uncertifiedCapacity S.placeEnds β (S.placesIn (cert ∪ sink)) (S.placesIn X) := by
   classical
-  have hl : ∀ (l : List Link) (p : Link → Bool),
-      ((l.filter p).map b).sum = (l.map fun k => if p k = true then b k else 0).sum := by
-    intro l p
-    induction l with
-    | nil => rfl
-    | cons k l ih =>
-      rw [List.filter_cons]
-      by_cases hk : p k = true
-      · rw [ite_eq_left hk, List.map_cons, List.sum_cons, List.map_cons, List.sum_cons, ite_eq_left hk, ih]
-      · rw [ite_eq_right hk, List.map_cons, List.sum_cons, ite_eq_right hk, ih, Nat.zero_add]
   have hp : ∀ (e : Fin S.links.length) (Y : Finset String),
       ((S.placeEnds e).1 ∈ S.placesIn Y ↔ (S.links[e.1]).ends.1 ∈ Y) ∧
         ((S.placeEnds e).2 ∈ S.placesIn Y ↔ (S.links[e.1]).ends.2 ∈ Y) := by
     intro e Y
     have h := hends (S.links[e.1]) (List.getElem_mem e.2)
     simp [placeEnds, placesIn, place, h.1, h.2]
-  unfold Accounting.uncertifiedCapacity Accounting.boundary uncovered crossing
-  rw [List.filter_filter, hl, Finset.sum_filter, Finset.sum_filter, ← Fin.sum_univ_fun_getElem]
+  unfold Accounting.uncertifiedCapacity Accounting.boundary
+  rw [Finset.sum_filter, Finset.sum_filter, Finset.sum_filter, Finset.sum_filter]
   refine Finset.sum_congr rfl fun e _ => ?_
-  have hX := hp e X
-  have hC := hp e cov
-  by_cases h : ((S.links[e.1]).ends.1 ∈ X ↔ (S.links[e.1]).ends.2 ∉ X) <;>
-    by_cases h1 : (S.links[e.1]).ends.1 ∈ cov <;> by_cases h2 : (S.links[e.1]).ends.2 ∈ cov <;>
-    simp [hX, hC, h, h1, h2]
+  have h1 := (h _ (List.getElem_mem e.2)).1
+  have h2 := (h _ (List.getElem_mem e.2)).2
+  simp only [(hp e _).1, (hp e _).2, Finset.mem_union]
+  by_cases a1 : (S.links[e.1]).ends.1 ∈ X <;> by_cases a2 : (S.links[e.1]).ends.2 ∈ X <;>
+    by_cases b1 : (S.links[e.1]).ends.1 ∈ sink <;> by_cases b2 : (S.links[e.1]).ends.2 ∈ sink <;>
+    by_cases c1 : (S.links[e.1]).ends.1 ∈ cert <;> by_cases c2 : (S.links[e.1]).ends.2 ∈ cert <;>
+    simp_all
 
 /-- **The leak limit at a subtree, each memory challenger a sealed sink or a trusted device.** At a Site whose links
 join kinds a link may join and end at places, for the subtree at `i` and a set `units` of its memory challengers that
@@ -149,7 +142,7 @@ theorem leak_le_registered {Ω : Type*} (hkinds : S.LinkKinds)
     (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec)
     (record : S.Place → Set ℕ) (bucket : ℕ → ℕ) (jitter a b : ℕ) (K : S.Place → ℕ)
     (hu : units ⊆ S.challengersOf pinned i) (hsh : S.sharedOf pinned i ⊆ units)
-    (β : Fin S.links.length → ℕ) (hβ : S.RatedOn β Set.univ)
+    (β : Fin S.links.length → ℕ)
     (hcs : Accounting.CausalStrategy R ℓ) (hdl : Accounting.DeclaredLinks R S.placeEnds β link)
     (hT : Accounting.TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter)
     (hsec : Accounting.Secrets R (S.placesIn (S.certifiersOf i ∪ units))
@@ -162,21 +155,16 @@ theorem leak_le_registered {Ω : Type*} (hkinds : S.LinkKinds)
         jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.certifiersOf i ∪ units)).card +
         Accounting.uncertifiedCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
           (S.placesIn (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞) := by
-  obtain rfl : β = (fun k : Link => k.β.getD 0) ∘ S.links.get := funext fun e => by
-    have h := hβ e trivial
-    simp only [linkβ, List.get_eq_getElem] at h
-    simp [h]
   have hin : ∀ y ∈ S.challengersOf pinned i \ units, S.Within i y := fun y hy =>
     S.within_of_not_shared (Finset.mem_sdiff.2
       ⟨(Finset.mem_sdiff.1 hy).1, fun h => (Finset.mem_sdiff.1 hy).2 (hsh h)⟩)
-  have h := Accounting.leak_le_sum_K R ℓ S.placeEnds _ link 𝒱 (S.placesIn (S.certifiersOf i ∪ units))
+  have h := Accounting.leak_le_sum_K R ℓ S.placeEnds β link 𝒱 (S.placesIn (S.certifiersOf i ∪ units))
     (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) spec record bucket jitter a b K hcs hdl hT
     hsec hK
-  rw [S.uncertified_registered_eq _ _ _ hends,
-    S.uncovered_sealed (S.certifiersOf i ∪ units) (S.proverUnder i) (S.challengersOf pinned i \ units)
+  rw [S.uncertified_sealed β (S.certifiersOf i ∪ units) (S.proverUnder i) (S.challengersOf pinned i \ units) hends
       (S.challengers_sealed hkinds i (S.challengersOf pinned i \ units)
         fun y hy => ⟨(S.mem_challengersOf (Finset.mem_sdiff.1 hy).1).1, hin y hy⟩),
-    S.units_union_sinks hu, ← S.uncertified_registered_eq _ _ _ hends] at h
+    S.units_union_sinks hu] at h
   exact h
 
 end Verity.Site
@@ -315,9 +303,9 @@ theorem EgressRegistered_nonvacuous :
     RegisteredSite.egress_node0⟩
 
 theorem LeakPartsRegistered : Guarantees.LeakPartsRegistered := by
-  intro D A c l S Ω pinned units i R ℓ link β 𝒱 spec record bucket jitter a b K hv _ hu hsh hβ hcs hdl hT hsec hK
+  intro D A c l S Ω pinned units i R ℓ link β 𝒱 spec record bucket jitter a b K hv _ hu hsh _ hcs hdl hT hsec hK
   exact S.leak_le_registered hv.linkKinds
     (fun k hk => ⟨S.mem_places.2 (hv.ends_known k hk).1, S.mem_places.2 (hv.ends_known k hk).2⟩) pinned units i R
-    ℓ link 𝒱 spec record bucket jitter a b K hu hsh β hβ hcs hdl hT hsec hK
+    ℓ link 𝒱 spec record bucket jitter a b K hu hsh β hcs hdl hT hsec hK
 
 end Accounting.SecurityProofs
