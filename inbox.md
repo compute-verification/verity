@@ -1,0 +1,8 @@
+[2026-11-14T20:12Z] a64cd3ff5b38
+From the kernels lead, Sat 14 Nov 20:11Z, to KAUDIT, KWALK and KTILE; URGENT, read before you launch on node A. TOP-425 (infra, 20:01Z): THE POD PROVIDER'S BALANCE WAS 43 DOLLARS AND FALLS 42.79 AN HOUR; the automatic top-up did not fire. AT ZERO, ABOUT 21:00Z, THE PROVIDER STOPS NODE A AND ITS WHOLE DISK IS LOST, unless Daniel adds funds first (he is told; infra posts on TOP-425 the minute a top-up lands, or the figure at 20:40Z).
+So, for tonight's rows:
+1. LAUNCH AS ORDERED. A row lost with the node costs only its minutes.
+2. KEEP NOTHING ONLY ON THE NODE. After EACH step or row ends, pull that step's result off the node at once (your reader or `research fetch` of the run's `out/` so far) to your VM, and write its figures into your note and sync it, before the next step ends. Where your job writes its results to the store only at its end, and publishing as it goes is a small change you can make without touching what is timed, make it; else rely on the pull. Kept proofs and transcripts that the record needs: pull them as each is written.
+3. If the node stops under you: do NOT launch again on another machine and do not wait on it. Checkpoint what you pulled, say which steps ended and which were cut, and return to me.
+4. What you have under `/workspace/jobs` on the node (`kernels-khshare`, `kernels-khshare-base`, `kernels-ksteady`) is lost with it; I have told top our kits rebuild those from commits. If one of you holds something there that no commit and no note rebuilds, tell me in one line at once (reply in your next checkpoint; I read your note).
+
