@@ -5,8 +5,9 @@ layers that share a quant method; and H1's install's of a layout without its row
 `circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's, the
 quantizer's of a value that is not finite, and the native prover's of a unit outside a call's population.  Pearl-C's of
 a kernel directory without one cubin, of a pass whose coins don't parse or are no object, of a live salt over other
-weights than its workload's, of a group of experts that repeat, are another group's or differ in shape and of B̃'s
-prefetch on a kernel without it, and the in-process certifier's of fewer coin bytes than it asks for."""
+weights than its workload's, of a group of experts that repeat, are another group's, differ in shape or whose bytes
+are not the kernel's size for them and of B̃'s prefetch on a kernel without it, and the in-process certifier's of fewer
+coin bytes than it asks for."""
 from __future__ import annotations
 
 import random
@@ -331,6 +332,30 @@ def test_a_group_of_experts_is_refused_unless_distinct_unheld_and_of_one_shape(m
         with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
             PG.group(run, ws)
     assert run._groups == {(0, 1): held}
+
+
+def test_a_group_is_stacked_only_from_experts_whose_bytes_are_the_kernels_size_for_them():
+    """`_Group` stacks a stacked operand only when every expert's is the size the kernel's pipeline gives for its
+    (n, k): a byte short or over, on one expert or on all, is refused and stacks nothing; stacked, each expert reads its
+    own rows of the stack."""
+    import torch
+    R = SimpleNamespace(PD_MAX_ROWS=64, BM=16, Pipeline=SimpleNamespace(sizes=lambda bm, n, k, bn: {"b": 8 * n + k}))
+    G = SimpleNamespace(STACKED=("b",))
+
+    def run_of(lengths: tuple[int, ...]) -> SimpleNamespace:
+        weights = {w: SimpleNamespace(n=4, k=8, b={"b": torch.full((m,), w, dtype=torch.uint8)}) for w, m in enumerate(lengths)}
+        return SimpleNamespace(entry="e", weights=weights, kernel=SimpleNamespace(run=R), device=SimpleNamespace(type="cpu"),
+                               driver=None)
+
+    for lengths in ((40, 39), (40, 41), (39, 39)):
+        run = run_of(lengths)
+        with pytest.raises(ValueError, match="^e: an expert's b isn't its 40 bytes, so the stack's stride isn't$"):
+            PG._Group(run, G, (0, 1))
+        assert [len(run.weights[w].b["b"]) for w in (0, 1)] == list(lengths)
+    run = run_of((40, 40))
+    g = PG._Group(run, G, (0, 1))
+    assert g.stacked["b"].tolist() == [0] * 40 + [1] * 40
+    assert [run.weights[w].b["b"].data_ptr() - g.stacked["b"].data_ptr() for w in (0, 1)] == [0, 40]
 
 
 def test_a_prefetch_of_b_is_refused_on_a_kernel_whose_pipeline_lacks_it():
