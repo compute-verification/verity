@@ -277,9 +277,7 @@ class Setup(NamedTuple):
 
 
 W63 = Setup(
-    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024),
-    W.WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
-                   ingress_buckets=12, egress_cells=65, every=16),
+    "w63", IS.Class(B=512, r=4, lanes=4, C=47, IDB=17, EVERY=16, WITHIN=12, D=27, KO=64, KI=1024), W.W63,
     (tuple((7 * k + 11) % 128_256 for k in range(1024)), tuple(100_000 + k for k in range(600)),
      tuple(131_071 - 3 * k for k in range(40)), tuple((k * k) % 128_256 for k in range(300)),
      tuple(5_000 + k for k in range(100))),
@@ -287,7 +285,7 @@ W63 = Setup(
     tuple(tuple((97 * k + 13 * q) % (1 << 17) for k in range(n)) for q, n in enumerate((3, 40, 64, 8, 5), 1)),
     windows=2, A=9, max_tokens=16, seed=7)
 W63K4 = Setup(
-    "w63k4", replace(W63.cls, KO=4, KI=32), replace(W63.params, egress_cells=5),
+    "w63k4", replace(W63.cls, KO=4, KI=32), W.W63K4,
     (tuple((7 * k + 11) % 128_256 for k in range(32)), tuple(100_000 + k for k in range(20)),
      tuple(131_071 - 3 * k for k in range(5)), tuple((k * k) % 128_256 for k in range(32)),
      tuple(5_000 + k for k in range(9))),
