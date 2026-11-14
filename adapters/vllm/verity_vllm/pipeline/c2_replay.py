@@ -398,7 +398,7 @@ def live_only_entry(protocols: Any) -> str | None:
     entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
-    from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
+    from verity.protocols.accounting.pouw.prover.serving import NCP_CIRCUIT_SCHEMES as SCHEMES
 
     from verity_vllm.protocols import pouw
 
