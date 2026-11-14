@@ -2289,6 +2289,6 @@ def periodRoots (_key _ledger _name _roots : Json) : R Unit := throw ("period", 
 
 /-- A Pearl-C credit period's credit over its passes (`credit.pearl_c_period_credit_twin`'s rule): refuses every period
 until its check is written. -/
-def pearlCPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
+def pearlCMonitoringPeriodCredit (_key _ledger _pins _main _name _passes _earlier : Json) : R Json := throw ("period", NOT_WRITTEN)
 
 end PouwCheck.Credit

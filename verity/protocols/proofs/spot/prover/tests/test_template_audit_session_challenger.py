@@ -14,7 +14,7 @@ import pytest
 from verity_flock import challengers as CH
 
 sys.path.insert(0, str((Path(__file__).resolve().parents[6] / "benchmarks" / "one_stage")))
-import a0
+from verity.protocols.proofs.spot.prover.audit import template_audit as a0
 
 ENV = ("FC_FIREWALL", "FC_FIREWALL_LEAN", "FC_FIREWALL_STATEMENT", "FC_HOST_WITNESS")
 

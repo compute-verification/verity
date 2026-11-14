@@ -1,5 +1,5 @@
-"""The SASS gate (`verity/protocols/accounting/pouw/prover/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `fixtures/sass_gate/ftz_probe.cu` and
-`ftz_refused.cu` (sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
+"""The SASS gate (`verity/protocols/accounting/pouw/prover/sass_gate.py`), on CUDA 12.9.1's and 13.0.1's listings of `ftz_probe.cu` and
+`ftz_refused.cu` (in `verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/`; sm_120a, and 13.0.1's sm_90a): builds without flags pass, with every flagged instruction inside a pinned sequence; --use_fast_math, -ftz=true
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
 under 13.0.1-sm_90a, on kernels' units_softmax) passes alone, in its one form, and nothing else does; kernels' units.cu
@@ -25,7 +25,7 @@ import pytest
 
 #: the gate as the harness's scripts hold it: one module a process, which `ieee_pin` loads from its repository path
 SG = ieee_pin.SG
-FIX = Path(__file__).parent / "fixtures" / "sass_gate"
+FIX = Path(__file__).parent.parent.parent.parent / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "tests" / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
 PLAIN_COVERED = {"int-seed": 10, "__cuda_sm20_rem_s64": 1, "__cuda_sm20_div_u64": 1, "__cuda_sm20_div_u16": 1,
                  "sqrt-fast-path": 6, "__cuda_sm20_sqrt_rn_f32_slowpath": 18, "div-fast-path": 4,

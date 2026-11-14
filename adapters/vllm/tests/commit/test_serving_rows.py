@@ -32,7 +32,7 @@ from verity.commitments.windows import rows as SR
 from verity.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.commit import index as IX
 

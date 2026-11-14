@@ -2571,6 +2571,17 @@
     },
     {
       "paths": {
+        "benchmarks/torch_gpu/s8_linear/": "benchmarks/kernels/s8_linear/",
+        "benchmarks/hash/exactlin/": "benchmarks/kernels/exactlin/",
+        "benchmarks/torch_gpu/ship.sh": "benchmarks/kernels/ship.sh",
+        "benchmarks/torch_gpu/ship_clock.c": "benchmarks/kernels/ship_clock.c",
+        "benchmarks/torch_gpu/ship_nvcc.sh": "benchmarks/kernels/ship_nvcc.sh",
+        "benchmarks/torch_gpu/ship_probe.sh": "benchmarks/kernels/ship_probe.sh",
+        "benchmarks/torch_gpu/job_nvcc.sh": "benchmarks/kernels/job_nvcc.sh"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/pouw/pearl_c/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c/",
         "benchmarks/pouw/pearl_c_sm120/": "verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/",
         "benchmarks/pouw/pearl_c_sm120/fixture.py": "benchmarks/pouw/pearl_c_sm120/fixture.py",
@@ -2667,6 +2678,39 @@
         "benchmarks/sampling_plan/tests/test_recursion.py": "verity/protocols/proofs/spot/prover/tests/test_cost_recursion.py",
         "benchmarks/prove_path/tests/test_window_cost.py": "verity/protocols/proofs/spot/prover/tests/test_window_cost.py",
         "benchmarks/prove_path/tests/test_class_rows.py": "verity/protocols/proofs/spot/prover/tests/test_class_rows.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/served_zk/": "verity/protocols/accounting/pouw/prover/kernels/served_zk/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftest.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftest.lean",
+        "verity/protocols/proofs/spot/verifier/lean/Spot/SiteDifftestMain.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteDifftestMain.lean",
+        "verity/protocols/proofs/spot/verifier/lean/tests/test_site_difftest.py": "verity/protocols/accounting/registration/verifier/lean/tests/test_site_difftest.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/tests/fixtures/sass_gate/": "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/verifier/one_stage/registration.py": "verity/protocols/proofs/spot/verifier/one_stage/docket.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordText.lean": "verity/protocols/proofs/spot/verifier/lean/Spot/RecordText.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/h1r.py": "verity/protocols/experimental/dither/prover/h1r.py",
+        "benchmarks/hash/dither/j10r_ws.py": "verity/protocols/experimental/dither/prover/j10r_ws.py"
       }
     }
   ]

@@ -576,6 +576,7 @@ theorem wServed120_eq (G : Nat) (a b : ℚ) (cA cB : Code)
   rw [hA', hB']
   rfl
 
+-- the kernel `decide`s evaluate the K = 32 peel at sm_120's atom-mix, past the default bound; not yet measured
 set_option maxHeartbeats 0 in
 /-- **(c) at sm_120 in windows of 4**: at `Peel.lean`'s degenerate inputs, formed by sm_120's atom-mix, two salts give
 the served entries `0` (all-ones noise) and `10` (`E_A`'s row starting with `2`, `E_B`'s with `−1`). -/
@@ -586,6 +587,7 @@ theorem served120_live_four : wServed120 4 (wNoise 1 1) = some 0 ∧ wServed120 
   · rw [wServed120_eq 4 2 (-1) (e4m3 32) (e4m3 10) (by decide +kernel) (by decide +kernel), peelExactP_const]
     decide +kernel
 
+-- the kernel `decide`s evaluate the K = 32 peel at sm_120's atom-mix, past the default bound; not yet measured
 set_option maxHeartbeats 0 in
 /-- **(c) at sm_120 with no promotion** (`G = 0`): the same two salts give `0` and `10`. -/
 theorem served120_live_zero : wServed120 0 (wNoise 1 1) = some 0 ∧ wServed120 0 (wNoise 2 (-1)) = some 10 := by
