@@ -168,6 +168,10 @@ path = "verity/commitments/"
 means = "the commitment schemes"
 
 [[tree]]
+path = "verity/claims/"
+means = "the security claims' ids, with each id's Lean premises generated from the Lean locks' `ids`"
+
+[[tree]]
 path = "verity/__init__.py"
 means = "the package, which re-exports nothing"
 
@@ -338,6 +342,12 @@ path = "demos/vllm/"
 to = "demos/remote.toml; its scripts to the vLLM adapter and `verity run`"
 owner = "top"
 day = "2026-11-15"
+
+[[not_yet]]
+path = "fixtures/"
+to = "beside its reader, each file"
+owner = "proofs"
+day = "2026-11-18"
 
 [[not_yet]]
 path = "demos/onsite_served/"

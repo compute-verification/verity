@@ -24,7 +24,7 @@ from test_repository import ROOT, _tracked
 LAYOUT = "tests/tree.toml"
 HANDLES = ".agents/skills/using-slack/registry.json"
 #: the not-yet list's length, its unowned lines and its arriving lines: each only shrinks, so lower it with the list
-NOT_YET_MAX = 9
+NOT_YET_MAX = 8
 UNOWNED_MAX = 0
 ARRIVING_MAX = 0
 UNOWNED = "unowned"
