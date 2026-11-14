@@ -79,7 +79,8 @@ CONSTRUCTION = "construction_manifest.json"
 
 
 def index() -> dict[str, dict[str, Any]]:
-    """Row id -> its index entry: `record`, its record's art: id (None for a row pinned before it has one), and its circuit's pins."""
+    """Row id -> its index entry: `record`, its record's art: id (None for a row whose pins no record of it holds: one pinned before
+    it has a record, or re-pinned since), and its circuit's pins."""
     return CR.load_index(INDEX)["rows"]
 
 
