@@ -191,7 +191,7 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 coins on them keep the checked units. -/
 def SampleFixed (D : Deploy Coin Col T) : Prop :=
   ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
-    D.rounds x u ⊆ D.stage2 x ∧ ∀ d, D.checked x (forkOn (D.rounds x u) r d) = D.checked x r
+    D.rounds x u ⊆ D.secondStage x ∧ ∀ d, D.checked x (forkOn (D.rounds x u) r d) = D.checked x r
 
 /-- **A checked unit's session is a Flock run**: at coins `r` that check `u`, the session's statement `xS`, an order
 embedding `emb` of Flock's rounds onto `u`'s, and a Flock prover `P'` (the sampled prover with `r`'s coins off `u`'s
@@ -231,8 +231,8 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col
 /-- **`SampleFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the
 checked units read only the coins off the second stage, fresh coins on a session keep them. -/
 theorem sampleFixed_of_first (D : Deploy Coin Col T)
-    (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.stage2 x)
-    (hfirst : ∀ x r r', (∀ t ∉ D.stage2 x, r t = r' t) → D.checked x r = D.checked x r') : SampleFixed D := by
+    (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.secondStage x)
+    (hfirst : ∀ x r r', (∀ t ∉ D.secondStage x, r t = r' t) → D.checked x r = D.checked x r') : SampleFixed D := by
   intro x r u hu
   refine ⟨hrounds x r u hu, fun d => hfirst x _ _ fun t ht => ?_⟩
   have hn : t ∉ D.rounds x u := fun hm => ht (hrounds x r u hu hm)

@@ -56,16 +56,14 @@ for line in sys.stdin:
 SIGNER = ROOT / "verity/protocols/accounting/pous/verifier/tests/pous_test_signer.py"
 
 #: `p2_parties` as the gate starts it, its memory challenger's key the test signer at S1's deployed parameters
-#: (`pous_test_signer.AtLeaf`) in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes
+#: (`pous_test_signer.AtLeaf`) handed to `main` in place of `onsite.device_key`'s, which a 2^20-leaf keygen makes
 PARTY_EXE = f"""import importlib.util, sys
 sys.path.insert(0, {str(ROOT)!r})
 spec = importlib.util.spec_from_file_location("pous_test_signer", {str(SIGNER)!r})
 ts = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(ts)
 from verity.protocols.accounting.poub.verifier import p2_parties
-from verity.protocols.accounting.pous.device import onsite
-onsite.device_key = lambda _directory: ts.AtLeaf(b"served-bandwidth-test/memory-challenger")
-sys.exit(p2_parties.main(sys.argv[1:]))
+sys.exit(p2_parties.main(sys.argv[1:], device_key=lambda _directory: ts.AtLeaf(b"served-bandwidth-test/memory-challenger")))
 """
 
 

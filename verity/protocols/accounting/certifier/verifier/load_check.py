@@ -15,7 +15,7 @@ SCHEMA = G.SCHEMA_V2
 
 @dataclass(frozen=True)
 class Shape:
-    """Interface 1's `Shape` (``benchmarks.torch_gpu.p2_stage.served_weights``)."""
+    """Interface 1's `Shape` (``verity.protocols.accounting.pous.prover.served_weights``)."""
 
     name: str
     width: int

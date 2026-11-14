@@ -144,10 +144,10 @@ class Answers:
     def lookup(self, k: str) -> dict[str, Any] | None:
         got = self.memo.get(k)
         if got is None and self.directory is not None:
-            try:
-                got = json.loads((Path(self.directory) / f"{k}.json").read_text())
-            except FileNotFoundError:
+            path = Path(self.directory) / f"{k}.json"
+            if not path.is_file():
                 return None
+            got = json.loads(path.read_text())
             self.memo[k] = got
         return got
 
