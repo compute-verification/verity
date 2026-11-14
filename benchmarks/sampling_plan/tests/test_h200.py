@@ -1,5 +1,5 @@
 """The H200 plan (`h200.py`): the block's units are circuits' partition, every execution phase is a uniform sample its tables
-divide within the statement cap, its K0 is IntegrityPeriodLog's, commitments are priced beside the proving and not in
+divide within the statement cap, its K0 is IntegrityMonitoringPeriodLog's, commitments are priced beside the proving and not in
 it, both alternative cuts are priced, the frontier is monotone and an execution phase of `window_blocks` blocks proves within its
 GPU time."""
 
@@ -10,8 +10,8 @@ from math import ceil, log
 
 import pytest
 
-import h200 as H
-from inputs import observations
+from verity.protocols.proofs.spot.prover.cost import h200 as H
+from verity.protocols.proofs.spot.prover.cost.inputs import observations
 
 M = H.Shape()
 

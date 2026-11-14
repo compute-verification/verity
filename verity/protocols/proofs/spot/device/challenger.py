@@ -1,4 +1,4 @@
-"""The proof system's challenger: its live coins, the one live-coin source of every protocol (Lean of record:
+"""The proof system's challenger: its live coins, the live coins of every protocol (Lean of record:
 `Spot.Challenger`, `verity/protocols/proofs/spot/verifier/lean`, which `tests/test_difftest.py` there holds this to).
 
 Coins are indexed by label and index, and named by no protocol.  A layout is a scheme, an epoch (the client's session the
@@ -17,8 +17,8 @@ and never twice: a retry never resamples.  There is no beacon and no Fiat–Sham
 a client derives what it samples from the opened coin (`verity.commitments.randomness.derive`).  The coins are live and the verifier
 designated: an outcome convinces the auditor, who trusts its own challenger, and no third party.
 
-**Every coin source is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` assumption of
-`verity.claims` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
+**The challenger's entropy is named by a claim instance**: its ``claim``, a ``uniform/<instance>`` claim id of
+`verity.commitments.claim_ids` (`coin_claim`), which the challenger keeps as its `LiveChallenger.claim`.  The Lean verifier's
 `coins` (`IO.getRandomBytes`) is ``uniform/io-getrandombytes`` (A3); `named` names another source.  A served
 challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`), so its coins never come from
 `os.urandom` or any other source no assumption covers; a test's seeded stream stays unnamed.
@@ -26,7 +26,7 @@ challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`),
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
 challenger is auditor-trusted, the auditor's device on a machine the developer doesn't control, under the named assumption
-`trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+`trusted-device`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 **A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
 `withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
@@ -73,7 +73,7 @@ session: the record under its key, the close signed under it, the log the one th
 session its client closed; then the roots it received (`released_roots_of`).  A session that ends unclosed is no window's.
 
 **A recursive run's interactive-run record** (`RunRecord`, `RUN_KIND`) is the challenger's log of one recursive
-statement's run, which `flock-verify rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
+statement's run, which `verity-verify-proof rec-compose --rec-run` reads (`Flock.RecCompose.checkRun`, C10 `OneRun`).  Its
 parts' sessions are proved separately, each on its own keyed coin tree, so only this record shows they are one run:
 
     record  = {events, kind}                                       kind: RUN_KIND
@@ -87,7 +87,7 @@ when the run ends.  `rec-compose` refuses unless each part has exactly one sessi
 parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
 coin tree's, sampled at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
 The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
-it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
+it answers is the auditor-trusted challenger's (`trusted-device`).  The live challenger keeps it one event a line: its
 operator stages the record before any session and closes it after the last, and Flock's `flock-circuit serve --zk
 --rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
 can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
@@ -117,7 +117,7 @@ open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key f
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
-the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs
+the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's device runs
 too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
@@ -128,7 +128,7 @@ opened under v2, ended and closed, its end naming its record's leaf and commitme
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+window it opens no session for, so one session's coins pass for one window only.  The auditor device's operator publishes
 the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
@@ -137,7 +137,7 @@ new one.  `ledger_line` writes an entry as the auditor does.
 **A lane's day** is a UTC day, numbered from 1970-01-01 (`day_of`), and its program is the one the lane's `declaration`
 entry names for it: its program's SHA-512 and its blocks' descriptor keys, declared at `declared_utc`, the challenger's
 own clock, for that day or a later one.  A lane declares a day once.  Once a lane has declared, each later `open` of its
-windows (the window's registration, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
+windows (the window's docket, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
 challenger's clock too, so the ledger orders a day's declaration before every coin of the day.  `_days` checks both in a
 second pass over the entries the first accepted; a lane that never declares opens as before.  `declared_day` is what a
 per-day check reads of the ledger: the day of the window's open and the lane's declarations before it.
@@ -163,7 +163,7 @@ pins the open's commit (`pins_reason`), and that commit is on main's first-paren
 (`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
 prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
 main's history, but main's check ran on the merge's tree, never on the branch commit's.  That the host ran the commit
-its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
+its open names is the auditor-trusted device's word (`trusted-device`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
@@ -192,13 +192,14 @@ Flock's live-coin part releases them, so its unopened coins rest on the tree's h
 of its proof files' name and bytes).  It is a round like any other to the challenger, which opens it when asked
 (`open_tree`), and the last line the log shows of that tree.  `member_tree_reason` holds a member's session to its tree
 closed after its evidence (`closes`), the tree without that round the session's as `session_tree_reason` holds one;
-`members_order` reads the trees in the order the log opens them, each tree's rounds together and its closing round
-before the next tree's first; and `members_tree_reason` holds an audit's members' sessions to both, one tree a session
-and every tree a session's.  So the log shows each session's evidence fixed before the next session's first coin.
+`members_order` reads the trees in the order the log's lines are of them, each tree's lines (the one that samples it and
+each opening a round of it) together and its closing round before the next tree's first line, the one that samples it;
+and `members_tree_reason` holds an audit's members' sessions to both, one tree a session and every tree a session's.
+So the log shows each session's evidence fixed before the next session's tree is sampled.
 
 The first client is PoUW's live window (`verity.protocols.accounting.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.commitments`, `verity.claims` and `verity.channel`, so any client calls it as it is.
+`verity.commitments` and `verity.channel`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -216,10 +217,10 @@ from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from verity import claims
 from verity.channel import Record
 from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
+from verity.commitments import claim_ids
 from verity.commitments import coin_tree as CT
 from verity.commitments import hm96
 from verity.commitments.identity import canonical_json_text, identity_digest_sha512, tagged_sha512
@@ -284,9 +285,13 @@ NO_CLOSING = (f"its coin tree's last opening is not its {CT.SESSION} round {CLOS
               "the SHA-512 of the session's evidence: a member's session ends with that round")
 #: Lean `Challenger.MEMBERS_ORDER`: the refusal of members' sessions the release log doesn't show one after another, in
 #: the sessions' order (`members_order`)
-MEMBERS_ORDER = ("the challenger's release log does not open the sessions' coin trees one after another, in the "
-                 "sessions' order: a round of a tree is opened before the closing round of the tree opened before it, "
-                 "or after its own")
+MEMBERS_ORDER = ("the challenger's release log does not hold the sessions' coin trees one after another, in the "
+                 "sessions' order: a line of a tree, the one that samples it or one opening a round of it, is before "
+                 "the closing round of the tree before it, or after its own")
+#: Lean `Challenger.LINKS_FIRST`: the refusal of a release log that opens a round of a session's coin tree before the
+#: tree's link (`links_first`)
+LINKS_FIRST = ("the challenger's release log opens a round of a session's coin tree before the tree's link: the first "
+               f"round opened of each tree is of its {CT.SESSION} stream, the link points")
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -356,10 +361,10 @@ MAIN_FORM = ("a list of main's first-parent commits, each 40 lowercase hex (`git
 NO_MAIN = ("the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's "
            "check passed: give it the auditor's own `git rev-list --first-parent origin/main`")
 NO_AUDIT = "no auditor's ledger: the verifier trusts a challenger session only as the auditor's signed ledger names it"
-#: the property every coin source's claim instance is assumed of: independent uniform output
+#: the property each entropy's claim instance is assumed of: independent uniform output
 COIN_PROPERTY = "uniform"
 NO_CLAIM = ("coins-without-claim: the challenger's entropy is named by no claim instance (its `claim`, a uniform/<instance> "
-            "assumption of verity.claims), so no assumption covers its coins: a served challenger draws from a named "
+            "claim id of verity.commitments.claim_ids), so no assumption covers its coins: a served challenger draws from a named "
             "source, the Lean verifier's `coins` (uniform/io-getrandombytes)")
 
 
@@ -368,15 +373,14 @@ class CoinError(ValueError):
 
 
 def coin_claim(entropy: Any) -> str | None:
-    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` assumption of
-    `verity.claims`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
+    """The claim instance that names `entropy`'s bytes: its ``claim``, a ``uniform/<instance>`` claim id of
+    `verity.commitments.claim_ids`, or None when it carries none (a test's seeded stream).  A ``claim`` that is no such id raises
     `CoinError`: a misnamed source is refused, never taken for an unnamed one."""
     claim = getattr(entropy, "claim", None)
     if claim is None:
         return None
-    prop, sep, instance = claim.partition("/") if type(claim) is str else ("", "", "")
-    if not (sep and prop == COIN_PROPERTY and instance in claims.INSTANCES):
-        raise CoinError(f"a coin source's claim is a {COIN_PROPERTY}/<instance> assumption of verity.claims, "
+    if not (type(claim) is str and claim.startswith(f"{COIN_PROPERTY}/") and claim in claim_ids.IDS):
+        raise CoinError(f"an entropy's claim is a {COIN_PROPERTY}/<instance> claim id of verity.commitments.claim_ids, "
                         f"not {claim!r}")
     return claim
 
@@ -1074,7 +1078,7 @@ def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
     the rest in pairs, a root's line and its coin's release: no coin of family `label` whose root's line names `after`
     is released after a line opening a coin tree's round (`open_line`), and the first such line opens the stream
     ``session`` (`link_line`), whose first round is the link points. A coin tree's own line may come anywhere. In v2's
-    one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
+    one-stage audit `label` is the parameters' challenger family and `after` the docket's digest, so the coins so
     released are the sample's, and v2 refuses a log out of this order (`SAMPLE_LINK_FIRST`)."""
     opened, pending = False, None
     for line in log:
@@ -1115,41 +1119,68 @@ def member_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int | 
     return session_tree_reason({t.root: LoggedTree(t.key, t.nonce, t.root, t.spec, t.opened[:-1])}, tables, record)
 
 
-def _open_of(line: str) -> tuple[str, bool] | None:
-    """The tree release log line `line` opens a round of (its root) and whether the round is of the stream ``session``;
-    None of a line that opens no round (Lean `Challenger.openOf`)."""
-    if not open_line(line):
+def member_line(line: str) -> tuple[str, bool] | None:
+    """The coin tree release log line `line` is of (its root) and whether the line is that tree's closing round (Lean
+    `Challenger.memberLine`): the line that samples a tree (`TREE_EVENT`) is of the tree its ``root`` names and never
+    a closing round; a line opening a round (`OPEN_EVENT`) is of the tree its ``tree`` names, and a closing round
+    where the round is `CLOSING_ROUND` of the stream ``session`` (`coin_tree.SESSION`). None of every other line: a
+    root's line and its coin's release are the window's sample's, no member's."""
+    if not tree_line(line):
         return None
     doc = _event(line)
-    if type(doc.get("tree")) is not str:
-        return None
-    return doc["tree"], doc.get("stream") == CT.SESSION
+    if doc.get("event") == TREE_EVENT:
+        return (doc["root"], False) if type(doc.get("root")) is str else None
+    if doc.get("event") == OPEN_EVENT and type(doc.get("tree")) is str:
+        shut = doc.get("stream") == CT.SESSION and type(doc.get("round")) is int and doc["round"] == CLOSING_ROUND
+        return doc["tree"], shut
+    return None
 
 
 def members_order(log: Sequence[str]) -> list[str] | None:
     """**The members' sessions one after another**, in the release log's lines `log` (Lean `Challenger.membersOrder`):
-    the trees it opens rounds of, in the order it first opens each, where every round it opens is of the tree opened
-    last, before that tree's second round of its stream ``session`` (its closing round), or the first of the next tree,
-    after it; None where a round of a tree is opened before the closing round of the tree opened before it, or after its
-    own.  A tree opened again after another is listed again, so a list without a tree twice shows each tree's rounds
-    together."""
+    the trees its lines are of, in the order a line of each first comes, where every line of a tree (`member_line`:
+    the line that samples it and each line opening a round of it) is of the tree the lines before it were last of,
+    before that tree's closing round, or the first of the next tree, after it; None where a line of a tree comes
+    before the closing round of the tree before it, or after its own. So nothing of a member's tree, not the line
+    that samples it, is in the log before the member before it is closed. A tree whose lines come again after
+    another's is listed again, so a list without a tree twice shows each tree's lines together. A root's line and its
+    coin's release, the window's sample's, are read past. The per-member form refuses a log whose trees, so listed,
+    are not its sessions' in the sessions' order (`MEMBERS_ORDER`)."""
     roots: list[str] = []
     last, closed = None, False
     for line in log:
-        o = _open_of(line)
-        if o is None:
+        of = member_line(line)
+        if of is None:
             continue
-        root, session = o
+        root, shut = of
         if last == root:
             if closed:
                 return None
-            closed = session
+            closed = shut
         elif closed or last is None:
             roots.append(root)
-            last, closed = root, False
+            last, closed = root, shut
         else:
             return None
     return roots
+
+
+def links_first(log: Sequence[str]) -> bool:
+    """**Each tree's link before its other rounds**, in the release log's lines `log` (Lean `Challenger.linksFirst`): a
+    line that opens a round of a tree (`open_line`, the tree its ``tree`` names), where the round opened before it is
+    another tree's or it is the first the log opens, is of the stream ``session`` (`link_line`), whose first round is
+    the session's link points. So the first round the log opens of a tree is its link's stream, and no round of a
+    session's other streams is opened before the session's link: what `sample_link_first` holds the log's first tree
+    to, for every tree. The per-member form refuses a log that is not so (`LINKS_FIRST`)."""
+    last = None
+    for line in log:
+        if not open_line(line) or type(_event(line).get("tree")) is not str:
+            continue
+        root = _event(line)["tree"]
+        if last != root and not link_line(line):
+            return False
+        last = root
+    return True
 
 
 def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
@@ -1160,8 +1191,10 @@ def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
     release log `log` shows sampled and opened (`trees`, `coin_trees_of`'s of it), one tree a session, the sessions one
     after another in the order given; None when they do.  The first session whose coins are not its tree's or whose
     closing round is not after its evidence (`member_tree_reason`); then no tree two sessions' (`SHARED_TREE`); then
-    every tree a session's (`UNUSED_TREE`); then the log opens the sessions' trees one after another in the sessions'
-    order, each tree's closing round before the next tree's first round (`members_order`, `MEMBERS_ORDER`)."""
+    every tree a session's (`UNUSED_TREE`); then the log holds the sessions' trees one after another in the sessions'
+    order, each tree's closing round before the line that samples the next tree and every round of it
+    (`members_order`, `MEMBERS_ORDER`); then the first round the log opens of each tree is of its link's stream
+    (`links_first`, `LINKS_FIRST`)."""
     for name, tables, record, evidence in records:
         why = member_tree_reason(trees, tables, record, evidence)
         if why is not None:
@@ -1174,6 +1207,8 @@ def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
                 f"{UNUSED_TREE}")
     if members_order(log) != used:
         return MEMBERS_ORDER
+    if not links_first(log):
+        return LINKS_FIRST
     return None
 
 
@@ -1680,7 +1715,7 @@ def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
-    """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
+    """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
     the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
@@ -1837,7 +1872,7 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take the auditor host's operator's newest published pins log")
+                "take the auditor device's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
@@ -1868,14 +1903,14 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
 
 def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, verify: Verify) -> Audited:
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
-    log `pins` (its lines; the auditor host's operator's published one) records the open's pin (`pins_reason`) and the
+    log `pins` (its lines; the auditor device's operator's published one) records the open's pin (`pins_reason`) and the
     verifier's own copy of
     main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
     the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
     session the auditor opened on a commit main's check passed; `pouw.credit` layers on it that the pin is recent and no
     older than its period's open (the freshness floor and the period pin), which this function doesn't check.  Every path
     that credits a session reads it here: PoUW's `credited_session` and `trusted_session_of`, and memory-accounting's
-    PoUB (`remote_bandwidth.coins`).  `audited_session` alone checks no pin and credits
+    PoUB (`poub.coins`).  `audited_session` alone checks no pin and credits
     nothing.  Only the open's pin is held: a repin of the host after the open neither helps nor harms the session, which
     is credited by the commit its open sealed, the pins log only growing past it."""
     audited, opened = _audited(ledger, window, key, verify)
@@ -2027,7 +2062,7 @@ class LiveRecord:
     def log(self) -> tuple[dict[str, Any], ...]:
         """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
         "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
-        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-host`'s."""
+        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-device`'s."""
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:
@@ -2078,7 +2113,7 @@ def record_many(asks: Sequence[tuple[LiveRecord, bytes]]) -> list[LiveOpening]:
     return openings
 
 
-#: the interactive-run record of one recursive run (module docstring), which `flock-verify rec-compose --rec-run` reads
+#: the interactive-run record of one recursive run (module docstring), which `verity-verify-proof rec-compose --rec-run` reads
 RUN_KIND = "verity/rec-run/v1"
 
 
@@ -2162,10 +2197,11 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
-           "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",
-           "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT",
+           "CLOSING_ROUND", "EXTRA_OPENING", "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS",
+           "MAX_TREE_LINES", "LINKS_FIRST", "MEMBERS_ORDER", "NO_TREE", "OPEN_EVENT", "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT",
            "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening", "coin_trees_of",
-           "coins_digest", "link_after", "link_line", "open_line", "record_rounds", "sample_link_first",
+           "coins_digest", "link_after", "link_line", "links_first", "member_line", "members_order", "open_line",
+           "record_rounds",
+           "sample_link_first",
            "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason",
-           "CLOSING_ROUND", "MEMBERS_ORDER", "NO_CLOSING", "closes", "member_tree_reason", "members_order",
-           "members_tree_reason"]
+           "NO_CLOSING", "closes", "member_tree_reason", "members_tree_reason"]

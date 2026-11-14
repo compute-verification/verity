@@ -29,7 +29,7 @@ def test_non_finite_accumulator_leaves_a_row_unsatisfied():
 
 
 def test_io_words_are_aligned_and_zero_padded():
-    head = lowering.netlist("bf16-hopper").split("\n", 1)[0].split()
+    head = lowering.circuit_description("bf16-hopper").split("\n", 1)[0].split()
     assert head[0] == lowering.FORMAT and head[6:11] == ["0", "1", "2", "3", "4"]
     ins, outs = int(head[5]), [int(c) for c in head[12:12 + int(head[11])]]
     assert ins == 5 and len(outs) == 2 and int(head[2]) <= 1 << lowering.K_LOG

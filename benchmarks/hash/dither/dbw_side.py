@@ -31,7 +31,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
-from verity.protocols.accounting.poub.verifier import audit
+from verity.device import load_card
+from verity.protocols.accounting.poub.verifier import audit, timing
 from verity.protocols.accounting.poub.verifier.session import verifier as V
 from verity.protocols.accounting.poub.verifier.session import wire
 
@@ -77,13 +78,14 @@ def main() -> int:
     ap.add_argument("--gib", type=float, default=24.0, help="the store, whole 1 GiB chunks")
     ap.add_argument("--lib", help="session.so (without it the prover's options name its backend: --cpu BLOCKS)")
     ap.add_argument("--kv", help="kv.so (p1024, masked)")
-    ap.add_argument("--lean-exe", type=Path, help="a built remote-audit-verifier (default: the verifier builds it)")
+    ap.add_argument("--lean-exe", type=Path, help="a built poub-verifier (default: the verifier builds it)")
     ap.add_argument("--jitter-ms", type=float, default=50.0)
     ap.add_argument("--quantile", default="max", choices=("p50", "p99", "p999", "max"))
     ap.add_argument("--pings", type=int, default=1000)
     ap.add_argument("--pace-pass-ms", type=float, default=0.0,
                     help="a paced stretch's groups are counted at this pass (0: the calibration's median)")
-    ap.add_argument("--hbm-bytes", type=int, default=V.GPU_HBM_BYTES, help="the memory line's capacity: one GPU's")
+    ap.add_argument("--hbm-bytes", type=int, default=load_card("rtx-pro-6000-server")["store"]["dram"]["value"],
+                    help="the memory line's capacity: one GPU's, its card's `store.dram`")
     ap.add_argument("--prover-py", default=sys.executable)
     ap.add_argument("--prover-cpus", help="the prover's cores (taskset -c; default this process's)")
     ap.add_argument("prover_args", nargs="*",
@@ -139,9 +141,9 @@ def main() -> int:
         return head, body, stamp
 
     conn.send, conn.recv = sent, got
-    v = V.Verifier(conn, source=os.urandom(32), windows=1, window_ns=10 ** 9, samples=2773, delta=2.0 ** -40,
-                   jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True), hbm_bytes=a.hbm_bytes,
-                   lean_exe=a.lean_exe)
+    v = V.Verifier(conn, figures=timing.RTX_PRO_6000_NODE, source=os.urandom(32), windows=1, window_ns=10 ** 9,
+                   samples=2773, delta=2.0 ** -40, jitter_ns=round(a.jitter_ms * 1e6), log=lambda m: print(m, flush=True),
+                   hbm_bytes=a.hbm_bytes, lean_exe=a.lean_exe)
     try:
         reg, cal = v.register()
     except (audit.RegistryError, ValueError, wire.Closed) as e:

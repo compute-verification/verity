@@ -7,7 +7,7 @@
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (a ref on origin whose tree
 # has them) in a worktree. From a clone, in one of the network slots, as a job of at most 180 minutes:
-#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/verity/check/slot.py \
+#   env SC_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/research/slots python3 tools/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/scan_period.sh
 # env: SC_MEM_GB (scan_zk.sh's)  SC_LATE_MS (default 800)  SC_PERIOD_REF (needed when the tree has no period)
 #      SC_CLASS (default test; w63k4 with SC_PROMPT_MAX=32, SC_MAX_TOKENS=4 and SC_LATE_MS past its 2.7 s delay)
@@ -30,7 +30,7 @@ else   # a machine's clone has only the shipped commits, so a run there ships a 
   REF=${SC_PERIOD_REF:?this tree has no period: set SC_PERIOD_REF to a ref on origin whose tree has it}
   P=$W/period; log "period: network-period and the mirror from $REF"
 fi
-# before the scans, not beside them: scan_zk.sh's sampled-proofs build writes the same path dependencies' .lake
+# before the scans, not beside them: scan_zk.sh's SPOT build writes the same path dependencies' .lake
 { { [ "$P" = "$SRC" ] || { git fetch -q origin "$REF" && git worktree add -q --detach "$P" FETCH_HEAD; }; } \
   && (cd "$P/verity/protocols/accounting/certifier/verifier/lean" && lake build network-period); } > "$OUT/build-period.log" 2>&1 \
   || { tail -30 "$OUT/build-period.log"; log "period: no network-period"; exit 7; }

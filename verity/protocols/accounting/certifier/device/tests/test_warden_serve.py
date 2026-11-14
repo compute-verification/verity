@@ -9,7 +9,6 @@ certifier's process, moves no tick in `serve`'s publisher process."""
 
 from __future__ import annotations
 
-import ast
 import asyncio
 import dataclasses
 import io
@@ -22,83 +21,20 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA
-from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.grid import Reason
 from verity.protocols.accounting.certifier.verifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
-from verity.protocols.accounting.certifier.verifier.warden import (END, INTEGER_FIELDS, REFUSED, Shim, Warden,
-                                                    WardenParams, audit, cells, read_cell, reason_frame)
+from verity.protocols.accounting.certifier.verifier.warden import (END, audit, cells, reason_frame)
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, record_files as RF
 from verity.protocols.accounting.certifier.device import runner_parts as rp, warden_serve as ws
+from verity.protocols.accounting.certifier.device.tests.relay_runs import (PARAMS, SESSION, SLOW_COMMIT_S, _response, _run, _session_argv, _Writer, refusing_commit, slow_commit)
 from verity.protocols.accounting.certifier.verifier import link_frame
 
 ROOT = Path(__file__).resolve().parents[6]
-#: a text rehearsal's schedule: its responses are vLLM's stock framing, so its egress form is bytes
-PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=4, window=60, ingress_cells=40,
-                      ingress_buckets=30, egress_cells=128, egress="bytes")
-SESSION = bytes(range(32))
-#: the clocks `slow_commit` moves: a run's while it ticks in this process; a spawned process's list stays empty
-PROCESS_CLOCK: list[VirtualClock] = []
-#: what a window's commit takes of its process's time: the trace corpus's small-KV run measured 378-392 ms
-SLOW_COMMIT_S = 0.4
 
 
 async def _no_sleep(_: float) -> None:
     pass
-
-
-#: what the relay's runner still imports from the older form's files, by the file: nothing. The keys stay so that a
-#: read of one comes back only by a line here, and the list only shrinks.
-OLDER_FORM_READS = {"active": set()}
-
-
-def _imports(path: Path) -> dict[Path, set[str]]:
-    """{a file of the tree: the names `path` imports from it, "*" for the module itself}, the module named bare beside
-    `path` or dotted from the root, the imports inside `path`'s functions included."""
-    def file(module: str) -> Path | None:
-        beside, rooted = path.with_name(f"{module}.py"), ROOT.joinpath(*module.split(".")).with_suffix(".py")
-        return beside if beside.is_file() else rooted if rooted.is_file() else None
-
-    out: dict[Path, set[str]] = {}
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.ImportFrom) and node.module and not node.level:
-            if f := file(node.module):
-                out.setdefault(f, set()).update(a.name for a in node.names)
-            for a in node.names:
-                if f := file(f"{node.module}.{a.name}"):
-                    out.setdefault(f, set()).add("*")
-        elif isinstance(node, ast.Import):
-            for a in node.names:
-                if f := file(a.name):
-                    out.setdefault(f, set()).add("*")
-    return out
-
-
-def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_listed():
-    """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports. Of the
-    older form's protocol file, only the runner's own imports, and `OLDER_FORM_READS` and no more, so once that is
-    empty the older form can go without the relay; and the list names nothing the runner no longer imports."""
-    runner = Path(ws.__file__)
-    older = {ROOT.joinpath(*WR.__package__.split("."), "active.py")}
-    assert all(f.is_file() for f in older) and {f.stem for f in older} == set(OLDER_FORM_READS), older
-    files: dict[Path, dict[Path, set[str]]] = {}
-    todo = [runner]
-    while todo:
-        if (path := todo.pop()) not in files:
-            files[path] = _imports(path)
-            todo += [f for f in files[path] if f.parent == runner.parent and f not in older]
-    assert len(files) > 4, sorted(p.name for p in files)
-    found = {(p.name, f.stem): names for p, imports in files.items() for f, names in imports.items() if f in older}
-    more = {k: sorted(names - (OLDER_FORM_READS[k[1]] if k[0] == runner.name else set())) for k, names in found.items()}
-    assert not any(more.values()), (
-        "\n".join(f"{f} imports {', '.join(names)} from {m}.py" for (f, m), names in sorted(more.items()) if names)
-        + f"\nA file of the relay reads nothing of the older form's files. Move the definition to a module of the relay's "
-          f"own, or to one named for what it holds, beside {runner.name} (a definition of the protocol's: beside the "
-          f"relay's protocol file), and have the older form's file import it from there, so that it keeps one definition.")
-    stale = {m: sorted(gone) for m, names in OLDER_FORM_READS.items() if (gone := names - found.get((runner.name, m), set()))}
-    assert not stale, (f"OLDER_FORM_READS lists what {runner.name} no longer imports from the older form's files: "
-                       f"{stale}. Delete it from the list, which only shrinks.")
 
 
 def test_varied_traffic_is_fixed_by_its_seed_and_varies():
@@ -288,192 +224,6 @@ def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_rea
     assert not ws.parse_id_response(data[:-1], P)["complete"] and not ws.parse_id_response(data[:-len(sz.IT.TRAILER)],
                                                                                             P)["complete"]
     assert not ws.parse_id_response(data.replace(b"data:", b"datum", 1), P)["complete"]
-
-
-class _Writer:
-    def __init__(self, warden: Warden | None = None) -> None:
-        self.warden, self.writes, self.closed, self.transport = warden, [], False, self
-
-    def write(self, data: bytes) -> None:
-        self.writes.append((self.warden.ticks if self.warden else None, bytes(data)))
-
-    def can_write_eof(self) -> bool:
-        return False
-
-    def is_closing(self) -> bool:
-        return self.closed
-
-    def close(self) -> None:
-        self.closed = True
-
-    def get_write_buffer_size(self) -> int:
-        return 0
-
-
-def _response(texts: list[str]) -> bytes:
-    events = [{"choices": [{"index": 0, "text": t, "finish_reason": "stop" if i == len(texts) - 1 else None}]}
-              for i, t in enumerate(texts)]
-    events.append({"choices": [], "usage": {"prompt_tokens": 7, "completion_tokens": len(texts)}})
-    return (b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ntransfer-encoding: chunked\r\n\r\n"
-            + b"".join(ws._sse(e) for e in events) + b"e\r\ndata: [DONE]\n\n\r\n0\r\n\r\n")
-
-
-def slow_commit(*args, **kwargs):
-    """`Cells.of`, taking `SLOW_COMMIT_S` of the clock of the process it runs in (`PROCESS_CLOCK`): pure Python
-    holds its process's GIL, so a ticker in that process, on any thread, waits as long. A spawned process has none."""
-    for clock in PROCESS_CLOCK:
-        clock.advance(clock() + SLOW_COMMIT_S)
-    return WR.Cells.of(*args, **kwargs)
-
-
-def refusing_commit(*args, **kwargs):
-    raise ValueError("a refusing commit")
-
-
-def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *, windows: int = 1, commit=None,
-         process: bool = False, servers: list | None = None, params: WardenParams = PARAMS,
-         id_payload: int | None = None, load_heads: Path | None = None, arrive: dict[int, int] | None = None,
-         late: dict[int, float] | None = None, back: dict[int, int | None] | None = None) -> Warden:
-    """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
-    `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
-    `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
-    before any record, each window committed by `commit`, its connection rows kept as the publisher process keeps
-    them when the schedule has lengths rows (its key then a height taller, for their heads), `deployment.json`, and
-    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at P =
-    `id_payload` when given; `servers` gets the server's side of each connection, in connect order. In a schedule
-    with a head offset the publisher hands each execution phase's line of connection rows back and the network
-    certifier's tick writes it, as in `serve`: the line is back at the hand itself when published inline and before
-    the next tick when by the process, or, inline, just before the tick `back` names for its execution phase, never
-    where that is None. The run then ticks on past its last window while a line may still leave. Returns the
-    network certifier."""
-    tau = params.bucket_ms / 1000
-    height = 5 if load_heads or params.lengths else 4
-    timed = params.head_offset is not None
-    assert not back or (timed and not process)
-    lines = rp.Lines(out, ws.LINK) if timed else None
-    held: dict[int, dict] = {}
-    device: list[Warden] = []
-
-    def taken(window: int, line: dict) -> None:
-        if window in (back or {}):
-            held[window] = line
-        else:
-            device[0].head_back(window, line)
-
-    if process:
-        from verity.protocols.accounting.certifier.device import warden_serve  # by name, so that the spawned process finds its functions
-
-        ws.ck.load_key(key, height)
-        publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0,
-                                                  ordinal=0)
-        hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
-                 "lengths": publisher.lengths}
-        public, start = publisher.key, publisher.start
-    else:
-        signer = ws.ck.signer(key, height)
-        issuer = ws.Issuer(signer, SESSION)
-        publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
-        keeper = rp.Keeper(out, issuer, params, RC.LINK, back=taken if timed else None)
-        hooks, public = {"publish": publisher, "withhold": publisher.withhold, "lengths": keeper.keep}, \
-            signer.public_key()
-        start = ws.start_json(ws.certify_start(issuer, 0, 0, params))
-    answers = iter(responses)
-
-    async def connect():
-        reader = asyncio.StreamReader()
-        reader.feed_data(next(answers))
-        reader.feed_eof()
-        writer = _Writer()
-        if servers is not None:
-            servers.append(writer)
-        return reader, writer
-
-    def settled(w: Warden) -> bool:
-        return all(c.server is not None and c.ingress_ended and c.egress_ended for c in w.active)
-
-    async def main() -> tuple[list[_Writer], Warden]:
-        clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=windows, clock=clock, sleep=clock.sleep, leave=lines,
-                        **hooks)
-        device.append(warden)
-        over: list[bool] = []
-        if process and timed:
-            loop = asyncio.get_running_loop()
-
-            def on_loop(call, *args) -> None:
-                # the process's last word comes at `close`, when the run is over and its loop closed
-                if not loop.is_closed():
-                    loop.call_soon_threadsafe(call, *args)
-
-            # the process's end wakes a wait for a line that then never comes, and `close` raises its failure
-            publisher.heads(lambda window, line: on_loop(taken, window, line),
-                            ended=lambda: on_loop(lambda: (over.append(True), warden._changed.set())))
-        running = asyncio.create_task(warden.run())
-        running.add_done_callback(lambda _: warden._changed.set())
-        clients, tasks = [], []
-
-        async def tick(t: int) -> None:
-            # the lines the process was handed are back before tick t runs, and `back`'s are handed back
-            if process and timed:
-                await warden.until(lambda w: over or not w.awaited)
-            for window, at in (back or {}).items():
-                if at == t:
-                    warden.head_back(window, held.pop(window))
-            # tick t runs `late[t]` seconds past its time
-            clock.advance(t * tau + (late or {}).get(t, 0))
-            await warden.until(lambda w: w.ticks > t or running.done())
-
-        async def connect_due(t: int) -> None:
-            # request j connects before the run's first tick, or just before tick `arrive[j]`: a later request no
-            # earlier, so that the clients are in the requests' order
-            for j, request in enumerate(requests):
-                if (arrive or {}).get(j, 0) == t:
-                    reader = asyncio.StreamReader()
-                    reader.feed_data(cells(request, params.cell_bytes))
-                    reader.feed_eof()
-                    clients.append(_Writer(warden))
-                    tasks.append(asyncio.create_task(warden.handle(reader, clients[-1])))
-            await warden.until(lambda w: w.ordinals + w.refused + w.turned_away == len(clients))
-
-        await connect_due(0)
-        PROCESS_CLOCK.append(clock)
-        try:
-            for t in range(windows * params.window):
-                if t:
-                    await connect_due(t)
-                await warden.until(settled)
-                await tick(t)
-            t = windows * params.window
-            while timed and not running.done():
-                await tick(t)
-                t += 1
-            await running
-        finally:
-            PROCESS_CLOCK.remove(clock)
-        await asyncio.gather(*tasks)
-        return clients, warden
-
-    clients, warden = asyncio.run(main())
-    publisher.close()
-    if lines is not None:
-        lines.close()
-    deployment = ws.deployment_record(params, public, SESSION, origin_unix=0.0, windows=windows, slack=warden.slack,
-                                      run_id=warden.run_id, start=start, origin_raw=0.0)
-    (out / "deployment.json").write_text(json.dumps(deployment))
-    log = []
-    for index, (request, client) in enumerate(zip(requests, clients)):
-        shim = Shim(params.cell_bytes)
-        B = params.cell_bytes
-        for t, data in client.writes:
-            for i in range(0, len(data), B):
-                kind, shim.ordinal, payload = read_cell(data[i:i + B], B)
-                shim.arrivals.append((t * tau + 0.001, kind))
-                shim.data += payload if kind in (DATA, END) else b""
-        kinds = [k for _, k in shim.arrivals]
-        shim.outcome = "refused" if REFUSED in kinds else "end" if END in kinds else "cut"
-        log.append(ws.connection_log(index, 0.0, 0.0, request, shim, 0.0, id_payload))
-    (out / "client.json").write_text(json.dumps({"connections": log}))
-    return warden
 
 
 def test_the_check_accepts_a_run_and_refuses_what_wasnt_certified_or_scheduled(tmp_path):
@@ -691,20 +441,6 @@ def test_a_phase_with_no_certificate_or_no_registration_is_a_problem_and_one_few
         assert counts(got) == (3 * windows, 3 * windows, 2 * windows - 1)
 
 
-#: the scan's w63k4 schedule (`scan_zk.W63K4`), the gate's relay sessions' in `_session_argv`
-W63K4 = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
-                     ingress_buckets=12, egress_cells=5, every=16)
-
-
-def _session_argv(out: Path, windows: int, listen_fd: int | None = None) -> list[str]:
-    """`session` for `windows` execution phases at the scan's w63k4 schedule, at height 5, as the gate's `relay-session`
-    command runs it (the challenger's tests hold the gate's command to this one)."""
-    return ["session", "--upstream", "127.0.0.1:40001", "--listen", "127.0.0.1:40002", "--out", str(out),
-            "--height", "5", "--windows", str(windows),
-            *(x for k in INTEGER_FIELDS for x in (f"--{k.replace('_', '-')}", str(getattr(W63K4, k)))),
-            *(() if listen_fd is None else ("--listen-fd", str(listen_fd)))]
-
-
 def _held_listener() -> socket.socket:
     held = socket.socket()
     held.bind(("127.0.0.1", 0))
@@ -849,7 +585,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
         tmp_path, monkeypatch, capsys):
     """`serve --listen-fd FD` through `main` and `serve` themselves, on the command `session` issues for a listener
     its caller holds: `main` makes the socket FD names, and `serve` gives it to the relay's server. The relay, its
-    publisher and the process's preparation are stood in for, so nothing ticks: the relay here ends
+    publisher, the stall probe and the process's preparation are stood in for, so nothing ticks: the relay here ends
     once its handler has answered one connection. That connection is one made to the caller's listener before
     `serve` started, the deployment and the line `serve` prints name the caller's port, and the caller's socket
     still listens once `serve` has returned. With either link cut, the flag to the socket or the socket to the
@@ -914,6 +650,7 @@ def test_serve_through_its_command_line_serves_on_the_socket_its_descriptor_name
     monkeypatch.setattr(ws, "PublisherProcess", Publisher)
     monkeypatch.setattr(ws, "Warden", Relay)
     monkeypatch.setattr(ws, "prepare_process", lambda params: {})
+    monkeypatch.setattr(ws, "stall_probe", types.SimpleNamespace(start=lambda *a: None, stop=lambda *a: None))
     monkeypatch.setattr(ws, "_quiet_runtime", lambda: None)
     for name in ("PYTHONMALLOC", ws.C_ALLOCATOR):
         monkeypatch.delenv(name, raising=False)
@@ -1074,7 +811,7 @@ def test_a_windows_commit_and_signatures_move_no_tick_past_its_slack_in_the_publ
     as the inline `Publisher` runs it, puts the ticks after the window's end past their slack: the next window faults
     (`monitor-unavailable`), the issuer certifies none of its records, and the check refuses it. In `serve`'s
     `PublisherProcess` the same commit runs in the spawned process, which signs and commits from the rows released to
-    it: every tick is on time, and the check accepts every link-window, certified and registered. A commit that fails
+    it: every tick is on time, and the check accepts every execution phase, certified and registered. A commit that fails
     there fails `close`, and the warden's process doesn't wait on it."""
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]

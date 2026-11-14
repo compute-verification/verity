@@ -25,12 +25,14 @@ import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from verity_vllm.records.schema_ids import PHI_SCHEMA
 
-__all__ = ["Phi"]
+if TYPE_CHECKING:
+    from verity_vllm.program.frontend.target_profile import TargetProfile
+
+__all__ = ["Phi", "served_phi"]
 
 
 @dataclass
@@ -71,7 +73,7 @@ class Phi:
         declared = self.workload.get("requests")   # a workload that states none has no request
         return list(declared) if declared else []
 
-    def target_profile(self):
+    def target_profile(self) -> TargetProfile:
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
         (`TargetProfile.execution_label`: a `bi-*` row runs the batch-invariant kernels, an `eager` row vLLM's defaults)."""
         from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -87,7 +89,7 @@ class Phi:
         """The distinct (LP, T) request shapes of the workload in first-occurrence order (T = max_tokens - 1 decode steps)."""
         seen: list[tuple[int, int]] = []
         for r in self.requests:
-            s = (_prompt_len(r), _cap(r) - 1)
+            s = (_prompt_len(r), _max_tokens(r) - 1)
             if s not in seen:
                 seen.append(s)
         return seen
@@ -100,13 +102,9 @@ def _prompt_len(r: dict) -> int:
     return int(stated)
 
 
-def _cap(r: dict) -> int:
+def _max_tokens(r: dict) -> int:
     params = r.get("sampling_params")   # where a request may state its `max_tokens` instead; one that states it nowhere has 0
     return int(r.get("max_tokens") or (params.get("max_tokens") if params else None) or 0)
-
-
-def load_phi(path: str | Path) -> Phi:
-    return Phi.from_json(json.loads(Path(path).read_text()))
 
 
 #: the engine args a served engine's φ carries from its engine record: the ones class G states (`engine_classes.CLASS_G_LIMITS`,
@@ -219,7 +217,3 @@ def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int 
     dtype = checkpoint_dtype(hf_config)
     return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": dict(hf_config), **({"dtype": dtype} if dtype else {})},
                target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
-
-
-def save_phi(phi: Phi, path: str | Path) -> None:
-    Path(path).write_text(json.dumps(phi.to_json(), indent=1, sort_keys=True) + "\n")

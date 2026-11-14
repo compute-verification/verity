@@ -245,7 +245,7 @@ def staged_stacked(stage: Path) -> tuple[dict, str, dict]:
     """The circuit registration META binds in ``stage`` (`inner_registered.bound`), its digest, and the `rec_live.Proxy`'s
     ``registered`` opening of its `rec_live.STACKED` entry (`inner_registered.private`, its ``top`` the nodes' ``b || c``
     under their salts); refused when the record carries no ``stacked`` entry or the prover holds no opening of it."""
-    from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+    from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
     from . import inner_registered as IR
 
@@ -464,7 +464,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     ``out/schedule.json`` first), through a `Relay` whose h is the ``hidden`` circuits' fold in ``circuit``; written into
     ``out`` (`Relay.write`), or, when it stops, the challenger's live-coin part's records alone (`rec_live.write_stopped`). ``tree``: every
     coin of the session, the relay's sparse and stacked phases' too, is the challenger's coin tree of that spec, sampled by
-    ``source`` at ``Hello`` (`rec_live.CoinServer`); the prover runs under ``FC_COINS=tree``. ``sparse``: the bucket's `rec_sparse.Shape`,
+    ``source`` at ``Hello`` (`rec_live.LiveCoinPart`); the prover runs under ``FC_COINS=tree``. ``sparse``: the bucket's `rec_sparse.Shape`,
     whose sparse phase (`Relay.sparse_phase`, on ``workers`` processes) the one hidden circuit's entries run. ``stacked``
     (with ``sparse``): flock-circuit, which opens R at the sparse claims (`Relay.stacked_phase`, under ``out/stacked``;
     ``forge`` its forgery), R and its registered top as staged beside ``circuit`` (`stage_stacked`, read by
@@ -497,7 +497,7 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     (out / "schedule.json").write_text(json.dumps(schedule, indent=1))
-    proxy = RL.Proxy(RL.CoinServer(rand, tree, source), schedule=schedule, registration=registration, registered=registered, bound=bound,
+    proxy = RL.Proxy(RL.LiveCoinPart(rand, tree, source), schedule=schedule, registration=registration, registered=registered, bound=bound,
                      draw=draw)
     relay = Relay(proxy, m, k_log, lambda p: hidden_fold(nets, ranges, p["alpha"], p["lw"], p["rho_in"], p["ts"]), phase, workers, st)
     host, port = listen.rsplit(":", 1)

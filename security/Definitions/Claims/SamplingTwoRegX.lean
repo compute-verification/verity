@@ -8,7 +8,7 @@ public import Definitions.Claims.SamplingTwoReg
 
 `CompiledTwo.KSRegTwo`, `CompiledTwo.HeadlineTwo` and `CompiledTwo.MissTwo` read the boundary at `Compiled.regVal`, the
 committed trace at the prover's tape, so whatever the tape holds reaches the replay blocks wrong at the boundary
-(`wrongAtBoundaryAt`). This file states the three at the boundary trace read at the statement (`Compiled.regValX`),
+(`incorrectAtBoundaryAt`). This file states the three at the boundary trace read at the statement (`Compiled.regValX`),
 which reads the statement and the prover's strategy and no tape, beside the three, which it leaves as they stand:
 
 1. **The incorrect set** (`FregTwoX`): `FregTwo` at `Compiled.regValX` and each replay block's committed interior
@@ -26,7 +26,7 @@ Statements only: definitions, no proofs.
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition wrongInAt footprintAt wrongAtBoundaryAt)
+open Claims.Sampling (AuditStatement Partition incorrectInAt footprintAt incorrectAtBoundaryAt)
 
 namespace CompiledTwo
 
@@ -48,7 +48,7 @@ noncomputable def FregTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) {Ω : Type
     match L.partition s, L.two s with
     | some Pt, some d =>
       (Finset.range d.part.blocks.length ×ˢ Finset.range Pt.strata.length).biUnion fun p =>
-        wrongInAt s Pt d.part (L.regValX H P x) p.1 p.2 (L.iregVal H P x ω r p.1)
+        incorrectInAt s Pt d.part (L.regValX H P x) p.1 p.2 (L.iregVal H P x ω r p.1)
     | _, _ => ∅
 
 /-! ## 2. The error -/
@@ -91,13 +91,13 @@ def HeadlineTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
 /-- **The miss at the replay blocks wrong at the boundary trace read at the statement**: on a statement in scope whose
 first stage catches each replay block at rate `r₁` and whose second stage samples each cell at rate `r₂`, at every
 prover and tape, the run's sample holds no proof block of the incorrect set (`FregTwoX`) with probability at most
-`(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at that trace (`wrongAtBoundaryAt`). `W` reads the statement and the
+`(1 − r₁·r₂)^{|W|}`, `W` the replay blocks wrong at that trace (`incorrectAtBoundaryAt`). `W` reads the statement and the
 prover's strategy and no tape: whatever fixes those two fixes it, where `MissTwo`'s is fixed by the tape. -/
 def MissTwoX (H : Msg → Msg) (L : CompiledTwo Coin A) (r₁ r₂ : ℝ) : Prop :=
   ∀ x s Pt d, L.Scope x → L.parse x = some s → L.partition s = some Pt → L.two s = some d →
     d.FirstRate r₁ → d.SecondRate Pt r₂ → ∀ (Ω : Type) [Fintype Ω] (P : Prover Ω) (ω : Ω),
       Pr (fun r : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x r, u ∉ L.FregTwoX H P x ω r) ≤
-        (1 - r₁ * r₂) ^ (wrongAtBoundaryAt s Pt d.part (L.regValX H P x)).card
+        (1 - r₁ * r₂) ^ (incorrectAtBoundaryAt s Pt d.part (L.regValX H P x)).card
 
 end CompiledTwo
 

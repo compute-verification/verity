@@ -6,7 +6,7 @@ and its outcome. The piece, on a serve dir whose window was the network certifie
 requests are certified in the transfer blocks of the scan's execution phase: the period mirror's certifier/v0
 accept (`period_case`), its
 profile with the placement (the certifier on the kept gate's machine and each of the piece's steps on the machine that
-ran it, labels by which the piece establishes no `trusted-host`), then goes through `served_verdicts.py record` into the window
+ran it, labels by which the piece establishes no `trusted-device`), then goes through `served_verdicts.py record` into the window
 report and the block record's certifier entry, which `block_record.check` holds and its schema admits. Its case.json is
 the three files `network-period` read, as `composite.py` reads a piece's case: witness, kept 0600 in the serve dir's
 private/pieces/certifier with no answer beside it, and at no time under the pieces' directory, which gets
@@ -167,7 +167,8 @@ def _chain_out(d: Path, verdict: str, w: int, registrations: tuple | list = (), 
     (out / "report" / "report.json").write_text(json.dumps({"verdict": verdict, "why": None if verdict == "accepted"
                                                             else {"n2": "a window refused"}}))
     (witness / "scan" / "answers.json").write_text(json.dumps({"registration": {"program": "ab" * 64}, "windows": [
-        {"window": w, "answer": {"verdict": "accept"}, "registrations": list(registrations)}]}))
+        {"window": w, "registration": {"program": "ab" * 64}, "answer": {"verdict": "accept"},
+         "registrations": list(registrations)}]}))
     (out / "scan" / "joint" / "program.json").write_text("{}")
     return d
 
@@ -250,7 +251,7 @@ def test_the_pieces_certifier_row_is_the_period_checks_accept_and_composes_into_
                                                                 "verifier": node})
     assert where["steps"] == {"chain": node, "period": node}
     assert where[CP.PREMISE] == (
-        f"unmet: this piece establishes no trusted-host and gives no bound on that ground; the network certifier ran "
+        f"unmet: this piece establishes no trusted-device and gives no bound on that ground; the network certifier ran "
         f"on {GATE_HOST}, not the developer's {node}; the chain's checks and samples ran on {node}, and the period "
         f"check and its proofs' challenges on {node}")
     assert [(x["name"], x["counted"]) for x in where["links"]] == [("certified", True), ("gate", False)]
@@ -349,7 +350,7 @@ def _decide(tmp_path, warden, verdict="accepted", w=None, records=None, check=No
     return a
 
 
-def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_period_are_rejects(tmp_path, warden):
+def test_a_refused_chain_a_request_off_the_scans_phase_and_a_rejected_period_are_rejects(tmp_path, warden):
     d = _serve_dir(tmp_path / "serve", warden)
     env = dict(os.environ, CERTIFIER_CMD=_piece_cmd(tmp_path, _chain_out(tmp_path / "chain", "refused", warden["w"]), {}))
     got = S.pieces(d, K, tmp_path / "pieces", env=env)
@@ -362,7 +363,7 @@ def test_a_refused_chain_a_request_off_the_scans_link_window_and_a_rejected_peri
     assert a["verdict"] == "reject" and f"not the period's {warden['w'] + 1} alone" in a["reason"]
     if warden["others"]:
         a = _decide(tmp_path / "mixed", warden, records=[*warden["records"][:1], warden["others"][0]])
-        assert a["verdict"] == "reject" and "spans link-windows" in a["reason"]
+        assert a["verdict"] == "reject" and "spans execution phases" in a["reason"]
     rejected = CP.answer("reject", "window 0: certificates")
     assert _decide(tmp_path / "period", warden, check=lambda c, p: rejected) == rejected
 
@@ -743,9 +744,9 @@ def test_the_placement_names_the_kept_gate_a_local_gate_the_prover_node_and_refu
         CP.placement(d, RUN)
 
 
-def test_the_steps_machines_are_labels_and_the_piece_establishes_no_trusted_host(tmp_path, warden):
+def test_the_steps_machines_are_labels_and_the_piece_establishes_no_trusted_device(tmp_path, warden):
     """The machines ``steps`` names are the placement's labels for the chain and the period check, the period's machine
-    the verifier's, and whatever they say, `trusted-host` reads `UNMET`, at the gate's machine and at a local gate."""
+    the verifier's, and whatever they say, `trusted-device` reads `UNMET`, at the gate's machine and at a local gate."""
     d = _serve_dir(tmp_path / "serve", warden)
     steps = {"chain": "chain-machine", "period": "period-machine"}
     names = (f"the network certifier ran on {GATE_HOST}, not the developer's {socket.gethostname()}; the chain's "
@@ -836,7 +837,7 @@ def test_the_piece_publishes_no_count_or_advice_bit_of_the_window_and_the_guard_
     assert report["verdict"] == "accepted" and set(report["steps"]) == {
         "custody", "certificates", "endpoint", "tie", "n2", "scan", "lean"}
     assert report["steps"]["endpoint"] == {"verdict": "accepted", "in_the_clear": CR.CLEAR["warden_endpoint_served"]}
-    assert report["steps"]["scan"]["eps_at_delta"]["units"] == 60
+    assert report["steps"]["scan"]["eps_at_delta"]["units"] == 2 * 30 + 1
     assert report["stubbed"] == list(CR.WARDEN_SERVED_STUBBED)
     for rel in ("endpoint/report.json", "scan/answers.json"):
         (hold / "chain" / rel).parent.mkdir()
@@ -1014,7 +1015,7 @@ def test_each_steps_time_limit_names_its_own():
             CP.ended(limit)(signal.SIGTERM, None)
 
 
-def test_n2_and_the_tie_take_every_link_window_of_a_short_run_unless_named():
+def test_n2_and_the_tie_take_every_phase_of_a_short_run_unless_named():
     assert CP.sized(1, []) == ["CR_N2_DRAW=", "CR_TIE_WINDOWS=1"]
     assert CP.sized(8, ["CR_N2_DRAW=4"]) == ["CR_TIE_WINDOWS=8", "CR_N2_DRAW=4"]
     assert CP.sized(9, ["CR_SCAN_ONLY=1"]) == ["CR_SCAN_ONLY=1"]
@@ -1051,7 +1052,7 @@ def test_the_front_sends_one_group_of_the_class_and_keeps_the_fetch_in_the_serve
     assert (kept.parent / CP.SESSION).read_text() == (out / "session.json").read_text()
     assert json.loads((out / "session.json").read_text())["gate"] == LIVE_GATE
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "64"]) == 2
-    assert "past one link-window" in json.loads((out / "session.json").read_text())["refused"]
+    assert "past one execution phase" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(serve), str(out), "--tokens", "5"]) == 2
     assert "1 to KO = 4 ids" in json.loads((out / "session.json").read_text())["refused"]
     assert CP.main(["front", "18190", str(tmp_path / "serve-w63"), str(tmp_path / "out-w63"), "--key",
@@ -1621,7 +1622,7 @@ def test_the_served_tables_scan_class_is_v3cs_setup_in_scan_zk():
     lanes and EVERY."""
     from verity.protocols.accounting.certifier.prover import scan_zk as SZ
 
-    spec = importlib.util.spec_from_file_location("served_table", ROOT / "demos/onsite_served/served_table.py")
+    spec = importlib.util.spec_from_file_location("served_table", ROOT / "tools/verity/cli/verity_cli/served_table.py")
     table = importlib.util.module_from_spec(spec)
     sys.modules["served_table"] = table
     spec.loader.exec_module(table)

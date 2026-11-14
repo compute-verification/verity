@@ -50,7 +50,7 @@ namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit
 
-variable {n : ℕ} {L : Law n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
+variable {n : ℕ} {L : SamplingDesign n} {Reg Cm Reg₂ Reg' : Type} {I : Inner} {S : ℕ} {Vs : Fin S → VStmt}
   {zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
   {src : List (Cm × I.Coin) → Option Flock.RecCoins.Source} {c3 : List (Cm × I.Coin) → Option Flock.RecCoins.C3}
   {f : Flock.RecCoins.Source} {R : Reg} {ω : L.Ω} {t : List (Cm × I.Coin)} {R₂ : Reg₂}
@@ -211,7 +211,7 @@ theorem outBitRow_part {c : Flock.Circuit} {j : ℕ} (h : PartOutsLaid c j) {n :
 (`outBitRow_part`), so its gate's commit string is the `out` read (`rowOfH`, `FlockC3.RegLevels.regOut_of_outBitRow`),
 whose registrant holds 0 at bit `e` (`hzero`). -/
 theorem zeroOut_of_laid {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
-    {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {u : Fin nv}
+    {hscope : Layout.scopeOk c = true} {Lv : SamplingDesign nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv) {u : Fin nv}
     {cpy : ℕ} (hcp : cpy < c.upv) (hlaid : PartOutsLaid c cpy) {base e : ℕ} (he : e < 2048)
     (hoc : base + e = Layout.outCol c (e / 16) (e % 16)) (h1 : (Rows.ofNet hU).nIn ≤ base + e)
     (h2 : base + e < (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp)

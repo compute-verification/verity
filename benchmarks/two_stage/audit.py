@@ -20,7 +20,7 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The second stage** (`two_stage.second_stage`, the served driver's, over any interior window of word-row members, its
   two records, the verifier's reads and the replay block): `a5.audit` of the stream's second sample: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
-  ``--firewall`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
+  ``--zk-server`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
   port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
   wires of the sampled proof blocks, and a5's negatives (the registered reads' three on b_in's session among them). Each
   session's circuit file is held to the one the params name for its template (`two_stage.pins`), and its statement as round 2
@@ -44,12 +44,12 @@ those reads (the interior's at the interior record and the links' boundary ports
 (``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
-(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
+(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, sampling designs
 and samples, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
 copies it reads them against (``guard/``, `guard.export`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/protocols/proofs/flock/prover/python:<tree>/adapters/vllm \\
-      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
+      python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --main FILE \\
         --out DIR [--altered]
 """
 from __future__ import annotations
@@ -66,10 +66,11 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
-import a5_coins as AC  # noqa: E402
+from verity.protocols.proofs.spot.device import challenger_session as AC  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import local_challenger as LC  # noqa: E402
 import guard as G  # noqa: E402
 import toy as T  # noqa: E402
-import two_stage as TS  # noqa: E402
+from verity.protocols.proofs.spot.prover.audit import two_stage as TS  # noqa: E402
 from verity.circuits.codec import descriptor_id  # noqa: E402
 from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
@@ -196,8 +197,8 @@ def main(argv=None) -> int:
     ap.add_argument("--k", type=int, default=1, help="the second stage's proof blocks in each (replay block, template) cell")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True, help="flock-circuit")
-    ap.add_argument("--lean", required=True, help="flock-verify")
-    ap.add_argument("--firewall", help="Lean's flock-firewall: every session behind the ZK server; without it each runs "
+    ap.add_argument("--lean", required=True, help="verity-verify-proof")
+    ap.add_argument("--zk-server", help="Lean's flock-zk-server: every session behind the ZK server; without it each runs "
                     "prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--altered", action="store_true", help="span S[0] replayed on an ingress one bit off")
     ap.add_argument("--out", required=True, type=Path)
@@ -208,7 +209,7 @@ def main(argv=None) -> int:
                     "--first-parent origin/main`), which the challenger session's pin is held to")
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
-    manager, draws, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main)
+    manager, draws, finisher = AC.start("local", ROOT, [0, 1], a.out / "challenger", a.main, local=LC.Local)
     try:
         return run(a, a.out, StageCoins(draws), draws)
     finally:

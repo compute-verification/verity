@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Physical
+public import Definitions.Registration.Physical
 public import Definitions.Accounting.Records
 public import Definitions.Core.SiteSubtree
 public import Mathlib.Data.String.Basic
@@ -55,7 +55,14 @@ namespace Accounting.Guarantees
 (`Site.under`), with the Site's places as the model's leaves and its links as the model's table, and an actual
 circuit `A` placed on the Site's places, a device or a memory leaf as much as a host:
 
-* **The wires run on the registered links** (`Placed.Links` at the Site's links, the one physical premise). It is
+* **The links it sums have registered rates** (`Site.RatedOn`): each link with exactly one end in the subtree is
+  registered with a rate, `β e`. A subtree with a link across its boundary that has no rate has no limit stated here:
+  the Site registers no capacity for that link. The registration's check does not discharge this: it asks a rate only
+  of a link with no `unmediated` (stated beside `Properties.Core.Site`, not proved), the network check's `registered`
+  holds only the one certifier link it is named to a rate (`Properties.Certifier.Registered.RegisteredLinkRated`), and
+  an unmediated link may be unrated, onsite a boundary link among them (it may be unmediated instead of certified),
+  and then no limit is stated across it.
+* **The wires run on the registered links** (`Placed.Links` at the Site's links and `β`, the one physical premise). It is
   taken of `A`'s image under `Site.linkPlace`, which sends each device and each memory leaf to its host (the Site's
   own `host?`) and every other place to itself, since a registered link ends at a host, a certifier, a challenger or
   the outside: a wire between two places of one host needs no link, and every other wire between two places runs on
@@ -73,10 +80,12 @@ beside them, the host's link to the certifier and the certifier's to the outside
 summed. The limit of that host's subtree, and of its site's, then counts the interfaces' rates twice, and the bound
 is loose there by up to a factor of two. -/
 def EgressRegistered : Prop :=
-  ∀ (S : Verity.Site) (i : String) (A : Placed S.Place) (link : Fin A.N → Fin A.N → Fin S.links.length),
-    (A.onto S.linkPlace).Links S.placeEnds S.linkβ link → S.HostsWhole i → ∀ a b : ℕ,
+  ∀ (S : Verity.Site) (i : String) (A : Placed S.Place) (link : Fin A.N → Fin A.N → Fin S.links.length)
+    (β : Fin S.links.length → ℕ),
+    S.RatedOn β ↑(boundary S.placeEnds (S.placesIn (S.under i))) →
+    (A.onto S.linkPlace).Links S.placeEnds β link → S.HostsWhole i → ∀ a b : ℕ,
       A.egress (S.placesIn (S.under i)) (Set.Ico a b) ≤
-        linkCapacity S.placeEnds S.linkβ (S.placesIn (S.under i)) * (b - a)
+        linkCapacity S.placeEnds β (S.placesIn (S.under i)) * (b - a)
 
 /-- **The leak limit as a sum over the trusted devices.** In the model: the certifiers `cert`; the memory challengers
 `chal` that are trusted devices, apart from the certifiers; the location `X`; and the sinks `sink`, apart from `X`,
@@ -121,6 +130,14 @@ challenger outside `units` adds nothing and nothing is asked of what it does; on
 a jitter share. `pinned`, `units` above the shared challengers, and `K` are parameters: this gives no device's record
 limit a value, and reads no protocol's check or output.
 
+**The links it sums have registered rates** (`Site.RatedOn`): each link `β°` sums, with exactly one end among the
+subtree's prover places and neither end among its auditor's devices, is registered with a rate, `β e`. Elsewhere `β`
+is only what the links premise holds the runs to, and the limit does not read it. A subtree with such a link that has
+no rate has no leak limit stated here. The registration's check does not discharge this: it asks a rate only of a
+link with no `unmediated` (stated beside `Properties.Core.Site`, not proved), the network check's `registered` holds
+only the one certifier link it is named to a rate (`Properties.Certifier.Registered.RegisteredLinkRated`), and an
+unmediated link may be unrated, and then no limit is stated across it.
+
 **A host is one leaf.** The strategy is placed at the places a link may end at (`AtLinkEnds`): a host's own work, its
 devices' and its memory leaves' are all gates at the host. The links premise (`DeclaredLinks`) asks a registered link
 between the two leaves of every wire, and a registered link ends at a host, a certifier, a challenger or the
@@ -132,11 +149,14 @@ def LeakPartsRegistered : Prop :=
     let S := Verity.Site.ofLog l
     ∀ {Ω : Type*} (pinned units : Finset String) (i : String) (R : Ω → Actual.Run S.Place)
       (ℓ : S.Place → S.Place → ℕ) (link : ∀ r, Fin (R r).A.N → Fin (R r).A.N → Fin S.links.length)
-      (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec) (record : S.Place → Set ℕ) (bucket : ℕ → ℕ)
+      (β : Fin S.links.length → ℕ) (𝒱 : Finset S.Place) (spec : ∀ r, (R r).A.Spec) (record : S.Place → Set ℕ) (bucket : ℕ → ℕ)
       (jitter a b : ℕ) (K : S.Place → ℕ),
       Verity.Registration.Valid D A c l → AtLinkEnds S R →
       units ⊆ S.challengersOf pinned i → S.sharedOf pinned i ⊆ units →
-      CausalStrategy R ℓ → DeclaredLinks R S.placeEnds S.linkβ link →
+      S.RatedOn β ↑((boundary S.placeEnds (S.placesIn (S.proverUnder i))).filter fun e =>
+        (S.placeEnds e).1 ∉ S.placesIn (S.auditorsOf pinned i) ∧
+          (S.placeEnds e).2 ∉ S.placesIn (S.auditorsOf pinned i)) →
+      CausalStrategy R ℓ → DeclaredLinks R S.placeEnds β link →
       TrustedUnits R 𝒱 (S.placesIn (S.certifiersOf i ∪ units)) spec record bucket jitter →
       Secrets R (S.placesIn (S.certifiersOf i ∪ units))
         (S.placesIn (S.proverUnder i ∪ (S.challengersOf pinned i \ units))) a →
@@ -145,7 +165,7 @@ def LeakPartsRegistered : Prop :=
           S.placesIn (S.certifiersOf i ∪ units))ᶜ (Set.Ico a b)).encard ≤
         ((2 ^ ((∑ y ∈ S.placesIn (S.certifiersOf i ∪ units), K y) +
           jitter * ((Finset.Ico a b).image bucket).card * (S.placesIn (S.certifiersOf i ∪ units)).card +
-          uncertifiedCapacity S.placeEnds S.linkβ (S.placesIn (S.auditorsOf pinned i))
+          uncertifiedCapacity S.placeEnds β (S.placesIn (S.auditorsOf pinned i))
             (S.placesIn (S.proverUnder i)) * (b - a)) : ℕ) : ℕ∞)
 
 end Accounting.Guarantees

@@ -29,7 +29,7 @@ from verity.protocols.accounting.certifier.verifier import scan_ok
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
 from verity.protocols.accounting.certifier.verifier.certificate import Certificate
 from verity.protocols.accounting.certifier.verifier.warden import WardenParams
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.profile import Stratified, Stratum
 
 __all__ = ["EXPECT", "MUTATIONS", "build", "reference"]
@@ -68,7 +68,7 @@ server = D.server_fixture(PORT)
 @pytest.mark.slow
 def test_the_period_check_agrees_with_its_mirror(server):
     """Lean and the mirror agree on every case, and each change reaches its verdict at least once: a change the run's
-    draw leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its draws."""
+    sample leaves out is replayed once, at seed 0, so adding a change doesn't fail another for its samples."""
     SEEN.clear()
     examples = 1200
     stats = D.run(PORT, examples=examples, server=server)
@@ -83,7 +83,7 @@ def test_the_period_check_agrees_with_its_mirror(server):
 
 
 def test_each_verdict_is_the_mirrors(server):
-    """A short run over an honest period, an undecided link-window and a forged certificate: all three verdicts."""
+    """A short run over an honest period, an undecided execution phase and a forged certificate: all three verdicts."""
     port = dataclasses.replace(PORT, inputs=cases(("rows-honest", "rows-answer-undecided", "rows-cert-forged")))
     stats = D.run(port, examples=40, server=server)
     assert all(stats.counts.get(v) for v in (ACCEPT, REJECT, UNDECIDED)), stats
@@ -218,15 +218,15 @@ def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number
     """The parameters list the certifier's entries, each a key, its session and the start of its stretch, and the
     period's execution phase alone picks the entry its certificates and row registrations are held to: that entry's key,
     its session, and that session's number for the execution phase, the period's less the entry's start. A period
-    whose every signature is the second of two entries' (`second-key`), and one whose execution phases two
-    entries' stretches hold, each execution phase signed by its own entry at its own number (`two-stretches`), are
-    accepted by Lean with the mirror's public; and a mirror that reads only the first listed entry, or holds a
-    certificate to the period's number, refuses what Lean accepts."""
+    whose every signature is the second of two entries' (`second-key`), and one whose one execution phase is the
+    second's stretch's first, the one after the first entry's last, signed by the second at its number 0
+    (`two-stretches`), are accepted by Lean with the mirror's public; and a mirror that reads only the first listed
+    entry, or holds a certificate to the period's number, refuses what Lean accepts."""
     cases = {(m, n): build(m, n, small=n % 2 == 0)
              for m in ("rows-second-key", "rows-two-stretches") for n in range(4)}
     for (m, n), case in cases.items():
         ids = listed_ids(case)
-        assert len(ids) == 2 and signers(case) == (set(ids) if "two-stretches" in m else {ids[1]}), (m, n)
+        assert len(ids) == 2 and signers(case) == {ids[1]}, (m, n)
         p = PC.params(case["params"])
         assert p.entries[0].session != p.entries[1].session and p.entries[1].start >= 1, (m, n)
         for w, certs in by_window(case):
@@ -236,7 +236,7 @@ def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number
                 assert c.key_id == e.key.key_id and c.window == w - e.start and c.verify(e.key, e.session), (m, n, w, c)
                 assert not c.verify(e.key, other.session), (m, n, w, c)
         if "two-stretches" in m:
-            assert {PC._entry_at(p, w) for w, _ in by_window(case)} == set(p.entries), (m, n)
+            assert p.windows == 1 and p.first == p.entries[1].start > p.entries[0].start, (m, n)
         out = reference(case)
         assert out["verdict"] == ACCEPT, (m, n, out)
         verdict, got = D.replay(PORT, case, server)
@@ -245,7 +245,7 @@ def test_an_execution_phase_picks_its_entry_and_is_signed_at_its_sessions_number
     for skipped in (lambda p, w: p.entries[0] if p.entries[0].start <= w else None,
                     lambda p, w: (e := real(p, w)) and dataclasses.replace(e, start=0)):
         monkeypatch.setattr(PC, "_entry_at", skipped)
-        for m in ("rows-second-key",):
+        for m in ("rows-second-key", "rows-two-stretches"):
             with pytest.raises(D.Mismatch) as x:
                 D.replay(PORT, cases[m, 0], server)
             assert (x.value.lean[0], x.value.python[0]) == (ACCEPT, REJECT), x.value
@@ -417,21 +417,24 @@ def with_starts(case: dict, starts: list | None) -> dict:
 
 def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monkeypatch):
     """The period reads each listed entry's session's signed start, so a key may be listed in two sessions. A
-    period that two stretches of one key hold between them, each signature in its own stretch's session at that
-    session's number, the second entry starting as many execution phases after the first as its session's signed
-    base is after the first's on the key's life (`restart`), is accepted by Lean with the mirror's public. The same
-    list with the second session's signed base another, every signature still verifying, is refused by Lean and by the
+    period of one execution phase in the second of two stretches of one key, each signature in that stretch's session
+    at its number, the second entry starting as many execution phases after the first as its session's signed base is
+    after the first's on the key's life (`two-sessions`), is accepted by Lean with the mirror's public. The same list
+    with the second session's signed base another, every signature still verifying, is refused by Lean and by the
     mirror and by name (`PC.NOT_SIGNED`); and a mirror that reads the starts' certificates and not their bases accepts
-    what Lean refuses by that name. A key's first listed entry is held to no start: moving every base of a key by one
-    amount changes no verdict."""
+    what Lean refuses by that name. A period is one execution phase, so one spanning the restart, an execution phase in
+    each stretch, its starts held, is refused by both by name (`restart`, `PC.CARRIED`). A key's first listed entry is
+    held to no start: moving every base of a key by one amount changes no verdict."""
     for n in range(6):
-        for m, want in (("rows-restart", ACCEPT), ("rows-start-not-signed", REJECT)):
+        for m, want, why in (("rows-two-sessions", ACCEPT, None), ("rows-start-not-signed", REJECT, PC.NOT_SIGNED),
+                             ("rows-restart", REJECT, PC.CARRIED)):
             case = build(m, n, small=n % 2 == 0)
             p = PC.params(case["params"])
             first, second = p.entries
             starts = shown_starts(case)
             assert first.key == second.key and first.session != second.session, (m, n)
-            assert {PC._entry_at(p, w) for w, _ in by_window(case)} == {first, second}, (m, n)
+            spans = {first, second} if m == "rows-restart" else {second}
+            assert {PC._entry_at(p, w) for w, _ in by_window(case)} == spans, (m, n)
             for w, certs in by_window(case):
                 e = PC._entry_at(p, w)
                 assert all(c.window == w - e.start and c.verify(e.key, e.session) for c in certs), (m, n, w)
@@ -439,21 +442,21 @@ def test_a_key_listed_in_two_sessions_is_held_to_its_signed_starts(server, monke
                 [None, None], (m, n)
             L = p.schedule.window * p.schedule.bucket_ms
             held = (second.start - first.start) * L == starts[1].base_ms - starts[0].base_ms
-            assert held == (want == ACCEPT), (m, n)
+            assert held == (why != PC.NOT_SIGNED), (m, n)
             out = reference(case)
             verdict, got = D.replay(PORT, case, server)
             assert out["verdict"] == verdict == want, (m, n, out, got)
             if want == ACCEPT:
                 assert json.loads(got)["public"] == out["public"], (m, n, got)
             else:
-                assert PC.NOT_SIGNED in out["reason"] and PC.NOT_SIGNED in json.loads(got)["reason"], (m, n, out, got)
+                assert why in out["reason"] and why in json.loads(got)["reason"], (m, n, out, got)
     monkeypatch.setattr(PC, "_held_to", lambda L, a, xa, e, x: True)
     for n in range(3):
         refused_by_lean_alone(build("rows-start-not-signed", n, small=True), server, PC.NOT_SIGNED)
 
 
 def test_a_keys_later_session_is_the_one_after_its_entry_listed_before_it(server, monkeypatch):
-    """A key listed in two sessions has the second's ordinal the first's next (`restart`, accepted above): its device
+    """A key listed in two sessions has the second's ordinal the first's next (`two-sessions`, accepted above): its device
     state gives each session it starts the next ordinal, so a session of the key between the two, which the list
     leaves out, leaves a gap. The same list with the second session's ordinal another, its start still certified and
     its base where the first puts it (`start-skipped`), is refused by Lean and by the mirror, by name (`PC.SKIPPED`);
@@ -565,11 +568,11 @@ def test_a_schedule_with_connection_rows_is_refused_by_name(server):
     the network certifier builds (`WardenParams`), and the period check reads it and refuses it by name at the
     parameters, Lean as the
     mirror: the check reads no connection rows' registration, so it accepts no period under one. The check refuses
-    it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, accepted
-    under the honest one: no parameters `params` reads reach it."""
+    it too (`connectionRowsCheck`), which the mirror's check shows at an empty period under each schedule, with no
+    entries and so no starts to show, accepted under the honest one: no parameters `params` reads reach it."""
     case = build("rows-honest", 0, small=True)
-    empty = dataclasses.replace(PC.params(case["params"]), audits=(), windows=0)
-    assert PC.check(empty, PC.Commitment([], [], b""), ([], []))[0] == ACCEPT
+    empty = dataclasses.replace(PC.params(case["params"]), audits=(), windows=0, entries=())
+    assert PC.check(empty, PC.Commitment([], [], b""), ([], [], []))[0] == ACCEPT
     for params in PC.connection_rows_params(case["params"]):
         schedule = PC._schedule(params["schedule"])
         assert PC.connection_rows(schedule) and PC.schedule_json(schedule) == params["schedule"]
@@ -579,7 +582,7 @@ def test_a_schedule_with_connection_rows_is_refused_by_name(server):
         verdict, got = D.replay(PORT, bad, server)
         assert verdict == REJECT and PC.CONNECTION_ROWS in json.loads(got)["reason"], (params["schedule"], got)
         held = dataclasses.replace(empty, schedule=schedule)
-        assert PC.check(held, PC.Commitment([], [], b""), ([], [])) == (REJECT, PC.CONNECTION_ROWS), schedule
+        assert PC.check(held, PC.Commitment([], [], b""), ([], [], [])) == (REJECT, PC.CONNECTION_ROWS), schedule
 
 
 def test_bad_lengths_rows_and_content_rows_are_refused_as_the_schedules(server):
@@ -822,7 +825,7 @@ def test_a_scan_whose_start_is_not_the_empty_state_is_refused(server, monkeypatc
         refused_by_lean_alone(build("rows-start-unpinned", n, small=True), server, PC.UNPINNED)
 
 
-def test_a_period_of_more_than_one_link_window_is_refused(server, monkeypatch):
+def test_a_period_of_more_than_one_phase_is_refused(server, monkeypatch):
     """An execution phase after its period's first starts from the state the one before it ended in, which the check
     neither holds nor charges, so the rows form refuses, in Lean and in the mirror and by name, a period of the run's
     first execution phase and the next and one of a later one and the next (`PC.CARRIES`), each stating a start opened
@@ -1010,7 +1013,7 @@ def test_a_template_named_slot_entry_with_another_body_is_refused(server, monkey
     assert selects == {False, True}, selects
 
 
-def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
+def test_a_tied_audits_free_inputs_are_in_its_phases_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
     audit's inputs are the execution phase's: over honest rows periods, which Lean and the mirror accept with one
     public, each scan's `free` is the parameters' `free` of the audits whose registration holds its `prog`'s root (the
@@ -1076,7 +1079,7 @@ def test_an_untied_audit_sampled_in_part_is_charged_nothing(server):
 SAMPLED_IN_PART = ("rows-tied-partial", "rows-tied-entries-sampled", "rows-tied-slots-sampled", "rows-tied-sampled")
 
 
-def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server):
+def test_a_tied_audit_sampled_in_part_is_charged_its_phases_entries(server):
     """The scan reads a tied audit only through its `prog`, E_w entry bits an execution phase, and its state is the
     scan's own, so an incorrect proof block of any of the audit's templates, an unsampled `SelectEntry_v1` or
     `ScanSlots_v2` one among them, changes only those bits: the rows form accepts a tied audit at any sample, Lean with
@@ -1607,8 +1610,8 @@ def test_a_small_period_reaches_its_verdict(server):
 def test_each_kind_of_case_is_answered_as_lean_answers(server):
     """`case(kind, seed)` reaches its kind's verdict for each kind, the ones that fail to decode refused where they fail
     (a digest only once the commitment decodes); an accepted period's eps is its scans' deltas summed with its tied
-    audits' sampled in part, and its profile names no sync; its evidence holds each link-window's three records'
-    certificates and two row registrations, with one scan a link-window, all at one δ, and a schedules term equal to
+    audits' sampled in part, and its profile names no sync; its evidence holds each execution phase's three records'
+    certificates and two row registrations, with one scan an execution phase, all at one δ, and a schedules term equal to
     the cells'; `cases(seed)` is one of each with its answer; and Lean gives every one of them the mirror's answer."""
     drawn = {(k, s): PC.case(k, s) for k in KINDS for s in range(6)}
     answers = {ks: PC.answer(c) for ks, c in drawn.items()}
@@ -1650,7 +1653,7 @@ def test_the_clock_form_is_refused(server):
 
 def test_the_rows_forms_bound_counts_what_it_says():
     """The rows form's K worked by hand (Lean's `rowsTerms` `#guard`s): 7 cells on one connection and 2 on another, 5
-    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
+    bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 execution phase
     one scan of 20 units (T = 10) sampled at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit sampled, no term for incorrect
     proof blocks; at w63's class with the egress tie (T = 32, every unit sampled), K the tied slot entries' free inputs,

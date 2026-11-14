@@ -118,10 +118,12 @@ def user_key() -> str:
 def call(method: str, path: str, key: str, body: dict | None = None) -> tuple[int, dict]:
     auth = base64.b64encode(f"{key}:".encode()).decode()
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(API + path, data=data, method=method,
+    if (scheme := urllib.parse.urlsplit(API).scheme) not in ("http", "https"):
+        sys.exit(f"CURSOR_API_URL is not an http or https URL (scheme {scheme!r})")
+    req = urllib.request.Request(API + path, data=data, method=method,  # noqa: S310 (http or https, checked above)
                                  headers={"Authorization": f"Basic {auth}", "Content-Type": "application/json"})
     try:
-        with urllib.request.urlopen(req) as resp:
+        with urllib.request.urlopen(req) as resp:  # noqa: S310 (http or https, checked above)
             return resp.status, decoded(resp.read())
     except urllib.error.HTTPError as err:
         return err.code, decoded(err.read())
@@ -166,7 +168,9 @@ def fetch_artifact(author: str, name: str, key: str) -> str:
                  f"then rerun this")
     query = urllib.parse.urlencode({"path": want})
     url = ok(*call("GET", f"/v1/agents/{author}/artifacts/download?{query}", key), f"download {want}")["url"]
-    with urllib.request.urlopen(url) as resp:
+    if (scheme := urllib.parse.urlsplit(url).scheme) not in ("http", "https"):
+        sys.exit(f"the download URL of {want} is not an http or https URL (scheme {scheme!r})")
+    with urllib.request.urlopen(url) as resp:  # noqa: S310 (http or https, checked above)
         return resp.read().decode()
 
 

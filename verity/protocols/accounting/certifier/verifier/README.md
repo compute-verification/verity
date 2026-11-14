@@ -8,28 +8,28 @@ accepted audit leaves the certified traffic outside what that Program accepts, a
 of bits of such a sender's secrets a decoder recovers from the client's view.
 
 The guarantee is `NetTiming.Guarantees.MonitoringPeriodLeakAccepted`
-(`security/Definitions/NetworkCertifier/Guarantees/MonitoringPeriod.lean`), proved as
-`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/NetworkCertifier/MonitoringPeriod.lean`). Over a monitoring
+(`security/Definitions/Certifier/Guarantees/MonitoringPeriod.lean`), proved as
+`NetTiming.SecurityProofs.MonitoringPeriodLeakAccepted` (`security/Proofs/Certifier/MonitoringPeriod.lean`). Over a monitoring
 period of n execution phases (the Lean's windows), execution phase i audited by the compiled sampled verifier at its
 registered statement, with one network certifier on the server's uplink running its code on schedules in `Ss`:
 
 - per execution phase, at a statement in scope, `Pr[accept ∧ ¬RLeakCertifier(δ)] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`;
 - where the network certifier registers its observations in every execution phase, the secrets whose every execution
   phase meets its good event (`ExecutionPhaseGood`) number at most
-  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
+  `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #incorrectSets_i(δ) · 2^β_i · Dj^k_i`, whose log2 bounds the bits.
 
 `RLeakCertifier(δ)` says every observation sequence the network certifier registers is one the registered Program
 accepts at the trace's committed values with some incorrect set the audit allows at δ. ε_ks and ε_bind are the sampled
 verifier's errors (`Compiled.KS`'s) and `B_tap` a collision between the extracted trace's openings and the network
 certifier's. `cap_c` bounds connection c's cells; `freeInputs_i \ reg_i` are execution phase i's free inputs (the
-advice) outside its registered inputs; `faultySets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
+advice) outside its registered inputs; `incorrectSets_i(δ)` are its possible incorrect sets at δ and β_i bounds the bits
 any of them commits; k_i is its steps and `Dj` bounds each step's jitter class.
 
 It bounds each execution phase's failure on its own: the union over the monitoring period's live coins is not stated,
 and `ExecutionPhaseGood` adds a condition no proof gives, the registration's values at the prover's registered inputs. It is a
 statement about the network certifier's code (`recordingCode`), not about runs of the network check's Lean
 (`lean`, `NetworkCheck`), which is the verifier's code and states no bound.
-`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) is the
+`NetTiming.Guarantees.PooledLeakAccepted` (`security/Definitions/Certifier/Guarantees/PooledLeak.lean`) is the
 pooled count, with the incorrect proof blocks paid for once over the monitoring period,
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i` at `Fmax ≥ ln(1/δ)/q`
 (N the period's proof blocks, b each one's committed bits, q the per-execution-phase detection probability), failing
@@ -44,7 +44,7 @@ assumptions: none. A premise that is part of what it says (`domain`):
 
 Open premises (`open`):
 
-- `Verity.Assumptions.TrustedHost` (`trusted-host`): the network certifier, the auditor's device on a host the developer
+- `Verity.Assumptions.TrustedDevice` (`trusted-device`): the network certifier, the auditor's device on a host the developer
   doesn't control, runs its stated code.
 - `Claims.SamplingGeneric.Compiled.KS`: the compiled sampled verifier is knowledge sound at its errors on the
   statements in scope.
@@ -52,15 +52,15 @@ Open premises (`open`):
 - `NetTiming.CertifierRegisters`: the network certifier's openings pass under the statement's roots, cover every
   egress and ingress gate, and hold its record's rows there; the antecedent of the period's count.
 
-`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedHost`.
+`PooledLeakAccepted`'s record lists one open premise, `Verity.Assumptions.TrustedDevice`.
 
 ## Interface
 
 - **Python**: `verity.protocols.accounting.certifier.verifier`. Code outside this directory imports every module but `boundary`
   and `pacer`. Its importers: the prover side, `verity/protocols/accounting/certifier/prover`; `../device`'s vector
-  scripts; `adapters/vllm` (`active`, `advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
-  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `demos/onsite_served`; the tests of
-  `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`, `network_sim`,
+  scripts; `adapters/vllm` (`advice`, `blocks`, `charge_chain`, `compile_slice`, `io_tie`, `release`,
+  `served_rows`, `warden`); `verity/protocols/compose/device/live_challenger`; `verity run`'s served table (`tools/verity/cli`); the tests of
+  `../../pouw/verifier` and `tools/verity`; and in `benchmarks/`, `network_traces`, `network_e2e`,
   `prove_path`, `one_stage`, `pouw`, `remote_session`, `mempool` and `compile_cost`. In this directory, the network
   check's tests (`network/tests`) and vector script (`lean/scripts`) import it too. `../../../proofs/spot`, `../../../proofs/flock` and
   `../../../proofs/recursion` import none.
@@ -103,7 +103,7 @@ Open premises (`open`):
   `period_case.py` (`benchmarks/network_traces`), and `test_network_period_protocol.py` and
   `test_inference_only_protocol.py` (the tests of `../../../compose/verifier/lean`).
 - **Loads from**: `lean/`, six Lake packages by path: `certifier_program`, `flock_verifier` (`../../../proofs/flock/verifier`),
-  `nci_check` (`../../../policy/inference_only/verifier/nci/lean`), `core_protocol` (`../../../interface`), and `lms` and
+  `inference_only_check` (`../../../policy/inference_only/verifier/lean`), `core_protocol` (`../../../interface`), and `lms` and
   `core_identity` (`verity/commitments/lms/lean`, `verity/commitments/identity`); the certifier program, no package. The
   modules, `verity.circuits`, `verity.commitments`, `verity.commitments.crypto`, `verity.protocols.proofs.spot.verifier` and,
   `parties` alone, `verity.protocol` and `verity.channel`;
@@ -120,28 +120,14 @@ A spec-level reference for network accounting's timing channel:
   fresh salt, with the execution phase's frames in a fixed-depth SHA-512 tree), and the ingress links' status check;
 - one execution phase's certificates through the proof system (`service`): the network `Spec`, a salted root over the
   certified records, and the check, whose Boolean part is each head's check (`head_check`: the head's hiding opening,
-  its fields, its counts against the public occupancy profile, and its record digest under the certifier's salt
-  against the digest its certificate signs), with a host-side verifier (no proof of the
-  check yet) that compares no grid in the clear. Its claim is counts only: on every execution phase the head check holds
-  the egress head's counts to the profile (and the ingress head's, where that end declares one), so the link's timing
-  is at the profile. Nothing here holds the frames, the rest of the egress grid. The network verdict of record is
-  `LinkWindows.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
-  egress profile registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
+  its fields, and its record digest under the certifier's salt against the digest its certificate signs). A link is
+  the network certifier's (`service.WardenProfile`), and its claim is the heads' only: on every execution phase both
+  are the network certifier's, on its grid under its parameters digest, so the link's timing is its schedule's.
+  Nothing here holds the frames, the rest of the egress grid (the scan does). The network verdict of record is
+  `TransferBlocks.network_verdict`, the AND over the link's execution phases with no ε or share credit: every window of the
+  link registered in order with an accepted outcome, and a rejected, late, missing or out-of-order window
   rejects the link;
-- a served link's counts (`served`, `LinkWindows(served=ServedProfile(F, F_in, windows, own))`), whose egress end has no
-  occupancy profile: N2's served proof block, `NetworkServedTransferBlocks`, adds a Boolean Definition,
-  `NetworkServedCounts_v1`, that holds the egress
-  head's counts to the ones its ingress head's counts derive under the window's declared sync, the advice the audit
-  already charges at log2 #Σ_sync bits a window. Each window starts empty and must end idle, so nothing carries
-  between windows, and a request whose frames or response straddle a window's end refuses the window. The claim is
-  counts only and rests on no premise. That the derived counts are the Program's grid rests on four: FIXLEN (every
-  response F frames), a fixed request size (every request F_in frames, every ingress frame a request's but the
-  certifier's salt frame heading each window, which `own` counts), a
-  request-major canonical order, and one T, τ_b and declared sync for a window's anchors (`PROTOCOL.md`, "A served
-  link"). The proxy's admission rule (`Proxy(served=…)`) admits a request only while its window still ends idle, so
-  an honest served link is accepted. An egress end with no profile gets no verdict (`ValueError`, failing
-  closed);
-- one vLLM v1 scheduler step (`replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
+- one vLLM v1 scheduler step, in vLLM's compiler (`verity_vllm.compiler.replay_step`): `ReplayStep_v1`, a Boolean Definition with `reference` its spec, takes the
   committed queue state, the certified arrivals and the committed decision bits to the step's rows (request, kind,
   start, n) and the next state, under sync or async scheduling and with `CacheStep_v1`'s walk entries, and refuses
   what its size class or the prefix layer's counts can't express. It is the compile slice's proof block's core, between
@@ -181,7 +167,6 @@ A spec-level reference for network accounting's timing channel:
 - the lengths row's proof block (`verity.protocols.accounting.certifier.prover.lengths_row`, `LengthsRow`), in no Spec: one a link,
   execution phase and slot stride (`PROTOCOL.md`, "The lengths row's proof block");
 - the response tie's two proof blocks (`response_tie`, beside it), in no Spec;
-- the honest prover's clock syncs in hindsight (`calibration.choose_syncs`);
 - advice v0 (`advice`): what vLLM's scheduler decided in a session (each request's lengths and finish, each step's
   rows with their chunks, prefix-cache hits and the KV they reuse, resumes, and each kept output's egress bucket) as one
   canonical bit string the compiler reads, refused unless it is a schedule vLLM could have run, with its bits split by
@@ -190,7 +175,7 @@ A spec-level reference for network accounting's timing channel:
 - advice v0's validity (`advice_check`): `AdviceCheck_v1{L}`, the compile slice's proof block's first part as a Boolean
   Definition, 1 exactly when the committed bits (at most L) decode to a v0 advice, up to the three refusals of `decode`
   it defers (unique ids, a source's KV computed there, release order per request); its AND count at each L is `size(L)`;
-- the replay's state chain (`replay_chain`): ReplayStep_v1's state handed from one step proof block to the next as the
+- the replay's state chain, in vLLM's compiler (`verity_vllm.compiler.replay_chain`): ReplayStep_v1's state handed from one step proof block to the next as the
   state rows of a produced value a window, with private heads into the window row every step reads: the certified
   arrivals not yet taken and the window's decisions, since the step's cursors are private. `ReplayAdvance` sits beside
   each step and checks its arrivals and decision bits are the window row's at the heads; `ReplayLoad` runs once a
@@ -253,8 +238,6 @@ A spec-level reference for network accounting's timing channel:
   its reference, holds each block's registered served rows, read through the Lean verifier's registered reads, to the
   RoPE statics of the Programs its steps ran, with no row hashed but the block's
   ([protocol/served-statics.md](protocol/served-statics.md));
-- the online prover (`online`): each window's clock sync declared at its first bucket from what it had seen `lag`
-  buckets before;
 - the prefix cache (`cache_step`): `CacheStep_v1`, a Boolean Definition of one scheduled row's pass over a table of
   whole cached units (an engine step's calls are `scan_step` and, as a circuit, `build_scan_step`), which checks the
   row's hit (the longest cached prefix while no block can have been evicted, a
@@ -393,28 +376,6 @@ A spec-level reference for network accounting's timing channel:
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
   t + 1 and egress unit t read, and egress unit t's row as a registered read of the network certifier's egress row t, so the
   chains are wires through the registered roots;
-- the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
-  With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
-  windows) gets one salt of `salt_bits` bits (512 by default), carried into the block only. The ingress record holds a
-  salt frame with a salt-free placeholder, so every record is a function of the traffic alone; the salt sits in the
-  certifier's sealed record cell `_salts[p]` until `Proxy.reveal(p, registration)` opens it on the PoUW window's
-  registration after its last ingress record is published, once and only within `reveal_deadline` of the window's
-  end on the certifier's clock, and `active.check_salts` reads the salt frames. The weights' root PoUW's noise seed
-  reads is recorded before the salt's sample, signed by the registered prover (`Proxy.commit_weights(p, root,
-  signature)` under `prover_key`, the sealed cell `_weights[p]`), and given on the same conditions
-  (`Proxy.committed(p, registration)`). With `Proxy(challenger_key=…, signer=…)`, both or neither, the challenger's key
-  from the auditor's deployment record, the two calls take only a request the auditor's challenger signed under LMS
-  for the certifier's key id and run (`Proxy.run_id`, 32 bytes sampled at construction) and answer an `active.Revealed`
-  the certifier signed, which names both; `active.serve_reveals` serves them over the network, one JSON line each way,
-  to the challenger's `active.CertifierClient`, given the run id by the deployment record, which returns the value
-  once it verifies for that run. Without the keys they are the in-process calls, for the auditor's side only. A proxy
-  back from maintenance (`Proxy(start=k, position=p)`, off by default) serves from window k on, its first egress frame
-  the Program's at position p, and carries nothing from before: a window it was down for has no record. On a served
-  link (`Proxy(served=ServedProfile(…))`, off by default; with the salt, `own` 1 at a PoUW window of one certifier
-  window) its ingress admits whole requests by the admission rule (`served.Admission`). On a sealed pair link
-  (`Proxy(pair=active.Pair.of(…))`, off by default), between two of the auditor's certifiers, every slot of the link is
-  sealed after its record and opened before it (`verity.commitments.crypto.aead`, SHA-512 counter mode then HMAC-SHA512, a
-  nonce per slot), so the records are the unsealed run's and a unit that doesn't open fails the link closed;
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress execution phase's `IoTieRequest`
   proof blocks, one a bucket row of the network certifier's registered ingress cells, proved as
   `NetworkIngressTieBucket` (one gate
@@ -455,29 +416,29 @@ assert audit.accepted
 
 ## Zero knowledge: what N2's verdict reads, and what's open
 
-Every protocol is to be zero-knowledge. The network audit's claim is counts only: N2 holds each window's per-bucket
-counts on every link's execution phase: on a served link to the ones its ingress counts derive under the declared sync,
-on a network certifier's to its schedule's, beside the proved timing bound (provisional).
+Every protocol is to be zero-knowledge. The network audit's claim is the heads' only: N2 holds both heads of every
+execution phase to the network certifier's grid and parameters digest, so each window's per-bucket counts are its
+schedule's, beside the proved timing bound (provisional).
 
-N2's verifier, `LinkWindows.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
-block (`NetworkTransferBlocks` v5, served `NetworkServedTransferBlocks` v4) and public inputs alone: its own run of Flock's Lean
+N2's verifier, `TransferBlocks.verify`, decides each execution phase on a `--zk` proof of N2's registered proof
+block (`NetworkTransferBlocks` v5) and public inputs alone: its own run of Flock's Lean
 verifier accepts the proof, the proof's public row opens to its own copy of the proof block's public arguments, the
-output row's verdict and deadline bits are 1, the certificates verify on their public fields (`LinkWindows.certified`),
-and the window's sync is declared. It reads no head, salt or sibling. `verity/protocols/accounting/certifier/prover/n2_zk.py` proves a
+output row's verdict and deadline bits are 1, and the certificates verify on their public fields (`TransferBlocks.certified`).
+It reads no head, salt or sibling. `verity/protocols/accounting/certifier/prover/n2_zk.py` proves a
 certifier-serve run's execution phases this way through the link's own stream, and scans what the verifier received. The
-in-the-clear check, `LinkWindows.clear`, is a debug comparison, off by default. What's open:
+in-the-clear check, `TransferBlocks.clear`, is a debug comparison, off by default. What's open:
 - **The certificates aren't a Spec item.** The verifier receives them in the clear from the certifier, the auditor's
   device, beside the proof system, whose public kinds have none for a trusted device's signature over a hiding
   commitment. That is a provisional exception to the four public kinds, not a fifth kind.
-- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`LinkWindows.unproved_outcome`,
+- **A run that proves nothing** (a rehearsal, the simulator) is decided in the clear (`TransferBlocks.unproved_outcome`,
   its verdict `"decided_by": "clear"`), which is never zero-knowledge.
 
-`LinkWindows.verify`'s verdict of record on a plain, served or network certifier link is the Lean's, `NetworkCheck.TransferBlocks`
+`TransferBlocks.verify`'s verdict of record is the Lean's, `NetworkCheck.TransferBlocks`
 (`verity/protocols/accounting/certifier/verifier/lean`, the `link-window` function of `network-records verdicts`), by the one switch line
 `service.OF_RECORD`. `verify` runs both on every proof, and an execution phase where
 they differ in the accept bit, the public outputs or the digest, or which the Lean refuses, is rejected. The switch is at
 `lean` under the friction skill's switching ruling, on these grounds:
-- the gap list is empty for plain and served links. Everything the Python checks, the Lean checks: the findings prove
+- the gap list is empty for the Lean's plain and served forms, which no Python link takes now. Everything the Python checks, the Lean checks: the findings prove
   the registered Program and the sampled proof blocks with every gate pinned, the public row the verifier derives (root, served
   domain, link, window, each end's grid and profile row, both signed digests, a served link's sync words), both rows'
   openings and the word 0b11, both certificates under the LMS key in the certifier session, and the sync in Σ_sync. Both
@@ -491,18 +452,17 @@ they differ in the accept bit, the public outputs or the digest, or which the Le
 - every proving run of N2 recorded before the switch replayed through both to the verdict it recorded, negative
   controls included.
 - the Python keeps running beside the Lean as the reference.
-- the Lean's verdict has its property in `security/Properties/NetworkCertifier/Check/TransferBlocks.lean`
-  (`Properties.NetworkCertifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
+- the Lean's verdict has its property in `security/Properties/Certifier/Check/TransferBlocks.lean`
+  (`Properties.Certifier.TransferBlocksAcceptMeans`, proved): an accepted execution phase was proved, opened to the
   word 0b11, certified on both ends and synced within Σ_sync (a network certifier link's syncs are not asked of), and
   its public outputs are verdict 1 and deadline 1.
 
 `tie_service.IngressTie.verify`, the ingress tie's verifier, is not ported and stays Python.
 
 A proof of the proof block is held to its circuit. Each gate names its Definition's circuit digest
-(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`, `served.gate` likewise), as `head_check.circuit-check.json` and
-`served.circuit-check.json` pin it and circuit-check holds the pin to the Definition. So the proof block's Program,
-which the spec and each registration bind, binds both circuits, and `LinkWindows.verify` refuses a proof that names any
-other Program, or a proof block of a size class no sidecar pins (`LinkWindows.proved`).
+(`Gate[NetworkHeadCheck_v2{…}@<digest>]_v2`), as `head_check.circuit-check.json` pins it and circuit-check holds the
+pin to the Definition. So the proof block's Program, which the spec and each registration bind, binds its circuit, and `TransferBlocks.verify` refuses a proof that names any
+other Program, or a proof block of a size class no sidecar pins (`TransferBlocks.proved`).
 
 The certificate signs no hash of witness. The certifier signs `D = SHA-512("verity/net-cert/v1" ‖
 salt_c ‖ R)`, R the head's record digest and `salt_c` 64 bytes the certifier samples fresh for each record
@@ -511,4 +471,4 @@ a hiding commitment to R, and the LMS check (`Certificate.verify`) reads only th
 Each end's head check holds R to the head it opens and D to R under `salt_c`, so the certificates' check reads nothing
 of the heads; the in-the-clear check also checks that link over the opening (`CertifiedRecord.verify`).
 
-Tests: `uv run tools/verity/check/suites.py verity/protocols/accounting/certifier`.
+Tests: `uv run tools/check/suites.py verity/protocols/accounting/certifier`.

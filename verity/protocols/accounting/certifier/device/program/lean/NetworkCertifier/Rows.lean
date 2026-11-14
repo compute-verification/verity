@@ -3,8 +3,8 @@ module
 /-!
 # The certifier program: the active network certifier's records as rows, and their audit
 
-The executable form of `security/Definitions/NetworkCertifier/RecordRows.lean` over the lanes of
-`security/Definitions/NetworkCertifier/Warden.lean`, for the records the active network certifier writes
+The executable form of `security/Definitions/Certifier/RecordRows.lean` over the lanes of
+`security/Definitions/Certifier/Warden.lean`, for the records the active network certifier writes
 (`verity/protocols/accounting/certifier/verifier/warden.py`, whose `audit` is the reference). Each direction's record
 has a row a bucket holding the `r` cells of every connection live in it, connection by connection in ordinal order,
 each cell naming its connection (`readCell`); the `fails` record holds a failed connection's reason (`readReason`).
@@ -82,7 +82,7 @@ structure Cell where
 /-- Connection `o`'s padding cell. -/
 def Cell.pad (o : Nat) : Cell := ⟨.pad, o, .empty⟩
 
-/-- A cell's header (`active.HEADER`): its kind u8, its connection's ordinal u32 and its payload's length u32. -/
+/-- A cell's header (`link_frame.HEADER`): its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def headerBytes : Nat := 9
 
 /-- `n mod 2^(8w)` as `w` big-endian bytes. -/

@@ -19,15 +19,15 @@ over the replay sample's proof blocks (`n_in = cap`), rather than `compiledAt`'s
 
 The contract's clauses that read only the sampled verifier's code are named Props of `Code`'s functions:
 
-* `Code.ReplayDraws` (`replayDraws`): on a statement in scope, the replay sample misses a set `T` of replay blocks
+* `Code.ReplaySamples` (`replaySamples`): on a statement in scope, the replay sample misses a set `T` of replay blocks
   with probability at most the first stage's `P_a(T)`;
-* `Code.SecondDraws` (`secondDraws`): on a statement in scope, at a run's coins, fresh second-stage coins check no
+* `Code.SecondSamples` (`secondSamples`): on a statement in scope, at a run's coins, fresh second-stage coins check no
   proof block of a set `B` among the units' first `n_PU` with probability at most the sampled replay blocks' escapes;
 * `Code.ReplayCap` (`unions`' inner count): on a statement in scope, at coins `r` of which some second-stage fork is
   accepted, the replay sample has at most `cap` proof blocks;
 * `Code.RefusesTwo` (`refuses`): an accepted run's statement parses, and its partition and two-stage design evaluate
   and are in the two-stage scope;
-* `Code.InteriorFixed` and `Code.DrawFixed` (`interior`, `fixed`), as at one stage.
+* `Code.InteriorFixed` and `Code.SampleFixed` (`interior`, `fixed`), as at one stage.
 
 `SessionOpensTwo` (`opens`, `Claims.Sampling.OpensTwo`) is `SessionOpens` read at a replay block: a checked unit's
 Flock witness makes its proof block correct on its replay block's values, under the interior roots the run shows for
@@ -54,19 +54,19 @@ open Claims.Sampling (AuditStatement InScopeTwo forkOn cell escCell footBits sam
 /-! ## The sampled verifier's two-stage code facts -/
 
 /-- **Replay samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
-def Code.ReplayDraws (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
+def Code.ReplaySamples (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ T ⊆ Finset.range d.part.blocks.length,
       Pr (fun r : Fin (c.V.k x) → FlockDeploy.Coin => ∀ ρ ∈ rs x r, ρ ∉ T) ≤ d.replay.Pa d.part T
 
 /-- **Second samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
-def Code.SecondDraws (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
+def Code.SecondSamples (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ (r : Fin (c.V.k x) → FlockDeploy.Coin) (B : Finset ℕ),
       Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin =>
-          ∀ u ∈ (c.checked x (forkOn (c.stage2 x) r e)).take (units c x), u ∉ B) ≤
+          ∀ u ∈ (c.checked x (forkOn (c.secondStage x) r e)).take (units c x), u ∉ B) ≤
         ∏ ρ ∈ (Finset.range d.part.blocks.length).filter (· ∈ rs x r),
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (B ∩ cell Pt d.part ρ t).card
@@ -76,7 +76,7 @@ def Code.ReplayCap (H : Msg → Msg) (c : Code) (two : AuditStatement → Option
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) (cap : Msg → ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ (Ω : Type) (P : Prover Ω) ω (r e : Fin (c.V.k x) → FlockDeploy.Coin),
-      (run H P c.V x ω (forkOn (c.stage2 x) r e)).out = .acc → (sampleBlocks Pt d.part (rs x r)).card ≤ cap x
+      (run H P c.V x ω (forkOn (c.secondStage x) r e)).out = .acc → (sampleBlocks Pt d.part (rs x r)).card ≤ cap x
 
 /-- **Refuses at two stages**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
 def Code.RefusesTwo (H : Msg → Msg) (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two) : Prop :=
@@ -113,14 +113,14 @@ noncomputable abbrev compiledTwo :
 
 /-- **The two-stage contract at the deployed record**: the code's facts, with the sessions' runs, their numbers at
 each unit's `N₀` and openings at a replay block. -/
-theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs)
-    (hcap : c.ReplayCap H two rs cap) (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplaySamples two rs) (hsd : c.SecondSamples two rs)
+    (hcap : c.ReplayCap H two rs cap) (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRunsTo H (deployOf F c))
     (hnum : Claims.Sampling.InnerNumbersAt (deployOf F c) c.unitN₀)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo H (deployOf F c) two iroots) :
     (compiledTwo F c iroots two rs cap).Sessions H where
-  replayDraws := hrd
-  secondDraws := hsd
+  replaySamples := hrd
+  secondSamples := hsd
   slots _ _ := List.length_take_le _ _
   shared _ _ _ _ _ i j u u' _ hu hu' hk := by
     obtain rfl : i = j := hk
@@ -143,8 +143,8 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
 decoder's list bound, the commitment's binding and the two-stage contract (`compilerKSTwo`, `flockArgKS`). -/
 theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
     (hlist : Claims.Flock.ListWithin F.len F.enc F.θ F.decode) (hB : (commit c).Binds H)
-    (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs) (hcap : c.ReplayCap H two rs cap)
-    (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
+    (hrd : c.ReplaySamples two rs) (hsd : c.SecondSamples two rs) (hcap : c.ReplayCap H two rs cap)
+    (hr : c.RefusesTwo H two) (hi : c.InteriorFixed H iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRunsTo H (deployOf F c))
     (hnum : Claims.Sampling.InnerNumbersAt (deployOf F c) c.unitN₀)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo H (deployOf F c) two iroots) :
@@ -162,8 +162,8 @@ noncomputable abbrev compiledTwoOne :
 is `compiledTwoOne`'s, every slot showing the run's one session (`shared`) and a sample holding one key (`keys`). -/
 theorem sessionsTwo_one (H : Msg → Msg) (hS : (compiledTwo F c iroots two rs cap).Sessions H)
     (hone : ∀ x u u' v, c.session x u v = c.session x u' v) : (compiledTwoOne F c iroots two rs cap).Sessions H where
-  replayDraws := hS.replayDraws
-  secondDraws := hS.secondDraws
+  replaySamples := hS.replaySamples
+  secondSamples := hS.secondSamples
   slots := hS.slots
   shared x _ _ _ _ _ _ u u' _ _ _ _ := hone x u u' _
   unions := hS.unions
@@ -184,8 +184,8 @@ two-stage code facts and its sessions' runs, scope (`SessionsIn`) and openings a
 theorem ksTwo_masked (c : Code) (iroots : Msg → Seen → ℕ → List Msg)
     (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) (cap : Msg → ℕ)
-    (hrd : c.ReplayDraws two rs) (hsd : c.SecondDraws two rs) (hcap : c.ReplayCap FlockDeploy.sha512 two rs cap)
-    (hr : c.RefusesTwo FlockDeploy.sha512 two) (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
+    (hrd : c.ReplaySamples two rs) (hsd : c.SecondSamples two rs) (hcap : c.ReplayCap FlockDeploy.sha512 two rs cap)
+    (hr : c.RefusesTwo FlockDeploy.sha512 two) (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.SampleFixed)
     (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
     (hnum : SessionsIn c)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c)

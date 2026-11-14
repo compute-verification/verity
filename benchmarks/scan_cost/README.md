@@ -66,7 +66,7 @@ A number stands only where the scan did what it measures:
 - `scan_zk.sh` exits 0: every round came out as the scan expects, the honest round accepted and each round it
   expects refused refused at the members it names.
 - Each execution phase's answer in `answers.json` accepts, and its public part equals `public.json`'s for the class:
-  the bound 0 for each template, every block of the execution phase sampled and proved, and the tied value
+  the bound 0 for each template, every block of the execution phase sampled and proved, every verdict of its audit run (`complete`), and the tied value
   the acceptance rests on.
 
 Where the guard does not hold, `result.py write` writes the document with the reasons and a failed validation, no

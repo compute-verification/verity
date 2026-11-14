@@ -1,8 +1,8 @@
 """Network certificates: the network certifier's signed record of each execution phase, on SHA-512 (record v2).
 
 The network certifier is the auditor-trusted device on a node's uplink that shapes each link into the grid
-(`grid.Certifier`). Once per link-window whose record is complete it signs one **network certificate**: a signature
-over a hiding digest of the window's record, salted by the certifier. A link-window whose record isn't complete gets
+(`grid.Certifier`). Once per execution phase whose record is complete it signs one **network certificate**: a signature
+over a hiding digest of the window's record, salted by the certifier. An execution phase whose record isn't complete gets
 none (`Issuer`), so it fails closed. The record head and the salt are witness: they enter proofs and never reach
 the auditor in the clear, so the record's own hashes are unsalted, and what the certificate signs is the salted digest.
 
@@ -119,7 +119,7 @@ start's own, so a start's certificate opens as no record's or mark's.
 The tag says which clock the session's ticks are read on: ``verity-network-certifier/start/v2`` means the host's raw
 clock, and a device whose ticks read any other clock signs its starts under another tag. The digest names no clock:
 the base is a sum of spans, not a reading, and that a device's ticks read the clock its tag means rests on
-`trusted-host`. A device that signs no start has no session a check of the start accepts.
+`trusted-device`. A device that signs no start has no session a check of the start accepts.
 """
 
 from __future__ import annotations
@@ -824,9 +824,9 @@ class Issuer:
     """The network certifier's signing step, beside its grid (`grid.Certifier`): one certificate per closed execution
     phase, in certifier session `session`. Before its first signature it starts the session on its signer, which refuses
     a session its state has already started. A refusal, of the start or of a leaf, leaves the execution phase without a
-    certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next link-window, and
+    certificate (fail-closed) and is listed in `refused`; a refused start is asked again at the next execution phase, and
     refused again. **It certifies only a complete record**: a record whose status isn't complete is refused the same
-    way, before the session's start or a leaf, so a link-window that isn't covered has no certificate and fails closed
+    way, before the session's start or a leaf, so an execution phase that isn't covered has no certificate and fails closed
     (`no-verdict`), and a certificate that verifies under the key is of a complete record unless it is a forgery. Each
     record's salt is `SALT_BYTES` fresh bytes of `coins`, the certifier's own randomness (the operating system's by
     default; a test injects its own). It certifies a mark the same way (`mark`), at the

@@ -155,7 +155,7 @@ def _pins_ok(meta: dict, pins: dict) -> str | None:
     for k, v in pins["constexprs"].items():
         if scalars.get(k) != v:
             return f"constexpr {k}={scalars.get(k)!r} differs from the profile pin {v!r}"
-    geom = meta.get("geometry") or {}
+    geom = meta["geometry"]
     nw = geom.get("num_warps", scalars.get("num_warps"))
     if nw != pins["num_warps"]:
         return f"num_warps={nw} differs from the profile pin {pins['num_warps']}"

@@ -4,8 +4,8 @@ bucket leaves.
 
 The loop that runs a grid's ticks also reads the link and every server connection, so when the server writes, which
 the prover chooses, moves when the tick runs, and a bucket written on the loop leaves when its tick does. A thread of the
-same process would wait on the same interpreter lock. The pacer waits on neither: the proxy (`active.Proxy(paced=…)`)
-or the network certifier (`warden.Warden(paced=…)`) hands it each bucket's bytes with its time once the tick has made
+same process would wait on the same interpreter lock. The pacer waits on neither: the network certifier
+(`warden.Warden(paced=…)`) hands it each bucket's bytes with its time once the tick has made
 them (`Pacer.hand`), and it releases them at that time on the handing process's clock, which its starter names
 (`CLOCKS`: the proxy's is the host's monotonic clock, the network certifier's the host's raw one, `raw_clock`),
 waiting in `poll` until `SPIN_S` before it and spinning on the clock for the rest. A bucket is parts, each for one
@@ -20,7 +20,7 @@ started; then, once every part is written or its link refused it, when its last 
 link took its part. `Pacer.behind` counts the buckets whose time has come and whose bytes aren't all written, as a
 transport's backlog does on the loop. The pacer still shares its host's scheduler: at an ordinary priority, a task
 that wakes on its CPU near a bucket's time, the handing process's own reads among them, can hold the release back by a
-scheduler slice, which a real-time class or a core of its own on the auditor's host takes away.
+scheduler slice, which a real-time class or a core of its own on the auditor's device takes away.
 
 The input is each bucket as its index, its time and its parts' count (`HEAD`), then each part as its link's key, its
 length and whether the link closes once it is written (`PART`), then its bytes. The output is a ready byte (`READY`),

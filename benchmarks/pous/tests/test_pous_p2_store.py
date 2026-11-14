@@ -5,7 +5,7 @@ passes the public-encoder setup with the pinned root, and refuses each negative 
 decode at the real store's indices. The driver (`commit`, `encode`, `finish`, `verify`, `spot`, `tie`) runs on the CPU at a
 128-bit width with 16-block segments and the scheme's own codec in the GPU's place, over a small generator with the real
 one's tensors and names: the store it writes is the registered scheme's encoding of `W` in the layout (the public-encoder
-check accepts it, and `decode_layer` gives each layer's tensors), its roots are `setup.server_root`'s tree, `verify`
+check accepts it, and `decode_layer` gives each layer's tensors), its roots are `responder.server_root`'s tree, `verify`
 catches a changed byte, a rerun resumes to the same store, and two parts join to it. The store's default generator
 itself gives `W` at the real shape, and `commit` takes its manifest."""
 from __future__ import annotations
@@ -85,7 +85,7 @@ def test_toy_regenerates():
     assert straddles == ["model.layers.0.mlp.down_proj.weight"] and STORE.layer(1)[0].first_block % 11
     commitment = setup.commit(STORE.params, W)
     assert commitment.hex() == TOY["commitment"]
-    assert setup.draw_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
+    assert setup.sample_salt(bytes.fromhex(TOY["source"]), commitment) == SALT
     assert expand_prefix(STORE.params, SALT).hex() == TOY["prefix"]
     for data, key in ((W, "w_sha512"), (C_STAR, "c_star_sha512"), (STAGING, "staging_sha512")):
         assert hashlib.sha512(data).hexdigest() == TOY[key]
@@ -296,7 +296,7 @@ def test_store_is_the_registered_encoding(gen: tuple[str, str], tmp_path: Path) 
     w = lay.layout.pack({t.name: b"".join(mod.tensor_bytes(g, b"seed", p) for p in S.generator_parts(t.name))
                          for t in lay.tensors})
     commitment = setup.commit(q, w)
-    salt = setup.draw_salt(bytes.fromhex(SOURCE), commitment)
+    salt = setup.sample_salt(bytes.fromhex(SOURCE), commitment)
     assert (doc["commitment"], doc["salt"]) == (commitment.hex(), salt.hex())
     vk = setup.verifier_key_from_encoding(q, None, commitment, salt, _store_segments(store, q))
     assert doc["root"] == vk.root.hex()
@@ -379,7 +379,7 @@ def test_generated_with_the_default_generator(gen: tuple[str, str], tmp_path: Pa
     `commit` run whole at `tiny`, where `setup.json` holds that name as `"program"`. The stand-in has no name, and its
     manifest no key, that the default generator's lacks."""
     monkeypatch.syspath_prepend(str(ROOT))
-    mod = importlib.import_module("benchmarks.torch_gpu.p2_stage.served_weights")
+    mod = importlib.import_module("verity.protocols.accounting.pous.prover.served_weights")
     seed, h200 = mod.TEST_SEED, mod.H200
     real = S.Generated(S.GENERATOR, "h200", seed)
     assert real.mod is mod and S.layout_sha512(real.store) == S.LAYOUT_SHA512

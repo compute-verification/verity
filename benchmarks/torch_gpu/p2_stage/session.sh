@@ -17,7 +17,7 @@
 #
 # With ENCODED=1 the store is memory-accounting's encoded store, read only: the layer's segment files of it (each
 # segment's `<s>.c` and `<s>.json`, and `setup.json`, copied off the node that holds it), put once into ENC/seg and kept
-# with `research keep`; its salt is `setup.draw_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
+# with `research keep`; its salt is `setup.sample_salt(SOURCE, COMMITMENT)`, the deployment's coin and commitment.
 # Otherwise the development store STORE under the public test salt SALT, which `encode` extends across runs.
 #
 # Outside the lease: the lib unpacked and held to its MANIFEST.sha256, the layout to the fixture's LAYOUT_SHA512, the
@@ -69,7 +69,7 @@ mkdir -p "$S/lib" "$S/toy" && tar -C "$S/lib" -xf "$IN/p2lib.tar" \
 step ship $?
 grep -q "ship rc 0" "$O/rc.txt" || { cat "$O/rc.txt"; exit 2; }
 cp "$S/lib/source.txt" "$S/lib/toolchain.txt" "$S/lib/elf.txt" "$S/lib/MANIFEST.sha256" "$O/"
-{ (cd "$IN" && sha256sum h200-manifest.json store-layout.json store-toy.tar) && sha256sum "$D/served_weights.py"; } \
+{ (cd "$IN" && sha256sum h200-manifest.json store-layout.json store-toy.tar) && sha256sum verity/protocols/accounting/pous/prover/served_weights.py; } \
   > "$O/inputs.sha256"
 git rev-parse HEAD > "$O/commit.txt" 2>&1
 nvidia-smi --query-gpu=index,uuid,name,driver_version,clocks.max.sm,power.limit --format=csv > "$O/gpus.txt" 2>&1
@@ -101,7 +101,7 @@ print(*L.Weights.of(json.load(open(os.environ["MANIFEST"]))).span(int(os.environ
 EOF
 )
 if [ ! -e "$SRC/w.key" ]; then
-  "$PY" -m benchmarks.torch_gpu.p2_stage.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
+  "$PY" -m verity.protocols.accounting.pous.prover.served_weights write --shape h200 --seed "$SEED" --start "$LO" --stop "$HI" --out "$SRC/w.bin" \
     --workers "$(nproc)" 2>> "$O/prepare.log" && echo "$SEED $LO $HI" > "$SRC/w.key"
   step prepare $?
 else

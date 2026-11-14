@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
-# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier) with the
-# ZK server's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof, the verifier) with the
+# ZK server's Lean frame, N2's network-records and the SPOT verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
-#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
+#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
 # Steps, each kept under $OUT and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)
@@ -36,7 +36,7 @@
 # comma-separated,      e.g. 128001 for Llama-3.2-1B; a network certifier run records none)  CR_TIE_WINDOWS (the tie's
 # execution phases, the run's all
 #      by default)  CR_TIE_GPU=1 and CR_N2_GPU=1 (the tie's and N2's provers on the GPU)  CR_N2_DRAW (n2_zk.py's
-#      --draw K: N2's period sampled, K of the link-windows sampled on the verifier's coins; every one by default)
+#      --draw K: N2's period sampled, K of the execution phases sampled on the verifier's coins; every one by default)
 #      CR_AUDIT (the served units' compute audit windows, space-separated directories: the report's --audit, d1's K)
 #      CR_PINS (the verifier's own pins, a JSON {param: root}: the report's --pins, the registered rows K leaves out)
 #      CR_PERIOD_ANSWER (certifier/v0's network-period check answer on the period, X.answer.json with its case
@@ -141,7 +141,7 @@ CR_PATH=${CR_PATH:-warden}
 [ "$CR_PATH" = warden ] || { log "chain: CR_PATH=$CR_PATH: the warden path is the only one"; exit 3; }
 PROXY=$(find "$G" \( -name plan.json -o -name calibration.json -o -name proxy.json.gz \) -print -quit)
 [ -z "$PROXY" ] || { log "chain: the warden path reads no certifier rehearsal's run (its records through" \
-  "active.Proxy), and ${PROXY#$G/} is one's"; exit 3; }
+  "the older certifier's proxy), and ${PROXY#$G/} is one's"; exit 3; }
 if [ -n "${CR_WARDEN_RUN:-}" ]; then WARDEN=$(find "$G" -path "*$CR_WARDEN_RUN" -print -quit)
 else WARDEN=$(find "$G" -name certified.jsonl -printf '%h\n' -quit); WARDEN=${WARDEN%/witness}; fi
 [ -n "$WARDEN" ] || { log "chain: the warden path: no warden run (a certified.jsonl) in $CR_GATES"; exit 3; }
@@ -176,12 +176,12 @@ if [ -n "${CR_ENDPOINT:-}" ]; then
     cp "${EP:-$W/endpoint}/advice.log" "$OUT/endpoint/" 2>/dev/null
   fi
 fi
-(cd verity/protocols/proofs/spot/verifier/lean && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/protocols/proofs/spot/verifier/lean && lake build spot-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
-export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
-(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_FIREWALL_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-firewall)) \
-  > "$OUT/build-firewall.log" 2>&1
-[ -x "$FC_FIREWALL_LEAN" ] || { tail -20 "$OUT/build-firewall.log"; log "chain: no firewall frame"; exit 7; }
+export FC_ZK_SERVER_LEAN=${LEAN%/*}/flock-zk-server
+(exec 8>"${LEAN%/.lake/*}.firewall.lock"; flock 8; [ -x "$FC_ZK_SERVER_LEAN" ] || (cd "${LEAN%/.lake/*}" && lake build flock-zk-server)) \
+  > "$OUT/build-zk-server.log" 2>&1
+[ -x "$FC_ZK_SERVER_LEAN" ] || { tail -20 "$OUT/build-zk-server.log"; log "chain: no ZK server frame"; exit 7; }
 
 # ---- n2 and scan -------------------------------------------------------------------------------------------------------
 WHOLE=(-name 'warden-registration*.json' -o -name answers.json)   # a step's files that hold a row registration whole
@@ -195,7 +195,7 @@ keep() {   # keep FROM TO: the public files and what the verifier received, neve
 }
 n2() {
   export WARDEN BIN LEAN N2OUT=$W/n2
-  local cmd=${CR_N2_CMD:-"$PY -m verity.protocols.accounting.certifier.prover.n2_zk prove --warden-run $WARDEN \
+  local cmd=${CR_N2_CMD:-"$PY benchmarks/network_traces/zk_drivers.py n2_zk prove --warden-run $WARDEN \
     --bin $BIN --lean $LEAN --out $N2OUT --witness $Q/witness/n2/issuer-refused.json ${CR_N2_GPU:+--gpu} \
     ${CR_N2_DRAW:+--draw $CR_N2_DRAW}"}
   log "chain: n2: $cmd"
@@ -206,11 +206,11 @@ n2() {
 scan() {
   export WARDEN BIN LEAN SCANOUT=$W/scan
   local wr=
-  if "$PY" -m verity.protocols.accounting.certifier.prover.scan_zk prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
+  if "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --help 2>/dev/null | grep -q -- --warden-run; then wr="--warden-run $WARDEN"
   else log "chain: scan_zk takes no --warden-run in this tree, so the scan proves its own run"; fi
   log "chain: scan ${CR_SCAN_CMD:+(CR_SCAN_CMD) }${wr:-on the synthetic warden run of scan_zk}"
   if [ -n "${CR_SCAN_CMD:-}" ]; then bash -c "$CR_SCAN_CMD"
-  else "$PY" -m verity.protocols.accounting.certifier.prover.scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
+  else "$PY" benchmarks/network_traces/zk_drivers.py scan_zk prove --bin "$BIN" --lean "$LEAN" --out "$SCANOUT" $wr \
     ${CR_SCAN_ARGS:-}; fi > "$OUT/scan.log" 2>&1
   echo $? > "$W/scan.rc"; keep "$SCANOUT" "$OUT/scan"; log "chain: scan done, rc $(cat "$W/scan.rc")"
   [ "$(cat "$W/scan.rc")" = 0 ] || tail -n 1 "$OUT/scan.log" | cut -c1-600 > "$W/scan.why"
@@ -219,7 +219,7 @@ scan() {
 tie() {
   local k=${CR_TIE_WINDOWS:-$("$PY" -c 'import json, sys; print(json.load(open(sys.argv[1]))["windows"])' \
     "$(find "$WARDEN" -name deployment.json -print -quit)")}
-  local cmd="$PY -m verity.protocols.accounting.certifier.prover.n2_tie_zk prove --class warden --warden-run $WARDEN --windows $k \
+  local cmd="$PY benchmarks/network_traces/zk_drivers.py n2_tie_zk prove --class warden --warden-run $WARDEN --windows $k \
     --bin $BIN --lean $LEAN --out $W/tie ${CR_TIE_GPU:+--gpu}"
   log "chain: tie: $cmd"
   bash -c "$cmd" > "$OUT/tie.log" 2>&1

@@ -9,9 +9,9 @@ import json
 from pathlib import Path
 
 import pytest
-from verity.commitments.windows import rows as CS
+from verity.commitments.periods import rows as CS
 from verity.protocols.accounting.certifier.verifier import advice as A
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 from verity_vllm.pipeline import advice_windows as AW
 from verity_vllm.pipeline.tp import serving_rows as SRT
@@ -362,7 +362,7 @@ def _draw(rec: dict, law: dict) -> dict:
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
     """The window's work sampling design proves every RoPE head (work 0, its floor all 32: an All stratum) and samples 2 of the 8 SiluMul rows, as
-    the registration's law states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
+    the registration's sampling design states and the verifier's own window derives; a sample by it holds every transfer-gate unit."""
     from verity.protocols.proofs.spot.verifier.one_stage import draw as D
 
     c = gated_tp

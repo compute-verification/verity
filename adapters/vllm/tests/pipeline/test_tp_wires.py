@@ -22,23 +22,23 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import Builder, bind
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import Array
-from verity.commitments.windows import interface as I
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as I
+from verity.commitments.periods import wiring as WI
 from verity.circuits.ops import gemm as GE
-from verity.definitions.registry import moe
-from verity.definitions.registry import tp_allreduce as TA
-from verity.definitions.registry.prims import BF16
+from verity_vllm.definitions.registry import moe
+from verity_vllm.definitions.registry import tp_allreduce as TA
+from verity_vllm.definitions.registry.prims import BF16
 
 from tests.program.predict.test_steps import _mixed, _registered
 from tests.program.test_tp_binding import ROWS, N, batch_body, rank_body
 from verity_vllm.pipeline.tp import grain as TG
 from verity_vllm.pipeline.tp import wires as TW
-from verity_vllm.program import prune as P
+from verity_torch import prune as P
 from verity_vllm.program import tp_binding as TB
 from verity_vllm.program.predict.common import _Peers
 from verity_vllm.program.predict.tp_steps import compile_tp
 
-RUN, LAW, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
+RUN, DESIGN, CAP, W = "ab" * 64, {"law": "stratified", "k": 2}, 4, 2
 #: the fused bodies' hidden row: four chunks of 64 (`grain.chunk`)
 H = 256
 FUSED = {"N": H, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
@@ -184,7 +184,7 @@ def _values(sites: TW.Sites, seed: int = 0) -> dict[str, tuple[dict, dict]]:
 
 def _window(sites: TW.Sites, values: dict) -> I.Window:
     """``sites``' window with every unit's ``values`` recorded."""
-    win = I.Window(sites.circuit, RUN, LAW, CAP)
+    win = I.Window(sites.circuit, RUN, DESIGN, CAP)
     for tid, fn in _fns(sites).items():
         lay, (ins, outs) = I.layout(fn), values[tid]
         view = [f"<u{b // 8}" for b in lay.widths]
@@ -232,7 +232,7 @@ def test_every_peer_row_of_a_tp_window_is_wired_from_its_ranks_gathered_row(toy)
     assert count["wired"] == _bits(tp)
     in_order(tp)
     rec = I.descriptor_record(tp.circuit, CAP)
-    assert I.window_of_record({**rec, "run": RUN, "context": ""}, LAW, fns.__getitem__).members == I.members(tp.circuit, CAP)
+    assert I.window_of_record({**rec, "run": RUN, "context": ""}, DESIGN, fns.__getitem__).members == I.members(tp.circuit, CAP)
 
 
 @pytest.mark.parametrize("before", [4, pytest.param(None, marks=pytest.mark.slow)])

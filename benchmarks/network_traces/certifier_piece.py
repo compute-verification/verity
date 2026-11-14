@@ -64,7 +64,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
+     take every execution phase of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
      ``accepted on the period check`` (`chain_record.RESTS`: the scan's acceptance rests on step 5's check, which
      then decides); any other is a reject with its why.
   4. The period's execution phase is the scan's (``answers.json``'s one window; the chain keeps its scan's answers on
@@ -73,9 +73,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
      (``--lean``, else built in verity/protocols/accounting/certifier/verifier/lean); its answer is the piece's, an accept's profile
      with its ``placement`` (`placement`): the machine the network certifier ran on, and the machine that ran each of
      the piece's own steps, the chain and the period check, each read from the machine as it runs the step (`ran_on`).
-     The names are labels: the piece establishes no `trusted-host` and gives no bound on that ground (`UNMET`).
+     The names are labels: the piece establishes no `trusted-device` and gives no bound on that ground (`UNMET`).
   DIR also gets the chain's public part (`PUBLIC`: its report's verdicts and ε at δ; never the scan's answers, the
-  endpoint's report, the report's counts or a step's summary, which are private) and the link-window's five
+  endpoint's report, the report's counts or a step's summary, which are private) and the execution phase's five
   certificates (`CERTIFICATES`, `certificates`: the three records' certificates and the two row registrations' of the
   case's evidence, each with its own fields alone). They and the answer are written to a fresh hold under
   SERVE_DIR/`PRIVATE`/held (0700) and reach DIR only through the record's leak guard (`leak_guard.py`), which reads DIR
@@ -181,18 +181,18 @@ PROTOCOL = "verity/certifier/v0"
 #: the protocol ``network-rows`` answers, step 1's rows audit of the network certifier's records
 ROWS = "verity/network-rows/v1"
 #: the named assumption the certifier's guarantee reads (`NetworkCheck.Period`): the certifier is the auditor's device
-PREMISE = "trusted-host"
+PREMISE = "trusted-device"
 #: What a placement says of it, word for word, followed by ``; `` and the names
-UNMET = "unmet: this piece establishes no trusted-host and gives no bound on that ground"
+UNMET = "unmet: this piece establishes no trusted-device and gives no bound on that ground"
 #: the machine of a chain step whose `CHAINED` names none
 UNNAMED = "a machine the chain step did not name"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
 #: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
-#: step's verdict, ε at δ (the sample's law, population and size) and where it runs in the clear, what the path stubs
+#: step's verdict, ε at δ (the sample's sampling design, population and size) and where it runs in the clear, what the path stubs
 #: and how its negatives came out. Everything else stays in the kept run: the scan's answers (its registration and
-#: each link-window's answer and row registrations, the period check's evidence less its certificates: witness, as a
+#: each execution phase's answer and row registrations, the period check's evidence less its certificates: witness, as a
 #: case's evidence is), the endpoint's report (each Commit window's request, carried, step and output counts, its
 #: opening time and its advice's bits), of which only a padded count may be public, report.md and the report's other
 #: keys (the certified I/O's counts, the advice's bits as K's term), and the steps' summaries (the scan's admissions
@@ -205,7 +205,7 @@ REFUSED = "refused.txt"
 #: params are witness, so it is never in DIR
 CASE = "case.json"
 CASES = Path("private") / "pieces" / "certifier"
-#: the link-window's five certificates in DIR (`certificates`): the case's evidence's, and nothing else of it
+#: the execution phase's five certificates in DIR (`certificates`): the case's evidence's, and nothing else of it
 CERTIFICATES = "certificates.json"
 #: the scan class of V3c's default window class (`served_verdicts.sh`'s V3C_CLASS)
 V3C_SCAN_CLASS = "w63k4"
@@ -265,7 +265,7 @@ def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.slee
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:
-            raise SS.Refused(f"--tokens {a.tokens}: a group past one link-window, which the period's rows form refuses")
+            raise SS.Refused(f"--tokens {a.tokens}: a group past one execution phase, which the period's rows form refuses")
         if a.warmup < 0:
             raise SS.Refused(f"--warmup {a.warmup}: a count of requests, 0 for none")
         ps = SS.prompts(a.prompts, a.prompt_ids, a.vocab, secrets.token_bytes(32))
@@ -536,6 +536,31 @@ def kept_run(serve_dir: Path) -> str:
     return runs[0]
 
 
+def kept_ingress(serve_dir: Path) -> tuple[object, dict, list[tuple[int, list]]] | None:
+    """The network certifier run the front kept under ``serve_dir`` as a served window's scan reads it
+    (`prove_path.kept_scan`, which takes this from its caller): the run's deployment parameters, its certified I/O
+    (`warden_chain.io`) and its certified ingress, each execution phase's number and rows (`warden_rows.window_rows`);
+    None where the front kept no run. ValueError, naming why, where the kept run can't be read."""
+    from benchmarks.network_traces import warden_chain as WC
+    from verity.protocols.accounting.certifier.verifier import relay_check as RC, warden_rows as WRW
+
+    if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
+        return None
+    unpacked = None
+    try:
+        unpacked, kept = unpack(serve_dir / PRIVATE / kept_run(serve_dir) / "fetch.tar.gz")
+        _, params = WC.deployment(kept)
+        io = WC.io(kept)
+        phases = [(r.window, list(WRW.window_rows(r, params)))
+                  for r in RC.read_records(WC.witness(kept), params)[RC.INGRESS]]
+    except (SystemExit, NotRun) as e:
+        raise ValueError(f"the certifier front's kept run: {e}") from None
+    finally:
+        if unpacked is not None:
+            rm(unpacked)
+    return params, io, phases
+
+
 def ran_on(chained: Path | None = None) -> dict[str, str]:
     """Which machine ran each of the piece's own steps, by the name each machine gives itself as it runs the step:
     this one for the period check and its proofs' challenges, and for the chain's checks and samples too unless
@@ -550,7 +575,7 @@ def placement(serve_dir: Path, run: str, steps: dict[str, str] | None = None) ->
     """Which machine ran each party and each of the piece's own steps, as labels read from the run: the network
     certifier ran on the gate's machine (the kept `SESSION`'s ``gate``; ``local`` is the developer's node), and
     ``steps`` (`ran_on`, this machine by default) names the machine that ran the chain's checks and samples and the one
-    that ran the period check and its proofs' challenges. This piece establishes no `trusted-host` and gives no bound
+    that ran the period check and its proofs' challenges. This piece establishes no `trusted-device` and gives no bound
     on that ground (`UNMET`), whatever the names say. ``kind`` is ``prover-node`` where the certifier ran on the
     developer's node, else ``not-placed``. ``links`` are the node's to the gate, and K counts the certified one
     alone."""
@@ -638,11 +663,11 @@ def bind(reqs: list[dict], io: dict) -> dict[str, dict]:
     return got
 
 
-def in_link_window(certified: dict[str, dict], T: int, w: int) -> None:
+def in_phase(certified: dict[str, dict], T: int, w: int) -> None:
     for user, c in certified.items():
         buckets = [c["release"], *(b for _, b in c["frames"])]
         if None in buckets or {b // T for b in buckets} != {w}:
-            raise Rejected(f"certified request {user!r} spans link-windows {sorted({b // T for b in buckets if b is not None})}"
+            raise Rejected(f"certified request {user!r} spans execution phases {sorted({b // T for b in buckets if b is not None})}"
                            f", not the period's {w} alone")
 
 
@@ -907,8 +932,8 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
         try:
             (w,) = [x["window"] for x in json.loads(answers.read_text())["windows"]]
         except (OSError, ValueError, KeyError) as e:
-            raise NotRun(f"the scan's answers.json names no one link-window: {type(e).__name__}: {e}") from None
-        in_link_window(certified, T, w)
+            raise NotRun(f"the scan's answers.json names no one execution phase: {type(e).__name__}: {e}") from None
+        in_phase(certified, T, w)
         if check is None:
             return None, unpacked
         got = check(case(warden, out / "scan", answers), d / "period")
@@ -928,7 +953,7 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
     `PIECE_FILES`, which releases the hold to DIR once it passes (0 when nothing was found, 3 when a find, a file
     holding a piece of the witness or of another path, was moved to the quarantine)."""
     quarantine.mkdir(mode=0o700, parents=True, exist_ok=True)
-    got = captured([sys.executable, str(HERE / "leak_guard.py"), str(d), str(quarantine),
+    got = captured([sys.executable, "-m", "verity.protocols.accounting.certifier.device.leak_guard", str(d), str(quarantine),
                     *(["--gates", str(unpacked)] if unpacked is not None else []), "--hold", str(hold),
                     "--release-to", str(d), *(x for f in PIECE_FILES for x in ("--public", f)),
                     "--report", str(quarantine / "piece-guard.json")])
@@ -938,7 +963,7 @@ def guard(d: Path, hold: Path, unpacked: Path | None, quarantine: Path) -> int:
 
 def certificates(evidence: bytes) -> dict:
     """The certificates of a case's ``evidence``, what the network certifier signed where the period check accepts
-    them, each with its own fields alone (`scan_period.CERTIFICATE_KEYS`): ``records``, each link-window's three
+    them, each with its own fields alone (`scan_period.CERTIFICATE_KEYS`): ``records``, each execution phase's three
     records' certificates (requests, responses, fails), and ``rows``, its two row registrations' (ingress, egress),
     with the link, direction and window its registration names, which the certificate's message signs. Nothing else of
     the evidence is here: no registration's head, no answer and no audit."""

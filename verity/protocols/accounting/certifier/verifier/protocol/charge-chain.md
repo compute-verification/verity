@@ -29,7 +29,7 @@ fixture's async-kv-pressure stream, window 1 costs 23 bits from window 0's carry
 counts. The tests check that each forged carry is refused, whether it is committed under a fresh salt or under the
 public start salt, and whether window 0's carry-out claims it.
 
-**Why a value of its own.** The carry-out isn't a field of `replay_chain`'s window row. `ReplayLoad` writes that row
+**Why a value of its own.** The carry-out isn't a field of `verity_vllm.compiler.replay_chain`'s window row. `ReplayLoad` writes that row
 and checks it in full at the window's start, before any decision is coded, so a carry-out there would need ReplayLoad
 to leave a field unchecked and change its pins. A sibling value under the same carry rule gives the same guarantee and
 leaves the scan's chain as it is.
@@ -45,7 +45,7 @@ leaves the scan's chain as it is.
 
 ## One carry for proof blocks and windows
 
-The charge's one carried representation is `replay-charge`'s two rows above, and `replay_chain`'s state row holds none
+The charge's one carried representation is `replay-charge`'s two rows above, and `verity_vllm.compiler.replay_chain`'s state row holds none
 of it: the charge runs whole in the window's load proof block, so no step proof block carries a coder state, KT counts,
 a context or a code position.
 
@@ -179,7 +179,7 @@ widens with the slots before it, and the build is linear in N + H + O + L.
 **The bound.** The proof block's charge is `code_v1`'s length for the whole window, its segment and its tail, so "The bound"
 (PROTOCOL.md) covers every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its
 strings are prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
-premise (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
+premise (`hAs` in `security/Definitions/Certifier/Guarantees/SampledCharge.lean`). It rests on two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
   The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
   (⌊(n_j − 1) / 2^15⌋ + 1) · 2^15 ≥ n_j for the two chunks. So
@@ -202,7 +202,7 @@ premise (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharg
   before the advice, so each term's 2^(bitlen(m) + 1) values each take exactly bitlen(m) + 1 bits: appended after the
   segment, the tail keeps the window's code prefix-free and its Kraft sum unchanged.
 
-The Lean definitions (`security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
+The Lean definitions (`security/Definitions/Certifier/WindowCharge.lean`) mirror `reference_window` one for one,
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.

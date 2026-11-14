@@ -15,6 +15,7 @@ from verity.commitments.crypto import lms
 from verity import channel as wire
 from verity.protocol import Role, place, site_of
 from verity.channel import Message, Refused
+from verity.runtime.framing import HEADER, decode, encode, parse
 from verity.protocols.accounting.certifier.verifier import out_commit as O
 from verity.protocols.accounting.certifier.verifier import parties as NC
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
@@ -86,21 +87,21 @@ def test_an_output_value_goes_as_its_two_messages(out) -> None:
     value, key = out
     to_workers = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, NC.WORKERS)
     to_verifier = NC.MANIFEST.sends(NC.NETWORK_CERTIFIER, NC.VERIFIER)
-    opening = to_workers.decode(to_workers.encode(Message(NC.OUT_OPENING, HEAD, value.witness)))
+    opening = decode(to_workers, encode(to_workers, Message(NC.OUT_OPENING, HEAD, value.witness)))
     assert opening.fields == HEAD and O.read_witness(opening.body) == list(value.salts)
-    record = to_verifier.decode(to_verifier.encode(Message(NC.OUT_RECORD, HEAD, wire.canonical(value.public))))
+    record = decode(to_verifier, encode(to_verifier, Message(NC.OUT_RECORD, HEAD, wire.canonical(value.public))))
     assert record.fields == HEAD
-    assert O.check_out(wire.parse(record.body), key, S.SESSION, SHAPE, window=record.fields["window"],
+    assert O.check_out(parse(record.body), key, S.SESSION, SHAPE, window=record.fields["window"],
                        link=record.fields["link"]) == value.root
     for channel, message in ((to_verifier, Message(NC.OUT_OPENING, HEAD, value.witness)),
                              (to_workers, Message(NC.OUT_RECORD, HEAD, wire.canonical(value.public)))):
         with pytest.raises(Refused) as e:
-            channel.encode(message)
+            encode(channel, message)
         assert e.value.name == "unknown-type"
 
 
 def _sent(channel, message: Message) -> Message:
-    return channel.decode(channel.encode(message))
+    return decode(channel, encode(channel, message))
 
 
 #: what the device's run hands out beside the output value, each with a stand-in body, by the channel that carries it
@@ -121,7 +122,7 @@ def test_the_runs_witness_goes_to_the_workers_and_its_certificates_and_registrat
             got = _sent(to, message)
             assert (got.type, got.fields, got.body) == (message.type, message.fields, message.body)
             with pytest.raises(Refused) as e:
-                wrong.encode(message)
+                encode(wrong, message)
             assert e.value.name == "unknown-type", message.type
     salts, wiring = WR.read_witness(RUN[NC.WORKERS][-1].body)
     assert (len(salts), len(wiring)) == (3, WR.WIRING_SALT_BYTES)
@@ -145,13 +146,13 @@ def test_a_message_past_its_schema_is_refused_by_name(out) -> None:
                           (Message(NC.GROUPS, HEAD, b"{}"), "schema"),
                           (Message(NC.GROUPS, {}, bytes(NC.MAX_RECORD + 1)), "oversized")):
         with pytest.raises(Refused) as e:
-            types.encode(message)
+            encode(types, message)
         assert e.value.name == name, message.type
-    types.encode(Message(NC.OUT_OPENING, {**HEAD, "window": (1 << 64) - 1}))
+    encode(types, Message(NC.OUT_OPENING, {**HEAD, "window": (1 << 64) - 1}))
 
 
 def test_the_bounds_are_the_frames_and_the_deployed_signatures() -> None:
-    frame = wire.HEADER.unpack(b"\xff" * wire.HEADER.size)[1]
+    frame = HEADER.unpack(b"\xff" * HEADER.size)[1]
     assert NC.MAX_OPENING % O.SALT_BYTES == 0 and NC.MAX_OPENING <= frame < NC.MAX_OPENING + O.SALT_BYTES
     assert wire.MAX_HEAD < 2 * lms.DEPLOYED.signature_bytes() < NC.MAX_RECORD
     assert NC.MAX_PACKED == frame

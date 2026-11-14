@@ -124,8 +124,8 @@ except ImportError:                                                 # run as a s
     def slack_dates(text: str, now: Any = None) -> str:
         return text
 
-    class waitcap:  # research/waitcap.py's cap, which a single file carries itself
-        WAIT_CAP_S, STILL_GOING = 1200, 79
+    class waitcap:  # research/waitcap.py's limit, which a single file carries itself
+        WAIT_LIMIT_S, STILL_GOING = 1200, 79
 
         @staticmethod
         def still_going(what: str, check: str, waited_s: float, end: str) -> str:
@@ -216,7 +216,7 @@ AGENT_ID_RE = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}|bc-[0-
                          r"|[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")                 # a desktop agent's, a bare UUID
 WORKER_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,39}")      # `linear comment --worker NAME`: shows as LANE/NAME
 QUIET = "(quiet)"                                                # ending a post: ring only the names it starts with
-CAP_PER_HOUR = 20                                                # doorbells into one inbox from one author in one thread
+LIMIT_PER_HOUR = 20                                              # doorbells into one inbox from one author in one thread
 DOORBELL_MAX = 600                                               # characters of the post a doorbell carries
 POST_MAX = 3000                                                  # bytes: Slack splits a longer post into separate top-level messages
 INBOX_HEAD = "Inbox for @"
@@ -1731,15 +1731,15 @@ def deliver(api: Slack, reg: dict, routes: Routes, ch: str, msg: dict, *, urgent
                    and (not reminder or f": reminder ({reminder}): " in (m.get("text") or "")) for m in rung):
                 continue
             n = sum(_mentions_thread(m.get("text") or "", src, where) and _from(m.get("text") or "", author) for m in rung)
-            if n >= CAP_PER_HOUR:                                        # a loop is one author; a roll call is many, once each
-                if n == CAP_PER_HOUR:
+            if n >= LIMIT_PER_HOUR:                                      # a loop is one author; a roll call is many, once each
+                if n == LIMIT_PER_HOUR:
                     if where is None:                                    # a person's channel gets no router notes
                         api.call("chat.postMessage", channel=ch, thread_ts=src, username="router", unfurl_links="false",
-                                 text=f"routing @{author} to {to} paused here for the hour ({CAP_PER_HOUR} doorbells) {QUIET}")
+                                 text=f"routing @{author} to {to} paused here for the hour ({LIMIT_PER_HOUR} doorbells) {QUIET}")
                     api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                              text=f"from router, {'#' + where + ' ' if where else ''}thread {src}: paused @{author} here "
-                                  f"for the hour ({CAP_PER_HOUR} doorbells)")
-                lines.append(f"@{to}: paused (cap of {CAP_PER_HOUR} an hour from @{author} in this thread)")
+                                  f"for the hour ({LIMIT_PER_HOUR} doorbells)")
+                lines.append(f"@{to}: paused (limit of {LIMIT_PER_HOUR} an hour from @{author} in this thread)")
                 continue
             api.call("chat.postMessage", channel=ch, thread_ts=r["inbox_ts"], username="router", unfurl_links="false",
                      unfurl_media="false", text=doorbell(author, src, msg.get("ts") or src, msg.get("text", ""), urgent, where,
@@ -4296,16 +4296,16 @@ def _decided(out: dict) -> bool:
 
 
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
-    out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_LIMIT_S run
+    out; a card still pending at the limit exits STILL_GOING with the command that reads it later (research.waitcap)."""
     follow = page_follower(ns, reg)
     out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
-                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+                           polls=polls, max_s=waitcap.WAIT_LIMIT_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
     if not capped:
         return rc
-    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_LIMIT_S,
                               end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
                                   "when Daniel answers."), file=sys.stderr)
     return waitcap.STILL_GOING
@@ -4753,7 +4753,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_LIMIT_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")

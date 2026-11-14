@@ -5,7 +5,7 @@ schedule only as a served run's verdict records say. This module reads those rec
 name, asks the network certifier's own rule (`class_charge.charge`) how each class of each head is charged, holds
 what the rule charges below to what the rule doesn't read (a negative control for each verifier that accepted,
 the rate the serve registered, the one serve of an execution phase, a verdict under another head and the order of
-runs; each below), and hands the calculator the answer (`leak_bounds.Stop`).
+runs; each below), and hands the calculator (`leak_bounds`) the answer, a `Stop`.
 Nothing but a run's files moves the answer.
 
 **No schedule.** The rule charges a class below its schedule only where it is handed the schedule the class's head
@@ -139,14 +139,14 @@ and of a serve launched after each superseded run that holds a record that doesn
 class at its whole schedule keeps its execution phase at its whole schedule, and each line says which verdict it
 lacks.
 Every other execution phase is charged its whole schedule, one whose registration no run kept among them: the
-calculator counts a row's execution phases from its monitoring period (`leak_bounds.Stop.share`), never from the
+calculator counts a row's execution phases from its monitoring period (`Stop.share`), never from the
 registrations read here. So a run's files with an execution phase left out charge what they would with that
 execution phase refused, and since nothing but verdicts on a head's digest holds an execution phase, a
 registration no verdict names holds none. A verdict is held to a head by the digest it names, so an accept decided
 under another head, another serve's among them, counts for nothing. Registrations or records that don't read, in a run
 that is not superseded ("The order of runs"), and two
 heads given for one execution phase ("An execution phase is one serve's"), hold no execution phase at all. Each
-verdict that is on a head read is handed on under the mark `leak_bounds.RUN_NOT_PROVED`, whatever its
+verdict that is on a head read is handed on under the mark `RUN_NOT_PROVED`, whatever its
 ``proved_by`` says: a run is no proof, and what a record's ``proved_by`` is worth is its reader's to check.
 
 **Not one class.** The four verdicts count only as one class's: of one class, in one execution phase of a link, on
@@ -222,7 +222,7 @@ from typing import Any, NamedTuple
 from verity.protocols.accounting.certifier.verifier import class_charge as CC
 from verity.protocols.accounting.certifier.verifier import connection_rows as C
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 
 #: the record, in the evidence store, of the runs that hold the stop class's verdict records
 RECORD = "exfiltration-glm53-stop-verdicts"
@@ -431,7 +431,7 @@ A_CONTROL = (f"a control record is an object with the fields {', '.join(CONTROL_
 
 def digest_of(registration: object) -> str:
     """The digest a verdict record names a serve's registration by: the registration record's own
-    (`one_stage.registration.digest`). ValueError for one that is no object."""
+    (`one_stage.docket.digest`). ValueError for one that is no object."""
     if not isinstance(registration, Mapping):
         raise ValueError(f"a serve's registration doesn't read: it is no object: {registration!r}")
     try:

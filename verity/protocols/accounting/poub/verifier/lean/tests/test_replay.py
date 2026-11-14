@@ -114,7 +114,7 @@ def test_a_transcript_reads_a_windows_frames_as_the_live_verifiers_do(server, tm
 
 
 @pytest.mark.parametrize("key", ["samples", "min_passes"])
-def test_a_transcript_whose_windows_could_draw_nothing_is_refused_by_both(server, tmp_path, key) -> None:
+def test_a_transcript_whose_windows_could_sample_nothing_is_refused_by_both(server, tmp_path, key) -> None:
     """Both verifiers reject a window with no samples `malformed` whatever its frames (`Session.verify`), and no session
     has one: with `samples` or `min_passes` at 0, the transcript, a frame neither can read beside each window's
     openings, is refused by both before its first event."""
@@ -161,7 +161,7 @@ def test_a_verifier_json_replays_to_its_recorded_verdict(server, tmp_path, name)
 
 @pytest.mark.parametrize("name, outcome", [("honest-shared-4", "accepted"), ("honest-shared-paced-uneven", "accepted"),
                                            ("few-shared", "few")])
-def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
+def test_a_verifier_json_sampled_more_than_one_window_a_coin_replays_to_its_recorded_verdict(server, tmp_path, name,
                                                                                             outcome) -> None:
     """Sampled g > 1 windows a coin (`groups_per_coin`) at two windows in flight, each sample closes at its last window
     under W + ⌈W/g⌉ coins and samples as many receipts as its windows' shares recorded: an honest session, even and
@@ -178,10 +178,10 @@ def test_a_verifier_json_drawn_more_than_one_window_a_coin_replays_to_its_record
     row, = R.replay_record(path, server)
     assert row["agree"] and row["held"] and row["lean"]["refused"] == 0, row
     if outcome == "accepted":
-        assert len(row["lean"]["drawn"]) == -(-W // g) and row["why"] == "every draw drawn, as many as recorded"
+        assert len(row["lean"]["drawn"]) == -(-W // g) and row["why"] == "every sample taken, as many as recorded"
 
 
-def test_a_verifier_json_drawn_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:
+def test_a_verifier_json_sampled_more_than_one_window_a_coin_at_one_in_flight_isnt_replayed(server, tmp_path) -> None:
     """At one window in flight no property covers a session sampled g > 1 windows a coin, and the driver refuses one:
     a record of one has no verdict to replay."""
     v = verifier_json(run("honest-shared-4"))

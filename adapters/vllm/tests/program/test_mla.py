@@ -1,7 +1,7 @@
 """`registry.mla`: Triton's one-split MLA decode, the absorb bmm and the shared-expert combine on bits are Boolean; agree with
 `mla_check`'s numpy models of the kernels (equal to the sm_120 captures of `mla_capture` word for word, 12,420 decode rows, 3,028
 bmm rows and 84 combine rows of one run) on random words and on words that reach every branch: the exp's
-small-argument path, masked columns, signed zeros, subnormals, infinities and NaNs; reduce stage 2's one-split merge to the
+small-argument path, masked columns, signed zeros, subnormals, infinities and NaNs; reduce the merge kernel over one split to the
 gate and `TritonMlaOut` exactly; reproduce captured hardware outputs at GLM-4.7-Flash's statics (by digest); and are pinned by
 gate count and program digest."""
 from __future__ import annotations
@@ -16,13 +16,13 @@ from verity.circuits import codec
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.reference import standalone_call
-from verity.definitions.numerics import derived_rows as DR
+from verity_vllm.definitions.numerics import derived_rows as DR
 from verity.circuits.ops import mufu as MU
 from verity.circuits.ops.boolean import gemm as BG
-from verity.definitions.registry import mla as M
-from verity.definitions.registry import mla_check as MK
+from verity_vllm.definitions.registry import mla as M
+from verity_vllm.definitions.registry import mla_check as MK
 
-from verity_vllm.program import mla_capture as MC
+from tests.program import mla_inputs as MC
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -116,7 +116,7 @@ def _merge_one_split(e_max, e_sum, tv):
 
 
 def test_one_split_merge_is_the_gate_and_out() -> None:
-    """Stage 2's merge of one split equals ``TritonMlaGate ? F2fp(tv + 0) : 0x7FFF`` with ``tv = div.full(acc, e_sum)``
+    """The merge kernel over one split equals ``TritonMlaGate ? F2fp(tv + 0) : 0x7FFF`` with ``tv = div.full(acc, e_sum)``
     (`TritonMlaOut_v1`) on every (e_max, e_sum) pair of specials and on random words, with e_sum around 1..T as the kernel
     makes it; MUFU.RCP(1) is 1, so ``div.full(x, 1) = x``."""
     assert int(MU.mufu_rcp_words(np.array([MK.ONE], U32), MU.table("rcp"))[0]) == int(MK.ONE)

@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import ast
 import importlib
+import os
 import re
 import sys
 import zlib
@@ -304,15 +305,10 @@ def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
 
 
 def kind_of(spec: str) -> str:
-    from pathlib import Path
-
     from verity_flock import subcircuit_templates as TM
 
-    try:
-        if Path(spec).exists():
-            return "sidecar" if spec.endswith(f"{CC.SUFFIX}.py") else "row"
-    except OSError:            # an id longer than a file name may be (a static spelled out at length), so no path
-        pass
+    if os.path.exists(spec):   # False for an id longer than a file name may be (a static spelled out at length)
+        return "sidecar" if spec.endswith(f"{CC.SUFFIX}.py") else "row"
     head = spec.partition(":")[0].partition("/")[0]
     return "template" if head in TM.TEMPLATES else "definition"
 
@@ -586,16 +582,22 @@ def binding_roots() -> list[Any]:
             for units, make in _root_bindings(name) if name != "_vocabulary_roots" else ():
                 try:
                     roots += _produce(units, make)
-                except Exception:  # noqa: BLE001  (see the docstring)
-                    continue
+                except Exception as e:  # noqa: BLE001  (see the docstring)
+                    _passed_over(",".join(units), e, "makes no root here; the catalog fails on it by name")
         for prefix, ns in binding_files():
             for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
+                unit = f"{prefix}_model_roots:{label}"
                 try:
-                    roots += _produce((f"{prefix}_model_roots:{label}",), lambda make=make: [make()])
-                except Exception:  # noqa: BLE001  (see the docstring)
-                    continue
+                    roots += _produce((unit,), lambda make=make: [make()])
+                except Exception as e:  # noqa: BLE001  (see the docstring)
+                    _passed_over(unit, e, "makes no root here; the catalog fails on it by name")
         _BOUND["roots"] = roots
     return [*_kinds_and_templates(), *_BOUND["roots"]]
+
+
+def _passed_over(label: str, e: Exception, what: str) -> None:
+    """Say on stderr what was done instead with ``label``, which raised ``e``."""
+    print(f"circuit-check: {label}: {what} ({type(e).__name__}: {str(e)[:200]})", file=sys.stderr)
 
 
 def _kinds_and_templates() -> list[Any]:
@@ -662,11 +664,19 @@ class Undecided(LookupError):
 
 
 def is_call(fam: str) -> bool:
+    """`call_answer`, an undecided family `Undecided`, by name, with the flags that decide it: the catalog's whole build is what
+    ``--all`` pays once for every target."""
+    if (answer := call_answer(fam)) is None:
+        raise Undecided(f"{fam}: whether a served Program Calls it needs the whole catalog built; give --as-call or --no-as-call, "
+                        "or check it under --all")
+    return answer
+
+
+def call_answer(fam: str) -> bool | None:
     """Whether family ``fam`` is in `call_families`, never building the catalog for it: once `call_families` is known here, by it;
     else a word Call family or a `callee_calls` one is; a family outside `boolean_call_candidates` is not; one
     `certified_boolean_calls` names is.  Any other (a Boolean version of a word Call family that only Definitions the catalog
-    reaches inside its roots could show) is `Undecided`, by name, with the flags that decide it: the catalog's whole build is what
-    ``--all`` pays once for every target."""
+    reaches inside its roots could show) is undecided, None."""
     callees = callee_calls()
     if _CALLS:
         return fam in _CALLS
@@ -680,10 +690,7 @@ def is_call(fam: str) -> bool:
     certified, refused = _SHORT.setdefault("certified", set()), _SHORT.setdefault("uncertified", set())
     if fam not in certified | refused:
         (certified if certified_boolean_calls(words, {fam}) else refused).add(fam)
-    if fam in certified:
-        return True
-    raise Undecided(f"{fam}: whether a served Program Calls it needs the whole catalog built; give --as-call or --no-as-call, "
-                    "or check it under --all")
+    return True if fam in certified else None
 
 
 def boolean_call_candidates(word_calls: set[str]) -> set[str]:
@@ -738,26 +745,28 @@ def certified_boolean_calls(word_calls: set[str], only: set[str] | None = None) 
     Call family, so its body (most of the catalog's build) never is.  With them, `on_demand_boolean_families` (in ``only``)."""
     from verity.circuits import boolean as BL
     from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
-    boolean_version, _none = _handed("boolean_version")()
     linked: dict[str, list[Any]] = {}
     for fn in binding_roots():
         if not isinstance(fn, (PrimitiveDefinition, SpecializedDefinition)) or family(fn) not in word_calls:
             continue
         try:
-            fam = family(boolean_version(fn))
-        except Exception:  # noqa: BLE001  (NoBooleanVersion, or a root that doesn't bind: it certifies nothing)
+            fam = boolean_family(fn)
+        except Exception as e:  # noqa: BLE001  (a root that doesn't bind certifies nothing; the catalog fails on it by name)
+            _passed_over(fn.id, e, "certifies no Boolean Call here")
             continue
-        if only is None or fam in only:
+        if fam is not None and (only is None or fam in only):
             linked.setdefault(fam, []).append(fn)
     out = {f for f in on_demand_boolean_families(word_calls) if only is None or f in only}
     for fam, fns in linked.items():
         for fn in fns:
             try:
-                if fn.gates <= MAX_GATES and not BL.is_boolean(fn):
-                    out.add(fam)
-                    break
-            except Exception:  # noqa: BLE001  (a root that doesn't build certifies nothing; the catalog fails on it by name)
+                certifies = fn.gates <= MAX_GATES and not BL.is_boolean(fn)
+            except Exception as e:  # noqa: BLE001  (a root that doesn't build certifies nothing; the catalog fails on it by name)
+                _passed_over(fn.id, e, "certifies no Boolean Call here")
                 continue
+            if certifies:
+                out.add(fam)
+                break
     return out
 
 

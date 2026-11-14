@@ -104,7 +104,7 @@ class Flock:
             raise ValueError(s.reason)
         relation = _LOWERED[sub.target.pipeline]
         pipe = lowering.PIPES[relation]
-        text = lowering.netlist(relation)
+        text = lowering.circuit_description(relation)
         digest = hashlib.sha256(text.encode()).hexdigest()
         if digest != lowering.PINS[relation]:
             raise ValueError(f"{relation}: lowering {digest} is not the pinned {lowering.PINS[relation]}")

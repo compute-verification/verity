@@ -3,7 +3,7 @@
     verity-vllm ids-front --upstream HOST:PORT [--listen 127.0.0.1:18746] [--id-payload 503] [--log FILE]
 
 The network certifier's id egress form takes from the server only the scan's id events: no HTTP head, one
-`io_tie.id_event` of P bytes an output id, then `io_tie.TRAILER`. `serve-openai --protocol ids` writes them itself
+`workload.id_event` of P bytes an output id, then `workload.TRAILER`. `serve-openai --protocol ids` writes them itself
 (`serve_protocol.IdsProtocol`). vLLM's own server, which serves the tensor-parallel workloads under the certified tick
 (`tick_plugin`), answers in HTTP, and a middleware can't take a response's head off. This relay does it for that server:
 a process of the server's side, on its host, between the network certifier and the server.
@@ -45,7 +45,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.certifier.verifier import io_tie as IT
+from verity.protocols.accounting.certifier.prover.workload import TRAILER, id_event
 from verity.protocols.accounting.certifier.verifier import release as REL
 
 from verity_vllm.config import UsageError, option
@@ -70,7 +70,7 @@ class Broken(Exception):
 def address(text: str) -> tuple[str, int]:
     """``HOST:PORT`` as (host, port)."""
     host, sep, port = text.rpartition(":")
-    if not (sep and host and port.isdigit()):
+    if not (sep and host and port.isdecimal()):
         raise UsageError(f"an address is HOST:PORT, not {text!r}")
     return host, int(port)
 
@@ -124,7 +124,7 @@ async def token_ids(reader: asyncio.StreamReader) -> AsyncIterator[list[int]]:
         status, *lines = (await reader.readuntil(BLANK))[:-len(BLANK)].decode("latin-1").split("\r\n")
         code = status.split(" ")[1:2]
         if code != ["200"]:
-            raise Broken(f"the server answered {code[0] if code and code[0].isdigit() else 'no status'}")
+            raise Broken(f"the server answered {code[0] if code and code[0].isdecimal() else 'no status'}")
         headers = {k.strip().lower(): v.strip() for k, _, v in (ln.partition(":") for ln in lines)}
         buf = b""
         async for data in _body(reader, "chunked" in headers.get("transfer-encoding", "").lower()):
@@ -151,7 +151,7 @@ async def _first(reader: asyncio.StreamReader) -> bytes:
         return await reader.read(READ_BYTES)
     line, *fields = head[:-len(BLANK)].split(b"\r\n")
     lengths = [f.partition(b":")[2].strip() for f in fields if f.partition(b":")[0].strip().lower() == b"content-length"]
-    if line != COMPLETIONS or len(lengths) != 1 or not lengths[0].isdigit() or int(lengths[0]) > BODY_BYTES:
+    if line != COMPLETIONS or len(lengths) != 1 or not lengths[0].decode("latin-1").isdecimal() or int(lengths[0]) > BODY_BYTES:
         return head
     try:
         return head + await reader.readexactly(int(lengths[0]))
@@ -191,7 +191,7 @@ class Front:
 
     def __init__(self, upstream: tuple[str, int], payload: int = ID_PAYLOAD, *,
                  log: Callable[[dict[str, Any]], None] | None = None, clock: Callable[[], float] = time.monotonic) -> None:
-        IT.id_event(0, payload)
+        id_event(0, payload)
         self.upstream, self.payload, self.log, self.clock = upstream, payload, log, clock
         self.origin = clock()
         self.host = f"{upstream[0]}:{upstream[1]}".encode()
@@ -250,11 +250,11 @@ class Front:
             async with contextlib.aclosing(token_ids(back)) as chunks:
                 async for ids in chunks:
                     for t in ids:
-                        writer.write(IT.id_event(t, self.payload))
+                        writer.write(id_event(t, self.payload))
                         wrote()
                     rec["ids"] += len(ids)
                     await writer.drain()
-            writer.write(IT.TRAILER)
+            writer.write(TRAILER)
             wrote()
             await writer.drain()
             rec["ended"] = True

@@ -29,7 +29,9 @@ term's
 `faultyEntries` is `faultyEntries` of its registration. An audit's facts are `factsOf`'s, which refuses a profile
 sampling more than its level holds, a stratified one with a stratum sampling more than it holds or whose strata's
 sizes do not sum to the level's, and one that is another sample than its registration's (`factsOf_sample`), so facts
-of a registered stratified sample that is sampled whole are of every stratum sampled whole (`strata_whole`).
+of a registered stratified sample that is sampled whole are of every stratum sampled whole (`strata_whole`). Every profile it
+gives facts of is of one level sampled `subset:k` or stratified, so none holds a work design
+(`factsOf_subset_or_stratified`).
 
 `RegisteredSampleHeld` and `SampleBoundCharged` read the public the rows form accepts with (`check_rows`): what
 `factsOf` gives of every answer (`factsOf_sample`: facts of the registered sample, with a count at least its bound,
@@ -428,8 +430,8 @@ theorem rowsTiedInputWired : RowsTiedInputWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))))
     unfold tiedInputCheck at h0
     split at h0
     · assumption
@@ -614,7 +616,7 @@ theorem findingOf_none {α : Type} {y : Found α} (h : findingOf y = none) : ∃
   | ok v => exact ⟨v, rfl⟩
 
 /-- The rows form's execution phases' findings, as `check` computes them. -/
-def rowsWindows (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
+def rowsExecutionPhases (p : Params) (c : Commitment) (e : Evidence) (s : Schedule) (sd : ByteArray) :
     Array (Found (Option (Facts × ℕ))) :=
   (c.windows.zip e.windows).zipIdx.map fun ((reg, x), i) =>
     some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + i) reg x
@@ -624,8 +626,8 @@ rows form's (`rowsPublic`) with the schedule's response cap. -/
 theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {prof : Profile} {s : Schedule}
     {sd : ByteArray} {scan : Scan} (hform : p.form = .rows s sd scan) (h : check p c e = .accept pub prof) :
     c.audits.size = p.audits.size ∧ e.windows.size = c.windows.size ∧ e.audits.size = c.audits.size ∧
-      (∀ y ∈ rowsWindows p c e s sd, findingOf y = none) ∧ (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
-      pub = { rowsPublic p c (auditChecks p c e) scan ((rowsWindows p c e s sd).filterMap (·.toOption.join)) with
+      (∀ y ∈ rowsExecutionPhases p c e s sd, findingOf y = none) ∧ (∀ y ∈ auditChecks p c e, findingOf y = none) ∧
+      pub = { rowsPublic p c (auditChecks p c e) scan ((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join)) with
         maxTokensCap := p.form.maxTokensCap } := by
   unfold check at h
   split at h
@@ -719,6 +721,29 @@ theorem factsOf_sample {what : String} {reg : Lean.Json} {prof : Core.Integrity}
     have := Array.find?_eq_none.mp (Option.eq_none_iff_forall_ne_some.mpr hnone) st m
     simpa using this
 
+/-- The facts `factsOf` gives are of a profile of one level sampled `subset:k` or stratified: it refuses every other
+profile, among them one whose level records a Bernoulli design or a work design. So the period check reads no work
+design's `k_s`, and what it accepts rests on no rule that sizes them. -/
+theorem factsOf_subset_or_stratified {what : String} {reg : Lean.Json} {prof : Core.Integrity} {pub : Lean.Json}
+    {f : Facts} (h : factsOf what reg prof pub = .ok f) :
+    ∃ l, prof.levels = #[l] ∧ ((∃ k, l.draw = some (.subset k)) ∨ ∃ ss, l.draw = some (.stratified ss)) := by
+  have one : ∀ (body : Core.Level → Found Facts) (alt : Found Facts),
+      (match prof.levels with | #[l] => body l | _ => alt) = .ok f →
+        alt = .ok f ∨ ∃ l, prof.levels = #[l] ∧ body l = .ok f := by
+    intro body alt hm
+    rcases hls : prof.levels with ⟨_ | ⟨l, _ | ⟨l', ls⟩⟩⟩ <;> rw [hls] at hm
+    · exact .inl hm
+    · exact .inr ⟨l, rfl, hm⟩
+    · exact .inl hm
+  unfold factsOf at h
+  rcases one _ _ h with h | ⟨l, hl, h⟩
+  · cases h
+  · refine ⟨l, hl, ?_⟩
+    simp only [bind, Except.bind, pure, Except.pure, refuse] at h
+    repeat' split at h
+    all_goals cases h
+    all_goals first | exact .inl ⟨_, by assumption⟩ | exact .inr ⟨_, by assumption⟩
+
 /-- Strata that each sample no more than they hold, and in all as many as they hold, are each sampled whole. -/
 theorem strata_whole (xs : List Core.Stratum) (hle : ∀ st ∈ xs, st.k ≤ st.size) (a b : ℕ) (hab : a ≤ b)
     (h : xs.foldl (fun n st => n + st.k) a = xs.foldl (fun n st => n + st.size) b) :
@@ -759,12 +784,12 @@ theorem rowsExecutionPhaseCheck_facts {p : Params} {s : Schedule} {sd : ByteArra
   all_goals exact ⟨_, _, _, by assumption⟩
 
 /-- An execution phase with no finding has its scan's facts and its tied audits' free inputs. -/
-theorem rowsWindows_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
-    (hws : ∀ y ∈ rowsWindows p c e s sd, findingOf y = none) :
-    ∀ y ∈ rowsWindows p c e s sd, ∃ u, y = .ok (some u) := by
+theorem rowsExecutionPhases_ok {p : Params} {c : Commitment} {e : Evidence} {s : Schedule} {sd : ByteArray}
+    (hws : ∀ y ∈ rowsExecutionPhases p c e s sd, findingOf y = none) :
+    ∀ y ∈ rowsExecutionPhases p c e s sd, ∃ u, y = .ok (some u) := by
   intro y hy
   obtain ⟨v, rfl⟩ := findingOf_none (hws y hy)
-  unfold rowsWindows at hy
+  unfold rowsExecutionPhases at hy
   obtain ⟨z, -, hz⟩ := Array.mem_map.mp hy
   cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + z.2) z.1.1 z.1.2 with
   | error r => simp [hr, Functor.map, Except.map] at hz
@@ -848,20 +873,20 @@ theorem rowsTiedCharged : RowsTiedCharged := by
       have hxw : e.windows[w]? = some (e.windows[w]'(by omega)) := Array.getElem?_eq_getElem (by omega)
       have hz : (c.windows.zip e.windows)[w]? = some (wreg, e.windows[w]'(by omega)) :=
         Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
-      have hwget : (rowsWindows p c e s sd)[w]? =
+      have hwget : (rowsExecutionPhases p c e s sd)[w]? =
           some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) wreg (e.windows[w]'(by omega))) := by
-        simp [rowsWindows, Array.getElem?_zipIdx, hz]
-      obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
+        simp [rowsExecutionPhases, Array.getElem?_zipIdx, hz]
+      obtain ⟨u, hu⟩ := rowsExecutionPhases_ok hws _ (Array.mem_of_getElem? hwget)
       rw [hu] at hwget
-      have hwall : ∀ y ∈ rowsWindows p c e s sd, (y.toOption.join).isSome = true := by
+      have hwall : ∀ y ∈ rowsExecutionPhases p c e s sd, (y.toOption.join).isSome = true := by
         intro y hy
-        obtain ⟨u, rfl⟩ := rowsWindows_ok hws y hy
+        obtain ⟨u, rfl⟩ := rowsExecutionPhases_ok hws y hy
         rfl
-      have hscan : ((rowsWindows p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
+      have hscan : ((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
         rw [getElem?_filterMap_of_isSome _ _ hwall, hwget]
         rfl
       refine ⟨scan.terms u.1 u.2 (faultyEntries p c (auditChecks p c e) scan wreg) p.jitter, ?_, ?_⟩
-      · have hzip : (((rowsWindows p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, wreg) :=
+      · have hzip : (((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, wreg) :=
           Array.getElem?_zip_eq_some.mpr ⟨hscan, hw⟩
         simp [rowsPublic, rowsTerms, hzip]
       · show faultyEntries p c (auditChecks p c e) scan wreg = scan.entries
@@ -959,7 +984,7 @@ theorem rowsStartCharged : RowsStartCharged := by
   split at h
   · cases h
   cases hf : p.form <;> simp only [hf] at h <;> split at h <;> cases h <;>
-    simp [StartCharged, hf, rowsPublic, rowsTerms, terms]
+    simp [StartCharged, hf, rowsPublic, rowsTerms]
 
 /-- **`RowsStartCharged`'s honest lemma**: the period check accepts a period that does not begin the run,
 `chargedPeriod` with nothing registered. -/
@@ -1260,23 +1285,23 @@ theorem answersAt {P : Lean.Json → Facts → Prop}
     have hxw : e.windows[w]? = some (e.windows[w]'(by omega)) := Array.getElem?_eq_getElem (by omega)
     have hz : (c.windows.zip e.windows)[w]? = some (reg, e.windows[w]'(by omega)) :=
       Array.getElem?_zip_eq_some.mpr ⟨hw, hxw⟩
-    have hwget : (rowsWindows p c e s sd)[w]? =
+    have hwget : (rowsExecutionPhases p c e s sd)[w]? =
         some (some <$> rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega))) := by
-      simp [rowsWindows, Array.getElem?_zipIdx, hz]
-    obtain ⟨u, hu⟩ := rowsWindows_ok hws _ (Array.mem_of_getElem? hwget)
+      simp [rowsExecutionPhases, Array.getElem?_zipIdx, hz]
+    obtain ⟨u, hu⟩ := rowsExecutionPhases_ok hws _ (Array.mem_of_getElem? hwget)
     have hrc : rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) = .ok u := by
       cases hr : rowsExecutionPhaseCheck p s sd c.audits (p.first + w) reg (e.windows[w]'(by omega)) with
       | error r => simp [hr, Functor.map, Except.map] at hu
       | ok v => simpa [hr, Functor.map, Except.map] using hu
     rw [hu] at hwget
-    have hwall : ∀ y ∈ rowsWindows p c e s sd, (y.toOption.join).isSome = true := by
+    have hwall : ∀ y ∈ rowsExecutionPhases p c e s sd, (y.toOption.join).isSome = true := by
       intro y hy
-      obtain ⟨u, rfl⟩ := rowsWindows_ok hws y hy
+      obtain ⟨u, rfl⟩ := rowsExecutionPhases_ok hws y hy
       rfl
-    have hscan : ((rowsWindows p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
+    have hscan : ((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join))[w]? = some u := by
       rw [getElem?_filterMap_of_isSome _ _ hwall, hwget]
       rfl
-    have hzip : (((rowsWindows p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, reg) :=
+    have hzip : (((rowsExecutionPhases p c e s sd).filterMap (·.toOption.join)).zip c.windows)[w]? = some (u, reg) :=
       Array.getElem?_zip_eq_some.mpr ⟨hscan, hw⟩
     obtain ⟨_, _, _, hfo⟩ := rowsExecutionPhaseCheck_facts hrc
     exact ⟨scan.terms u.1 u.2 (faultyEntries p c (auditChecks p c e) scan reg) p.jitter,
@@ -1293,7 +1318,7 @@ registered, and of an answer whose profile is the sample its registration states
 each sampled, the facts it reads are of the 16 units with 8 sampled. A period with an audit needs one-stage's answer
 at its window record's digest, which the period's difftest builds and checks against the mirror. -/
 theorem registeredSampleHeld_honest :
-    (∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof) ∧
+    (∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ = .accept pub prof) ∧
       (factsOf "audit 0" halvesReg halvesProfile (statedBound 0)).toOption.map (fun f => (f.units, f.drawn)) =
         some (16, 8) := by
   refine ⟨rowsCapPublished_honest, ?_⟩
@@ -1306,7 +1331,7 @@ theorem registeredSampleHeld_nontrivial :
     ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (subsetDesign 3)], #[], .empty⟩
       (statedPublic ⟨2, 3, ⟨1, 10⟩, 0, .subset 3⟩) := by
   intro h
-  obtain ⟨f, -, ⟨n, d, hs, -, -, hle, hd⟩, -⟩ := h.1 0 (sampleReg 2 (subsetDesign 3)) rfl
+  obtain ⟨f, -, ⟨n, d, hs, -, -, hle, hd⟩⟩ := h.1 0 (sampleReg 2 (subsetDesign 3)) rfl
   have hreg : sampleOf (sampleReg 2 (subsetDesign 3)) = some (2, .subset 3) := by decide +kernel
   rw [hreg] at hs
   cases hs
@@ -1322,7 +1347,7 @@ theorem registeredSampleHeld_stratum :
     ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 3 (strataDesign 1 2 2 0)], #[], .empty⟩
       (statedPublic ⟨3, 2, ⟨1, 10⟩, 0, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]⟩) := by
   intro h
-  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 3 (strataDesign 1 2 2 0)) rfl
+  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩⟩ := h.1 0 (sampleReg 3 (strataDesign 1 2 2 0)) rfl
   have hreg : sampleOf (sampleReg 3 (strataDesign 1 2 2 0)) = some (3, .stratified #[⟨"a", 1, 2⟩, ⟨"b", 2, 0⟩]) := by
     decide +kernel
   rw [hreg] at hs
@@ -1341,7 +1366,7 @@ theorem registeredSampleHeld_sizes :
     ¬ AnswersAt SampleHeld cappedPeriod ⟨#[sampleReg 2 (strataDesign 2 1 2 1)], #[], .empty⟩
       (statedPublic ⟨2, 2, ⟨1, 10⟩, 0, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]⟩) := by
   intro h
-  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩, -⟩ := h.1 0 (sampleReg 2 (strataDesign 2 1 2 1)) rfl
+  obtain ⟨f, -, ⟨n, d, hs, -, -, -, hd⟩⟩ := h.1 0 (sampleReg 2 (strataDesign 2 1 2 1)) rfl
   have hreg : sampleOf (sampleReg 2 (strataDesign 2 1 2 1)) = some (2, .stratified #[⟨"a", 2, 1⟩, ⟨"b", 2, 1⟩]) := by
     decide +kernel
   rw [hreg] at hs
@@ -1356,7 +1381,7 @@ registered, and of an answer for two registered strata of 4 of 8 units at δ = 1
 the count it reads is 6: each stratum's own bound at δ = 1/20 is 3. A period with an audit needs one-stage's answer
 at its window record's digest, which the period's difftest builds and checks against the mirror. -/
 theorem sampleBoundCharged_honest :
-    (∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof) ∧
+    (∃ (pub : Public) (prof : Profile), check cappedPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[], #[]⟩ = .accept pub prof) ∧
       (factsOf "audit 0" halvesReg halvesProfile (statedBound 0)).toOption.map (·.wrong) = some 6 := by
   refine ⟨rowsCapPublished_honest, ?_⟩
   decide +kernel
@@ -1368,7 +1393,7 @@ theorem sampleBoundCharged_nontrivial :
     ¬ AnswersAt SampleCharged cappedPeriod ⟨#[halvesReg], #[], .empty⟩
       (statedPublic ⟨16, 8, ⟨1, 10⟩, 5, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]⟩) := by
   intro h
-  obtain ⟨f, hf, ⟨n, d, hs, hd⟩, -⟩ := h.1 0 halvesReg rfl
+  obtain ⟨f, hf, ⟨n, d, hs, hd⟩⟩ := h.1 0 halvesReg rfl
   obtain rfl : f = ⟨16, 8, ⟨1, 10⟩, 5, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]⟩ := by
     simpa [statedPublic, rowsTerms] using hf.symm
   have hreg : sampleOf halvesReg = some (16, .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]) := by decide +kernel
@@ -1383,7 +1408,7 @@ theorem sampleBoundCharged_nontrivial :
 check accepts a period with an audit and publishes no facts of it. -/
 theorem answers_acceptAll (P : Lean.Json → Facts → Prop) : ¬ AnswersOf P acceptAllRows := by
   intro h
-  obtain ⟨f, hf, -⟩ := (h cappedPeriod ⟨#[Lean.Json.null], #[], .empty⟩ ⟨#[], #[]⟩ _ _ rfl).1 0 _ rfl
+  obtain ⟨f, hf, -⟩ := (h cappedPeriod ⟨#[Lean.Json.null], #[], .empty⟩ ⟨#[], #[], #[]⟩ _ _ rfl).1 0 _ rfl
   simp [rowsTerms] at hf
 
 end Properties.NetworkPeriod

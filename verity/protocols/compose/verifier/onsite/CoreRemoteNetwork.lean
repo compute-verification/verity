@@ -6,7 +6,7 @@ subprotocols are that composite's three (`Core.Remote.components`: the inference
 SPOT) and the network certifier over the period (`NetworkCheck.Period.protocol`, `verity/certifier/v0`: the
 period's execution phases certified and proved, and the bound `K` on what left the site).
 `Core.Composition.tiedSameB` composes them on the caller's blobs under remote's record subprotocols
-(`Core.Remote.tied`), remote's tie (`Core.Remote.windows`) and its own (`egress`), so its verdict is the AND of
+(`Core.Remote.tied`), remote's tie (`Core.Remote.executionPhases`) and its own (`egress`), so its verdict is the AND of
 remote's and the network certifier's over one registration: it accepts when both accept and the network certifier's
 period is on the policy's record, and either's rejection rejects it whatever the other answers.
 
@@ -57,9 +57,9 @@ def auditRecords (k : Case) : Option (List ByteArray) := do
 
 /-- Every compute audit of the network certifier's period on the policy's record. -/
 def egress : Tie :=
-  ⟨"record", [(NciCheck.Protocol.protocolId, Core.Remote.policyRecord), (NetworkCheck.Period.protocolId, auditRecords)]⟩
+  ⟨"record", [(InferenceOnlyCheck.Protocol.protocolId, Core.Remote.policyRecord), (NetworkCheck.Period.protocolId, auditRecords)]⟩
 
-def ties : List Tie := [Core.Remote.windows, egress]
+def ties : List Tie := [Core.Remote.executionPhases, egress]
 
 def protocol : BlobProtocol := tiedSameB protocolId Core.Remote.tied ties components
 
@@ -89,9 +89,9 @@ private def allRefused : Answer := answer (components.map refused)
 -- remote's subprotocols alone are not this composite's, nor is the network certifier's period alone
 #guard (answer (Core.Remote.components.map refused)).reason == some "params: verity/certifier/v0 is missing"
 #guard (answer [refused NetworkCheck.Period.protocol]).reason == some "params: verity/inference-only/v0 is missing"
-#guard (answer [refused NetworkCheck.Period.protocol, refused NciCheck.Protocol.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
     refused PouwCheck.Period.protocol]).reason == some "params: verity/sampled-proofs/v1 is missing"
-#guard (answer [refused NetworkCheck.Period.protocol, refused NciCheck.Protocol.protocol,
+#guard (answer [refused NetworkCheck.Period.protocol, refused InferenceOnlyCheck.Protocol.protocol,
     refused PouwCheck.Period.protocol, refused Spot.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
 
@@ -99,7 +99,7 @@ private def allRefused : Answer := answer (components.map refused)
 private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"registered\":[]}"
 
 private def recordsOf (policy sampled : String) : Answer :=
-  answer [refused NetworkCheck.Period.protocol, { refused NciCheck.Protocol.protocol with commitment := policy.toUTF8 },
+  answer [refused NetworkCheck.Period.protocol, { refused InferenceOnlyCheck.Protocol.protocol with commitment := policy.toUTF8 },
     refused PouwCheck.Period.protocol, { refused VStar.Recursive.Sampled.protocol with commitment := sampled.toUTF8 }]
 
 #guard (recordsOf (record 0) (record 0)).reason.map (·.startsWith "verity/certifier/v0 reject: params: ") == some true
@@ -110,13 +110,13 @@ private def recordsOf (policy sampled : String) : Answer :=
 #guard !((recordsOf (record 1) (record 0)).reason.map (contains · "reject: params")).getD true
 
 -- the egress tie: every compute audit of the network certifier's period on the policy's record holds; one on another
--- record, or a period with no compute audit, names the policy's record and the period's stray (the empty string when
--- it has none); a period that doesn't decode names nothing, and its own rejection stands
+-- record, or a period with no compute audit, names the tie and the two subprotocols and neither value; a period that
+-- doesn't decode names nothing, and its own rejection stands
 private def monitoringPeriodOn (audits : List String) : Case :=
   { refused NetworkCheck.Period.protocol with
     commitment := s!"\{\"audits\":[{",".intercalate audits}],\"windows\":[]}".toUTF8 }
 
-private def policyOn (r : String) : Case := { refused NciCheck.Protocol.protocol with commitment := r.toUTF8 }
+private def policyOn (r : String) : Case := { refused InferenceOnlyCheck.Protocol.protocol with commitment := r.toUTF8 }
 
 private def digestOf (r : String) : String :=
   ((Lean.Json.parse r).toOption.bind fun j => (Flock.WindowRecord.digestHex j).toOption).getD ""
@@ -128,13 +128,11 @@ private def digestOf (r : String) : String :=
 #guard egress.strays [monitoringPeriodOn [record 0], policyOn (record 0)] == none
 #guard egress.strays [monitoringPeriodOn [record 0, record 0], policyOn (record 0)] == none
 #guard egress.strays [monitoringPeriodOn [record 1], policyOn (record 0)] ==
-  some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed \
-    {digestOf (record 1)}"
+  some "record: verity/inference-only/v0 and verity/certifier/v0 named different values"
 #guard egress.strays [monitoringPeriodOn [record 0, record 1], policyOn (record 0)] ==
-  some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed \
-    {digestOf (record 1)}"
+  some "record: verity/inference-only/v0 and verity/certifier/v0 named different values"
 #guard egress.strays [monitoringPeriodOn [], policyOn (record 0)] ==
-  some s!"record: verity/inference-only/v0 committed {digestOf (record 0)}, verity/certifier/v0 committed "
+  some "record: verity/inference-only/v0 and verity/certifier/v0 named different values"
 #guard egress.strays [refused NetworkCheck.Period.protocol, policyOn (record 0)] == none
 #guard egress.strays [monitoringPeriodOn [record 1]] == none
 
@@ -151,7 +149,7 @@ private def composite : Protocol :=
   tiedSame protocolId Core.Remote.tied ties (standIns (components.map (·.id)))
 
 private def remote : Protocol :=
-  tiedSame "verity/remote/v0" Core.Remote.tied [Core.Remote.windows] (standIns (Core.Remote.components.map (·.id)))
+  tiedSame "verity/remote/v0" Core.Remote.tied [Core.Remote.executionPhases] (standIns (Core.Remote.components.map (·.id)))
 
 private def both : Verdict → Verdict → Verdict
   | .reject, _ | _, .reject => .reject

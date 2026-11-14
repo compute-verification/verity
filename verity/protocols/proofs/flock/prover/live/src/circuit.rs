@@ -79,6 +79,18 @@ pub const TMPL_FORMAT: &str = "flock-circuit/tmpl";
 pub const TMPL_STATEMENT: &str = "verity/flock-circuit/tmpl";
 pub const TMPL_TAGS: Tags =
     Tags { statement: TMPL_STATEMENT, sigma: "verity/flock-circuit/tmpl/sigma", domain: "flock-circuit-tmpl/fast100x2/rep" };
+
+/// A rep stream's transcript domain under a statement's domain tag (`Tags::domain`, in the session's version): the tag,
+/// then the rep's decimal index; in a session of several `tables`, the table's name and a `/` before the tag's final `rep`
+/// (`flock-circuit/fast100x2/circuit-00/rep0`).
+pub fn rep_domain(tag: &str, tables: usize, table: &str, rep: usize) -> Vec<u8> {
+    if tables <= 1 {
+        return format!("{tag}{rep}").into_bytes();
+    }
+    let base = tag.strip_suffix("rep").expect("a statement's domain tag ends in `rep`");
+    format!("{base}{table}/rep{rep}").into_bytes()
+}
+
 pub const SCHEME: &str = "frame-v3-sha512/hm96-sha512";
 pub const ROW_SCHEMA: &str = "hm96-sha512/row/v1";
 /// a bit row's leaf (`sha512/row/v2`; `verity.commitments.rowleaf.SCHEMA_HM96_SHA512_ROW_V2`)

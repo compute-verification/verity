@@ -17,6 +17,8 @@ TP_ROOT_TAG = b"verity/tp-run-root/v2"
 TP_ROOT_TAG_V1 = b"verity/tp-run-root/v1"
 RANK_ROOT_BYTES = DIGEST_BYTES["sha512"]
 
+__all__ = ["TP_ROOT_TAG", "TP_ROOT_TAG_V1", "combine", "tp_run_root", "tp_run_root_sha256"]
+
 
 def _ranks(world: int, roots: dict[int, bytes]) -> None:
     if sorted(roots) != list(range(world)):

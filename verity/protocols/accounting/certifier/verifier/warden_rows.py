@@ -3,7 +3,7 @@ Each execution phase's cells are committed one `hm96-sha512/row/v2` row a bucket
 frame-v3-sha512 tree. The network certifier signs a head that names the root and a salted digest of the execution
 phase's wiring with the certifier's signer (`certificate.Issuer.sign`, LMS n = 64). A proof block opens a cell's row as
 its output port (the sender's) or its input port (the receiver's) by the Lean verifier's registered reads
-(`flock-verify --registered`, `Flock.Registered.checkPort`): the port's table row is the proof block's row committed
+(`verity-verify-proof --registered`, `Flock.Registered.checkPort`): the port's table row is the proof block's row committed
 under the row's salt, and it must climb its path to the signed root at the row the verifier reads for the proof block.
 The verifier derives that row from the proof block's (connection, cell) and the network certifier's wiring (`port`). No
 gate of the proof block hashes the row, and the verifier receives no row and no salt.
@@ -131,7 +131,7 @@ def row_bytes(params: WardenParams) -> int:
 
 
 def window_rows(record: BlockGrid, params: WardenParams) -> list[bytes]:
-    """The link-window's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
+    """The execution phase's rows: each bucket's slots in order, a slot no connection holds B zero bytes."""
     grid = params.grid
     if len(record.grid) != grid.buckets or any(len(row) != grid.allocation for row in record.grid):
         raise ValueError(f"a window has {grid.buckets} buckets of {grid.allocation} slots")
@@ -173,7 +173,7 @@ class Wiring:
                                  f"{last_first}: connections are admitted in ordinal order")
             if cells < r or cells % r or first < 0 or first + cells // r > T:
                 raise ValueError(f"connection {q}'s {cells} cells from row {first} aren't r = {r} a row within the "
-                                 f"link-window's {T} rows")
+                                 f"execution phase's {T} rows")
             for t in range(first, first + cells // r):
                 rows[t].append(q)
             last_q, last_first = q, first
@@ -195,11 +195,11 @@ class Wiring:
                 raise ValueError(f"a read is (connection, cell), not {read!r}")
             q, k = read
             if q not in held:
-                raise ValueError(f"connection {q} holds no slot of the link-window: a read opens a connection's own "
+                raise ValueError(f"connection {q} holds no slot of the execution phase: a read opens a connection's own "
                                  "cells, never an empty slot")
             first, cells = held[q]
             if not 0 <= k < cells:
-                raise ValueError(f"connection {q} has {cells} cells in the link-window, not cell {k}")
+                raise ValueError(f"connection {q} has {cells} cells in the execution phase, not cell {k}")
             if (q, k) in seen:
                 raise ValueError(f"connection {q}'s cell {k} is read twice")
             seen.add((q, k))
@@ -209,7 +209,7 @@ class Wiring:
 
 
 def wiring(record: BlockGrid, params: WardenParams, salt: bytes | None = None) -> Wiring:
-    """The link-window's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
+    """The execution phase's wiring, read off its record (a cell's stream field is its connection's ordinal), under `salt`
     (default: 64 bytes fresh from the operating system); ValueError when the record's cells aren't where the schedule
     puts them."""
     held: dict[int, list[tuple[int, int]]] = {}
@@ -342,7 +342,7 @@ class Cells:
         (default: fresh from the operating system) and never for another row."""
         rows = tuple(bytes(r) for r in rows)
         if len(rows) != rows_of(params) or any(len(r) != row_bytes(params) for r in rows):
-            raise ValueError(f"a link-window is {rows_of(params)} rows of {row_bytes(params)} bytes, one a bucket")
+            raise ValueError(f"an execution phase is {rows_of(params)} rows of {row_bytes(params)} bytes, one a bucket")
         wiring.live(params)
         salts = tuple(_INST.fresh_salt() for _ in rows) if salts is None else tuple(bytes(s) for s in salts)
         if len(salts) != len(rows) or any(len(s) != _INST.salt_bytes for s in salts):
@@ -406,7 +406,7 @@ class Cells:
         prover's), and its header's `registered` entry, `{"value", "positions", "paths"}`. With `units`, the
         positions are the rows its cells are in, and the entry names its value (`Units.value`), as `port` does."""
         if any(not 0 <= p < len(self.rows) for p in positions):
-            raise ValueError(f"a position is outside the link-window's {len(self.rows)} rows")
+            raise ValueError(f"a position is outside the execution phase's {len(self.rows)} rows")
         if units is not None and [t for t, _ in self.wiring.place(self.params, units.cells)] != list(positions):
             raise ValueError("the positions aren't the rows the units' wiring reads")
         return ([words(self.rows[p]) for p in positions], [self.salts[p] for p in positions],
@@ -418,7 +418,7 @@ def read_witness(blob: bytes) -> tuple[list[bytes], bytes]:
     """`Cells.witness` read back: the rows' salts and the wiring's."""
     rows = len(blob) - WIRING_SALT_BYTES
     if rows < 0 or rows % SALT_BYTES:
-        raise ValueError(f"a link-window's witness is {SALT_BYTES} bytes a row and the wiring's {WIRING_SALT_BYTES}")
+        raise ValueError(f"an execution phase's witness is {SALT_BYTES} bytes a row and the wiring's {WIRING_SALT_BYTES}")
     return [blob[i:i + SALT_BYTES] for i in range(0, rows, SALT_BYTES)], blob[rows:]
 
 

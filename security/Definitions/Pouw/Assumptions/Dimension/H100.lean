@@ -63,7 +63,7 @@ review lists the measurements.
 * **`Hc`** reads `Embed`'s `Instr`, `M4090`'s instructions, which the H200 can't check. So `EmbedMH100` keeps its
   marker.
 * **`IndepMod`, `runWords` and `splitK`** define targets and the honest schedule. No measurement reads them.
-* **The pinned statements.** `PerWordMH100`, `PerWordMH100Floor` and `PerWordMH100Words` read only the above, at a
+* **The guarantees.** `PerWordMH100`, `PerWordMH100Floor` and `PerWordMH100Words` read only the above, at a
   table meeting `H32` or `Floor c`, so they are checked with them. `MH100Attains` and `HonestSplitK100` are
   statements at `h100Nominal`. Their hardware caveat holds on the H200: `wgmma` costs 32.003 a register at
   `N ≥ 64`, and C-2's m64n8k32 costs 144. `MH100WordsConsistent` and `H32Sat` read no price the hardware sets.
@@ -155,7 +155,7 @@ def splitK (κ : ℕ) (I : ℕ → G → ℚ) (b : ℕ) : ℕ → List (Op100 G)
   | τ + 1 => splitK κ I b τ ++
       [Op100.wgmma Shape100.e4m3F32 [I τ], Op100.fp32 κ (b + 2 * τ) (b + 2 * τ + 1) (b + 2 * τ)]
 
-/-! ## Pinned statements -/
+/-! ## Guarantees -/
 
 /-- **`H32` is satisfiable**: the nominal H100 table satisfies it. -/
 def H32Sat : Prop := H32 h100Nominal

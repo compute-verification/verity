@@ -4,42 +4,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_scan_zk_challenger.py", "tests/test_scan_zk_lean_one.py"]
-# scan_zk's draws take the challenger's coins through one_stage's a5_coins; its honest round lowers and stages through
-# one_stage's a0, a7, a8 (with the population a0 and a7 read) and prove_leg (`warden_zk._one_stage`), and its stream's
-# verifier is the Lean package `core_spot`'s verifier executable, whose lakefile is the package it builds; the period
-# check's Python mirror it reads takes verity_difftest's decoders. test_window_chain hands window_chain the vLLM
-# integration's window advice. block_certifier's block_leg is the block record's certifier entry, which
-# test_block_certifier holds to the block record's schema, `block_record` and its period-0 fixture. test_stop_verdicts
-# counts through leak_bounds, over the census, rho's fleet and the sampling plan's cards. n2_zk joins warden_chain's
-# chain and test_n2_zk runs test_warden_chain's gate; test_scan_zk_lean_one runs the shell drivers' blocks through
-# test_out_request_values.
-inputs = ["verity",
-          "benchmarks/one_stage/a0.py", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a7.py",
-          "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_leg.py", "benchmarks/one_stage/r2_population.py",
-          "verity/protocols/proofs/spot/verifier/lean/lakefile.toml", "tools/difftest/python/verity_difftest",
-          "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
-          "adapters/vllm/verity_vllm/pipeline/window_advice.py", "adapters/vllm/verity_vllm/pipeline/advice.py",
-          "adapters/vllm/verity_vllm/pipeline/advice_windows.py",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo/block_record.py",
-          "benchmarks/one_stage/interfaces/verity_e2e_demo/schemas/block-record.v2.schema.json",
-          "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
-          "benchmarks/network_traces/leak_bounds.py", "benchmarks/census/deployments.json", "benchmarks/census/adversary.json",
-          "benchmarks/census/hardware.json", "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/hardware.toml",
-          "benchmarks/spot_figures/cards", "benchmarks/spot_figures/cards.py", "benchmarks/spot_figures/figure1.py",
-          "benchmarks/spot_figures/total_cost.py", "benchmarks/spot_figures/breakeven",
-          "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/tests/test_warden_chain.py",
-          "benchmarks/network_traces/tests/test_out_request_values.py", "benchmarks/network_traces/chain_record.sh",
-          "benchmarks/network_traces/n2_zk.sh", "benchmarks/network_traces/scan_zk.sh"]
-# The Lean verifier, whose statement setup test_warden_zk and test_egress_zk run on their staged members (`check` builds
-# it before this suite).
-artifacts = ["verity/protocols/proofs/flock/verifier/.lake/build/bin/flock-verify"]
-
-# What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
-# what a program it starts reads): the graph's test-file tasks are keyed on it.
-
-[[tool.verity.tests.reads]]
-tests = ["tests/test_block_certifier.py"]
-paths = ["verity"]
+# The tests here run the drivers with no proof drivers installed (`proof_drivers`): what needs them is under
+# benchmarks/network_traces/tests. The period check's Python mirror test_scan_zk reads takes verity_difftest's decoders
+# and the served circuits' sampling Definitions (`verity_vllm.definitions`), with the package they sit in.
+inputs = ["verity", "tools/difftest/python/verity_difftest", "adapters/vllm/verity_vllm/__init__.py",
+          "adapters/vllm/verity_vllm/definitions"]

@@ -1,4 +1,4 @@
-"""The int8 attention's oracle: compute accounting's LUT softmax and served output, from `benchmarks/pouw/edited_gemm`.
+"""The int8 attention's oracle: compute accounting's LUT softmax and served output, from `verity/protocols/accounting/pouw/prover/kernels/edited_gemm`.
 
 `attention(q, k, v, k_scales, scale)` is a numpy reimplementation, row by row in int64 and numpy float32 / Python float64 scalars,
 of `fattn_ref.py`'s softmax (S, m, t = min((m - S) A >> 32, 255), e = LUT[t], P, L, s_q = 1/L, z_q = e(0)/L) and `apv_ref.py`'s f
@@ -18,7 +18,7 @@ from typing import Any
 import numpy as np
 import torch
 
-EDITED = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "edited_gemm"
+EDITED = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "edited_gemm"
 if str(EDITED) not in sys.path:
     sys.path.insert(0, str(EDITED))
 

@@ -35,7 +35,7 @@ def row_config(row: str) -> dict:
         return out
     for k, v in zip(ROW_FIELDS, parts):
         pfx = {"tp": "tp", "batch": "b", "input": "i", "output": "o"}.get(k)
-        out[k] = int(v[len(pfx):]) if pfx and v.startswith(pfx) and v[len(pfx):].isdigit() else v
+        out[k] = int(v[len(pfx):]) if pfx and v.startswith(pfx) and v[len(pfx):].isdecimal() else v
     return out
 
 

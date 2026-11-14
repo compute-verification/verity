@@ -21,11 +21,11 @@ no encoding.
 
 `commit` is `setup.commit` of the real `W` under the layout's manifest, before any salt exists, into `setup.json` in
 `--store` and `--out` (p2_v1/p2-encode's `commit`, with `W` laid out here). `W` is regenerated from the seeded generator
-(`Generated`: `benchmarks.torch_gpu.p2_stage.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
+(`Generated`: `verity.protocols.accounting.pous.prover.served_weights`, a module name or its `.py` file) by `--workers` forked processes, and each of
 the generator's s8 tensors is held to `--manifest`'s SHA-256 (the generator's `manifest(digests=True)`) as the pass reads
 it.
 
-`encode` samples the salt, `setup.draw_salt(source, commitment)` with `source` the auditor's coin flipped after the
+`encode` samples the salt, `setup.sample_salt(source, commitment)` with `source` the auditor's coin flipped after the
 commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` through `gpu.Kernels`, one process a GPU,
 `--p2-lib`) or by the scheme's CPU codec, each segment checked by the device's decode of all of it and by
 `reference.decode` of two of its blocks before it is written. The store (`--store`, scratch outside the run directory):
@@ -36,7 +36,7 @@ commitment, and encodes every segment of C* on the node's GPUs (`libp2v1.so` thr
 - `rows/<s>.rows`: their `sha512/row/v2` digests, 64 bytes each (the memory challenger's table,
   `VerifierKey.from_row_digests`);
 - `seg/<s>.json`: the segment's digests and roots, written last, so a segment that has it is done and a rerun resumes;
-- `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`setup.server_root`'s tree, computed as RFC 6962's
+- `SHA512SUMS` and `store.json`, the public outputs: `root`, C*'s root (`responder.server_root`'s tree, computed as RFC 6962's
   tree over the segments' subtree roots, the same tree since a segment is a power of two of leaves); `w_root`, the same
   salted tree over W's blocks, each block's 2,054 payload bytes digested as `sha512/row/v2` at 16,432 bits; and `tie`,
   `tagged_sha512(TIE_TAG, canonical JSON)` of `TIE_FIELDS`, with the weights' registration digest null until it is
@@ -61,7 +61,7 @@ padding at the real shape.
 **C*.** Block `i = blocks_per_segment · s + v` is 2,056 bytes, big-endian, at byte `2056 · i` of one buffer in HBM; on
 disk, one file per segment, blocks in `v` order. Its leaf is `SHA512(0x00 ‖ tag_s ‖ u16le(v) ‖ R)`, `tag_s = salt ‖
 u64le(s)` (32 bytes) and `R` its `sha512/row/v2` digest, under nodes `SHA512(0x01 ‖ l ‖ r)` of RFC 6962's shape
-(`verifier.VerifierKey`). The commitment is `setup.commit(params, W)` and the salt `setup.draw_salt(source,
+(`verifier.VerifierKey`). The commitment is `setup.commit(params, W)` and the salt `setup.sample_salt(source,
 commitment)`.
 
 **Decode.** Layer `l`'s staging buffer holds its tensors back to back from offset 0, each at a multiple of
@@ -123,7 +123,7 @@ STAGING_ALIGN = 256
 TOY_SOURCE = hashlib.sha512(b"verity-pous/p2-store/toy/setup-source").digest()
 TOY_W = b"verity-pous/p2-store/toy/w/v1\0"
 SETUP_FORMAT = "verity-pous/p2/store/v1"
-GENERATOR = "benchmarks.torch_gpu.p2_stage.served_weights"
+GENERATOR = "verity.protocols.accounting.pous.prover.served_weights"
 TIE_TAG = "verity-pous/p2/store-tie/v1"
 TIE_FIELDS = ("manifest", "program", "stream_bytes", "layout_sha512", "commitment", "salt", "root", "w_root", "registration")
 SPOTS_PER_SEGMENT = 2
@@ -402,7 +402,7 @@ def git_blob(path: str) -> str | None:
 
 
 class Generated:
-    """`W` from a seeded weights generator (`benchmarks.torch_gpu.p2_stage.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
+    """`W` from a seeded weights generator (`verity.protocols.accounting.pous.prover.served_weights`: `tensors`, `tensor_bytes`, `stream_bytes`,
     `model_id`) at a shape and seed, laid out by `build`: each of the layout's tensors is its `generator_parts`' bytes
     back to back, each part an s8 tensor of the layout tensor's `K` columns. `program` is the generator's name of the
     weights (its `model_id`, its manifest's `"model"`), named as `setup.json` and the tie hold it."""
@@ -804,7 +804,7 @@ def encode_cmd(a: argparse.Namespace) -> int:
     params = params_of(doc["manifest"])
     if a.source is None:
         raise SystemExit("encode needs --source: the auditor's coin, drawn after the commitment")
-    salt = setup.draw_salt(a.source, bytes.fromhex(doc["commitment"]))
+    salt = setup.sample_salt(a.source, bytes.fromhex(doc["commitment"]))
     if doc.get("salt") not in (None, salt.hex()):
         raise SystemExit(f"{store} was encoded under another salt: use a fresh --store")
     doc.update(source=a.source.hex(), salt=salt.hex(), salt_domain=setup.SALT_DOMAIN)
@@ -1105,7 +1105,7 @@ def toy(shape: Shape, blocks_per_segment: int, workers: int | None = None) -> di
     plain = toy_plain(store)
     w, staging = plain["w.bin"], plain["staging.bin"]
     commitment = setup.commit(params, w)
-    salt = setup.draw_salt(TOY_SOURCE, commitment)
+    salt = setup.sample_salt(TOY_SOURCE, commitment)
     prefix = expand_prefix(params, salt)
     real = build(MQA16K).params
     real_prefix = expand_prefix(real, salt)

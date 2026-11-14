@@ -15,7 +15,7 @@ public import PouwWindow.Length
 * `Params`: the verifier's own parameters of the execution phase: the check item, ε and δ, the grid's bits, the declared range
   of tile counts, the execution phase's context and the check query's SHA-512; its template one the verifier pins (`tiles`), with
   that template's tile work and query; and the rows' fixed length: stop mode `fixed` and each slot's max_tokens.
-* `WindowCommitmentRecord`: the execution phase's execution phase commitment record, one-stage's record of it
+* `ExecutionPhaseCommitmentRecord`: the execution phase's execution phase commitment record, one-stage's record of it
   (`registration.record`), canonical JSON, with what PoUW's rule reads; its digest is the record's own,
   `registration.digest`. It is the execution phase's commitment, not the registration log (`Core.Registration`), which
   registers the Site, θ and the registered compiler and declares each day's circuit.
@@ -75,7 +75,7 @@ structure Params where
   query : String
   lo : Nat
   hi : Nat
-  /-- Each slot's max_tokens, which a row of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
+  /-- Each slot's max_tokens, which a workload of record serves whatever it samples (stop mode `fixed`, `ignore_eos`). -/
   maxTokens : List Nat
   /-- A live execution phase's salt session's inputs as its verifier holds them (`liveKeys`); `none` for any other execution phase. -/
   live : Option Json := none
@@ -160,7 +160,7 @@ structure ExecutionBlockItem where
 
 /-- The execution phase's execution phase commitment record: the canonical bytes its digest hashes, and the record's fields
 PoUW's rule reads. -/
-structure WindowCommitmentRecord where
+structure ExecutionPhaseCommitmentRecord where
   bytes : ByteArray
   format : String
   program : String
@@ -168,11 +168,11 @@ structure WindowCommitmentRecord where
   partition : String
   scheme : String
   population : Nat
-  law : Json
+  samplingDesign : Json
   roots : Array Root
   window : ExecutionBlockItem
 
-def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
+def recordOf (b : ByteArray) : V ExecutionPhaseCommitmentRecord := do
   let rec_ ← Core.canonicalJson b
   let some format := (str? (get rec_ "format")).filter (formats.contains ·)
     | throw s!"format is not {" or ".intercalate formats}"
@@ -184,7 +184,7 @@ def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
   let partition ← s "partition"
   let scheme ← s "scheme"
   let some population := nat? (get rec_ "population") | throw "population is missing or not a natural number"
-  let some law := PouwWindow.field? rec_ "law" | throw "law is missing"
+  let some samplingDesign := PouwWindow.field? rec_ "law" | throw "law is missing"
   let roots : Option (Array Root) := match get rec_ "roots" with
     | .arr rs => rs.mapM rootOf?
     | _ => none
@@ -199,20 +199,20 @@ def recordOf (b : ByteArray) : V WindowCommitmentRecord := do
   let some window := window
     | throw ("window is not {context, kind, public}, with strings and an object, and optionally activations " ++
         "and registered")
-  pure { bytes := b, format, program, query, partition, scheme, population, law, roots, window }
+  pure { bytes := b, format, program, query, partition, scheme, population, samplingDesign, roots, window }
 
 /-- `registration.digest`: the execution phase record's digest (`Flock.WindowRecord.digestOf`) of its format and the canonical
 bytes it was read from. -/
-def WindowCommitmentRecord.digest (c : WindowCommitmentRecord) : ByteArray :=
+def ExecutionPhaseCommitmentRecord.digest (c : ExecutionPhaseCommitmentRecord) : ByteArray :=
   Flock.WindowRecord.digestOf c.format c.bytes
 
-/-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitDraw`, decoded with this check's own
+/-! The service's sample, as one-stage's `draw.py` writes it: a `Flock.Draw.UnitSample`, decoded with this check's own
 refusals (`core_check.py`'s `unit_draw`), which read only its keys and leave its sampling design to `outcome`. -/
 
-deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.Law
+deriving instance DecidableEq for Flock.Draw.Stratum, Flock.Draw.WorkStratum, Flock.Draw.SamplingDesign
 
 /-- `parse_design`'s spelling. -/
-def lawName : Flock.Draw.Law → String
+def lawName : Flock.Draw.SamplingDesign → String
   | .subset k => s!"subset:{k}"
   | .bernoulli a b => s!"bernoulli:{a}/{b}"
   | .stratified k _ => s!"stratified:{k}"
@@ -255,13 +255,13 @@ def pOf (s ctx : String) : V (Nat × Nat) :=
 
 /-- The public outputs `{"draw": d}`, `d` one of `draw.py`'s laws with exactly its keys (`check_draw`'s), and optionally a
 live execution phase's `salt` (`saltOf`). -/
-def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
+def drawOf (j : Json) : V Flock.Draw.UnitSample := do
   unless keys j == some ["draw"] || keys j == some ["draw", "salt"] do
     throw "public: keys are not draw, and optionally salt"
   let d := get j "draw"
   let ctx := "public.draw"
-  let law ← Flock.J.str d "law" ctx
-  let ks ← match law with
+  let samplingDesign ← Flock.J.str d "law" ctx
+  let ks ← match samplingDesign with
     | "subset" => pure ["k", "law", "population", "units"]
     | "bernoulli" => pure ["law", "p", "population", "units"]
     | "stratified" => pure ["k", "law", "population", "strata", "units"]
@@ -269,7 +269,7 @@ def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
     | _ => throw s!"{ctx}.law: not subset, bernoulli, stratified or work"
   keysAre d ks ctx
   let population ← Flock.J.nat d "population" ctx
-  let (l, closure) ← match law with
+  let (l, closure) ← match samplingDesign with
     | "subset" => do pure (.subset (← Flock.J.nat d "k" ctx), #[])
     | "bernoulli" => do let (a, b) ← pOf (← Flock.J.str d "p" ctx) ctx; pure (.bernoulli a b, #[])
     | "stratified" => do
@@ -281,7 +281,7 @@ def drawOf (j : Json) : V Flock.Draw.UnitDraw := do
       pure (.work k (strata.map fun (s, work, floor) => { toStratum := s, work, floor }), closure)
   pure ⟨l, population, ← natsOf d "units" ctx, closure⟩
 
-/-- A live execution phase's `salt` among the public outputs, an object (`windowSaltReason` reads it), or `none`. -/
+/-- A live execution phase's `salt` among the public outputs, an object (`executionPhaseSaltReason` reads it), or `none`. -/
 def saltOf (j : Json) : V (Option Json) :=
   match PouwWindow.field? j "salt" with
   | none => pure none
@@ -290,7 +290,7 @@ def saltOf (j : Json) : V (Option Json) :=
 
 /-- What the service said. -/
 inductive Said where
-  | accept (profile : Core.Integrity) (draw : Flock.Draw.UnitDraw)
+  | accept (profile : Core.Integrity) (draw : Flock.Draw.UnitSample)
   | reject (reason : String)
   | undecided (reason : String)
 

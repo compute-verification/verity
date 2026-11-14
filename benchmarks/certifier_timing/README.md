@@ -96,8 +96,8 @@ the observer's two stamps. A run whose guard fails reports no number.
 A stated parameter, not a measurement. The certifier's timing channel may carry 300 GB (2.4e12 bits) a year over all
 compute, spread evenly over its nodes, each behind one certifier. The nodes are the census's world
 (`benchmarks/census/adversary.json`, `world-inference-2027`: 9.36e30 FLOP a year) on eight-GPU nodes
-(`benchmarks/rho/data/hardware.toml`, `location.h200-hgx`) at two utilizations: 0.4, the
-fleet's (`benchmarks/rho/data/reference.toml`, `fleet.world-h200`: 4.687e7 nodes), which is a
+(`benchmarks/slowdown/data/hardware.toml`, `location.h200-hgx`) at two utilizations: 0.4, the
+fleet's (`benchmarks/slowdown/data/reference.toml`, `fleet.world-h200`: 4.687e7 nodes), which is a
 bit a node every 616 seconds, and 1, 1.875e7 nodes, a bit every 246 seconds. `channel.SECONDS_A_BIT` holds the two
 rounded, 600 and 240: so at an interval of τ seconds the certifier's share is at most τ/240 to τ/600 bits an
 interval. `target` prints both ends and the scored intervals it takes to show a number that small

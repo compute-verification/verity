@@ -103,7 +103,7 @@ def test_the_plan_is_the_scan_rehearsal_at_the_scans_class_and_the_gate_takes_it
     inner = SS.parser().parse_args(shlex.split(run[-1])[2:])
     assert (inner.cmd, inner.endpoint, inner.eos_ids, inner.draw, inner.coins, str(inner.challenger_key)) == (
         "chain", "ART", None, 8, "gate", "$RESEARCH_RUN_DIR/inputs/challenger-key.json")
-    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not demos/vllm/serve.sh",
+    assert all(w in doc["hand_start"] for w in ("--required-manifest ROW/manifest.json", "not adapters/vllm/tools/served_run/serve.sh",
                                                  "--disk-floor-gb 40", "VERITY_STAGING_BOUNDED stays unset"))
     ep = shlex.split(doc["runs"]["endpoint"])
     inner = SS.parser().parse_args(shlex.split(ep[-1])[2:])
@@ -283,7 +283,7 @@ def test_the_gates_start_reply_stays_in_keep_since_it_names_the_unit_the_warden_
     published, q = tmp_path / "published", tmp_path / "q"
     published.mkdir()
     shutil.copyfile(reply, published / "start.json")
-    got = subprocess.run([sys.executable, str(HERE / "leak_guard.py"), str(published), str(q), "--gates",
+    got = subprocess.run([sys.executable, "-m", SS.LEAK_GUARD, str(published), str(q), "--gates",
                           str(kept / "fetch.tar.gz"), "--dry", "--report", str(tmp_path / "report.json")],
                          capture_output=True, text=True)
     assert got.returncode == 3, got.stdout + got.stderr
@@ -476,6 +476,8 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     here.mkdir()
     (here / "chain_record.sh").write_text('env | grep "^CR_" | sort > "$SEEN"\n')
     monkeypatch.setattr(SS, "HERE", here)
+    guard = SS.LEAK_GUARD
+    monkeypatch.setattr(SS, "LEAK_GUARD", "verity_has_no_such_guard")
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     keep = tmp_path / "keep"
     (keep / RUN / "endpoint").mkdir(parents=True)
@@ -484,7 +486,7 @@ def test_chain_runs_chain_records_warden_path_on_the_kept_fetch_and_needs_the_le
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     argv = ["chain", "--run", RUN, "--keep", str(keep), "--eos-ids", "256", "CR_N2_DRAW=4"]
     assert SS.main(argv) == 2
-    (here / "leak_guard.py").write_text("")
+    monkeypatch.setattr(SS, "LEAK_GUARD", guard)
     assert SS.main(argv) == 0
     seen = dict(line.split("=", 1) for line in (tmp_path / "seen").read_text().splitlines())
     assert seen == {"CR_PATH": "warden", "CR_GATES": str(keep / RUN / "fetch.tar.gz"), "CR_MEM_GB": "96",
@@ -501,7 +503,6 @@ def test_chain_reads_the_endpoints_art_as_given_and_needs_no_eos_ids_for_it(tmp_
     for d in (here, keep / RUN):
         d.mkdir(parents=True)
     (here / "chain_record.sh").write_text('env | grep "^CR_E" | sort > "$SEEN"\n')
-    (here / "leak_guard.py").write_text("")
     (keep / RUN / "fetch.tar.gz").write_bytes(b"")
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
@@ -533,7 +534,6 @@ def _gate_chain(tmp_path, monkeypatch, peer):
     here = tmp_path / "here"
     here.mkdir(exist_ok=True)
     (here / "chain_record.sh").write_text('env | grep "^CR_SCAN_ARGS=" > "$SEEN"\n')
-    (here / "leak_guard.py").write_text("")
     monkeypatch.setattr(SS, "HERE", here)
     monkeypatch.setenv("SEEN", str(tmp_path / "seen"))
     (tmp_path / "challenger-key.json").write_text("{}")

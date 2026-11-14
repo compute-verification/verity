@@ -24,7 +24,7 @@ from tests.program import test_dsa_derive as DSA
 from tests.program import test_sigmoid_moe_fp8_derive as MOE
 from tests.program.test_dsa_derive import served  # noqa: F401  (the DSA stand-in's fixture)
 from verity_vllm.program.frontend import derive_examples as ex
-from verity_vllm.program.frontend.derive import derive_report
+from verity_vllm.program.frontend.vllm_derive import derive_report
 from verity_vllm.program.frontend.rules.vllm_bindings import (
     clear_observations,
     observe_target_profile,

@@ -109,7 +109,7 @@ class OldUses:
             raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a noise primitive "
                             f"reads is read once, by that instance alone, but it is read {total} times (first by "
                             f"{e[4][0]}; then by {at[0]}): a second noise or a receipt key from a noise bit's coin puts the "
-                            f"bit in the cheater's view. Draw a coin of its own for each noise and for the receipt keys")
+                            f"bit in the cheater's view. Flip a coin of its own for each noise and for the receipt keys")
         if s[0] == "coin" and e[_SEED] and e[_FOLD]:
             raise PortError("E_COIN_REUSE", f"{self.root.id} input node {s[1]} leaf {s[2]}: a coin that a seed reads is read "
                             f"by seeds alone, but a receipt fold reads it too (first by {e[4][0]}; then by {at[0]}): only a "
@@ -124,7 +124,7 @@ class OldUses:
             raise PortError("E_COIN_REUSE", f"{self.labels[s[1]]} return leaf {s[2]}: noise is the noise of one operand of one "
                             f"instance and is read at most once, but it is read {total} times (first by "
                             f"{'; then by '.join(e[4])}): two copies of one noise cancel, and noise shared across rows, "
-                            f"matmuls, batch members or scan steps is fresh for none of them. Draw fresh coins for each use")
+                            f"matmuls, batch members or scan steps is fresh for none of them. Flip fresh coins for each use")
 
     def _apply(self, fn: Any, args: list, at: str, reads: dict) -> dict:
         """One instance of `fn` (a primitive or a composite) on arguments whose tracked leaves are `args` ({leaf: source}

@@ -6,7 +6,6 @@ hold a run's own lines, which the released keys' lists declare; and its relay se
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import json
 import math
 import re
@@ -17,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from verity.protocols.accounting.certifier.device import released_keys as RK, warden_serve as ws
+from verity.protocols.accounting.certifier.device.tests.relay_runs import _response, _run, _session_argv
 from verity.protocols.accounting.certifier.prover import scan_zk as sz
 from verity.protocols.accounting.certifier.verifier import load_check as LK, relay_check as RC, warden_rows as WR
 
@@ -24,16 +24,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import auditor as A  # noqa: E402
 
-_spec = importlib.util.spec_from_file_location(
-    "device_warden_serve_cases",
-    Path(__file__).resolve().parents[6] / "verity/protocols/accounting/certifier/device/tests/test_warden_serve.py")
-T = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(T)
-_run, _response = T._run, T._response
 
 
 def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_every_request_counts_traffic(tmp_path):
-    """The auditor host's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
+    """The auditor device's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs `rehearse` on traffic the
     gate fixes, its key at the request's height (the deployed key's, 20, by default), and refuses a request whose
     minutes are under `warden_minutes` of its requests and height: for every request count the gate takes, at its
     lowest height, those minutes cover the traffic's last arrival, its tail, the rest of the window it ends in, the
@@ -55,7 +49,7 @@ def test_the_gates_warden_rehearsal_is_a_rehearse_and_its_least_minutes_cover_ev
 
 
 def test_the_gates_load_relay_is_a_rehearse_with_its_load_first_and_its_minutes_cover_the_link(tmp_path):
-    """The auditor host's `load-relay` runs `rehearse` as `warden-rehearse` does, with the load first: the store's
+    """The auditor device's `load-relay` runs `rehearse` as `warden-rehearse` does, with the load first: the store's
     stream of the request's shape relayed to the sink tunnels' local ends for its program, the endpoint given the
     gate's `LOAD_READY_S`; a request without a load passes none. The gate's shapes are `load_relay`'s, and its
     `load_minutes` cover each shape's weights stream and witness at `LOAD_RATE` and the endpoint's wait: 46 at H200."""
@@ -158,7 +152,7 @@ def test_each_scan_class_the_gate_takes_is_scan_zks_setup_of_its_name_at_its_sch
         sz.W63K4.cls.serves(sz.PARAMS)
 
 
-def test_the_gates_warden_windows_are_at_least_every_request_counts_link_windows_which_its_key_signs(tmp_path):
+def test_the_gates_warden_windows_are_at_least_every_request_counts_phases_which_its_key_signs(tmp_path):
     """The gate sizes a network certifier rehearsal's key on `warden_windows` of its requests (`warden_height`), so for
     every request count it takes, those are at least the execution phases `rehearse` runs (its traffic's last arrival
     and tail): at the scan's schedule on the gate's id traffic and on `--prompts`' arrivals, and at `warden_serve.py`'s
@@ -374,7 +368,7 @@ def test_the_gates_relay_session_is_the_session_the_devices_tests_run(tmp_path):
     for fd in (None, 9):
         gate = A.warden_command(req, tmp_path / "run", "http://127.0.0.1:40001", listen=40002, listen_fd=fd)
         assert ws.parser().parse_args(gate[2:]) == \
-            ws.parser().parse_args(T._session_argv(tmp_path / "run", 3, listen_fd=fd)), fd
+            ws.parser().parse_args(_session_argv(tmp_path / "run", 3, listen_fd=fd)), fd
     held = A.held_listener()
     assert held.getsockname()[0] == "127.0.0.1"
     with socket.create_connection(held.getsockname()):
