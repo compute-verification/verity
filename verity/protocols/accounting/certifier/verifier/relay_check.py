@@ -21,10 +21,16 @@ INGRESS, EGRESS, FAILS, LINK = "requests", "responses", "fails", "warden"
 CERTIFIED = {INGRESS: (LINK, Direction.INGRESS), EGRESS: (LINK, Direction.EGRESS),
              FAILS: (f"{LINK}-{FAILS}", Direction.EGRESS)}
 KIND_CHARS = {PAD: "p", DATA: "d", END: "e", FAIL: "f", REFUSED: "r"}
+#: a check's words for how a connection that neither ended nor was refused failed: the network certifier's own two
+#: outcomes, and `error` for any other, a client's exception among them, whose words are its connection's own line
+FAILED = ("cut", "fail", "error")
 #: the local file beside `deployment.json` that holds the run's two addresses (`endpoints_record`), never published
 ENDPOINTS = "endpoints.json"
 #: a deployment's fields that are addresses, which `ENDPOINTS` holds and the published deployment never does
 ADDRESSES = ("listen", "upstream")
+#: a deployment's fields that say what the auditor's device alone reads (the origin on its raw clock): the gate's
+#: `out/` copy of the deployment is the rest, and the copies a run holds besides add only these
+DEVICE_KEYS = ("origin_raw",)
 #: the witness file beside `cells.salts` that holds each registration's commit and sign milliseconds
 CELLS_TIMING = "cells-timing.jsonl"
 #: the device's timings, which a registration (`cells.jsonl`) never carries: a commit's time varies with what it commits
@@ -167,6 +173,13 @@ def check_load(run: Path, dep: dict, key: LmsKey, session: bytes) -> tuple[dict 
     return summary | {"relayed": relayed}, problems + found
 
 
+def failed_words(outcomes: object) -> list[str]:
+    """`FAILED`'s words for the outcomes of the connections that failed, each once: one that is none of the first
+    two is `error`, so the list has no word of a client's or an endpoint's."""
+    return sorted({o if isinstance(o, str) and o in FAILED else FAILED[-1]
+                   for o in (outcomes if not isinstance(outcomes, (str, bytes)) else [outcomes])})
+
+
 def check(run: Path, registrations: Path | None = None, under: tuple[bytes, bytes] | None = None) -> dict:
     """The offline check of a served run (the module docstring's `check`). `audit_windows` is the audit's verdict of
     each execution phase that has a record, whole: whether the audit accepted it, and its problems, which `problems`
@@ -245,7 +258,7 @@ def check(run: Path, registrations: Path | None = None, under: tuple[bytes, byte
     summary = {
         "requests": len(rows), "ended": sum(r["outcome"] == "end" for r in rows),
         "refused": sum(r["outcome"] == "refused" for r in rows),
-        "failed": sorted({r["outcome"] for r in rows} - {"end", "refused"}),
+        "failed": failed_words(r["outcome"] for r in rows if r["outcome"] not in ("end", "refused")),
         "start": start, "windows": dep["windows"], "certified_windows": sum(w["certified"] for w in windows),
         "certificates": len(certified), "signer_refused": refused,
         "withheld_windows": warden_log.get("refused_windows", []), "cell_rows": cells_summary,
