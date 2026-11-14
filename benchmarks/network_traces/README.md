@@ -42,8 +42,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **The chain's run of record.** `chain_record.py` (`chain_record.sh`, below), with `window_chain.py` (a served
   endpoint's Commit periods as one I1 v0 advice), `negatives.py` (what network accounting must refuse, each by the
   check and code that refuse it), `leak_guard.py` (the record's leak guard, below) and `released_keys.py` (the keys a
-  record releases, each declared public by name, below). `block_certifier.py` decides a
-  period by `network-period check` and writes its accepted answer as the block record's certifier entry.
+  record releases, each declared public by name, below). `block_certifier.py` writes a period's accepted answer as the
+  block record's certifier entry.
   `served_session.py` is the served session's runbook (below).
 - **The weights' load:** `load_relay.py`, `load_bench.py` and `load_commit.py` (below).
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).

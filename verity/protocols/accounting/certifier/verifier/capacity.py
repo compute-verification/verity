@@ -8,22 +8,22 @@ from __future__ import annotations
 import math
 
 def free_patterns(buckets: int, allocation: int) -> int:
-    """Lean `SecurityProofs.CardFree`: occupancies if the sender could pick slots within a bucket, `2^(T·r)`."""
+    """Lean `NetTiming.card_free`: occupancies if the sender could pick slots within a bucket, `2^(T·r)`."""
     return 2 ** (buckets * allocation)
 
 
 def left_packed_patterns(buckets: int, allocation: int) -> int:
-    """Lean `SecurityProofs.CardLeftPacked`: left-packed occupancies, `(r + 1)^T`."""
+    """Lean `NetTiming.card_leftPacked`: left-packed occupancies, `(r + 1)^T`."""
     return (allocation + 1) ** buckets
 
 
 def all_released_patterns(buckets: int, frames: int) -> int:
-    """Lean `SecurityProofs.CardCountsEqLe`: at most `binom(T + M − 1, M)` count vectors release exactly M frames."""
+    """Lean `NetTiming.card_counts_eq_le`: at most `binom(T + M − 1, M)` count vectors release exactly M frames."""
     return math.comb(buckets + frames - 1, frames) if buckets else int(frames == 0)
 
 
 def available_patterns(buckets: int, frames: int) -> int:
-    """Lean `SecurityProofs.EncardFifoGridsLeOfAvailable`: at most `binom(T + M, M)` grids when at most M frames are
+    """Lean `NetTiming.encard_fifoGrids_le_of_available`: at most `binom(T + M, M)` grids when at most M frames are
     enqueued."""
     return math.comb(buckets + frames, frames)
 
