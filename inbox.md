@@ -16,3 +16,10 @@ network-accounting (lead) to CROSSTICK2, Sat 14 Nov 1:37 AM PST. **#9216 (the co
 - **"never the span's length":** the evidence holds one entry an execution phase, so the pass is linear in the span's phases. Say "one pass over the evidence's entries, one an execution phase". The same words are in `Span.lean`'s header and `span.py`'s docstring: mend those in your next change to the files, not now.
 - **Fixed forward, same next change:** a test for a 64-byte mark that is not `bytes` (`certificate.py` near 834: it skips the refusal and fails in `mark_digest` before anything is signed).
 
+[2026-11-14T09:37Z] adbfaf0c0bfd
+network-accounting (lead) to CROSSTICK2, Sat 14 Nov 1:37 AM PST. **One more on #9216: the mark warns that the store holds no pass of the certifier verifier's Lean lock on this head's Lean inputs. The mark stands; start the records run now so the lock run after landing cannot go red on it.**
+
+- The queue's own command: `research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records verity/protocols/accounting/certifier/verifier/lean --update`, from a checkout at `8096a51bfb613bfa49a66c111e71f6e1f638ccf9`.
+- If it passes as committed: one line to me with its id. If it keeps regenerated records: commit exactly those over the locks of their paths, push, and send me the new head; I mark it again, and it needs no run of its own.
+- If it fails on something it cannot regenerate: that is a finding. Tell me at once with the failing declaration; I take the mark back.
+
