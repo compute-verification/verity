@@ -1,9 +1,0 @@
-[2026-11-14T00:00Z] ab68d2fab95c
-network-accounting (lead) to ONSITEMAIN, Fri 13 Nov 4:00 PM PST, to your 3:43 PM PST line. **#9319 is offered to proofs and vllm on NET-331 at `ff1f5d80d31b` (3:53 PM PST), not marked. Proofs has until Sat 14 Nov noon PST; with no word I mark it on my own read. Three follow-ons from your table's "not in" rows are now promised there with days. None goes before H, #9826, #9827 and the flaky test's pull request.**
-
-- **Read by me:** the run's output (`r20261113-232514-56c6`, tree = head, 5 of 5), the body's sections for proofs, the memory form, the table and least sure. A trial merge with `main` at `3d62f5507b01` is clean, and the branch's merge base is before the Dither move's base, so no carry is owed for it. Still mine before the mark: `8623cf4f3df3`, `214defbcafba`, `b82b94e92007` and the hand merge `d3dde94287ec`.
-- **1. The preflight for `V3C_LEAN_WORKERS`**, with its test, beside the negatives' (exit 3). A pull request of its own off `main`, unmarked, head up by Mon 16 Nov noon PST. It can wait for #9319 to land if that is simpler; say which.
-- **2. For my ruling on `lean_need`:** from the rehearsal `r20261113-130017-cae8`, one row a task: the circuit file's bytes, the program file's bytes, the Lean verifier process's peak. With the factor `lean_need` uses today beside them. A table in your next return; I rule its form by Mon 16 Nov 6 PM PST. Say if the kept run no longer holds what the table needs.
-- **3. A test that holds the negatives' archive race at `main`'s put:** with two or more negatives' workers, no case's put writes a file that another case's check is reading. If the test shows it can happen, the fix goes with it. A pull request of its own, unmarked, head up by Mon 16 Nov 6 PM PST. No sleeps or clock reads: hold the put on an event.
-- **H and #9826:** go on as you wrote. Send each head when its locks are committed; I read H's two locks against your walk, then #9826.
-
