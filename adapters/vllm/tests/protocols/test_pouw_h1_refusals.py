@@ -26,7 +26,15 @@ window's sampling coin (`pouw_h1_handoff.suspend`, `resume`), a call's rows of t
 reuses (`pouw_h1_commit.CommitTap.arow`, `reused`), a value's rows in a host tensor (`pouw_h1_registered.commit`), the
 tables of a call that served no rows and a port that reads no row (`drawn.zy_value`, `a_value`, `call_rows`), the
 host's salts (`pouw_h1_registered_device.host_commit`), and records that say they are on a CUDA device
-(`pouw_h1_words.zy_words`, `pouw_h1_tables_device.take_z`)."""
+(`pouw_h1_words.zy_words`, `pouw_h1_tables_device.take_z`).
+
+And what the GPU path does that a CPU reaches: a window hashed where that path says by the host's twins of the
+kernels (`pouw_h1_tables_device.flush`, `pouw_h1_registered.commit`, `public_salts`, `pouw_h1_served.Served.settle`),
+kernels that don't build and a library off `ZyArgs` (`pouw_h1_registered_device.available`, `zy_host_lib`). Beside
+it, a pull that holds two engine steps and a rank call with no rows or off the Program's order
+(`pouw_h1_ranks.Holder.pull`, `ingest`, `pouw_h1_served.Served.commit`), a leaf's committed files, its staged table
+and its record's root (`drawn.leaf_stagers`, `FileStager.stage`, `stage_leaves`), and a saved window's Program
+(`pouw_h1_handoff.resume`)."""
 from __future__ import annotations
 
 import dataclasses
@@ -37,8 +45,10 @@ import json
 import os
 import pickle
 import random
+import shutil
 import socket
 import threading
+from contextlib import contextmanager
 from fractions import Fraction
 from pathlib import Path
 from types import SimpleNamespace
@@ -1885,3 +1895,253 @@ def test_records_said_to_be_on_a_cuda_device_are_viewed_where_they_are_and_only_
         assert TBD.take_z(run, call, other) is None and run._zy is held
     assert TBD.take_z(run, call, words) == (did, 9) and run._zy is None
     assert TBD.take_z(run, call, words) is None
+
+
+needs_cxx = pytest.mark.skipif(not any(shutil.which(c) for c in ("g++", "c++", "clang++")), reason="no C++ compiler")
+
+
+@needs_cxx
+def test_a_window_on_the_gpu_path_hashed_by_the_hosts_twins_registers_what_numpy_registers(monkeypatch):
+    """Where H1 hashes on the GPU (here the host's twins of the kernels stand for the device, no hash ready before
+    it is read), a served call's z table waits for its registered ``zy@<c>``. Records on the device are that
+    value's rows where they are, so its hash commits the z table from the same read and the call's tables hash its
+    A table alone. Records on the host are not, so the z table is hashed apart once the call is registered. An empty
+    call's z table is built where the hash runs, and a public table's salts are derived there. Either way the window
+    registers the entries, the roots, the call tables, the rounds and the calls root that it does with NumPy."""
+    def window():
+        torch.manual_seed(0)
+        run, *_ = TS._window(TS.W1)
+        served = run.served
+        assert not served.refused, served.refused
+        return ([bool(c.m) for c in run.calls],
+                (served.entries(), served.roots(), served.digest(), run.tables, run.round_log, run.calls_root()))
+
+    monkeypatch.setattr(TBD, "MODE", "python")
+    monkeypatch.setattr(NR, "MODE", "numpy")
+    calls, want = window()
+    served, empty = calls.count(True), calls.count(False)
+    values: list[tuple[bool, bool, bool]] = []
+    tables: list[tuple[str, ...]] = []
+
+    class Value:
+        def __init__(self, words, key, nonce, row_salts, domain_id, public=None, also=None):
+            on = bool(getattr(words, "is_cuda", False))
+            rows = words.view(torch.uint8).numpy().view("<u2") if on else words
+            values.append((on, public is not None, also is not None))
+            if also is not None:
+                self.z, *made = RGD.host_zy(rows, key, nonce, domain_id, also)
+                self.made = tuple(made)
+            else:
+                salts = row_salts if public is None else RGD.host_public_salts(public[0], public[1], len(rows), public[2])
+                self.z, self.made = None, RGD.host_commit(rows, key, nonce, salts, domain_id)
+
+        def ready(self):
+            return False
+
+        def result(self):
+            return self.made
+
+        def also(self):
+            return self.z
+
+    class Tables:
+        def __init__(self, laid, key, names=("a", "z")):
+            tables.append(names)
+            roots = TBD.host_roots(laid, key)
+            self.roots, self.ready, self.names = (lambda: roots), (lambda: False), names
+
+    @contextmanager
+    def hashing():
+        yield torch.device("cpu")
+
+    monkeypatch.setattr(TBD, "MODE", "gpu")
+    monkeypatch.setattr(NR, "MODE", "gpu")
+    monkeypatch.setattr(TBD, "device_hash", Tables)
+    for name, twin in (("device_hash", Value), ("zy_available", lambda: True), ("hashing", hashing),
+                       ("device_public_salts", RGD.host_public_salts)):
+        monkeypatch.setattr(RGD, name, twin)
+    assert window() == (calls, want) and served and empty
+    assert tables == [("a",), ("z",)] * served + [("a", "z")] * empty
+    assert values and not any(on or also for on, _public, also in values) and any(public for _on, public, _also in values)
+    on_host = len(values)
+    del tables[:], values[:]
+    zy_of = TS.OPS.scaled_mm_zy
+
+    def on_device(*args):
+        y, zy = zy_of(*args)
+        return y, zy.as_subclass(TS._OnDevice)
+
+    monkeypatch.setattr(TS.OPS, "scaled_mm_zy", on_device)
+    assert window() == (calls, want)
+    assert tables == [("a",)] * served + [("a", "z")] * empty and len(values) == on_host
+    assert [v for v in values if v[0] or v[2]] == [(True, False, True)] * served
+    head = b"a public table's salt head"
+    there = [NR.public_salts(head, 1 << 33, 3, ok) for ok in (False, True)]
+    monkeypatch.setattr(NR, "MODE", "numpy")
+    assert there == [NR.public_salts(head, 1 << 33, 3, ok) for ok in (False, True)]
+
+
+def test_h1_hashes_with_numpy_and_says_why_where_cuda_is_there_and_its_kernels_dont_build(monkeypatch):
+    """`available`: a process with CUDA hashes on the GPU once the kernels are built for its current device. Where
+    they don't build, here with no nvcc, a warning says that H1 hashes with NumPy and why, and the GPU path is not
+    taken."""
+    built: list[tuple] = []
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))
+    monkeypatch.setattr(RGD, "nvcc", lambda: None)
+    with pytest.warns(RuntimeWarning) as said:
+        assert RGD.available.__wrapped__() is False
+    assert [str(w.message) for w in said] == ["H1's registered values hash with NumPy: the GPU path doesn't build here "
+                                              "(RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on the path))"]
+    monkeypatch.setattr(RGD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    assert RGD.available.__wrapped__() is True and built == [(0, RGD.device_lib, "rr_midstates")]
+
+
+@needs_cxx
+def test_a_zy_library_whose_args_are_not_the_bytes_of_zyargs_is_refused(monkeypatch):
+    """The library that commits a call's z table beside its value takes its layout as `ZyArgs`. A build whose
+    ``Args`` is another size, here against a `ZyArgs` of one word, is refused by both sizes."""
+    class Short(RGD.ctypes.Structure):
+        _fields_ = [("n", RGD.ctypes.c_uint32)]
+
+    args = RGD.ctypes.sizeof(RGD.ZyArgs)
+    monkeypatch.setattr(RGD, "ZyArgs", Short)
+    with pytest.raises(RuntimeError, match=f"^zy_commit.cuh's Args is {args} bytes, ZyArgs 4$"):
+        RGD.zy_host_lib.__wrapped__()
+
+
+def test_a_pull_that_holds_two_engine_steps_of_the_ranks_commits_is_refused_by_its_steps():
+    """The window's tap keeps one engine step a site, so what the ranks' Commits acquired by one pull is of one
+    engine step. A pull that holds two is refused by its steps; what each rank acquired is still fed to the tap, and
+    a rank with no Commit, which answers with nothing acquired, keeps its place."""
+    x: np.ndarray = np.zeros((1, 8), np.int8)
+
+    def rank(lo, *acquired):
+        return {"lo": lo, "rows": [], "refused": [], "order_ok": True, "unopened": None,
+                **({"acquired": list(acquired)} if acquired else {})}
+    pulls = [[rank(2), rank(0, ("m/row_quant/0", 4, x), ("m/row_quant/1", 4, np.ones(1, "<f4"))),
+              rank(4, ("n/row_quant/0", 5, x))],
+             [rank(0, ("m/row_quant/0", 6, x)), rank(2), rank(4, ("n/row_quant/0", 6, x))]]
+    tap = CT.CommitTap()
+    run = SimpleNamespace(served=SimpleNamespace(tap=tap), shapes_=[])
+    holder = PHR.Holder(run, SimpleNamespace(collective_rpc=lambda method: pulls.pop(0)), [{"decode_query_len": 1}], None)
+    assert holder.pull() == 0
+    assert tap.refused == ["one pull held engine steps [4, 5]: the window's tap keeps one step a site"]
+    assert sorted(tap.acquired) == [(4, "m/row_quant", "0"), (4, "m/row_quant", "1"), (5, "n/row_quant", "0")]
+    assert holder.pull() == 0 and len(tap.refused) == 1 and len(tap.acquired) == 5
+    assert holder.pulls == 2 and sorted(holder.ranks) == [0, 2, 4]
+
+
+def test_a_rank_call_with_no_rows_or_off_the_programs_order_refuses_the_windows_registered_tables():
+    """A multiprocess window registers its tables from the rows its ranks ship with each call (`ingest`). A call
+    whose rank shipped none refuses the window's tables by the call. One that is not at its step's and linear's
+    place in the declared Program, or is past its calls, is refused by its index, step and linear
+    (`Served.commit`). Either way the call is the window's and registers nothing."""
+    linears = len(TS.SHAPES)
+
+    def row(index, step, layer, **shipped):
+        n, k = TS.SHAPES[layer]
+        return {"call": dataclasses.asdict(PH.Call(index, step, layer, TS.MODULES[layer], 0, k, n, 0, TS.T)), **shipped}
+    past = TS.STEPS * linears
+    for shipped, said in ((row(0, 0, 0), "call 0: its rank shipped no rows for the window's registered tables"),
+                          (row(1, 0, 0, served={}), "call 1 (step 0, linear 0) is off the declared Program's order"),
+                          (row(past, TS.STEPS, 0, served={}),
+                           f"call {past} (step {TS.STEPS}, linear 0) is off the declared Program's order")):
+        run = PH.H1Run("t", SALT, TS.MODULES, TS.SHAPES, TS.T, TS.STEPS, key=KEY,
+                       served=SV.Served(TS.TILE, TS._unit(), TS.BLOCKS, window=TS.W1))
+        PHR.ingest(run, [shipped])
+        index = shipped["call"]["index"]
+        assert run.served.refused == [said]
+        assert [c.index for c in run.calls] == [index] and run.tables[index]["registered"] == {}
+
+
+def test_a_leafs_committed_files_are_held_to_the_manifest_and_a_staged_table_to_its_instances_rows(tmp_path):
+    """`leaf_stagers` takes each of K's leaf statements from --circuits' committed files. A leaf with no file, no
+    leaf Program or no template id there is refused by what to build; a leaf Program that is not the one the
+    manifest commits, by its file; and a circuit file that is not the manifest's, by both digests. `FileStager.stage`
+    refuses a port's table whose rows at the instances' refs are not their rows, before anything is written."""
+    k = LL.LEAST_K
+    name = f"{LL.LANE}{k}"
+    circuit, program = tmp_path / f"{name}.circuit.txt", tmp_path / DR.LEAF_PROGRAM.format(name=name)
+    text = b"a circuit\nMETA " + json.dumps({"ports": []}).encode() + b"\n"
+    leaf = hashlib.sha512(b"a leaf Program").hexdigest()
+    manifest = {"files": {name: "00" * 64, CR.LEAF_PROGRAMS: {name: leaf}}, "templates": {name: "a template"}}
+
+    def refusal(manifest):
+        with pytest.raises(Refused) as refused:
+            DN.leaf_stagers(k, PH.TILE, tmp_path, manifest)
+        return str(refused.value)
+    absent = f"--circuits has no {name} file, leaf Program and template id: build them (pouw_h1_circuits --lanes {k})"
+    assert refusal({}) == refusal(manifest) == absent
+    circuit.write_bytes(text)
+    assert refusal(manifest) == absent
+    program.write_bytes(b"another leaf Program")
+    for short in ({"files": manifest["files"]}, {**manifest, "files": {CR.LEAF_PROGRAMS: {name: leaf}}}):
+        assert refusal(short) == absent
+    assert refusal(manifest) == (f"--circuits' {program.name} is not the leaf Program the manifest commits "
+                                 f"({CR.LEAF_PROGRAMS} {name})")
+    program.write_bytes(b"a leaf Program")
+    assert refusal(manifest) == (f"{name}'s circuit (SHA-512 {hashlib.sha512(text).hexdigest()[:16]}...) is not "
+                                 f"--circuits' {name} file ({'00' * 8}...), the one the period-open committed")
+    stager = DN.FileStager(circuit, "a template", [("p", 0, 0, ())], DR.LEAF_OUT_ROWS)
+    with pytest.raises(ValueError, match="^port p's table rows at the instances' refs are not their rows$"):
+        stager.stage({"p": [[1, 2]]}, tmp_path / "staged", KEY, {}, [0], "a set", {"p": [[1, 2], [3, 4]]}, {"p": [1]}, {})
+    assert sorted(p.name for p in tmp_path.iterdir()) == sorted([circuit.name, program.name])
+
+
+def test_a_windows_sampled_leaves_are_staged_only_in_a_lanes_shape_and_under_its_records_root(tmp_path):
+    """`stage_leaves` stages K's sampled leaves as their lanes only where credit's lanes theorem reaches
+    (`credit.lanes_shape`: refused by its reason), and commits each leaf's partials under the root the window's
+    record names for its sample: a record that names none is refused, before a file of --circuits is read."""
+    k = LL.LEAST_K
+    shape = {"tiles": {k: {"j10r": False}}}
+
+    def refusal(win):
+        with pytest.raises(Refused) as refused:
+            DN.stage_leaves(None, {"shape": shape, **win}, k, [0], {}, None, tmp_path, tmp_path, {}, {})
+        return str(refused.value)
+    off = {"tile": (16, 32)}
+    why = CR.lanes_shape(off, shape, k)
+    assert why is not None and refusal({"layout": off}) == f"K = {k}'s drawn leaves: {why}"
+    assert CR.lanes_shape({"tile": PH.TILE}, shape, k) is None
+    records: list[dict[str, Any]] = [{}, {"draw": None}, {"draw": "a root"}, {"draw": {}}, {"draw": {"root": 7}}]
+    for record in records:
+        assert refusal({"layout": {"tile": PH.TILE}, **record}) == ("the window's record names no draw root, under "
+                                                                     "which a leaf's partials are committed")
+    assert list(tmp_path.iterdir()) == []
+
+
+def _stand_in(k):
+    """`test_pouw_h1_served`'s stand-in proof block of K, under a name a saved window's state pickles."""
+    return TS._unit()(k)
+
+
+@pytest.mark.filterwarnings("ignore:The given NumPy array is not writable:UserWarning")
+def test_a_saved_window_whose_program_declared_again_is_another_is_refused_at_its_resume(tmp_path, monkeypatch):
+    """A saved window holds its Program's digest, not the Program, which `resume` declares again from the run's
+    public shapes and the period's prefix. A saved state whose digest is not that Program's, here one changed in
+    the file, is refused by the window's entry."""
+    monkeypatch.setattr(pouw, "linear_types", lambda: (Linear,))
+    host = _host(tmp_path, monkeypatch)
+    served = SV.Served(PH.TILE, _stand_in, window=bytes(64))
+    run = TH._served(_remote(transcript_dir=str(tmp_path / "w"), served=served), n=64, arm=TH.ZyArm)
+    mine, theirs = socket.socketpair()
+    try:
+        path = HO.suspend(run, tmp_path / "saved")
+        doc = pickle.loads(path.read_bytes())
+        kind, state, layers = doc["state"]["served"]
+        assert not run.served.refused, run.served.refused
+        assert state["program_digest"] == run.served.program_digest and len(state["program_digest"]) == 128
+        doc["state"]["served"] = (kind, {**state, "program_digest": "00" * 64}, layers)
+        (tmp_path / "changed").mkdir()
+        (tmp_path / "changed" / HO.FILE).write_bytes(pickle.dumps(doc, protocol=5))
+        with pytest.raises(ValueError) as refused:
+            HO.resume(tmp_path / "changed", mine.detach())
+        assert str(refused.value) == (f"{run.entry}: the window Program declared again is not the one its tables were "
+                                      "registered under")
+    finally:
+        mine.close()
+        theirs.close()
+        run.rounds.challenger._wire.sock.close()
+    assert host.ended() is not None
