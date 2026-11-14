@@ -43,7 +43,7 @@ The H200's and B200's headlines in `Definitions.Accounting.Guarantees.Headline`'
 reading, and a twin of the H200's measured one at (I3)'s `q = q_T = 3/5`, the family's credited work at least `1 − ε` of
 its credit, on one device's machine, one design's TS model on it
 and its floor program ♭, all exact data (`Definitions.Accounting.HeadlineDc`, written by
-`machine-model lean-headline`). Each `ε` is the exporter's exact bound rounded up at `10^-5`. The hypotheses are
+`benchmarks/pouw/lean_headline_dc.py`). Each `ε` is the exporter's exact bound rounded up at `10^-5`. The hypotheses are
 `Sm120SheetHeadline`'s and `Sm120MeasuredHeadline`'s, with two differences, each stated where it enters:
 
 * **The measured readings' word premises.** Both measured models are at A6's ½ floors, so A6 (`SheetWords`) stands in

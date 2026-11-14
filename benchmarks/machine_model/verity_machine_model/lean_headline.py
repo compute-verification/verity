@@ -470,8 +470,8 @@ def render(i: Instance) -> str:
          f"the vector classes CUDA's lane classes and the 64-bit ones ({', '.join(k for k in i.vec if k in VEC_64)}); "
          f"{f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
          f"words a unit of honest work ({f.honest})."),
-        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word writing), the fold, no "
-         f"filler, and ε_skip's free compute at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
+        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
+         f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
          f"(`eps_budget.design_skip` on {f.device})."),
         f"`piStar`: π*, the facet ({i.pistar}) the machine model's LP certificate sits on at q* = ½" + (
             f", with {', '.join(f'{i.cert[r].numerator}/{i.cert[r].denominator} moved onto {r}' for r in moved)}: the "
@@ -493,9 +493,9 @@ public import Definitions.Accounting.Headline.Encoding
 /-!
 # {f.key}'s headline instance: {f.device} and {f.title} (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+file. `Accounting.Guarantees.TS.{f.ns}SheetHeadline` reads it.
 
 {doc}
 -/
@@ -552,13 +552,13 @@ def {f.dvar} : DesignData where
 {mhead}
   {f.dvar}.model {len(i.classes)} {len(i.writers)} {len(i.folds)} sheet.machine
 
-/-- ♭'s word writing a unit: the MMA and the operand floor. -/
+/-- ♭'s word production a unit: the MMA and the operand floor. -/
 def flatWords : Sparse := {_sparse(i, i.nw)}
 
 /-- ♭'s fold a unit: the lane fold for {i.Nw} words. -/
 def flatFold : Sparse := {_sparse(i, i.nf)}
 
-/-- ♭'s free compute a unit, at {f.skip}'s price. -/
+/-- ♭'s skippable work a unit, at {f.skip}'s price. -/
 def flatSkip : Sparse := {_sparse(i, i.ns)}
 
 /-- The floor program ♭, labelled. -/
@@ -593,9 +593,9 @@ public import Definitions.Accounting.Headline.Sm120
 /-!
 # sm_120's measured headline instance: {VECTOR} and H1 + fx1 (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 * `rowNames`, `{vf}`, `machine`: the measured vector {VECTOR} (the exporter's `VECTOR`, named there, not model.toml's
   `current`), {len(m.rows)} rows of SMSP-cycles a warp instruction at its epoch's census, each sparse over `Sm120.classes`;
@@ -605,7 +605,7 @@ Written by `machine-model lean-headline` from `machine_model`'s data, and checke
   rounded up), and the uniform `UNI` (1); `MMA` (the forms' fallback line) and `UNI64` ({VECTOR} prices it on the
   uniform pipe alone) are not on the menu. `Sm120.h1fx1`'s vector classes, fold routes and `N_w`; SCALAR-ROUTE's
   floors `q = q_T = {Q_M.numerator}/{Q_M.denominator}`, `b_T = 0`.
-* `flatSkip`, `flat`: ♭ is `Sm120.flat`'s word writing and fold, with ε_skip's free compute at {VECTOR}'s
+* `flatSkip`, `flat`: ♭ is `Sm120.flat`'s word production and fold, with ε_skip's skippable work at {VECTOR}'s
   {float(m.eps_skip):.6%} (`eps_budget.design_skip` on {VECTOR}), at {SKIP}'s price on π*.
 * `piStar`, `wStarKind`: π*, the facet ({m.pistar}) the machine model's LP certificate sits on at
   q* = {Q_M.numerator}/{Q_M.denominator}, and the writer kind (honest's {m.wstar}) that is the cheapest word route there.
@@ -645,7 +645,7 @@ def h1fx1 : DesignData where
 noncomputable def model : Model (Fin {len(i.classes)}) (Fin {len(m.rows)}) (Fin {nt}) Unit Empty (Fin {len(i.folds)}) Unit :=
   h1fx1.model {len(i.classes)} {nt} {len(i.folds)} machine
 
-/-- ♭'s free compute a unit on {VECTOR}, at its {SKIP} price. -/
+/-- ♭'s skippable work a unit on {VECTOR}, at its {SKIP} price. -/
 def flatSkip : Sparse := {_sparse(i, m.ns)}
 
 /-- The floor program ♭ on {VECTOR}, labelled. -/

@@ -5,9 +5,9 @@ public import Definitions.Accounting.Headline.Sm120
 /-!
 # sm_120's measured headline instance: VF3s-16 and H1 + fx1 (trusted; generated)
 
-Written by `machine-model lean-headline` from `machine_model`'s data, and checked against it by
-`benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this file.
-`Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
+Written by `benchmarks/pouw/lean_headline.py` from the machine model's data (`benchmarks/pouw/machine_model/data`), and
+checked against it by `benchmarks/pouw/tests/test_lean_headline.py`: edit the data and rerun the exporter, never this
+file. `Accounting.Guarantees.TS.Sm120MeasuredHeadline` reads it.
 
 * `rowNames`, `vf3s16`, `machine`: the measured vector VF3s-16 (the exporter's `VECTOR`, named there, not model.toml's
   `current`), 130 rows of SMSP-cycles a warp instruction at its epoch's census, each sparse over `Sm120.classes`;
@@ -17,7 +17,7 @@ Written by `machine-model lean-headline` from `machine_model`'s data, and checke
   rounded up), and the uniform `UNI` (1); `MMA` (the forms' fallback line) and `UNI64` (VF3s-16 prices it on the
   uniform pipe alone) are not on the menu. `Sm120.h1fx1`'s vector classes, fold routes and `N_w`; SCALAR-ROUTE's
   floors `q = q_T = 9/8`, `b_T = 0`.
-* `flatSkip`, `flat`: ♭ is `Sm120.flat`'s word writing and fold, with ε_skip's free compute at VF3s-16's
+* `flatSkip`, `flat`: ♭ is `Sm120.flat`'s word production and fold, with ε_skip's skippable work at VF3s-16's
   0.373490% (`eps_budget.design_skip` on VF3s-16), at NOROW's price on π*.
 * `piStar`, `wStarKind`: π*, the facet (JI3t_0) the machine model's LP certificate sits on at
   q* = 9/8, and the writer kind (honest's IMMA16832) that is the cheapest word route there.
@@ -1615,7 +1615,7 @@ def h1fx1 : DesignData where
 noncomputable def model : Model (Fin 122) (Fin 130) (Fin 15) Unit Empty (Fin 2) Unit :=
   h1fx1.model 122 15 2 machine
 
-/-- ♭'s free compute a unit on VF3s-16, at its NOROW price. -/
+/-- ♭'s skippable work a unit on VF3s-16, at its NOROW price. -/
 def flatSkip : Sparse := [(65, 358305108662297233167438995592669, 4799735813840639548005662692000000)]
 
 /-- The floor program ♭ on VF3s-16, labelled. -/

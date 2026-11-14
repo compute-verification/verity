@@ -39,7 +39,7 @@ import Mathlib.Topology.Sheaves.Init
 
 A family's headline guarantee (`Definitions.Accounting.Guarantees.Headline`) is about one device's machine, one design's TS
 model on it and its floor program ♭, each given as exact data the machine model's exporter writes
-(`verity_machine_model.lean_headline`): natural numbers and rationals, never a float.
+(`benchmarks/pouw/lean_headline.py`): natural numbers and rationals, never a float.
 
 * `Sparse`: counts per class as `(class index, numerator, denominator)` triples, each entry the rational
   `numerator / denominator`; `Sparse.counts` reads them over `Fin n`, an index at or past `n` read as nothing.
