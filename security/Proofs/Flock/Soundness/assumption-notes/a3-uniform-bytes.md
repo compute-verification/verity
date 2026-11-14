@@ -8,7 +8,7 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   call, so the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at
   `n` uniform bytes: any source with fewer outcomes than byte strings fails it. Its zero is an idealization, the CSPRNG taken as exactly
   uniform; the true bound carries the CSPRNG's distinguishing advantage against the theorem's test, which is the per-test
-  form's `η`. A salt is 192 bytes and a rep's samples are `drawBytes` bytes, so zero knowledge takes the per-test form.
+  form's `η`. A salt is 192 bytes and a rep's samples are `sampleBytes` bytes, so zero knowledge takes the per-test form.
   The unit sample still takes the every-event form, under the same idealization, since its reads are past 32 bytes too.
 - **Why it is not stated about `IO.getRandomBytes`.** To Lean's logic an `IO` action is a function of the world and
   `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random would be refutable, and every theorem
@@ -16,14 +16,14 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on Windows. Re-read it at every
   toolchain bump.
 - **What ties the statement to the verifier.** The verifier has no randomness of its own: the live sample is
-  `Flock.Draw.drawWith` on the challenger's coins, read in order (`Spot.Draw.drawUnits`), which the challenger
+  `Flock.Draw.drawWith` on the challenger's coins, read in order (`Spot.Draw.sampleUnits`), which the challenger
   flips from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). The theorems are about
-  `drawWith`, and `drawOS_def` states that `Flock.Draw.drawOS` is `drawWith` with every stream's bytes from
+  `drawWith`, and `sampleOS_def` states that `Flock.Draw.sampleOS` is `drawWith` with every stream's bytes from
   `IO.getRandomBytes`. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with A3.
   That the challenger releases the coins only after the registration they sample is recorded rests on `trusted-device`,
   not on A3.
-- **Where it is used.** `drawOS_subset_escape_le`, `drawOS_stratified_escape_le`, `drawOS_work_escape_le`,
-  `execOS_escape_le` and `execOS_subset_escape_le` (`ExecDrawOS.lean`). They hold for every number of
+- **Where it is used.** `sampleOS_subset_escape_le`, `sampleOS_stratified_escape_le`, `sampleOS_work_escape_le`,
+  `execOS_escape_le` and `execOS_subset_escape_le` (`ExecSampleOS.lean`). They hold for every number of
   bytes `L` the model reads. The live sample reads as many as its reruns need, and its miss probability is the
   limit as `L` grows, which the theorems don't state. `subset_exec_escape_le` and `stratified_exec_escape_le` take
   uniform streams as their probability space, the same assumption. The recursive audit's sessions of V* need none of
@@ -49,11 +49,11 @@ The statement is in `../ASSUMPTIONS.md`: `UniformRandomBytes L t` (every event),
   `Flock.SecurityProofs.recursiveZK_os_gap` (`Recursive/OsSalts.lean`).
 - **Its scope: the masks and the Reed–Solomon padding** are the operating system's bytes too (`live/src/zk_hooks.rs`),
   read by the ZK server's Lean processes. Each rep's frame reads its samples in one call at its start (`flock-zk-server
-  frame`; `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.drawsWith` refuses a read of any other length):
+  frame`; `Frame.cmd` is `Frame.cmdWith IO.getRandomBytes`, and `Frame.samplesWith` refuses a read of any other length):
   the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
   (`flock-zk-server tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
-  salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_draws` (the
-  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `drawOS_def` is for a unit sample;
+  salts and the coin tree's nonce. What ties them to the model is `Claims.ZKServer.frame_cmd` and `frame_samples` (the
+  frame's read, on rep `i`'s stream of the tape, is the release's samples), as `sampleOS_def` is for a unit sample;
   `Claims/ZK/Os.lean` takes the ZK server's three theorems to those bytes (`zkServerLeanOs`). So no premise on a stream
   generator is left on the salts or the masks.
 - **What is outside it.** A VM snapshot restored more than once repeats the kernel's CRNG state unless the kernel

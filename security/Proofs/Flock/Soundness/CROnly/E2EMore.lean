@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.CROnly.Link
 /-!
 # The executable-law and program-of-units e2e forms under `cr/sha-512` alone
 
-`Partition.flock_e2e_drawn_exec`, `flock_e2e_count_exec`, `UProg.flock_e2e_count`, `UProg.flock_e2e_drawn` and the four
+`Partition.flock_e2e_sampled_exec`, `flock_e2e_count_exec`, `UProg.flock_e2e_count`, `UProg.flock_e2e_sampled` and the four
 `UProg.flock_e2e_*_classes` forms, restated as in `CROnly/E2E.lean`: `LinkCRStrict` at budget `q` in place of `LinkCR`, and
 `strictRunCost t' q` in place of `t'`.
 -/
@@ -33,9 +33,9 @@ variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Ls : Fin m → ℕ)
 
-/-- **`Partition.flock_e2e_drawn_exec` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
+/-- **`Partition.flock_e2e_sampled_exec` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
 at the per-run cost `strictRunCost t' q`. -/
-theorem flock_e2e_drawn_exec
+theorem flock_e2e_sampled_exec
     {execAccept : Bool × Finset (Fin n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin n → FlockSoundness.Rows} (dp : P.DerivedPlaces plan tab unitRows)
     (ones : Finset (Fin C.N)) (hConst : P.ConstCols plan tab dp.place ones)
@@ -49,7 +49,7 @@ theorem flock_e2e_drawn_exec
         ¬ Disjoint (P.wrong (Xpub ones zeros (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw))) o.2)
         (audit (Law.execStratified St Ls) Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := Law.execStratified St Ls) plan tab vb k Rw M ρ (strictRunCost t' q) :=
-  P.flock_e2e_drawn_exec H E plan tab St Ls hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
+  P.flock_e2e_sampled_exec H E plan tab St Ls hExec dp ones hConst zeros hZero vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict P H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **`Partition.flock_e2e_count_exec` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
@@ -103,9 +103,9 @@ theorem uprog_e2e_count
   UProg.flock_e2e_count hone p H E plan tab hExec dp hConst vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_drawn` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at
+/-- **`UProg.flock_e2e_sampled` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at
 `δ_link = linkBoundE` at the per-run cost `strictRunCost t' q`. -/
-theorem uprog_e2e_drawn
+theorem uprog_e2e_sampled
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     {unitRows : Fin p.n → FlockSoundness.Rows} (dp : (p.P hone).DerivedPlaces plan tab unitRows)
     (hConst : (p.P hone).ConstCols plan tab dp.place {p.oneOf hone})
@@ -120,7 +120,7 @@ theorem uprog_e2e_drawn
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
-  UProg.flock_e2e_drawn hone p H E plan tab hExec dp hConst vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
+  UProg.flock_e2e_sampled hone p H E plan tab hExec dp hConst vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **`UProg.flock_e2e_count_classes` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
@@ -147,9 +147,9 @@ theorem uprog_e2e_count_classes
   UProg.flock_e2e_count_classes hone p H E plan tab hExec cls slot blk hrd hcp vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_drawn_classes` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
+/-- **`UProg.flock_e2e_sampled_classes` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
 at the per-run cost `strictRunCost t' q`. -/
-theorem uprog_e2e_drawn_classes
+theorem uprog_e2e_sampled_classes
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (Audit.Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
@@ -168,7 +168,7 @@ theorem uprog_e2e_drawn_classes
           (Xpub {p.oneOf hone} ∅ ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
-  UProg.flock_e2e_drawn_classes hone p H E plan tab hExec cls slot blk hrd hcp vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
+  UProg.flock_e2e_sampled_classes hone p H E plan tab hExec cls slot blk hrd hcp vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 /-- **`UProg.flock_e2e_count_classes_zero` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
@@ -198,9 +198,9 @@ theorem uprog_e2e_count_classes_zero
   UProg.flock_e2e_count_classes_zero hone p H E plan tab hExec cls slot blk hrd hcp hzk hz1 hzr vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le K σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
-/-- **`UProg.flock_e2e_drawn_classes_zero` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
+/-- **`UProg.flock_e2e_sampled_classes_zero` under `cr/sha-512`**: `LinkCRStrict` at budget `q` (`hCRs`) for `LinkCR`, at `δ_link = linkBoundE`
 at the per-run cost `strictRunCost t' q`. -/
-theorem uprog_e2e_drawn_classes_zero
+theorem uprog_e2e_sampled_classes_zero
     {execAccept : Bool × Finset (Fin p.n) → Prop} (hExec : ∀ o, execAccept o → o.1 = true)
     (cls : ∀ S R u, u ∈ S → TableClass (Audit.Partition.tabOf plan tab S R u).S)
     (slot : ∀ S R u (h : u ∈ S), Fin (cls S R u h).slots)
@@ -222,7 +222,7 @@ theorem uprog_e2e_drawn_classes_zero
           ((p.P hone).Xplur H E plan tab vb (reg σ) (cont σ) k Rw) ∘ p.mapG hone)) o.2)
         (audit L Reg (batchedSession H E plan)) σ ≤
       ksAvgBE H E plan k (reg σ) (cont σ) + (p.P hone).linkBoundE (L := L) plan tab vb k Rw M ρ (strictRunCost t' q) :=
-  UProg.flock_e2e_drawn_classes_zero hone p H E plan tab hExec cls slot blk hrd hcp hzk hz1 hzr vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
+  UProg.flock_e2e_sampled_classes_zero hone p H E plan tab hExec cls slot blk hrd hcp hzk hz1 hzr vb hk hRw hM hρ hr (strictRunCost_pos ht hq).le σ
     (linkCR_of_strict (p.P hone) H E plan tab vb (reg σ) (cont σ) ht hq hCRs)
 
 end UProg

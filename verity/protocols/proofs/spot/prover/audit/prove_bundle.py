@@ -15,7 +15,7 @@ tampered window's member, whose proof must not be accepted.
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
   replayed, and the sample's sampling design the registered one); the bundle's run, registration digest and partition are the
   window's; each sampled member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
-  one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
+  one) is held to the window (`held_sample`): its receipt names the window's registration, and its record is a sample of
   the bundle's units under the registered sampling design over the registered population (`draw.check_draw`).
 * **Staging** as a5 stages a sampled member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
@@ -86,7 +86,7 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
     return ok, bad
 
 
-def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
+def held_sample(doc: dict, wdir: Path) -> dict[str, bool]:
     """A live sample held to the window (module docstring); ``{}`` for a fixture's. Its sampling design against the registered one is
     also the bundle check's (`replay_bundle.check`)."""
     d = doc["draw"]
@@ -160,7 +160,7 @@ def session(a, mm: dict, draw: dict, sdir: Path, firewall: bool = True, forged: 
     env = a0.prover_env(a.firewall if firewall else None, mm["st"])
     if forged:
         env["FC_ZK_SELF_CHECK"] = "skip"
-    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, draw_file=sdir / "draw.json",
+    record, live = a0.session(a.bin, mm["st"], mm["m"].n, f"subset:{draw['k']}", free_port(), sdir, sample_file=sdir / "draw.json",
                               zk=True, env=env, prove_timeout=a.session_timeout)
     served = (record or {}).get("unit_draw") or {}
 
@@ -220,7 +220,7 @@ def main(argv=None) -> int:
     out.mkdir(parents=True, exist_ok=True)
     doc, payload = RB.read(a.bundle)
     held, bad = hold(doc, payload, wdir)
-    held.update(held_draw(doc, wdir))
+    held.update(held_sample(doc, wdir))
     if a.live:
         held["draw:live"] = doc["draw"].get("source") == "live"
     summary: dict = {"format": FORMAT, "bundle": {"payload_sha512": doc["payload"]["sha512"], "draw": doc["draw"],

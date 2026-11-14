@@ -189,7 +189,7 @@ def paramsParsed (j : Json) : V Params := do
 
 /-- **The one statement's parameters** (`paramsParsed`), with every sampling design that is no `subset` one refused by
 its kind (`SUBSET_ONLY`), after every refusal of `paramsParsed`. The kind is the parsed sampling design's, the one the
-sample is sampled under (`OneStage.drawnFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
+sample is sampled under (`OneStage.sampledFrom`, `Draw.deriveLaw`): v1 has already resolved a rate stated as text over
 the population (`OneStage.design`), so `rate:NUM/DEN[:T]` is a `subset` one here and passes, and `stratified-rate:` and
 `work-rate:` are refused as `stratified` and `work`. -/
 def paramsOfJson (j : Json) : V Params := do
@@ -443,10 +443,10 @@ def fitsWhy (limit : Nat) (circuit pub : ByteArray) (tables : List (String × By
 
 /-- `some "the draw"` when a session's statement would hold its record's sample `draw` at `limit` bytes or more
 (`printedSize`). -/
-def drawFitsWhy (limit : Nat) (draw : Option Json) : Option String :=
+def sampleFitsWhy (limit : Nat) (draw : Option Json) : Option String :=
   if draw.any (limit ≤ printedSize ·) then some "the draw" else none
 
-/-- The refusal of a length `fitsWhy` or `drawFitsWhy` names at `WORD`. -/
+/-- The refusal of a length `fitsWhy` or `sampleFitsWhy` names at `WORD`. -/
 def FITS : String := "2^64 bytes or more, past the 8-byte word a session's statement holds each length in"
 
 /-- The verifier's registered reads, as `verifyCmd` derives them from its registered file: its own ports, the reads it
@@ -508,7 +508,7 @@ registered openings, once the sampling design holds. -/
 def setupAt (I : Flock.Witness.Inputs) (rd : Reads) (draw : Option Json) :
     V (Flock.SessionSpec × Array Flock.Setup × Json × Json) := do
   let (spec, sts) ← (sessionAt I rd draw).mapError (s!"setup: {·}")
-  (if draw.isSome then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  (if draw.isSome then Flock.ProvedScope.sampleLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
   pure (spec, sts.map Flock.Setup.ofCircuit, (sts[0]?.map (·.partition)).getD Json.null,
     Flock.registeredOpenings sts rd.registered)
 
@@ -554,9 +554,9 @@ def verdictOf (I : Flock.Witness.Inputs) (scope ksFiles population : V Unit) (co
   Flock.Zk.verify spec tabs record proofs
   scope
   Flock.ProvedScope.sizesOk true (tabs.map (·.m))
-  (if draw.isNone then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
-  Flock.RecSetup.fullDraw none false draw record
-  Flock.RecSetup.innerDrawn none
+  (if draw.isNone then Flock.ProvedScope.sampleLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit)
+  Flock.RecSetup.fullSample none false draw record
+  Flock.RecSetup.innerSampled none
   Flock.ProvedScope.programHeld I.program
   Flock.RecordText.check record
   ksFiles
@@ -594,14 +594,14 @@ def push (I : Flock.Witness.Inputs) (rd : Reads) (programSha : Option String) (w
 /-- One session's `verity-verify-proof verify --zk` on the blobs, after the sessions `r` holds: set up at its record's own sample
 (`setupAt`), its rep files the blobs its `reps` name, its coin-tree key fresh, `Zk.verify` and the checks `verifyCmd`
 makes after it, the population check last (`verdictOf`), its verdict pushed (`push`). A refusal when its record is in
-no blob or not UTF-8, its sample doesn't fit the session's statement (`drawFitsWhy`), or it accepted naming another
+no blob or not UTF-8, its sample doesn't fit the session's statement (`sampleFitsWhy`), or it accepted naming another
 program than the partition object's. -/
 def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFiles population : V Unit)
     (programSha : Option String) (want : Json) (r : Run) (s : RunFiles) : V Run := do
   let some record := String.fromUTF8? (← bs.get s.record s!"session {s.name}'s record")
     | throw s!"session {s.name}'s record is not UTF-8"
   let draw := Flock.Witness.recordDraw record
-  (match drawFitsWhy WORD draw with
+  (match sampleFitsWhy WORD draw with
     | some what => throw s!"session {s.name}: {what}: {FITS}"
     | none => pure () : V Unit)
   let st := setupAt I rd draw
@@ -610,7 +610,7 @@ def step (I : Flock.Witness.Inputs) (rd : Reads) (bs : Core.Blobs) (scope ksFile
     (verdictOf I scope ksFiles population r.coinKeys record draw st (filesOf bs s st) coinKey)
 
 /-- The units the accepted sessions proved (`proved`, in session order) held to the evidence's `proved_units` (`want`):
-sorted, they must be it. `want` is strictly ascending (`Draw.checkDrawFull`), so a unit two sessions prove (or one
+sorted, they must be it. `want` is strictly ascending (`Draw.checkSampleFull`), so a unit two sessions prove (or one
 session twice) refuses, and so does a sampled proof block no session proves. -/
 def provedHeld (proved want : Array Nat) : V Unit :=
   if proved.qsort (· < ·) != want then throw "the units the sessions proved are not the evidence's proved_units"
@@ -622,7 +622,7 @@ accepted. A session accepts only where the registration's population is the publ
 (`FilePart.check`, last). A refusal, first, of blobs holding other lookup tables than the registered circuit's (`tablesHeld`),
 then for what `proofs.verify` refuses: registered values read without the verifier's registered file, a
 file no blob holds, an accepted session naming another program than the partition object's, or proved units other than
-the evidence's (`provedHeld`); and for a length a session's statement can't hold (`fitsWhy`, `drawFitsWhy`, at
+the evidence's (`provedHeld`); and for a length a session's statement can't hold (`fitsWhy`, `sampleFitsWhy`, at
 `WORD`). -/
 def run (p : Own) (sessions : Array RunFiles) (provedUnits? : Option (Array Nat)) (bs : Core.Blobs) : V Run := do
   tablesHeld p bs

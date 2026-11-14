@@ -17,7 +17,7 @@ messages `SpotFlock.V h` reads: SpotFlock's tagged Flock messages, not the recor
   `Spot.OneStageZk.heldStep` finds it, and the session's record on the blobs.
 * **Its statement** (`stmtRaw`, `stmtAtCase`): the statement the form verifies the session at
   (`Member.statement`, then `step` at the record's sample): `flock-verify verify --zk` at `verity/flock-circuit`, the
-  member's circuit and public file, the blobs' lookup tables, the record's sample (`drawBytes`), the member's partition
+  member's circuit and public file, the blobs' lookup tables, the record's sample (`sampleBytes`), the member's partition
   object and program and its registered reads, each JSON value as `Flock.RecordText.printT` prints it. Its fields are
   `SpotFlock.HeldOf.memberRaw`'s, so `pinOk` compares it with template `t`'s reference statement like with like.
 * **The statements' message** (`stmtsMsg`): one statement an entry of the evidence's `stmts`, which the run's
@@ -74,7 +74,7 @@ def recordAt (bs : Core.Blobs) (s : Spot.OneStageZk.RunFiles) : Option String :=
   (bs.get s.record "record").toOption.bind String.fromUTF8?
 
 /-- **The record's sample, as a session's statement holds it**: its text as `Flock.RecordText.printT` prints it. -/
-def drawBytes (record : String) : Option ByteArray :=
+def sampleBytes (record : String) : Option ByteArray :=
   (_root_.Flock.Witness.recordDraw record).map fun j => (_root_.Flock.RecordText.printT j).toUTF8
 
 /-- **A member's session statement**, at the circuit and public files `circuit` and `pub`, the lookup tables
@@ -95,7 +95,7 @@ def stmtAtCase (k : Case) (t : ℕ) : Option Msg := do
   let record ← recordAt k.blobs s
   let circuit ← (k.blobs.get m.own.circuit "circuit").toOption
   let pub ← (k.blobs.get m.own.pub "public file").toOption
-  pure (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (drawBytes record)
+  pure (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (sampleBytes record)
     (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode
 
 /-- **The session statements' encoding**: the list of statements as `SpotFlock.stmtsOf` reads one back. -/
@@ -233,7 +233,7 @@ theorem stmtAtCase_some {k : Case} {t : ℕ} {x : Msg} (h : stmtAtCase k t = som
     ∃ p e m s record circuit pub, formOf k = some (p, e) ∧ memberAt p e t = some m ∧ filesAt e t = some s ∧
       recordAt k.blobs s = some record ∧ (k.blobs.get m.own.circuit "circuit").toOption = some circuit ∧
       (k.blobs.get m.own.pub "public file").toOption = some pub ∧
-      x = (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (drawBytes record)
+      x = (stmtRaw m circuit pub (Spot.OneStageZk.tablesOf k.blobs) (sampleBytes record)
         (m.own.registered.map fun j => (_root_.Flock.RecordText.printT j).toUTF8)).encode := by
   unfold stmtAtCase at h
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at h

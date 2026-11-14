@@ -109,7 +109,7 @@ def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
 
 
 @pytest.mark.parametrize("seed", range(3))
-def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
+def test_the_class_closure_map_is_refused_and_the_work_sample_without_it_accepted(seed):
     """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read, so its
     sample of record afterwards is the one a stream on the same challenger samples with no refusal before it: k units (the
     work sampling design over one template of work 1 is the uniform k-subset), proving exactly those, and accepted, the Lean's run

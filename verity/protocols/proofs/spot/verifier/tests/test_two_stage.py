@@ -1161,7 +1161,7 @@ def test_the_rule_and_the_spec_state_one_form():
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
 
-def test_the_verifier_of_record_draws_both_stages():
+def test_the_verifier_of_record_samples_both_stages():
     """The verifier's executable (`Pieces.verifier`, `verifier.EXE`) samples a two-stage rule's first stage, `Q`
     of the `N` replay blocks, and its second, `k` of each sampled replay block's proof blocks, as the service does."""
     assert V.EXE == "sampled-proofs-verifier" and _spec().selection == RULE

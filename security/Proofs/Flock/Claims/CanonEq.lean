@@ -10,7 +10,7 @@ import Std.Data.TreeMap.Raw.Lemmas
 `Flock.canon` is total (well-founded on `sizeOf`), so its equations unfold. It prints an array element by element, and
 an object's values in the order of its tree before it sorts the pairs by key; `JsonEquiv` fixes exactly those: the
 elements' forms in order, and the tree's keys and values' forms in order (`jsonForm_obj`). So equivalent values print
-alike (`canon_jsonEquiv`), and two samples `drawEq` passes on print alike (`canon_drawEq`).
+alike (`canon_jsonEquiv`), and two samples `sampleEq` passes on print alike (`canon_sampleEq`).
 -/
 
 @[expose] public section
@@ -124,9 +124,9 @@ theorem canon_jsonEquiv_lt : ∀ (k : Nat) (a b : Json), sizeOf a < k → JsonEq
 theorem canon_jsonEquiv {a b : Json} (h : JsonEquiv a b) : canon a = canon b :=
   canon_jsonEquiv_lt (sizeOf a + 1) a b (Nat.lt_succ_self _) h
 
-/-- **Two samples `drawEq` passes on print alike.** -/
-theorem canon_drawEq {a b : Option Json} (h : drawEq a b = true) : a.map canon = b.map canon := by
-  cases (drawEq_iff a b).1 h with
+/-- **Two samples `sampleEq` passes on print alike.** -/
+theorem canon_sampleEq {a b : Option Json} (h : sampleEq a b = true) : a.map canon = b.map canon := by
+  cases (sampleEq_iff a b).1 h with
   | none => rfl
   | some he => exact congrArg some (canon_jsonEquiv he)
 

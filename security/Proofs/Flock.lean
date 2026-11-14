@@ -4,7 +4,7 @@ public import Proofs.Flock.Verifier
 public import Proofs.Flock.Level3
 public import Proofs.Flock.Soundness
 public import Proofs.Flock.EndToEnd
-public import Proofs.Flock.EndToEndDrawn
+public import Proofs.Flock.EndToEndSampled
 public import Proofs.Flock.EndToEndHidden
 public import Proofs.Flock.EndToEnd.Period
 public import Proofs.Flock.EndToEnd.Blocks

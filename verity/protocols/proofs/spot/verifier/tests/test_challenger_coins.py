@@ -49,7 +49,7 @@ def _reading(coins):
     return source, read
 
 
-def test_the_draw_reads_the_coins_opened_after_the_commitment_in_order():
+def test_the_sample_reads_the_coins_opened_after_the_commitment_in_order():
     """subset:4 over 678 reads 144 bytes, three coins, opened in one batch after the commitment; the sample is
     `draw_first` on their concatenation, and the verifier replays it from the record."""
     ch, coins = _coins()
@@ -120,7 +120,7 @@ def test_the_verifier_refuses_coins_other_than_those_released_after_the_commitme
     assert reason is not None and why in reason, reason
 
 
-def test_a_family_is_drawn_once_and_a_read_needs_a_commitment():
+def test_a_family_is_sampled_once_and_a_read_needs_a_commitment():
     """A second sample in a family, for the same commitment or another, would take the family's later coins, which the
     prover could pick among once it has read the first: refused. A read before any commitment opens nothing. Coins over
     several families take a commitment each, in order, every one from its family's first coin."""
@@ -199,7 +199,7 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
     assert draw == T.draw_first(T.OwnRandomness(T._on(T.challenger_stream(commitment, doc, ROOT))), law, 6)
 
 
-def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
+def test_the_proof_system_samples_from_the_challengers_coins_after_the_receipt():
     """`Stream.select` with the coins as its `coins`, committed to the registration's digest after its receipt: the
     sample both verifiers agree on, from bytes the verifier replays from the record. Without the commitment the
     select reads no coin."""
@@ -314,7 +314,7 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
             assert (lean["step"], lean["codes"]) == ("select", [COIN_CODES.get(name, "coins")]), (name, lean)
 
 
-def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
+def test_the_lean_run_refuses_a_sample_whose_coins_the_challenger_did_not_release_after_the_registration(
         tmp_path, signer, monkeypatch):
     """On a stream sampling from the challenger (which its digest names), every outcome's run
     by the verifier (`Run.run`) checks the sample's coins: with their evidence for the registration's window
@@ -345,7 +345,7 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     assert "read none" in refused.value.verdict.detail["coins"]
 
 
-def test_the_lean_run_accepts_a_draw_whose_session_released_its_coins_in_several_frames(tmp_path, signer, monkeypatch):
+def test_the_lean_run_accepts_a_sample_whose_session_released_its_coins_in_several_frames(tmp_path, signer, monkeypatch):
     """A window's withheld session that opened `test_remote.RELEASED` coins of another family before the sample, so
     many that its release at the close is past `remote.MAX_HEAD` as one frame (which cut the close, so its coins never
     settled) and takes several (`remote.release_frames`): the sample's coins, its own family's from the first, settle
@@ -483,7 +483,7 @@ def _salt_coins(challenger: C.LiveChallenger | None = None) -> tuple[C.LiveChall
     return ch, T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))
 
 
-def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn_once():
+def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_sampled_once():
     """The seed salt is the seed-salt family's first coin, opened after the window's open root and read whole, with no
     derivation, which the verifier replays from the record. The sample refuses coins of another family, a window root in
     another form, and a family with a coin open already: nothing resamples a window's salt."""
