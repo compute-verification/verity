@@ -133,8 +133,7 @@ theorem sm90i_isCert : IsCert Sm90MeasuredI3.lamStar := by
 theorem sm90i_wf : Sm90MeasuredI3.model.Wf Sm90Measured.flat := by
   refine ⟨sm90i_a_nonneg, ?_, ?_, ?_, fun t => ?_, ?_, ?_, le_rfl, fun u => u.elim, fun φ r => ?_, fun _ _ => le_rfl,
     le_rfl, ?_, le_rfl, ?_⟩
-  · show (0 : ℝ) < ((1980 : ℕ) : ℝ)
-    norm_num
+  · exact Nat.cast_pos.mpr (by decide)
   · rw [sm90i_Nw]
     norm_num
   · rw [sm90i_bnd]

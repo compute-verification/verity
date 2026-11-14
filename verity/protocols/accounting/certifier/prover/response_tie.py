@@ -64,7 +64,7 @@ commits none.
 row has, since a row's count is at most its O ids. So no row a refused block returns is one the network certifier
 signs, and a refusal needs nothing to hold o0 to `ACCEPT`: a statement that registers o1 as a read of the
 signed row opens its root on no refused input. That rests on the network certifier signing only rows of the form
-(`trusted-host`) and on the commitment binding its row. The ids of such a row are still what the gates compute
+(`trusted-device`) and on the commitment binding its row. The ids of such a row are still what the gates compute
 (`outputs` gives the same): those below `at` where the end row's class has its low bit, and below n otherwise.
 
 **A statement of it is taken only from O = 32.** Flock's composer takes a statement only where one of its rows has

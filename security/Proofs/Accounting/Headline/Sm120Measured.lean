@@ -113,8 +113,7 @@ theorem sm120m_qT : Sm120Measured.model.qT = 9 / 8 := by
 theorem sm120m_wf : Sm120Measured.model.Wf Sm120Measured.flat := by
   refine ⟨sm120m_a_nonneg, ?_, ?_, ?_, fun t => ?_, ?_, ?_, le_rfl, fun u => u.elim, fun φ r => ?_, fun _ _ => le_rfl,
     le_rfl, ?_, le_rfl, ?_⟩
-  · show (0 : ℝ) < ((2430 : ℕ) : ℝ)
-    norm_num
+  · exact Nat.cast_pos.mpr (by decide)
   · rw [sm120m_Nw]
     norm_num
   · rw [sm120m_bnd]

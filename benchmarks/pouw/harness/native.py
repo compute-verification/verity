@@ -1,4 +1,4 @@
-"""The device, through ctypes: `libpouw_harness.so` (native/build.sh) and NVML. `Device` is what the harness, its baselines
+"""The device, through ctypes: `libpouw_harness.so` (`verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh`) and NVML. `Device` is what the harness, its baselines
 and every arm see (`arm.py`); `Nvml` reads one GPU's sensors, addressed by its UUID."""
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class LtCandidate(C.Structure):
 
 
 def lib_path() -> Path:
-    return Path(settings.POUW_HARNESS_LIB or HERE / "native" / "build" / "libpouw_harness.so")
+    return Path(settings.POUW_HARNESS_LIB or HERE.parents[2] / "verity/protocols/accounting/pouw/prover/kernels/harness/native" / "build" / "libpouw_harness.so")
 
 
 def lt2_path() -> Path | None:
@@ -274,7 +274,7 @@ class Device:
 
     def nvtx_push(self, text: str) -> None:
         if not self.has_nvtx:
-            raise NativeError("this libpouw_harness.so has no NVTX ranges: rebuild it (native/build.sh)")
+            raise NativeError("this libpouw_harness.so has no NVTX ranges: rebuild it (verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh)")
         self.lib.ph_nvtx_push(text.encode())
 
     def nvtx_pop(self) -> None:
@@ -282,7 +282,7 @@ class Device:
 
     def profiler_start(self) -> None:
         if not self.has_profiler:
-            raise NativeError("this libpouw_harness.so has no profiler API: rebuild it (native/build.sh)")
+            raise NativeError("this libpouw_harness.so has no profiler API: rebuild it (verity/protocols/accounting/pouw/prover/kernels/harness/native/build.sh)")
         self.ck(self.lib.ph_profiler_start(), "profiler start")
 
     def profiler_stop(self) -> None:
