@@ -1,7 +1,7 @@
 """kappa for frontier training: twice the counted multiplications over the reference training circuit's computed gates,
 per token at a context length, over a model's pretraining schedule, and for the board's other rows (``ROWS``).
 
-``InferenceOnly.SecurityProofs.ThreadedTraining`` (``security/Definitions/InferenceOnly/Guarantees/Threads.lean``) takes kappa through its
+``InferenceOnly.SecurityProofs.ThreadedTraining`` (``security/Definitions/Slowdown/Guarantees/Threads.lean``) takes kappa through its
 hypothesis ``kappa * c.D.size c.D.computed <= 2 * T.M.card``: every computed gate of the reference circuit ``c``
 against twice its counted multiplications ``M``, the gates that multiply an updated weight by an activation or an
 activation gradient (``InferenceOnly.Threading``). A gate is one scalar operation and an addition reads two values, so a matmul's

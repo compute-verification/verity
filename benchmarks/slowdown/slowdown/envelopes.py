@@ -110,9 +110,9 @@ class Delta:
 
 @dataclass(frozen=True)
 class Pouw:
-    """PoUW's envelope. Each field is `benchmarks/nci/tiers.py`'s parameter of the same name."""
+    """PoUW's envelope. Each field is `benchmarks/nci/tiers.py`'s parameter of the same name (`residual` is its `free`)."""
 
-    #: the GPUs' share of capacity outside the floor credit (`tiers` `residual`)
+    #: the GPUs' share of capacity outside the floor credit (`tiers` `free`)
     residual: float
     #: `ε_W`: PoUW's deficit, a share of certified work credited without its running
     eps_w: float
