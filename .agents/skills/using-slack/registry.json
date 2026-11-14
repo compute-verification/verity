@@ -412,7 +412,8 @@
         "security/Properties/Pouw.lean",
         "security/Properties/Pouw/",
         "security/Properties/Accounting/Compose.lean",
-        "security/Properties/Accounting/RegisteredCircuit.lean"
+        "security/Properties/Accounting/RegisteredCircuit.lean",
+        "security/Proofs/Nci.lean"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -700,7 +701,11 @@
         "security/Properties/NetworkCertifier/",
         "security/Properties/NetworkPeriod.lean",
         "security/Properties/NetworkScan.lean",
-        "security/Properties/NetworkScan/"
+        "security/Properties/NetworkScan/",
+        "security/Properties/Nci.lean",
+        "security/Properties/Nci/",
+        "security/Proofs/Properties/Nci.lean",
+        "security/Proofs/Properties/Nci/"
       ],
       "branch_suffixes": [
         "728f",
@@ -979,7 +984,13 @@
         "security/Definitions/Accounting/Guarantees/ServingBlocks/",
         "security/Proofs/Accounting/Coverage.lean",
         "security/Proofs/Accounting/ServingBlocks.lean",
-        "security/Proofs/Accounting/ServingBlocks/"
+        "security/Proofs/Accounting/ServingBlocks/",
+        "security/Properties/Nci/Threads.lean",
+        "security/Properties/Nci/Desc/Cover.lean",
+        "security/Properties/Nci/Desc/Verdict.lean",
+        "security/Properties/Nci/Record.lean",
+        "security/Proofs/Properties/Nci/DescVerdict.lean",
+        "security/Proofs/Properties/Nci/Agrees.lean"
       ],
       "branch_suffixes": [
         "4207"
