@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from verity_vllm.config import UsageError, option
-from verity_vllm.pipeline.cli import write
+from verity_vllm.log import write
 
 NAME = "verity_router_tap"
 TAP_VERSION = 1
