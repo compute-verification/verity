@@ -1,12 +1,12 @@
 """A stand-in `wipe-protocol` for the leg's tests: the period's Lean judge, answering each case as the Python answered
-it (`wipe_period.run`'s `answer`), so a test of the leg's accept runs without a Lean build."""
+it (`wipe_run.run`'s `answer`), so a test of the leg's accept runs without a Lean build."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from verity.protocols.accounting.pous.verifier import wipe_period as W
+from verity.protocols.accounting.pous.prover import wipe_run
 
 
 def judge(period: Path, monkeypatch) -> list[dict]:
@@ -14,7 +14,7 @@ def judge(period: Path, monkeypatch) -> list[dict]:
     gave."""
     doc = json.loads((period / "period.json").read_text())
     (period / "period.json").write_text(json.dumps(doc | {"tools": {"wipe-protocol": "wipe-protocol"}}))
-    wipes, given, run = [], [], W.run
+    wipes, given, run = [], [], wipe_run.run
 
     def ran(*args, **kw):
         wipes.append(run(*args, **kw))
@@ -25,6 +25,6 @@ def judge(period: Path, monkeypatch) -> list[dict]:
         given.append(wipes[-1].answer)
         return [wipes[-1].answer]
 
-    monkeypatch.setattr(W, "run", ran)
-    monkeypatch.setattr(W, "serve", serve)
+    monkeypatch.setattr(wipe_run, "run", ran)
+    monkeypatch.setattr(wipe_run, "serve", serve)
     return given

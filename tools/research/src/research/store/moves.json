@@ -3192,6 +3192,11 @@
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_eps_profile.py": "benchmarks/pouw/tests/test_edited_gemm_eps_profile.py",
         "verity/protocols/accounting/pouw/prover/kernels/edited_gemm/tests/test_vprod_profile.py": "benchmarks/pouw/tests/test_edited_gemm_vprod_profile.py"
       }
+    },
+    {
+      "paths": {
+        "verity/protocols/interface/CoreProtocol/SiteV2Guards.lean": "verity/protocols/accounting/registration/verifier/lean/RegistrationLog/SiteV2Guards.lean"
+      }
     }
   ]
 }

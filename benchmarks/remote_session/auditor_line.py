@@ -46,10 +46,11 @@ the auditor's.
 
 The ledger's head, a gate session's read of the ledger and the *credited* and *pinned* checks below are the Lean
 verifier's answers (`sampled-proofs-verifier`'s `challenger_head`, `challenger_ledger`, `challenger_credited` and
-`challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse; `verify_ledger`,
-`verify_periods`, the commit on main, *complete* and the store's binding are still the Python's alone. A served
-session's `session_of` has no Lean yet. The Lean's answers for those but the binding have their interfaces, not yet
-written (`periods_answer`, `on_main_answer`, `complete_answer`, `served_session_answer`).
+`challenger_pinned`, through `coins.lean_answer`), each held to the Python's, which may only refuse. So are the
+ledger's windows and periods (`periods_answer`, past `verify_ledger` and `verify_periods`), the commit on main
+(`on_main_answer`), *complete* (`complete_answer`) and a served session's read (`served_session_answer`, past
+`session_of`), whose Lean isn't written yet: where the Python doesn't refuse, each is undecided
+(`coins.undecided`), and the session earns no credit, with that reason. The store's binding is still the Python's.
 
 **Credit.** The line of record (`line`) counts a session only when all four hold, each reported per session
 (`credit`), and its store's binding isn't refused, and gives any other session zero credit with the reasons:
@@ -475,8 +476,10 @@ def session_error(session: dict) -> dict:
     so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
     `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
-    total."""
+    total. `{"undecided": why}` where the ledger's declared outputs are undecided."""
     lg = session["ledger"]
+    if "undecided" in lg["declared"]:
+        return {"undecided": lg["declared"]["undecided"]}
     totals = {m["delta"] for m in lg["declared"]["memory"].values() if "delta" in m}
     if len(totals) != 1:
         raise Disagree(f"session {session['k']}'s memory line forms record δ {sorted(totals)}: the ledger computes one")
@@ -739,9 +742,14 @@ def ledger_check(heads: list[Path], key: Ch.ChallengerKey, period: str, lane: st
     verify = lambda m, sig: VP.lms_verify(key, m, sig)  # noqa: E731
     windows = Ch.verify_ledger(raw, key.public[:16], verify)
     periods = Ch.verify_periods(raw, key.public[:16], verify)
-    p = periods.get(period)
     doc = {"entries": len(lines), "sha512": hashlib.sha512("".join(x + "\n" for x in lines).encode()).hexdigest(),
            "verify_ledger": "passed", "heads": len(heads)}
+    try:
+        got = periods_answer(lines, key, {"windows": windows, "periods": periods})
+        windows, periods = got["windows"], got["periods"]
+    except NotImplementedError:
+        doc["verify_ledger"], doc["undecided"] = "undecided", coins.undecided("ledger's windows and periods")
+    p = periods.get(period)
     doc["period"] = None if p is None else {
         "name": period, "lane": p["lane"], "cap": p["cap"], "circuit": p["circuit"], "windows": len(p["windows"]),
         "opened_by": p["open"]["body"].get("by") if p.get("open") else None,
@@ -761,32 +769,34 @@ def head_lines(heads: list[Path], key: Ch.ChallengerKey) -> list[str]:
                              {"ledger": Ch.ledger_head(hl, key, VP.lms_verify)})["ledger"]
 
 
-def periods_answer(lines: list[str], key: Ch.ChallengerKey) -> dict:
-    """The Lean verifier's read of the ledger's windows and periods (`challenger_periods`, on `{"key", "ledger"}`),
-    held to `verify_ledger`'s and `verify_periods`'s as `{"windows", "periods"}`, which `ledger_check` is to act on in
-    place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+def periods_answer(lines: list[str], key: Ch.ChallengerKey, python: dict) -> dict:
+    """The Lean verifier's read of the ledger's windows and periods (`challenger_periods`, on `{"key", "ledger"}`), the
+    one `ledger_check` acts on, held to `python`, `verify_ledger`'s and `verify_periods`'s as `{"windows", "periods"}`,
+    as `coins.lean_answer` holds an answer. Until it is written the read is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
-def complete_answer(lines: list[str], R: str, period: str, session: str | None, key: Ch.ChallengerKey) -> dict:
+def complete_answer(lines: list[str], R: str, period: str, session: str | None, key: Ch.ChallengerKey,
+                    python: dict) -> dict:
     """The Lean verifier's *complete* (`challenger_complete`, on `{"key", "ledger", "window": {"root": R}, "period",
-    "session"}`): the window's end and the period's close complete, and the close listing the session's window complete,
-    held to `credit_check`'s *complete*, which is to act on it in place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    "session"}`): the window's end and the period's close complete, and the close listing the session's window complete;
+    the one `credit_check` acts on where the Python's *complete* (`python`) holds, as `coins.lean_answer` holds an
+    answer. Until it is written *complete* is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
-def on_main_answer(commit: str, main: list[str] | None) -> bool:
+def on_main_answer(commit: str, main: list[str] | None, python: bool) -> bool:
     """The Lean verifier's answer to whether the verifier's `commit` is on the auditor's first-parent list of main
-    (`challenger_on_main`, on `{"commit", "main"}`), held to `credit_check`'s, which is to act on it in place of the
-    Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    (`challenger_on_main`, on `{"commit", "main"}`), the one `credit_check` acts on where the Python's (`python`) holds.
+    Until it is written the commit's place on main is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
-def served_session_answer(key: Ch.ChallengerKey, files: dict) -> dict:
+def served_session_answer(key: Ch.ChallengerKey, files: dict, python: dict) -> dict:
     """The Lean verifier's read of a served session under the key its run wrote (`challenger_served`, on `{"key",
-    "session"}`, `session` being `remote.session_files`'), held to `challenger.session_of`'s, which `signed_lines` is
-    to act on in place of the Python's."""
-    raise NotImplementedError("memory-accounting/lean-decides-memory-verdicts")
+    "session"}`, `session` being `remote.session_files`'), the one `signed_lines` acts on where
+    `challenger.session_of` (`python`) reads it. Until it is written the read is undecided."""
+    raise NotImplementedError(coins.UNWRITTEN)
 
 
 def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict, *, key: Ch.ChallengerKey,
@@ -812,6 +822,13 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
                 f"its verifier ran commit {commit}, which is not on main's first-parent line in the auditor's copy "
                 "(`git rev-list --first-parent origin/main`), so no tree main's check ran on: repin the verifier "
                 "host to a commit on main's first-parent line (vy-verifier-pin) and rerun the window there"))
+        if credited["ok"]:
+            try:
+                if not on_main_answer(commit, main, True):
+                    credited.update(ok=False, reason=f"the Lean verifier finds commit {commit} off main's "
+                                                     "first-parent line")
+            except NotImplementedError:
+                credited.update(ok=False, reason=coins.undecided("verifier's commit on main"))
     except Ch.CoinError as e:
         credited.update(ok=False, reason=str(e))
     end = ((windows.get(R) or {}).get("end") or {}).get("body") or {}
@@ -835,12 +852,21 @@ def credit_check(s: dict, R: str, lines: list[str], windows: dict, periods: dict
                    "incomplete)")
     elif outcome is None or outcome.get("complete") is not True:
         why.append(f"period {period}'s close doesn't list its window complete")
+    if not why:
+        try:
+            complete_answer(lines, R, period, sid, key, complete)
+        except NotImplementedError:
+            why.append(coins.undecided("completeness"))
+        except Ch.CoinError as e:
+            why.append(str(e))
     complete.update(ok=not why, reason="; ".join(why) or None)
     verdict = s.get("verdict")
     if verdict not in LEAN_VERDICTS:
         reason = f"its verdict is {verdict}'s, not the Lean's"
     elif s.get("disagreement") is not None:
         reason = "the two verifiers disagreed"
+    elif (s.get("failure") or {}).get("failure") == "undecided":
+        reason = s["failure"].get("reason") or "undecided"
     elif s.get("accepted") is not True:
         reason = f"the Lean refused it ({(s.get('failure') or {}).get('failure')})"
     else:
@@ -900,7 +926,12 @@ def signed_lines(d: Path, kind: str, R: str, heads: list[Path], key: Ch.Challeng
         trust = {"read": "trusted_session", "period": got["period"], "cap": got["cap"], "circuit": got["circuit"]}
     else:
         key = Ch.ChallengerKey.from_json(json.loads((d / remote.KEY).read_text()))
-        Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        commitment, roots, sid = Ch.session_of(key, files["record"], files["log"], files["close"], VP.lms_verify)
+        try:
+            served_session_answer(key, files, {"commitment": commitment.to_json(), "session": sid,
+                                               "roots": {k: [r.hex() for r in rs] for k, rs in roots.items()}})
+        except NotImplementedError:
+            raise coins.Undecided(coins.undecided("served session's read")) from None
         trust = {"read": "session_of", "key_sha512": hashlib.sha512(key.public).hexdigest(),
                  "note": "a served challenger on the verifier's machine: no ledger, not the auditor's clock"}
     close = Ch.ChallengerClose.from_json(files["close"])
@@ -975,6 +1006,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             row["ledger"] = session_check(s, k, R, windows, periods, period=period, lane=lane, peer=peer, pin=pin)
             row["credit"] = credit_check(s, R, lines, windows, periods, key=key, period=period, desc=desc,
                                          commit=commit, pins=pins, main=main, bound=bound)
+            if "undecided" in doc["ledger"]:
+                row["credit"] = {**row["credit"], "ok": False,
+                                 "zero": [*row["credit"]["zero"], f"not credited: {doc['ledger']['undecided']}"]}
             row["no_relay"] = lockdown_check(lockdown, signed_span(windows.get(R)))
             d = ch_dir / c["session"] / "out"
         elif c.get("challenger") == "serve":
@@ -987,6 +1021,10 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
             continue
         try:
             log, row["trust"] = signed_lines(d, c["challenger"], R, heads or [], key, period)
+        except coins.Undecided as e:
+            row["undecided"] = f"the challenger's session's read: {e}"
+            row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], row["undecided"]]}
+            continue
         except (Ch.CoinError, OSError, ValueError, KeyError) as e:
             row["refused"] = f"the challenger's session is not readable as signed: {e}"
             row["credit"] = {**row["credit"], "ok": False, "zero": [*row["credit"]["zero"], row["refused"]]}
@@ -1014,6 +1052,9 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
         row["shares_auditor_clock"] = shares(a, reg, host_bytes, rates, lean, clock="challenger", transcript=tr)
         row["shares_verifier_clock"] = shares(s, reg, host_bytes, rates, lean, transcript=tr)
         row["error"] = session_error(s)
+        if "undecided" in row["error"]:
+            row["credit"] = {**row["credit"], "ok": False,
+                             "zero": [*row["credit"]["zero"], f"not credited: its ledger's {row['error']['undecided']}"]}
         row["cross_check"] = cross_check(s["windows_seen"], seen)
         for clock in ("auditor", "verifier"):
             for f, x in row[f"shares_{clock}_clock"].items():
