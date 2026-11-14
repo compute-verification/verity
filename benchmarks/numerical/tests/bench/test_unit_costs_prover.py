@@ -35,7 +35,7 @@ def test_the_registered_check():
     rows = PR.check(PR.fit()["coef"])
     assert [r["K"] for r in rows] == [16384, 32768] and [r["k_log"] for r in rows] == [26, 27]
     for r in rows:
-        assert r["posted"]["rss_gib"] > 4 * r["measured"]["rss_gib"] and r["law_at_measured"]["rss_gib"] < r["measured"]["rss_gib"] / 2
+        assert r["posted"]["rss_gib"] > 4 * r["measured"]["rss_gib"] and r["fit_at_measured"]["rss_gib"] < r["measured"]["rss_gib"] / 2
         assert r["now"]["k_log"] == r["k_log"] and r["now"]["D"] == r["D"]
         for k in ("rss_gib", "prove_s"):
             assert abs(r["now"][k] / r["measured"][k] - 1) < 0.25

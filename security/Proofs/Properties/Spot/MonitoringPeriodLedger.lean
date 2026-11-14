@@ -13,7 +13,7 @@ says what a line of the device's own ledger says, or the finder outputs a break 
 
 Two entries whose texts without their `sig` agree have one number (`Lines.seq_of_text`). So where each entry of the
 device's ledger is the line at its own number, its line that says what presented line `i` says is its line `i`
-(`ledgerOfDevice`).
+(`own_line_at`, `ledgerOfDevice`).
 -/
 
 @[expose] public section
@@ -52,6 +52,23 @@ theorem ledgerLinesOfDevice : LedgerLinesOfDevice := by
     exact ⟨⟨e, hle, hei⟩, by simp [unsignedText_eq hle hs], own, hown,
       (unsignedText_eq he' hs').trans (unsignedText_eq hle hs).symm⟩
 
+/-- **Where the device numbers its ledger's lines, the presented line at place `i` and the device's own line `i` are
+entries that say the same**, their signatures aside, where the finder outputs no break. -/
+theorem own_line_at {dev : History} {key : ChallengerKey} {label : String} {lines : Array Json}
+    {es : Array LedgerEntry} (hlines : lines.toList.map ledgerEntry? = es.toList.map some)
+    (hseq : SeqInv es.toList) (hsig : SigInv key es.toList) (hnum : Numbered dev key.pub)
+    (hb : ¬ Break dev key label (Json.mkObj [("ledger", Json.arr lines)])) {i : Nat} {line : Json}
+    (hi : lines[i]? = some line) :
+    ∃ (e : LedgerEntry) (s : String) (own : Json) (e' : LedgerEntry), ledgerEntry? line = some e ∧
+      Flock.canonUtf8 (Core.Record.unsigned e.entry) = .ok s ∧ (dev.ledger key.pub)[i]? = some own ∧
+      ledgerEntry? own = some e' ∧ Flock.canonUtf8 (Core.Record.unsigned e'.entry) = .ok s := by
+  obtain ⟨e, s, own, e', hle, hei, hs, hown, he', hs'⟩ := line_at (dev := dev) hlines hseq hsig hb hi
+  have hj := hnum own hown e' he'
+  have hij : i = e'.seq := by
+    rw [← hei]
+    exact seq_of_text hle he' hs hs'
+  exact ⟨e, s, own, e', hle, hs, by rw [hij]; exact hj, he', hs'⟩
+
 /-- **The ledger a period's check reads is the device's own, whole up to the period's end**
 (`Properties.Spot.MonitoringPeriod.LedgerOfDevice`). -/
 theorem ledgerOfDevice : LedgerOfDevice := by
@@ -64,12 +81,8 @@ theorem ledgerOfDevice : LedgerOfDevice := by
         ∃ own s, (dev.ledger p.key.pub)[i]? = some own ∧ unsignedText line = some s ∧
           unsignedText own = some s := by
       intro i line hi
-      obtain ⟨e, s, own, e', hle, hei, hs, hown, he', hs'⟩ := line_at (dev := dev) hlines hseq hsig hb hi
-      have hj := hnum own hown e' he'
-      have hij : i = e'.seq := by
-        rw [← hei]
-        exact seq_of_text hle he' hs hs'
-      exact ⟨own, s, by rw [hij]; exact hj, unsignedText_eq hle hs, unsignedText_eq he' hs'⟩
+      obtain ⟨e, s, own, e', hle, hs, hown, he', hs'⟩ := own_line_at hlines hseq hsig hnum hb hi
+      exact ⟨own, s, hown, unsignedText_eq hle hs, unsignedText_eq he' hs'⟩
     refine .inl ⟨lines, rfl, hreach, ?_, fun line hl => ?_, ?_⟩
     · refine Nat.le_of_not_lt fun hlt => ?_
       obtain ⟨own, s, hown, -, -⟩ := hat _ _ (Array.getElem?_eq_getElem hlt)
