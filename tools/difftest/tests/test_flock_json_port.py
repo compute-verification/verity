@@ -5,6 +5,7 @@ sampled. A refusal is an output (`["error", why]`), so its text is compared, not
 
 from __future__ import annotations
 
+import gzip
 import json
 import re
 import shutil
@@ -365,3 +366,45 @@ def test_recorded_public_headers(server):
         got = D.replay(PARSE, case, server)
         assert json.loads(got[1])[0] == "ok", (p, got)
         assert D.replay(PARSE_CORE, case, server) == got, p
+
+
+#: The JSON the verifiers' tests hold: the fixtures and vectors under the protocols' `verifier/` directories.
+VERIFIER_FIXTURES = tuple(Path(__file__).resolve().parents[3] / p for p in (
+    "verity/protocols/accounting/certifier/verifier/network/tests/fixtures",
+    "verity/protocols/accounting/certifier/verifier/tests/fixtures",
+    "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
+    "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
+    "verity/protocols/proofs/recursion/verifier/firewall/tests/fixtures",
+    "verity/protocols/proofs/spot/verifier/lean/tests/fixtures", "verity/protocols/proofs/spot/verifier/tests/fixtures"))
+
+
+def _fixture_texts(p: Path) -> list[str]:
+    """A fixture's JSON texts: the file, or each line of a `.jsonl`, each also in canonical form where it has one."""
+    data = gzip.decompress(p.read_bytes()) if p.suffix == ".gz" else p.read_bytes()
+    texts = data.decode().splitlines() if ".jsonl" in p.suffixes else [data.decode()]
+    out = []
+    for t in texts:
+        out.append(t)
+        try:
+            c = D.canonical(json.loads(t))
+        except (ValueError, TypeError):
+            continue
+        if c != t:
+            out.append(c)
+    return out
+
+
+def test_verifier_fixture_texts(server):
+    """`Core.canonicalJson` reads with `Flock.JsonParse.parse` what it read with `Lean.Json.parse`: on every JSON text the
+    verifiers' tests hold (`VERIFIER_FIXTURES`), as it is and in canonical form, the one form `canonicalJson` accepts,
+    the two give the mirror's answer, so each other's."""
+    files = sorted(f for d in VERIFIER_FIXTURES for f in ([d] if d.is_file() else d.rglob("*"))
+                   if re.search(r"\.jsonl?(\.gz)?$", f.name))
+    assert len(files) >= 30, files
+    n = 0
+    for p in files:
+        for t in _fixture_texts(p):
+            got = D.replay(PARSE, {"text": t}, server)
+            assert D.replay(PARSE_CORE, {"text": t}, server) == got, p
+            n += 1
+    assert n >= 1000, n

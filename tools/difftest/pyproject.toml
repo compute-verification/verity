@@ -35,4 +35,10 @@ inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/
           "verity/protocols/proofs/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs",
           "verity/protocols/proofs/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/proofs/flock/prover/tests/fixtures/rec-coins",
           "verity/protocols/proofs/flock/prover/tests/fixtures/rec-links", "verity/protocols/proofs/flock/prover/tests/fixtures/zk-sessions",
-          "verity/protocols/__init__.py"]
+          "verity/protocols/__init__.py",
+          # the JSON parser's port reads the JSON the verifiers' tests hold (`VERIFIER_FIXTURES`), which `Core.canonicalJson` reads
+          "verity/protocols/accounting/certifier/verifier/network/tests/fixtures", "verity/protocols/accounting/certifier/verifier/tests/fixtures",
+          "verity/protocols/accounting/poub/verifier/tests/fixtures", "verity/protocols/accounting/poub/verifier/tests/vectors.json",
+          "verity/protocols/accounting/pous/verifier/tests/fixtures", "verity/protocols/accounting/pouw/verifier/tests/vectors",
+          "verity/protocols/proofs/recursion/verifier/firewall/tests/fixtures",
+          "verity/protocols/proofs/spot/verifier/lean/tests/fixtures", "verity/protocols/proofs/spot/verifier/tests/fixtures"]
