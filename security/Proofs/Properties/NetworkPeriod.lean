@@ -426,7 +426,7 @@ theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows :=
   intro h
   let p : Params :=
     ⟨#[slotAudit], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows slotSchedule .empty ⟨0, 0, 0, 0, 0⟩, 1, none⟩
-  let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], .rows #[]⟩
+  let x : ExecutionPhase := ⟨tiedAnswer #[.str "prog0", .str "state"], #[], #[]⟩
   have hw : tiedInputWired slotSchedule (tiedAnswer #[.str "prog0", .str "state"]) = true :=
     (h p ⟨#[slotReg], #[tiedExecutionPhase], .empty⟩ ⟨#[], #[x]⟩ _ _ rfl slotSchedule .empty ⟨0, 0, 0, 0, 0⟩ rfl 0 tiedExecutionPhase x
       rfl rfl).1
