@@ -150,9 +150,7 @@ tree. A directory's status is one of:
 
 - **maintained**: developed against the current tree, and its commands run from it;
 - **frozen**: kept so that what it measured can be measured again, and changed only to keep it running;
-- **data**: no measuring code, only numbers that other code takes as parameters;
-- **library**: shared code that benchmarks import and that records no number of its own, so it declares no
-  `metrics.toml`.
+- **data**: no measuring code, only numbers that other code takes as parameters.
 
 ### Protocol overhead
 
@@ -160,7 +158,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | library |
+| `harness/` | `verity-bench`: its specs and sweeps (`specs/`, one TOML file each), recorded runs and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
 | `replay_determinism/` | whether a served MoE window's recorded schedule, replayed without batch invariance, gives its served bytes, and whether a request alone gives the bytes it got in its batch, op by op | maintained |

@@ -8,7 +8,7 @@ from test_repository import ROOT, _tracked
 
 INDEX = "benchmarks/README.md"
 #: The README's status scale.
-STATUSES = frozenset({"maintained", "frozen", "data", "library"})
+STATUSES = frozenset({"maintained", "frozen", "data"})
 _ROW = re.compile(r"^\| `([^`/]+)/` \| .+ \| ([a-z ]+) \|$", re.M)
 
 
