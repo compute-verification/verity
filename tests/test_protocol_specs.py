@@ -11,7 +11,7 @@ from test_repository import ROOT, _tracked
 
 #: Specs that stay: {PROTOCOL.md: why}.
 KEPT = {
-    "verity/protocols/accounting/pouw/verifier/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
+    "verity/protocols/experimental/dither/PROTOCOL.md": "experimental: Dither has no Lean verifier",
     "verity/circuits/PROTOCOL.md": "a format: the circuit file",
     "verity/commitments/frame_v3/PROTOCOL.md": "a format: frame-v3 trees",
     "verity/commitments/hm96/PROTOCOL.md": "a format: hm96 rows",

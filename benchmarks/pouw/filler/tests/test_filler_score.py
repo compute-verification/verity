@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import arms as A
 import pytest
+import score
 import scoring as S
 
 share = S.share
@@ -1009,3 +1010,22 @@ def test_score_tp_reads_the_slowest_rank_with_the_gates_per_rank():
     assert "SCORE_TP" not in sc and len(sc["missing"]) == len(S.TP_SUITE) - 1
     assert sc["by_tp"][2]["coverage"] == pytest.approx(e["coverage"])
     assert e["coverage_v4_form"] == pytest.approx((0.225 * 1e12 + 0.45 * 1.5e12) / (S.capacity(2000.0) * 42.0e-3))
+
+
+def test_show_tp_prints_each_gate_from_its_own_dict(tmp_path, capsys):
+    """`score.show_tp` prints a line a gate: its verdict, then the detail it reads from that gate's dict of the TP
+    report, here of an out dir whose rank 1 is short of a pf_gate kind and of reps and has a bad receipt."""
+    out = tmp_path / "run" / "out"
+    (out / "set0").mkdir(parents=True)
+    (out / "set0" / "settings.txt").write_text("NCCL_CGA_CLUSTER_SIZE=1 TPC_S=64\n")
+    (out / "set0" / "rank0.jsonl").write_text(tp_log(0) + "\n")
+    (out / "set0" / "rank1.jsonl").write_text(tp_log(1, rec_bad=1, kinds=("fixed", "up"), reps=5) + "\n")
+    score.show_tp(score.tp_report([out], None, None, None))
+    said = dict(ln.removeprefix("  gate ").split(": ", 1) for ln in capsys.readouterr().out.splitlines()
+                if ln.startswith("  gate "))
+    assert said == {
+        "slowdown": "FAIL  worst 1.025 at (2, 32, 2048)",
+        "pf_gate": "FAIL  2 ranks: run/set0 rank 1: kinds ok ['fixed', 'up']",
+        "receipts": "FAIL  32 checked, bad: ['(2, 32, 2048) repeat 0 rank 1', '(2, 32, 2048) repeat 1 rank 1']",
+        "nccl": "pass  ", "filler_paths": "pass  no program facts: the filler reads its floor", "dram": "pass  ",
+        "clocks": "FAIL  ", "honest": "pass  whole kernel ≤ 0.127 of peak"}

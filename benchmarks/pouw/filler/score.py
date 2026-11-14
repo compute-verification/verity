@@ -493,6 +493,26 @@ def show_v5(res: dict) -> None:
               f"{e['filler_macs']:.3g} |")
 
 
+#: what `show` prints after each gate's verdict, from that gate's dict in the report's "gates"
+GATE_DETAIL: dict[str, Callable[[dict], str]] = {
+    "slowdown": lambda v: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
+    "replay": lambda v: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
+                        f"scorer's and disjoint, coins and {v.get('seeds_sampled')} sampled seeds distinct",
+    "receipts": lambda v: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
+    "honest": lambda v: v.get("why") or "; ".join(
+        [f"{k}: {', '.join(v[k])}" for k in ("unstable_placement", "too_good", "over_peak", "no_reference",
+                                             "over_peak_whole") if v.get(k)]
+        + ([f"whole kernel ≤ {fmt(v['whole_of_peak_max'])} of peak"] if v.get("whole_of_peak_max") else [])
+        + [control_line(v.get("control"))]),
+    "filler_paths": lambda v: v.get("why") or f"{v.get('callers')} callers, nothing outside dfill_k on "
+                              "their filler warps' paths",
+    "dram": lambda v: v.get("why") if not v.get("share_of_hbm") else
+                      f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
+    "clocks": lambda v: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "
+                        f"{v.get('watt')}",
+}
+
+
 def show(res: dict) -> None:
     g = res["gates"]
     print(f"\n{res['arm']} ({res['variant']}), {res['scorer']}"
@@ -528,22 +548,7 @@ def show(res: dict) -> None:
               + (f": {fc['dropped'][0]}" + (" ..." if len(fc["dropped"]) > 1 else "") if fc["dropped"] else ""))
     for name in GATES + (("filler_paths",) if "filler_paths" in g else ()):
         v = g.get(name, {})
-        extra = {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')} ({v.get('phase')})",
-                 "replay": lambda: v.get("why") or f"{v.get('rounds')} rounds, {v.get('tiles'):.3g} tiles, ranges the "
-                                   f"scorer's and disjoint, coins and {v.get('seeds_sampled')} sampled seeds distinct",
-                 "receipts": lambda: v.get("why") or f"timed {v.get('timed_checked')} checked, {v.get('timed_bad')} bad",
-                 "honest": lambda: v.get("why") or "; ".join(
-                     [f"{k}: {', '.join(v[k])}" for k in ("unstable_placement", "too_good", "over_peak", "no_reference",
-                                                          "over_peak_whole") if v.get(k)]
-                     + ([f"whole kernel ≤ {fmt(v['whole_of_peak_max'])} of peak"] if v.get("whole_of_peak_max") else [])
-                     + [control_line(v.get("control"))]),
-                 "filler_paths": lambda: v.get("why") or f"{v.get('callers')} callers, nothing outside dfill_k on "
-                                         "their filler warps' paths",
-                 "dram": lambda: v.get("why") if not v.get("share_of_hbm") else
-                 f"{v['share_of_hbm']:.3%} of HBM, counter control {fmt(v.get('control_bytes_ratio'))}",
-                 "clocks": lambda: f"{v.get('reps')} reps read; nvidia-smi between points: MHz {v.get('mhz')}, W "
-                                   f"{v.get('watt')}",
-                 }.get(name, lambda: "")()
+        extra = GATE_DETAIL.get(name, lambda _: "")(v)
         print(f"  gate {name}: {'pass' if v.get('ok') else 'FAIL'}  {extra}")
     print("\n| entry | coverage | filler share | time | slowdowns | τ (VF) |\n|---|---|---|---|---|---|")
     for e in res["entries"]:
@@ -692,6 +697,16 @@ def tp_report(outs: list[Path], listings: dict | None, noise: str | None, fold: 
             "filler_entry": entry, "fold": fd, "served_model": S.served_model(), "unchecked": list(TP_UNCHECKED)}
 
 
+#: what `show_tp` prints after each gate's verdict, from that gate's dict in the report's "gates"
+TP_GATE_DETAIL: dict[str, Callable[[dict], str]] = {
+    "slowdown": lambda v: f"worst {fmt(v.get('worst'))} at {v.get('at')}",
+    "filler_paths": lambda v: v.get("why") or f"{v.get('callers')} callers",
+    "honest": lambda v: f"whole kernel ≤ {fmt(v.get('whole_of_peak_max'))} of peak",
+    "receipts": lambda v: f"{v['checked']} checked" + (f", bad: {v['bad']}" if v["bad"] else ""),
+    "pf_gate": lambda v: f"{v['ranks']} ranks" + (f": {v['why']}" if v["why"] else ""),
+}
+
+
 def show_tp(res: dict) -> None:
     g, fe, fd = res["gates"], res["filler_entry"], res["fold"]
     print(f"\n{res['reading']}, {res['scorer']}: SCORE-TP {fmt(res['SCORE_TP'])}"
@@ -705,12 +720,7 @@ def show_tp(res: dict) -> None:
     show_served_model(res["served_model"])
     for name, v in g.items():
         if name != "ok":
-            print(f"  gate {name}: {'pass' if v['ok'] else 'FAIL'}  "
-                  + {"slowdown": lambda: f"worst {fmt(v.get('worst'))} at {v.get('at')}",
-                     "filler_paths": lambda: v.get("why") or f"{v.get('callers')} callers",
-                     "honest": lambda: f"whole kernel ≤ {fmt(v.get('whole_of_peak_max'))} of peak",
-                     "receipts": lambda: f"{v['checked']} checked" + (f", bad: {v['bad']}" if v["bad"] else ""),
-                     "pf_gate": lambda: f"{v['ranks']} ranks" + (f": {v['why']}" if v["why"] else "")}.get(name, lambda: "")())
+            print(f"  gate {name}: {'pass' if v['ok'] else 'FAIL'}  " + TP_GATE_DETAIL.get(name, lambda _: "")(v))
     print("  unchecked: " + "; ".join(res["unchecked"]))
     print("\n| entry | slowdown | coverage | filler part | served part (modelled) | v4 form | step ms base / phase / modelled |\n"
           "|---|---|---|---|---|---|---|")

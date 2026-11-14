@@ -1126,13 +1126,16 @@ class Compiled(Tiles):
 
     def check_descriptor(self, descriptor: dict) -> None:
         """Refuse a descriptor that is not the verifier's own compiled Program."""
+        def refusal() -> DomainError:
+            return DomainError(f"{self.scheme.name}: the descriptor is not the verifier's compiled Program of "
+                               f"{self.served.fn.id}")
+
         try:
             ok = program_digest(descriptor) == self.digest
-        except (TypeError, ValueError):
-            ok = False
+        except (TypeError, ValueError) as e:
+            raise refusal() from e
         if not ok:
-            raise DomainError(f"{self.scheme.name}: the descriptor is not the verifier's compiled Program of "
-                              f"{self.served.fn.id}")
+            raise refusal()
 
     def check_gates(self) -> GateCheck:
         """The gate-level checks, on the flattened Program: for one small enough to flatten (a test's, a reduced layer)."""

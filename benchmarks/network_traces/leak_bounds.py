@@ -86,6 +86,15 @@ schedule releases what a link serves in an execution phase, the least the rule c
 lanes whose schedule releases fewer are refused. The rows that hold the lengths by a stop block and are not the
 design's (`lengths`, `all three`) are charged none, and say why in their own lines (`NO_COUNT`).
 
+**The scans' δ.** A row's ε is its execution phases' scans' δ summed, a union bound, so a δ that suits one execution
+phase bounds nothing over the world's year. Where a caller gives none, each execution phase's scan is at the δ at
+which the row that pools the most execution phases, the largest scope's longest period, carries `PERIOD_ERROR`
+(`period_delta`): that error over the row's execution phases, the row found and its execution phases counted from
+the inputs, neither typed in. It is one δ for every row, so
+each row's ε is `PERIOD_ERROR` or less and two rows' errors compare. No term reads it, and it is assumed: no scan has
+run at it. A row states its δ and the error it is taken from (``scan_delta``, ``eps_target``). Under a δ a caller
+gives (`--scan-delta`) there is no such error, and a row whose ε is 1 or more bounds nothing.
+
 `inputs` marks each input measured, modeled, assumed or simulated (`MARKS`) with its source, and `main` prints the
 table and its JSON.
 """
@@ -118,6 +127,9 @@ DELTAS: tuple[Fraction, ...] = protocol.DELTAS
 TAU = Fraction(W.WardenParams().bucket_ms, 1000)
 #: a sampling block's scan's δ when a link names none: `scan_zk --delta`'s default
 SCAN_DELTA = Fraction(1, 2 ** 20)
+#: the error a row at a scope's load is to carry at most over its monitoring period: where a caller gives no δ, each
+#: execution phase's scan is at the δ at which the row that pools the most execution phases carries it (`period_delta`)
+PERIOD_ERROR = Fraction(1, 2 ** 20)
 #: the jitter bound D_j that K is charged at (`NetTiming.JitterBounded`, one bound over every step): a statement of k
 #: steps, one a bucket, pays ⌈log2 D_j^k⌉ = k bits. Each bucket leaves at a time fixed before it is made
 #: (`warden.Warden(paced=…)`, `active.Proxy(paced=…)`), yet the host's state after the server's writes for the next
@@ -501,6 +513,10 @@ OF_RECORD = JITTER_BOUND
 SET_TIME = "with a simulated set-time card"
 #: the mark of the set-time card and of the figure printed under its label, one of `MARKS`
 SIMULATED = "simulated"
+#: the mark of a row whose accept a run gives and no proof covers. It is a row's mark and no input's, so not one of
+#: `MARKS`: it is the harness's mark of that name (`verity_bench.exfiltration`'s `MARKS`), whose tests hold this string
+#: to it
+RUN_NOT_PROVED = "run, not proved"
 #: what a figure under `SET_TIME` rests on, the source of the card's input and of that figure
 SET_TIME_CLAUSE = ("`trusted-host`, set-time card clause: the network certifier's card releases each bucket at the "
                    "tick its record names, whatever the host and the server send it. It holds only of a calibrated "
@@ -533,25 +549,31 @@ REQUESTS = ("plan", "census")
 class Kind(NamedTuple):
     """One of `ROWS`: where it stands (a check on main, a change to the scan's check, or a design), the changes it
     makes to the scan's check (`CHANGES`; None for the clock form, which is another check), what it counts and by
-    which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), and whether its
-    check reads the head that states each content class's held rows, so that it is charged the count (`counted`)."""
+    which rule, whether a stop block holds a response's output count to its ids (`terms`' ``stop``), whether its
+    check reads the head that states each content class's held rows, so that it is charged the count (`counted`),
+    and the mark its accept carries (`RUN_NOT_PROVED`; None where it carries none)."""
     standing: str
     changes: tuple[str, ...] | None
     counts: str
     stop: bool = True
     count: bool = False
+    mark: str | None = None
 
 
 #: why a row that holds the lengths by a stop block, and is not the design's, is charged no count
 NO_COUNT = ("it is charged no count: its tables are of the lengths rows' form 1, the schedule's rows whatever the "
             "load, so the head states none")
+#: where the scan's accept stands, said in the `scan` row's own line beside its mark, whatever the row's bound and its
+#: scans' δ
+SCAN_ACCEPT = ("its accept is run, not proved: it rests on verdicts the scan's driver hands the compiled record check, "
+               "and nothing compiled ties them to the sessions' runs")
 #: a scope's eight rows over a monitoring period: the two checks on main, the scan under each of `CHANGES` and under
 #: all three, and the design, without its stop block and with it
 ROWS = {
     "scan": Kind("on main", (),
                  "the rows form on the network certifier's own run, as the check charges it: a schedule and a fail "
                  "cell for each connection of the period's parameters, counted by request, and the jitter of each "
-                 "link's execution phase"),
+                 f"link's execution phase; {SCAN_ACCEPT}", mark=RUN_NOT_PROVED),
     "N2": Kind("on main", None,
                "the clock form: the schedules, ⌈log2 #Σ_sync^m⌉ over a link's m execution phases, counted by link "
                "whatever it serves; no fail cell, its parameters listing no connection; and the jitter of each "
@@ -647,7 +669,7 @@ def plan() -> dict[str, Input]:
 
 def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets: int = BUCKETS,
            bucket_s: float | Fraction = TAU, failure_rate: float | Fraction = 0, requests: str = "plan",
-           world_requests: float | None = None, scan_delta: float | Fraction = SCAN_DELTA,
+           world_requests: float | None = None, scan_delta: float | Fraction | None = None,
            syncs: int | None = None, lanes: int | None = None, classes: int = CLASSES, delay: int = DELAY,
            ingress_buckets: int | None = None) -> dict[str, Input]:
     """Every input of the scaling by requests, each marked (`MARKS`) with its source.
@@ -667,7 +689,9 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
     connection's admission, by default the delay's; each is by default the lengths rows' cost runner's
     (`COST_RUNNER`). ``syncs`` is N2's #Σ_sync, by default the most a calibration chooses. ``failure_rate`` is
     the share of connections that fail, which only the rows with the lengths held read, and ``scan_delta`` each
-    execution phase's scan's δ. ``set_time_card`` is the card every figure under `SET_TIME` rests on: it is
+    execution phase's scan's δ: a caller's, or with None the one at which the row that pools the most execution
+    phases carries `PERIOD_ERROR`, which `period_delta` reads from these inputs; either is assumed, no scan
+    having run at it. ``set_time_card`` is the card every figure under `SET_TIME` rests on: it is
     simulated, the one input so marked (`SIMULATED`), and its source is the clause it rests on (`SET_TIME_CLAUSE`)."""
     if requests not in REQUESTS:
         raise ValueError(f"the request counted is one of {', '.join(REQUESTS)}, not {requests!r}")
@@ -749,7 +773,12 @@ def inputs(*, response_ids: int = RESPONSE_IDS, id_bits: int = ID_BITS, buckets:
         "failure_rate": Input(failure_rate, "failure/connection", "assumed",
                               "none measured: the share of connections that fail, which the rows with the lengths "
                               "held charge pooled (--failure-rate)"),
-        "scan_delta": Input(scan_delta, "", "assumed", "each execution phase's scan's δ: `scan_zk --delta`'s default"),
+        "scan_delta": Input(scan_delta, "", "assumed",
+                            "none given (--scan-delta): each execution phase's scan is at the δ at which the row "
+                            f"that pools the most execution phases carries {PERIOD_ERROR} over its monitoring "
+                            "period (`period_delta`); no scan has run at it"
+                            if scan_delta is None else
+                            "each execution phase's scan's δ, given (--scan-delta): no scan has run at it"),
         "set_time_card": Input(SIMULATED, "", SIMULATED, SET_TIME_CLAUSE),
     }
     if off := sorted(k for k, i in out.items() if i.mark not in MARKS or not i.source):
@@ -824,15 +853,42 @@ def counted(inp: Mapping[str, Input]) -> Count:
     return Count(classes, lanes if given else least, given, releases, load, classes * math.log2(releases + 1))
 
 
+class Scan(NamedTuple):
+    """Each execution phase's scan's δ and where it is from. ``given``: whether it is a caller's. Otherwise it is
+    ``target``, the error a row is to carry at most over its monitoring period (`PERIOD_ERROR`), over ``phases``:
+    the execution phases of the row that pools the most, every link of ``scope`` over ``period``. Under a caller's
+    δ ``target`` is None, no error having been set."""
+    delta: Fraction
+    given: bool
+    target: Fraction | None
+    scope: str
+    period: str
+    phases: Fraction
+
+
+def period_delta(inp: Mapping[str, Input]) -> Scan:
+    """Each execution phase's scan's δ at ``inp`` (`Scan`): the one it gives, or with none the δ at which the row
+    that pools the most execution phases, the scope of the most machines over the longest monitoring period, carries
+    `PERIOD_ERROR`. It is one δ for every row, the least any row needs, so each row's ε is that error or less; the
+    execution phases are counted from ``inp`` as `table` counts them."""
+    most, period = max(scopes(inp), key=lambda s: s.machines), max(PERIODS, key=lambda p: PERIODS[p])
+    phases = most.machines * inp["links"].value * Fraction(PERIODS[period]) / _class(inp).phase_s
+    given = inp["scan_delta"].value
+    if given is not None:
+        return Scan(Fraction(given), True, None, most.name, period, phases)
+    return Scan(PERIOD_ERROR / phases, False, PERIOD_ERROR, most.name, period, phases)
+
+
 def table(inp: Mapping[str, Input]) -> list[Row]:
     """Each check's terms (`ROWS`) at each scope's load (`scopes`) over each monitoring period (`PERIODS`), from
     ``inp`` (`inputs`), in exact arithmetic but for the failed connections' charge and the count. A scope serves the
     world's requests a year in proportion to its GPU-seconds, so every row counts all its scope serves: the scan's
     connections by request, the links' execution phases by link, and the entries by capacity where the lanes are
     given, never by requests what a check counts by capacity. The count (`counted`) is by link, for each of its
-    execution phases, on the rows whose check reads the head that states it (`Kind.count`)."""
+    execution phases, on the rows whose check reads the head that states it (`Kind.count`). A row's ε is its
+    execution phases' scans' δ summed, each scan at `period_delta`'s."""
     cls, lanes, syncs = _class(inp), inp["lanes"].value, inp["syncs"].value
-    failing, scan_delta = Fraction(inp["failure_rate"].value), Fraction(inp["scan_delta"].value)
+    failing, scan_delta = Fraction(inp["failure_rate"].value), period_delta(inp).delta
     if not (0 <= failing <= 1 and 0 < scan_delta < 1 and inp["world_requests"].value >= 0):
         raise ValueError(f"the failure rate is in [0, 1], the scan's δ in (0, 1) and the world's requests at least 0, "
                          f"not {failing!r}, {scan_delta!r} and {inp['world_requests'].value!r}")
@@ -897,12 +953,28 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
     world's year, with its release times taken once, is at most the target: the failed connections' charge and the
     count; it is None where the count alone is over the target. ``only`` and ``periods`` keep the rows of those
     scopes and monitoring periods; ``covers`` is the share of its scope's compute a row counts, and
-    ``request_count`` which of `COUNTS` its requests are, the document's one."""
+    ``request_count`` which of `COUNTS` its requests are, the document's one.
+
+    Every row states the δ each of its execution phases' scans is at and the error that δ is taken from
+    (``scan_delta``, ``eps_target``; `period_delta`), beside its ``eps``. The document's ``scan`` says where the δ
+    is from: whether it is ``given``, and else the error, ``eps_target``, and the row whose execution phases it is
+    spread over, by ``scope``, ``period`` and ``phases``. The input ``scan_delta`` holds the δ and that source,
+    whoever chose it. Under a caller's δ ``eps_target`` is None, and a row whose ``eps`` is 1 or more bounds
+    nothing."""
     only, periods, target = set(only) or set(SCOPES), set(periods) or set(PERIODS), Fraction(target_gb) * GB
     if not target > 0 or only - set(SCOPES) or periods - set(PERIODS):
         raise ValueError(f"the target is positive, a scope one of {', '.join(SCOPES)} and a monitoring period one of "
                          f"{', '.join(PERIODS)}, not {target_gb!r}, {sorted(only)} and {sorted(periods)}")
     cls, lanes, request_count = _class(inp), inp["lanes"].value, inp["request_count"].value
+    scan = period_delta(inp)
+    eps_target = None if scan.target is None else float(scan.target)
+    # the δ as the document's inputs state it: the one given, or the one taken from the error, with how
+    stated = inp["scan_delta"] if scan.given else inp["scan_delta"]._replace(
+        value=scan.delta,
+        source=f"each execution phase's scan's δ: {scan.target}, the error a row is to carry at most over its "
+               f"monitoring period, over the {_n(float(scan.phases))} execution phases of the {scan.scope}'s "
+               f"{scan.period}, the row that pools the most, so that every row's ε is that error or less; none is "
+               "given (--scan-delta), and no scan has run at it")
 
     def term(r: Row, dj: int) -> dict:
         t = Fraction(r.terms[dj].certifier)
@@ -910,10 +982,12 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                 "bits_a_phase": float(t / r.phases), "bits_a_request": float(t / r.requests) if r.requests else None}
 
     rows = [{"scope": r.scope.name, "period": r.period, "row": r.name, "standing": ROWS[r.name].standing,
+             "mark": ROWS[r.name].mark,
              "with_set_time_card": SET_TIME if "timing" in (ROWS[r.name].changes or ()) else None,
              "machines": r.scope.machines, "gpu_seconds": r.scope.gpus * PERIODS[r.period],
              "request_count": request_count, "requests": float(r.requests), "phases": float(r.phases), "covers": 1.0,
-             "eps": float(r.eps), "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
+             "scan_delta": float(scan.delta), "eps_target": eps_target, "eps": float(r.eps),
+             "schedules": _size(r.terms[1].schedules), "cells": _size(r.terms[1].cells),
              "count": _size(r.terms[1].count),
              "jitter": {str(dj): _size(r.terms[dj].jitter) for dj in JITTERS},
              "term": {str(dj): term(r, dj) for dj in JITTERS}, "entries": _size(r.terms[1].entries)}
@@ -951,9 +1025,11 @@ def document(inp: Mapping[str, Input], *, target_gb: float | Fraction = TARGET_G
                             "count by capacity that needs the class's lanes" if lanes is None else
                             f"every slot's entry, by capacity: {lanes} lanes x {cls.T // EVERY} strides a link's "
                             "execution phase, whatever it serves",
-            "legend": {name: {"standing": k.standing, "counts": k.counts} for name, k in ROWS.items()},
+            "scan": {"delta": float(scan.delta), "given": scan.given, "mark": stated.mark, "eps_target": eps_target,
+                     "scope": scan.scope, "period": scan.period, "phases": float(scan.phases)},
+            "legend": {name: {"standing": k.standing, "mark": k.mark, "counts": k.counts} for name, k in ROWS.items()},
             "inputs": {k: {"value": float(i.value) if isinstance(i.value, Fraction) else i.value, "unit": i.unit,
-                           "mark": i.mark, "source": i.source} for k, i in inp.items()},
+                           "mark": i.mark, "source": i.source} for k, i in {**inp, "scan_delta": stated}.items()},
             "rows": [r for r in rows if r["scope"] in only and r["period"] in periods]}
 
 
@@ -987,7 +1063,7 @@ def render(doc: dict) -> str:
     ph, tg, theirs = doc["phase"], doc["target"], "the compute side's"
     at = [str(dj) for dj in sorted(JITTERS, key=lambda dj: dj != OF_RECORD)]
     counted, seen = doc["request_count"], {(r["scope"], r["period"]): r for r in doc["rows"]}
-    card, ct = doc["with_set_time_card"], doc["count"]
+    card, ct, sc = doc["with_set_time_card"], doc["count"], doc["scan"]
     cost, rate = ct["cost_runner"], doc["failure_rate_at_target"]
     # whether the count's classes, delay and ingress buckets are the cost runner's own
     as_costed = all(ct[k] == cost[k] for k in ("classes", "delay", "ingress_buckets"))
@@ -1026,7 +1102,8 @@ def render(doc: dict) -> str:
         f"Request count {counted}: {COUNTS[counted]}. Every row names its request count, and rows of two request "
         "counts don't compare.",
         "The rows of a scope and a monitoring period:",
-        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in doc["legend"].items()),
+        *(f"- {name} ({'; '.join(filter(None, (k['standing'], k['mark'])))}): {k['counts']}"
+          for name, k in doc["legend"].items()),
         f"The entries as the scan's check charges them today: {doc['entries_rule']}.",
         f"A link's execution phase is {_n(ph['seconds'])} s of {_n(ph['buckets'])} buckets: {_n(ph['requests'])} "
         f"requests, each charged {ph['connection_bits']} bits for its schedule and again for its fail cell; N2's "
@@ -1060,13 +1137,22 @@ def render(doc: dict) -> str:
            f"at a failure rate of at most {_n(rate)}.")
         + f" Without that card the jitter alone, at D_j = {OF_RECORD}, is {_n(jitter)} {doc['unit']} over the "
           f"world's year, {_n(jitter / tg['value'])} times the target.",
-        "ε is the scan's execution phases' δ summed, a union bound: at 1 or more it bounds nothing.", "",
+        "ε is the scan's execution phases' δ summed, a union bound: at 1 or more it bounds nothing. "
+        + (f"Each execution phase's scan is at the δ given (--scan-delta), {_n(sc['delta'])}; no error over a "
+           "monitoring period is set, so a row's ε is what that δ sums to." if sc["given"] else
+           f"Each execution phase's scan is at δ = {_n(sc['delta'])}: the δ at which the {sc['scope']}'s "
+           f"{sc['period']}, the row that pools the most execution phases, {_n(sc['phases'])} of them, fails with "
+           f"at most {_n(sc['eps_target'])} over its monitoring period. It is one δ for every row, so each row's ε "
+           "is that error or less.")
+        + f" The δ is {sc['mark']}: no scan has run at it. No term reads it.", "",
         "## Inputs", "",
         *_pipes(("input", "value", "unit", "mark", "source"),
                 [(k, _n(i["value"]), i["unit"], i["mark"], i["source"]) for k, i in doc["inputs"].items()], 5), "",
         "## The scopes: the compute each row covers, all its scope serves", "",
-        *_pipes(("scope", "period", "request count", "machines", "GPU-seconds", "requests", "execution phases", "ε"),
-                [(*k, *(_n(r[c]) for c in ("request_count", "machines", "gpu_seconds", "requests", "phases", "eps")))
+        *_pipes(("scope", "period", "request count", "machines", "GPU-seconds", "requests", "execution phases",
+                 "δ a phase", "the error it is from", "ε"),
+                [(*k, *(_n(r[c]) for c in ("request_count", "machines", "gpu_seconds", "requests", "phases",
+                                           "scan_delta")), _n(r["eps_target"], "none: δ given"), _n(r["eps"]))
                  for k, r in seen.items()], 3), "",
         "## The terms in GB", "",
         *_pipes(("scope", "period", "row", "request count", "schedules", "cells", "count",
@@ -1141,8 +1227,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                          f"break-even planner, or the census's at the workload card's MACs (default {REQUESTS[0]})")
     ap.add_argument("--world-requests", type=float, metavar="N",
                     help="the world's requests a year, in place of either request's count")
-    ap.add_argument("--scan-delta", type=Fraction, default=SCAN_DELTA, metavar="D",
-                    help=f"each execution phase's scan's δ (default {SCAN_DELTA})")
+    ap.add_argument("--scan-delta", type=Fraction, metavar="D",
+                    help="each execution phase's scan's δ (default: the δ at which the row that pools the most "
+                         f"execution phases, the largest scope's longest period, carries {PERIOD_ERROR} over its "
+                         "monitoring period, counted from the inputs)")
     ap.add_argument("--target-gb", type=float, default=TARGET_GB, metavar="GB",
                     help=f"the GB the term is read against (default {TARGET_GB})")
     ap.add_argument("--scope", action="append", choices=SCOPES, help="only this scope's rows (repeatable)")
