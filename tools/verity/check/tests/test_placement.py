@@ -394,6 +394,13 @@ def test_the_payload_reads_both_files_from_stdin_where_neither_script_is_on_disk
     floors = b"DISK_MIN_INODES, DISK_MIN_GB = 400_000, 50"      # the payload reads the machine's own disks, which this test can't set
     assert floors in (payload := CHECK.slots_payload())
     payload = payload.replace(floors, b"DISK_MIN_INODES, DISK_MIN_GB = 0, 0")
+    absent = f"slot.Path({str(tmp_path / 'absent')!r})"
+    unread = payload.replace(b'"slice_gib": doc(slot.slice_gib)', f'"slice_gib": doc(lambda: slot.slice_gib({absent}))'.encode())
+    assert unread != payload               # the slice read raising, as where /proc/self/cgroup can't be read: an error, and a skip
+    gone = json.loads(subprocess.run([sys.executable, "-"], input=unread, cwd=tmp_path, env=env, capture_output=True, check=True).stdout)
+    assert gone["slice_gib"]["error"].startswith("FileNotFoundError: ")
+    with pytest.raises(ValueError, match=r"its slice can't be read \(FileNotFoundError: .*\), and this shard asks 390 GiB"):
+        CHECK.placement(gone, True, None, 390)
     r = subprocess.run([sys.executable, "-"], input=payload, cwd=tmp_path, env=env, capture_output=True, check=True)
     doc = json.loads(r.stdout)
     doc["deadline_in_s"] = None             # the payload reads the machine's own /etc/research/deadline, which this test can't set

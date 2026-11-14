@@ -342,20 +342,14 @@ def slice_gib(root: Path = Path("/")) -> int | None:
     """The least cgroup v2 memory.max over this process's cgroup and those over it (the limits `memory_gb` counts down from:
     on a CPU node an ssh login's session scope, 80% of the machine, under the user slice's 93%), in whole GiB rounded down;
     None where none sets one. A check whose ask is over it never finds that much free here (`blocked`), so check.py places
-    no such shard on the machine."""
-    try:
-        own = [ln[3:].strip("/") for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::")]
-    except OSError:
-        own = []
+    no such shard on the machine. OSError where /proc/self/cgroup can't be read: the slots payload reports that, and a shard
+    with an ask skips the machine."""
+    own = [ln[3:].strip("/") for ln in (root / "proc/self/cgroup").read_text().splitlines() if ln.startswith("0::")]
     top, limits = root / "sys/fs/cgroup", []
     if own:
         d = top / own[0]
         for c in (d, *[p for p in d.parents if p.is_relative_to(top)]):
-            try:
-                m = (c / "memory.max").read_text().strip()
-            except OSError:
-                continue
-            if m.isdigit():
+            if (c / "memory.max").is_file() and (m := (c / "memory.max").read_text().strip()).isdigit():
                 limits.append(int(m))
     return min(limits) >> 30 if limits else None
 
