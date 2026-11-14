@@ -383,6 +383,22 @@ def test_the_load_crosses_four_streams_to_a_loopback_sink(tmp_path):
     assert LR.check_load(dict(doc, format="x"), key, session)[1][0].startswith("load: not a load's registrations")
 
 
+def test_a_refused_write_records_its_word_and_says_the_sentence_to_stderr(tmp_path, capsys):
+    """`write`'s record of a refused write is the refusal's word alone (`REFUSALS`), on stdout and in `--out`,
+    which is what a run publishes of it: the sentence names the store's path and goes to stderr. A write that
+    isn't refused records the store less its tensors' digests."""
+    store, out = tmp_path / "store", tmp_path / "store.json"
+    assert LR.main(["write", "--store", str(store), "--shape", "tiny", "--out", str(out)]) == 1
+    said = capsys.readouterr()
+    assert json.loads(out.read_text()) == json.loads(said.out) == {"refused": "no-store"}
+    assert f"refused (no-store): no store directory {store}" in said.err and str(store) not in said.out
+    store.mkdir()
+    assert LR.main(["write", "--store", str(store), "--shape", "tiny", "--workers", "1", "--out", str(out)]) == 0
+    assert json.loads(out.read_text()) == json.loads(capsys.readouterr().out) == {
+        "status": "written", "format": LR.STORE_FORMAT, "shape": LR.TINY.name, "model": LR.model_id(LR.TINY),
+        "stream_bytes": len(demo_stream()), "fold": LR.STORE_DIGESTS[LR.TINY.name]}
+
+
 def test_a_load_that_isnt_the_stores_or_has_no_sink_is_refused(tmp_path):
     """A refused load's ``load-relay.json`` holds the refusal's word alone (`REFUSALS`), which is what a run
     publishes of it: the sentence, raised with it, names the store's path, the sink's address or a value and its

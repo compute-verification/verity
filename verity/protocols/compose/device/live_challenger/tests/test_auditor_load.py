@@ -69,9 +69,11 @@ def refused(rc: int, out: bytes) -> str:
 
 def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_the_store_once(host):
     """The run is `load_relay.py write` itself, at the tiny shape: written the first time, present (read back to the
-    pin) the second, and its end carries the store's record less the digests."""
+    pin) the second, and its end carries the store's record less the digests. The record as the write left it
+    and what the write printed are the witness's, and no refusal says where the store is."""
     write = ["weights-write", "--shape", "tiny"]
-    assert f"no store disk at {host.store}: infra mounts it, auditor's" in refused(*gate(host, write))
+    no_disk = refused(*gate(host, write))
+    assert "the store: no-store (one of load_relay.REFUSALS' words)" in no_disk and str(host.store) not in no_disk
     host.store.mkdir()
     for key in (None, "-"):
         assert "this key reads only: the store's write is started with a lane's own gate key, or by vy-admin" in \
@@ -96,9 +98,49 @@ def test_weights_write_needs_the_store_disk_and_a_lane_key_and_its_run_writes_th
         assert end["store"] == {"status": status, "format": LR.STORE_FORMAT, "shape": LR.TINY.name,
                                 "model": LR.model_id(LR.TINY), "stream_bytes": 34240,
                                 "fold": LR.STORE_DIGESTS[LR.TINY.name]}
-        assert set(end["files"]) == {"rehearse.log", "store.json"}
+        d = host.certifier / end["run"]
+        assert set(end["files"]) == {"store.json"} and json.loads((d / "out" / "store.json").read_text()) == end["store"]
+        assert {p.name for p in (d / A.WITNESS).iterdir()} == {"rehearse.log", "store.json", A.ENDED_WHY}
+        assert json.loads((d / A.WITNESS / "store.json").read_text()) == end["store"]
+    assert A.STORE_FORMAT == LR.STORE_FORMAT and set(A.LOAD_SHAPES) == set(LR.SHAPES)
     data, sha = LR.read_store(host.store, LR.TINY)
     assert data.stat().st_size == 34240 and len(sha) == len(LR.manifest(LR.TINY))
+
+
+def test_a_refused_store_write_ends_in_its_word_and_a_record_out_of_form_is_not_published(host):
+    """A write the runner refuses ends in the refusal's word alone: the sentence, which names the store's path on
+    the auditor's device, is in the witness's log and nowhere in the end or `out/`. A record `STORE_PUBLIC`
+    doesn't hold whole and in form is not published: the run ends nonzero as `unruled`."""
+    host.store.mkdir()
+    write = ["weights-write", "--shape", "tiny"]
+    run = json.loads(gate(host, write)[1])["run"]
+    host.store.rmdir()
+    end = A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait())
+    d = host.certifier / run
+    assert end["rc"] == 1 and end["ended"] == "exited" and end["store"] == {"refused": "no-store"}
+    assert json.loads((d / "out" / "store.json").read_text()) == {"refused": "no-store"}
+    public = (d / "end.json").read_text() + (d / "out" / "store.json").read_text()
+    assert str(host.store) not in public and "no store directory" not in public
+    assert f"refused (no-store): no store directory {host.store}" in (d / A.WITNESS / "rehearse.log").read_text()
+
+    good = {"status": "written", "format": A.STORE_FORMAT, "shape": "tiny", "model": "m/tiny/0a",
+            "stream_bytes": 34240, "fold": "ab" * 64}
+    assert A.store_public(good) == good and A.store_public({"refused": "store-size"}) == {"refused": "store-size"}
+    assert A.store_public({"refused": f"no store directory {host.store}"}) == {"refused": "other"}
+    for bad in (good | {"sha256": []}, {k: v for k, v in good.items() if k != "fold"}, good | {"status": "kept"},
+                good | {"format": "another/v1"}, good | {"shape": "a shape"}, good | {"model": "a model"},
+                good | {"stream_bytes": True}, good | {"stream_bytes": 1 << 63}, good | {"fold": "AB" * 64}, [good]):
+        with pytest.raises(A.Unruled, match="STORE_PUBLIC"):
+            A.store_public(bad)
+    host.store.mkdir()
+    run = json.loads(gate(host, write, token="cd34")[1])["run"]
+    wrote = f'import json; (out / "store.json").write_text(json.dumps({good | {"path": str(host.store)}!r}))'
+    end = A.certifier_run(host, run, pinned=PIN, wait=lambda proc, s: proc.wait(),
+                          command=lambda req, out, store: [sys.executable, "-c",
+                                                           f"import pathlib; out = pathlib.Path({str(out)!r})\n{wrote}"])
+    assert (end["rc"], end["ended"], end["store"], end["files"]) == (2, "unruled", None, {})
+    assert "holds ['fold', 'format', 'model', 'path'" in ended_why(host, end)
+    assert str(host.store) not in (host.certifier / run / "end.json").read_text()
 
 
 def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
@@ -117,7 +159,7 @@ def test_the_store_write_runs_load_relay_write_over_every_core_into_the_store():
     (["--streams", "0"], "--streams '0': 1 to 8"),
     (["--streams", "9"], "--streams '9': 1 to 8"),
     (["--shape", "small"], "--shape 'small': one of ['h200', 'tiny']"),
-    (["--shape", "h200"], "the store: no store record"),
+    (["--shape", "h200"], "the store: no-record (one of load_relay.REFUSALS' words): weights-write --shape h200"),
     (["--minutes", "16"], "--minutes 16: the tiny load takes 16 minutes"),
     (["--minutes", "26"], "--minutes 26: 100 requests take 11 minutes"),
     (["--minutes", "26"], "at height 20) after the load's 16: give --minutes 27 or more, or fewer --requests"),
@@ -133,19 +175,23 @@ def test_the_gate_refuses_a_load_it_cant_check(stored, bad, why):
 
 
 def test_a_load_is_refused_unless_the_store_holds_its_shape_as_weights_write_wrote_it(host):
-    assert "the store: no store record" in refused(*gate(host, LOAD))
+    def word() -> str:
+        why = refused(*gate(host, LOAD))
+        assert why.startswith("the store: ") and str(host.store) not in why and "weights-write --shape tiny" in why
+        return why.removeprefix("the store: ").split(" ")[0]
+
+    assert word() == "no-record"
     host.store.mkdir()
-    assert "write the store first (weights-write)" in refused(*gate(host, LOAD))
+    assert word() == "no-record"
     LR.write_store(host.store, LR.TINY)
     data, rec = LR.store_paths(host.store, LR.TINY)
     doc = json.loads(rec.read_text())
     rec.write_text(json.dumps(doc | {"sha256": doc["sha256"][::-1]}))
-    assert f"the store: the store record {rec} isn't interface 1's {LR.TINY.name} stream" in \
-        refused(*gate(host, LOAD))
+    assert word() == "not-interface-1"
     rec.write_text(json.dumps(doc))
     with open(data, "ab") as f:
         f.write(b"\0")
-    assert "isn't its 34,240 bytes: write the store again (weights-write)" in refused(*gate(host, LOAD))
+    assert word() == "store-size"
     assert "--program" in refused(*gate(host, [w for w in LOAD if w not in ("--program", PROGRAM)]))
     assert not host.certifier.exists()
 

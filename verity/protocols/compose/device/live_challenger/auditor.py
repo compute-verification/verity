@@ -345,7 +345,10 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   H200 once a serving session. `weights-write [--shape h200|tiny]` writes the shape's stream there once
   (`load_relay.py write`, `WEIGHTS_MINUTES`): a stream already there is read back and kept only when its tensors'
   SHA-256 fold to the pin of interface 1's manifest (`load_relay.STORE_DIGESTS`), else refused and left unrecorded;
-  its end carries the store's record (`store`: written, present or refused). `load-relay` is a warden rehearsal (all
+  its end carries the store's record as `out/store.json` holds it (`store`, `STORE_PUBLIC`: written or present,
+  the shape and what the shape fixes; or the one word it was refused in, `LOAD_REFUSED`), and the record as the
+  write left it and what the write printed (`rehearse.log`) are in its `witness/`. A request the gate refuses for
+  the store says the word too, never the store's path. `load-relay` is a warden rehearsal (all
   of `warden-rehearse`'s flags) with the load first, run by the same warden: the gate refuses it unless the store's
   record of `--shape` is interface 1's (`load_relay.read_store`), `--program` is the reading program's digest and
   `--minutes` covers `load_minutes` (the stream and its witness at `LOAD_RATE`, and `LOAD_READY_S`) and then the
@@ -557,13 +560,14 @@ LOAD_RELAY = "load-relay.json"
 #: sentence is the witness's (`check.json`'s problems, `rehearse.log`)
 LOAD_REFUSED = ("digest", "decode", "length", "signer", "no-digests", "no-store", "not-interface-1", "no-record",
                 "store-size", "sink", "other")
-#: what `out/` and the end hold of a relayed load's record beside how many streams carried it and whether the sink
-#: acknowledged every byte sent: the shape and what the shape fixes, its model's name, its values, their rows and the
-#: bytes of the link and of the witness. Each stream's own counts, which the link's timing decides, and the relay's
-#: seconds, jobs and workers stay in `witness/`
-LOAD_PUBLIC = {"shape": str, "model": str, "values": int, "rows": int, "link_bytes": int, "witness_bytes": int}
 #: a published name of a load's record: a shape's or a model's
 LOAD_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}")
+#: what `out/` and the end hold of a relayed load's record beside how many streams carried it and whether the sink
+#: acknowledged every byte sent, each in its form (`in_form`): the shape and what the shape fixes, its model's name,
+#: its values, their rows and the bytes of the link and of the witness. Each stream's own counts, which the link's
+#: timing decides, and the relay's seconds, jobs and workers stay in `witness/`
+LOAD_PUBLIC = {"shape": LOAD_NAME, "model": LOAD_NAME, "values": int, "rows": int, "link_bytes": int,
+               "witness_bytes": int}
 #: the row registrations' files of `witness/`, the cells' and the connection rows' (`connection_rows`), each with
 #: the file of `out/` that holds its lines' certificates, line for line (`row_certificate`). A line is a
 #: registration, or the execution phase it was refused for, and its cost; of a connection rows' registration
@@ -611,6 +615,14 @@ CELL_ROWS = ("registered", "of")
 WITNESS = "witness"
 #: the shapes of interface 1's weights a store holds and a load relays (`load_relay.SHAPES`)
 LOAD_SHAPES = ("h200", "tiny")
+#: the store's format, `load_relay.STORE_FORMAT`'s word for word
+STORE_FORMAT = "verity-network-certifier/load-store/v1"
+#: a store's record as `out/` and the end hold it (`load_relay.py write`'s, less its tensors' digests), each key in
+#: its form: whether the stream was written or was there (`status`), the store's format, the shape's name and what
+#: the shape fixes: its model's name, the stream's bytes and the fold of its tensors' digests. A refused write's is its
+#: word alone, one of `LOAD_REFUSED`. The record as the write left it, and what the write printed, are the witness's
+STORE_PUBLIC = {"status": ("written", "present"), "format": (STORE_FORMAT,), "shape": LOAD_NAME,
+                "model": LOAD_NAME, "stream_bytes": int, "fold": ROOT}
 #: a load's streams to the H200's sink, each through a tunnel of its own, and how many by default
 LOAD_STREAMS, LOAD_DEFAULT_STREAMS = (1, 8), 4
 #: the link's rate a load's minutes are sized on (about 95 MB/s, measured over 4 streams from this host to
@@ -1883,8 +1895,9 @@ def parse_load(a: argparse.Namespace, host: Host, port: int) -> dict:
     lr = _load_relay()
     try:
         lr.read_store(host.store, lr.SHAPES[a.shape])
-    except lr.Refused as e:
-        raise Refused(f"the store: {e}") from None
+    except lr.Refused as e:  # its sentence names the store's path on the auditor's device: the caller gets the word
+        raise Refused(f"the store: {e.code} (one of load_relay.REFUSALS' words): weights-write --shape {a.shape} "
+                      "writes the shape's stream and its record") from None
     return {"shape": a.shape, "program": a.program, "sink_port": sink_port, "streams": streams,
             "minutes": load_minutes(a.shape)}
 
@@ -1907,7 +1920,8 @@ def parse_weights(argv: list[str], host: Host) -> dict:
     if a.shape not in LOAD_SHAPES:
         raise Refused(f"--shape {a.shape!r}: one of {list(LOAD_SHAPES)}")
     if not host.store.is_dir():
-        raise Refused(f"no store disk at {host.store}: infra mounts it, auditor's")
+        raise Refused("the store: no-store (one of load_relay.REFUSALS' words): the auditor's device has no store "
+                      "disk, which infra mounts")
     return {"device": "weights", "shape": a.shape, "minutes": WEIGHTS_MINUTES}
 
 
@@ -2746,7 +2760,7 @@ def warden_command(req: dict, out: Path, url: str, tree: Path = TREE, *, sinks: 
 
 def weights_command(req: dict, out: Path, store: Path, tree: Path = TREE) -> list[str]:
     """`load_relay.py write` of a `weights-write` request: its shape's stream into `store` over every core, its record
-    (less the digests) to `out/store.json`."""
+    (less the digests) to `store.json` in `out`, which the unit makes the run's `witness/` (`_weights_run`)."""
     return [sys.executable, str(tree / "benchmarks" / "network_traces" / "load_relay.py"), "write", "--store",
             str(store), "--shape", req["shape"], "--workers", str(os.cpu_count() or 1),
             "--out", str(out / "store.json")]
@@ -2766,6 +2780,44 @@ WARDEN_COUNTS = ("failed", "windows", "certified_windows", "certificates", "cell
 FAILED = ("cut", "fail", "error")
 
 
+class Unruled(ValueError):
+    """A line of a row registrations' file that `out/` can't hold as `ROW_LINE` rules it, or a store's record that
+    it can't hold as `STORE_PUBLIC` does."""
+
+
+def in_form(v: object, form: object) -> bool:
+    """Whether `v` is in a published key's `form`: `int`, a count below 2^63; a tuple, one of its values, in its
+    own type; a pattern, a string it matches whole."""
+    if form is int:
+        return type(v) is int and 0 <= v < 1 << 63
+    if isinstance(form, tuple):
+        return any(type(v) is type(w) and v == w for w in form)
+    return isinstance(v, str) and form.fullmatch(v) is not None
+
+
+def load_refused(word: object) -> dict:
+    """A refused load's or store's record as `out/` and the end hold it: its word alone, one of `LOAD_REFUSED`,
+    the last for anything that isn't one of the others."""
+    return {"refused": word if isinstance(word, str) and word in LOAD_REFUSED else LOAD_REFUSED[-1]}
+
+
+def store_public(doc: object) -> dict:
+    """A store's record (`load_relay.py write`'s) as `out/` and the end hold it: a refused write's word
+    (`load_refused`), or `STORE_PUBLIC`'s keys, all of them and no other, each in its form. `Unruled` for any
+    other record, naming the key and what to change: none of it is published."""
+    if isinstance(doc, dict) and "refused" in doc:
+        return load_refused(doc["refused"])
+    if not isinstance(doc, dict) or set(doc) != set(STORE_PUBLIC):
+        keys = sorted(map(str, doc)) if isinstance(doc, dict) else type(doc).__name__
+        raise Unruled(f"the store's record holds {keys}, not STORE_PUBLIC's keys {sorted(STORE_PUBLIC)}. Rule "
+                      f"whether a new key is public, and write its form there ({Path(__file__).name})")
+    for k, form in STORE_PUBLIC.items():
+        if not in_form(doc[k], form):
+            raise Unruled(f"the store's record's {k} isn't in the form STORE_PUBLIC ({Path(__file__).name}) holds "
+                          "it to")
+    return {k: doc[k] for k in STORE_PUBLIC}
+
+
 def load_relay_public(doc: object) -> dict | None:
     """A load's relay's record (`LOAD_RELAY`) as `out/` and the end hold it, None for what isn't one. A refused
     load's is its word alone, one of `LOAD_REFUSED`: the last for anything that isn't one of the others, so no
@@ -2776,11 +2828,8 @@ def load_relay_public(doc: object) -> dict | None:
     if not isinstance(doc, dict):
         return None
     if "refused" in doc:
-        word = doc["refused"]
-        return {"refused": word if isinstance(word, str) and word in LOAD_REFUSED else LOAD_REFUSED[-1]}
-    public = {k: doc[k] for k, form in LOAD_PUBLIC.items()
-              if (type(doc.get(k)) is int and 0 <= doc[k] < 1 << 63 if form is int
-                  else isinstance(doc.get(k), str) and LOAD_NAME.fullmatch(doc[k]) is not None)}
+        return load_refused(doc["refused"])
+    public = {k: doc[k] for k, form in LOAD_PUBLIC.items() if in_form(doc.get(k), form)}
     streams = doc.get("streams")
     acks = streams if isinstance(streams, list) and all(isinstance(a, dict) for a in streams) else []
     sums = [sum(a[k] for a in acks) if all(type(a.get(k)) is int for a in acks) else None
@@ -2809,10 +2858,6 @@ def row_certificate(line: dict) -> dict:
     c = r["certificate"]
     return {"certificate": {"key_id": c["key"], "link": r["link"], "direction": r.get("direction", ROWS_DIRECTION),
                             "window": r["window"], "digest": c["digest"], "signature": c["signature"]}}
-
-
-class Unruled(ValueError):
-    """A line of a row registrations' file that `out/` can't hold as `ROW_LINE` rules it."""
 
 
 def _ruled(doc: dict, keys: dict, at: str) -> dict:
@@ -3083,19 +3128,26 @@ def _end(d: Path, rc: int, word: str | None, why: str | None, outcome: dict, *, 
 def _weights_run(host: Host, d: Path, req: dict, *, pinned: str,
                  command: Callable[[dict, Path, Path], list[str]],
                  wait: Callable[[subprocess.Popen, float], int] | None) -> dict:
-    """A `weights-write` run: `command` (`weights_command`) for at most `WEIGHTS_MINUTES`, its end the store's record
-    (`out/store.json`: written, present or refused)."""
-    out, word, why = d / "out", None, None
-    with open(out / "rehearse.log", "wb") as log:
-        proc = subprocess.Popen(command(req, out, host.store), stdin=subprocess.DEVNULL, stdout=log,
+    """A `weights-write` run: `command` (`weights_command`) for at most `WEIGHTS_MINUTES`, writing to the run's
+    `witness/`, what it prints (`rehearse.log`) with it. Its end is the store's record as `store_public` holds it
+    (written, present or the word it was refused in), which is `out/store.json` too; a record `STORE_PUBLIC`
+    doesn't rule is not published and ends the run nonzero, the end saying `unruled` and the witness's `ENDED_WHY`
+    the key and the fix."""
+    out, witness, word, why, store = d / "out", d / WITNESS, None, None, None
+    witness.mkdir(mode=0o700, exist_ok=True)
+    with open(witness / "rehearse.log", "wb") as log:
+        proc = subprocess.Popen(command(req, witness, host.store), stdin=subprocess.DEVNULL, stdout=log,
                                 stderr=subprocess.STDOUT, env=certifier_env(), start_new_session=True)
     rc = (wait or _wait)(proc, req["minutes"] * 60)
     if rc == -signal.SIGTERM:
         word, why = "stopped", f"stopped at {req['minutes']} minutes"
     try:
-        store = json.loads((out / "store.json").read_text())
+        store = store_public(json.loads((witness / "store.json").read_text()))
+        (out / "store.json").write_text(json.dumps(store, indent=1, sort_keys=True) + "\n")
+    except Unruled as e:
+        rc, word, why = rc or 2, word or "unruled", str(e) if why is None else f"{why}; {e}"
     except (OSError, ValueError):
-        store = None
+        pass
     return _end(d, rc, word, why, {"device": "weights", "store": store}, pinned=pinned)
 
 

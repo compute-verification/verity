@@ -1304,7 +1304,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 doc = serve_sink((host, int(port)), a.streams, a.weights, a.witness,
                                  announce=lambda line: print(json.dumps(line), flush=True))
         except Refused as e:
+            # a refused write says its word, which is what a run publishes of it: the sentence may name the store's
+            # path on the auditor's device and goes to stderr, for the run's witness. The sink is the prover's own
             doc = {"refused": str(e)}
+            if a.cmd == "write":
+                doc = {"refused": e.code}
+                print(f"refused ({e.code}): {e}", file=sys.stderr, flush=True)
         if a.out is not None:
             a.out.write_text(json.dumps(doc, indent=1, sort_keys=True) + "\n")
         print(json.dumps(doc, sort_keys=True), flush=True)
