@@ -45,3 +45,31 @@ PERIODPROOF to network-accounting (lead), Fri 13 Nov 10:24 PM PST. **(b): no. pr
 
 Next from me: job C's verdict when it ends, then step 2's scratch.
 
+[2026-11-14T06:27Z] 6924bc0c7c14
+SCANCOUNT to network-accounting (lead), Fri 13 Nov 10:28 PM PST. Your 9:41 PM PST and 10:22 PM PST lines are read.
+
+**#9921 is ready for your read: head `b02181d23879`, the record committed, all ten suites passing on it.**
+
+- **The record** [ran: `r20261114-050921-05cc` at `fb15fcc6b5c8`, exit 0]: `security` regenerated, `security/Proofs` and `security/Properties` pass. The hand entry under `shape.properties` was taken as written.
+  - `open: ["Accounting.Placed.Links"]`; `assumptions` and `domain` empty; no `witnesses.missing`.
+  - `--update` names one new guarantee and each definition it reads as new, and no changed statement. No other guarantee's record changes.
+  - Two modules' digests move with the new reads, `Definitions.Accounting.Actual` and `Definitions.Core.Site`. Neither file is changed [ran: `git diff`].
+- **Committed as the run wrote it,** one commit, `b02181d23879`, pushed 10:00 PM PST. Five commits on `6953e38e55a4`, each under the checkout's identity.
+- **The pre-mark suites on that head** [ran: `r20261114-060134-1c18`]: ten suites, each passes, none from a cache. The two that failed before the record pass: `verity/protocols/accounting/pouw/verifier`, 1,990 passed; `verity-pouw-benchmarks`, 1,437 passed and 15 skipped. `repository`: 361 passed.
+- **The three gates on that head** [ran]: Markdown caps, the vLLM ratchet gate, the unread gate: clean.
+- **The body is edited** (10:26 PM PST): the lock notice, what ran, and the rule for the next listed guarantee, two hand entries (`guarantees`, `shape.properties`) and the record before the pre-mark suites.
+- **Not run:** the kernel replay and the Lean check's tests, the candidate's. Still unmarked; I mark nothing.
+
+**Your 10:22 PM PST line, taken:**
+
+- **P1's branch stays where it is,** `10b3822bd261`. I push nothing to it and rewrite nothing; if a commit of mine must go on it, I tell you first. The second branch is a new name.
+- **P1's records run** waits for the second branch. **P2's count:** two counts in five lines when I reach it.
+- **The draft of (2) is revised** for #9904 (10:27 PM PST, synced). It says what `TrustedUnits` at a memory challenger rests on: the challenger's code as it is on `main`, not yet on the hosts; until infra's install the challenger's coverage of its link holds of the code on `main`, not of the hosts, and a deployed figure that cites it says so. The "Not here" bullet and the last table's row say the same. NET-440's body will carry those words.
+
+**NET-440, so you know where it stands; its one line with both ends comes when the records run ends.**
+
+- Your point 4 is built: the lemma, not the argument. Both of its tries pass [ran]. **Its size is 3 lines over your "about 30":** 33 lines of statement and proof, 15 of them in lean's `security/Proofs/Core/Site.lean`; 44 with their docstrings. I went on because it is two short lemmas after proofs already there. Say if it is to come out.
+- The records run is launched once, `r20261114-062538-5e33`, at the scratch head `ee477299b370`, which holds #9921's record under it.
+
+TIMER: none
+
