@@ -3404,7 +3404,6 @@
     {"file": "verity/circuits/requirement/CircuitRequirement.lean", "count": 3},
     {"file": "verity/circuits/requirement/lakefile.toml", "count": 2},
     {"file": "verity/circuits/requirement/pyproject.toml", "count": 2},
-    {"file": "verity/circuits/requirement/tests/test_census_and_memory_map.py", "count": 4},
     {"file": "verity/protocols/accounting/certifier/verifier/PROTOCOL.md", "count": 120},
     {"file": "verity/protocols/accounting/certifier/verifier/README.md", "count": 44},
     {"file": "verity/protocols/accounting/certifier/verifier/active.py", "count": 10},
@@ -4675,6 +4674,7 @@
     {"file": "verity/protocols/proofs/spot/prover/audit/compose_circuit.py", "count": 1},
     {"file": "verity/protocols/proofs/spot/prover/tests/test_check_memo.py", "count": 8},
     {"file": "verity/protocols/proofs/spot/prover/audit/records_audit.py", "count": 63},
-    {"file": "verity/protocols/proofs/spot/prover/tests/test_records_audit.py", "count": 111}
+    {"file": "verity/protocols/proofs/spot/prover/tests/test_records_audit.py", "count": 111},
+    {"file": "adapters/vllm/tests/commit/test_census_and_memory_map.py", "count": 4}
   ]
 }

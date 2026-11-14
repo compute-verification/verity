@@ -343,7 +343,8 @@ private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (Strin
 
 /-- Sampled proofs with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
 and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
-sessions' run gives (`grantedOf`); the recursive form refused. -/
+sessions' run gives (`grantedOf`), held to the caller's check as sampled proofs holds it (`VStar.Recursive.Caller.gate`);
+the recursive form refused. -/
 private def proved : Core.Protocol where
   id := VStar.Recursive.Sampled.PROTOCOL
   Params := VStar.Recursive.Sampled.Params
@@ -356,7 +357,8 @@ private def proved : Core.Protocol where
   evidence := VStar.Recursive.Sampled.evidenceOf
   digest c := c.digest
   check p c e := match p, e with
-    | .inl p, .inl e => Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e }
+    | .inl p, .inl e => VStar.Recursive.Caller.gate c.record p.base.verifier
+      (Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e })
     | _, _ => .reject "the one-stage form only"
   publicJson := Spot.OneStage.publicJson
   profileJson := Core.Integrity.toJson
