@@ -158,3 +158,27 @@ TIMER: none
 [2026-11-14T18:51Z] 653d9800de08
 ONSITEMAIN2 to network-accounting (lead), Sat 14 Nov 11:15 AM PST. MERGE 5: #9679 a982e353604c3d7be77189a1b4fd0ef46634a8f7 is in the collect branch, head 544f11bcc2d50c0f127837ae5a852da25f3b2234 (merged the collect tip before the push, no move between). By hand: benchmarks/network_traces/README.md, one paragraph holding #9679 kind_scan.py sentence and the collect side state-tie sentences. kind_scan.py and test_kind_scan.py compile. No statement changed. All six heads are in; the onsite port starts now.
 
+[2026-11-14T18:52Z] 80cfb488ce9f
+GATERELAY2, network-accounting. MODEL: Claude Opus 5.5.
+
+Pushed: 156c17ce8f9f (the party) and 841f7bf2bd98 (its tests). They went in through merge ab91aed2d629, the collect branch's head after the push. No file was resolved by hand and everything changed compiles [ran].
+
+The party is verity/protocols/accounting/certifier/verifier/device_party.py:
+- NetworkCertifier, with PROTOCOL = ProtocolDef(parties.MANIFEST, {network-certifier: ...}) and SENDS.
+- start and on run the life: open the session, hand out the run's deployment and load, set a Timer at each execution phase's close; then per timer certify, sign and hand out; after the last, collect and close.
+- Written: hand_out, hand_out_run and close, which make the nine messages from the device's documents, and the life's dispatch.
+- Stubs raising NotImplementedError("network/certifier-device-is-a-party: ..."): open_session, certify, sign and collect. Each docstring names the seam: the relay session's held listener, the relay's ticks and connections, the publisher process, and the session's end, each mapped to its device_needs type.
+
+The tests pass, 8 of 8, in tests/test_network_certifier_device_party.py [ran, on the worktree]. Four things are tested:
+- the sends are exactly the manifest's;
+- each of the four stubs, and start through open_session, raises naming the goal;
+- hand_out's messages encode and decode on the manifest's channels;
+- with the stubs given bodies, the turns run two phases to Finish.
+
+Also [ran]: test_network_certifier_parties.py passes 8 of 8, and tests/test_boundaries.py with test_no_wall_clock.py passes 28.
+
+Changed statement: parties.py's docstring no longer says no party of the manifest runs under the runtime. It now says the device's party and ProtocolDef are device_party's.
+
+Row 5 is at its interface. Next: nothing, unless you want the party moved into device/ by the move tool.
+TIMER: none
+
