@@ -96,7 +96,9 @@ from verity.protocols.accounting.pouw.prover.serving import (
     SCHEDULES,
     Shape,
     traced_as as _traced_as,
+    use_h1_device,
     use_int8_arm,
+    use_tensors,
     verifier_coins,
     weight_binding,
     weights_root,
@@ -107,6 +109,23 @@ from verity_vllm.protocols.interface import Context, Option, Target
 from verity_vllm.protocols.pouw import h1_hooks as PHK
 from verity_vllm.protocols.pouw import h1_settings as PHS
 from verity_vllm.protocols.pouw.h1_settings import fills, from_engine  # noqa: F401  (the adapter's hooks)
+
+
+def _tensors() -> Any:
+    from verity.protocols.accounting.pouw.prover.serving.tensors_device import TENSORS
+
+    return TENSORS
+
+
+def _h1_device() -> Any:
+    from verity.protocols.accounting.pouw.prover.serving.h1.h1_device import H1
+
+    return H1
+
+
+#: PoUW's serving code reads and allocates the served buffers, and runs H1's device half, through the PyTorch adapter's
+use_tensors(_tensors)
+use_h1_device(_h1_device)
 
 __all__ = ["challenged", "h1_run"]
 

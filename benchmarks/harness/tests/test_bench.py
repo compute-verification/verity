@@ -1199,7 +1199,7 @@ def test_arm_settings_name_a_protocol_arm_of_the_spec_and_a_control_it_runs(tmp_
 def test_a_pearl_c_protocol_arms_passes_are_the_adapters_and_the_harness_only_reads_them():
     """The adapter ends a Pearl-C pass at each ``execute_model`` (`pouw.install`); the harness wraps nothing, finds the
     device run through the option's ``end_pass`` and reports the running totals of the passes it ended."""
-    from verity.protocols.accounting.pouw.prover.serving.pearl_c import PearlCDeviceRun
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c.run_device import PearlCDeviceRun
 
     class Run(PearlCDeviceRun):
         def __init__(self):

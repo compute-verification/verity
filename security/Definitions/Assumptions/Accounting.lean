@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Carrier
-public import Definitions.Accounting.Remote.Sketch
+public import Definitions.Registration.Carrier
+public import Definitions.Compose.Remote.Sketch
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.PearlC.Game
 import Mathlib.Basic.ENNReal.Real
@@ -12,9 +12,9 @@ import Mathlib.Basic.ENNReal.Real
 The premises of memory and bandwidth accounting that are named assumptions, each a `Prop` taken as a hypothesis by the
 guarantees that use it, never an `axiom`. No proof in the gate or ideal models reaches the first three, which are
 conjectures about the codec and the sketch's keys; the last two are a property a cost model has or lacks. The rate
-audit's, stacking's and the receipts' sketch bound's assumption modules (`Definitions.Accounting.Assumptions.RateAudit`,
+audit's, stacking's and the receipts' sketch bound's assumption modules (`Definitions.Poub.Assumptions.RateAudit`,
 `.Stacking`, `.RemoteSketch`) re-export this module, and the per-run guarantees
-(`Definitions.Accounting.Guarantees.PerRun`) import it:
+(`Definitions.Pouw.Guarantees.PerRun`) import it:
 
 * `WorkHardness b rounds c_root cost` (claim `rate-codec-work`): completing `x` of a word's `b` bits costs at least
   `x/b` of a word's price `rounds · c_root`.
@@ -39,7 +39,7 @@ namespace Accounting.Assumptions
 where `cost x` is the least compute, in the game's unit, in which the stated device obtains `x` bits of a word of the
 store (its bottom `x` bits, or any other `x`-bit function of it) that it neither holds nor reads, from setup, the
 payload the word encodes and anything else it holds, the word's other `b − x` bits among them, one word at a time (no
-amortization across words). It is what `RatePartial`'s games (`Definitions/Accounting/RateAuditPartial.lean`) charge for
+amortization across words). It is what `RatePartial`'s games (`Definitions/Poub/RateAuditPartial.lean`) charge for
 a completion of `x` bits. At `x = b` it says a whole rebuild costs at least `c_word`, `RateAudit`'s `c_enc`.
 
 **The price is a parameter.** For Sloth over `p` at `k` rounds, decoding is `k` squarings a word and encoding `k`

@@ -11,7 +11,7 @@ attaches the decode to its layers (vLLM's: `verity_vllm.protocols.pous`).
   ``libp2v1.so`` on the weights' GPU, which checks its own decode of the whole segment; `CpuEncoder` on the CPU), two
   blocks of each segment held to ``W`` by the reference decode, and ``C*`` held as one [blocks, block_bytes] uint8
   tensor on the weights' device; the memory challenger's table of it and the root over that table
-  (`VerifierKey.from_row_digests`). The salt is ``setup.draw_salt(source, commitment)``, ``source`` the auditor's coin
+  (`VerifierKey.from_row_digests`). The salt is ``setup.sample_salt(source, commitment)``, ``source`` the auditor's coin
   flipped after the commitment (`salt_from`).
 * **Decode** (`decoder`): a tensor's bytes from ``C*`` into a fresh buffer, by the store's load
   `p2_store.load.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the

@@ -42,9 +42,9 @@ The proofs are in `Security/Proofs/Slowdown/Formalism/Witnesses.lean`.
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism.Guarantees
+namespace Slowdown.Formalism.Guarantees
 
-open InferenceOnly.Formalism InferenceOnly.Formalism.Assumptions
+open Slowdown.Formalism Slowdown.Formalism.Assumptions
 open scoped NNReal ENNReal
 
 /-- **The counting lemma's premises hold** at `Chain`: the kind `{3, 4}` has the cap `1`, `1` is a partition-level
@@ -140,4 +140,4 @@ def FitTraining_nontrivial : Prop :=
   Honest.d.D.Boolean ∧ TrainingBlocks Honest.d Honest.P 1 0 1 1 1 1 1 ∧ ¬ TrainingFits 1 1 1 1 1 1 ∧
     ¬ slowdown Honest.d 1 1 ≤ ((1 : ℕ) : ℝ≥0∞) / ((1 - 0 : ℕ) : ℝ≥0∞)
 
-end InferenceOnly.Formalism.Guarantees
+end Slowdown.Formalism.Guarantees

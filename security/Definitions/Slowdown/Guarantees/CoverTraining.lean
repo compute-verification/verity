@@ -10,7 +10,7 @@ public import Definitions.Slowdown.Assumptions.CoverTraining
 /-!
 # The cover theorem on a declaration that complies with the inference-only policy
 
-The cover theorem (`InferenceOnly.Cover.Guarantees`) bounds what a block of a circuit of bits finishes. This guarantee
+The cover theorem (`Slowdown.Cover.Guarantees`) bounds what a block of a circuit of bits finishes. This guarantee
 joins it to the inference-only policy at `(c, k)`, `InferenceOnly.Complies c k`, through a reference training circuit
 `r` that the declared circuit `d` contains: `d`'s wiring is the prover's, so the premises are on `r`, and `d` reaches
 `r` through containment with its registered information free of the reference circuit's fresh input
@@ -32,7 +32,7 @@ not a scalar product), and `UpdateHardness` is needed at the block size in bits,
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.Guarantees
+namespace Slowdown.Cover.Guarantees
 
 /-- **Training through a compliant declaration pays the cover theorem's factor**: a declaration `d` that contains a
 reference training circuit `r` and complies at `(Γ, α)` (`CompliesRate`), with its registered information free of the
@@ -45,9 +45,9 @@ def CoverTraining : Prop :=
     {J L : Type} [DecidableEq J] [DecidableEq L] (Mb : MulBlocks (Circuit.ofDecl r) J L)
     (A : J → Finset (Fin (Circuit.ofDecl r).N)) (s D w₀ : ℕ),
     0 < b → 0 ≤ α → InferenceOnly.CompliesRate Γ α d →
-    InferenceOnly.Assumptions.ThetaRegistered r d (InferenceOnly.PartialContainment.ofContainment M) →
+    InferenceOnly.Assumptions.ThetaRegistered r d (Slowdown.PartialContainment.ofContainment M) →
     Assumptions.UpdateHardness Mb s b → Mb.Upstream A D → Assumptions.CapBelowDepth (α * Γ) b D →
     Assumptions.BlockFits r Γ (α * Γ) w₀ s → InferenceOnly.Assumptions.Coverage α₀ r Mb.P.card →
       α₀ * b * r.D.size r.D.computed ≤ (α * α * Γ + b * α) * d.D.size d.D.computed
 
-end InferenceOnly.Cover.Guarantees
+end Slowdown.Cover.Guarantees

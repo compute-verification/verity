@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Compose.Assumptions.Parties
 public import Properties.Pous.MemoryChallenger
 
 /-!

@@ -20,6 +20,7 @@ from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 
 from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 from verity.protocols.accounting.pouw.prover.serving.h1.names import PREFIX
+from verity.protocols.accounting.pouw.prover.serving.tensors import tensors
 
 
 def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
@@ -42,9 +43,7 @@ def card_arch(device: Any = None) -> str:
     """The architecture of the CUDA card ``device`` (the current one when None) as H1's device records name it
     (`h1device.DEVICES`): an H100 or H200's, compute capability 9.0, or the RTX PRO 6000's, 12.0. ValueError on a card
     with no record."""
-    import torch
-
-    major, minor = torch.cuda.get_device_capability(device)
+    major, minor = tensors().capability(device)
     return HD.device(f"sm_{major}{minor}").arch
 
 

@@ -97,7 +97,7 @@ from verity.protocols.accounting.pouw.prover.serving.h1 import commit as CT
 from verity.protocols.accounting.pouw.prover.serving.h1 import prover as PV
 from verity.protocols.accounting.pouw.prover.serving.h1 import records as ZR
 from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
-from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
+from verity.protocols.accounting.pouw.prover.serving.h1 import tables as TB
 from verity.protocols.accounting.pouw.prover.serving.h1.commit import calls_root
 from verity.protocols.accounting.pouw.prover.serving.h1.names import SALT_TAG, program_salt
 from verity.protocols.accounting.pouw.prover.serving.h1.records import numpy_of
@@ -358,7 +358,7 @@ class H1Run:
             PV.keep_key(self.prover, self._key)
         #: each call's table roots (`tables`), the calls whose tables the GPU is still hashing, and each call's receipt root
         self._roots: dict[int, dict[str, str | None]] = {}
-        self._hashing: deque[tuple[int, TD.Pending]] = deque()
+        self._hashing: deque[tuple[int, Any]] = deque()
         self.receipts: dict[int, bytes] = {}
         #: the admitted requests' entries in admission order, each round's, and the requests refused admission
         self.requests: list[RQ.RequestEntry] = []
@@ -392,7 +392,7 @@ class H1Run:
     @property
     def tables(self) -> dict[int, dict[str, str | None]]:
         """Each call's table roots (hex; z None when the run has no exact Y for it), once the GPU has hashed them all."""
-        TD.settle(self, wait=True)
+        TB.settle(self, wait=True)
         if self.served is not None:
             self.served.settle()
         return self._roots
@@ -437,8 +437,8 @@ class H1Run:
         return requests
 
     def _commit_tables(self, call: Call, a: Any, s_a: Any, records: np.ndarray | None, zy: Any = None) -> None:
-        """The call's A and z tables (`pouw_h1_tables_device.commit_tables`)."""
-        TD.commit_tables(self, call, a, s_a, records, zy)
+        """The call's A and z tables (`pouw_h1_tables.commit_tables`)."""
+        TB.commit_tables(self, call, a, s_a, records, zy)
 
     def call(self, index: int) -> Call:
         """Call `index`; KeyError when the window has none."""
@@ -459,7 +459,7 @@ class H1Run:
             self._commit_tables(call, a, s_a, records, zy)
             if self.served is not None:
                 self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
-            TD.flush(self)
+            TB.flush(self)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -630,7 +630,7 @@ class H1Run:
         self._recorded = (call, z, None if records is None else (records, s_a, weight_scale))
         return call
 
-    def judge(self, trace: CG.Trace, y: Any) -> dict[str, Any] | None:
+    def judge(self, trace: Any, y: Any) -> dict[str, Any] | None:
         """The credit gate on the call `record` made inside ``trace`` (None if it made none): y is what the linear handed
         back to vLLM; a call the trace credits whose records don't hold is refused (`pouw_h1_records.refusal`), read on
         the records' device first (`pouw_h1_records.holds_on`) and on the host's copy only when that doesn't hold."""
@@ -641,7 +641,7 @@ class H1Run:
         v = CG.verdict(trace, y, z)
         if v["credit"] and not (held is not None and ZR.holds_on(z, call.rows, call.n, y, held[1], held[2])) \
                 and (why := ZR.refusal(held and (held[0], numpy_of(held[1]), numpy_of(held[2])), call,
-                                       TD.row_words(y, call.m, "<i2"))):
+                                       TB.row_words(y, call.m, "<i2"))):
             v = {**v, "credit": False, "reason": f"credit: {CG.RECORDS}: {trace.linear} {why}"}
         self.verdicts[call.index] = v
         return v

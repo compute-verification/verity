@@ -103,8 +103,8 @@ the vector fails its check or doesn't reproduce a published number.
 Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
 two exceptions: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
 `rows.csv` ("Adopt a probe's census"), and `lean-headline` with neither `--check` nor `--numbers` writes the Lean
-files of the families' headline instances, `security/Definitions/Accounting/Headline/Sm120.lean` and
-`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Accounting/HeadlineDc/`; `--json F` writes the
+files of the families' headline instances, `security/Definitions/Pouw/Headline/Sm120.lean` and
+`Sm120Measured.lean` and the five `Sm*.lean` of `security/Definitions/Pouw/HeadlineDc/`; `--json F` writes the
 data-centre families' readings to `F`.
 
 ## Layout
@@ -465,7 +465,7 @@ value read from the card file (`card = "EXPR"`) where the card holds it:
 
 - `machine-model --device sm_90 sheet` derives every DS line from it, checks them against the census file, and checks
   each per-clock peak against the figure its document prints at the clock it's quoted at.
-- `sheet --lean` prints the Lean module `sheet.toml` names (`security/Definitions/Accounting/Sheets/`), which the tests
+- `sheet --lean` prints the Lean module `sheet.toml` names (`security/Definitions/Registration/Sheets/`), which the tests
   hold to that output and whose `machine_eq_census` proves the machine is the census.
 - `sheet --eps` prices the headline design's sheet reading on the sheet's own lines, with each peak read per second at
   f_max, and finds how much slower every tensor line can be before that ε moves; `sheet --eps --uni C …` prices it with

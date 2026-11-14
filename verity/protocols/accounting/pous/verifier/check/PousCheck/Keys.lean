@@ -21,7 +21,7 @@ t        the first w/8-byte word of stream_t below p: candidate a is bytes [a·n
 Two prefix bodies, the same streams after them:
 
 - the package's (`expand_prefix`, what `p2-16448/v4` runs): `"verity/pous/p2/keys/v4\0" ‖ frame("p2/v4") ‖
-  frame(prime id) ‖ frame(salt)`, its 24-byte salt from the generic `setup.draw_salt`;
+  frame(prime id) ‖ frame(salt)`, its 24-byte salt from the generic `setup.sample_salt`;
 - the spec's (`reference.py`, and `vectors.json`): the same with `frame(model commitment) ‖ frame(setup salt)`, 64 and 32 bytes.
 
 The prefix is absorbed once (`Identity.Sha512`'s midstate) and each chunk is one compression after it. The counter is a

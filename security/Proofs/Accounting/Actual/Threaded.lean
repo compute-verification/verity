@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Guarantees.Actual.Threaded
+public import Definitions.Slowdown.Guarantees.Actual.Threaded
 public import Proofs.Accounting.Actual.ServerBlocks
 public import Proofs.Slowdown.Threads
 
@@ -12,7 +12,7 @@ divides the developer's region over `[0, t)` into `n ⌈t/ω⌉` windows of at m
 containment's image at most the state at its start plus `β_X ω`, so at most `K = R + r ω` (`serverBlocks_small`). Pulled back
 through the containment (`InferenceOnly.SecurityProofs.pull`), the windows divide the reference circuit into pieces no larger whose
 fresh input bits are at most their windows' reads in the image (`InferenceOnly.SecurityProofs.freshInput_pull_le_readsIn`, which needs
-no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`InferenceOnly.SecurityProofs.ThreadedReads`) bounds each
+no condition on the baselines), each small at `(Γ, K)`, and Theorem 1 (`Slowdown.SecurityProofs.ThreadedReads`) bounds each
 piece's counted multiplications by `K Λ(K) / b_a`; every counted multiplication lies in one piece (`card_M_eq_sum`).
 Through a partial containment the windows divide only the gates the declaration computes (`InferenceOnly.SecurityProofs.piece`),
 each reading novelly at most its window's reads in the image of those gates and the gates they read
@@ -20,11 +20,13 @@ each reading novelly at most its window's reads in the image of those gates and 
 (`ThreadedRuntimeDark`).
 
 The runtime follows from `⌈t/ω⌉ ω ≤ t + ω` (`runtime_of_count`); the rate at `ω = R/r` from `(2R)² / ω = 4 R r`. Each is
-proved per parameter slot, through Theorem 1 per slot (`InferenceOnly.SecurityProofs.ThreadedReadsSlots`), and the form over weight
-gates is its instance at one slot per weight gate (`InferenceOnly.SecurityProofs.Fit.idSlots`).
+proved per parameter slot, through Theorem 1 per slot (`Slowdown.SecurityProofs.ThreadedReadsSlots`), and the form over weight
+gates is its instance at one slot per weight gate (`Slowdown.SecurityProofs.Fit.idSlots`).
 -/
 
 @[expose] public section
+
+open Slowdown
 
 namespace Accounting.SecurityProofs.Actual
 
@@ -113,7 +115,7 @@ theorem ThreadedRuntimeSlots : Guarantees.Actual.ThreadedRuntimeSlots := by
           rw [card_M_eq_sum T (InferenceOnly.SecurityProofs.pull M P), Nat.cast_sum, mul_sum]
       _ ≤ ∑ u, (freshInput c ((InferenceOnly.SecurityProofs.pull M P).gates u) : ℝ) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ =>
-            InferenceOnly.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
+            Slowdown.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
       _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
       _ = _ := by simp
@@ -122,9 +124,9 @@ theorem ThreadedRuntimeSlots : Guarantees.Actual.ThreadedRuntimeSlots := by
 /-- `ThreadedRuntimeSlots` at one slot per weight gate. -/
 theorem ThreadedRuntime : Guarantees.Actual.ThreadedRuntime := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT hW
-  exact ThreadedRuntimeSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T) d e
+  exact ThreadedRuntimeSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (Slowdown.SecurityProofs.Fit.idSlots T) d e
     hω hX hC hΦ hL hbw hba hd hΓ hr hR hcont hT
-    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW)
+    (Slowdown.SecurityProofs.weightsIncompressibleSlots_of (Slowdown.SecurityProofs.Fit.idSlots T) hbw.le hW)
 
 theorem ThreadedRateSlots : Guarantees.Actual.ThreadedRateSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T σ d e hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω
@@ -176,9 +178,9 @@ theorem ThreadedRateSlots : Guarantees.Actual.ThreadedRateSlots := by
 theorem ThreadedRate : Guarantees.Actual.ThreadedRate := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T d e hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω hωt
     hopt hquad hcont hT hW
-  exact ThreadedRateSlots A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T) d e
+  exact ThreadedRateSlots A ℓ Φ ends β link n X θ hθ t ω p Γ R r b_w b_a c T (Slowdown.SecurityProofs.Fit.idSlots T) d e
     hω hX hC hΦ hL hbw hba hd hΓ hr hwipe hpω hωt hopt hquad hcont hT
-    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW)
+    (Slowdown.SecurityProofs.weightsIncompressibleSlots_of (Slowdown.SecurityProofs.Fit.idSlots T) hbw.le hW)
 
 theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T σ d e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT hW
@@ -198,7 +200,7 @@ theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots :=
           rw [hM, Nat.cast_sum, mul_sum]
       _ ≤ ∑ u, (freshInput c (InferenceOnly.SecurityProofs.piece M P u) : ℝ) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ =>
-            InferenceOnly.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
+            Slowdown.SecurityProofs.ThreadedReadsSlots c T σ Γ (R + r * ω) b_w b_a d e hbw hba hd hT hW _ (hpiece u)
       _ ≤ ∑ _u : Fin (n * ((t + ω - 1) / ω)), (R + r * ω) * T.bound (R + r * ω) b_w d e :=
           sum_le_sum fun u _ => mul_le_mul_of_nonneg_right (hpiece u).2.2 hΛ
       _ = _ := by simp
@@ -214,8 +216,8 @@ theorem ThreadedRuntimeDarkSlots : Guarantees.Actual.ThreadedRuntimeDarkSlots :=
 /-- `ThreadedRuntimeDarkSlots` at one slot per weight gate. -/
 theorem ThreadedRuntimeDark : Guarantees.Actual.ThreadedRuntimeDark := by
   intro L E _ _ A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T d e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT hW
-  exact ThreadedRuntimeDarkSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (InferenceOnly.SecurityProofs.Fit.idSlots T) d
+  exact ThreadedRuntimeDarkSlots A ℓ Φ ends β link n X θ hθ t ω Γ R r b_w b_a c T (Slowdown.SecurityProofs.Fit.idSlots T) d
     e M hω hX hC hΦ hL hbw hba hd hΓ hr hR hT
-    (InferenceOnly.SecurityProofs.weightsIncompressibleSlots_of (InferenceOnly.SecurityProofs.Fit.idSlots T) hbw.le hW)
+    (Slowdown.SecurityProofs.weightsIncompressibleSlots_of (Slowdown.SecurityProofs.Fit.idSlots T) hbw.le hW)
 
 end Accounting.SecurityProofs.Actual

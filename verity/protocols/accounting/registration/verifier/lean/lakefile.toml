@@ -21,7 +21,7 @@ path = "../../../../../circuits/difftest"
 [[lean_lib]]
 name = "RegistrationLog"
 # The guards of the Site's checks (`RegistrationLog.SiteV2Guards`), which no module imports, build with the library.
-globs = ["RegistrationLog", "RegistrationLog.SiteV2Guards"]
+roots = ["RegistrationLog", "RegistrationLog.SiteV2Guards"]
 
 [[lean_exe]]
 name = "core-registration"

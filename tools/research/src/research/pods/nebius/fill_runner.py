@@ -91,7 +91,7 @@ import subprocess
 import sys
 import time
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 FILL = Path(os.environ.get("FILL_DIR", "/workspace/pouw/fill"))
@@ -167,7 +167,7 @@ repinned: set[str] = set()
 
 
 def now() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def event(kind: str, job: str, **kw) -> None:
@@ -178,7 +178,7 @@ def event(kind: str, job: str, **kw) -> None:
 def utc(s: str) -> float:
     """`2026-10-02T14:45Z` (UTC when it names no zone) in epoch seconds."""
     d = datetime.fromisoformat(s.replace("Z", "+00:00"))
-    return d.replace(tzinfo=d.tzinfo or timezone.utc).timestamp()
+    return d.replace(tzinfo=d.tzinfo or UTC).timestamp()
 
 
 def fences(t: float | None = None) -> list[dict]:
@@ -450,7 +450,7 @@ def start(p: Path, h: dict, backfill: bool = False, claim_fd: int | None = None)
     name = p.name
     run = FILL / "running" / name
     shutil.move(str(p), run)
-    log = open(FILL / "logs" / f"{name}.{datetime.now(timezone.utc):%H%M%S}.log", "w")
+    log = open(FILL / "logs" / f"{name}.{datetime.now(UTC):%H%M%S}.log", "w")
     env = {**os.environ, "FILL": "1", "FILL_JOB": name, "GPU_LEASE_WHO": f"fill:{h['owner']}",
            "OMP_NUM_THREADS": str(h["cpus"])}
     verity = h["project"] == "verity" and not h["gpus"]
@@ -821,7 +821,7 @@ def disk_pct(path: str) -> float:
 
 
 def verity_pool(queued: list) -> None:
-    t = datetime.now(timezone.utc)
+    t = datetime.now(UTC)
     jobs = {k: j for k, j in running.items() if not j["h"]["gpus"] and j["h"]["project"] == "verity"}
     lent = {k: j for k, j in running.items() if j["h"].get("lent") and not j.get("stopping")}
     if t >= VERITY_STOP:
@@ -961,7 +961,6 @@ def tick(n: int) -> str:
                 queued.append((p, h, p.stat().st_mtime))
             except OSError:
                 pass
-    started = False
     # a window blocked by another lease: fill backfills, admitted by gpu-lease --max-min only if it ends before the window can start
     backfill = window and blockers > 0
     if not timed and (not want or backfill) and time.monotonic() >= backoff_until:
@@ -1008,7 +1007,6 @@ def tick(n: int) -> str:
             start(p, {**h, "on": ",".join(map(str, got))}, backfill=backfill)
             counts[h["owner"]] += 1
             slots -= h["gpus"]
-            started = True
         if not window:
             # Commits that found too few free GPUs take the newest proofs (then pous) fills' GPUs, counting GPUs already freeing
             waiting = sum(h["gpus"] for p, h, _ in queued if h["gpus"] and rank(p.name, h) == 0 and p.exists() and clears(h, booked, t_now))
@@ -1163,7 +1161,7 @@ def fence(argv: list[str], t: float | None = None) -> int:
                 theirs = gpu_set(f["cpus"], 1 << 16) or set()
                 if f["gpu"] == a.gpu or cpus & theirs:
                     return refuse(f"{f['owner']} has GPU {f['gpu']} and cores {f['cpus']} until "
-                                  f"{datetime.fromtimestamp(f['until'], timezone.utc):%H:%MZ}")
+                                  f"{datetime.fromtimestamp(f['until'], UTC):%H:%MZ}")
             for p in (FILL / "running").glob(".*.cpus"):
                 try:
                     theirs = gpu_set(p.read_text().strip(), 1 << 16) or set()
@@ -1173,13 +1171,13 @@ def fence(argv: list[str], t: float | None = None) -> int:
                     return refuse(f"timing job {p.name[1:-len('.cpus')]} has cores {cpu_list(theirs)} until its max_min")
             if a.jobs is not None and (not re.fullmatch(r"[^\s#]+", a.jobs) or not 1 <= a.max_min <= 60 * FENCE_MAX_H):
                 return refuse(f"--jobs is one glob without #, --max-min 1 to {60 * FENCE_MAX_H}")
-            end = datetime.fromtimestamp(until, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            end = datetime.fromtimestamp(until, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
             jobs = f" {a.jobs} {a.max_min}" if a.jobs is not None else ""
             line = f"{a.owner} {a.gpu} {cpu_list(cpus)} {end}{jobs}  # {' '.join(a.why.split())}"
             note = f"fence {'(replaces its last) ' if old else ''}{line}"
             for s, e in windows():
                 if s < until and e > t:
-                    print(f"note: the window booked at {datetime.fromtimestamp(s, timezone.utc):%H:%MZ} stops every fill job "
+                    print(f"note: the window booked at {datetime.fromtimestamp(s, UTC):%H:%MZ} stops every fill job "
                           f"while it runs, the fence's too")
         with open(QUOTA_LOG, "a") as log:
             log.write(f"{now()} {a.owner} (fill_runner.py fence): {note}\n")

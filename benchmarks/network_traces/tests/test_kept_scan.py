@@ -151,7 +151,7 @@ def test_the_scan_state_opening_is_the_registered_scan_state_the_scan_holds(serv
 
     monkeypatch.setattr(H1R, "MODE", "numpy")
     with PP.network_traces():
-        import scan_zk as SZ
+        from verity.protocols.accounting.certifier.prover import scan_zk as SZ
     rows, _ = kept_scan(serve_dir, CLASS, USERS[:3])
     run = "ab" * 64
     value = WRS.state_value(WC.NAME, CLASS, rows, hashlib.sha512(b"committer").digest()[:32], 0, window=run)

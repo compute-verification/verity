@@ -27,7 +27,7 @@ disjoint.
 
 @[expose] public section
 
-namespace InferenceOnly.Cover.SecurityProofs
+namespace Slowdown.Cover.SecurityProofs
 
 /-- A block that computes whole a counted product of use `j` is handed a gate of `j`'s activation region. -/
 theorem whole_use_entry {C : Circuit} {J L : Type} [DecidableEq J] [DecidableEq L] (M : MulBlocks C J L)
@@ -102,4 +102,4 @@ theorem finished_sdiff_whole_card_le {C : Circuit} {J L : Type} [DecidableEq J] 
   rw [C.θ_input x hxθ] at hy
   exact Finset.notMem_empty y hy
 
-end InferenceOnly.Cover.SecurityProofs
+end Slowdown.Cover.SecurityProofs

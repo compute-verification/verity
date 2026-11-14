@@ -1,4 +1,4 @@
-"""`security/Proofs/Accounting/TS/J10RChecks.lean`'s vectors are the Python's: each `theorem NAME : LHS = RHS` the kernel
+"""`security/Proofs/Pouw/TS/J10RChecks.lean`'s vectors are the Python's: each `theorem NAME : LHS = RHS` the kernel
 evaluates there is recomputed here from `seeds` and `h1tile`, so the Lean definitions of J10-R's noise (`J10R.lean`) and
 the units' references can't drift apart."""
 from __future__ import annotations

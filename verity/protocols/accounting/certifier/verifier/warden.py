@@ -504,6 +504,11 @@ LENGTHS_FORMS = (1, 2)
 #: period check reads (`scheduleOf`), which reads beside them each optional field a schedule sets, and whose egress
 #: form is the id form
 INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", *OPTIONAL_FIELDS))
+#: the scan's w63 schedule, and w63k4's, its egress 5 cells an execution phase: the schedules `scan_zk`'s setups of
+#: those names serve and the gate's relay sessions run
+W63 = WardenParams(cell_bytes=512, slots=4, bucket_ms=100, delay=27, lanes=4, queue=4, window=32, ingress_cells=47,
+                   ingress_buckets=12, egress_cells=65, every=16)
+W63K4 = replace(W63, egress_cells=5)
 
 
 def _stride_releases(lanes: int, every: int, delay: int, ingress_buckets: int) -> int:

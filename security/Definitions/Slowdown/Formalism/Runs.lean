@@ -20,7 +20,7 @@ the bins of `Δ`, the update profiles along which A2's floor is measured.
 
 @[expose] public section
 
-namespace InferenceOnly.Formalism
+namespace Slowdown.Formalism
 
 open Finset
 open Verity (RegisteredCircuit)
@@ -60,4 +60,4 @@ noncomputable def Run.inefficiency (methods : Set Run) (ℓ : List Bool → ℝ)
 /-- **`B` blocks fit in `N` periods** of `n` blocks each. -/
 def InPeriods (B N n : ℕ) : Prop := B ≤ N * n
 
-end InferenceOnly.Formalism
+end Slowdown.Formalism
