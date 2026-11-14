@@ -21,7 +21,8 @@ import numpy as np
 import pytest
 
 from verity_vllm.acquire import fa2_plane_classes as FP
-from verity_vllm.commit import binding as B, step_rows
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 from verity_vllm.query.manifest import bind as MB
 from verity_vllm.query.manifest import format as MF

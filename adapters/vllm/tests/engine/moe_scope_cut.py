@@ -15,10 +15,21 @@ from __future__ import annotations
 import argparse
 import gzip
 import hashlib
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Event, Note, Root, RunHeader, StepEnd, StepStart, TritonLaunch, views_in
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Event,
+    Note,
+    Root,
+    RunHeader,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    views_in,
+)
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import dumps, read_log, split_steps
 
