@@ -1,5 +1,5 @@
 # `verity bench certifier_term` (`run.py`). Not a package: the suite holds the result the runner writes with `--out` to
-# the calculator's document and to the harness kit's writer (`uv run tools/verity/check/suites.py benchmarks/certifier_term`).
+# the calculator's document and to the harness kit's writer (`uv run tools/check/suites.py benchmarks/certifier_term`).
 # What the runner prints with no `--out`, and the calculator's numbers, are benchmarks/network_traces' suite's.
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -33,7 +33,7 @@ PACKAGE = Path(__file__).resolve().parents[1]
 RECORD = Path(__file__).with_name("population_recorded.json")
 ABOUT = ("TemplateInstances / TemplatePopulations programs over verity/circuits' circuit-check catalog: per program, the "
          "SHA-512 of its descriptor id and its program digest; checked and written by test_population_recorded.py")
-REWRITE = "`uv run python tools/verity/check/pins.py --write verity/circuits/tests/population_recorded.json`"
+REWRITE = "`uv run python tools/check/pins.py --write verity/circuits/tests/population_recorded.json`"
 #: the population programs' own families, which the sidecars bind as roots too: not templates of a population here
 POPULATIONS = ("TemplateInstances", "TemplatePopulations")
 #: the packages under `verity/circuits` whose sidecars the record never held

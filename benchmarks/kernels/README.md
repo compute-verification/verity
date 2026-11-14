@@ -15,7 +15,7 @@ Each directory is also a test suite, run on the CPU from the tree's root:
 
 ```bash
 uv sync --all-packages --extra torch-cpu
-uv run tools/verity/check/suites.py benchmarks/kernels/DIR
+uv run tools/check/suites.py benchmarks/kernels/DIR
 ```
 
 Each GPU script's header gives its command and the hardware it needs: CUDA's nvcc (12.8 or later), a GPU taken through

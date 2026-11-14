@@ -1,6 +1,6 @@
 # The tensor-core wide-word codec's benchmark and its tests. Not a package: `wt.cu` and `bench.py` run on a GPU node,
 # and the byte-exact reference with the kernel's tensor-core decomposition and lane-by-lane carries (`wide.py`)
-# run here as a suite (`uv run tools/verity/check/suites.py benchmarks/codec_tensor`), on the remote bandwidth audit's
+# run here as a suite (`uv run tools/check/suites.py benchmarks/codec_tensor`), on the remote bandwidth audit's
 # codec (`wide.py`'s field, keys and rounds).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
