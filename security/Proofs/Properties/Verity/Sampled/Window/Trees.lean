@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Window.Order
 public import Proofs.Properties.Verity.Sampled.Window.Answered
 
 /-!
-# Sampled proofs' coupling over a window: which session each answered release is of
+# SPOT's coupling over a window: which session each answered release is of
 
 The members' sessions' traces answer releases of the one play's log (`Window/Answered.lean`), and the window's
 readings say which opening is which session's round by the order the trees are first opened in

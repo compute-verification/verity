@@ -129,10 +129,8 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
     },
     "compute-accounting": {
-        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`), and a coins client in place of the
-        # verifier's own `Challenger` and `verifier.coins` for the Pearl+ serve.
+        # Needs, outside pouw's verifier/: the matmul domain's error (`DomainError`).
         "verity_vllm/check/replay/pouw_circuit.py": ("accounting.pouw.verifier.protocol.DomainError",),
-        "verity_vllm/pipeline/serve_pearl.py": ("accounting.pouw.verifier.coins.Challenger", "accounting.pouw.verifier.verifier"),
     },
     "memory-accounting": {
         # `protocols/pous.py` runs a whole period (setup, serve, audit, certify, the memory challenger's session): it

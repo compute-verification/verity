@@ -182,7 +182,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     rows, cols = list(range(ti * TILE, (ti + 1) * TILE)), list(range(tj * TILE, (tj + 1) * TILE))
     fast = settings.PEARL_C4_F1 == "fast"
     if fast:
-        import f1_fast
+        from verity.protocols.experimental.pearl_c4.prover import f1_fast
     s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)
     lab = lambda part: hashlib.sha256(f"pearl-c4-real/{name}/{t}/{part}".encode()).digest()  # noqa: E731

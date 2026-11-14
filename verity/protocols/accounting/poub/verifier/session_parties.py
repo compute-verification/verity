@@ -1,5 +1,6 @@
 """PoUB's session (`period.session`) as two parties of the deployment layer (`verity.runtime`): the
-verifier and its challenger (`Verifier`), on a machine the developer doesn't control, and the prover (`Prover`) on its node.
+verifier and its challenger (`Verifier`), on a machine the developer doesn't control, and the prover on its node, whose
+party is `verity/protocols/accounting/poub/prover/session_prover.py`'s. `PROTOCOL` declares the verifier's role.
 
 ~~~text
 prover   -> verifier   Register {blocks} + payload root; per pass Root {t, i} + root; per window Openings {t} + openings
@@ -22,20 +23,17 @@ the period's live secret and the registration's nonce, sampled once. Its clock t
 The verifier finishes with `{"answer", "case"}` (private: the case holds the openings) once it has recorded the answer
 (`period.answer`, as `RemoteAudit.Protocol.check` gives it): after the last window's verdict, or at the first rejection,
 with the case of the events so far. A prover that leaves, a frame the wire refuses or one out of phase ends it refused
-by name, with the answer as it stands. The developer's machine gives it its store (`capabilities["store"]`, a
-`period.Prover`: `period.Local` is the reference); it finishes on `End`, refused `coins` when a challenge it was sent
-doesn't open against the coins disclosed (`period.Prover.end`).
+by name, with the answer as it stands.
 """
 
 from __future__ import annotations
 
-import json
 import struct
 from collections.abc import Callable
 from typing import Any
 
 from verity.commitments.identity import canonical_json_bytes
-from verity.protocol import Channel, Manifest, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role
 from verity.party import (
     Finish,
     Identity,
@@ -44,8 +42,7 @@ from verity.party import (
     Send,
     Timer,
 )
-from verity.runtime.runner import ProtocolDef
-from verity.channel import Body, Int, Json, Message, Phase, Refused, Schema
+from verity.channel import Body, Int, Json, Message, Schema
 
 from . import audit, receipts
 from . import coins as C
@@ -232,52 +229,8 @@ class Verifier:
         return canonical_json_bytes({"commitment": commitment.to_json(), "openings": [o.to_json() for o in openings]})
 
 
-class Prover:
-    """The prover: its store (`capabilities["store"]`, a `period.Prover`) registered, held to the registration and the
-    session's coin commitment it is sent, and read for each pass and each window's openings."""
-
-    def start(self, params: dict[str, Any], identity: Identity) -> list[Any]:
-        self.store, self.passes, self.phase = identity.capabilities["store"], 0, Phase("Hold")
-        blocks, root = self.store.register()
-        return [Send(VERIFIER, Message("Register", {"blocks": blocks}, root))]
-
-    def on(self, r: Received) -> list[Any]:
-        m = r.message
-        if m.type in ("Refused", "Closed"):
-            return [Finish({"passes": self.passes}, m.fields["name"] if m.type == "Refused" else "closed")]
-        try:
-            self.phase.check(m)
-        except Refused as e:
-            return [Finish({"passes": self.passes}, e.name)]
-        self.phase.expect("Run", "Open", "End")
-        if m.type == "Hold":
-            self.store.hold(P.registration_of(m.fields["registration"]))
-            return []
-        t = m.fields.get("t")
-        if m.type == "Run":
-            try:
-                challenge = C.Released.from_json(m.fields["challenge"])
-            except ValueError:
-                return [Finish({"passes": self.passes}, "coins")]
-            root = self.store.run(challenge, t, m.fields["i"], m.body)
-            self.passes += 1
-            return [Send(VERIFIER, Message("Root", {"t": t, "i": m.fields["i"]}, root))]
-        if m.type == "Open":
-            sampled = [DRAW.unpack_from(m.body, k) for k in range(0, len(m.body), DRAW.size)]
-            return [Send(VERIFIER, Message("Openings", {"t": t}, W.encode_openings(self.store.open(t, sampled))))]
-        if m.body:
-            try:
-                doc = json.loads(m.body)
-                self.store.end(C.LiveCommitment.from_json(doc["commitment"]),
-                               [C.LiveOpening.from_json(o) for o in doc["openings"]])
-            except (ValueError, KeyError, TypeError):
-                return [Finish({"passes": self.passes}, "coins")]
-        return [Finish({"passes": self.passes})]
-
-
-PROTOCOL = ProtocolDef(MANIFEST, {VERIFIER: Verifier, PROVER: Prover})
+PROTOCOL = ProtocolDef(MANIFEST, {VERIFIER: Verifier})
 PROTOCOLS = {ID: PROTOCOL}
 
 
-__all__ = ["ID", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "VERIFIER", "VERSION", "Prover", "Verifier",
-           "request_of"]
+__all__ = ["ID", "MANIFEST", "PROTOCOL", "PROTOCOLS", "PROVER", "VERIFIER", "VERSION", "Verifier", "request_of"]

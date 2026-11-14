@@ -6,7 +6,7 @@ what an auditor with no devices at the site establishes about a datacenter servi
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
-- **integrity**, by sampled proofs' one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
+- **integrity**, by SPOT's one-stage audit (`verity/protocols/proofs/spot/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/protocols/accounting/pouw/verifier/`), on the served model itself: the endpoint
@@ -21,7 +21,7 @@ run is a development run. And an H1 commitment's served execution blocks aren't 
 remote's PoUW subprotocol reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
 `demo.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
-is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
+is none. SPOT's guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
@@ -41,7 +41,7 @@ it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. 
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
 2. greedy requests from the certifier's traffic generator (`serve_load.py --varied`), closed into one execution phase;
-3. sampled proofs on that execution phase: its advice and request Programs, the circuit of the served execution blocks
+3. SPOT on that execution phase: its advice and request Programs, the circuit of the served execution blocks
    at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean ZK server, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
@@ -61,7 +61,7 @@ gets no verdict.
 ## The auditor's parties
 
 The auditor's parties are the verifier, the challenger, the network certifier and the memory challenger. The
-challenger is an auditor device reached through its gate, and its live coins are PoUW's always and sampled proofs' when
+challenger is an auditor device reached through its gate, and its live coins are PoUW's always and SPOT's when
 `PP_CHALLENGER` names it, V3c's audit, the sampled-proofs audit of record, among them. Otherwise a local development
 challenger session on the endpoint's node samples the proof blocks, which shows the path but is no auditor's coins, and
 `served_verdicts.sh` takes it only in a development run, which the demo's `placement.toml` says it is (`DEVELOPMENT=1`).

@@ -1,7 +1,7 @@
 """IntegrityProfile: what verification established, and the worst case a consumer's utility reads off it.
 
 The two consumer utilities below stand in for PoUW's incorrect-unit bound and the KV touched-unit bound, which live
-with their consumers, not in core.  `two_level` is sampled proofs' shape (n_r units sampled with p, then k of the n_v
+with their consumers, not in core.  `two_level` is SPOT's shape (n_r units sampled with p, then k of the n_v
 inside each), and `_before_levels` is the profile's arithmetic as it stood in those four numbers (every pair of m tried), kept as the
 oracle the level form must reproduce: `accept` exactly, and `worst_case` from above, within its directed margin.
 `_exact_rhos` and `_exact_lp` are the high-precision reference (60-digit `Decimal`): `worst_case` is never below it."""
