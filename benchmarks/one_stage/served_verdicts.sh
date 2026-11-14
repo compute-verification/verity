@@ -1520,6 +1520,10 @@ if [ -n "${V3C_WARM_JOBS:-}" ]; then  # V3c's composes made before its audit
   grep -q -- '"warm"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: V3C_WARM_JOBS composes the window's templates before its audit with records_audit.py warm, which this tree's records_audit.py doesn't have"; exit 3; }
 fi
+if [ -n "${V3C_LEAN_WORKERS:-}" ]; then  # V3c's audit's Lean checks side by side
+  [[ $V3C_LEAN_WORKERS =~ ^[1-9][0-9]*$ ]] \
+    || { say "PREFLIGHT: V3C_LEAN_WORKERS is how many of the audit's Lean checks run at once, a positive integer, not $V3C_LEAN_WORKERS"; exit 3; }
+fi
 if [ -n "${V3C_NEGATIVE_WORKERS:-}" ]; then  # V3c's audit's negatives side by side
   [[ $V3C_NEGATIVE_WORKERS =~ ^[1-9][0-9]*$ ]] \
     || { say "PREFLIGHT: V3C_NEGATIVE_WORKERS is how many of the audit's negatives run at once, a positive integer, not $V3C_NEGATIVE_WORKERS"; exit 3; }

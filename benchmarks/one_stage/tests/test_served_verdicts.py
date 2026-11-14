@@ -3830,6 +3830,19 @@ def test_a_served_nodes_audit_runs_one_lean_check_at_a_time_within_v3c_audit_mem
     assert _pool(tmp_path) == want
 
 
+@pytest.mark.parametrize("given", ["0", "all", "2.5", "-1", " 2"])
+@pytest.mark.parametrize("follow", [False, True])
+def test_a_v3c_lean_workers_that_is_not_a_positive_integer_is_refused_before_anything_runs(tmp_path, given, follow):
+    """V3C_LEAN_WORKERS reaches the audit as a5's --lean-workers, which takes a count of at least 1. One that isn't a
+    positive integer is refused before anything runs, on the node that served and on a follow-on alike, with the line
+    that says what it is; the audit would else refuse it only once the window is served."""
+    if follow:
+        assert _deferred(tmp_path).returncode == 0
+    rc, lines, order, _limits = (_follow if follow else _v3c)(tmp_path, V3C_LEAN_WORKERS=given)
+    line = f"PREFLIGHT: V3C_LEAN_WORKERS is how many of the audit's Lean checks run at once, a positive integer, not {given}"
+    assert (rc, lines, order) == (3, [line], [])
+
+
 @pytest.mark.parametrize("given, want", [
     ({}, {"--lean-workers": None, "--audit-mem-gb": None}),
     ({"V3C_LEAN_WORKERS": "2"}, {"--lean-workers": "2", "--audit-mem-gb": None}),
