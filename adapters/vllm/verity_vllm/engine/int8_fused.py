@@ -481,7 +481,7 @@ class Workspace:
     """The int32 partial sums and per-tile counters a split-K launch needs, zero between calls; one per device, sized
     once, so a call allocates nothing."""
 
-    def __init__(self, device, words: int = 64 * 32768, tiles: int = 1 << 16):
+    def __init__(self, device: torch.device | str | int, words: int = 64 * 32768, tiles: int = 1 << 16) -> None:
         self.ws = torch.zeros(words, dtype=torch.int32, device=device)
         self.cnt = torch.zeros(tiles, dtype=torch.int32, device=device)
 
@@ -551,7 +551,7 @@ def add_norm_quant(x: torch.Tensor, residual: torch.Tensor, weight: torch.Tensor
 
 
 def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor,
-              cfg: Cfg | None = None, work: Workspace | None = None):
+              cfg: Cfg | None = None, work: Workspace | None = None) -> triton.compiler.CompiledKernel:
     """xq [M, K] int8, s_a [M] f32, w [N, K] int8 (row-major), s_w [N] or [N, 1] f32 -> y [M, N] bf16, in place.  A
     split-K `cfg` needs `work`."""
     m, k = xq.shape
@@ -581,7 +581,7 @@ def scaled_mm(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.T
 
 
 def scaled_mm_zy(xq: torch.Tensor, s_a: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, y: torch.Tensor, zy: torch.Tensor,
-                 rows: int, cfg: Cfg | None = None, work: Workspace | None = None):
+                 rows: int, cfg: Cfg | None = None, work: Workspace | None = None) -> triton.compiler.CompiledKernel:
     """`scaled_mm` into y, and zy [units, ZY_BYTES] uint8, the call's records over `rows` slots (`int8_exact.zy_records`),
     from the same accumulator, in place."""
     m, k = xq.shape
@@ -619,7 +619,7 @@ def linear(x: torch.Tensor, w: torch.Tensor, s_w: torch.Tensor, xq: torch.Tensor
     scaled_mm(xq, s_a, w, s_w, y)
 
 
-def ptx_check(compiled) -> dict:
+def ptx_check(compiled: triton.compiler.CompiledKernel) -> dict:
     """What the PTX of a compiled kernel (a launch's return value) says about its float semantics."""
     ptx = compiled.asm["ptx"]
     name = compiled.metadata.name
