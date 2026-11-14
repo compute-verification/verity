@@ -4168,6 +4168,11 @@
         "security/Proofs/Compose/RemoteHeld/Draw.lean": "security/Proofs/Compose/RemoteHeld/Sample.lean",
         "security/Proofs/Properties/Compose/Remote/Draw.lean": "security/Proofs/Properties/Compose/Remote/Sample.lean"
       }
+    },
+    {
+      "paths": {
+        "security/Properties/Accounting/Remote/HonestLog/Case.lean": "security/Properties/Compose/Remote/HonestLog/Case.lean"
+      }
     }
   ]
 }

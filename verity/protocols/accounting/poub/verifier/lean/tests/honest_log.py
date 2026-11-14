@@ -1,5 +1,5 @@
 """The honest one-window period whose log `Properties.Poub.Subprotocol.HonestLogAccepted` says the deployed check
-accepts (`security/Properties/Accounting/Remote/HonestLog.lean`): its case (`run`), and that case as the Lean module the
+accepts (`security/Properties/Compose/Remote/HonestLog.lean`): its case (`run`), and that case as the Lean module the
 premise reads (`lean_module`). `python honest_log.py` writes the module; `test_honest_log.py` holds it to this file and
 holds the premise to the compiled check.
 
@@ -19,7 +19,7 @@ from verity.protocols.accounting.poub.prover import period_prover
 from verity.protocols.accounting.poub.verifier import audit
 
 ROOT = M.PACKAGE.parents[5]
-MODULE = ROOT / "security" / "Properties" / "Accounting" / "Remote" / "HonestLog" / "Case.lean"
+MODULE = ROOT / "security/Properties/Compose/Remote/HonestLog/Case.lean"
 NAMESPACE = "Properties.Poub.Subprotocol.HonestLog"
 STORE = hashlib.shake_256(b"one block").digest(100)
 COINS = hashlib.sha512(b"the period's live coins").digest()
