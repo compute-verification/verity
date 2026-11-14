@@ -96,13 +96,15 @@ def arm(name: str, out: Path, a: argparse.Namespace) -> Path:
             *a.serve, "--out", str(d), "--port", str(port), *(["--async-scheduling"] if name == "async" else [])]
     with open(d / "serve.log", "w") as log:
         srv = subprocess.Popen(argv, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-        for line in srv.stdout:
+        lines = srv.stdout
+        assert lines is not None
+        for line in lines:
             log.write(line)
             if "SERVE-OPENAI listening" in line:
                 break
         else:
             raise RuntimeError(f"{name}: serve-openai exited {srv.wait()} before it listened ({d / 'serve.log'})")
-        drain = threading.Thread(target=lambda: log.writelines(srv.stdout))
+        drain = threading.Thread(target=lambda: log.writelines(lines))
         drain.start()
         for b in range(1, a.batches + 1):
             subprocess.run([sys.executable, str(LOAD), "--port", str(port), "--model", model, "--fixed", str(a.requests),

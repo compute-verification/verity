@@ -84,7 +84,7 @@ from typing import Any, BinaryIO
 
 from verity.channel import Body, Message, Refused, Schema
 from verity.party import Finish, Identity, Received, Send, Timer
-from verity.protocol import Channel, Manifest, ProtocolDef, Role
+from verity.protocol import Channel, Manifest, ProtocolDef, Role, Start
 from verity.protocols.accounting.pous.device import challenger_session as CS
 from verity.protocols.accounting.pous.device import memory_challenger as mc
 from verity.protocols.accounting.pous.verifier.schemes.p2 import P2Params
@@ -1057,12 +1057,12 @@ def pinned_signer(configuration: Mapping[str, Any], directory: Path) -> mc.LmsSi
     return signer
 
 
-def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path) -> Any:
+def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Path | None) -> Start:
     """The verifier's start on the auditor's host, from the configuration, its deploy bindings (`bound`, its
     `[bandwidth-verifier.bandwidth]`: `address`, and `challenger`, the memory challenger's device directory on this
     host) and its own `state` directory: the closer's key, pinned (`pinned_signer`); its case digests under `state`'s
     `private/` (`CASE_DIGESTS`, `_keep`, the `keep` capability); the session parameters `SESSION`; and the runtime's
-    `RealClock()`, `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It raises `NotImplementedError(GOAL)`
+    own clock (`Start.clock` None), `CLOCK_MONOTONIC` in ns, which `Twin`'s windows are timed on. It raises `NotImplementedError(GOAL)`
     past the key: the registration (PoUS setup's record on that device, `pous_record`, for the setup's session id), the
     session id the auditor gives the memory challenger, and the Lean process holding the registration (`hold`) have no
     source the runtime gives a party."""
@@ -1071,8 +1071,7 @@ def start(configuration: Mapping[str, Any], bound: Mapping[str, Any], state: Pat
 
 
 STARTS = {VERIFIER: start}
-"""Each party's start (`ProtocolDef.starts`), which `PROTOCOLS` takes once `ProtocolDef` has it."""
-PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier})}
+PROTOCOLS = {ID: ProtocolDef(MANIFEST, {VERIFIER: Verifier}, STARTS)}
 
 
 __all__ = ["Books", "CASE_DIGESTS", "CLOSER_PIN", "COIN_BYTES", "Closer", "DELTA", "EPS_TERMS", "GAMMA_TERMS", "GOAL",
