@@ -1,7 +1,8 @@
 """`rows.py --ctas-at`: a row count runs at the receipt CTA counts its word names, in the word's order, and at
 `--sketch-ctas` alone where no word names it; a word for a row count that doesn't run, or one whose counts aren't
 numbers, ends the run saying what a word is. `rows.reference`, the whole-store check's receipts, is the reference
-receipter's at both row counts, at the int8 extremes and at any first block. Every path of the tree `rows.sh` names is
+receipter's at both row counts, at the int8 extremes and at any first block. `rows.whole_store` asks a leaf pass
+for its receipts for its one pass and puts the store's mode back, and leaves `rs_pass`'s mode alone. Every path of the tree `rows.sh` names is
 one the tree has, so the build a card waits on doesn't end at a moved file."""
 from __future__ import annotations
 
@@ -46,6 +47,39 @@ def test_the_whole_store_reference_is_the_reference_receipters(k):
     got = rows.reference(torch, seed, k)(torch.frombuffer(bytearray(b"".join(blocks)), dtype=torch.uint8), j0)
     r = rb.receipter(rb.SKETCH_SHA512, seed, k)
     assert got == b"".join(r(j0 + i, b) for i, b in enumerate(blocks))
+
+
+class _Stop(Exception):
+    pass
+
+
+class _Store:
+    """The store's pass mode as `whole_store` sees it, and the mode its pass ran under; the pass stops the check."""
+
+    def __init__(self, leaf_ctas: int, leaf_receipts: bool = False):
+        self.leaf_ctas, self.leaf_receipts, self.poison, self.ran = leaf_ctas, leaf_receipts, False, None
+
+    def pass_mode(self, leaf_ctas: int = 0, receipts: bool = False) -> None:
+        self.leaf_ctas, self.leaf_receipts = leaf_ctas, receipts
+
+    def run_pass(self, seed):
+        self.ran = (self.leaf_ctas, self.leaf_receipts, self.poison)
+        raise _Stop
+
+
+class _Backend:
+    def __init__(self, store: _Store):
+        self.store = store
+
+
+@pytest.mark.parametrize("leaf, kept, during", [(188, False, (188, True, True)), (160, True, (160, True, True)),
+                                                (-1, False, (-1, True, True)), (0, False, (0, False, True))])
+def test_the_whole_store_pass_asks_a_leaf_pass_for_its_receipts_and_puts_the_mode_back(leaf, kept, during):
+    s = _Store(leaf, kept)
+    with pytest.raises(_Stop):
+        rows.whole_store(_Backend(s), 64, np.random.default_rng(0))
+    assert s.ran == during
+    assert (s.leaf_ctas, s.leaf_receipts, s.poison) == (leaf, kept, False)
 
 
 def test_every_path_rows_sh_names_is_in_the_tree():
