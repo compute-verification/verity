@@ -1468,7 +1468,7 @@ def main(argv=None) -> int:
         _check_paced(args)
         if args.stall_probe:
             raise NotImplementedError("network/certifier-programs-leave-benchmarks: the stall probe is a harness's "
-                                      "(benchmarks/network_traces/stall_probe.py), which a harness passes to "
+                                      "(verity/protocols/accounting/certifier/device/stall_probe.py), which a harness passes to "
                                       "`serve` as `probe`; the device's own command line has none")
         out = args.out.resolve()
         if out == args.key.resolve() or out in args.key.resolve().parents:
