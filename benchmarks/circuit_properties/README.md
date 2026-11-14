@@ -75,7 +75,9 @@ rows are equal at enough points to hold 64 sampled bits a row, compared by their
 at every width, so two rows that are one inf are equal, or where a row holds a NaN, which no comparison shows
 distinct. A row whose words are all zero at its point, whatever their signs, is left out of the comparison, and none
 of the MACs that read it is charged (`Tally.share`): a product by a zero row is zero, so it is no work (W plus -1
-times W, times a stated ±1, is charged nothing). So a weight combined with its own words whose rows are equal and not
+times W, times a stated ±1, is charged nothing). A product's share left uncharged is the sum of its operands' zero
+shares, at most 1, so no MAC that reads a zero row is charged however the rows pair; where both operands hold zero
+rows it can leave out more than reads them, so N only falls. So a weight combined with its own words whose rows are equal and not
 zero whatever the weight is refused: cancelled against itself (M plus -1 times M; W times v plus -1 times v), or
 times its own rows in another order (M times
 swap(M)), and so is a weight times a difference of an input's words. The pass is about one evaluation of the step,

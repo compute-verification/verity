@@ -10,8 +10,8 @@ float, positive, repeated through every array it fills (all tokens are one token
 binades about 2^`CENTRE`, every sign and mantissa; `held` the bits that leaves it), or any nonzero word at a width no
 float has. An input's float is about 1 and positive, because an input is data or a state the step carries in, which an
 honest step reads under a square root, a logarithm or a divide: a positive word is inside each such domain, and one word repeated
-says nothing about rows by its sign. `θ` keeps every sign, the generic part of the point. A NaN and equal rows are
-refused, so the sign passes no claim; it decides only which honest circuits pass. The sample is seeded by SHA-512 of
+says nothing about rows by its sign. `θ` keeps every sign, the generic part of the point. A NaN and equal rows that
+are not zero are refused, and a zero row is charged nothing, so the sign passes no claim; it decides only which honest circuits pass. The sample is seeded by SHA-512 of
 the Program's digest, with no other randomness, so two reads agree. The seed is public: a submitter can try variants
 of a circuit until the point misses an identity that holds only on a thin set of values, which is a premise
 (below), not something the point tests.
@@ -28,9 +28,9 @@ pick one row of any table. Every other input's word is drawn as `θ`'s are but p
 (a learning rate, a moment) is as small as a weight: about 1, one update moves training_slowdown's weights so far that
 its attention's softmax is one-hot, and rows that differ by their tokens come out equal. The second point meets
 `P_BATCH` by that construction wherever a batch holds no more positions than that table has rows, so it shows a
-specific operand's rows are not equal by an identity of the circuit (O1 plus -1 times O1 is 0 for every input). There
+specific operand's rows are not equal by an identity of the circuit (O1 plus -1 times O1 plus 1 is 1 for every input). There
 a specific operand's rows are compared across every activation whose other operand's words are the same at that
-point, so a row repeated a member against one shared operand is refused; at the first point every member is equal,
+point, so a row, not zero, repeated a member against one shared operand is refused; at the first point every member is equal,
 so rows are compared within one activation. That the served data meets `P_BATCH` stays the premise it is today. A
 NaN and a scan's unevaluated outputs are refused there as at the first point.
 
@@ -264,12 +264,11 @@ class Tally:
     zero: dict = field(default_factory=dict)
 
     def share(self, sid: int, node: int) -> Fraction:
-        """The share of product ``node``'s MACs that read a row zero at its point, by either operand: no work."""
-        kept = Fraction(1)
-        for (s, k, _i), z in self.zero.items():
-            if (s, k) == (sid, node):
-                kept *= 1 - z
-        return 1 - kept
+        """The share of product ``node``'s MACs left uncharged as reading a row zero at its point, by either operand:
+        the sum of its operands' zero shares, at most 1. However the rows pair (every row of one with every row of the
+        other, or member by member), no MAC that reads a zero row is charged; where both operands hold zero rows it can
+        leave out more than reads them."""
+        return min(Fraction(1), sum((z for (s, k, _i), z in self.zero.items() if (s, k) == (sid, node)), Fraction(0)))
 
 
 def claimed(st) -> bool:
@@ -634,8 +633,8 @@ class Walk:
         left out of the comparison, and its share of the rows is recorded (`Tally.zero`), which the reading doesn't
         charge: a product by it is zero. At the one-word point's lanes rows are
         compared within one activation, whose members are equal there; where ``by_words``, at the word-by-word point's
-        lanes, across every activation whose ``other`` operand's words are the same there, so a row repeated a
-        member against one shared operand is refused."""
+        lanes, across every activation whose ``other`` operand's words are the same there, so a row, not zero,
+        repeated a member against one shared operand is refused."""
         words, gone = value
         if gone is not None and gone.any():
             self.tally.unrun.append((S.sid, k, name, self.scans[int(gone[gone > 0][0]) - 1], by_words))
@@ -643,7 +642,7 @@ class Walk:
         self.tally.claims += 1
         W = words.shape[1]
         P, A = self.P, L // self.lanes
-        if not K or W % K or (W // K) * (A if by_words else 1) < 2:
+        if not K or W % K:
             return
         R = W // K
         v = words.reshape(self.lanes, A, R, K)
@@ -651,16 +650,18 @@ class Walk:
         w = _operand_width(nd, i)
         if w in FLOAT_WIDTHS:
             v = np.where(v == np.uint64(1 << (w - 1)), np.uint64(0), v)
+        zero = ~v.any(axis=1)
+        if zero.any():
+            at = (S.sid, k, i)
+            self.tally.zero[at] = max(self.tally.zero.get(at, Fraction(0)), Fraction(int(zero.sum()), A * R))
+        if R * (A if by_words else 1) < 2:
+            return
         if w == 32:
             bad = _nan(v).any(axis=1).reshape(A, R)
             if bad.any():
                 a = int(np.flatnonzero(bad.any(axis=1))[0])
                 raise WK.RepeatedRows(self.fns[S.sid].id, k, name, None, member=a if A > 1 else None,
                                       nan=(int(bad[a].sum()), R), by_words=by_words)
-        zero = ~v.any(axis=1)
-        if zero.any():
-            at = (S.sid, k, i)
-            self.tally.zero[at] = max(self.tally.zero.get(at, Fraction(0)), Fraction(int(zero.sum()), A * R))
         member = np.arange(A, dtype=np.uint64)
         if by_words and A > 1:
             o = other.reshape(self.lanes, A, -1)[P:].transpose(1, 0, 2).reshape(A, -1)
