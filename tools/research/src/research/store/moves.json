@@ -2410,6 +2410,12 @@
       "paths": {
         "verity/protocols/accounting/pouw/clear/": "verity/protocols/accounting/pouw/prover/clear/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/nci/slowdown.py": "benchmarks/nci/bracket.py",
+        "benchmarks/nci/tests/test_slowdown.py": "benchmarks/nci/tests/test_bracket.py"
+      }
     }
   ]
 }
