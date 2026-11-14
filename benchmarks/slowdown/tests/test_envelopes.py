@@ -91,8 +91,8 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
     """Lean's `SlowdownRemote` with no declared products (the declared share `ν = 0`) and χ = 0 is
     `max(1, 1/(s + (1 − s) u / MFU₀))`,
     against an unencumbered trainer at `MFU₀`. The bound counts every gate at capacity against the reference at
-    capacity, so its padded size ratio is `SlowdownRemote`'s `ρ` at `MFU₀ = 1` (where at least 1), and the slowdown is
-    that `ρ` at the reference's MFU."""
+    capacity, so its padded size ratio is `SlowdownRemote`'s bound at `MFU₀ = 1` (where at least 1), and the slowdown
+    is that bound at the reference's MFU."""
     reg = REG.override({"regime.remote.residual": 0.01, "regime.remote.clock_share": 0.0, "regime.remote.host": 0.0})
     ctx = tiers_context(reg)
     remote = envelopes.regime(reg, "remote")
@@ -111,18 +111,18 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_slowdown_remot
 
 
 #: `InferenceOnly.Slowdown.remoteSlowdown` as security/Definitions/InferenceOnly/Remote.lean defines it, and the conclusion of
-#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean) that names it `ρ`
+#: `InferenceOnly.Guarantees.SlowdownRemote` (security/Definitions/InferenceOnly/Guarantees/Remote.lean), which bounds the slowdown by it
 REMOTE_SLOWDOWN = "noncomputable def remoteSlowdown (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
 REMOTE_CONCLUSION = "remoteSlowdown mfu (unregisteredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_slowdown_at_the_references_mfu():
-    """Without reference efficiency the remote slowdown is `SlowdownRemote`'s `ρ`, `remoteSlowdown MFU₀ s x ≤
+    """Without reference efficiency the remote slowdown is `SlowdownRemote`'s bound, `remoteSlowdown MFU₀ s x ≤
     hardwareMultiple MFU₀`, at the reference training algorithm's MFU (0.4): free compute counts at peak. Under it free
-    compute counts at `MFU₀`, so `ρ = max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
-    server and the H200 give the same `x = 0.33`, and `ρ = 3.04` (1.22 without reference efficiency), as
+    compute counts at `MFU₀`, so the slowdown is `max(1, 1/(s + x))`, the padded size ratio. Hosts carry no compute, so tiers'
+    server and the H200 give the same `x = 0.33`, and a slowdown of 3.04 (1.22 without reference efficiency), as
     `benchmarks/nci`'s slowdown reads it. Without both assumptions tiers' server (host CPUs 12.6% of the GPUs)
-    has `x = 0.45`, which outruns that developer, so `ρ = 1`; the H200 (2.9%) has 1.12."""
+    has `x = 0.45`, which outruns that developer, so the slowdown is 1; the H200 (2.9%) has 1.12."""
     lean_dir = ROOT / "security" / "Definitions" / "InferenceOnly"
     assert REMOTE_SLOWDOWN in (lean_dir / "Remote.lean").read_text()
     assert REMOTE_CONCLUSION in (lean_dir / "Guarantees" / "Remote.lean").read_text()
