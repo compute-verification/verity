@@ -133,9 +133,10 @@ def test_the_gate_publishes_a_registration_less_its_wiring_and_the_guard_holds_t
 
 def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     run = gate_run(tmp_path)
-    got = WC.certificates(run)
-    assert (got["verdict"], got["why"], got["certified_windows"], got["windows"]) == ("accepted", None, sz.W63.windows,
-                                                                                    sz.W63.windows)
+    got, private = WC.checked(run)
+    assert got == WC.certificates(run) and not set(WC.WITNESS_KEYS) & set(got) and set(private) == set(WC.WITNESS_KEYS)
+    assert (got["verdict"], got["why"], got["windows"]) == ("accepted", None, sz.W63.windows)
+    assert (private["certified_windows"], private["issuer_refused"], private["problems"]) == (sz.W63.windows, [], 0)
     assert got["public_is_the_records"] is True and got["clock_certificates"] == 0 and got["sync_bits"] == 0.0
     assert got["warden_run"] == "00" * 32 and got["warden_check"]["accepted"]
     io = WC.io(run)
@@ -165,11 +166,11 @@ def test_a_warden_runs_certificates_io_and_link_are_its_own(tmp_path):
     path.unlink()
     for b in [RF.pack_record(type(rec)(rec.link, rec.window, tuple(map(tuple, grid)), rec.status)), *blobs[1:]]:
         bf.write_blobs(path, b)
-    got, check = WC.certificates(run), WC.RC.check(run / "witness")
-    assert got["verdict"] == "refused" and got["rows"][0]["certified"] is False
+    (got, private), check = WC.checked(run), WC.RC.check(run / "witness")
+    assert got["verdict"] == "refused" and private["rows"][0]["certified"] is False and "rows" not in got
     assert any("responses window 0 isn't certified" in p for p in check["problems"])
     assert got["warden_check"]["accepted"] is False and "problems" not in got["warden_check"]
-    assert f"{len(check['problems'])} problems" in got["why"]
+    assert got["why"] == WC.REFUSES and private["problems"] == len(check["problems"])
     assert not [p for p in check["problems"] if p in json.dumps(got)]
 
 

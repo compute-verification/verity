@@ -89,7 +89,7 @@ def _steps(tmp_path, job: dict, endpoint: bool = True) -> SimpleNamespace:
     window = {"accepted": True, "proof": {"proved": True}, "as_expected": True}
     return SimpleNamespace(
         custody=put("custody.json", {"verdict": "accepted"}),
-        certs=put("certs.json", {"verdict": "accepted", "rows": [{"window": 0, "certified": True}]}),
+        certs=put("certs.json", {"verdict": "accepted", "windows": 1}),
         endpoint=put("endpoint.json", {"chain": {
             "bits": {"bound": True, "rebuilt": True, "commit_windows": [{"bound": True, "rebuilt": True}]},
             "tie": {"ran": True, "runs": {"honest": {"verdict": "accepted"}}}}}) if endpoint else None,
@@ -428,7 +428,7 @@ def test_k_counts_the_audits_draw_and_free_inputs_and_the_networks_terms_once_a_
     (tmp_path / "registration.json").write_text(json.dumps({"population": 4, "law": {"law": "subset", "k": 2}}))
     audit = cr.audit_of(tmp_path)
     assert (audit["units"], audit["drawn"], audit["free"]) == (4, 2, 96) and "jitter" not in audit
-    cert = {"sync_bits": 7.0, "rows": [{"window": w, "certified": True} for w in range(3)], "window_buckets": 60}
+    cert = {"sync_bits": 7.0, "verdict": "accepted", "windows": 3, "window_buckets": 60}
     assert cr.network_terms(cert, {"advice_bits": {"derived": 40, "v0_total": 90}}) == {"advice": 40, "syncs": 21,
                                                                                         "cells": 0}
     assert cr.network_terms(cert, {"advice_bits": {"derived": None, "v0_total": 90}})["advice"] == 90
