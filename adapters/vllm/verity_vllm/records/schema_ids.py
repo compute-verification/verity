@@ -183,6 +183,8 @@ TP_FOLD_MATCH_SCHEMA = "verity/tp2/fold-match/v1"
 #: the TP Commit's sampled replay (`pipeline.tp.rank_replay.SCHEMA`), which `in_process` and `defer` write, and
 #: `pipeline.tp.commit`'s `main`
 TP_SAMPLED_REPLAY_SCHEMA = "verity-sweep/tp-sampled-replay/v1"
+#: a TP Commit's serving rows, `tp.json` (`pipeline.tp.serving_rows.SCHEMA`), which `gather` writes
+TP_SERVING_ROWS_SCHEMA = "verity-vllm/tp-serving-rows/v1"
 #: the Build's relabel report (`pipeline.tp.emit_ranks.SCHEMA`), which `finish` and `read_report` write
 BUILD_RELABEL_SCHEMA = "verity-vllm/build-relabel/v1"
 #: the relabel's guard record (`pipeline.tp.relabel_build.SCHEMA`), which `derive` writes

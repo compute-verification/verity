@@ -79,7 +79,7 @@ VLLM_ENCODED = config.ROOT.parent.parent / "benchmarks" / "vllm_encoded"
 def address(value: str) -> tuple[str, int]:
     """``HOST:PORT``, the verifier's listening address."""
     host, sep, port = str(value).rpartition(":")
-    if not sep or not host or not port.isdigit() or not 0 < int(port) < 1 << 16:
+    if not sep or not host or not port.isdecimal() or not 0 < int(port) < 1 << 16:
         raise ValueError(f"a remote verifier is HOST:PORT, not {value!r}")
     return host, int(port)
 

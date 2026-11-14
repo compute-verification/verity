@@ -84,6 +84,17 @@ def test_a_cell_s_document_states_its_lengths_its_schedule_and_the_arguments_tha
         "The control run's realized step count is the gates' reference (EOS may end a request early).")
 
 
+@pytest.mark.parametrize("rows, steps, peak, changes, mixed", [
+    # the second arrives beside the first's decode and is gone a step later, when the third arrives beside the first's last
+    ([(0, 3), (1, 1), (2, 3)], 5, 2, 3, 2),
+    # the second arrives the step after the first has ended: the batch changes, and its prefill is beside no decode
+    ([(0, 1), (1, 2)], 3, 1, 1, 0),
+])
+def test_the_full_length_schedule_counts_its_steps_the_batch_s_changes_and_the_prefills_beside_a_decode(rows, steps, peak, changes, mixed):
+    sim = gw.simulate_schedule([{"arrive_step": arrive, "max_tokens": tokens} for arrive, tokens in rows])
+    assert sim == {"expected_engine_steps": steps, "peak_concurrent": peak, "membership_changes": changes, "steps_with_mixed_prefill_decode": mixed}
+
+
 def test_each_prompt_is_the_corpus_from_its_own_paragraph_on_cut_at_its_length():
     paras = gw.corpus_paragraphs()
     at = {f"{p['source']} \N{PILCROW SIGN}{p['index']}": j for j, p in enumerate(paras)}

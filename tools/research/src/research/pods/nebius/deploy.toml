@@ -995,7 +995,26 @@ nodes = ["vy-nebius-2"]
 run = ["systemd:vy-retention-gc.timer"]
 owner = "infra"
 
-# The code the three clean-up units run (vy-store-evict, vy-store-evict-research, vy-retention-gc): main's `research` package,
+# The collector over root's runs root on vy-nebius-cpu-7, where the checker keeps its copy of every run it launches on the other
+# nodes: hourly `research retention gc --launcher-copies --apply` there, as root, with the store key the checker runs with. No
+# other node has a service that launches runs all day. It refuses until the checker lists the runs it still needs. After the
+# first install, `sudo systemctl daemon-reload && sudo systemctl enable --now vy-launcher-copies-gc.timer`.
+[[file]]
+path = "/etc/systemd/system/vy-launcher-copies-gc.service"
+src = "tools/research/src/research/pods/nebius/sky/launcher_copies_gc.service"
+nodes = ["vy-nebius-cpu-7"]
+run = ["systemd:vy-launcher-copies-gc.timer"]
+owner = "infra"
+
+[[file]]
+path = "/etc/systemd/system/vy-launcher-copies-gc.timer"
+src = "tools/research/src/research/pods/nebius/sky/launcher_copies_gc.timer"
+nodes = ["vy-nebius-cpu-7"]
+run = ["systemd:vy-launcher-copies-gc.timer"]
+owner = "infra"
+
+# The code the four clean-up units run (vy-store-evict, vy-store-evict-research, vy-retention-gc, vy-launcher-copies-gc): main's
+# `research` package,
 # whole, at the commit installed, on every node that has one of them. They delete, so they never run a snapshot a `research
 # run` shipped (a branch's code, under a directory any run can write): each unit names this link (VY_RESEARCH_TOOL) and
 # resolves it once when a pass starts. Root's, where no run can write. A change to the package reaches a node only by `research
