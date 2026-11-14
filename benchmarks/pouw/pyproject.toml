@@ -169,6 +169,8 @@ inputs = ["verity/__init__.py", "tools/config/verity_config/verity_settings.py",
           "benchmarks/kernels/s8_linear/sass_gate.py",
           "benchmarks/hash/dither/dither_one.py", "benchmarks/hash/dither/forms.py", "benchmarks/hash/dither/h1c.py",
           "verity/protocols/experimental/dither/prover/h1r.py", "benchmarks/hash/dither/h1r_torch.py",
+          # pearl_c4/replay.py, hidden_zk/stage.py and test_pearl_c4_replay load Pearl-C4's scheme, circuit and vectors
+          "verity/protocols/experimental/pearl_c4",
           "benchmarks/hash/dither/j10r_units.py",
           "benchmarks/hash/dither/settings.py",
           "benchmarks/served_units/summarize.py", "benchmarks/harness/verity_bench/overhead.py", "benchmarks/harness/verity_bench/kit.py", "benchmarks/harness/verity_bench/settings.py",

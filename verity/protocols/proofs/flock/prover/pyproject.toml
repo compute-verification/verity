@@ -195,7 +195,7 @@ tests = [
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
-paths = ["verity/protocols/accounting/pouw/verifier/tests"]
+paths = ["verity/protocols/accounting/pouw/verifier/tests", "verity/protocols/experimental/pearl_c4/tests"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_derive.py"]

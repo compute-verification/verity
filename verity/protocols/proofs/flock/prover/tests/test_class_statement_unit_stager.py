@@ -17,7 +17,7 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
-from test_pouw_rows import POUW_TESTS, STAGED_TILES, V
+from test_pouw_rows import PC4_TESTS, STAGED_TILES, V
 from verity.circuits import evaluation as EV
 from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import add
@@ -92,7 +92,7 @@ def _anchor() -> tuple:
     """`test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation`' statement: three public input ports."""
     from verity.protocols.accounting.pouw.prover.circuit.anchors import public_ports
 
-    spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
+    spec = importlib.util.spec_from_file_location("pearl_c4_regions_vectors", PC4_TESTS / "pearl_c4_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(RV)
     t = RV.anchors("pc4-64", "pc4", 64, None)

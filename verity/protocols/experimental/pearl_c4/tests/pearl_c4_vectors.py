@@ -1,5 +1,5 @@
 """Pinned vectors for ``pearl-c-nvfp4-v0`` and ``pearl-c-mxfp4-v0``: ``uv run python verity/protocols/experimental/pearl_c4/tests/pearl_c4_vectors.py``
-rewrites ``../../../experimental/pearl_c4/tests/vectors/pearl_c4.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
+rewrites ``tests/vectors/pearl_c4.json``.  A change to that file is a change to the scheme and needs a reason in the PR.
 
 Inputs are derived, not stored: word t of row i of operand ``name`` in case ``c`` is the BF16 value with sign bit b0 >> 7,
 mantissa b0 & 0x7F and exponent −4 + (b1 mod 6), where (b0, b1) are bytes 2t and 2t + 1 of
