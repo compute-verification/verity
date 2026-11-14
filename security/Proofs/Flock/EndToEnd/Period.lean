@@ -156,7 +156,7 @@ open scoped ENNReal
 /-- **The integrity audit over a period.** -/
 theorem IntegrityPeriod : Flock.Guarantees.IntegrityPeriod := by
   intro W T hA3 s hT hL
-  have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
+  have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
     periodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   have h := period_union (fun t => (W t).game) (fun t => (W t).record t)
     (fun r => r.accepted ∧ (W r.idx).K₀ ≤ r.wrong) (fun t τ => t < T ∧ (W t).CR τ)
@@ -177,7 +177,7 @@ theorem IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog := by
 theorem IntegrityHorizon : Flock.Guarantees.IntegrityHorizon := by
   intro W T q δ hq hδ hqt hA3 s hT hL
   classical
-  have hs : PeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
+  have hs : MonitoringPeriodGood (fun t => (W t).game) (fun t => (W t).CR) 0 T s :=
     periodGood_of_plays _ _ T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
   set M : ℕ := ⌈Real.log (1 / δ) / q⌉₊
   set x : ℝ≥0∞ := ENNReal.ofReal (1 - q)
