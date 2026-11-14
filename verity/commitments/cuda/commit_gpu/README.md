@@ -20,7 +20,7 @@ Files:
 - `gpu.sh`: the pod job (builds and reference cases outside the lease; selftest, check, rate, e2e, both leaf-size sweeps,
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
-- `run.sh`: the directory's runner, which `verity bench pouw commit_gpu` runs. It starts `gpu.sh` as it is, with the
+- `run.sh`: the directory's runner, the command of a `research run`. It starts `gpu.sh` as it is, with the
   caller's arguments and environment.
 
 On an RTX PRO 6000 node (MACHINE):
