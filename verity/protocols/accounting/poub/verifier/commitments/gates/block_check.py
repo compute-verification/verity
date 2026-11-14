@@ -673,12 +673,13 @@ BlockOpeningCheck = CompositeDefinition(
 
 # --- the second version: the identity plan, u32 positions ---------------------------------------------------------------
 
-#: v2's three trees together have at most this many levels (the module docstring's legal range)
-LEVELS = 64
+#: v2's three trees together have at most LEVELS[r] levels in a binding of at most r sketch rows, r the least such key (the
+#: module docstring's legal range)
+LEVELS = {16: 64, 64: 52}
 #: v2's limits, each a static's largest value and the reason a binding past it is refused
 LIMITS_V2 = (
     ("K", 3, "a fourth round is 32 more word rounds, about 15M ANDs at p1024, past a masked unit's 2^26 cells at every depth"),
-    ("ROWS", 16, "more sketch rows take the room the tree levels use: 64 are about 2.9M more cells"),
+    ("ROWS", max(LEVELS), "LEVELS bounds the trees' levels only up to 64 sketch rows, and each row more is about 65,000 cells"),
     ("LEAF", PER_LEAF, "a receipt leaf holds 16 receipts"),
     ("DR", 28, "a u32 position's receipt leaf, pos >> 4, is below 2^28"),
     ("DP", 32, "a payload's rank and position j are u32s"),
@@ -701,10 +702,12 @@ def _check_opening_v2(S) -> None:
         if isinstance(v, bool) or not isinstance(v, int) or not low <= v <= top:
             past = f": {why}" if isinstance(v, int) and v > top else ""
             raise ValueError(f"BlockOpeningCheck_v2: {k} is {low} to {top}, not {v!r}{past}")
-    if S.DR + S.DP + S.DV > LEVELS:
-        raise ValueError(f"BlockOpeningCheck_v2: DR + DP + DV is at most {LEVELS} levels, not {S.DR + S.DP + S.DV}: a level is "
-                         "about 238,000 cells, and p1024/k3/masked's unit leaves room in its 2^26 cells for 13 past a whole "
-                         "node's 53")
+    rows = min(r for r in LEVELS if S.ROWS <= r)
+    low = max((r for r in LEVELS if r < rows), default=0) + 1
+    if S.DR + S.DP + S.DV > LEVELS[rows]:
+        raise ValueError(f"BlockOpeningCheck_v2: DR + DP + DV is at most {LEVELS[rows]} levels at {low} to {rows} sketch rows, not "
+                         f"{S.DR + S.DP + S.DV}: a level is about 238,000 cells, and p1024/k3/masked's unit at {rows} rows has "
+                         f"room in its 2^26 cells for {LEVELS[rows]} at its costliest split")
 
 
 def _sig_leaf_v2(S):
