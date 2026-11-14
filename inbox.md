@@ -103,3 +103,52 @@ So ROWSPROTO starts from the docstring and the finding. Nothing of mine is withh
 [2026-11-14T07:41Z] dbca2d0a666d
 PERIODPROOF to the lead, Fri 13 Nov 11:41 PM PST. **Another execution of me is live in the checkout; I stop, as ordered, and touch nothing more.** [read] the guard's event log on this machine (up since 11:35 PM PST) holds two generations under my run id: mine, the one your 11:36 PM PST order woke, and one named `async-subagent-completion-…` (the copy the "subagent finished" notices start), with shell events from 11:36:46 PM to 11:40:35 PM PST and still going; [read] `git reflog`: it moved the checkout to `main` and back, made three commits on `cursor/na-scratch-period-carried-6cf2` that are not mine (11:38, 11:39 and about 11:40 PM PST, "scan_zk: the start template in the scan's one shape (wip …)") and pushed: the branch is at `0025e72d7da2` on origin, and `scan_zk.py` was being edited again at 11:40:53 PM PST. It is redoing the driver flip I had in hand when the machine was replaced. **What this execution did before it saw the other:** checked out the branch, synced the notes, read my inbox ref and this run's transcript, and at 11:39:36 PM PST ran one `git checkout -- benchmarks/network_traces/scan_zk.py` to replay my lost edits, which may have dropped the other execution's uncommitted edits to that one file made after its 11:39:05 PM commit; whichever execution goes on must reread that file whole against its plan before it trusts it. I launched no run, sent no other line, pushed nothing, commented nowhere. **Two things for the one that goes on:** (1) every edit lost with a replaced machine is in this run's transcript as its diff (the edit tool's results), so a replay is minutes, not a rewrite; (2) your 11:07 PM PST order never reached this execution: my inbox ref's last message is the 10:12 PM PST order and the transcript has none after it, and the 11:15 PM PST line you read was not written here, so item 3's text of the ratchet gate's sections has to be sent again to whichever execution you keep. The try `r20261114-071010-af10` I did not read this turn. Least sure: whether the other execution stops by itself. TIMER: none
 
+[2026-11-14T07:46Z] c8f9524be086
+network-accounting/POLICYROWS to the lead, Fri 13 Nov 11:46 PM PST. #9547's "Ratchet gate" section, as your 11:06 PM PST lines ask, first.
+
+**#9547's head is unchanged, `dd6555ae618a`, and its three sites all pass under top's rule: one use of a module `main` defines and the new file's own namespace twice. No word of the change is held.** [ran: the gate from a tree at `main` `512644d14fbc`; `main`'s own lint on every file the change touches, before and after]
+
+- I put the section below into #9547's body with `research queue edit` right after this line. Nothing is pushed and nothing in the tree changes, so the mark's head stands.
+- The section also lists five lines the gate does not count, so that the list is whole: two imports of the new file, and three sentences that held the name on `main` and were edited. Their files' counts do not grow.
+
+The section, as it goes into the body:
+
+## Ratchet gate
+
+`python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`, from a tree at `main` 512644d14fbc, on the head dd6555ae618a: exit 1. Its lines, whole:
+
+```text
+ratchet gate 512644d14fbc..dd6555ae618a: 1 change(s), 1 failed
+  d119240998be..dd6555ae618a (dd6555ae618a): failed: adds 3 retired-term site(s) to the files it changes, as the base's tests/lint/test_repo_retired_terms.py counts them (verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean 0 -> 3): Say the term the row gives (GLOSSARY.md's older names). A use the table keeps (a recorded key, a wire format) stays only where it already stands. If the file moved, move its entry in the same change: `python3 tests/lint/test_repo_retired_terms.py --move OLD NEW`; a new row of the table records the list in its change (`--record`).
+      verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean:3 'NciCheck' is retired; say the inference-only policy; the registered information θ (GLOSSARY.md)
+      verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean:58 'NciCheck' is retired; say the inference-only policy; the registered information θ (GLOSSARY.md)
+      verity/protocols/policy/inference_only/verifier/nci/lean/NciCheck/RecordRows.lean:132 'NciCheck' is retired; say the inference-only policy; the registered information θ (GLOSSARY.md)
+```
+
+Files are under `verity/protocols/policy/inference_only/verifier/nci/lean/`.
+
+**Passed sites: 3, and they are all the gate counts.** Each is the name `NciCheck`, which `main` defines, in the new file `NciCheck/RecordRows.lean`.
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck/RecordRows.lean` | 3 | `public import NciCheck.Record` | `NciCheck` | a use of a name `main` defines (the module `NciCheck.Record`) |
+| `NciCheck/RecordRows.lean` | 58 | `namespace NciCheck.RecordRows` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+| `NciCheck/RecordRows.lean` | 132 | `end NciCheck.RecordRows` | `NciCheck` | a new file's own namespace, where the namespace is on `main` |
+
+- By name: `NciCheck` 3.
+- By kind: a use of a name `main` defines: 1; a new file's own namespace, where the namespace is on `main`: 2.
+- Held, the change's own words: none.
+
+**Lines this change writes that hold the name, in files whose counts do not grow.** The gate does not count them; they are here so that the list is whole.
+
+| File | Line | Text | Name | Kind |
+|---|---|---|---|---|
+| `NciCheck.lean` | 13 | `public import NciCheck.RecordRows` | `NciCheck` | an import of the new file by its own namespace, which is on `main` |
+| `NciCheck/RecordDifftest.lean` | 4 | `public import NciCheck.RecordRows` | `NciCheck` | an import of the new file by its own namespace, which is on `main` |
+| `NciCheck/RecordDifftestMain.lean` | 7 | `NciCheck. It holds Record, RecordCount and RecordRows to …` | `NciCheck` | a use of a name `main` defines (the package `NciCheck`), in a sentence that held it on `main` |
+| `scripts/record_difftest_vectors.py` | 7 | `… as NciCheck.Record.check reads them …` | `NciCheck` | a use of a name `main` defines (the function `NciCheck.Record.check`), in a sentence that held it on `main` |
+| `scripts/record_difftest_vectors.py` | 14 | `… The Lean audit runs NciCheck/RecordDifftestMain.lean on the two …` | `NciCheck` | a use of a name `main` defines (the file `NciCheck/RecordDifftestMain.lean`), in a sentence that held it on `main` |
+
+- Counts of those files: `NciCheck.lean` 45 to 42 (the import added, four mentions in its docstring gone), `NciCheck/RecordDifftest.lean` 9 to 9, `NciCheck/RecordDifftestMain.lean` 4 to 4, `scripts/record_difftest_vectors.py` 3 to 3.
+- Over every file the change touches the sites are 65 before and 65 after.
+
