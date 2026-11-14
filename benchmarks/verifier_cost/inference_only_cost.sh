@@ -4,8 +4,10 @@
 # build writes .lake), with GLM-5.3's rank 0 workload descriptor sent beside it for `glm` (README.md's fetch):
 #   research run --project verity --on vy-nebius-cpu-2 --pool network --source . --cwd clone --mem-gb 320 --timeout 12h \
 #     --send glm53-b1-rank0.descriptor.json.gz -- bash benchmarks/verifier_cost/inference_only_cost.sh [CASE...]
-# INFERENCE_ONLY_COST_FLAGS (`--env`) goes to each inference_only_cost.py, e.g. "--no-policy --word-only".
+# INFERENCE_ONLY_COST_FLAGS (`--env`) goes to each inference_only_cost.py, e.g. "--no-policy --word-only". The variable's
+# older name, NCI_COST_FLAGS, is refused: a run that sets it would otherwise run without its flags.
 set -euo pipefail
+[ -z "${NCI_COST_FLAGS+set}" ] || { echo "NCI_COST_FLAGS is set: the variable is INFERENCE_ONLY_COST_FLAGS" >&2; exit 2; }
 O=${OUT:?run under research run, which sets OUT}
 IN=${RESEARCH_RUN_DIR:?run under research run}/inputs
 L=$PWD/verity/protocols/policy/inference_only/verifier/lean
