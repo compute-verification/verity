@@ -6,7 +6,7 @@
 # 0.965-of-an-issue-slot price, scaled from a scalar-saturated stream, was optimistic). `current` stays DC-90; the refit is the vector DC-90-ri (read it with `eps --vector DC-90-ri`).
 current = "DC-90"
 epochs = ["DC-90", "DS-90", "DC-90-ri"]
-# The card file (hardware/cards/) θ and the opcode table read this device's ceilings from.
+# The card file (hardware/cards/) θ, the opcode table, the data sheet and the table route read this device's numbers from.
 card = "h200-sxm-141gb"
 # The card file of the host the device sits in, which θ's host rates read (`host:PATH`).
 host = "xeon-platinum-8468-2s"
