@@ -1019,6 +1019,107 @@ def test_a_window_with_a_refused_connection_is_certified_nowhere(tmp_path, proce
             f"{name} window 0's cells aren't registered" for name in ("requests", "responses")}
 
 
+def test_a_phase_with_no_certificate_or_no_registration_is_a_problem_and_one_fewer_in_its_count(tmp_path):
+    """The gate's end holds three of the check's counts only when it is accepted, on the ground that each is then
+    the schedule's (`auditor.ACCEPTED_COUNTS`, `auditor.ACCEPTED_CELL_ROWS`): how many records were certified, by
+    how many certificates, and how many of the cells' registrations the check accepted. That stands on the check
+    refusing a run with one missing. A run whose every execution phase is certified and registered is accepted,
+    each count the schedule's. The same run less one record's certificate, for each record and execution phase, or
+    less one cells' registration, is refused on that execution phase by name, with its own count one fewer and the
+    others as they were."""
+    out, windows = tmp_path / "run", 2
+    out.mkdir()
+    _run(out, tmp_path / "key", [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200)],
+         [_response([" a", " b"]), _response([" word"] * 40)], windows=windows)
+
+    def counts(result: dict) -> tuple[int, int, int]:
+        s = result["summary"]
+        return s["certified_windows"], s["certificates"], s["cell_rows"]["registered"]
+
+    whole = ws.check(out)
+    assert whole["accepted"], whole["problems"]
+    assert whole["summary"]["windows"] == windows and whole["summary"]["cell_rows"]["of"] == 2 * windows
+    assert counts(whole) == (3 * windows, 3 * windows, 2 * windows)
+    names = {(link, direction.value): name for name, (link, direction) in ws.CERTIFIED.items()}
+
+    certified = (out / "certified.jsonl").read_text().splitlines()
+    assert len(certified) == 3 * windows
+    for i, line in enumerate(certified):
+        record = RF.certified_from_json(json.loads(line))
+        (out / "certified.jsonl").write_text("".join(x + "\n" for x in certified[:i] + certified[i + 1:]))
+        got = ws.check(out)
+        assert not got["accepted"]
+        assert f"{names[(record.link, record.direction.value)]} window {record.window} isn't certified" in got["problems"]
+        assert counts(got) == (3 * windows - 1, 3 * windows - 1, 2 * windows)
+    (out / "certified.jsonl").write_text("".join(x + "\n" for x in certified))
+
+    cells, salts = (out / "cells.jsonl").read_text().splitlines(), ws.bf.read_blobs(out / "cells.salts")
+    assert len(cells) == len(salts) == 2 * windows
+    for i, line in enumerate(cells):
+        r = json.loads(line)["registration"]
+        (out / "cells.jsonl").write_text("".join(x + "\n" for x in cells[:i] + cells[i + 1:]))
+        (out / "cells.salts").unlink()
+        for blob in salts[:i] + salts[i + 1:]:
+            ws.bf.write_blobs(out / "cells.salts", blob)
+        got = ws.check(out)
+        assert not got["accepted"]
+        assert f"{names[(r['link'], r['direction'])]} window {r['window']}'s cells aren't registered" in got["problems"]
+        assert counts(got) == (3 * windows, 3 * windows, 2 * windows - 1)
+
+
+def test_of_a_deployment_the_gate_gives_out_every_key_but_the_auditors_devices(tmp_path):
+    """`auditor.DEPLOYMENT_PUBLIC` is the deployment's record less the origin on the device's raw clock
+    (`relay_check.DEVICE_KEYS`); where the relay listened and where it reached the endpoint are `endpoints.json`'s,
+    which the gate never publishes: a key the record gains is given out only once the gate names it."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    out = tmp_path / "run"
+    out.mkdir()
+    _run(out, tmp_path / "key", [ws.http_request({"prompt": "x"}, "h:1")], [_response([" a"])])
+    record = set(json.loads((out / "deployment.json").read_text()))
+    assert record - set(A.DEPLOYMENT_PUBLIC) == set(RC.DEVICE_KEYS) == {"origin_raw"}
+    assert set(A.DEPLOYMENT_PUBLIC) <= record and len(set(A.DEPLOYMENT_PUBLIC)) == len(A.DEPLOYMENT_PUBLIC)
+    assert set(A.public_deployment(out / "deployment.json")) == set(A.DEPLOYMENT_PUBLIC)
+    assert A.public_deployment(out / "none.json") is None
+
+
+def test_the_gates_forms_are_the_verifiers_constants_and_hold_a_runs_own_lines(tmp_path):
+    """The gate publishes a certificate and a cells' registration only in forms it states itself, since it loads
+    nothing of the certifier's verifier: its constants are `warden_rows`' and the runner's word for word, and
+    every line a run writes passes them under the run's own deployment, so an honest run publishes all its
+    certificates and registrations. A value changed in a line is out of form, and nothing of its file is
+    published."""
+    sys.path.insert(0, str(ROOT / "verity/protocols/compose/device/live_challenger"))
+    import auditor as A
+    assert (A.ROW_FORMAT, A.ROW_SCHEMA, A.ROW_WORD_BITS) == (WR.REGISTRATION, WR.SCHEMA, WR.WORD_BITS)
+    assert {ws.LINK + follows for follows in A.CERTIFIED_LINKS} == {link for link, _ in ws.CERTIFIED.values()}
+    assert set(A.DIRECTIONS) == {d.value for _, d in ws.CERTIFIED.values()}
+    run, out = tmp_path / "run", tmp_path / "out"
+    run.mkdir()
+    out.mkdir()
+    _run(run, tmp_path / "key", [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200)],
+         [_response([" a", " b"]), _response([" word"] * 40)], windows=2)
+    given = A.deployment_forms(run / "deployment.json")
+    dep = json.loads((run / "deployment.json").read_text())
+    assert given["link"] == (ws.LINK,) and given["parameters"] == (dep["digest"],)
+    assert not list(out.iterdir()) and A.warden_outcome(out, run)["verdict"] is None
+    assert {p.name for p in out.iterdir()} == {"deployment.json"}, "a run with no accepted check publishes no line"
+    check = ws.check(run)
+    (run / "check.json").write_text(json.dumps(check))
+    outcome = A.warden_outcome(out, run)
+    assert check["accepted"] is True and outcome["verdict"]["accepted"] is True and "unruled" not in outcome
+    for name, public in (("certified.jsonl", "certificates.jsonl"), ("cells.jsonl", "cells-certificates.jsonl"),
+                         ("cells.jsonl", "cells-registrations.jsonl")):
+        lines = (run / name).read_text().splitlines()
+        assert lines and len((out / public).read_text().splitlines()) == len(lines), public
+    line = json.loads((run / "cells.jsonl").read_text().splitlines()[0])
+    assert A.row_registration(json.dumps(line), given)
+    for key, value in (("value", "another/egress/0"), ("parameters", "00" * 64), ("row_schema", "cells/v1"),
+                       ("root", line["registration"]["root"][:-2]), ("rows", str(line["registration"]["rows"]))):
+        with pytest.raises(A.Unruled, match=f"registration's {key} isn't in the form ROW_LINE"):
+            A.row_registration(json.dumps(line | {"registration": line["registration"] | {key: value}}), given)
+
+
 def _session(tmp_path: Path, windows: int):
     """The gate's `relay-session` command for `windows` execution phases at the scan's w63k4 schedule, parsed, with its
     schedule, and a maker of `n` id requests of the class's most tokens with their id-form answers."""
@@ -1322,6 +1423,32 @@ def test_one_connection_failed_closed_refuses_a_sessions_whole_run_whichever_cli
     assert sorted(w["accepted"] for w in audit_["windows"]) == [False, True]
     assert not result["accepted"] and all(w["certified"] for w in result["windows"])
     assert result["problems"] == ["audit: connection 4 failed closed (format) at egress cell 0"]
+
+
+def test_the_summarys_failed_list_holds_the_checks_fixed_words_and_none_of_a_clients(tmp_path):
+    """The summary's `failed` says how the connections that neither ended nor were refused failed, in `FAILED`'s
+    words alone: the gate's end carries the list, and a word in it is a word a key with no name reads. The connection
+    this run's relay failed closed is in it by its client's outcome, `cut`. A client's connection that raised has its
+    exception's words on its own line of `client.json`; the check's problems keep them, and so does the connection's
+    row, and the summary says `error`."""
+    args, p, load = _session(tmp_path, 2)
+    requests, responses = load(4)
+    out = tmp_path / "run"
+    out.mkdir()
+    _run(out, tmp_path / "key", requests, responses[:3] + [_response([" a"])], windows=args.windows, params=p,
+         id_payload=p.payload, arrive=dict(enumerate([0, 0, 1, 2])))
+    assert ws.check(out)["summary"]["failed"] == ["cut"]
+    client = json.loads((out / "client.json").read_text())
+    said = "ConnectionResetError: the endpoint hung up on the first request"
+    index = client["connections"][0]["index"]
+    client["connections"][0] = {"index": index, "error": said}
+    (out / "client.json").write_text(json.dumps(client))
+    result = ws.check(out)
+    assert result["summary"]["failed"] == ["cut", "error"] and said not in json.dumps(result["summary"])
+    assert f"client connection {index}: {said}" in result["problems"]
+    assert {"index": index, "outcome": said} in result["connections"]
+    assert RC.failed_words(["cut", said, "cut", None, 3]) == ["cut", "error"] and RC.failed_words(said) == ["error"]
+    assert RC.failed_words([]) == [] and set(RC.failed_words(RC.FAILED)) == set(RC.FAILED)
 
 
 def test_the_check_names_each_execution_phase_the_audit_refused_and_why_uncut(tmp_path, monkeypatch):
