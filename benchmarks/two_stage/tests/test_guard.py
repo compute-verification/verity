@@ -11,8 +11,9 @@ the templates' names, links, wires and descriptor, the boundary and interior reg
 templates' reference statements, made from the interior window with no run in it and admitted only after the script
 checks each is in Flock's masked scope (`zkOk`), and the templates' reference reads as the params name them
 (`ref-<t>.reads.json`, `Held.refReads`). Nothing in `h` reads the run's messages or coins. `two`'s conjuncts on the
-members' files (`twoFilesOk`: the layout fits them, and each reference statement reads as a member's) evaluate to true
-too. `runOkAt` refuses the altered run, and the honest run with one byte of a session statement's registered reads
+members' files (`twoFilesOk`: the layout fits them, each reference statement reads as a member's, and the registered
+wiring passes the clauses that read the description alone) evaluate to true too. `runOkAt` refuses the altered run,
+and the honest run with one byte of a session statement's registered reads
 flipped (`guard.flip_registered`). Its records check (`recordsOk`) refuses the honest run with FLIP_B's own port `o0`,
 which no link or wire names, dropped from round 1's record and registered as a value of its name (`guard.drop_port`),
 and with a value the registration registers registered twice (`guard.register`), where the same run with it registered

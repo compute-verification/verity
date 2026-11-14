@@ -10,6 +10,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
         [--chain-cmd CMD] [CR_K=V ...]
     python certifier_piece.py period SERVE_DIR WINDOW DIR V3C [--lean EXE]
     python certifier_piece.py relay --listen PORT --to PORT
+    python certifier_piece.py front PORT SERVE_DIR OUT --session --client-port PORT --windows N [--gate ...]
+        [--key KEY] [--peer NAME] [--scan-class w63k4] [--height H] [--minutes M] [--bucket-ms MS]
+    python certifier_piece.py close SERVE_DIR OUT
 
 * **front** runs before served_verdicts.sh's requests when ``CERTIFIER_FRONT`` names it: the gate's scan rehearsal
   (`served_session.session`, ``warden-rehearse --scan --prompts --window-per-group``) against serve-openai on PORT, one
@@ -50,8 +53,9 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   3. The chain (`served_session.py chain`: chain_record.sh's network certifier path, certs, endpoint, N2, tie and scan)
      on the kept run, with the serve dir's endpoint records (`ENDPOINT`, copied to SERVE_DIR/`PRIVATE`/RUN/endpoint), its run
      dir and quarantine under SERVE_DIR/`PRIVATE`/RUN, so nothing of the witness reaches a record. N2 and the tie
-     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on; any other is a
-     reject with its why.
+     take every link-window of a run of at most 8 (`sized`). Its report's verdict ``accepted`` goes on, and so does
+     ``accepted on the period check`` (`chain_record.RESTS`: the scan's acceptance rests on step 5's check, which
+     then decides); any other is a reject with its why.
   4. The period's link-window is the scan's (``answers.json``'s one window): every window request's release and
      streamed ids lie in it, else reject.
   5. The period check: `scan_period.rows_case` of the warden run and the chain's scan, checked by ``network-period``
@@ -96,6 +100,35 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   DIR/`CHAINED` or the chain's scan read no V3c window or another. Each releases through its own hold and refuses as
   the piece does, keeping ``served_verdicts.sh``'s logs (`LOGS`).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
+* **front --session** and **close** put the gate's relay session (`auditor.py`'s "A relay session") around the served
+  run's own load, in the rehearsal front's place: the load's clients are the run's, and the front sends no group.
+  - ``front --session`` asks the gate for ``relay-session``: PORT is the endpoint's, ``--client-port`` the port of
+    the peer's loopback the load's clients connect to and ``--windows`` the session's length in execution phases.
+    ``--height`` at the piece's default, 10, which signs 204 of them, is raised to the least whose key signs the
+    session's (`auditor.warden_height`), and ``--minutes`` is by default `auditor.session_minutes` at that height
+    plus `served_session.MARGIN`, at most the gate's: for the longest session, 1119 execution phases, height 13,
+    with ``--minutes`` 66 at the scan's 100 ms tick (59 min 40 s of them) and 126 at 200 ms (119 min 21 s). The
+    gate refuses any other ``--height`` too low for the session. This tree's gate checks the request first. It
+    returns once the gate's ``status`` shows the relay listening: exit 0, with
+    SERVE_DIR/`PRIVATE`/RUN/`RELAY` (0600) holding ``client``, 127.0.0.1:CLIENT_PORT on the peer, and
+    ``deployment``, the relay's (its schedule, ``origin_unix`` and ``windows``), and one line on stdout naming the
+    run, the client's address and that file. Exit 2 when the gate refused the request or a session is open already,
+    1 when the session ended before its relay listened, the reason in OUT/session.json. The session then runs to
+    its execution phases' end whatever its caller does: nothing ends it early, and its last connection is admitted
+    `WardenParams.span` + 1 buckets before that end.
+  - ``close`` runs after the load: it waits for the session's end, keeps the lane's fetch where the piece reads it
+    (SERVE_DIR/`PRIVATE`/RUN/fetch.tar.gz) and publishes to OUT what the rehearsal front does (``session.json``,
+    ``bundle.tgz`` and ``status.json``, through the leak guard), with the front's exits: 0 when the gate's check
+    accepted the run.
+  - The piece's steps close a session that no ``close`` ended before they read the kept run (`close_open`): the same
+    wait and the same kept files, nothing published.
+  - The piece answers for a session's run as for a rehearsal's, only when the gate's check accepted the whole run
+    (`rehearsed`). One connection the relay failed closed, one cut from s + D on at the session's end, one refused at
+    a full queue or one execution phase the relay faulted, whichever load it carried, leaves every window of the
+    served run without the certifier's answer. The run's records cover the connections that crossed the relay; that
+    nothing else reaches the endpoint is the placement's, as a rehearsal's.
+  - ``--gate local`` is the dry run's: this tree's gate on a scratch host under SERVE_DIR/`PRIVATE`, its unit a
+    process of the front's (`local_unit`) with a `relay` each way in the place of its ssh.
 """
 from __future__ import annotations
 
@@ -187,13 +220,15 @@ def _lines(path: Path) -> list[dict]:
 
 # ---------------------------------------------------------------------------------------------------------------- front
 
-def front(a: argparse.Namespace) -> int:
+def front(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.sleep) -> int:
     serve_dir, out = a.serve_dir.resolve(), a.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     keep = serve_dir / PRIVATE
     keep.mkdir(parents=True, exist_ok=True)
     for p in (serve_dir / "private", keep):
         p.chmod(0o700)
+    if a.session:
+        return open_session(a, keep, out, sleep=sleep)
     a.requests = a.prompts
     a.keep, a.out, a.at, a.window_per_group = keep, out, None, True
     if a.minutes is None:
@@ -203,6 +238,7 @@ def front(a: argparse.Namespace) -> int:
         a.tunnel = lambda ssh, port: [sys.executable, str(Path(__file__).resolve()), "relay", "--listen", str(port),
                                       "--to", str(a.port)]
     try:
+        a.gate = SS.gate_at(a.gate)
         if a.prompts > SS.A.SCAN["--lanes"]:
             raise SS.Refused(f"--prompts {a.prompts}: one group, at most the scan's {SS.A.SCAN['--lanes']} lanes")
         if SS.A.scan_group_windows(a.tokens) != 1:
@@ -278,6 +314,184 @@ def relay(listen: int, to: int, *, ready: Callable[[], None] = lambda: None) -> 
             continue
         for x, y in ((conn, up), (up, conn)):
             threading.Thread(target=pipe, args=(x, y), daemon=True).start()
+
+
+def relays(pairs: list[tuple[int, int]]) -> None:
+    """`relay` for each (listen, to) of `pairs`, the last in this thread once every other listens."""
+    *more, last = pairs
+    for pair in more:
+        listening = threading.Event()
+        threading.Thread(target=relay, args=pair, kwargs={"ready": listening.set}, daemon=True).start()
+        listening.wait()
+    relay(*last)
+
+
+# -------------------------------------------------------------------------------------------------------------- session
+
+#: a relay session the front opened, under SERVE_DIR/`PRIVATE`/RUN (0600): the run, its gate and key, the front's
+#: arguments its request is made of (`SESSION_ARGS`) and, once the relay listens, where a client connects (``client``)
+#: and the relay's deployment; the session is open until ``fetch.tar.gz`` is beside it
+RELAY = "relay.json"
+SESSION_ARGS = ("peer", "port", "client_port", "windows", "minutes", "height", "bucket_ms", "scan_class")
+#: how often the front asks the gate whether the relay listens yet: the run's first bucket starts a few seconds after
+READY_POLL_S = 1
+
+
+class Unready(SS.Refused):
+    """A relay session that ended, or whose unit did, before the front or the close had what it waited for."""
+    code = 1
+
+
+def open_sessions(keep: Path) -> list[dict]:
+    """Each relay session under `keep` that no close has ended: its `RELAY`."""
+    return [json.loads(p.read_text()) for p in sorted(keep.glob(f"*/{RELAY}"))
+            if not (p.parent / "fetch.tar.gz").is_file()]
+
+
+def session_args(doc: dict, keep: Path, out: Path) -> argparse.Namespace:
+    """The front's arguments a kept `RELAY` holds, as `served_session` reads a session's."""
+    return argparse.Namespace(**doc["args"], gate=doc["gate"], key=Path(doc["key"]), unit=doc.get("unit"),
+                              run=doc["run"], keep=keep, out=out, at=None)
+
+
+def write_relay(keep: Path, a: argparse.Namespace, run: str, relay_: dict | None = None) -> Path:
+    doc = {"run": run, "gate": a.gate, "key": str(a.key), "args": {k: getattr(a, k) for k in SESSION_ARGS},
+           **({} if getattr(a, "unit", None) is None else {"unit": a.unit}), **(relay_ or {})}
+    path = keep / run / RELAY
+    path.parent.mkdir(mode=0o700, exist_ok=True)
+    with open(path, "w", opener=lambda p, flags: os.open(p, flags, 0o600)) as f:
+        f.write(json.dumps(doc, indent=1, sort_keys=True) + "\n")
+    return path
+
+
+def gate_status(a: argparse.Namespace, keep: Path, run: str) -> dict | None:
+    """The gate's ``status RUN``, None where it didn't answer: over ssh, or this tree's gate on ``--gate local``'s
+    scratch host, whose unit is the process ``a.unit``."""
+    if a.gate == "local":
+        host = SS.scratch_host(keep / "local-gate", a.peer)
+        rc, got = SS.A.gate(["--ssh", f"status {run}", "--key", SS.LANE], host,
+                            certifier_active=lambda r: a.unit is not None and live(a.unit))
+        got = got if rc == 0 else None
+    else:
+        got = SS.status(a, run)
+    return None if got is None else json.loads(got)
+
+
+def waited(a: argparse.Namespace, keep: Path, run: str, done: Callable[[dict], bool], every: float,
+           sleep: Callable[[float], object]) -> dict:
+    """The gate's status of `run` once `done` takes it, asked every `every` seconds. `Unready` when the unit is twice
+    seen ended with no end, which a unit that ran to its end always writes, or when the session's own minutes of
+    asking pass, by which the gate has stopped it."""
+    gone = 0
+    for _ in range(int(a.minutes * 60 / every) + 1):
+        st = gate_status(a, keep, run)
+        if st is not None:
+            if done(st):
+                return st
+            gone = gone + 1 if st.get("active") is False and st.get("end") is None else 0
+            if gone > 1:
+                raise Unready(f"relay session {run}: its unit ended and wrote no end.json (the gate's status)")
+        sleep(every)
+    raise Unready(f"relay session {run}: {a.minutes} minutes of asking, the session's own, and the gate's status "
+                  "didn't show what was awaited")
+
+
+def open_session(a: argparse.Namespace, keep: Path, out: Path, *, sleep: Callable[[float], object] = time.sleep) -> int:
+    """``front --session`` (the module docstring): the gate's relay session started, and its `RELAY` kept once the
+    relay listens. Exit 0 then, 2 when the session isn't started (the reason in OUT/session.json), 1 when it ended
+    before its relay listened."""
+    try:
+        if a.client_port is None or a.windows is None:
+            raise SS.Refused("--session: with --client-port PORT, the peer's loopback port the load's clients "
+                             "connect to, and --windows N, the session's length in execution phases")
+        if a.warmup:
+            raise SS.Refused("--session sends no request of its own: --warmup is the rehearsal front's")
+        if a.height == HEIGHT:
+            a.height = SS.A.warden_height(a.windows)
+        if a.minutes is None:
+            tick = a.bucket_ms or SS.A.SCAN["--bucket-ms"]
+            a.minutes = min(SS.A.session_minutes(a.windows, a.height, SS.A.SCAN["--window"] * tick) + SS.MARGIN,
+                            SS.A.CERTIFIER_MINUTES[1])
+        with tempfile.TemporaryDirectory() as d:
+            try:
+                SS.A.REHEARSALS[SS.words(a)[0]](SS.words(a)[1:], SS.scratch_host(Path(d), a.peer))
+            except SS.A.Refused as e:
+                raise SS.Refused(f"the gate refuses it: {e}") from None
+        if opened := open_sessions(keep):
+            raise SS.Refused(f"relay session {opened[0]['run']} is open under {keep}: close it first "
+                             "(certifier_piece.py close)")
+        if a.gate == "local":
+            _, run = SS.local_start(a, b"", keep)
+            (keep / run).mkdir(mode=0o700, exist_ok=True)
+            with open(keep / run / "unit.log", "wb") as log:
+                a.unit = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "unit", str(keep), run,
+                                           a.peer, str(a.port)], stdin=subprocess.DEVNULL, stdout=log,
+                                          stderr=subprocess.STDOUT, start_new_session=True).pid
+        else:
+            run = SS.start(a, b"", keep)
+        write_relay(keep, a, run)
+        st = waited(a, keep, run, lambda st: st.get("end") is not None or st.get("relay") is not None,
+                    READY_POLL_S, sleep)
+        if st.get("relay") is None:
+            raise Unready(f"relay session {run} ended before its relay listened: exit {st['end'].get('rc')}, "
+                          f"{st['end'].get('ended')}")
+        kept = write_relay(keep, a, run, st["relay"])
+        print(json.dumps({"run": run, "client": st["relay"]["client"], "relay": str(kept)}, sort_keys=True), flush=True)
+        return 0
+    except SS.Refused as e:
+        (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        print(f"refused: {e}", file=sys.stderr)
+        return e.code
+
+
+def local_unit(a: argparse.Namespace) -> int:
+    """``--gate local``'s unit of a relay session: this tree's `auditor.certifier_run` on the scratch host under KEEP,
+    a `relay` both ways in the place of its ssh, to the endpoint's port and from the clients' to the relay."""
+    host = SS.scratch_host(a.keep / "local-gate", a.peer)
+    me = [sys.executable, str(Path(__file__).resolve()), "relay"]
+    end = SS.A.certifier_run(host, a.run, pinned=SS.pinned(), now=lambda: SS.datetime.now(SS.UTC),
+                             tunnel_argv=lambda ssh, port, back: [*me, "--listen", str(port), "--to", str(a.port),
+                                                                  "--listen", str(back[0]), "--to", str(back[1])])
+    return 0 if end["rc"] == 0 else 1
+
+
+def ended_fetch(a: argparse.Namespace, keep: Path, hold: Path, sleep: Callable[[float], object]) -> bytes:
+    """The open session ``a.run``'s end awaited (the gate's status every `served_session.POLL_S` seconds; the last,
+    less its ``relay``, which the bundle's deployment holds, is `hold`'s ``status.json``), then the lane's fetch."""
+    st = waited(a, keep, a.run, lambda st: st.get("end") is not None, SS.POLL_S, sleep)
+    (hold / "status.json").write_text(json.dumps({k: v for k, v in st.items() if k != "relay"}, sort_keys=True) + "\n")
+    try:
+        if a.gate == "local":
+            return SS.A.certifier_fetch(a.run, SS.scratch_host(keep / "local-gate", a.peer), witness=True)
+        return SS.fetch(a, a.run)
+    except subprocess.CalledProcessError as e:
+        raise Unready(f"relay session {a.run}: the gate's fetch failed (exit {e.returncode}): "
+                      f"{e.stderr[-400:]!r}") from None
+    except SS.A.Refused as e:
+        raise Unready(f"relay session {a.run}: the gate's fetch: {e}") from None
+
+
+def close(a: argparse.Namespace, *, sleep: Callable[[float], object] = time.sleep) -> int:
+    """``close`` (the module docstring): the one open relay session's end awaited and its fetch kept and published
+    as a rehearsal front's. Exit as `served_session.session`'s; 2 with no session open, or more than one."""
+    serve_dir, out = a.serve_dir.resolve(), a.out.resolve()
+    out.mkdir(parents=True, exist_ok=True)
+    keep = serve_dir / PRIVATE
+    try:
+        opened = open_sessions(keep)
+        if len(opened) != 1:
+            raise SS.Refused(f"{len(opened)} relay sessions open under {keep}, not one: the front (front --session) "
+                             "opens it before the load")
+        b = session_args(opened[0], keep, out)
+        b.close = lambda hold: ended_fetch(b, keep, hold, sleep)
+        rc = SS.session(b, b"", [])
+        if (doc := out / "session.json").is_file():
+            shutil.copyfile(doc, keep / b.run / SESSION)
+        return rc
+    except SS.Refused as e:
+        (out / "session.json").write_text(json.dumps({"refused": str(e)}, indent=1) + "\n")
+        print(f"refused: {e}", file=sys.stderr)
+        return e.code
 
 
 # ---------------------------------------------------------------------------------------------------------------- piece
@@ -558,6 +772,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
     ``chain`` is given KEEP, the run, the endpoint's records and the run's link-windows, or is None to read the report
     of the chain the split's chain step ran; ``check`` None stops once the chain accepted, with no answer (the split's
     chain step). `NotRun` when a step can't run."""
+    import chain_record as CR
     from benchmarks.network_traces import warden_chain as WC
     keep = serve_dir / PRIVATE
     run = kept_run(serve_dir)
@@ -584,7 +799,7 @@ def decide(serve_dir: Path, window: int, d: Path, *, chain: Callable[[Path, str,
             if not report.is_file():
                 raise NotRun(f"the chain wrote no report (exit {rc}): see chain/ and the kept run's stdout.log")
         doc = json.loads(report.read_text())
-        if doc.get("verdict") != "accepted":
+        if doc.get("verdict") not in ("accepted", CR.RESTS):
             raise Rejected(f"the chain {doc.get('verdict')}: {json.dumps(doc.get('why'), default=str)}"[:1800])
         try:
             (w,) = [x["window"] for x in json.loads((out / "scan" / "answers.json").read_text())["windows"]]
@@ -698,6 +913,30 @@ def said(got: dict) -> int:
     return 0 if got.get("verdict") == "accept" else 1
 
 
+def close_open(serve_dir: Path, *, sleep: Callable[[float], object] = time.sleep) -> None:
+    """The piece's guard for a relay session nobody closed (no `close` ran after the load): its end awaited and its
+    fetch and `SESSION` kept as `close` keeps them, with nothing published. Nothing where none is open; `NotRun` when
+    it can't be closed."""
+    keep = serve_dir / PRIVATE
+    opened = open_sessions(keep)
+    if not opened:
+        return
+    if len(opened) > 1:
+        raise NotRun(f"{len(opened)} relay sessions open under {keep}, not one: the run's load goes through one")
+    (keep / "held").mkdir(mode=0o700, exist_ok=True)
+    hold = Path(tempfile.mkdtemp(dir=keep / "held", prefix="close-"))
+    try:
+        b = session_args(opened[0], keep, hold)
+        b.close = lambda h: ended_fetch(b, keep, h, sleep)
+        doc, _ = SS._session(b, b"", [], keep, hold)
+        shutil.copyfile(hold / "session.json", keep / doc["run"] / SESSION)
+    except SS.Refused as e:
+        raise NotRun(f"relay session {opened[0]['run']}, which no close ended, couldn't be closed here: {e}") from None
+    finally:
+        rm(hold)
+    print(f"relay session {doc['run']} closed here: no close ran after the load (certifier_piece.py close)", flush=True)
+
+
 def settle(serve_dir: Path, window: int, d: Path, limit: str,
            step: Callable[[Path], tuple[dict | None, Path | None]]) -> dict | None:
     """``step``'s answer: its files written to a fresh hold under SERVE_DIR/`PRIVATE`/held (``step`` is given it), an
@@ -710,6 +949,7 @@ def settle(serve_dir: Path, window: int, d: Path, limit: str,
     case, released = serve_dir / CASES / CASE, False
     try:
         case.unlink(missing_ok=True)
+        close_open(serve_dir)
         if not any((serve_dir / PRIVATE).glob("*/fetch.tar.gz")):
             raise NotRun(f"no warden run kept under {serve_dir / PRIVATE}: the run's load didn't go through the "
                          "certifier's front (CERTIFIER_FRONT unset, or the gate, its tunnel or ssh failed)")
@@ -844,6 +1084,11 @@ def parser() -> argparse.ArgumentParser:
     f.add_argument("--warmup", type=int, default=0, metavar="N",
                    help="plain requests of the group's shape straight to PORT first, each in a window of its own "
                         "(none by default)")
+    f.add_argument("--session", action="store_true",
+                   help="the gate's relay session, kept up for the served run's own load: no group is sent")
+    f.add_argument("--client-port", type=int, metavar="PORT",
+                   help="with --session: the port of the peer's loopback the load's clients connect to")
+    f.add_argument("--windows", type=int, metavar="N", help="with --session: its length, in execution phases")
     q = sub.add_parser("piece")
     q.add_argument("serve_dir", type=Path)
     q.add_argument("window", type=int)
@@ -868,8 +1113,16 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("set", nargs="*", help="CR_K=V")
     sub.choices["period"].add_argument("--lean", help="network-period, built (else built here)")
     r = sub.add_parser("relay")
-    r.add_argument("--listen", type=int, required=True)
-    r.add_argument("--to", type=int, required=True)
+    r.add_argument("--listen", type=int, required=True, action="append")
+    r.add_argument("--to", type=int, required=True, action="append")
+    c = sub.add_parser("close")
+    c.add_argument("serve_dir", type=Path)
+    c.add_argument("out", type=Path)
+    u = sub.add_parser("unit")
+    u.add_argument("keep", type=Path)
+    u.add_argument("run")
+    u.add_argument("peer")
+    u.add_argument("port", type=int)
     return p
 
 
@@ -883,7 +1136,13 @@ def main(argv: list[str] | None = None) -> int:
         return chain_step(a)
     if a.cmd == "period":
         return period_step(a)
-    relay(a.listen, a.to)
+    if a.cmd == "close":
+        return close(a)
+    if a.cmd == "unit":
+        return local_unit(a)
+    if len(a.listen) != len(a.to):
+        raise SystemExit("relay: one --to for each --listen")
+    relays(list(zip(a.listen, a.to, strict=True)))
     return 0
 
 

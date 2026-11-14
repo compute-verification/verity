@@ -106,6 +106,28 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def _block(doc: dict, name: str) -> dict:
+    """The block `name` of a document this rank reads: its own facts, the driver's weights pin and replay options, its weights of
+    record, the manifest of record.  Empty for a document that holds none, or holds it null or empty: each field read off it is then
+    None, which its reader takes as not stated (no Program dir for this rank, a world of 1, no digest for this rank)."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def _listed_for(per_rank: dict | None, rank: int) -> list:
+    """What a per-rank option of the driver (`{"<rank>": [...]}`: the post-load tensors, the shards to serve from another rank) lists
+    for this rank; empty for an option the driver left out and for one that lists nothing for this rank."""
+    listed = (per_rank or {}).get(str(rank))
+    return list(listed if listed else [])
+
+
+def _per_request(stated: Any, n_req: int) -> dict[str, int]:
+    """A number for each request `r<i>` of the batch, from the table the driver stated: 0 for a request the table leaves
+    out, and for every request when there is no table."""
+    table = stated if stated else {}
+    return {f"r{i}": int(table.get(f"r{i}", 0)) for i in range(n_req)}
+
+
 def _collector_counters(rc: Any) -> dict[str, Any]:
     """The counters a run's native collector stated; none when its committer has no collector, or states none."""
     stated = rc.extra.get("native_collect")
@@ -273,7 +295,7 @@ class TP2CaptureWorkerExtension:
         rank_dir.mkdir(parents=True, exist_ok=True)
         runner = self.model_runner
         model = runner.get_model()
-        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
+        post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
@@ -565,7 +587,7 @@ class TP2CaptureWorkerExtension:
         rank = int(facts["tp"]["rank"])
         runner = self.model_runner
         model = runner.get_model()
-        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
+        post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
@@ -584,7 +606,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1), manifest=man)
+            msrc = MoeBlockSource(com, model, world=int(_block(facts, "tp").get("world_size") or 1), manifest=man)
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
@@ -644,7 +666,7 @@ class TP2CaptureWorkerExtension:
         # Program's shard map prescribes is wrong.  Applied BEFORE register_weights (the rank commits what it serves); the per-rank pin,
         # composed for THIS rank, must FAIL naming the parameter.  A replicated parameter cannot be mis-served this way (refused by name).
         res["serve_shard_from"] = None
-        ssf = list((serve_shard_from or {}).get(str(rank)) or []) if isinstance(serve_shard_from, dict) else []
+        ssf = _listed_for(serve_shard_from, rank) if isinstance(serve_shard_from, dict) else []
         if ssf:
             if not (isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir")):
                 raise RuntimeError(f"rank {rank}: --serve-shard-from needs --checkpoint-dir (the other rank's shard is composed from the pinned checkpoint)")
@@ -670,14 +692,14 @@ class TP2CaptureWorkerExtension:
                     raise RuntimeError(f"rank {rank}: {pname} is replicated on every rank ({note.get('shard')}) -- no other rank's shard to serve")
                 own, _ = WR.compose(pname, list(p.shape), bits, ck, world=world_, rank=rank)
                 with torch.no_grad():
-                    before = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
+                    sha_before = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
                     t = torch.from_numpy(_np.ascontiguousarray(arr)).view(p.dtype).reshape(p.shape)
                     p.data.copy_(t.to(p.device))
-                    after = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
+                    sha_after = hashlib.sha256(p.data.detach().contiguous().cpu().view(torch.uint8).numpy().tobytes()).hexdigest()
                 own_sha = hashlib.sha256(_np.ascontiguousarray(own).tobytes()).hexdigest()
                 applied.append({"rank": rank, "param": pname, "from_rank": frm, "shard_rule": note.get("shard"), "sources": note.get("sources"),
-                                "served_before_sha256": before, "served_after_sha256": after, "own_shard_of_record_sha256": own_sha,
-                                "own_equals_before": own_sha == before, "after_equals_before": after == before})
+                                "served_before_sha256": sha_before, "served_after_sha256": sha_after, "own_shard_of_record_sha256": own_sha,
+                                "own_equals_before": own_sha == sha_before, "after_equals_before": sha_after == sha_before})
             res["serve_shard_from"] = applied
         # the weights the rank registers, pins and replays: its MXFP4 Marlin experts' fields as loaded (`acquire.as_loaded`, bound by the TP
         # driver with the checkpoint of record), every other tensor as served
@@ -693,7 +715,7 @@ class TP2CaptureWorkerExtension:
         if isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir"):
             try:
                 from verity_vllm.check import weights_of_record as WR
-                pdir = (weights_pin.get("program_dirs") or {}).get(str(rank))
+                pdir = _block(weights_pin, "program_dirs").get(str(rank))
                 if not pdir:
                     raise RuntimeError(f"rank {rank}: no rank Program dir for the weights of record")
                 if not os.path.exists(os.path.join(str(pdir), "instances.json.gz")):
@@ -705,7 +727,7 @@ class TP2CaptureWorkerExtension:
                     pdir = subs[0]
                 rec = WR.build_record(str(pdir), str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
                                       model=weights_pin.get("model"), shard_pin=weights_pin.get("shard_pin"))
-                rtp = (rec.get("tp") or {})
+                rtp = _block(rec, "tp")
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
                     raise RuntimeError(f"rank {rank}: weights of record built from a Program of tp={rtp}, not this rank's (world {world_}, rank {rank})")
@@ -724,7 +746,7 @@ class TP2CaptureWorkerExtension:
                     chk["result"] = False
                     chk["why"] = (f"rank {rank}: checkpoint shards NOT pinned by manifests/checkpoints.json (all_shards_pinned={chk.get('all_shards_pinned')!r}): "
                                   f"the record is over the files at the checkpoint dir, not the checkpoint of record (W1); " + str(chk.get("why") or ""))[:400]
-                elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str((weights_pin.get("program_dirs") or {}).get(str(rank))), "instances.json.gz")) \
+                elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str(_block(weights_pin, "program_dirs").get(str(rank))), "instances.json.gz")) \
                         and str(rec.get("program_digest") or "") not in ("", chk["w2_program_of_record"]["rank_program_digest_of_record"]):
                     chk["result_before_w2"] = chk.get("result")
                     chk["result"] = False
@@ -765,7 +787,7 @@ class TP2CaptureWorkerExtension:
         if hasattr(com, "identity_check"):
             try:
                 from verity_vllm.acquire import fa2_plane_classes as FP
-                _pdir = ((replay or {}).get("programs") or {}).get(str(rank)) or ((weights_pin or {}).get("program_dirs") or {}).get(str(rank))
+                _pdir = _block(replay or {}, "programs").get(str(rank)) or _block(weights_pin or {}, "program_dirs").get(str(rank))
                 _impls, _impls_path = FP.attention_impls_of_record(program_dir=_pdir, programs_root=_pdir) if _pdir else (None, None)
                 _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
                 if _decls:
@@ -791,7 +813,7 @@ class TP2CaptureWorkerExtension:
             # this rank's Program digest must be the manifest's digest for this rank (a manifest of another Program = wrong Program)
             try:
                 man = json.loads(Path(required_manifest).read_text())
-                pdr = (man.get("program_digest_per_rank") or {}).get(str(rank))
+                pdr = _block(man, "program_digest_per_rank").get(str(rank))
                 if pdr is None and isinstance(man.get("program_digest"), str):
                     pdr = man["program_digest"]
                 if not program_digest:
@@ -799,7 +821,7 @@ class TP2CaptureWorkerExtension:
                     self._tp2_commit["program_digest"] = pdr
                 res["required_manifest"] = {"path": required_manifest, "manifest_digest": man.get("manifest_digest"), "complete": man.get("complete"),
                                             "program_digest_for_rank": pdr, "program_digest_matches": (pdr == program_digest),
-                                            "identities": (man.get("populations") or {}).get("identities"), "ranks": man.get("ranks")}
+                                            "identities": _block(man, "populations").get("identities"), "ranks": man.get("ranks")}
                 self._tp2_commit["manifest_doc"] = man
             except Exception as e:  # noqa: BLE001
                 res["required_manifest"] = {"path": required_manifest, "error": repr(e)[:300]}
@@ -1003,7 +1025,7 @@ class TP2CaptureWorkerExtension:
             return {"skipped": f"B={n_req} > 1 but the rank's collector recorded no step_rows ({getattr(com, 'step_rows_why', None)}) -- no coverage verdict"}
         try:
             requests = [f"r{i}" for i in range(n_req)]
-            arrivals = {f"r{i}": int((st.get("arrivals") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            arrivals = _per_request(st.get("arrivals"), n_req)
             man_doc = st.get("manifest_doc") if st.get("required_manifest") else None
             binder = Binder.of_manifest(man_doc, rank=rank, ports=source_ports(com.sources), arrivals=arrivals) if man_doc else None
             bmap = bd.build_binding_map(com._layouts, rc.steps, rc.run_root, pd, rank=rank, weight_registration=rc.weight_registration, request_rows=request_rows, binder=binder,
@@ -1019,14 +1041,14 @@ class TP2CaptureWorkerExtension:
             if tps is not None:
                 by_path = {d["op_path"]: d for d in struct["modules"]}
                 for site, cls in tps.sites:
-                    mem = f"shard_rank{rank}" if cls == "LogitsProcessor" else f"part_rank{rank}"
+                    mem = f"shard_rank{rank}" if cls == LC.LOGITS else f"part_rank{rank}"
                     if site in by_path:
                         by_path[site]["members"] = list(by_path[site]["members"]) + [mem]
                     else:
                         struct["modules"].append({"op_path": site, "class": cls, "invocations": 1, "members": [mem]})
                     tp_members += 1
                 struct["tp_partial_sites"] = len(tps.sites)
-            caps = {f"r{i}": int((st.get("caps") or {}).get(f"r{i}", 0)) for i in range(n_req)}
+            caps = _per_request(st.get("caps"), n_req)
             horizon = max(arrivals[k] + caps[k] for k in caps) if any(caps.values()) else len(rc.steps)
             wl = {"program_digest": pd, "requests": requests, "steps": horizon, "ranks": [rank],
                   "request_steps": {k: list(range(arrivals[k], arrivals[k] + caps[k])) for k in caps} if any(caps.values()) else None}
@@ -1041,7 +1063,8 @@ class TP2CaptureWorkerExtension:
                 pop_all, man_hdr = bd.load_required_manifest(st["required_manifest"], pd, requests=requests, steps=horizon, ranks=[rank], arrivals=arrivals)
                 pop = [i for i in pop_all if int(i[7]) == rank]          # identity = (pd, rid, step, inv, op, member, (lo, hi), rank)
                 man_hdr["rows_for_rank"], man_hdr["rows_all_ranks"] = len(pop), len(pop_all)
-                man_hdr["program_digest_for_rank"] = ((st.get("manifest_doc") or {}).get("program_digest_per_rank") or {}).get(str(rank))
+                per_rank = man_doc.get("program_digest_per_rank") if man_doc else None
+                man_hdr["program_digest_for_rank"] = per_rank.get(str(rank)) if per_rank else None
                 source = "required-manifest (Program(rank) x canonical query, rows with rank=r)"
                 if not pop:
                     return {"error": f"required manifest has no rows for rank {rank} ({man_hdr.get('path')})", "rank": rank}
@@ -1054,13 +1077,18 @@ class TP2CaptureWorkerExtension:
             # to WHICH block a request was bound to; this is what makes an omitted / relabelled / duplicated request fail named on a rank
             comp = bd.composition_check(man_hdr, bmap) if (man_hdr is not None and hasattr(bd, "composition_check")) else None
             if comp is not None:
-                cov["composition"] = {k: v for k, v in comp.items() if k != "problems"} | {"problems": (comp.get("problems") or [])[:3]}
+                stated = {k: v for k, v in comp.items() if k != "problems"}
+                problems = comp.get("problems")
+                cov["composition"] = stated | {"problems": problems[:3] if problems else []}
             if man_hdr is not None and man_hdr.get("complete") is False:            # unmodelled Program families -> not a population
-                cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + "; ".join(f"{k} x{v}" for k, v in sorted((man_hdr.get("unmodelled") or {}).items())))
+                unmodelled = man_hdr.get("unmodelled")
+                families = "; ".join(f"{k} x{v}" for k, v in sorted(unmodelled.items())) if unmodelled else ""
+                cov = dict(cov, ok=False, error="manifest incomplete: unmodelled Program families " + families)
             elif man_hdr is not None and man_hdr.get("program_digest_for_rank") not in (None, pd):
                 cov = dict(cov, ok=False, error=f"manifest Program digest for rank {rank} {str(man_hdr.get('program_digest_for_rank'))[:16]} != this rank's Program {pd[:16]}")
             elif comp is not None and not comp.get("ok"):
-                cov = dict(cov, ok=False, missing=list(cov.get("missing") or []), error=f"rank {rank}: " + str(comp.get("error") or "composition check failed"))
+                missing = cov.get("missing")
+                cov = dict(cov, ok=False, missing=list(missing) if missing else [], error=f"rank {rank}: " + str(comp.get("error") or "composition check failed"))
             ctx_ok, ctx_why = bd.map_context_check(bmap, rc) if hasattr(bd, "map_context_check") else (None, "n/a")
             st["bmap"] = bmap
             st["pop"] = pop

@@ -9,9 +9,9 @@ an H200 (sm_90) and a B200 (sm_100).
 The kernels are the vLLM integration's: `adapters/vllm/verity_vllm/engine/int8_fused.py`, the CUDA bodies
 `engine.int8_ops` registers for both ops, with their config table in `engine.profiles.int8_gemm_configs`. Every gate
 and bench here imports that module, so a gate's pass and a timing describe the kernels vLLM serves. This directory holds
-no kernel or table of its own. `exactlin.py` holds only the three Triton helpers `benchmarks/hash/dither/dither_a.py`
-inlines into its kernels (`_rni_s32`, `_membar_gl`, `_epilogue`), which are private in `int8_fused`;
-`tests/test_helpers.py` holds them to `int8_fused`'s text. Nothing a verifier runs reads this directory.
+no kernel or table of its own. `benchmarks/hash/dither/dither_a.py` inlines `int8_fused`'s public Triton helpers
+(`rni_s32`, `membar_gl`, `epilogue`) into its kernels; `tests/test_dither_a_helpers.py` holds each name it reads to
+one `int8_fused` binds. Nothing a verifier runs reads this directory.
 
 ## Entry points
 
@@ -52,8 +52,8 @@ For x [M, K] bf16, W [N, K] int8 and s_w [N] float32:
 
 ## Files
 
-- `exactlin.py`: the three helpers dither-a inlines, and nothing else. The kernels (`exactlin_quant_rows`,
-  `exactlin_scaled_mm`, and `exactlin_scaled_mm_tma` over host tensor descriptors) and the API above are `int8_fused`'s.
+- The kernels (`exactlin_quant_rows`, `exactlin_scaled_mm`, and `exactlin_scaled_mm_tma` over host tensor descriptors)
+  and the API above are `int8_fused`'s.
 - Gates:
   - `kgate.py`: the fused linear bit for bit against `int8_exact` on Llama-3.1-8B's and Qwen3-8B's linears at every
     `CONFIGS` row, with each buffer poisoned first. It covers the statement's edge rows, a CUDA graph's replay, zero

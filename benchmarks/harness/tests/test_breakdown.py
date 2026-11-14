@@ -203,7 +203,7 @@ def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_
     """`served_table.BREAKDOWNS` reads the breakdown at each run of its labelled record art, not the newest run, and
     passes over a record run without the spans arms."""
 
-    from verity_bench import served_table
+    from verity_bench import served_render, served_table
 
     producer = Producer(tmp_path)
     producer.ran("r20261024-020000-0001", B.SPEC, "b8-p512-mixed", _result("b8-p512-mixed", reps=3))
@@ -229,7 +229,7 @@ def test_the_served_table_puts_a_records_breakdown_beside_the_protocols_row(tmp_
     [skipped] = [s for s in table["skipped"] if s["run"] == "r20261024-020000-0002"]
     assert skipped["why"] == f"no timed {', '.join(B.SPANS_ARMS)} at b32-p512-mixed"
 
-    markdown = served_table.render(table)
+    markdown = served_render.render(table)
     section = markdown.split("## Where the bandwidth audit's time goes")[1]
     assert "| row | b8-p512-mixed, ms an output token | share |" in section
     assert "| decode linear: the weights' codec decode" in section
