@@ -1,5 +1,6 @@
 //! `verity/flock-ir-block/v1`: identical units of an IR subcircuit template (`flock-ir-unit/v1`
-//! netlists, `verity_flock.ir_lower`) as ONE block R1CS, so the CPU prover and Flock-CUDA's host-witness mode prove it.
+//! circuit descriptions, `verity_flock.ir_lower`) as ONE block R1CS, so the CPU prover and Flock-CUDA's host-witness mode prove
+//! it.
 //!
 //! Block `b` holds units `U b .. U b + U - 1` (instance-major over the instance file), unit `u` at the 2^unit_log-bit slot
 //! `u`, so `k_log = unit_log + log2 U`. `A = I ⊗ (I_U ⊗ unit) + Δ` (and B), where Δ makes every unit's constant column a
@@ -189,7 +190,7 @@ impl RowWrite for Rows {
     }
 }
 
-/// A `flock-ir-unit/v2` netlist.
+/// A `flock-ir-unit/v2` circuit description.
 #[derive(Clone)]
 pub struct IrUnitNet {
     pub name: String,
@@ -463,7 +464,7 @@ fn fold<W: RowWord>(rows: &Rows, i: usize, z: &[W], ahead: usize) -> W {
     bare(x, &row[n..])
 }
 
-/// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
+/// A circuit description's `useful` rows, each line `na a.. nb b..`, written in order.
 fn read_rows<'a, R: RowWrite>(lines: &mut impl Iterator<Item = &'a str>, useful: usize) -> (R, R) {
     let (mut a, mut b) = (R::with_rows(useful), R::with_rows(useful));
     let mut v: Vec<usize> = Vec::new();
@@ -1064,10 +1065,11 @@ fn pairs(v: &serde_json::Value) -> Result<Vec<Vec<(usize, usize)>>, String> {
         .collect()
 }
 
-/// The cut structure is the pinned netlist's (IR4), never the instance header's: a header carrying its own is refused, and
-/// its cut word and per-instance unit counts must be the netlist's. Checked: units = instances x units per instance; no cut
-/// word (and no second port group) without a tail that computes it; the cut ports exactly the netlist's cut groups (32-bit
-/// ports, in order); every cut word computed exactly once, by one unit of the instance or by the tail.
+/// The cut structure is the pinned circuit description's (IR4), never the instance header's: a header carrying its own is
+/// refused, and its cut word and per-instance unit counts must be the circuit description's. Checked: units = instances x units
+/// per instance; no cut word (and no second port group) without a tail that computes it; the cut ports exactly the circuit
+/// description's cut groups (32-bit ports, in order); every cut word computed exactly once, by one unit of the instance or by the
+/// tail.
 pub fn cut_map(inst: &IrInstances, net: &IrUnitNet) -> Result<CutMap, String> {
     cut_map_of(net, &inst.header, inst.units)
 }
@@ -1264,8 +1266,8 @@ mod tests {
                     order: Some(pos), ..net.clone() }
     }
 
-    /// `net` as a `flock-ir-unit/v2` netlist: its rows under one input group of its input words and one output group of the
-    /// word after them.
+    /// `net` as a `flock-ir-unit/v2` circuit description: its rows under one input group of its input words and one output group
+    /// of the word after them.
     fn text_of(net: &IrUnitNet) -> String {
         let (w, cp) = (net.in_words, net.const_pos);
         let mut t = format!("flock-ir-unit/v2 t {} {cp} 1 0 {w} 1 {} 1 {w} 1 1 1\n", net.useful, w * WORD);
@@ -1485,7 +1487,7 @@ mod tests {
         }
     }
 
-    /// The parser writes a netlist's rows into `Rows` exactly as into vectors, and those are the rows the text holds.
+    /// The parser writes a circuit description's rows into `Rows` exactly as into vectors, and those are the rows the text holds.
     #[test]
     fn the_parser_writes_rows_alike() {
         for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
