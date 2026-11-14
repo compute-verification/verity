@@ -66,11 +66,11 @@ KINDS: dict[str, str] = {
     "lean-review/v1": "a `check.py --update` run's audit.json (tools/verity/lean): per package its review, statement_changes, and the guarantees "
                       "and reads it compared with (before) beside those it wrote; a `lean_review` label on pr:<n>@<head> may name it, "
                       "as a record nothing waits on",
-    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/flock/agreement/upstream-build.sh): "
+    "flock-upstream-build/v1": "upstream Flock's verifier builds for the agreement job (verity/protocols/flock/prover/agreement/upstream-build.sh): "
                                "a tar.gz of upstream-<PR #83 commit> binaries and BUILD.json; meta {flock, rustc, host, bundle_sha256, "
-                               "binaries}, pinned by verity/protocols/flock/agreement/upstream.json",
+                               "binaries}, pinned by verity/protocols/flock/prover/agreement/upstream.json",
     "flock-agreement-inputs/v1": "the stored inputs the agreement job's replayable sets name (a ci-bundle's store/, tar.gz); meta "
-                                 "{arts}, pinned by verity/protocols/flock/agreement/upstream.json",
+                                 "{arts}, pinned by verity/protocols/flock/prover/agreement/upstream.json",
     "redteam-findings/v1": "meta {findings: [...]}; refs.target",
     "circuit-check-report/v1": "a `circuit-check --out` report (tools/verity/circuit_check): payload file circuit-check.json; meta "
                                "{targets, failures}; a subcircuit catalog's counts cite its targets",
