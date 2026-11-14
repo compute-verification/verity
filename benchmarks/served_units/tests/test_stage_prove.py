@@ -144,6 +144,13 @@ def test_ram_work_stages_in_ram_with_the_executables_on_disk(job, tmp_path: Path
     assert rc == 0 and not shm.exists() and not disk.exists(), steps
 
 
+def test_ram_work_stage_alone_keeps_a_partial_staging_without_staged(job, tmp_path: Path, shm: Path):
+    (tmp_path / "units").write_text("census:A@full\t1\t1\t1\t1\ncensus:B@full\t1\t1\t1\t1\n")
+    rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=str(tmp_path / "disk"))
+    assert rc == 0 and (shm / "data/s/.done").exists() and not (shm / ".staged").exists(), steps
+    assert (tmp_path / "disk/py").is_dir()
+
+
 def test_ram_work_refuses_a_disk_work_in_ram_or_on_a_noexec_mount(job, tmp_path: Path, shm: Path):
     rc, steps, _ = job(STEPS="stage", LAKE_OK="1", RAM_WORK="1", FLOCK_WORK=str(shm), DISK_WORK=f"{shm}-exec")
     assert rc == 4 and f"REFUSED: DISK_WORK {shm}-exec is in RAM" in steps, steps

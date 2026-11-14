@@ -19,7 +19,8 @@
 #      symlinks into DISK_WORK (a fresh directory under /workspace/tmp unless given, refused if noexec), named in its
 #      .disk_work and removed with it; window.py counts it as host memory against WIN_MEM_GB. In RAM the node's
 #      MemAvailable is read before staging and every MEM_POLL_S during it: under MEM_FLOOR_GB the job stages nothing more,
-#      removes FLOCK_WORK and DISK_WORK and exits 5; a job that proves removes both at any exit. Under
+#      removes FLOCK_WORK and DISK_WORK and exits 5; a job that proves removes both at any exit, and STEPS=stage keeps them
+#      once window.py stage has ended. Under
 #      STEPS=stage the job ends here, FLOCK_WORK kept and, if every statement staged, .staged naming the commit
 #   3. (prove) window.py prove: one group per card of CARDS (one group on the CPU), each group's `gpu-lease 1` taken only among
 #      CARDS (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step under `timeout` to KILL_AT less 90 s;
@@ -133,9 +134,9 @@ if has stage; then
   say "window.py stage exit $rc; staged: $staged; placed units: $(ls "$FW"/data/*/unit.placed 2>/dev/null | wc -l)"
   ls "$FW"/tmpl-unit/lean-*/flock-tmpl-unit 2>/dev/null | while read -r b; do say "flock-tmpl-unit $b, sha256 $(sha256sum "$b" | cut -c1-16)"; done
   if ! has prove; then
+    DROP=
     [ "$rc" = 0 ] && [ "$staged" -ge "$n" ] \
-      && echo "$TREE $(date -u +%Y-%m-%dT%H:%M:%SZ) units-sha256 $(sha256sum < "$UNITS" | cut -c1-16) staged $staged" > "$FW/.staged" \
-      && DROP=
+      && echo "$TREE $(date -u +%Y-%m-%dT%H:%M:%SZ) units-sha256 $(sha256sum < "$UNITS" | cut -c1-16) staged $staged" > "$FW/.staged"
     say "STEPS=stage: FLOCK_WORK $FW kept ($(du -sh "$FW" 2>/dev/null | cut -f1)); .staged: $(cat "$FW/.staged" 2>/dev/null || echo 'none, so no STEPS=prove takes it')"
     exit $rc
   fi
