@@ -9,9 +9,10 @@ public import Properties.Verity.LedgerPinned
 `remote_soundness_deployedReady` reads the challenger's ledger through its instance's device: the field
 `Instance.signer` of its argument `I` makes the vocabulary's signer the deployed device's (`Device.Deployment.signer`),
 which signs the ledger lines of each play (`Device.Deployment.setupOf`'s `ledger`, its `opens` before any coin and its
-`closes` at the close) under the parameters' key (`Device.pubOf`, `Binding.keyOf`), and `Binding.accepted_run` reads
-those lines as the device's own ledger (`Instance.dev`, `Properties.Challenger.OpensOn`). Nothing in the theorem says
-that key is the auditor's: `hFP` (`Instance.FamiliesPinned`) pins the family the parameters name, not the key.
+`closes` at the close) under the parameters' key (`Device.pubOf`, `Binding.keyOf`), and the coupling reads those lines
+as the device's own ledger (`Properties.Challenger.OpensOn` in `Binding.accepted_run`) at the deployed device's history
+(`Instance.dev`, which `Instance.constructionsAt` assembles with). Nothing in the theorem says that key is the
+auditor's: `hFP` (`Instance.FamiliesPinned`) pins the family the parameters name, not the key.
 
 * `Instance.LedgerLinesPinned`: at every play the sampled verdict accepts, the parameters name a key and every ledger
   line the deployed device signs at that play verifies under it, a key the registration pins
