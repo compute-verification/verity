@@ -126,7 +126,7 @@ window's \(\mu_{\text{sample}}\) is 0.25% and its whole \(\gamma_t\) 1.27–1.36
 the node's, the sum over its devices, whatever share of the node the store is on:
 
 - \(R\) is the node's read capacity over every registered tier: its 8 GPUs' HBM plus its host's DRAM. Measured, that
-  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597 + 819.2 = 13,595.2 GB/s
+  is 8 × 1,539 + 606.8 = 12,918.8 GB/s (`timing.READ_BYTES_PER_S`); specified, 8 × 1,597.568 + 819.2 = 13,599.744 GB/s
   (`timing.SPEC_BYTES_PER_S`).
 - \(S_{\text{chip}}\) is every GPU's on-chip storage and the host's: 8 × 263,163,904 + 1,000,341,504 =
   3,105,652,736 B (`timing.CHIP_BYTES`). The host's part bounds the whole host, two Xeon 6776P sockets of 64 cores,
@@ -144,9 +144,9 @@ DRAM holding its share.
 
 **Which \(R\) is the headline.** γ is reported twice: against the node's specified read bandwidth,
 which is the headline, and against the measured one beside it. The figures above are at the measured \(R\) = 12.92
-TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.597 TB/s a GPU and 16 channels of
+TB/s. The node is specified at 13.60 TB/s (the RTX PRO 6000 Server Edition's 1.598 TB/s a GPU and 16 channels of
 DDR5-6400), which no measured kernel reaches, so at spec every reading also carries that gap:
-\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.82–5.85% for the worst
+\(\gamma_{\text{spec}} = 1 - (1 - \gamma_{\text{meas}})\,R_{\text{meas}}/R_{\text{spec}}\), 5.86–5.89% for the worst
 stated window. The 1% per window holds at the measured \(R\) only. The two-machine sessions so far are one GPU's, over
 an 85 GiB store: both honest sessions accepted and a prover dropping 1/16 of its blocks rejected in its first window.
 As the verifier recorded them, at one
@@ -159,7 +159,8 @@ term is a fixed byte count over \(R\Sigma\), and a prover reporting a slower rea
 bytes read (0.066 read as 0.0057 at the slowest calibration still accepted). The measured reading takes each
 tier's fastest measured read: 1,539 GB/s a GPU (an honest session's, `timing.GPU_READ_BYTES_PER_S`) and
 606.8 GB/s of host DRAM (`timing.HOST_READ_BYTES_PER_S`), which
-`verity/protocols/accounting/poub/verifier/session/verifier.py`'s ledgers take as `timing.READ_BYTES_PER_S`. \(R\) is the rate of plain, incompressible reads,
+`verity/protocols/accounting/poub/verifier/session/verifier.py`'s ledgers take from the node's figures its caller hands
+in (`timing.Figures`; the measured node's, `timing.RTX_PRO_6000_NODE`, sums them to `timing.READ_BYTES_PER_S`). \(R\) is the rate of plain, incompressible reads,
 which the store's encoded blocks are: the GPU's compression engine reads a compressible buffer faster
 (7.55 TB/s against 1.536 TB/s plain), but the encoded store reads at 1.515 TB/s under a
 compressible allocation, since the hardware compresses 128-byte units, one codec word, and no encoded word is constant
@@ -402,7 +403,7 @@ first-parent line is refused.
 
 The verifier releases \(\text{chal}_0\) at the session's start (`AuditRun.start`). At window \(t\)'s end it sends the
 boundary message, which is \(\text{chal}_{t+1}\), or the close after the last window (`AuditRun.boundary`). Each is
-one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`Prover.run`). Pass \(i\) of
+one-way: no round trip waits on it. The prover refuses an openings coin as a challenge (`audit_prover.Prover.run`). Pass \(i\) of
 window \(t\) (`receipts.py`):
 
 ~~~text
@@ -470,7 +471,7 @@ verifier → prover   {"type": "appended", "first": j, "coin": hex(c_a)}      c_
 So each block's index, and with \(d_j\) and \(c_a\) its bound key and its encoding (§3), is fixed before any pass whose
 plan holds it: a plan received before the append that commits one of its blocks rejects with `plan`. Only then does
 the prover encode the append's blocks, each under its bound key \(b_j(c_a)\), keeping \(d_j\) beside it
-(`Store.append` commits, `Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
+(`audit_prover.Store.append` commits, `audit_prover.Store.encode` encodes under the coin). The timing follows the free convention (§8, "The
 pass and its step"), with residency deferred to the encode, so the coin's round trip is off serving's critical path.
 A block completed at step \(s\) is appended once it is complete, and stays plaintext in its slot, which serving reads
 in the clear, until its coin arrives and the device encodes it in place. Its write is recorded at the step before the
@@ -509,7 +510,7 @@ sketches of other blocks (64 bytes a block at 16 rows, 64 blocks a page), and th
 page's bytes without reading them, a red-team finding whose
 test is `test_append_order.py`. A page that relayed any receipt of a pass whose seed binds it would be a fixed point
 of SHA-512. The prover therefore sends a pass's appends before its root and computes the seed after they're sent
-(`Store.head`, `Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
+(`audit_prover.Store.head`, `audit_prover.Prover.run(..., head=...)`). A seed computed without an append the verifier received before the root
 fails every receipt of the pass. While a session has no appends the seeds are unchanged, so the GPU passes, which
 append nothing, derive them as before.
 
@@ -856,7 +857,7 @@ It would also void the horizon reading (§10), whose proof takes each window's s
 prover did in that window, unless that is re-proved for a grinding prover. The coin costs one message a window, sent
 after the roots, which the verifier is waiting for anyway. So the protocol keeps it.
 
-The prover opens each sample (`Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
+The prover opens each sample (`audit_prover.Prover.open`, `Opening`): the block \(E_j\) at \(j = \text{plan}_{(t,i)}[p]\), its receipt
 leaf's receipts \(v_c\) with the leaf's salt and path to \(\text{root}_{(t,i)}\), the payload's salt and path to the
 payload root (to its append's root, for a block appended after the seed, which also carries its payload's digest
 \(d_j\)), and under a registration that binds \(z\), PoUW's evidence for \(z_{(i,j)}\). Openings aren't timed,
@@ -1286,7 +1287,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     heads, the stale bounds it keeps and the hook.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
-  but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
+  but not stacking: SPOT shows a payload is the circuit's actual computation, and an arbitrary circuit that
   can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
   on the property's verdict on its writers (§3, `credit_post_seed`), and then \(\mu_{\text{carrier}}\) charges what
   its carriers can hold (§1). Only bound blocks may be registered after the seed. The reference appends them (§4):
@@ -1295,7 +1296,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   under with the coin, and releases that keep a block out of every later plan. Open:
   - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
     bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
-    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
+    their payloads are those circuits' values (SPOT), are I2's and I4's to check. That no appended block is
     credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
     \(L\) is the verdict's to say.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a
@@ -1500,19 +1501,19 @@ a GPU, 789 GB over every tier with 61 ms passes, is best except at \(T\) = 1 s. 
 
 | \(T\) | openings a window | store, GB a GPU | \(\mu_{\text{timing}}\) | \(\mu_{\text{sample}}\) | \(\mu_{\text{chip}}\) | λ | \(\mu_{\text{rebuild}}\) | worst \(\gamma_t\) | at spec | \(W\) | pooled \(\mu_{\text{sample}}\) | horizon γ |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.827–5.856% | 10 | 0.0083% | 0.668–0.671% |
-| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.009–6.038% | 10 | 0.0083% | 0.911–0.914% |
-| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.678–6.708% | 10 | 0.0083% | 1.680–1.684% |
-| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.271–10.299% | 10 | 0.0079% | 5.355–5.358% |
-| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.39% | 0.115% | 0.065% | 1.267–1.360% | 6.179–6.268% | 30 | 0.0083% | 0.668–0.671% |
-| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.59% | 0.117% | 0.065% | 1.522–1.616% | 6.422–6.511% | 30 | 0.0083% | 0.911–0.914% |
-| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.23% | 0.120% | 0.065% | 2.057–2.150% | 6.930–7.019% | 30 | 0.0083% | 1.680–1.684% |
-| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.18–1.20% | 0.115–0.118% | 0.065% | 4.948–6.687% | 9.677–11.329% | 600 | 0.0017% | 1.674–1.677% |
-| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.356–0.362% | 0.105–0.106% | 0.065% | 9.448–11.040% | 13.953–15.466% | 600 | 0.0017% | 0.661–0.664% |
-| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.994–1.015% | 5.920–5.940% | 6 | 0.042% | 0.707–0.710% |
+| 60 s | 33,273 | 789 GB, 94, every tier | 0.24–0.27% | 0.083% | 0.39% | 0.115% | 0.065% | 0.896–0.927% | 5.858–5.888% | 10 | 0.0083% | 0.668–0.671% |
+| 60 s | 33,273 | 520 GB, 62, every tier | 0.23–0.26% | 0.083% | 0.595% | 0.117% | 0.065% | 1.088–1.119% | 6.040–6.070% | 10 | 0.0083% | 0.911–0.914% |
+| 60 s | 33,273 | 252 GB, 30, every tier | 0.29–0.33% | 0.083% | 1.23% | 0.120% | 0.065% | 1.792–1.823% | 6.709–6.739% | 10 | 0.0083% | 1.680–1.684% |
+| 60 s | 33,273 | 752 GB, 94, HBM | 4.93–4.96% | 0.079% | 0.39% | 0.110% | 0.065% | 5.573–5.602% | 10.301–10.329% | 10 | 0.0079% | 5.355–5.358% |
+| 20 s | 11,091 | 789 GB, 94, every tier | 0.45–0.54% | 0.25% | 0.39% | 0.115% | 0.065% | 1.267–1.360% | 6.210–6.299% | 30 | 0.0083% | 0.668–0.671% |
+| 20 s | 11,091 | 520 GB, 62, every tier | 0.50–0.59% | 0.25% | 0.59% | 0.117% | 0.065% | 1.522–1.616% | 6.453–6.542% | 30 | 0.0083% | 0.911–0.914% |
+| 20 s | 11,091 | 252 GB, 30, every tier | 0.40–0.49% | 0.25% | 1.23% | 0.120% | 0.065% | 2.057–2.150% | 6.961–7.050% | 30 | 0.0083% | 1.680–1.684% |
+| 1 s | 2,773 | 252 GB, 30, every tier | 2.60–4.38% | 0.95–0.97% | 1.18–1.20% | 0.115–0.118% | 0.065% | 4.948–6.687% | 9.707–11.359% | 600 | 0.0017% | 1.674–1.677% |
+| 1 s | 2,773 | 789 GB, 94, every tier | 8.00–9.62% | 0.90–0.92% | 0.356–0.362% | 0.105–0.106% | 0.065% | 9.448–11.040% | 13.982–15.495% | 600 | 0.0017% | 0.661–0.664% |
+| 90 s | 11,091 | 789 GB, 94, every tier | 0.17–0.19% | 0.25% | 0.39% | 0.116% | 0.065% | 0.994–1.015% | 5.951–5.971% | 6 | 0.042% | 0.707–0.710% |
 
 At the stated \(T\) = 60 s, then, every window is under 1% for the whole \(\gamma_t\) at the measured \(R\):
-0.896–0.927% with 94 GB a GPU over every tier, and 1.09–1.12% at 62 GB a GPU. At spec it is 5.8% at best, the
+0.896–0.927% with 94 GB a GPU over every tier, and 1.09–1.12% at 62 GB a GPU. At spec it is 5.9% at best, the
 measured kernels' shortfall from the datasheets. The same 94 GB a GPU in HBM alone is 5.57–5.60%, host DRAM's idle
 4.7% of \(R\) in \(\mu_{\text{timing}}\). At the 20 s option, every window under 1% holds for \(\mu_{\text{sample}}\)
 (0.25%) and not for the whole \(\gamma_t\), which is 1.27% at best. At \(T\) = 90 s with 11,091 a window it is
@@ -1628,7 +1629,7 @@ y_g        SHA512(Z(SKETCH_RECEIPT_DOMAIN ‖ frame(seed_i)) ‖ u64be g ‖ σ_
            one compression after the pass's 128-byte prefix, whose midstate every unit shares
 ~~~
 
-The host commits the \(y_g\) in plan order as §4's tree (`p2.Prover.commit`). The partial is a function of the bytes
+The host commits the \(y_g\) in plan order as §4's tree (`p2_prover.Prover.commit`). The partial is a function of the bytes
 the decode read, so the receipt binds the read the decode made; computing it from the decoded `W`, or from a second
 read, is another protocol. Per block it is \(16 \times 2056\) sign-and-add steps beside the decode's two 16,448-bit
 squarings. The fixture kernels build against comes from the serving loop over the toy `C*` (`serve.py fixture`,
@@ -1652,7 +1653,12 @@ differ the session is rejected `disagreement`. The session's parameters (W, the 
 values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
 (`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
 (`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
-`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there.
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there. The case is signed: the memory
+challenger's key closes it (`p2_party.Closer`, its line count and its chain, `RemoteAudit.P2Close`) under the session id
+the auditor gave it, which its session log records before the first coin. The chain runs over the case's head (the
+commitment's digest and the clock floor, `P2Protocol.headOf`) and then every entry of its log, and it is the one
+SHA-512 the verifier's device keeps of the case (`p2_party.case_digest`). The check refuses a close that doesn't sign
+the case under a key and a session its params name before it replays any entry (`P2Protocol.closeRefusal`).
 
 **What it rests on, and what is open.**
 

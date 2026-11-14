@@ -9,7 +9,9 @@ is encoded. The session needs the card (`held`); its answer needs none, and is m
 (`challenger_party.keep`, `p2_party.pous_record`): the node, P2's parameters, setup's commitment and salt as the request
 declared them before that session, and the root the session bound. Its plan is the whole store. The prover's `Held`
 refuses a registration that isn't its store's (`hold`), and the session's case names the root (`p2_case.store_root`),
-which `p2_case.same_store` holds to PoUS's run case.
+which `p2_case.same_store` holds to PoUS's run case. The party is given a fresh session id (``--session``), which the
+memory challenger claims in its session log before the first coin and under which it signs the case's close of the
+verifier's log (`p2_party.Closer`).
 
 **A pass** reads every unit of the plan from ``C*``'s rows on their device: σ by the exact int8 product against the
 pass's signs (`p2_v1.bandwidth.Sketch`), y on the device (`receipts_of`), a few units held to `p2.Sketcher` (`spot`), and
@@ -35,6 +37,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -231,14 +234,16 @@ def public_answer(judged: Mapping[str, Any], bind: bytes, scope: str, r_bytes_pe
 def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, request_: Mapping[str, Any],
          private: Path) -> None:
     """One PoUB-P2 session over the held `store` with the bandwidth party `party` (a shell command, to which
-    ``--pous-session`` and PoUS's session id `sid` are added; its port reached at `party_host`), under `request_`:
+    ``--pous-session`` and PoUS's session id `sid` are added, and ``--session`` and a fresh id for this session, under
+    which the memory challenger signs the case's close; its port reached at `party_host`), under `request_`:
     the session's record (`SESSION`: the party's answer and its own record of it, the registration, each pass and
     opening, the seconds) and, where the session made one, its case not yet answered (`HELD`), with the logs, to
     `private` (0700, files 0600), for `decide`. This is the part that reads the store."""
     private.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(private, 0o700)
     (private / HELD).unlink(missing_ok=True)   # an earlier session's case is never this one's
-    command = f"{party} --pous-session {sid.hex()}"
+    p2_session = secrets.token_bytes(32)
+    command = f"{party} --pous-session {sid.hex()} --session {p2_session.hex()}"
     with open(private / "prover.log", "a") as log_f:
 
         def log(m: str) -> None:
@@ -264,7 +269,7 @@ def held(store: Any, *, node: str, party: str, party_host: str, sid: bytes, requ
         "answer": answer, "verifier_record": record, "verifier_rc": rc, "request": dict(request_),
         "registration": None if prover is None else p2_party.registration_json(prover.registration, prover.plan),
         "steps": None if prover is None else prover.steps, "opened": None if prover is None else prover.opened,
-        "pous_session": sid.hex(), "party": command, "party_host": party_host,
+        "pous_session": sid.hex(), "session": p2_session.hex(), "party": command, "party_host": party_host,
         "setup_s": None if setup_s is None else round(setup_s, 3), "session_wall_s": round(wall, 3)}, 0o600)
 
 
@@ -275,9 +280,10 @@ def decide(private: Path, public: Path, *, bind: bytes, window: int, pous_case: 
     public answer, also returned. With `pous_case` (PoUS's run case), a case whose store isn't PoUS's
     (`p2_case.same_store`) is refused. With `case_exe` (``remote-audit-p2-protocol``) the Lean answers the case and
     its answer is the one written, in ``lean_s`` seconds; a Lean that doesn't answer leaves the session undecided and no
-    case written; without it the session's reject or undecided stands and its accept is undecided (`p2_case.unjudged`). The summary names the program whose verdict the answer is and the host it ran on (``decided_by``,
-    `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the same session can
-    be answered again; the caller removes it once it needs no other answer."""
+    case written; without it the session's reject or undecided stands and its accept is undecided
+    (`p2_case.unjudged`). The summary names the program whose verdict the answer is and the host it ran on
+    (``decided_by``, `period.decided_by`): the Lean where it answered the case, else this Python. `HELD` stays, so the
+    same session can be answered again; the caller removes it once it needs no other answer."""
     public.mkdir(parents=True, exist_ok=True)
     scope = SCOPE.format(k=window)
     doc = json.loads((private / SESSION).read_text())

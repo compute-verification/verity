@@ -5,7 +5,7 @@ program's runs (`history_order`), on valid and broken inputs at capacities up to
 placeholder, and the root binds the rows' order and the capacity. The strings come from the writer's members' public
 bodies as the circuit prover lays them out (`history_strings`), and each table's root from bodies the leaf layer binds
 (`history_roots`), each held to its Python mirror (`history.table_strings`, `history.roots_of`). An interior's tables
-are held to the boundary registration's ports (`tables_served`, `service.tables_served`)."""
+are held to the boundary docket's ports (`tables_served`, `service.tables_served`)."""
 
 from __future__ import annotations
 
@@ -262,7 +262,7 @@ def reference_served(j):
 
 @st.composite
 def served(draw, broken: bool = False):
-    """A boundary registration's record, its ``roots`` its own port and one to three tables', and tables an interior
+    """A boundary docket's record, its ``roots`` its own port and one to three tables', and tables an interior
     reads: some of the record's at their roots and domains, or one with its root, domain or name changed, one the record
     has no port of, the same name twice, a port the record lists again under another root before or after its own, or
     the record's ``roots`` in another form; broken, a table that isn't ``[name, root, domain]`` in lowercase hex."""

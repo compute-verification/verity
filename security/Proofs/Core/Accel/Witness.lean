@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Core.Accel.H200
 public import Proofs.Core.Accel.Model
+public import Proofs.Core.Accel.Sheet
 public import Mathlib.Algebra.BigOperators.Intervals
 public import Mathlib.Algebra.BigOperators.Ring.Finset
 public import Mathlib.Algebra.Order.BigOperators.Group.Finset
@@ -10,9 +10,13 @@ public import Mathlib.Tactic.IntervalCases
 public import Mathlib.Tactic.Linarith
 
 /-!
-# The honest lemma: the deployed INT8 GEMM meets the H200's model
+# The honest lemma: the deployed INT8 GEMM meets the model of any card whose sheet states the figures
 
-The machine is the H200's table at the exact `s8` semantics (`hm`, `s8Open`). The kernel (`kernel n`) multiplies `n × n`
+The machine is a card's table `c` at the exact `s8` semantics (`hm c`, `s8Open`). What the lemma asks of the card is
+`GemmFigures c`: figures a data sheet states, each its rates or sizes against a number (every rate positive, an `s8` MAC
+one tensor unit, the code, register, shared-memory and device-memory sizes the kernel at `n = 2048` needs). The
+instance is the H200's, its sheet's figures as a value (`Verity.Accel.H200.sheetCard`, `h200_gemmFigures`,
+`h200_cardWithinAccel`). The kernel (`kernel n`) multiplies `n × n`
 `s8` matrices, `n` a multiple of 256 and at most 2048: `A` sits in device memory row-major and `B` column-major, a byte
 an entry, four to a word (`Placed`); `C` row-major, a word an entry. Three phases:
 
@@ -25,43 +29,63 @@ an entry, four to a word (`Placed`); `C` row-major, a word an entry. Three phase
 Each instruction is the whole text of a thread of its own (`prog`), and the schedule steps the threads in order
 (`sched`), so a run is the kernel's instructions in order (`run_plan`).
 
-* `kernel_fits`: the run meets the model (`Machine.Fits`) in `secs n` seconds, each resource's need at its rate one
+* `kernel_fits`: the run meets the model (`Machine.Fits`) in `secs c n` seconds, each resource's need at its rate one
   after another (`n³` tensor units, the moves' and MMAs' issue slots, shared memory's and device memory's words, the
   code fetched at four words an instruction).
 * `kernel_computes`: it leaves `C = A·B` exactly, each entry's sum a 32-bit word.
 * `gemm_cardWithinAccel`: so the card premise holds at the honest instance (`gemmCan`, the card running this
-  kernel), at the exact `s8` semantics, which meets (P1) and (P2).
+  kernel), at the exact `s8` semantics, which meets (P1) and (P2), on every card meeting `GemmFigures`.
+* `h200_cardWithinAccel`: at the H200's sheet (`h200_gemmFigures`), so the card premise holds at a real card.
 -/
 
 @[expose] public section
 
 open scoped NNRat
 
-namespace Verity.Accel.H200.Resident
+namespace Verity.Accel.Resident
 
 open Machine (Operand)
 
-/-- The H200's machine at the exact `s8` semantics. -/
-abbrev hm : Machine := ⟨card, s8Open⟩
+/-- **The figures the honest lemma asks of a card**, each a rate or size of its sheet against a number. -/
+structure GemmFigures (c : Card) : Prop where
+  /-- Every resource's rate is positive: `kernel_fits` takes each resource's need over its rate (`secs`). -/
+  rate_pos : ∀ r, 0 < c.ρ r
+  /-- An `s8` MAC is one tensor unit: `kernel_fits` counts the MMAs' tensor units as `n³`. -/
+  weight_s8 : c.weight .s8 = 1
+  /-- The code holds the kernel at `n = 2048`, `2n + n³/524288 + n²/4` instructions: `kernel_fits` (G1). -/
+  text : 1069056 ≤ c.text
+  /-- The registers hold `C`'s accumulators at `n = 2048`: `sq_le_reg`, so `mma_reg` and `kernel_computes`. -/
+  reg : 2048 * 2048 ≤ c.size .reg
+  /-- Shared memory holds `A` and `B` at `n = 2048`, `2n · n/4` words: `kernel_computes`, for `loads_exec`. -/
+  smem : 2 * 2048 * 512 ≤ c.size .smem
+  /-- Device memory holds at least shared memory's words: `kernel_computes`, for `loads_exec`. -/
+  smem_dram : c.size .smem ≤ c.size .dram
+  /-- Device memory holds `A` and `B` and then `C` at `n = 2048`: `kernel_computes`, for `stores_exec`. -/
+  dram : 2048 * 2048 / 2 + 2048 * 2048 ≤ c.size .dram
+
+variable {c : Card}
+
+/-- A card's machine at the exact `s8` semantics. -/
+abbrev hm (c : Card) : Machine := ⟨c, s8Open⟩
 
 /-- An instruction of the kernel: an opcode, its input operands and its output operands. -/
 abbrev Ins : Type := Opcode s8Open × (ℕ → Operand) × (ℕ → Operand)
 
 /-- The instruction on the machine, unpredicated. -/
-def Ins.instr (a : Ins) : hm.Instr := .op a.1 (fun i => a.2.1 i) (fun i => a.2.2 i) none
+def Ins.instr (a : Ins) : (hm c).Instr := .op a.1 (fun i => a.2.1 i) (fun i => a.2.2 i) none
 
 /-- The instruction's effect on the stores. -/
-def Ins.exec (a : Ins) (M : hm.Mem) : hm.Mem := Machine.execOp a.1 (fun i => a.2.1 i) (fun i => a.2.2 i) none M
+def Ins.exec (a : Ins) (M : (hm c).Mem) : (hm c).Mem := Machine.execOp a.1 (fun i => a.2.1 i) (fun i => a.2.2 i) none M
 
 /-- A plan's program: instruction `θ` is the whole text of thread `θ`. -/
-def prog (plan : List Ins) : hm.Prog ℕ := fun θ => (plan[θ]?.map Ins.instr).toList
+def prog (plan : List Ins) : (hm c).Prog ℕ := fun θ => (plan[θ]?.map Ins.instr).toList
 
 /-- A plan's schedule: its threads in order. -/
 def sched (plan : List Ins) : List ℕ := List.range plan.length
 
 /-! ## A run is the plan -/
 
-theorem run_prog (plan : List Ins) : ∀ (θs : List ℕ) (σ : hm.State ℕ), θs.Nodup → (∀ θ ∈ θs, σ.pc θ = 0) →
+theorem run_prog (plan : List Ins) : ∀ (θs : List ℕ) (σ : (hm c).State ℕ), θs.Nodup → (∀ θ ∈ θs, σ.pc θ = 0) →
     (Machine.run (prog plan) σ θs).2 = θs.filterMap (fun θ => plan[θ]?.map Ins.instr) ∧
       (Machine.run (prog plan) σ θs).1.mem = (θs.filterMap fun θ => plan[θ]?).foldl (fun M a => a.exec M) σ.mem
   | [], σ, _, _ => ⟨rfl, rfl⟩
@@ -94,7 +118,7 @@ theorem filterMap_range_getElem {α β : Type} (g : α → β) : ∀ is : List �
     simpa [Function.comp_def] using filterMap_range_getElem g is
 
 /-- **A run of a plan is the plan**: its instructions, and its stores the plan's instructions applied in order. -/
-theorem run_plan (plan : List Ins) (σ : hm.State ℕ) (hpc : ∀ θ, σ.pc θ = 0) :
+theorem run_plan (plan : List Ins) (σ : (hm c).State ℕ) (hpc : ∀ θ, σ.pc θ = 0) :
     (Machine.run (prog plan) σ (sched plan)).2 = plan.map Ins.instr ∧
       (Machine.run (prog plan) σ (sched plan)).1.mem = plan.foldl (fun M a => a.exec M) σ.mem := by
   obtain ⟨h1, h2⟩ := run_prog plan (sched plan) σ List.nodup_range (fun θ _ => hpc θ)
@@ -103,15 +127,15 @@ theorem run_plan (plan : List Ins) (σ : hm.State ℕ) (hpc : ∀ θ, σ.pc θ =
     simpa using filterMap_range_getElem id plan
   rw [sched, this]
 
-theorem code_prog (plan : List Ins) : Machine.code (prog plan) (sched plan) = plan.length := by
+theorem code_prog (c : Card) (plan : List Ins) : Machine.code (prog (c := c) plan) (sched plan) = plan.length := by
   unfold Machine.code sched
   rw [List.Nodup.dedup List.nodup_range,
     List.map_congr_left (g := fun _ => 1) (fun θ hθ => by
       simp [prog, List.getElem?_eq_getElem (List.mem_range.mp hθ)])]
   simp
 
-theorem units_prog (plan : List Ins) (σ : hm.State ℕ) (hpc : ∀ θ, σ.pc θ = 0) (r : Res) :
-    Machine.units (Machine.run (prog plan) σ (sched plan)).2 r = (plan.map fun a => card.use a.1 r).sum := by
+theorem units_prog (plan : List Ins) (σ : (hm c).State ℕ) (hpc : ∀ θ, σ.pc θ = 0) (r : Res) :
+    Machine.units (Machine.run (prog plan) σ (sched plan)).2 r = (plan.map fun a => c.use a.1 r).sum := by
   rw [(run_plan plan σ hpc).1]
   simp [Machine.units, Ins.instr, Machine.Instr.use, List.map_map, Function.comp_def]
 
@@ -175,9 +199,9 @@ def byteOf (w : Word) (k : ℕ) : BitVec 8 := BitVec.ofNat 8 (w.toNat / 2 ^ (8 *
 
 /-- `A` and `B` in device memory: entry `(i, l)` of `A` is byte `l % 4` of word `l / 4` of row `i`, entry `(l, j)` of
 `B` byte `l % 4` of word `l / 4` of column `j`. -/
-def Placed (n : ℕ) (A B : Fin n → Fin n → BitVec 8) (M : hm.Mem) : Prop :=
-  (∀ i l : Fin n, byteOf (M (hm.loc .dram (addrA n i (l / 4)))) (l % 4) = A i l) ∧
-    ∀ l j : Fin n, byteOf (M (hm.loc .dram (addrB n j (l / 4)))) (l % 4) = B l j
+def Placed (n : ℕ) (A B : Fin n → Fin n → BitVec 8) (M : (hm c).Mem) : Prop :=
+  (∀ i l : Fin n, byteOf (M ((hm c).loc .dram (addrA n i (l / 4)))) (l % 4) = A i l) ∧
+    ∀ l j : Fin n, byteOf (M ((hm c).loc .dram (addrB n j (l / 4)))) (l % 4) = B l j
 
 /-! ## The kernel's units -/
 
@@ -191,10 +215,10 @@ def smemNeed (n : ℕ) : ℚ≥0 := (2 * n * (n / 4) + mmas n * 2560 : ℕ)
 instruction. -/
 def dramNeed (n : ℕ) : ℚ≥0 := (2 * n * (n / 4) + n * n / 4 * 4 + 4 * (2 * n + mmas n + n * n / 4) : ℕ)
 
-/-- **The kernel's seconds** on the H200: each resource's need at its rate, one after another. -/
-def secs (n : ℕ) : ℚ≥0 :=
-  (n : ℚ≥0) ^ 3 / card.ρ .tensor + issueNeed n / card.ρ .issue + smemNeed n / card.ρ .smem +
-    dramNeed n / card.ρ .dram
+/-- **The kernel's seconds** on the card `c`: each resource's need at its rate, one after another. -/
+def secs (c : Card) (n : ℕ) : ℚ≥0 :=
+  (n : ℚ≥0) ^ 3 / c.ρ .tensor + issueNeed n / c.ρ .issue + smemNeed n / c.ρ .smem +
+    dramNeed n / c.ρ .dram
 
 theorem blocks_mul (n : ℕ) (h : 256 ∣ n) : mmas n * 524288 = n ^ 3 := by
   obtain ⟨q, rfl⟩ := h
@@ -208,50 +232,47 @@ theorem kernel_length (n : ℕ) : (kernel n).length = 2 * n + mmas n + n * n / 4
 theorem load_op (n c : ℕ) : (load n c).1 = .move .dram .smem (n / 4) 1 := by
   unfold load; split <;> rfl
 
-theorem kernel_use (n : ℕ) (r : Res) : ((kernel n).map fun a => card.use a.1 r).sum =
-    ((2 * n : ℕ) : ℚ≥0) * card.use (x := s8Open) (.move .dram .smem (n / 4) 1) r +
-      (mmas n : ℚ≥0) * card.use mmaOp r + ((n * n / 4 : ℕ) : ℚ≥0) * card.use (x := s8Open) (.move .reg .dram 4 1) r := by
+theorem kernel_use (n : ℕ) (r : Res) : ((kernel n).map fun a => c.use a.1 r).sum =
+    ((2 * n : ℕ) : ℚ≥0) * c.use (x := s8Open) (.move .dram .smem (n / 4) 1) r +
+      (mmas n : ℚ≥0) * c.use mmaOp r + ((n * n / 4 : ℕ) : ℚ≥0) * c.use (x := s8Open) (.move .reg .dram 4 1) r := by
   simp only [kernel, List.map_append, List.sum_append, List.map_map, Function.comp_def, load_op]
   simp [mma, store, copyN, List.map_const', List.sum_replicate, nsmul_eq_mul]
-
-theorem rho_pos (r : Res) : 0 < card.ρ r := by
-  cases r <;> norm_num [card, clock, tensorClock]
 
 theorem le_rho_mul {ρ q T : ℚ≥0} (hρ : 0 < ρ) (h : q / ρ ≤ T) : q ≤ ρ * T := by
   rw [mul_comm]; exact (div_le_iff₀ hρ).mp h
 
 /-- **The kernel meets the model** in `secs n` seconds: its code fits (G1), and each resource's units, with the code
 fetched, are within its rate over the run (G2). -/
-theorem kernel_fits (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) (σ : hm.State ℕ) (hpc : ∀ θ, σ.pc θ = 0) :
-    Machine.Fits (prog (kernel n)) σ (sched (kernel n)) (secs n) := by
-  have hcode := code_prog (kernel n)
+theorem kernel_fits (c : Card) (hf : GemmFigures c) (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) (σ : (hm c).State ℕ)
+    (hpc : ∀ θ, σ.pc θ = 0) : Machine.Fits (prog (kernel n)) σ (sched (kernel n)) (secs c n) := by
+  have hcode := code_prog c (kernel n)
   have hlen := kernel_length n
   refine ⟨?_, fun r => ?_⟩
   · rw [hcode, hlen]
-    show _ ≤ 144 * 2 ^ 30 / 16
+    refine le_trans ?_ hf.text
     obtain ⟨q, rfl⟩ := h256
     have hq : q ≤ 8 := by omega
     interval_cases q <;> norm_num [mmas, blocks]
   · rw [units_prog _ σ hpc, kernel_use, hcode, hlen]
     have hwa : (⟨64, 256, 32⟩ : Shape).wa (s8Open.fa ()) = 512 := rfl
     have hwb : (⟨64, 256, 32⟩ : Shape).wb (s8Open.fb ()) = 2048 := rfl
-    have hw : card.weight (s8Open.fa ()) = 1 := rfl
+    have hw : c.weight (s8Open.fa ()) = 1 := hf.weight_s8
     cases r <;> simp only [mmaOp, Card.use, slot, port, hwa, hwb, hw, reduceCtorEq, false_and, and_false,
       ite_true, ite_false, mul_zero, mul_one, zero_add, add_zero, Nat.cast_ofNat, zero_le, max_self]
     · rw [show ((64 * 256 * max 32 1 : ℕ) : ℚ≥0) = 524288 by norm_num]
       have h3 : (mmas n : ℚ≥0) * 524288 = (n : ℚ≥0) ^ 3 := by exact_mod_cast blocks_mul n h256
       rw [h3]
-      refine le_rho_mul (rho_pos _) ?_
+      refine le_rho_mul (hf.rate_pos _) ?_
       exact le_add_right (le_add_right (le_add_right le_rfl))
-    · refine le_rho_mul (rho_pos _) (le_add_right (le_add_right (le_add_left (le_of_eq ?_))))
+    · refine le_rho_mul (hf.rate_pos _) (le_add_right (le_add_right (le_add_left (le_of_eq ?_))))
       simp only [issueNeed]
       push_cast
       ring
-    · refine le_rho_mul (rho_pos _) (le_add_right (le_add_left (le_of_eq ?_)))
+    · refine le_rho_mul (hf.rate_pos _) (le_add_right (le_add_left (le_of_eq ?_)))
       simp only [smemNeed]
       push_cast
       ring
-    · refine le_rho_mul (rho_pos _) (le_add_left (le_of_eq ?_))
+    · refine le_rho_mul (hf.rate_pos _) (le_add_left (le_of_eq ?_))
       simp only [dramNeed]
       push_cast
       ring
@@ -301,29 +322,29 @@ end Writes
 
 /-! ## Copies -/
 
-theorem copy_exec (s t : Store) (len a b : ℕ) (M : hm.Mem) :
+theorem copy_exec (s t : Store) (len a b : ℕ) (M : (hm c).Mem) :
     (copyN s t len a b).exec M =
       (List.finRange (1 * len)).foldl (fun M' (i : Fin (1 * len)) => Function.update M'
-        (hm.loc t (b + i.val)) (M (hm.loc s (a + i.val)))) M := by
+        ((hm c).loc t (b + i.val)) (M ((hm c).loc s (a + i.val)))) M := by
   simp only [Ins.exec, copyN]
-  refine (execOp_direct (m := hm) (.move s t len 1) _ (fun i => b + i.val) M).trans ?_
+  refine (execOp_direct (m := hm c) (.move s t len 1) _ (fun i => b + i.val) M).trans ?_
   congr 1
   funext M' i
   have hi : (i : ℕ) < len := by have := i.isLt; simp only [Opcode.nOut] at this; omega
   simp [Opcode.eval, getD, Opcode.outStore, Opcode.inStore, Opcode.nIn, Machine.Operand.readIn, Machine.Operand.locIn,
     Nat.mod_eq_of_lt hi, hi]
 
-theorem copy_at (s t : Store) (len a b : ℕ) (M : hm.Mem) (u : Store) (q : ℕ) (hq : q < hm.card.size u)
-    (hb : b + len ≤ hm.card.size t) :
-    (copyN s t len a b).exec M (hm.loc u q) =
-      if u = t ∧ b ≤ q ∧ q < b + len then M (hm.loc s (a + (q - b))) else M (hm.loc u q) := by
+theorem copy_at (s t : Store) (len a b : ℕ) (M : (hm c).Mem) (u : Store) (q : ℕ) (hq : q < (hm c).card.size u)
+    (hb : b + len ≤ (hm c).card.size t) :
+    (copyN s t len a b).exec M ((hm c).loc u q) =
+      if u = t ∧ b ≤ q ∧ q < b + len then M ((hm c).loc s (a + (q - b))) else M ((hm c).loc u q) := by
   rw [copy_exec]
   split_ifs with hin
   · obtain ⟨rfl, h1, h2⟩ := hin
-    have := foldl_update_mem (fun i : Fin (1 * len) => hm.loc u (b + i.val))
-      (fun i => M (hm.loc s (a + i.val))) (List.finRange (1 * len)) M
+    have := foldl_update_mem (fun i : Fin (1 * len) => (hm c).loc u (b + i.val))
+      (fun i => M ((hm c).loc s (a + i.val))) (List.finRange (1 * len)) M
       (fun i _ j _ e => by
-        have e2 := ((loc_eq_iff (m := hm) u u _ _).mp e).2
+        have e2 := ((loc_eq_iff (m := hm c) u u _ _).mp e).2
         have hi := i.isLt
         have hj := j.isLt
         rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt (by omega)] at e2
@@ -333,7 +354,7 @@ theorem copy_at (s t : Store) (len a b : ℕ) (M : hm.Mem) (u : Store) (q : ℕ)
     rwa [show b + (q - b) = q by omega] at this
   · apply foldl_update_not_mem
     intro i _ e
-    obtain ⟨rfl, e2⟩ := (loc_eq_iff (m := hm) t u _ _).mp e
+    obtain ⟨rfl, e2⟩ := (loc_eq_iff (m := hm c) t u _ _).mp e
     have hi := i.isLt
     rw [Nat.mod_eq_of_lt (by omega), Nat.mod_eq_of_lt hq] at e2
     exact hin ⟨rfl, by omega, by omega⟩
@@ -354,27 +375,27 @@ theorem load_eq (n c : ℕ) (h4 : 4 ∣ n) : load n c = copyN .dram .smem (n / 4
     simp only [addrB, e1, e2, Nat.add_sub_cancel_left]
     congr 1 <;> ring
 
-theorem loads_exec (n : ℕ) (h4 : 4 ∣ n) (hsz : 2 * n * (n / 4) ≤ hm.card.size .smem)
-    (hsd : hm.card.size .smem ≤ hm.card.size .dram) (M : hm.Mem) :
-    ∀ c ≤ 2 * n, ∀ (u : Store) (q : ℕ), q < hm.card.size u →
-      ((List.range c).map (load n)).foldl (fun M a => a.exec M) M (hm.loc u q) =
-        if u = .smem ∧ q < c * (n / 4) then M (hm.loc .dram q) else M (hm.loc u q)
+theorem loads_exec (n : ℕ) (h4 : 4 ∣ n) (hsz : 2 * n * (n / 4) ≤ (hm c).card.size .smem)
+    (hsd : (hm c).card.size .smem ≤ (hm c).card.size .dram) (M : (hm c).Mem) :
+    ∀ k ≤ 2 * n, ∀ (u : Store) (q : ℕ), q < (hm c).card.size u →
+      ((List.range k).map (load n)).foldl (fun M a => a.exec M) M ((hm c).loc u q) =
+        if u = .smem ∧ q < k * (n / 4) then M ((hm c).loc .dram q) else M ((hm c).loc u q)
   | 0, _, u, q, _ => by simp
-  | c + 1, hc, u, q, hq => by
-    have hb : c * (n / 4) + n / 4 ≤ hm.card.size .smem := by
+  | k + 1, hc, u, q, hq => by
+    have hb : k * (n / 4) + n / 4 ≤ (hm c).card.size .smem := by
       have := Nat.mul_le_mul_right (n / 4) hc
       rw [add_mul, one_mul] at this
       omega
     rw [List.range_succ, List.map_append, List.foldl_append, List.map_cons, List.map_nil, List.foldl_cons,
-      List.foldl_nil, load_eq n c h4, copy_at .dram .smem (n / 4) (c * (n / 4)) (c * (n / 4)) _ u q hq hb]
-    have ih := loads_exec n h4 hsz hsd M c (by omega)
+      List.foldl_nil, load_eq n k h4, copy_at .dram .smem (n / 4) (k * (n / 4)) (k * (n / 4)) _ u q hq hb]
+    have ih := loads_exec n h4 hsz hsd M k (by omega)
     by_cases hu : u = .smem
     · subst hu
-      by_cases h1 : c * (n / 4) ≤ q ∧ q < c * (n / 4) + n / 4
+      by_cases h1 : k * (n / 4) ≤ q ∧ q < k * (n / 4) + n / 4
       · rw [ite_eq_left ⟨rfl, h1⟩, ih .dram _ (by omega), ite_eq_right (by simp),
-          ite_eq_left ⟨rfl, by rw [add_mul, one_mul]; omega⟩, show c * (n / 4) + (q - c * (n / 4)) = q by omega]
+          ite_eq_left ⟨rfl, by rw [add_mul, one_mul]; omega⟩, show k * (n / 4) + (q - k * (n / 4)) = q by omega]
       · rw [ite_eq_right (fun h => h1 h.2), ih .smem q hq]
-        by_cases h2 : q < c * (n / 4)
+        by_cases h2 : q < k * (n / 4)
         · rw [ite_eq_left ⟨rfl, h2⟩, ite_eq_left ⟨rfl, by rw [add_mul, one_mul]; omega⟩]
         · rw [ite_eq_right (fun h => h2 h.2), ite_eq_right (fun h => by rw [add_mul, one_mul] at h; omega)]
     · rw [ite_eq_right (fun h => hu h.1), ih u q hq, ite_eq_right (fun h => hu h.1), ite_eq_right (fun h => hu h.1)]
@@ -392,15 +413,15 @@ theorem store_eq (n w : ℕ) (h4 : 4 ∣ n) : store n w = copyN .reg .dram 4 (4 
     omega
   simp only [store, acc, dramC, e1, e2, Nat.add_assoc]
 
-theorem stores_exec (n : ℕ) (h4 : 4 ∣ n) (hsd : n * n / 2 + n * n ≤ hm.card.size .dram)
-    (hsr : n * n ≤ hm.card.size .reg) (M : hm.Mem) :
-    ∀ m ≤ n * n / 4, ∀ (u : Store) (q : ℕ), q < hm.card.size u →
-      ((List.range m).map (store n)).foldl (fun M a => a.exec M) M (hm.loc u q) =
-        if u = .dram ∧ n * n / 2 ≤ q ∧ q < n * n / 2 + 4 * m then M (hm.loc .reg (q - n * n / 2))
-        else M (hm.loc u q)
+theorem stores_exec (n : ℕ) (h4 : 4 ∣ n) (hsd : n * n / 2 + n * n ≤ (hm c).card.size .dram)
+    (hsr : n * n ≤ (hm c).card.size .reg) (M : (hm c).Mem) :
+    ∀ m ≤ n * n / 4, ∀ (u : Store) (q : ℕ), q < (hm c).card.size u →
+      ((List.range m).map (store n)).foldl (fun M a => a.exec M) M ((hm c).loc u q) =
+        if u = .dram ∧ n * n / 2 ≤ q ∧ q < n * n / 2 + 4 * m then M ((hm c).loc .reg (q - n * n / 2))
+        else M ((hm c).loc u q)
   | 0, _, u, q, _ => by simp
   | m + 1, hm', u, q, hq => by
-    have hb : n * n / 2 + 4 * m + 4 ≤ hm.card.size .dram := by omega
+    have hb : n * n / 2 + 4 * m + 4 ≤ (hm c).card.size .dram := by omega
     rw [List.range_succ, List.map_append, List.foldl_append, List.map_cons, List.map_nil, List.foldl_cons,
       List.foldl_nil, store_eq n m h4, copy_at .reg .dram 4 (4 * m) (n * n / 2 + 4 * m) _ u q hq hb]
     have ih := stores_exec n h4 hsd hsr M m (by omega)
@@ -421,13 +442,13 @@ theorem stores_exec (n : ℕ) (h4 : 4 ∣ n) (hsd : n * n / 2 + n * n ≤ hm.car
 def accOut (n p o : ℕ) : ℕ :=
   acc n (64 * (p % blocks n / (n / 256)) + o / 256) (256 * (p % blocks n % (n / 256)) + o % 256)
 
-theorem mma_exec (n p : ℕ) (M : hm.Mem) :
+theorem mma_exec (n p : ℕ) (M : (hm c).Mem) :
     (mma n p).exec M =
       (List.finRange (mma n p).1.nOut).foldl (fun M' o => Function.update M'
-        (hm.loc .reg (accOut n p o.val))
+        ((hm c).loc .reg (accOut n p o.val))
         ((mma n p).1.eval (fun i => ((mma n p).2.1 i.val).readIn ((mma n p).1.inStore i) M) o)) M := by
   simp only [Ins.exec]
-  exact execOp_direct (m := hm) _ _ (fun o => accOut n p o.val) M
+  exact execOp_direct (m := hm c) _ _ (fun o => accOut n p o.val) M
 
 theorem hwa : (⟨64, 256, 32⟩ : Shape).wa .s8 = 512 := by decide
 
@@ -443,17 +464,17 @@ theorem mma_eval (n p : ℕ) (v : Fin (mma n p).1.nIn → Word) (o : Fin (mma n 
     intDot, BitVec.ofNat_toNat, BitVec.setWidth_eq, hwa, hwb]
 
 /-- MMA `p`'s input words in `M`, as its opcode reads them. -/
-def mmaV (n p : ℕ) (M : hm.Mem) : ℕ → Word :=
+def mmaV (n p : ℕ) (M : (hm c).Mem) : ℕ → Word :=
   getD (fun i : Fin (mma n p).1.nIn => ((mma n p).2.1 i.val).readIn ((mma n p).1.inStore i) M)
 
-theorem mma_in (n p : ℕ) (M : hm.Mem) (i : ℕ) (hi : i < 18944) :
+theorem mma_in (n p : ℕ) (M : (hm c).Mem) (i : ℕ) (hi : i < 18944) :
     mmaV n p M i =
       if i < 512 then
-        M (hm.loc .smem (addrA n (64 * (p % blocks n / (n / 256)) + i / 8) (8 * (p / blocks n) + i % 8)))
+        M ((hm c).loc .smem (addrA n (64 * (p % blocks n / (n / 256)) + i / 8) (8 * (p / blocks n) + i % 8)))
       else if i < 2560 then
-        M (hm.loc .smem (addrB n (256 * (p % blocks n % (n / 256)) + (i - 512) / 8) (8 * (p / blocks n) + (i - 512) % 8)))
+        M ((hm c).loc .smem (addrB n (256 * (p % blocks n % (n / 256)) + (i - 512) / 8) (8 * (p / blocks n) + (i - 512) % 8)))
       else if p / blocks n = 0 then 0
-      else M (hm.loc .reg
+      else M ((hm c).loc .reg
         (acc n (64 * (p % blocks n / (n / 256)) + (i - 2560) / 256) (256 * (p % blocks n % (n / 256)) + (i - 2560) % 256))) := by
   have hn : (mma n p).1.nIn = 18944 := rfl
   simp only [mmaV, getD, show i < (mma n p).1.nIn by rw [hn]; exact hi, ↓reduceDIte]
@@ -475,10 +496,10 @@ theorem byte_toInt (w : Word) (k : ℕ) : Fmt.s8.intVal (w.toNat / 2 ^ (8 * k) %
   split_ifs <;> push_cast <;> omega
 
 /-- Entry `(i, l)` of `A` as MMA operands read it from shared memory in `M`. -/
-def aOf (n : ℕ) (M : hm.Mem) (i l : ℕ) : ℤ := (byteOf (M (hm.loc .smem (addrA n i (l / 4)))) (l % 4)).toInt
+def aOf (n : ℕ) (M : (hm c).Mem) (i l : ℕ) : ℤ := (byteOf (M ((hm c).loc .smem (addrA n i (l / 4)))) (l % 4)).toInt
 
 /-- Entry `(l, j)` of `B` as MMA operands read it from shared memory in `M`. -/
-def bOf (n : ℕ) (M : hm.Mem) (l j : ℕ) : ℤ := (byteOf (M (hm.loc .smem (addrB n j (l / 4)))) (l % 4)).toInt
+def bOf (n : ℕ) (M : (hm c).Mem) (l j : ℕ) : ℤ := (byteOf (M ((hm c).loc .smem (addrB n j (l / 4)))) (l % 4)).toInt
 
 theorem zipWith_ofFn_sum (f : ℕ → ℕ → ℤ) (F G : ℕ → ℕ) : ∀ k : ℕ,
     (List.zipWith f (List.ofFn fun l : Fin k => F l) (List.ofFn fun l : Fin k => G l)).sum =
@@ -490,7 +511,7 @@ theorem zipWith_ofFn_sum (f : ℕ → ℕ → ℤ) (F G : ℕ → ℕ) : ∀ k :
     simp
 
 /-- MMA `p`'s products for output `o = 256 r + s`: `A`'s row `i₀ + r` against `B`'s column `j₀ + s` over slice `κ`. -/
-theorem mma_sum (n p : ℕ) (M : hm.Mem) (r s : ℕ) (hr : r < 64) (hs : s < 256) :
+theorem mma_sum (n p : ℕ) (M : (hm c).Mem) (r s : ℕ) (hr : r < 64) (hs : s < 256) :
     (List.zipWith (fun x y => Fmt.s8.intVal x * Fmt.s8.intVal y)
       (rowA .s8 ⟨64, 256, 32⟩ (mmaV n p M) r) (colB .s8 ⟨64, 256, 32⟩ 512 (mmaV n p M) s)).sum =
       ∑ l ∈ Finset.range 32, aOf n M (64 * (p % blocks n / (n / 256)) + r) (32 * (p / blocks n) + l) *
@@ -530,9 +551,8 @@ theorem acc_lt (n i j : ℕ) (hi : i < n) (hj : j < n) : acc n i j < n * n := by
   simp only [acc]
   nlinarith
 
-theorem sq_le_reg (n : ℕ) (hn : n ≤ 2048) : n * n ≤ hm.card.size .reg := by
-  show _ ≤ 132 * (65536 + 4494)
-  nlinarith
+theorem sq_le_reg (hf : GemmFigures c) (n : ℕ) (hn : n ≤ 2048) : n * n ≤ (hm c).card.size .reg :=
+  (Nat.mul_le_mul hn hn).trans hf.reg
 
 /-- The block `(i/64, j/256)` of entry `(i, j)`, numbered as the MMAs number them. -/
 def blk (n i j : ℕ) : ℕ := i / 64 * (n / 256) + j / 256
@@ -583,25 +603,25 @@ theorem blocks_pos (n : ℕ) (h256 : 256 ∣ n) (hn : 0 < n) : 0 < blocks n := b
   positivity
 
 /-- An MMA writes no store but the registers. -/
-theorem mma_other (n p : ℕ) (M : hm.Mem) (u : Store) (hu : u ≠ .reg) (q : ℕ) :
-    (mma n p).exec M (hm.loc u q) = M (hm.loc u q) := by
+theorem mma_other (n p : ℕ) (M : (hm c).Mem) (u : Store) (hu : u ≠ .reg) (q : ℕ) :
+    (mma n p).exec M ((hm c).loc u q) = M ((hm c).loc u q) := by
   rw [mma_exec]
-  exact foldl_update_not_mem _ _ _ _ _ fun o _ h => hu ((loc_eq_iff (m := hm) _ _ _ _).mp h).1.symm
+  exact foldl_update_not_mem _ _ _ _ _ fun o _ h => hu ((loc_eq_iff (m := hm c) _ _ _ _).mp h).1.symm
 
 /-- **One MMA on the accumulators**: MMA `p` (slice `κ = p / blocks n`, block `e = p % blocks n`) adds its slice's
 products to each accumulator of block `e`, from zero at `κ = 0`, and leaves every other accumulator. -/
-theorem mma_reg (n p : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (M : hm.Mem) (i j : ℕ) (hi : i < n)
-    (hj : j < n) :
-    (mma n p).exec M (hm.loc .reg (acc n i j)) =
+theorem mma_reg (hf : GemmFigures c) (n p : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (M : (hm c).Mem)
+    (i j : ℕ) (hi : i < n) (hj : j < n) :
+    (mma n p).exec M ((hm c).loc .reg (acc n i j)) =
       if blk n i j = p % blocks n then
-        BitVec.ofInt 32 ((if p / blocks n = 0 then 0 else (M (hm.loc .reg (acc n i j))).toInt) +
+        BitVec.ofInt 32 ((if p / blocks n = 0 then 0 else (M ((hm c).loc .reg (acc n i j))).toInt) +
           ∑ l ∈ Finset.range 32, aOf n M i (32 * (p / blocks n) + l) * bOf n M (32 * (p / blocks n) + l) j)
-      else M (hm.loc .reg (acc n i j)) := by
+      else M ((hm c).loc .reg (acc n i j)) := by
   have he : p % blocks n < blocks n := Nat.mod_lt _ (blocks_pos n h256 hn0)
   obtain ⟨gi, gj⟩ := blk_geom n (p % blocks n) h256 he
   set i₀ := 64 * (p % blocks n / (n / 256)) with hi₀
   set j₀ := 256 * (p % blocks n % (n / 256)) with hj₀
-  have hsz := sq_le_reg n hn
+  have hsz := sq_le_reg hf n hn
   have hout : ∀ o : ℕ, o < 16384 → accOut n p o < n * n := fun o ho => acc_lt n _ _ (by omega) (by omega)
   have hacc := acc_lt n i j hi hj
   have hno : (mma n p).1.nOut = 16384 := rfl
@@ -615,11 +635,11 @@ theorem mma_reg (n p : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (
       rw [← hi₀, ← hj₀, show (i % 64 * 256 + j % 256) / 256 = i % 64 by omega,
         show (i % 64 * 256 + j % 256) % 256 = j % 256 by omega, show i₀ + i % 64 = i by omega,
         show j₀ + j % 256 = j by omega]
-    have key := foldl_update_mem (fun o : Fin (mma n p).1.nOut => hm.loc .reg (accOut n p o.val))
+    have key := foldl_update_mem (fun o : Fin (mma n p).1.nOut => (hm c).loc .reg (accOut n p o.val))
       (fun o => (mma n p).1.eval (fun i => ((mma n p).2.1 i.val).readIn ((mma n p).1.inStore i) M) o)
       (List.finRange _) M
       (fun a _ a' _ e => by
-        have e2 := ((loc_eq_iff (m := hm) _ _ _ _).mp e).2
+        have e2 := ((loc_eq_iff (m := hm c) _ _ _ _).mp e).2
         have ha : a.val < 16384 := hno ▸ a.isLt
         have ha' : a'.val < 16384 := hno ▸ a'.isLt
         rw [Nat.mod_eq_of_lt ((hout _ ha).trans_le hsz), Nat.mod_eq_of_lt ((hout _ ha').trans_le hsz)] at e2
@@ -643,7 +663,7 @@ theorem mma_reg (n p : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (
   · rw [ite_eq_right hb]
     apply foldl_update_not_mem
     intro o _ e
-    have e2 := ((loc_eq_iff (m := hm) _ _ _ _).mp e).2
+    have e2 := ((loc_eq_iff (m := hm c) _ _ _ _).mp e).2
     have ho : o.val < 16384 := hno ▸ o.isLt
     rw [Nat.mod_eq_of_lt ((hout _ ho).trans_le hsz), Nat.mod_eq_of_lt (hacc.trans_le hsz)] at e2
     simp only [accOut, acc] at e2
@@ -655,18 +675,18 @@ theorem mma_reg (n p : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (
 /-- After the MMAs of the slices before `κ` and of the first `e` blocks of slice `κ` from `M₀`: every store but the
 registers is `M₀`'s, and accumulator `(i, j)` holds the sum over the slices its block has had (anything before its
 first). -/
-def MmaInv (n : ℕ) (M₀ M : hm.Mem) (κ e : ℕ) : Prop :=
-  (∀ u, u ≠ .reg → ∀ q, M (hm.loc u q) = M₀ (hm.loc u q)) ∧
+def MmaInv (n : ℕ) (M₀ M : (hm c).Mem) (κ e : ℕ) : Prop :=
+  (∀ u, u ≠ .reg → ∀ q, M ((hm c).loc u q) = M₀ ((hm c).loc u q)) ∧
   ∀ i j, i < n → j < n → (blk n i j < e ∨ 1 ≤ κ) →
-    M (hm.loc .reg (acc n i j)) =
+    M ((hm c).loc .reg (acc n i j)) =
       BitVec.ofInt 32 (∑ l ∈ Finset.range (32 * (κ + if blk n i j < e then 1 else 0)), aOf n M₀ i l * bOf n M₀ l j)
 
 theorem ofInt_toInt_add (S T : ℤ) :
     BitVec.ofInt 32 ((BitVec.ofInt 32 S).toInt + T) = BitVec.ofInt 32 (S + T) := by
   rw [BitVec.ofInt_add, BitVec.ofInt_toInt, ← BitVec.ofInt_add]
 
-theorem mma_step (n κ e : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (he : e < blocks n)
-    (M₀ M : hm.Mem) (h : MmaInv n M₀ M κ e) :
+theorem mma_step (hf : GemmFigures c) (n κ e : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (he : e < blocks n)
+    (M₀ M : (hm c).Mem) (h : MmaInv n M₀ M κ e) :
     MmaInv n M₀ ((mma n (κ * blocks n + e)).exec M) κ (e + 1) := by
   obtain ⟨hother, hreg⟩ := h
   have hB := blocks_pos n h256 hn0
@@ -681,7 +701,7 @@ theorem mma_step (n κ e : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 204
     funext l j
     simp only [bOf, hother .smem (show (Store.smem : Store) ≠ .reg by decide)]
   refine ⟨fun u hu q => by rw [mma_other n _ M u hu q]; exact hother u hu q, fun i j hi hj hc => ?_⟩
-  rw [mma_reg n _ h256 hn0 hn M i j hi hj, hdiv, hmod, hA, hB']
+  rw [mma_reg hf n _ h256 hn0 hn M i j hi hj, hdiv, hmod, hA, hB']
   by_cases hb : blk n i j = e
   · rw [ite_eq_left hb, ite_eq_left (show blk n i j < e + 1 by omega)]
     by_cases hκ : κ = 0
@@ -695,17 +715,17 @@ theorem mma_step (n κ e : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 204
     · rw [ite_eq_left h1, ite_eq_left (show blk n i j < e + 1 by omega)]
     · rw [ite_eq_right h1, ite_eq_right (show ¬ blk n i j < e + 1 by omega)]
 
-theorem mma_next (n κ : ℕ) (h256 : 256 ∣ n) (M₀ M : hm.Mem) (h : MmaInv n M₀ M κ (blocks n)) :
+theorem mma_next (n κ : ℕ) (h256 : 256 ∣ n) (M₀ M : (hm c).Mem) (h : MmaInv n M₀ M κ (blocks n)) :
     MmaInv n M₀ M (κ + 1) 0 := by
   refine ⟨h.1, fun i j hi hj _ => ?_⟩
   have hb := blk_lt n i j h256 hi hj
   rw [h.2 i j hi hj (Or.inl hb), ite_eq_left hb, ite_eq_right (Nat.not_lt_zero _)]
 
-theorem mma_slices (n : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (M₀ : hm.Mem) :
+theorem mma_slices (hf : GemmFigures c) (n : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (M₀ : (hm c).Mem) :
     ∀ κ, MmaInv n M₀ (((List.range (κ * blocks n)).map (mma n)).foldl (fun M a => a.exec M) M₀) κ 0
   | 0 => ⟨fun _ _ _ => by simp, fun i j _ _ h => by omega⟩
   | κ + 1 => by
-    have ih := mma_slices n h256 hn0 hn M₀ κ
+    have ih := mma_slices hf n h256 hn0 hn M₀ κ
     have hblocks : ∀ e, e ≤ blocks n →
         MmaInv n M₀ (((List.range (κ * blocks n + e)).map (mma n)).foldl (fun M a => a.exec M) M₀) κ e := by
       intro e
@@ -715,19 +735,19 @@ theorem mma_slices (n : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) 
         intro he
         rw [show κ * blocks n + (e + 1) = (κ * blocks n + e) + 1 by ring, List.range_succ, List.map_append,
           List.foldl_append, List.map_cons, List.map_nil, List.foldl_cons, List.foldl_nil]
-        exact mma_step n κ e h256 hn0 hn (by omega) M₀ _ (ihe (by omega))
+        exact mma_step hf n κ e h256 hn0 hn (by omega) M₀ _ (ihe (by omega))
     rw [show (κ + 1) * blocks n = κ * blocks n + blocks n by ring]
     exact mma_next n κ h256 M₀ _ (hblocks (blocks n) le_rfl)
 
 /-- **The MMA phase**: from `M₀`, the kernel's MMAs leave every store but the registers as it was, and accumulator
 `(i, j)` holding row `i` of `A` dotted with column `j` of `B`, as shared memory holds them in `M₀`, wrapped to a word. -/
-theorem mmas_exec (n : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (M₀ : hm.Mem) :
+theorem mmas_exec (hf : GemmFigures c) (n : ℕ) (h256 : 256 ∣ n) (hn0 : 0 < n) (hn : n ≤ 2048) (M₀ : (hm c).Mem) :
     (∀ u, u ≠ .reg → ∀ q,
-      ((List.range (mmas n)).map (mma n)).foldl (fun M a => a.exec M) M₀ (hm.loc u q) = M₀ (hm.loc u q)) ∧
+      ((List.range (mmas n)).map (mma n)).foldl (fun M a => a.exec M) M₀ ((hm c).loc u q) = M₀ ((hm c).loc u q)) ∧
     ∀ i j, i < n → j < n →
-      ((List.range (mmas n)).map (mma n)).foldl (fun M a => a.exec M) M₀ (hm.loc .reg (acc n i j)) =
+      ((List.range (mmas n)).map (mma n)).foldl (fun M a => a.exec M) M₀ ((hm c).loc .reg (acc n i j)) =
         BitVec.ofInt 32 (∑ l ∈ Finset.range n, aOf n M₀ i l * bOf n M₀ l j) := by
-  have h := mma_slices n h256 hn0 hn M₀ (n / 32)
+  have h := mma_slices hf n h256 hn0 hn M₀ (n / 32)
   have h32 : 1 ≤ n / 32 := by omega
   refine ⟨h.1, fun i j hi hj => ?_⟩
   rw [mmas, h.2 i j hi hj (Or.inr h32), ite_eq_right (Nat.not_lt_zero _), Nat.add_zero,
@@ -739,31 +759,29 @@ theorem idx_lt {a b i w : ℕ} (hi : i < a) (hw : w < b) : i * b + w < a * b := 
 
 /-- **The kernel computes `C = A·B`**: from any state holding `A` and `B`, it leaves each entry of `C` the exact sum,
 a 32-bit word. -/
-theorem kernel_computes (n : ℕ) (hn0 : 0 < n) (h256 : 256 ∣ n) (hn : n ≤ 2048) (A B : Fin n → Fin n → BitVec 8)
-    (σ : hm.State ℕ) (hpc : ∀ θ, σ.pc θ = 0) (hP : Placed n A B σ.mem) (i j : Fin n) :
-    (Machine.run (prog (kernel n)) σ (sched (kernel n))).1.mem (hm.loc .dram (dramC n i j)) =
+theorem kernel_computes (c : Card) (hf : GemmFigures c) (n : ℕ) (hn0 : 0 < n) (h256 : 256 ∣ n) (hn : n ≤ 2048)
+    (A B : Fin n → Fin n → BitVec 8) (σ : (hm c).State ℕ) (hpc : ∀ θ, σ.pc θ = 0) (hP : Placed n A B σ.mem)
+    (i j : Fin n) :
+    (Machine.run (prog (kernel n)) σ (sched (kernel n))).1.mem ((hm c).loc .dram (dramC n i j)) =
       BitVec.ofInt 32 (∑ l : Fin n, (A i l).toInt * (B l j).toInt) := by
   have h4 : 4 ∣ n := Nat.dvd_trans (by norm_num) h256
-  have hsz : 2 * n * (n / 4) ≤ hm.card.size .smem := by
-    show _ ≤ 132 * 65536
-    have := Nat.mul_le_mul (Nat.mul_le_mul_left 2 hn) (show n / 4 ≤ 512 by omega)
-    omega
-  have hsd : hm.card.size .smem ≤ hm.card.size .dram := by
-    show 132 * 65536 ≤ 144 * 2 ^ 30 / 4
-    norm_num
-  have hsd' : n * n / 2 + n * n ≤ hm.card.size .dram := by
-    show _ ≤ 144 * 2 ^ 30 / 4
+  have hsz : 2 * n * (n / 4) ≤ (hm c).card.size .smem :=
+    (Nat.mul_le_mul (Nat.mul_le_mul_left 2 hn) (show n / 4 ≤ 512 by omega)).trans hf.smem
+  have hsd : (hm c).card.size .smem ≤ (hm c).card.size .dram := hf.smem_dram
+  have hsd' : n * n / 2 + n * n ≤ (hm c).card.size .dram := by
+    show _ ≤ c.size .dram
     have := Nat.mul_le_mul hn hn
+    have := hf.dram
     omega
-  have hdd : hm.card.size .dram = card.size .dram := rfl
-  have hss : hm.card.size .smem = card.size .smem := rfl
+  have hdd : (hm c).card.size .dram = c.size .dram := rfl
+  have hss : (hm c).card.size .smem = c.size .smem := rfl
   have h2k : 2 * n * (n / 4) = 2 * (n * (n / 4)) := Nat.mul_assoc 2 n (n / 4)
   have hq4 : n * n / 4 = n * (n / 4) := Nat.mul_div_assoc n h4
   have hnn : n * n = 4 * (n * (n / 4)) := by
     rw [← Nat.mul_assoc, Nat.mul_comm 4 n, Nat.mul_assoc, Nat.mul_div_cancel' h4]
   have hL := loads_exec n h4 hsz hsd σ.mem (2 * n) le_rfl
-  have hM := mmas_exec n h256 hn0 hn (((List.range (2 * n)).map (load n)).foldl (fun M a => a.exec M) σ.mem)
-  have hS := stores_exec n h4 hsd' (sq_le_reg n hn)
+  have hM := mmas_exec hf n h256 hn0 hn (((List.range (2 * n)).map (load n)).foldl (fun M a => a.exec M) σ.mem)
+  have hS := stores_exec n h4 hsd' (sq_le_reg hf n hn)
     (((List.range (mmas n)).map (mma n)).foldl (fun M a => a.exec M)
       (((List.range (2 * n)).map (load n)).foldl (fun M a => a.exec M) σ.mem)) (n * n / 4) le_rfl
   have hacc := acc_lt n i j i.isLt j.isLt
@@ -781,29 +799,50 @@ theorem kernel_computes (n : ℕ) (hn0 : 0 < n) (h256 : 256 ∣ n) (hn : n ≤ 2
   rw [hL .smem _ (by simp only [addrA]; omega), ite_eq_left ⟨rfl, by simp only [addrA]; omega⟩,
     hL .smem _ (by simp only [addrB]; omega), ite_eq_left ⟨rfl, by simp only [addrB]; omega⟩, hP.1 i l, hP.2 l j]
 
-/-- **The honest instance** (the card running the deployed GEMM): in `secs n` seconds, on every memory holding some `A`
-and `B`, to the memory the kernel leaves, which holds `C = A·B` (`gemm_computes`). -/
-def gemmCan (n : ℕ) (f : card.Mem → card.Mem) (T : ℚ≥0) (D : card.Mem → Prop) : Prop :=
-  T = secs n ∧ D = (fun M => ∃ A B, Placed n A B M) ∧
+/-- **The honest instance** (the card `c` running the deployed GEMM): in `secs c n` seconds, on every memory holding
+some `A` and `B`, to the memory the kernel leaves, which holds `C = A·B` (`gemm_computes`). -/
+def gemmCan (c : Card) (n : ℕ) (f : c.Mem → c.Mem) (T : ℚ≥0) (D : c.Mem → Prop) : Prop :=
+  T = secs c n ∧ D = (fun M => ∃ A B, Placed n A B M) ∧
     f = fun M => (Machine.run (prog (kernel n)) ⟨M, fun _ => 0⟩ (sched (kernel n))).1.mem
 
-/-- **The card premise holds at the honest instance**: at the exact `s8` semantics, which meets (P1) and (P2), the
-kernel is a program of the machine that meets the model and computes the card's map. -/
-theorem gemm_cardWithinAccel (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
-    Verity.Assumptions.CardWithinAccel card (gemmCan n) := by
+/-- **The card premise holds at the honest instance**, on every card meeting the figures: at the exact `s8`
+semantics, which meets (P1) and (P2), the kernel is a program of the machine that meets the model and computes the
+card's map. -/
+theorem gemm_cardWithinAccel (c : Card) (hf : GemmFigures c) (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
+    Verity.Assumptions.CardWithinAccel c (gemmCan c n) := by
   refine ⟨s8Open, s8Open_exact _, s8Open_productForm, ?_⟩
   rintro f T D ⟨rfl, rfl, rfl⟩
-  refine ⟨prog (kernel n), sched (kernel n), fun σ _ hpc => ⟨kernel_fits n h256 hn σ hpc, ?_⟩⟩
+  refine ⟨prog (kernel n), sched (kernel n), fun σ _ hpc => ⟨kernel_fits c hf n h256 hn σ hpc, ?_⟩⟩
   obtain ⟨M, pc⟩ := σ
   obtain rfl : pc = fun _ => 0 := funext hpc
   rfl
 
 /-- The honest instance's map leaves `C = A·B`. -/
-theorem gemm_computes (n : ℕ) (hn0 : 0 < n) (h256 : 256 ∣ n) (hn : n ≤ 2048) {f : card.Mem → card.Mem} {T : ℚ≥0}
-    {D : card.Mem → Prop} (h : gemmCan n f T D) (A B : Fin n → Fin n → BitVec 8) (M : card.Mem)
+theorem gemm_computes (c : Card) (hf : GemmFigures c) (n : ℕ) (hn0 : 0 < n) (h256 : 256 ∣ n) (hn : n ≤ 2048)
+    {f : c.Mem → c.Mem} {T : ℚ≥0} {D : c.Mem → Prop} (h : gemmCan c n f T D) (A B : Fin n → Fin n → BitVec 8)
+    (M : c.Mem)
     (hP : Placed n A B M) (i j : Fin n) :
-    f M (hm.loc .dram (dramC n i j)) = BitVec.ofInt 32 (∑ l : Fin n, (A i l).toInt * (B l j).toInt) := by
+    f M ((hm c).loc .dram (dramC n i j)) = BitVec.ofInt 32 (∑ l : Fin n, (A i l).toInt * (B l j).toInt) := by
   obtain ⟨-, -, rfl⟩ := h
-  exact kernel_computes n hn0 h256 hn A B ⟨M, fun _ => 0⟩ (fun _ => rfl) hP i j
+  exact kernel_computes c hf n hn0 h256 hn A B ⟨M, fun _ => 0⟩ (fun _ => rfl) hP i j
 
-end Verity.Accel.H200.Resident
+/-! ## The H200's sheet -/
+
+open Verity.Accel.H200 (sheetCard sheetClock sheetTensorClock)
+
+/-- **The H200's sheet meets the figures**. -/
+theorem h200_gemmFigures : GemmFigures sheetCard where
+  rate_pos r := by cases r <;> norm_num [sheetCard, sheetClock, sheetTensorClock]
+  weight_s8 := rfl
+  text := by show _ ≤ 144 * 2 ^ 30 / 16; norm_num
+  reg := by show _ ≤ 132 * (65536 + 4494); norm_num
+  smem := by show _ ≤ 132 * 65536; norm_num
+  smem_dram := by show 132 * 65536 ≤ 144 * 2 ^ 30 / 4; norm_num
+  dram := by show _ ≤ 144 * 2 ^ 30 / 4; norm_num
+
+/-- **The card premise holds at the H200's sheet**: `gemm_cardWithinAccel` at `sheetCard`. -/
+theorem h200_cardWithinAccel (n : ℕ) (h256 : 256 ∣ n) (hn : n ≤ 2048) :
+    Verity.Assumptions.CardWithinAccel sheetCard (gemmCan sheetCard n) :=
+  gemm_cardWithinAccel sheetCard h200_gemmFigures n h256 hn
+
+end Verity.Accel.Resident

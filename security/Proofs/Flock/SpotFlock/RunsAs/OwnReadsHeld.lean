@@ -92,10 +92,10 @@ theorem rootFor_of_byPort {rec : Json} {p : String} {x : Json} (hx : (p, x) ∈ 
 
 /-- **Each port of a record that passed the registration check has a root that is a string**, where the verifier
 lists each port once: the record names exactly the verifier's ports, and R3 holds each to a hex root. -/
-theorem byPort_root_str {rec : Json} {v : Spot.Registration.Verifier} (h : Spot.Registration.check rec v = #[])
+theorem byPort_root_str {rec : Json} {v : Spot.Docket.Verifier} (h : Spot.Docket.check rec v = #[])
     (hn : (v.ports.map (·.1)).toList.Nodup) {p : String} {x : Json} (hx : (p, x) ∈ Spot.Record.byPort rec) :
     ∃ s, Spot.getD x "root" = .str s := by
-  obtain ⟨samplingDesign, -, -, h3, -⟩ := (Properties.Spot.registration_nil rec v).1 h
+  obtain ⟨samplingDesign, -, -, h3, -⟩ := (Properties.Spot.docket_nil rec v).1 h
   -- `Properties.Spot.R3` by position: `hroot` is its roots clause (`RootIs`), the seventh of its eight
   obtain ⟨-, -, -, -, -, -, hroot, -⟩ := h3
   obtain ⟨⟨ps, hps, -, hmem⟩, -⟩ := recordOk_spec (RecordNames.recordOk_of_check h hn)

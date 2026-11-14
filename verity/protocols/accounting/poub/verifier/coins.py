@@ -381,7 +381,7 @@ def lean_answer(piece: str, request: Mapping[str, Any], python: Any) -> Any:
     `sampled-proofs-verifier`: `challenger_head`, `_ledger`, `_pinned`, `_session` or `_credited`), the one acted on.
     `python` is the Python mirror's answer to the same request, computed first so that its refusal raises there: it may
     refuse, never accept alone.  Raises `CoinError` where the Lean refuses or can't run, or answers otherwise."""
-    # imported here, so that only a read that asks the Lean loads sampled proofs' verifier
+    # imported here, so that only a read that asks the Lean loads SPOT's verifier
     from verity.protocols.proofs.spot.verifier.one_stage import verifier as spot_verifier
     got = spot_verifier.lean(piece, json.loads(json.dumps(request)))
     if "refused" in got:

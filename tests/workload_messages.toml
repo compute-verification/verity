@@ -1,5 +1,5 @@
 # Today's writers and readers of each message between the workload and the prover, by lane, as they stand before
-# the adapter reaches them through the declarations (`verity/protocols/*/*/verifier/workload.py`). One entry a form a
+# the adapter reaches them through the declarations (`verity/protocols/*/*/prover/workload.py`). One entry a form a
 # message takes today: `second = true` marks a second form of a message already listed. `find` is a regular
 # expression for the site in its file. `tests/test_workload_messages.py` holds the list to the declarations.
 
@@ -178,7 +178,7 @@ writers = [
 ]
 readers = [
     { lane = "vllm", file = "adapters/vllm/verity_vllm/pipeline/advice.py", find = "run / \"summary\\.json\"" },
-    { lane = "vllm", file = "demos/vllm/serve.sh", find = "pauses\\.jsonl summary\\.json" },
+    { lane = "vllm", file = "adapters/vllm/tools/served_run/serve.sh", find = "pauses\\.jsonl summary\\.json" },
 ]
 
 [[message]]

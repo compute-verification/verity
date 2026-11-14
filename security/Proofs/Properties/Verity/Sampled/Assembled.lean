@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.SampledRead
 public import Proofs.Properties.Verity.Sampled.Digest
 
 /-!
-# Sampled proofs' coupling, assembled from its pieces
+# SPOT's coupling, assembled from its pieces
 
 `CouplingTarget` at the leg's constructions with the binding's read finder and forger (`Binding.withBinding`), the
 bound digests' two-continuation finder (`Constructions.withBind`), the projection at the sample-coupled coin maps

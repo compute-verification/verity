@@ -64,7 +64,7 @@ theorem recordGood {c : ByteArray} {cm : Spot.OneStage.Commitment} (h : Spot.One
   unfold Spot.OneStage.commitmentOf at h
   rcases hj : Core.canonicalJson c with e | j
   · simp [hj, Bind.bind, Except.bind] at h
-  rcases hd : Spot.Registration.digest j with e | d
+  rcases hd : Spot.Docket.digest j with e | d
   · cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   cases j <;> simp [hj, hd, Bind.bind, Except.bind, pure, Except.pure, throw, throwThe, MonadExceptOf.throw] at h
   subst h

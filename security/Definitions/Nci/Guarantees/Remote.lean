@@ -11,7 +11,7 @@ public import Definitions.Assumptions
 The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and
 T2: `residual_share`, `fit.residual_with_lag` and `fit.dampener`, and `benchmarks/rho`'s
 `theorem.multiple_bound`), with its two terms that `DampenerThreaded` takes inside its residual's hypothesis derived,
-and the two that sampled proofs and PoUW's deficit add:
+and the two that SPOT and PoUW's deficit add:
 
 * `CertificateSlack` ([CERTIFICATE-SLACK]): over `N` windows, each certificate wrong with probability at most `p`
   (`PouwSound`), the windows whose certificates are wrong hold more than `ε' C` of the capacity with probability at most

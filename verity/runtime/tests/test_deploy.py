@@ -5,6 +5,8 @@ restarts."""
 
 from __future__ import annotations
 
+import inspect
+import itertools
 import json
 import socket
 import struct
@@ -14,6 +16,7 @@ import deploy_example as X
 import pytest
 
 from verity import protocol as M
+from verity.runtime import sources as S
 from verity.runtime.channels import Playback, dial
 from verity.runtime.runner import ARRIVED, RUNTIME, run
 from verity.runtime.transcript import PartyLog
@@ -130,6 +133,32 @@ def test_a_peers_frame_reaches_its_party_stamped_with_its_arrival_on_its_clock(t
     again = run(X.config(), ["challenger"], "replay", None, protocols={X.ID: proto}, replay_dir=tmp_path / "runs/1")
     assert (again.status, again.divergence, seen["challenger"]) == ("completed", None, live)
     assert stamps(again.transcripts["challenger"]) == [arrived]
+
+
+def test_a_party_is_handed_the_name_of_the_clock_its_source_reads(tmp_path):
+    """`Identity.clock` is the name of the real clock a party's clock source reads, as given with it; None for virtual
+    time, in a replay and for a party with no clock. The runtime's own real clock reads `time.monotonic_ns` and is named
+    `MONOTONIC`."""
+    named: dict[str, list] = {p: [] for p in BOTH}
+
+    def naming(party):
+        class Naming(party):
+            def start(self, params, identity):
+                named[identity.party].append(identity.clock)
+                return super().start(params, identity)
+        return Naming
+
+    proto = X.protocol(challenger=naming(X.Challenger), responder=naming(X.Responder))
+    untimed = X.config(params={**X.PARAMS, "timer": False})
+    tick = itertools.count(10 ** 9, 1000).__next__
+    r = run(untimed, BOTH, "live", tmp_path, protocols={X.ID: proto}, keys=X.keys(*BOTH), verify=X.verify,
+            sources={"challenger": {"clock": S.RealClock(tick, "CLOCK_TEST ns"), "coins": S.SeededCoins(SEED)}})
+    assert r.status == "completed", r.outcomes
+    assert simulated(None, proto).status == "completed"
+    run(untimed, ["challenger"], "replay", None, protocols={X.ID: proto}, replay_dir=tmp_path / "runs/1")
+    assert named == {"challenger": ["CLOCK_TEST ns", None, None], "responder": [None, None]}
+    assert inspect.signature(S.RealClock).parameters["read"].default is S.time.monotonic_ns
+    assert S.RealClock().name == S.MONOTONIC == "CLOCK_MONOTONIC ns"
 
 
 def test_replay_of_the_challenger_from_its_transcript(tmp_path):
