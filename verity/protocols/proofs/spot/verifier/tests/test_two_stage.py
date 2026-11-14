@@ -879,7 +879,7 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})
 
 
-#: The tables' docket's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
+#: The tables' registration's entries for tables ``t`` and ``u``, as the auditor's params pin them (`service.pinned_tables`).
 PINNED = (("t", {"value": "t", "root": T_ROOT, "leaves": 8, "words": 2, "domain": T_DOMAIN}),
           ("u", {"value": "u", "root": U_ROOT, "leaves": 8, "words": 2, "domain": U_DOMAIN}))
 NO_RECORD = {"roots": []}
@@ -904,7 +904,7 @@ NO_RECORD = {"roots": []}
 ])
 def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(own, value):
     """`second_stage._one_table` beside round 1's record: a read's root and domain may be one table's of the tables
-    the auditor's params pin before any coin (`Own.tables`, the tables' docket's entries), so a read's row,
+    the auditor's params pin before any coin (`Own.tables`, the tables' registration's entries), so a read's row,
     salt and path pass with round 1's record registering no table, or with it registering one of two tables filled
     row by row and the params pinning the other. Refused, the row named, with `second_stage.INPUTS_WHY`: a table
     neither pinned nor registered, a pin whose root, domain id or count of leaves is another than the one the verifier
@@ -915,7 +915,7 @@ def test_round_two_takes_a_reads_table_from_the_tables_the_auditors_params_pin(o
 
 
 def test_the_params_pin_registered_tables_beside_the_circuit_files():
-    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' docket's
+    """`template_circuits` and `pinned_tables`: the auditor's params may add ``"tables"``, the tables' registration's
     entries by parameter, which it pinned before any coin; the verifier takes them in the parameters' order and the
     circuit files as without them, and refuses an entry not exactly the docket's form (`service._table_entry`)
     and tables that are not an object."""

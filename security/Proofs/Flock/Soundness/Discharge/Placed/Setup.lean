@@ -11,7 +11,7 @@ import Proofs.Flock.Soundness.Lowering
 # `ProgPlaces` from `Stmt.setupH`'s accept
 
 `Prog.flock_headline` takes each sampled proof block's place in its table's statement (`ProgPlaces`). This file builds it from the
-executable's accept step on the untyped path (`tags.typed = false`, the statement production the circuit prover runs):
+executable's accept step on the untyped path (`tags.typed = false`, the statement the circuit prover runs):
 
 * `Accepted T`: a run of `Stmt.setupH` that accepted, whose statement (`Layout.model`, the level-0 matrices the verifier
   folds) is `T`. Its template instance rows `Accepted.rows` are the unit net's rows stacked `units_per_vu` times, placed

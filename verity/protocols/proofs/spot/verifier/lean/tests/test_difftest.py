@@ -3818,7 +3818,7 @@ _PARAMS_CHANGES = {
 }
 
 
-#: A registered table's entry the auditor pins (`service._table_entry`): the tables' docket's for parameter ``w``.
+#: A registered table's entry the auditor pins (`service._table_entry`): the tables' registration's for parameter ``w``.
 _PINNED = {"value": "w", "root": "ab" * 64, "leaves": 8, "words": 4, "domain": "cd" * 64}
 
 
@@ -5456,7 +5456,7 @@ def _read_opening(c: dict, x: int) -> dict:
     table; its root is left as a table's name, which is none of the verifier's bytes; round 1's record registers
     the root under another domain; the params record no read, the read at another count of rows, or another template
     alone as one; round 1's record registers the table at another count of leaves; the auditor's params pin the
-    tables (`Own.tables`, the tables' docket's entries) and round 1's record registers none, or both do, or the
+    tables (`Own.tables`, the tables' registration's entries) and round 1's record registers none, or both do, or the
     pin's root, domain id or count of leaves is another than the one the verifier fills; or its verdict reads the four
     bytes of 1, two 16-bit leaves."""
     rec, links, wires, refs, rows = (c.get(k) for k in ("interior", "links", "wires", "ref_reads", "rows"))

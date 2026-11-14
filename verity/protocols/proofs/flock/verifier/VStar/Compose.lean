@@ -9,7 +9,7 @@ public import VStar.Unit
 
 For a template lowered to one unit per instance with no cut, no public input and `sha512/row/v1` rows (V*'s statements):
 line 1 `flock-circuit <unit>`, line 2 `META` and its JSON (`pyDumps`), then the sections `CIRCUIT <name> <lines>` of the unit,
-`sha512x3` and `hm96` (`ir_lower.netlist` without `LEAVES`). META holds the rows (each port's words and compressions, its
+`sha512x3` and `hm96` (`ir_lower.circuit_description` without `LEAVES`). META holds the rows (each port's words and compressions, its
 prefix, midstate and padding), the slot ranges and the block size they give (`placeRanges`, `vusPerBlock`), the leaf maps,
 the all-zero instance's outputs and each row's `b ‖ c` under a zero salt (`dummy`), the rows' wires, and the statement's
 bindings (`Bindings`), which come from core's descriptor codec and are taken as given here.
@@ -182,7 +182,7 @@ def zeroSaltBc (p : Row) (ws : Array Nat) : ByteArray :=
 
 /-! ## META and the file -/
 
-/-- The unit's lowering text (`Lowering.text`: its netlist with `LEAVES`): SHA-256, bytes. -/
+/-- The unit's lowering text (`Lowering.text`: its circuit description with `LEAVES`): SHA-256, bytes. -/
 def unitDigests (u : UnitC) (l : Laid) : Except String Digests := do
   let lv ← pyDumps u.leaves
   pure ((emitNet hashPut u.name l (some lv)).run {}).2
