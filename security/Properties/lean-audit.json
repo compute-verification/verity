@@ -13,8 +13,6 @@
   "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
-  "Properties.Pouw.Lead.Commit",
-  "Properties.Pouw.Lead.V2",
   "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Pouw.PearlPlusDraw",
@@ -2159,7 +2157,6 @@
     "Properties.Pouw.ServedFreed",
     "Properties.Pouw.ServedWork",
     "Properties.Pouw.ServedValues",
-    "Properties.Pouw.Lead.V2",
     "Properties.Pouw.PearlPlus",
     "Properties.Pouw.PearlPlus.Witnesses",
     "Properties.Pouw.PearlPlusDraw"
@@ -2399,11 +2396,6 @@
    "except": [],
    "why": "the code's periods are stated equal to the spec's: the code's copy and the spec's ticks, spans and monitoring period, never a proof",
    "sealed": true
-  },
-  "Properties.Pouw.Lead.V2": {
-   "imports": ["CoreProtocol.Protocol", "Definitions.Pouw.Lead"],
-   "except": [],
-   "why": "the lead's acceptance at PoUW's v2 case is stated against `Core.Protocol`'s acceptance and the lead's statement (`Definitions.Pouw.Lead`), never a proof"
   },
   "Properties.Pous.PeriodGame": {
    "imports": [
@@ -13435,9 +13427,6 @@
    "Pous.Period.SecurityProofs.periodHeldCoinsAt": "frozen (premise): periodHeldAt in the shared coin game, as periodHeldCoins is periodHeld's, at every point and block count N from 2^19 to 2^27; it takes periodHeldAt's premises (Pous.Guarantees.RoundsBound at 105 rounds, the open conjecture P2RingRoundSecureWide, Pous.Period.RingDeviceAt and Pous.Period.Fits) and Pous.Period.ReadsNoPrimitive, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises.",
    "NciCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (NciCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
-   "Properties.Pouw.Lead.Commit.LeafFirstBlock": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.leafFirstBlock; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
-   "Properties.Pouw.Lead.Commit.RoundsOpenAfterRoots": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
-   "Properties.Pouw.Lead.Commit.RowBound": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.rowBound; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
    "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.spotSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
    "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
    "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
@@ -26725,7 +26714,7 @@
    }
   },
   "Spot.ChallengerCoins": {
-   "digest": "c1993a306ae72d94436fc56503e9f3e8f747579c0e205e8fb33132519a565800",
+   "digest": "b8b0dc0c8e2b2d4423d558c70d884731cc04cc09e50c11c44f0b2f8099780a3b",
    "definitions": {
     "Spot.Challenger.FAMILY_ROOT": "73d04951cb6d6dd23f80140003c5dd9cd93bd72079ccbe9ccadaa50bfcf55d71",
     "Spot.Challenger.LIMITS": "e7bfb471561d80fdee056273c9f5c772f1d8042bb580ecf0c98661c934fb8008",
@@ -26744,7 +26733,7 @@
     "Spot.Challenger.SEGMENT_FORM": "c52e73ce8c32b42739c3ed9507c9c2b8652602c5fcc9c9d9691216556e79324f",
     "Spot.Challenger.WITHHELD": "218d71c722297a393b300c9c0d32291a596d31ea111ff6e032acf001e1db8718",
     "Spot.Challenger.arrSize": "1ba24d09e64bb2ca0b304ea389f91ab093599edac9fdd8d71eb7e16507962c55",
-    "Spot.Challenger.challengerStream": "bf344249321fd12224dcbbf9a0a95a43b345e05bea215fb3cd20c8c720b7cedf",
+    "Spot.Challenger.challengerStream": "f233f44a6e4dafa1bcb451af24510fc1e4973bb8e6b47c54f45e55e9ce02abe3",
     "Spot.Challenger.startReason": "6a6b7f192eaf957ce913693fb51edba82557b4481a37bc0760743ff0d5978a88",
     "Spot.Challenger.withheldOn": "0b901e9670b0baeb11447d1b44a31ef6052853b2d04bd530284525d1d902ecf4",
     "Spot.Challenger.withinAt": "f6f5b3c70fda31eee55c13ee910e2ef8c8c3f61205d67d9361ca2859f535e35d"
@@ -26783,7 +26772,7 @@
    }
   },
   "Spot.ChallengerRecord": {
-   "digest": "71f3992b42f34afb894b8bf000675545bf986babe34ed9e04c4d54928c64b462",
+   "digest": "ae9e8cd7e9852345ec3a820a32cb07fa1268cb1e8af9952a4cfa1ee08ea32300",
    "definitions": {
     "Spot.Challenger.COMMITMENT_TAG": "533b9e8aa59874facc70d607333a408dd5b2d893dbbbbbd3ff44360e1bca81d5",
     "Spot.Challenger.ChallengerKey": "28b8d7cf3733aafd4ec5fe39df55a719cc4712c962b00c6b39c49be8ab4f9804",
@@ -26803,12 +26792,12 @@
     "Spot.Challenger.field": "9699d70853b8497b176743bee5a63f2b5c8b62725b44f06e3ead4118b9f9b2e1",
     "Spot.Challenger.isHost": "dd9e52b5fc201441a1a230f2958756134719c5fedab0405363e76b6b5fc2f07e",
     "Spot.Challenger.recordMessage": "e6a79450a78cbd267e033e6c09f2e83f83ac0d69279ff2b69dabf9377afdac33",
-    "Spot.Challenger.recordReason": "529cd20715177e1287f66cd402a53f325fa0e3b85932e185a1e308e9bd8d9ed8",
+    "Spot.Challenger.recordReason": "3037e772f3afc9c26b3ee765f5fe0057bf641c0cae3db75f92be7762c5134eb2",
     "_private.Spot.ChallengerRecord.0.Spot.Challenger.hexOf?": "d7faeecdcfbc0613ef2452951b0dcd044a6ce82e31ca6185f3cc1c04be52c994"
    }
   },
   "Spot.ChallengerSession": {
-   "digest": "0e571b0f8fa59f9997bae8011949307a0fb526463316b6e3d544d20c509f1b50",
+   "digest": "7975b3d99311c6a4a7c58e1b5ae6ab6c6aefc9a07ae163dbb33b360e42d0cd99",
    "definitions": {
     "Spot.Challenger.Audited": "67907e70e13df8e0a71d4816b64126a9e02156a2a7f4c1774e923ffbcb2780de",
     "Spot.Challenger.Audited.circuit": "a73b3aad92abf4ba22c25228c2c6b5e86d2861b68fec367d0b459573c172b2c4",
@@ -26891,16 +26880,16 @@
     "Spot.Challenger.Win.root": "addbbb4bfd24443201b29060198f2e1765a9ec47a710d514f14fd173b0f2da28",
     "Spot.Challenger.ZERO": "485851f6467b12f818f58c0905c5c43e6d826f93a1de28d925a827df6b163520",
     "Spot.Challenger.auditedChallengePhase": "ac4fe8585ce40943430f47a9a6c860db8b225eede392293563276a8dc8b6f6f5",
-    "Spot.Challenger.auditedOpen": "6fe3726e737afb00e4102b7c7aa8e6121472707aaa1acc270546ffe56825b332",
-    "Spot.Challenger.challengePhaseNamed": "033e2c9d49f3e87802e6d8db858506eaa4ce61aa458e4cb52c01a420ed2141bc",
-    "Spot.Challenger.challengePhaseOf": "d91ebdb6dd18f93bfd25db34d47de20eeed8ba2b2ffad3308bba9aa01d249492",
-    "Spot.Challenger.checked": "f274ccd2dd3283a1d4e68a0d4d9d64c8e622ab49bd8c074ec067c8901c7666d0",
+    "Spot.Challenger.auditedOpen": "bd50bb1cceeee11640f9da3fa14e2fcc04c97307389954a8c2abf26f5b84f666",
+    "Spot.Challenger.challengePhaseNamed": "e336391255434cf900f1d9836d4e01d1f14776b15008df55e86c788a20756a63",
+    "Spot.Challenger.challengePhaseOf": "fd02b4cf7c63a9889d826ec7227e2741c40f29448137bb604e659f9af76963e5",
+    "Spot.Challenger.checked": "76dffab1db23eba9017d9d0727f22dc10991eb813d292c4b19331db47cacbda5",
     "Spot.Challenger.circuitReason": "4f82835da0c27d15b5754ed206ab67f2969cce5f3dd45efa4df2a3f06f39b73e",
     "Spot.Challenger.closeMessage": "8b2d69d7407f1b1f800e33fdea7306b96858c2cb9ce15250e4046f5ed463a84c",
     "Spot.Challenger.creditedChallengePhase": "ef7c78b7790f1f000cdc9947783f36831ccf6bdd2e88d14e7f0fed924efd47e4",
     "Spot.Challenger.dayOf": "3cd54f113dcece28dc86f26db9e76dda45c107f6ed88bb9e049adf488b97a1ae",
     "Spot.Challenger.event": "12b45ad3827f3bc8cc24825d88a96eadd45d82ce2e9f991c2cb5ea4add296dac",
-    "Spot.Challenger.firstParentReason": "f271874dd695861bf5af03cf5fd9629cbee6b33be5b55c134adfbd00daa5fa3d",
+    "Spot.Challenger.firstParentReason": "d9a7e64d5c22cb10852804be993b3d1681b2d95263a69d637c4f26d893eb2f73",
     "Spot.Challenger.instInhabitedLedgerEntry": "0f9b3d221a718a6872f03c6e47bd7b1102e9614d093f414c4a1339a8e1730a82",
     "Spot.Challenger.instInhabitedLedgerEntry.default": "74fbc4956f7092ee3d54ddd1c51e77745629a1a055ef56718c2c0ceb131e9562",
     "Spot.Challenger.instInhabitedMonitoringPeriod": "acc1302ffbfb2001c7e79e093685700f0fafbcef601ea5d7850f67158bc9e1f0",
@@ -26922,23 +26911,23 @@
     "Spot.Challenger.logDigest": "0b7cbc63f865c71786c13f2f15a17390c871c989e7cba191514f21c45cd46bca",
     "Spot.Challenger.pinOf?": "a2862c599daec4573da6b503f2ed846e1ea83d497bc32bc38d60d4f100f27880",
     "Spot.Challenger.pinnedChallengePhase": "d5eacf67b6e814ef6970fa90af4a2b34d0938d1d14c861606dc18cc7bbcea45d",
-    "Spot.Challenger.pinsReason": "b54bdd00c4d273bd5eed6c05b88929d12e34785fbb058ba17a033be25abbaa9d",
-    "Spot.Challenger.releasedRootsOf": "f6efdc7f4e3583700eee2975e7e7cd56b784443111f8e935ed685ceca06f130f",
+    "Spot.Challenger.pinsReason": "07ab80a979d68863b01cfb3f8d94870bc4d361239a1570bd023c70012294235a",
+    "Spot.Challenger.releasedRootsOf": "672f930c0d1974bbb6b57d832f667e3c151231f778487816bb5ecb53324d8356",
     "Spot.Challenger.treeLine": "d151b9c394dd0f77207eff5243c79a148ac33ccc204a06b9922aa71da348a358",
     "Spot.Challenger.trustedChallengePhaseOf": "de0fffc703dafaacfe584fced6a9cf49a2c5253d26e8bfbd10207ce6395edb39",
     "Spot.Challenger.verifyDays": "a426d9799f0d8bb794c117c77e8a7acd574a3cd796a8300851bec73c08ec47c9",
-    "Spot.Challenger.verifyLedger": "51e446b211e42c99d5d5bbe0eb44d259515528ea5d3086f79fcbb44105b66c5b",
+    "Spot.Challenger.verifyLedger": "58beeaab78478fe0b6363ea8294e89da4943312fae7add14330791f898cc383a",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.daysIn": "9c90608c5c0a8079b5429f656960a26f5888424dc8c73c55513374a87edb911d",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.digitsAt": "e377ed709709703303085d0f77be19e522e79a7be53736e97795bf5a68ffa67b",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.escapesSurrogate": "f84d9ba64a44ae5e3509323c9e7091f8d47df61f8e84c3b5a065ec3147252d11",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.hexAt?": "1f1f4249327f3e2098c03f64820f7231b571d3f8ce9ef4d40bf8f76100ff9ed0",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.inReserve": "67215c4728472eb4b7edd4155a7fd3beb210ff0b2cfec68e3973359ba53dac71",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isBodyOf": "dd116acfb9ac7332a63737e23f2fe560320f194f0eb9d29d563bf4a34efa5235",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isBodyOf": "90f08155bad61d8058c3ea7dccb18ce4859ca5fce55a49e43830b3341535e0bc",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isDeclaration": "f01983a9f33d3489d3749dae93f488e24858ef11f624a2cf892eb4daa77d0fc3",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isDigest": "149e7c28c97ccdb66a1550f063944007150f6f827d26b6ffe0c96471b9002f06",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isLedgerName": "70c59c791631dbd8e9e99952ee222e27b9e54349b1ee9f6abfaae8f53168ee90",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isOutcome": "5927b4a83fb28d31844409744eab166c2ed695add546e7721dc32bd5ec7d84fc",
-    "_private.Spot.ChallengerSession.0.Spot.Challenger.isReserve": "ce47fe07f1f0212ba936d6225cfa4773917ac649746b06a1304c247d7e50f272",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isOutcome": "597a16f4ee419cf8064402671354e62281b83ee58733cc17447e6177d48f4d0f",
+    "_private.Spot.ChallengerSession.0.Spot.Challenger.isReserve": "a8d528161a724e5426011310129c6cd45e6b8017a566e01710efdd1ca8459bcc",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isStr": "6cbe72c67080dcc9e217ff8bd4aec9d3c0995e54fb786645c0cfb5fc6efe35f2",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isTime": "fd317615edc610bc0062308f8245bb0e34c73ee1b55a817a4f0ba4bc874b0efd",
     "_private.Spot.ChallengerSession.0.Spot.Challenger.isV1Run": "caae722904a84cb2b6760c665b87430c7e5c81821cc795b1574c42bee19c3838",
@@ -27254,7 +27243,7 @@
    }
   },
   "Spot.Json": {
-   "digest": "61a1c4e7f9f80c8ce822366259cc058fabae80a37006109414c57a926b1104c8",
+   "digest": "50cd8453e0d39173371ed779315f4f419623f7425590ff9dd31591fc33bf7d3b",
    "definitions": {
     "Spot.Check": "7dfc036c0ba1e812942dcd7f6defc02cfba46485806ba0ffebbabd4c7c9260c1",
     "Spot.Check.codes": "2023c19204f36cb7b59a06c9f2226c76b613dcf8638fe1e5bacd4aad0829fc9e",
@@ -27270,6 +27259,7 @@
     "Spot.intsJson": "7c4db10607d2f0b45df2e6b5fe3af57d349ae4e507a9153fbdef4fe1464ddba7",
     "Spot.isHex": "d29ab48eb63f20868e0bdff2ab56ecd9c01f2eddcde41740cc7008dcf9055dce",
     "Spot.jeq": "fc16a705d80a01371429e1089648d1b33f9d090c9c6433c5c40bb8cef4e7440a",
+    "Spot.jsonBoolIs": "1e55a3a231e4513e24510c497d79424dca919a21b8cfb83583b73480c34925ce",
     "Spot.jsonStrIs": "a1e112d3c8033a562585752322bb461764454516cd47ff8ba2591ddb6c9f50ed",
     "Spot.keys?": "8b08331aacfaf869e4500a3cc8db0c87d45c0517274302d355ebd6804a712164",
     "Spot.nat?": "9a20b6b82e106116f06bb5c10731579b488794f6adcb2de42016e5f5ce2e7aa8",
