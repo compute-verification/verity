@@ -1,7 +1,8 @@
 """The pouw option's refusals that no other CPU test of the adapter reaches, each held to its own words: `Settings.of`'s of
 a transcript directory that is no string; `refusals`' of a tensor-parallel world, of a forward anchor under an executor
 that counts its own, and of a schedule Pearl-C's path can't run; `_layers`' of a model with no linear layer and of two
-layers that share a quant method; and H1's install's of a layout without its rows or its steps."""
+layers that share a quant method; and H1's install's of a layout without its rows or its steps.  Under the option,
+`circuit`'s of a scheme without a circuit and of an input group of another length than its Definition's."""
 from __future__ import annotations
 
 import random
@@ -10,11 +11,14 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.accounting.pouw.prover.circuit import SCHEMES
+from verity.protocols.accounting.pouw.prover.circuit.ncp2 import Shape
 from verity.protocols.accounting.pouw.verifier.coins import Challenger
 from verity.protocols.accounting.pouw.verifier.serving import SCHEDULES, Schedule
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
+from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import pearl_c as PPD
 from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of
 
@@ -118,3 +122,47 @@ def test_h1s_install_refuses_a_layout_without_its_rows_or_its_steps(monkeypatch,
     target = SimpleNamespace(model=None, weight_commitments={"entry": {"weight_roots": {}, "shapes": {}}})
     with pytest.raises(ValueError, match=r"^entry: the static layout needs the pouw settings 'rows' \(T\) and 'steps' \(S\)$"):
         P._install_h1("entry", SimpleNamespace(ks=None, rows=rows, steps=steps), target)
+
+
+@pytest.mark.parametrize("scheme", ["ncp-v1", "ncp-v1-shift24", "ncp-v3", ""])
+def test_a_scheme_without_a_circuit_has_no_permutation_and_no_program(scheme):
+    assert scheme not in SCHEMES and "ncp-v2" in SCHEMES
+    said = f"{scheme}: no circuit (verity.protocols.accounting.pouw.prover.circuit.SCHEMES = {', '.join(SCHEMES)})"
+    with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+        PC.kind_of(scheme)
+    with pytest.raises(ValueError, match=f"^{re.escape(said)}$"):
+        PC.program(scheme, 16, 64, 16)
+
+
+def test_a_scheme_with_a_circuit_has_its_permutation_and_its_two_programs():
+    for scheme, kind in SCHEMES.items():
+        assert PC.kind_of(scheme) == kind
+        c = PC.program(scheme, 16, 64, 16)
+        assert (c.traced.scheme, c.traced.kind, c.shape) == (scheme, kind, Shape(16, 64, 16))
+        assert (len(_groups(c.program)), len(_groups(c.weight_program))) == (11, 4)
+
+
+def _groups(prog) -> list[int]:
+    """How many values each of a Program's input groups takes, in the Definition's order."""
+    return [len(group.refs) for group in prog.root.input_colls]
+
+
+def test_a_program_is_not_evaluated_on_an_input_group_of_another_length():
+    """Each group of a call's Program and of its weight side's, one value short and one over, with every other group
+    at its length: the refusal names the group's two lengths and comes before any gate is evaluated."""
+    c = PC.program("ncp-v2", 16, 64, 16)
+    for prog in (c.program, c.weight_program):
+        sizes = _groups(prog)
+        for at, size in enumerate(sizes):
+            for given in (size - 1, size + 1):
+                args = [[0] * (given if g == at else s) for g, s in enumerate(sizes)]
+                with pytest.raises(ValueError, match=f"^an input group has {given} values, the Definition takes {size}$"):
+                    PC._transcript(prog, args)
+
+
+def test_a_program_is_evaluated_whole_on_input_groups_of_its_lengths():
+    c = PC.program("ncp-v2", 16, 64, 16)
+    for prog in (c.program, c.weight_program):
+        trace = PC._transcript(prog, [[0] * size for size in _groups(prog)])
+        assert len(trace) == prog.circuit.size
+        assert all(trace[gate] == 0 for group in prog.root.input_colls for (_space, _zero, gate) in group.refs)
