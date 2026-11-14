@@ -9,5 +9,9 @@ new = { verity = "verity", verity_difftest = "tools/difftest/python/verity_difft
 [paths]
 "adapters/vllm/tests/engine/int8_kscale_gpu.py" = "benchmarks/ppl/int8_kscale_gpu.py"
 
+[split]
+# "old file: old directory" = why the reference follows the larger part (`layout.py` fails on any other)
+"adapters/vllm/tests/engine/int8_kscale_gpu.py: adapters/vllm" = "the run line's `cd adapters/vllm`: the adapter, which stays"
+
 [modules]
 "adapters.vllm.tests.engine.int8_kscale_gpu" = "benchmarks.ppl.int8_kscale_gpu"
