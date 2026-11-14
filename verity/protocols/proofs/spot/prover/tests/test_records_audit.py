@@ -985,7 +985,7 @@ DAY0, PIN, S1, S2 = 20746, "c" * 40, "s20261020T093000Z-0001", "s20261020T093000
 
 def _auditor():
     from verity.protocols.proofs.spot.prover.audit import local_challenger as LC
-    return LC._module("a5_auditor", HERE.parents[2] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
+    return LC._module("a5_auditor", Path(__file__).resolve().parents[6] / "verity" / "protocols" / "compose" / "device" / "live_challenger" / "auditor.py")
 
 
 def _device_ledger(tmp_path: Path, events: list[tuple[str, str | None, dict]]) -> tuple[list[str], object, Path]:

@@ -73,7 +73,7 @@ from verity.commitments.periods import interface as IF, rows as CS
 
 HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "prove_path" / "tests")
 
-ROOT = HERE.parents[2]
+ROOT = Path(__file__).resolve().parents[6]
 ONE_STAGE = ROOT / "benchmarks" / "one_stage"
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 CONFIG = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 128, "intermediate_size": 256,
