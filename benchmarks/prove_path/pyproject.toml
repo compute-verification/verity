@@ -31,8 +31,6 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "verity/protocols/a
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/settings.py",
           "benchmarks/network_traces/warden_chain.py", "verity/protocols/accounting/certifier/device/warden_serve.py",
-          # zk_drivers, which served_statics_zk loads to install the certifier's ZK drivers before it runs one
-          "benchmarks/network_traces/zk_drivers.py",
           "verity/protocols/accounting/certifier/device/connection_rows_run.py",
           "verity/protocols/accounting/certifier/device/runner_parts.py", "verity/protocols/accounting/certifier/device/certifier_key.py",
           "verity/protocols/accounting/certifier/device/runner_cli.py",
