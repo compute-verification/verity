@@ -17,14 +17,16 @@
 #      job refuses a FLOCK_WORK under /dev/shm or on a noexec mount; window.py builds the prover beside the stagings. Under
 #      RAM_WORK=1 a FLOCK_WORK under /dev/shm holds the statements alone, its py, flock-gpu-link, flock-circuit and tmpl-unit
 #      symlinks into DISK_WORK (a fresh directory under /workspace/tmp unless given, refused if noexec), named in its
-#      .disk_work and removed with it; window.py counts it as host memory against WIN_MEM_GB. Under
+#      .disk_work and removed with it; window.py counts it as host memory against WIN_MEM_GB. In RAM the node's
+#      MemAvailable is read before staging and every MEM_POLL_S during it: under MEM_FLOOR_GB the job stages nothing more,
+#      removes FLOCK_WORK and DISK_WORK and exits 5; a job that proves removes both at any exit. Under
 #      STEPS=stage the job ends here, FLOCK_WORK kept and, if every statement staged, .staged naming the commit
 #   3. (prove) window.py prove: one group per card of CARDS (one group on the CPU), each group's `gpu-lease 1` taken only among
 #      CARDS (GPU_LEASE_ALLOWED_FILE) and ending by KILL_AT less 3 minutes, the whole step under `timeout` to KILL_AT less 90 s;
 #      every session kept in out/kept/NAME; FLOCK_WORK removed at its end
 # env: UNITS (a path, or a name sent with the run) DEV (gpu|cpu) CARDS (gpu, to prove) SM (gpu) NOT_BEFORE KILL_AT; STEPS;
 #      FLOCK_WORK (under /workspace/tmp: STEPS=stage's choice, STEPS=prove's input); RAM_WORK=1 DISK_WORK (a FLOCK_WORK in
-#      /dev/shm); MIN_LEFT_S=1800 WORK_ROOT=/workspace/tmp
+#      /dev/shm) MEM_FLOOR_GB=500 MEM_POLL_S=5 MEMINFO=/proc/meminfo; MIN_LEFT_S=1800 WORK_ROOT=/workspace/tmp
 #      WARM=1 RUNS=4 VCPUS=2 LEASE_MIN=60 WIN_MEM_GB=64 WIN_DISK_GB=40 WIN_FREE_GB=20 WIN_DEV_GIB=135
 set -uo pipefail
 IN=$RESEARCH_RUN_DIR/inputs; OUT=$RESEARCH_RUN_DIR/out; mkdir -p "$OUT"; L=$OUT/steps.txt
@@ -36,7 +38,11 @@ case $STEPS in "stage prove" | stage | prove) ;; *) say "STEPS is \"stage prove\
 has() { case " $STEPS " in *" $1 "*) return 0 ;; esac; return 1; }
 export PYTHONDONTWRITEBYTECODE=1 PATH=$HOME/.elan/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH
 NCPU=$(python3 -c 'import os; print(len(os.sched_getaffinity(0)))')
-S=$(mktemp -d); trap 'rm -rf "$S"' EXIT
+FW=; DROP=
+drop() { local ex; [ -n "$FW" ] || return 0; ex=$(cat "$FW/.disk_work" 2>/dev/null); [ -z "$ex" ] || rm -rf "$ex"; rm -rf "$FW"; }
+S=$(mktemp -d); trap 'rm -rf "$S"; [ -z "$DROP" ] || drop' EXIT; trap 'exit 143' TERM INT
+avail() { awk '/^MemAvailable:/ { print int($2 / 1048576) }' "${MEMINFO:-/proc/meminfo}"; }
+FLOOR=${MEM_FLOOR_GB:-500}
 TREE=$(git rev-parse HEAD 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}")
 say "tree $TREE, host $(hostname), $NCPU cpus, device $DEV${CARDS:+, cards $CARDS}, steps $STEPS"
 
@@ -51,6 +57,7 @@ if ! has stage; then
   FW=${FLOCK_WORK:?the FLOCK_WORK a STEPS=stage job of this commit kept}; st=$(head -1 "$FW/.staged" 2>/dev/null)
   [ "${st%% *}" = "$TREE" ] || { say "REFUSED: FLOCK_WORK $FW was not staged by this commit: its .staged reads '${st:-nothing}': nothing started"; exit 9; }
   say "FLOCK_WORK $FW staged by this commit: $st"
+  case $FW in /dev/shm*) DROP=1 ;; esac
 fi
 ngroups=1
 if [ "$DEV" = gpu ] && has prove; then
@@ -96,7 +103,9 @@ if has stage; then
     for d in py flock-gpu-link flock-circuit tmpl-unit; do
       mkdir -p "$EX/$d" && { [ -L "$FW/$d" ] || ln -s "$EX/$d" "$FW/$d"; } || { say "no $d of DISK_WORK $EX linked into $FW"; exit 4; }
     done
-    echo "$EX" > "$FW/.disk_work"
+    echo "$EX" > "$FW/.disk_work"; DROP=1
+    a=$(avail); [ "${a:-0}" -ge "$FLOOR" ] \
+      || { say "REFUSED: the node's MemAvailable is ${a:-unread} GB, under MEM_FLOOR_GB=$FLOOR: nothing staged"; exit 5; }
   fi
   if findmnt -no OPTIONS -T "$EX" | tr ',' '\n' | grep -qx noexec; then
     exw=FLOCK_WORK; [ -z "$ram" ] || exw=DISK_WORK
@@ -108,13 +117,25 @@ if has stage; then
     WIN_UNTIL=$(date -u -d @$((KILL_AT - 1200)) +%Y-%m-%dT%H:%MZ)
   n=$(grep -vc '^#' "$UNITS")
   say "window.py stage $n lines of $(basename "$UNITS"), until $WIN_UNTIL"
-  python3 benchmarks/served_units/window.py stage "$UNITS"; rc=$?
+  python3 benchmarks/served_units/window.py stage "$UNITS" & wp=$!; mw=
+  if [ -n "$ram" ]; then
+    (while kill -0 "$wp" 2> /dev/null; do
+      a=$(avail); [ "${a:-0}" -ge "$FLOOR" ] || { echo "${a:-unread}" > "$S/floor"; kill -TERM "$wp"; exit; }
+      sleep "${MEM_POLL_S:-5}"
+    done) & mw=$!
+  fi
+  wait "$wp"; rc=$?; [ -z "$mw" ] || { kill "$mw" 2> /dev/null; wait "$mw" 2> /dev/null; }
+  if [ -s "$S/floor" ]; then
+    say "STOPPED: the node's MemAvailable fell to $(cat "$S/floor") GB, under MEM_FLOOR_GB=$FLOOR: staging stopped, FLOCK_WORK and DISK_WORK removed"
+    exit 5
+  fi
   staged=$(ls -d "$FW"/data/*/.done 2>/dev/null | wc -l)
   say "window.py stage exit $rc; staged: $staged; placed units: $(ls "$FW"/data/*/unit.placed 2>/dev/null | wc -l)"
   ls "$FW"/tmpl-unit/lean-*/flock-tmpl-unit 2>/dev/null | while read -r b; do say "flock-tmpl-unit $b, sha256 $(sha256sum "$b" | cut -c1-16)"; done
   if ! has prove; then
     [ "$rc" = 0 ] && [ "$staged" -ge "$n" ] \
-      && echo "$TREE $(date -u +%Y-%m-%dT%H:%M:%SZ) units-sha256 $(sha256sum < "$UNITS" | cut -c1-16) staged $staged" > "$FW/.staged"
+      && echo "$TREE $(date -u +%Y-%m-%dT%H:%M:%SZ) units-sha256 $(sha256sum < "$UNITS" | cut -c1-16) staged $staged" > "$FW/.staged" \
+      && DROP=
     say "STEPS=stage: FLOCK_WORK $FW kept ($(du -sh "$FW" 2>/dev/null | cut -f1)); .staged: $(cat "$FW/.staged" 2>/dev/null || echo 'none, so no STEPS=prove takes it')"
     exit $rc
   fi
@@ -123,7 +144,6 @@ fi
 # 3. prove
 export FLOCK_WORK=$FW
 left=$(( KILL_AT - 90 - $(date +%s) )); lease=$(( (KILL_AT - $(date +%s)) / 60 - 3 ))
-drop() { local ex; ex=$(cat "$FW/.disk_work" 2>/dev/null); [ -z "$ex" ] || rm -rf "$ex"; rm -rf "$FW"; }
 [ "$left" -gt 300 ] || { say "REFUSED: $left s to KILL_AT: nothing proved"; drop; exit 9; }
 export WIN_GPUS=$ngroups WIN_DEV_GIB=${WIN_DEV_GIB:-135} WIN_KEEP=0 WARM=${WARM:-1} RUNS=${RUNS:-4} VCPUS=${VCPUS:-2} \
   LEASE_MIN=$(( ${LEASE_MIN:-60} < lease ? ${LEASE_MIN:-60} : lease ))
