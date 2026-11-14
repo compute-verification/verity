@@ -28,6 +28,9 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         # widths), the docket's and partition's digests and template ids, the draw design's parsers, the second stage's
         # row links, registration's `Declaration`, and the challenger's client types (`CoinError`, `LiveOpening`, `LiveRecord`).
         "verity_vllm/commit/registered_rows.py": ("proofs.spot.verifier.one_stage.registered",),
+        "verity_vllm/compiler/replay_chain.py": (
+            "proofs.spot.verifier.one_stage.produced", "proofs.spot.verifier.one_stage.registered",
+        ),
         "verity_vllm/pipeline/advice.py": ("accounting.registration.verifier.registration",),
         "verity_vllm/pipeline/boundary_rows.py": (
             "proofs.spot.verifier.one_stage.docket", "proofs.spot.verifier.one_stage.partition",
@@ -87,7 +90,6 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
             "accounting.certifier.verifier.advice.Source", "accounting.certifier.verifier.advice.StepAdvice",
         ),
         "verity_vllm/pipeline/advice_code/lengths.py": ("accounting.certifier.verifier.advice",),
-        "verity_vllm/pipeline/advice_code/tick_step.py": ("accounting.certifier.verifier.replay_step",),
         "verity_vllm/pipeline/advice_code/window_code.py": ("accounting.certifier.verifier.arith_encode.CW",),
         "verity_vllm/pipeline/ids_front.py": (
             "accounting.certifier.verifier.io_tie", "accounting.certifier.verifier.release",
@@ -128,36 +130,26 @@ KNOWN: dict[str, dict[str, tuple[str, ...]]] = {
         ),
         "verity_vllm/compiler/compile_slice.py": (
             "accounting.certifier.verifier.arith_encode", "accounting.certifier.verifier.charge_chain",
-            "accounting.certifier.verifier.replay_chain", "accounting.certifier.verifier.replay_step",
         ),
         "verity_vllm/compiler/compile_slice_v4.py": (
             "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands", "accounting.certifier.verifier.replay_chain",
-            "accounting.certifier.verifier.replay_step",
+            "accounting.certifier.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/compile_slice_v5.py": (
             "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands", "accounting.certifier.verifier.replay_chain",
-            "accounting.certifier.verifier.replay_step",
+            "accounting.certifier.verifier.head_check.ands",
         ),
         "verity_vllm/compiler/compile_slice_v6.py": (
             "accounting.certifier.verifier.head_check._Consts", "accounting.certifier.verifier.head_check._coll",
-            "accounting.certifier.verifier.head_check.ands", "accounting.certifier.verifier.replay_chain",
-            "accounting.certifier.verifier.replay_step",
+            "accounting.certifier.verifier.head_check.ands",
         ),
-        "verity_vllm/compiler/compile_slice_v7.py": (
-            "accounting.certifier.verifier.charge_chain", "accounting.certifier.verifier.replay_chain",
-        ),
-        "verity_vllm/compiler/served_rows.py": ("accounting.certifier.verifier.replay_step",),
-        "verity_vllm/compiler/served_statics.py": (
-            "accounting.certifier.verifier.head_check", "accounting.certifier.verifier.replay_chain",
-        ),
+        "verity_vllm/compiler/compile_slice_v7.py": ("accounting.certifier.verifier.charge_chain",),
+        "verity_vllm/compiler/served_statics.py": ("accounting.certifier.verifier.head_check",),
         "verity_vllm/compiler/served_tie.py": (
             "accounting.certifier.verifier.head_check", "accounting.certifier.verifier.io_tie",
-            "accounting.certifier.verifier.replay_chain",
         ),
-        "verity_vllm/protocols/remote_bandwidth/binder.py": ("accounting.poub.verifier.audit.Tiles",),
-        "verity_vllm/protocols/remote_bandwidth/remote.py": (
+        "verity_vllm/protocols/poub/binder.py": ("accounting.poub.verifier.audit.Tiles",),
+        "verity_vllm/protocols/poub/remote.py": (
             "accounting.poub.verifier.audit", "accounting.poub.verifier.codec",
         ),
     },

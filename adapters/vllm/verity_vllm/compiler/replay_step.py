@@ -121,11 +121,12 @@ from functools import lru_cache
 from types import SimpleNamespace
 from typing import Sequence
 
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import ONE, ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.defs import bind
 from verity.circuits.types import Array, Tuple
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _part
 
 STATICS = ("R", "W", "A", "M", "T", "L", "B", "H", "CH", "WM", "FULL", "PC", "NB", "IW", "AS", "EW")
 

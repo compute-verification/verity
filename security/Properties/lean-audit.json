@@ -942,11 +942,6 @@
   }
  },
  "open_seed": {
-  "Properties.Remote": {
-   "issue": "TOP-415",
-   "due": "2026-11-17",
-   "owner": "@proofs"
-  },
   "Properties.Poub.Remote.HonestLog": {
    "issue": "MEM-353",
    "due": "2026-11-30",

@@ -81,7 +81,7 @@ Per session one `ReplayClose` and its two reads.
 On the trace corpus's 15 sync traces a step is 16,569 to 80,959 ANDs and a window 3.5e7 to 1.9e8 (PROTOCOL.md, before
 the carry). AS and EW widen the rows by the step's own fields, and the parts with them: at the served vLLM run's engine
 class (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4, `ReplayAdvance` is 1,761 ANDs sync, 1,814 at AS = 1 and 2,102 with
-17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (protocol/served-shape.md).
+17-bit walk entries, and `ReplayLoad` 1,944, 2,000 and 2,144 (../../../../verity/protocols/accounting/certifier/verifier/protocol/served-shape.md).
 """
 
 from __future__ import annotations
@@ -93,13 +93,14 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity.circuits import boolean as BL
+from verity.circuits.boolean import BIT
 from verity.circuits.boolean.forms import ZERO, Circuit, add, and_reduce, const_bits, mux, or_reduce, sub
+from verity.circuits.boolean.trace import part as _part
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.commitments import hm96
 from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _part
 from verity.protocols.proofs.spot.verifier.one_stage import produced
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
