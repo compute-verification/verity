@@ -1,0 +1,24 @@
+# This directory's numbers, one [[metric]] each: benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py
+# enforces it.
+
+[[metric]]
+id = "top/tree-not-yet-lines"
+title = "Files left to reorganize"
+owner = "top"
+unit = "lines"
+axis = "Paths on main still outside the new repository layout."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_yet.py"
+every = "1d"
+goal = "top/repo-cleaned-up"
+
+[[metric]]
+id = "top/architecture-not-built-rows"
+title = "Architecture left to build"
+owner = "top"
+unit = "rows"
+axis = "Things the architecture requires that main doesn't do yet, one row each of its table of code to write."
+better = "lower"
+command = "research run --on auto --cwd source -- uv run python benchmarks/tree/not_built.py"
+every = "1d"
+goal = "top/architecture-implemented"

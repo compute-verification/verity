@@ -38,8 +38,8 @@ round's units its answers say were proved), T and the tick, the traffic, the cor
 verifier's. The group is a setting, beside the identity: the numbers are for a second of execution phase at any group.
 
 **The guard**: the scan exited 0, and each execution phase's answer accepts with the public part `public.json` pins
-for the class (the bound 0, every block sampled and proved; over a group, G times the blocks). Where it does not hold,
-no measurement is written: the document says why and the run's validation fails.
+for the class (the bound 0, every block sampled and proved, every verdict run; over a group, G times the blocks).
+Where it does not hold, no measurement is written: the document says why and the run's validation fails.
 """
 from __future__ import annotations
 
@@ -60,7 +60,7 @@ DOC, SCHEMA, BASELINE_SCHEMA = "scan_cost.json", "scan-cost/v1", "scan-cost/base
 PUBLIC, BASELINE = HERE / "public.json", HERE / "baseline.json"
 #: what two results share to compare
 IDENTITY = ("class", "sample", "ticks", "tick_ms", "source", "cores", "verifier_cores")
-#: the metrics' ids (benchmarks/metrics.toml), the names their measurements are written under
+#: the metrics' ids (benchmarks/scan_cost/metrics.toml), the names their measurements are written under
 PROVING, VERIFIER = "network-accounting/scan-proving-cost", "network-accounting/scan-verifier-cost"
 #: a session's stages, in order, and the Lean verifier's
 STAGES = ("to_register_s", "register_to_reps_s", "level0_s", "reps_s", "tail_s")
@@ -346,7 +346,7 @@ def write(run_dir: Path, scan_exit: int) -> tuple[dict | None, bool, str]:
     if holds:
         writer = kit.Writer(run_dir, run, stamp)
         for m in measurements(doc):
-            writer.measurement(**m)
+            writer.measurement(**m, mark="measured")
     return doc, holds, detail
 
 

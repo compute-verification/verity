@@ -26,7 +26,7 @@ challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`),
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
 challenger is auditor-trusted, the auditor's device on a machine the developer doesn't control, under the named assumption
-`trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
+`trusted-device`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 **A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
 `withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
@@ -87,7 +87,7 @@ when the run ends.  `rec-compose` refuses unless each part has exactly one sessi
 parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
 coin tree's, sampled at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
 The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
-it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
+it answers is the auditor-trusted challenger's (`trusted-device`).  The live challenger keeps it one event a line: its
 operator stages the record before any session and closes it after the last, and Flock's `flock-circuit serve --zk
 --rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
 can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
@@ -110,14 +110,14 @@ more entries, its `period-open` and `period-close`, which name the prover in the
     declaration = body {by, [for], blocks, day, declared_utc, pinned, program} (session null)
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
-each entry a record entry (`verity.hardware.record`, `Core.Record`), each line as the auditor writes it
+each entry a record entry (`verity.channel.Record`, `Core.Record`), each line as the auditor writes it
 (`ledger_text`, every character past ASCII escaped), and each signature over the entry's canonical JSON in UTF-8
 (`ledger_message`).  The window is `{root}`, the served Commit's root, its prover the
 open's `for`, else its `by` (`lane_of`).  The verifier pins the challenger key from outside the ledger (the window's
 deployment; `key_of_record` reads the operator's published pin), and refuses any open or period-open naming another
 key's
 SHA-512 before it checks a signature, so a ledger signed under its own key can't pin itself.  Then the ledger is
-the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's host runs
+the operator's reference check, `verify_ledger` and `verify_periods` (one `_verify`, which the auditor's device runs
 too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
@@ -128,7 +128,7 @@ opened under v2, ended and closed, its end naming its record's leaf and commitme
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+window it opens no session for, so one session's coins pass for one window only.  The auditor device's operator publishes
 the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
@@ -163,7 +163,7 @@ pins the open's commit (`pins_reason`), and that commit is on main's first-paren
 (`first_parent_reason`; the auditor's ``git rev-list --first-parent origin/main``, an argument, never the host's or the
 prover's word).  Ancestry is not enough: main lands each change as a merge, so a branch commit merged into main is in
 main's history, but main's check ran on the merge's tree, never on the branch commit's.  That the host ran the commit
-its open names is the auditor-trusted host's word (`trusted-host`).  Every path that credits a session reads it
+its open names is the auditor-trusted device's word (`trusted-device`).  Every path that credits a session reads it
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
@@ -199,7 +199,7 @@ So the log shows each session's evidence fixed before the next session's tree is
 
 The first client is PoUW's live window (`verity.protocols.accounting.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
-`verity.commitments`, `verity.claims` and `verity.hardware.record`, so any client calls it as it is.
+`verity.commitments`, `verity.claims` and `verity.channel`, so any client calls it as it is.
 """
 
 from __future__ import annotations
@@ -213,12 +213,12 @@ import string
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from verity import claims
-from verity.hardware import record as core_record
+from verity.channel import Record
 from verity.commitments import (Commitment, CommitmentDomain, MerkleTree, Opening, RangeIndexedDomain,
                                    VerificationLimits, verify_opening)
 from verity.commitments import coin_tree as CT
@@ -327,7 +327,7 @@ MAX_LEDGER_LINES = 1 << 20
 MAX_PINS = 1 << 20
 #: the longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins
 MAX_PATH = (MAX_COINS - 1).bit_length()
-_ZERO = core_record.ZERO
+_ZERO = Record.ZERO
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
 _LEDGER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:-]{0,63}")
@@ -1246,10 +1246,10 @@ def ledger_message(I: bytes, entry: dict) -> bytes:
     tag = LEDGER_TAGS.get(entry.get("schema"))
     if tag is None:
         raise ValueError(f"schema {entry.get('schema')!r} is none of {sorted(LEDGER_TAGS)}")
-    unsigned = core_record.unsigned(entry)
+    unsigned = Record.unsigned(entry)
     canonical_json_text(_hexed(unsigned))
     text = json.dumps(unsigned, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(",", ":"))
-    return core_record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
+    return Record.message(LEDGER_ROLE, I, tagged_sha512(tag, text.encode()))
 
 
 def leaf_of(sig: Any) -> int:
@@ -1286,7 +1286,7 @@ def later(t: Any, minutes: int) -> str | None:
     if m is None:
         return None
     try:
-        d = datetime(*map(int, m.groups()), tzinfo=timezone.utc) + timedelta(minutes=minutes)
+        d = datetime(*map(int, m.groups()), tzinfo=UTC) + timedelta(minutes=minutes)
     except (ValueError, OverflowError):
         return None
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z"
@@ -1479,7 +1479,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
             raise ValueError(f"entry {i}: kind {kind!r}")
         es.append(e)
         leaves.add(q)
-        prev, last = core_record.prev_of(ln), q
+        prev, last = Record.prev_of(ln), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
     _days(es)
@@ -1526,16 +1526,16 @@ def _days(es: list[dict]) -> None:
 
 
 def ledger_text(entry: dict) -> str:
-    """An entry's line as the auditor writes it (`core_record.line`): sorted keys, no whitespace, every character past ASCII
+    """An entry's line as the auditor writes it (`Record.line`): sorted keys, no whitespace, every character past ASCII
     escaped."""
-    return core_record.line(entry)
+    return Record.line(entry)
 
 
 def ledger_line(lines: Sequence[str], kind: str, session: str | None, body: dict, I: bytes,
                 sign: Callable[[bytes], bytes], schema: str = LEDGER_SCHEMA) -> str:
     """The auditor's next ledger line after `lines`: entry `kind` for session `session` (None for a period's) with body
     `body`, signed with `sign` under the key whose identifier is `I`."""
-    entry = {"body": body, "kind": kind, "prev": core_record.prev_of(lines[-1]) if lines else _ZERO,
+    entry = {"body": body, "kind": kind, "prev": Record.prev_of(lines[-1]) if lines else _ZERO,
              "schema": schema, "seq": len(lines), "session": session}
     return ledger_text({**entry, "sig": bytes(sign(ledger_message(I, entry))).hex()})
 
@@ -1551,14 +1551,14 @@ def _outcome(w: Any) -> bool:
 
 
 def _ledger_entry(line: Any) -> dict | None:
-    """A ledger line's entry when it is its own `ledger_text`, a record entry (`core_record.of_json`) and of the
+    """A ledger line's entry when it is its own `ledger_text`, a record entry (`Record.of_json`) and of the
     ledger's form, else None."""
     try:
         e = json.loads(line) if type(line) is str and len(line) <= MAX_LEDGER_LINE else None
         if e is None or ledger_text(e) != line or any(f"\\ud{c}" in line for c in "89abcdef"):
             return None
         canonical_json_text(_hexed(e))
-        core_record.of_json(e)
+        Record.of_json(e)
     except (ValueError, TypeError, RecursionError):
         return None
     if e["schema"] not in LEDGER_TAGS or len(e["sig"]) < 8:
@@ -1716,7 +1716,7 @@ def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
-    """The auditor's ledger as the auditor host's operator published it: every head of `heads` (each its lines; None
+    """The auditor's ledger as the auditor device's operator published it: every head of `heads` (each its lines; None
     when the verifier has none)
     checked under the pinned key `key` (`audited_session`'s check of a ledger), any two extending one another, and of them
     the longest.  Raises `CoinError` naming why (and which head, when there are several), so a ledger forked, cut or
@@ -1873,7 +1873,7 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take the auditor host's operator's newest published pins log")
+                "take the auditor device's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
@@ -1904,7 +1904,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
 
 def pinned_session(ledger: Any, window: Any, key: ChallengerKey, pins: Any, main: Any, verify: Verify) -> Audited:
     """`audited_session`, from main's code: the window's session as the auditor's ledger names it, when the host's pins
-    log `pins` (its lines; the auditor host's operator's published one) records the open's pin (`pins_reason`) and the
+    log `pins` (its lines; the auditor device's operator's published one) records the open's pin (`pins_reason`) and the
     verifier's own copy of
     main's first-parent history `main` holds it (`first_parent_reason`).  Raises `CoinError` naming why, so a session
     the host ran from any other tree fails closed.  For PoUW this is what makes a credited window's coins come from a
@@ -2063,7 +2063,7 @@ class LiveRecord:
     def log(self) -> tuple[dict[str, Any], ...]:
         """The release order with the record's time, two events a coin: root i's receipt, `{"event": "root", "label",
         "index", "root": <hex>, "received_at"}`, then coin i's release after it, `{"event": "release", "label", "index",
-        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-host`'s."""
+        "after": <hex>, "released_at"}`.  It records the order; that the challenger kept it is `trusted-device`'s."""
         return tuple(self._log)
 
     def record(self, root: bytes) -> LiveOpening:

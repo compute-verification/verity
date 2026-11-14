@@ -217,9 +217,11 @@ def test_spot_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, s
     assert not (tmp_path / "case-v2-error.txt").exists()
 
 
-#: a sample's coin evidence in `a5_coins.evidence`'s form: the challenger's key and what its session published
-COINS = {"key": {"H": 20, "W": 1, "public": "ab" * 80}, "ledger": ["opened"], "main": ["c0"], "pins": ["pin"],
-         "segment": {"label": a5.AC.FAMILY, "openings": []}, "session": {"log": ["head"]}}
+#: a sample's coin evidence in `a5_coins.evidence`'s form, what the challenger's session published, which names no key
+COINS = {"ledger": ["opened"], "main": ["c0"], "pins": ["pin"], "segment": {"label": a5.AC.FAMILY, "openings": []},
+         "session": {"log": ["head"]}}
+#: the challenger's key as the session's start had it (`a5_coins.held`'s, `ChallengerKey.to_json`'s form)
+KEY = {"H": 20, "W": 1, "public": "ab" * 80}
 WINDOW_ROOT = "ee" * 64
 
 
@@ -234,13 +236,14 @@ def zk(monkeypatch, stub_case):
 
 def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carries_its_coins(tmp_path, zk, stub_case):
     """v2 reads a sample's coins under the challenger its parameters name, on the window's root, from the evidence's
-    coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, and
-    its SPOT form is that case's. Its proofs, commitment and blobs are the unnamed case's."""
-    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY)
+    coins: the case of an audit sampled on the challenger's coins holds all three, the key in the parameters alone, the
+    one its session started under, and its SPOT form is that case's. Its proofs, commitment and blobs are the
+    unnamed case's."""
+    write(tmp_path, {}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, challenger_key=KEY)
     got = json.loads((tmp_path / "case-v2.json").read_text())
-    named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
+    named = {"challenger": {"key": KEY, "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert got["params"] == {**zk["params"], **named}
-    evidence = {"coins": {k: v for k, v in COINS.items() if k != "key"}, "proofs": {}}
+    evidence = {"coins": COINS, "proofs": {}}
     assert sorted(evidence["coins"]) == ["ledger", "main", "pins", "segment", "session"]
     assert got["evidence"] == stub_case.DT.canonical(evidence).encode().hex()
     assert (got["blobs"], got["commitment"]) == (zk["blobs"], zk["commitment"])
@@ -251,11 +254,15 @@ def test_a_case_sampled_on_the_challengers_coins_names_the_challenger_and_carrie
 
 def test_an_audit_on_the_challengers_coins_with_no_window_root_has_no_v2_case(tmp_path, zk):
     """v2 reads the challenger's session as the one its ledger opens on the window's root: with no root to name, no
-    case is written, the error file says why, and the v1 case stays."""
-    write(tmp_path, {}, coins=COINS, window_root=None, family=a5.AC.FAMILY)
-    assert not (tmp_path / "case-v2.json").exists() and not (tmp_path / "case-sampled.json").exists()
-    assert "no window root" in (tmp_path / "case-v2-error.txt").read_text()
-    assert (tmp_path / "case.json").exists()
+    case is written, the error file says why, and the v1 case stays. So with no challenger key to name: the evidence
+    names none, and a case without one would be read under no key."""
+    for at, (root, key) in enumerate(((None, KEY), (WINDOW_ROOT, None))):
+        out = tmp_path / str(at)
+        out.mkdir()
+        write(out, {}, coins=COINS, window_root=root, family=a5.AC.FAMILY, challenger_key=key)
+        assert not (out / "case-v2.json").exists() and not (out / "case-sampled.json").exists()
+        assert "no window root" in (out / "case-v2-error.txt").read_text()
+        assert (out / "case.json").exists()
 
 
 @pytest.mark.parametrize("trees", [False, True])
@@ -266,8 +273,9 @@ def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on
     where they ran there."""
     pm = {**zk, "params": {"proofs": {"members": []}}}
     monkeypatch.setattr(a5, "case_members", lambda case, **k: pm)
-    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees)
-    named = {"challenger": {"key": COINS["key"], "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
+    write(tmp_path, {}, per_member={}, coins=COINS, window_root=WINDOW_ROOT, family=a5.AC.FAMILY, member_trees=trees,
+          challenger_key=KEY)
+    named = {"challenger": {"key": KEY, "label": a5.AC.FAMILY}, "window_root": WINDOW_ROOT}
     assert json.loads((tmp_path / "case-v2.json").read_text())["params"] == {**zk["params"], **named}
     assert json.loads((tmp_path / "case-v2-members.json").read_text())["params"] == {**pm["params"], **(named if trees else {})}
 
@@ -276,7 +284,7 @@ def test_the_per_member_case_names_the_challenger_only_where_its_sessions_ran_on
 def test_a_case_that_names_a_challenger_already_is_not_named_again(stub_case, params, evidence):
     case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical(evidence).encode().hex(), "params": params}
     with pytest.raises(ValueError, match="already"):
-        a5.case_coins(case, COINS, a5.AC.FAMILY, WINDOW_ROOT)
+        a5.case_coins(case, COINS, KEY, a5.AC.FAMILY, WINDOW_ROOT)
 
 
 def test_the_case_is_named_where_replay_names_another_module(monkeypatch, stub_case):
@@ -284,7 +292,7 @@ def test_the_case_is_named_where_replay_names_another_module(monkeypatch, stub_c
     `replay.py` beside a5 all the same."""
     monkeypatch.setitem(sys.modules, "replay", types.ModuleType("replay"))
     case = {"blobs": [], "commitment": "ab", "evidence": stub_case.DT.canonical({}).encode().hex(), "params": {}}
-    got = a5.case_coins(case, COINS, a5.AC.FAMILY, WINDOW_ROOT)
+    got = a5.case_coins(case, COINS, KEY, a5.AC.FAMILY, WINDOW_ROOT)
     assert got["params"]["window_root"] == WINDOW_ROOT and "coins" in json.loads(bytes.fromhex(got["evidence"]))
 
 

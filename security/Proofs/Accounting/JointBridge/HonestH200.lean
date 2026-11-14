@@ -10,8 +10,7 @@ public import Proofs.Pouw.Period.Honest
 public import Proofs.Pouw.Prob
 import Definitions.Accounting.TS
 import Definitions.Claims
-import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.PearlC.DevicePricesLoop
+import Proofs.Pouw.PearlC.Records
 import Base.Sizes
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

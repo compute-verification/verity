@@ -1,5 +1,5 @@
 """Nothing under ``verity/`` needs an integration (AGENTS.md "Design rules", "Integrations are frontends";
-ARCHITECTURE.md "Integrations"): any serving stack plugs in without changing ``verity/``.
+ARCHITECTURE.md, section 2, "The ideas that organize everything"): any serving stack plugs in without changing ``verity/``.
 Today some files do: Flock takes the vLLM integration's registered Definitions and kernels where ``verity`` has no
 equivalent yet, and core's difftests of the primitives and sigma hold the Lean to them (a benchmark may compose an
 integration).  ``KNOWN`` lists every such ``(file, module)`` site and may only shrink: a new site fails, and so does a
@@ -42,10 +42,10 @@ KNOWN = {
     # PoUB's memory-map/v1 builder (`Lines`), which records a session's appends and frees: `map_case` builds with it
     ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
     ("verity/circuits/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
-    ("verity/protocols/proofs/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.boolean"),
-    ("verity/protocols/proofs/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry"),
-    ("verity/protocols/proofs/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry.catalog"),
-    ("verity/protocols/proofs/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.replay"),
+    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.boolean"),
+    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry"),
+    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry.catalog"),
+    ("verity/protocols/proofs/flock/verifier/sigma/tests/test_sigma_difftest.py", "verity.definitions.replay"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py", "verity.definitions.encoding"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/boolean_export.py", "verity.definitions.registry"),
     ("verity/protocols/proofs/flock/prover/python/verity_flock/class_statement.py", "verity.definitions.encoding"),
@@ -153,7 +153,7 @@ def test_the_scan_sees_verity():
 
 def test_nothing_in_verity_imports_an_integration_outside_known():
     new = sorted(_sites() - KNOWN)
-    assert not new, ("a file under verity/ imports an integration (ARCHITECTURE.md \"Integrations\": verity meets a serving "
+    assert not new, ("a file under verity/ imports an integration (ARCHITECTURE.md, section 6, rule 1: verity meets a serving "
                      "stack at one interface); import from verity instead, or, if the dependency cannot go through verity "
                      "yet, add to KNOWN in tests/test_integration_boundaries.py:\n"
                      + "\n".join(f'    ("{f}", "{m}"),' for f, m in new))

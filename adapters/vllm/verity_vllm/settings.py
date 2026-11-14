@@ -225,6 +225,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_WORD_CHECK", str, None, VALUE, "the strict word check's widths, X/W"),
     S("VERITY_WORKLOADS", paths, (), WHERE, "directories of row files beside workloads/, os.pathsep-separated: a row id resolves to "
       "the one file of its name among them (`config.row_file`), whose path and sha256 the row's effective config records"),
+    S("ACQUIRE_MANIFEST", str, None, WHERE, "the path of the row's required-value manifest, which a stage reads where its command "
+      "line names none (the row sets it)"),
     S("MATCH_IMPL", str, None, VALUE, "the global match's checker, fast or record (the audit); unset, `global_match`'s default, fast, "
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request parts; empty, min(cpu_count, 8)"),
@@ -250,7 +252,21 @@ SETTINGS: dict[str, Setting] = _declare(
     S("HF_HUB_OFFLINE", str, None, WHERE, "1: Hugging Face reads only its cache (`engine.env.EXPORT` and an engine's pins set it); a "
       "Build records it"),
     S("MAX_JOBS", str, None, VALUE, "parallel compile jobs of torch's extension builds; a tap build sets its own default"),
+    S("NCCL_ALGO", str, None, VALUE, "the algorithms NCCL may use (its family's role, as the six below); an engine profile's TP "
+      "backends record each of the seven that is set"),
+    S("NCCL_BUFFSIZE", str, None, VALUE, "the bytes of NCCL's buffer between a pair of GPUs"),
+    S("NCCL_LAUNCH_MODE", str, None, VALUE, "how NCCL launches its kernels, PARALLEL or GROUP"),
+    S("NCCL_MAX_NCHANNELS", str, None, VALUE, "the most channels NCCL uses"),
+    S("NCCL_MIN_NCHANNELS", str, None, VALUE, "the fewest channels NCCL uses"),
+    S("NCCL_NTHREADS", str, None, VALUE, "NCCL's CUDA threads per block, one block a channel"),
+    S("NCCL_PROTO", str, None, VALUE, "the protocols NCCL may use"),
+    S("PYTHONPATH", str, None, WHERE, "the interpreter's module search path, which the source identity records as the environment "
+      "holds it"),
     S("RESEARCH_RUN_ID", str, None, WHERE, "the research run this process is part of"),
+    S("RESEARCH_SOURCE_SHA", str, None, WHERE, "the commit of the tree the research runner shipped, which the source identity takes "
+      "where `--sha` names none and a row's records carry"),
+    S("RUNPOD_POD_ID", str, None, WHERE, "the RunPod pod this process runs in, which an engine profile's GPU record names as its pod; "
+      "unset, the node's name"),
     S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
       "a Build records it"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
@@ -280,31 +296,32 @@ FAMILIES: dict[str, str] = {"VLLM_": VALUE, "NCCL_": VALUE, "CUBLAS": VALUE}
 
 #: The ``VERITY_*`` variables the rest of the tree reads (``verity/``, ``benchmarks/``, ``tools/``, the integration's tests and
 #: tools), which a verity-vllm process may inherit.  A name ending ``_`` names a family.
-ELSEWHERE = frozenset("""
-VERITY_BENCH_ VERITY_GRADER_ VERITY_SUITE_ VERITY_VLLM_BENCH_
-VERITY_ADV_CACHE VERITY_ADV_SEED VERITY_AMBIENT VERITY_AMBIENT_TEST VERITY_CAPTURED_101_GUMBEL VERITY_CENSUS
-VERITY_CHECKER_VARIANT VERITY_CIRCUIT_CHECK_SLOW VERITY_COMMIT VERITY_DENSE_PROGRAM_DIRS VERITY_E2E_B VERITY_E2E_BOUNDED
-VERITY_E2E_CASE VERITY_E2E_EXCLUDE VERITY_E2E_GPU_UTIL VERITY_E2E_HIDDEN_SO VERITY_E2E_LEARN_MB VERITY_E2E_UTIL
-VERITY_E2E_WINDOW_MB VERITY_E2E_WORKLOAD VERITY_ENCODINGS_ADVICE_V0 VERITY_EVALUATE_FULL_LOGF VERITY_EXHAUSTIVE VERITY_FA2_CSRC
-VERITY_FLOCK_CACHE VERITY_FLOCK_INNER_FOLD VERITY_FLOCK_SAME_SHAPE_FULL VERITY_GIT_GUARD VERITY_GPU_TORCH_ONLY
-VERITY_H1_REGISTER VERITY_HP_ARCHIVE VERITY_KV_SO VERITY_LEAF_LAYOUT VERITY_LEAN_MEM_FLOOR_GIB VERITY_ML_BOOLEAN_EXHAUSTIVE
-VERITY_ML_DEFINITIONS_SLOW
-VERITY_MOE_PROGRAM_DIRS VERITY_MUFU_TABLES VERITY_MUFU_TANH_TABLES VERITY_NETWORK_RECORDS_EXE VERITY_NUMERICAL_STORE
-VERITY_PAGED_SO VERITY_POUS_SLOW VERITY_POUW_CUDA_ARCH VERITY_POUW_CUDA_BUILD VERITY_POUW_H1_PIN
-VERITY_POUW_H1U_SO VERITY_POUW_NOISE_CUBIN VERITY_POUW_NVCC VERITY_POUW_WINDOW_LOWERED_LANES VERITY_REAL_GIT VERITY_REGRESSION
-VERITY_REGRESSION_CANDIDATE VERITY_REGRESSION_CANDIDATE_CACHE VERITY_REGRESSION_ORACLE VERITY_REGRESSION_REBUILD
-VERITY_REGRESSION_RECORD_ACTUAL VERITY_REGRESSION_ROWS_ROOT VERITY_REGRESSION_SCRATCH VERITY_REGRESSION_STOCH_JOBS
-VERITY_REGRESSION_TIERS VERITY_REGRESSION_VERIFY_ALL VERITY_REPIN VERITY_RESEARCH_POSTGRES VERITY_RMS_TABLES VERITY_SESSION_SO
-VERITY_SKIP_STORE VERITY_SLOW VERITY_STORE_REQUIRED VERITY_TC_PROBE_FP4_NVCC VERITY_TEST_CACHE VERITY_TEST_CACHE_MIN_S
-VERITY_TRACE_DIR VERITY_VEC_IN VERITY_VEC_OUT VERITY_VLLM_BOOLEAN_NORMS_FULL VERITY_VLLM_BOOLEAN_SWEEPS
-VERITY_VLLM_CLASS_G_WINDOW VERITY_VLLM_INT8_K_SCALES VERITY_VLLM_TANH_EXHAUSTIVE VERITY_VSTAR_STAGE VERITY_VSTAR_STAGE_OUT
-""".split())
+ELSEWHERE = frozenset((
+    "VERITY_BENCH_", "VERITY_GRADER_", "VERITY_SUITE_", "VERITY_VLLM_BENCH_",
+    "VERITY_ADV_CACHE", "VERITY_ADV_SEED", "VERITY_AMBIENT", "VERITY_AMBIENT_TEST", "VERITY_CAPTURED_101_GUMBEL", "VERITY_CENSUS",
+    "VERITY_CHECKER_VARIANT", "VERITY_CIRCUIT_CHECK_SLOW", "VERITY_COMMIT", "VERITY_DENSE_PROGRAM_DIRS", "VERITY_E2E_B",
+    "VERITY_E2E_BOUNDED", "VERITY_E2E_CASE", "VERITY_E2E_EXCLUDE", "VERITY_E2E_GPU_UTIL", "VERITY_E2E_HIDDEN_SO", "VERITY_E2E_LEARN_MB",
+    "VERITY_E2E_UTIL", "VERITY_E2E_WINDOW_MB", "VERITY_E2E_WORKLOAD", "VERITY_ENCODINGS_ADVICE_V0", "VERITY_EVALUATE_FULL_LOGF",
+    "VERITY_EXHAUSTIVE", "VERITY_FA2_CSRC", "VERITY_FLOCK_CACHE", "VERITY_FLOCK_INNER_FOLD", "VERITY_FLOCK_SAME_SHAPE_FULL",
+    "VERITY_GIT_GUARD", "VERITY_GPU_TORCH_ONLY", "VERITY_H1_REGISTER", "VERITY_HP_ARCHIVE", "VERITY_KV_SO", "VERITY_LEAF_LAYOUT",
+    "VERITY_LEAN_MEM_FLOOR_GIB", "VERITY_ML_BOOLEAN_EXHAUSTIVE", "VERITY_ML_DEFINITIONS_SLOW", "VERITY_MOE_PROGRAM_DIRS",
+    "VERITY_MUFU_TABLES", "VERITY_MUFU_TANH_TABLES", "VERITY_NETWORK_RECORDS_EXE", "VERITY_NUMERICAL_STORE", "VERITY_PAGED_SO",
+    "VERITY_POUS_SLOW", "VERITY_POUW_CUDA_ARCH", "VERITY_POUW_CUDA_BUILD", "VERITY_POUW_H1_PIN", "VERITY_POUW_H1U_SO",
+    "VERITY_POUW_NOISE_CUBIN", "VERITY_POUW_NVCC", "VERITY_POUW_WINDOW_LOWERED_LANES", "VERITY_REAL_GIT", "VERITY_REGRESSION",
+    "VERITY_REGRESSION_CANDIDATE", "VERITY_REGRESSION_CANDIDATE_CACHE", "VERITY_REGRESSION_ORACLE", "VERITY_REGRESSION_REBUILD",
+    "VERITY_REGRESSION_RECORD_ACTUAL", "VERITY_REGRESSION_ROWS_ROOT", "VERITY_REGRESSION_SCRATCH", "VERITY_REGRESSION_STOCH_JOBS",
+    "VERITY_REGRESSION_TIERS", "VERITY_REGRESSION_VERIFY_ALL", "VERITY_REPIN", "VERITY_RESEARCH_POSTGRES", "VERITY_RMS_TABLES",
+    "VERITY_SESSION_SO", "VERITY_SKIP_STORE", "VERITY_SLOW", "VERITY_STORE_REQUIRED", "VERITY_TC_PROBE_FP4_NVCC", "VERITY_TEST_CACHE",
+    "VERITY_TEST_CACHE_MIN_S", "VERITY_TRACE_DIR", "VERITY_VEC_IN", "VERITY_VEC_OUT", "VERITY_VLLM_BOOLEAN_NORMS_FULL",
+    "VERITY_VLLM_BOOLEAN_SWEEPS", "VERITY_VLLM_CLASS_G_WINDOW", "VERITY_VLLM_INT8_K_SCALES", "VERITY_VLLM_TANH_EXHAUSTIVE",
+    "VERITY_VSTAR_STAGE", "VERITY_VSTAR_STAGE_OUT",
+))
 
 #: ``VERITY_*`` names the library spells out that are not environment variables: the C preprocessor macros of the tap builds.
-NOT_SETTINGS = frozenset("""
-VERITY_FA3_MS VERITY_HAVE_FA3_HDIM VERITY_HAVE_FWD_HDIM64_BF16 VERITY_HAVE_SPLIT_HDIM VERITY_MAT_MS VERITY_MAT_SRC
-VERITY_ROW_GUARD VERITY_TAP
-""".split())
+NOT_SETTINGS = frozenset((
+    "VERITY_FA3_MS", "VERITY_HAVE_FA3_HDIM", "VERITY_HAVE_FWD_HDIM64_BF16", "VERITY_HAVE_SPLIT_HDIM", "VERITY_MAT_MS", "VERITY_MAT_SRC",
+    "VERITY_ROW_GUARD", "VERITY_TAP",
+))
 
 
 def setting(name: str) -> Setting:

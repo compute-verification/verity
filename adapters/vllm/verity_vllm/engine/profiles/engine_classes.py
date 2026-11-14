@@ -105,8 +105,10 @@ def effective_refusals(name: str, effective: dict[str, Any], env_flags: dict[str
     facts, _, served, _ = of(name)
     want = {"tensor_parallel_size": facts["world"], **served, "enable_prefix_caching": False}
     if effective.get("enforce_eager") is False:
-        c = TargetProfile.COMPILATIONS[compilation(name, "compiled")]
-        want.update(breakable_cudagraph=True, capture_sizes=list(c["capture_sizes"]))
+        comp = compilation(name, "compiled")
+        if comp is not None:      # a class whose compiled execution names no compilation states no CUDA graphs to hold it to
+            c = TargetProfile.COMPILATIONS[comp]
+            want.update(breakable_cudagraph=True, capture_sizes=list(c["capture_sizes"]))
     got = effective.get("max_model_len")
     if max_model_len == -1:
         limit = [] if type(got) is int and got > 0 else [f"the built engine's max_model_len is {got!r}, not a length vLLM fitted"]

@@ -1,7 +1,7 @@
 """`stop_audit.py`'s verifier's half on a stop class's hand-off, sampled on a test's own challenger
 (`fake_challenger`): the stop stream built again from the hand-off alone, the verifier's own ``--registered`` file,
 the audit record's entries and what each refuses, and Lean's verdicts on the read across the class's two streams
-(`Record.across`) held to the Python's on fourteen written cases. No input is random. No proof runs here: a session's
+(`Record.across`) held to the Python's on eighteen written cases. No input is random. No proof runs here: a session's
 verdicts are stand-ins of the form `a0.lean_verify` reports, and ``stop_audit_small.sh`` is the run that proves. The
 class is the two-stage driver's tests' (`test_two_stage_driver._stop_class`)."""
 
@@ -11,6 +11,7 @@ import hashlib
 import importlib
 import json
 import sys
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace as NS
 
@@ -33,9 +34,11 @@ SESSION = "5e" * 64
 NULL = {SA.BOUNDARY_AUDIT, SA.REQUEST_ROW, SA.STOP_RULE}
 
 
-def _resume(handoff: dict, stop: BS.Stop = T.STOP, design: str = DESIGN):
-    """`stop_audit.resume` under the proof deadline the test's first stage ran under."""
-    return SA.resume(handoff, T.PAIR, stop, design, proof_deadline=T.RULE.proof_deadline)
+def _resume(handoff: dict, stop: BS.Stop = T.STOP, design: str = DESIGN, **held: object):
+    """`stop_audit.resume` under the proof deadline the test's first stage ran under, the verifier holding the test's
+    challenger's key and its copy of main's history unless ``held`` gives its own."""
+    return SA.resume(handoff, T.PAIR, stop, design, proof_deadline=T.RULE.proof_deadline,
+                     **{"key": T.FC.pinned_key(), "main": T.FC.MAIN, **held})
 
 
 def _handoff(tmp_path: Path, monkeypatch, seed: str) -> dict:
@@ -58,9 +61,10 @@ def _proved(r, file: dict, **lean: object) -> dict:
             "verdicts": {SA.LEAN: verdict, SA.M0: {"accepted": True}}, "statement": {SA.MEMBER: {"statement": "stub"}}}
 
 
-def _audit(handoff: dict, outcome: dict | None = None, **lean: object) -> tuple[dict, dict]:
-    """One audit of the hand-off's stop sample on a stream built again: `decide`'s outcome and its summary."""
-    r = _resume(handoff)
+def _audit(handoff: dict, outcome: dict | None = None, held: dict | None = None, **lean: object) -> tuple[dict, dict]:
+    """One audit of the hand-off's stop sample on a stream built again (``held``: the key or the copy of main's history
+    its verifier holds, where not the test's challenger's): `decide`'s outcome and its summary."""
+    r = _resume(handoff, **(held or {}))
     file = SA.reads(r)
     got = SA.decide(r, handoff, file, _proved(r, file, **lean), outcome)
     return got, SA.summary_of(r, T.STOP, DESIGN, got)
@@ -72,7 +76,10 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
     boundary record's roots and the output row at the stop record's, unit i at row i. Neither opens the class's
     directory nor calls the prover's half. Refused: another stop rule, another sampling design, a sample that is not
     the hand-off's, a hand-off with no stop sample, and a stop record on a boundary record the boundary stream never
-    logged (case 2)."""
+    logged (case 2). The stop sample's family and the session's root are `resume`'s to name, from the class's layout
+    and its record's window: a hand-off that names the boundary stream's family for the stop sample, or the stop
+    sample's for the boundary stream's, or another session root, is refused, and `link` hands Lean the layout's
+    whatever the hand-off names."""
     handoff = _handoff(tmp_path, monkeypatch, "resume")
 
     def prover(*_a: object, **_k: object):
@@ -103,6 +110,19 @@ def test_the_verifiers_half_is_built_from_the_hand_off_and_the_verifiers_own_cop
         _resume({**handoff, "stop": {"error": "refused"}})
     with pytest.raises(SA.Unlogged, match="no record of the class's boundary stream's log"):
         _resume(SMALL.unlogged(handoff, T.PAIR))
+
+    spans, blocks = T.TS.family_of(r.layout), T.TS.family_of(r.layout, blocks=True)
+    assert (handoff["family"], s["family"], handoff["window_root"]) == (spans, blocks, r.layout.run)
+    swapped = {**handoff, "stop": {**s, "family": spans}}
+    for named in (swapped, {**handoff, "family": blocks}):
+        with pytest.raises(ValueError, match="does not choose among the families the session reserved"):
+            _resume(named)
+    elsewhere = {**handoff, "window_root": "ab" * 64}
+    with pytest.raises(ValueError, match="the hand-off names the session root abababab"):
+        _resume(elsewhere)
+    for named in (swapped, elsewhere):
+        read = SA.link(named, r.first)
+        assert (read["window"], read["family"]) == (r.layout.run, blocks)
 
 
 def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_path, monkeypatch):
@@ -141,12 +161,53 @@ def test_an_accepted_record_names_what_it_did_not_check_and_is_not_complete(tmp_
     assert {SA.BOUNDARY_PREMISE, SA.STOP_RULE_PREMISE, SA.REQUEST_PREMISE} == set(summary["premises"])
 
 
+def test_the_stop_streams_answer_carries_its_audit_records_complete(tmp_path, monkeypatch):
+    """`answer_of` is one-stage's answer of the stop stream's outcome. The record that accepts with three entries null
+    gives an accept of the stop registration over the stop sample whose public ``complete`` is false, which a reader
+    that wants a complete audit refuses (`audit.answer_complete`). The same record saying complete gives one it takes:
+    the field is the record's own. A session Lean's verdict refuses gives a reject of that registration with no public
+    outputs, naming the failed checks and the two verdicts that did not accept: Lean's, and the registered reads'
+    entry, which is Lean's verdict held to the verifier's file."""
+    first = _handoff(tmp_path, monkeypatch, "answer")
+    r = _resume(first)
+    got, _ = _audit(first)
+    a = SA.answer_of(r, got)
+    assert (a["verdict"], a["reason"], a["protocol"]) == ("accept", None, SA.R.PROTOCOL)
+    assert a["commitment"] == first["stop"]["registration"]
+    units, others = sorted(first["stop"]["units"]), set(a["public"]) - {"bound", "complete", "per_template"}
+    assert len(others) == 2 and "proved" in others and all(a["public"][k] == units for k in others)
+    assert a["public"]["complete"] is got["audit"]["complete"] is False and not SA.A.answer_complete(a)
+    whole = SA.answer_of(r, {**got, "audit": {**got["audit"], "complete": True}})
+    assert whole["public"] == {**a["public"], "complete": True} and SA.A.answer_complete(whole)
+    refused, _ = _audit(first, accepted=False, why="the proof does not verify")
+    b = SA.answer_of(r, refused)
+    assert (b["verdict"], b["public"], b["profile"], b["commitment"]) == ("reject", None, None, a["commitment"])
+    assert b["reason"] == f"checks: registered, roots; verdicts: {SA.LEAN}, {SA.READS}" and not SA.A.answer_complete(b)
+
+
+def test_an_answer_names_what_refused_it_or_that_no_record_was_written():
+    """`answer_of` on outcomes written by hand, of a stream that holds only its δ and its registration's digest: a
+    record that did not accept for a verdict alone names the verdict; an outcome the stream refused, which has no
+    audit record, says so; an outcome that did not accept beside a record that did is a reject."""
+    r = NS(stream=NS(delta=0.5), registration=NS(digest="ab" * 64))
+    entry = {"accepted": False, "checks": {"proved": {"ok": True}},
+             "verdicts": {SA.LEAN: {"accepted": True}, SA.BOUNDARY_AUDIT: {"accepted": False}, SA.STOP_RULE: {"accepted": None}}}
+    reject = {"commitment": "ab" * 64, "profile": None, "protocol": SA.R.PROTOCOL, "public": None, "verdict": "reject"}
+    assert SA.answer_of(r, {"accepted": False, "audit": entry}) == {**reject, "reason": f"verdicts: {SA.BOUNDARY_AUDIT}"}
+    none = {**reject, "reason": "the stop stream refused the outcome"}
+    assert SA.answer_of(r, {"accepted": False, "refused": {"codes": ["sessions"]}}) == none
+    assert SA.answer_of(r, {"accepted": False, "audit": {"accepted": True}}) == none
+    assert not any(SA.A.answer_complete(SA.answer_of(r, g)) for g in ({"accepted": False, "audit": entry}, {"accepted": False}))
+
+
 def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path, monkeypatch):
     """One hand-off, audited on a stream built again each time. Refused: a session Lean's verdict refuses (a length
     that is not the rule's); a boundary stream's outcome that did not accept, that is another registration's, or
     whose audit record Lean's verdict refuses (case 3); a verdict that names another ``--registered`` file than the
     verifier's, or reports another root for a port; and an order the challenger's signed log does not show, here a
-    log with no coin after the stop registration (case 2). With a boundary outcome that accepted and is complete the
+    log with no coin after the stop registration (case 2), and the hand-off's own evidence before a verifier that holds
+    another challenger's key, no key, or another copy of main's history (case 2, and the stream's own run refuses the
+    coins). With a boundary outcome that accepted and is complete the
     entry accepts and names the audit record (case 1), and the record is still not complete; the record handed is
     one made by hand, which no stream wrote, and the two entries that read it name that premise: case 1 on a handed
     record is on no entry of record, and the summary holds no length on it. With one that accepted
@@ -206,6 +267,12 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     assert got["audit"]["verdicts"][SA.ORDER]["accepted"] is False and got["audit"]["verdicts"][SA.ORDER]["case"] == 2
     assert summary["case"] == 2 and "the later sample's coins" in summary["why"][SA.ORDER]
 
+    ours = T.FC.pinned_key()
+    for held in ({"key": replace(ours, public=bytes(x ^ 1 for x in ours.public))}, {"key": None}, {"main": T.FC.MAIN[1:]}):
+        got, summary = _audit(handoff, held=held)
+        assert summary["accepted"] is False and "run" in summary["failed"], (held, summary["failed"])
+        assert got["audit"]["verdicts"][SA.ORDER]["accepted"] is False and summary["case"] == 2, held
+
 
 def _generic(why: str | None) -> str | None:
     """`two_stage.stop_order`'s reason in `Record.across`'s names: the stop stream is the later one, and the class's
@@ -239,7 +306,11 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     boundary record never logged; an empty log; and, on sessions of the test's challenger that received the two
     registrations by hand, the stop registration's coins released first, no receipt of the boundary registration, a
     coin opened and not read, no evidence, no family named, and the boundary stream's family named for the stop
-    sample's coins, which are held to the family named and not to the one their evidence names. Case 3: the boundary
+    sample's coins, which are held to the family named and not to the one their evidence names; and the hand-off's
+    own evidence read by a verifier that holds another challenger's key, no key, or another copy of main's history,
+    and evidence that names a key, the verifier's own. The family is the one `link` names, the stop blocks' place's;
+    a case that names its own gives it to Lean and to the Python by hand, since `link` takes none from a hand-off.
+    Case 3: the boundary
     stream's audit record missing, refused, and another registration's. Case 4: that audit record accepted with an
     entry that did not run."""
     handoff = _handoff(tmp_path, monkeypatch, "across")
@@ -252,7 +323,8 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
     def handed(seed: str, *commits: tuple[str, int], read: int | None = None) -> dict:
         one, got, family = _released(seed, *commits)
         return {"evidence": one.evidence(later), "read": got[later][:read].hex(), "family": family[later]}
-    assert s["family"] == T.AC.family(1) != handoff["family"] == T.AC.family(0)
+    spans, blocks = (T.AC.family(rank) for rank in T._stop_places()[:2])
+    assert s["family"] == blocks != handoff["family"] == spans
     cases = {
         "accepted": (1, {}, None, accepted, None),
         "by hand": (1, handed("by-hand", (earlier, 1), (later, 2)), None, accepted, None),
@@ -266,21 +338,33 @@ def test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams(tmp_pat
         "no family": (2, {"family": None}, None, accepted, "read no coins of a challenger's family"),
         "another family": (2, {"family": handoff["family"]}, None, accepted,
                            f"coins are not the challenger's {handoff['family']} family's"),
+        "another key": (2, {}, None, accepted, "the later sample's coins: "),
+        "no key": (2, {}, None, accepted, "holds no challenger key"),
+        "another main": (2, {}, None, accepted, T.CC.COINS_MAIN),
+        "evidence naming a key": (2, {"evidence": {**s["evidence"], "key": T.FC.pinned_key().to_json()}}, None, accepted,
+                                  T.CC.DRAW_FORM),
         "no audit record": (3, {}, None, None, None),
         "a refused audit record": (3, {}, None, refused, None),
         "another registration's audit record": (3, {}, None, others, None),
         "an audit record that accepted and is not complete": (4, {}, None, SMALL.incomplete(handoff), None),
     }
-    assert len(cases) == 14 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 8 + [3] * 3 + [4]
+    ours = T.FC.pinned_key()
+    holds = {"another key": (replace(ours, public=bytes(x ^ 1 for x in ours.public)), T.FC.MAIN), "no key": (None, T.FC.MAIN),
+             "another main": (ours, T.FC.MAIN[1:])}
+    assert len(cases) == 18 and sorted(c for c, *_ in cases.values()) == [1] * 2 + [2] * 12 + [3] * 3 + [4]
     for name, (case, stop, log, outcome, why) in cases.items():
         mine = {**handoff, "stop": {**s, **stop}}
         log = list(r.first.stream.log) if log is None else log
+        key, main = holds.get(name, (ours, T.FC.MAIN))
         previous = mine["stop"]["record"]["previous"]
         logged = previous in [SA.R.digest(rec) for rec in log]
-        order = T.TS.stop_order(mine["stop"]["evidence"], r.layout.run, mine["stop"]["family"], previous,
+        read = SA.link(mine, NS(layout=r.layout, stream=NS(log=log, key=key, main=tuple(main))), outcome)
+        assert (read["window"], read["family"]) == (r.layout.run, blocks), name
+        family = stop.get("family", blocks)
+        order = T.TS.stop_order(key, main, mine["stop"]["evidence"], r.layout.run, family, previous,
                                 SA.R.digest(mine["stop"]["record"]), bytes.fromhex(mine["stop"]["read"]), T.AC.lms_verify)
         audit = SA.boundary_audit(previous, outcome)
-        lean = SA.across(mine, NS(layout=r.layout, stream=NS(log=log)), outcome)
+        lean = SA.V.lean("across", {**read, "family": family})
         assert "refused" not in lean, (name, lean)
         assert lean["logged"]["accepted"] is logged and lean["received"] == (0 if logged else None), (name, lean)
         assert lean["order"] == ({"accepted": True} if order is None else {"accepted": False, "why": _generic(order)}), (name, lean, order)

@@ -1,7 +1,5 @@
 """verity_vllm/properties/quarantine_lint.py — PROTECTED (gate G4, admission rules 1–2).  Static purity + identity lint of the
-quarantine registry.
-
-    uv run verity-vllm quarantine-lint [--root verity_vllm/program/quarantine] [--out quarantine_lint.json]
+quarantine registry: `lint(root)`.
 
 Rules (AST, no import of the checked modules):
   - forbidden imports: os, sys, time, datetime, random, secrets, pathlib, io, json, pickle, subprocess, socket, urllib,
@@ -17,17 +15,13 @@ Rules (AST, no import of the checked modules):
 from __future__ import annotations
 
 import ast
-import json
 import re
-import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.config import ROOT as REPO
-from verity_vllm.config import option
 from verity_vllm.program import quarantine as _quarantine
-from verity_vllm.properties.record import seal
+from verity_vllm.records.property_record import seal
 
 ROOT = Path(_quarantine.__file__).parent
 FORBIDDEN_IMPORTS = ("os", "sys", "time", "datetime", "random", "secrets", "pathlib", "io", "json", "pickle", "subprocess", "socket",
@@ -43,7 +37,6 @@ def lint_file(path: Path) -> dict[str, Any]:
     tree = ast.parse(src, str(path))
     problems: list[str] = []
     is_adapter = path.name.endswith("_difftest.py")
-    module_names = {n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and isinstance(getattr(n, "ctx", None), ast.Store)}
     semantic_id = None
     n_defs = 0
     for node in ast.walk(tree):
@@ -94,10 +87,7 @@ def _parents(tree: ast.AST, target: ast.AST) -> list[ast.AST]:
         if node is target:
             out.extend(chain)
             return True
-        for ch in ast.iter_child_nodes(node):
-            if walk(ch, chain + [node]):
-                return True
-        return False
+        return any(walk(ch, chain + [node]) for ch in ast.iter_child_nodes(node))
 
     walk(tree, [])
     return out
@@ -112,19 +102,3 @@ def lint(root: Path = ROOT) -> dict[str, Any]:
     return seal({"schema": "verity-gen/quarantine-lint/v1", "root": str(root), "n_files": len(files), "status": "pass" if ok else "fail",
                  "duplicate_semantic_ids": dup, "files": reports}, ok)
 
-
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    root: str = option("--root", default=str(ROOT))
-    out: str | None = option("--out", default=None)
-
-
-def main(a: Options) -> int:
-    rep = lint(Path(a.root))
-    if a.out:
-        Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
-    for r in rep["files"]:
-        if r["status"] != "pass":
-            print(f"[quarantine_lint] FAIL {r['file']}: " + "; ".join(r["problems"]), file=sys.stderr)
-    print(f"[quarantine_lint] {rep['status']}: {rep['n_files']} files" + (f", duplicate ids {rep['duplicate_semantic_ids']}" if rep["duplicate_semantic_ids"] else ""), file=sys.stderr)
-    return 0 if rep["status"] == "pass" else 1

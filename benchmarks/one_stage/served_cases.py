@@ -58,7 +58,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   Both composites name the policy among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`), and
   compose its v0, which publishes the division and its blocks' profiles, as a stated exception (`composite.EXCEPTIONS`).
   The policy's Lean package and the Python its check is held to are named by the module `POLICY`, loaded when this
-  case is asked for; on a tree that leaves the policy out (the public release) the case is refused saying so.
+  case is asked for; on a tree that leaves the policy out the case is refused saying so.
 * **PoUW's period case** (`period_case`, `PERIOD`: `verity/pouw/period/v1`, both composites' work subprotocol):
   `pouw_piece.py period`'s case and answer as it wrote them (``--period``; with ``--serve-dir``, `served_pouw.sh`'s
   ``D/private/pouw/period`` when it holds a case), taken once every window of the period names R as its Commit record
@@ -129,7 +129,7 @@ ROOT = Path(__file__).resolve().parents[2]
 V1 = R.PROTOCOL
 V1_LEAN = (VF.PACKAGE, "sampled-proofs-one-stage")
 SAMPLED = "verity/sampled-proofs/v1"
-SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/recursion/verifier/recursive", "vstar-recursive")
+SAMPLED_LEAN = (ROOT / "verity/protocols/proofs/spot_flock/verifier/lean", "vstar-recursive")
 #: `vstar-recursive`'s command for sampled proofs (`VStar.Recursive.Sampled.main`), ahead of ``check``
 SAMPLED_CMD = ("sampled",)
 #: The form remote's sampled proofs case names: one-stage v2's audit (`VStar.Recursive.Sampled.ONE_STAGE`)
@@ -137,8 +137,7 @@ ONE_STAGE = "one-stage"
 V2 = PF.V2
 INFERENCE_ONLY = "verity/inference-only/v0"
 #: the module beside this file that says where the tree holds the policy's check: its Lean package and executable
-#: (``LEAN``) and the Python that check is held to (``reference``). The public release leaves the policy out, and that
-#: module with it, so `policy` loads it by name
+#: (``LEAN``) and the Python that check is held to (``reference``), which `policy` loads by name
 POLICY = "inference_only_lean"
 PERIOD = PC.ID
 PEARL_PLUS = "verity/pouw/pearl-plus/v1"

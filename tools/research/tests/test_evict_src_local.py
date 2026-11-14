@@ -2,6 +2,9 @@
 red team's recheck of 437c8cf32, each of which deleted a tree with work in it; the rest check that
 what a ship and a test run leave behind (READY.json, build caches, fetched fixtures) doesn't pin a tree forever."""
 import json
+from pathlib import Path
+
+import pytest
 
 from research.store import evict as EV
 from test_evict_src import NOW, _age, _git, fake_proc, kept, node, run  # noqa: F401  (node is a fixture)
@@ -103,16 +106,23 @@ def test_LOW_a_sibling_tree_named_relatively_from_another_tree_or_from_src_keeps
 
 # ---- what a ship and a test run leave still lets a tree go -------------------------------------------------------------------
 
-def _ignoring(node, ignore: str, artifacts: dict | None = None) -> str:
+#: where a tree holds the registry: at the root, and where a tree shipped from a commit before the registry moved holds it.
+#: Spelled here, the second in two parts, so a rewrite of the registry's path that left the code one place fails these tests
+ROOT, BEFORE = Path("artifacts.json"), Path("fixtures", "artifacts.json")
+LAYOUTS = pytest.mark.parametrize("place", [ROOT, BEFORE], ids=["at-the-root", "under-fixtures"])
+
+
+def _ignoring(node, ignore: str, artifacts: dict | None = None, place: Path = ROOT, also: dict[Path, dict] | None = None) -> str:
+    """A shipped tree of a commit that ignores `ignore` and holds the registry `artifacts` at `place` (and each of `also`)."""
     from test_evict_src import tree
     work, gd = node.tmp / "work", node.root / "git" / "verity.git"
     _git(work, "checkout", "-q", "main")
     (work / ".gitignore").write_text(ignore)
     paths = [".gitignore"]
-    if artifacts is not None:
-        (work / "fixtures").mkdir(exist_ok=True)
-        (work / "artifacts.json").write_text(json.dumps(artifacts))
-        paths.append("artifacts.json")
+    for at, reg in ({} if artifacts is None else {place: artifacts, **(also or {})}).items():
+        (work / at).parent.mkdir(exist_ok=True)
+        (work / at).write_text(json.dumps(reg))
+        paths.append(at.as_posix())
     _git(work, "add", *paths)
     _git(work, "commit", "-q", "-m", "ignores")
     d = _git(work, "rev-parse", "HEAD")
@@ -123,10 +133,15 @@ def _ignoring(node, ignore: str, artifacts: dict | None = None) -> str:
     return d
 
 
-def test_build_caches_and_fetched_fixtures_under_ignored_paths_let_the_tree_go(node):
+@LAYOUTS
+def test_build_caches_and_fetched_fixtures_under_ignored_paths_let_the_tree_go(node, place):
+    """Wherever the tree holds its registry: one shipped from a commit before the registry moved to the root holds it under
+    `fixtures/`, and its fetched fixtures pin it no more than a newer tree's do."""
     d = _ignoring(node, ".venv/\n.lake/\n__pycache__/\n.hypothesis/\nbig/\nfx/\n",
-                  {"art:" + "1" * 64: "big/data.npz", "art:" + "2" * 64: "fx/tree", "previous": {"art:" + "1" * 64: ["art:" + "3" * 64]}})
+                  {"art:" + "1" * 64: "big/data.npz", "art:" + "2" * 64: "fx/tree", "previous": {"art:" + "1" * 64: ["art:" + "3" * 64]}},
+                  place)
     t = node.src / d
+    assert (t / place).is_file() and [p for p in (ROOT, BEFORE) if (t / p).exists()] == [place]
     for p in (".venv/bin/python", ".lake/build/x.olean", "pkg/__pycache__/m.cpython-312.pyc", "pkg/.hypothesis/.gitignore", "big/data.npz", "fx/tree/a/b.bin"):
         (t / p).parent.mkdir(parents=True, exist_ok=True)
         (t / p).write_text("regenerable")
@@ -134,8 +149,9 @@ def test_build_caches_and_fetched_fixtures_under_ignored_paths_let_the_tree_go(n
     assert d in deleted(run(node, origin=None))
 
 
-def test_an_ignored_directory_holding_a_fixture_and_something_else_keeps_the_tree(node):
-    d = _ignoring(node, "big/\n", {"art:" + "1" * 64: "big/data.npz"})
+@LAYOUTS
+def test_an_ignored_directory_holding_a_fixture_and_something_else_keeps_the_tree(node, place):
+    d = _ignoring(node, "big/\n", {"art:" + "1" * 64: "big/data.npz"}, place)
     t = node.src / d
     (t / "big").mkdir()
     (t / "big" / "data.npz").write_text("fixture")
@@ -143,6 +159,29 @@ def test_an_ignored_directory_holding_a_fixture_and_something_else_keeps_the_tre
     _age(t, 5)
     rep = run(node, origin=None)
     assert d not in deleted(rep) and any("ignored path" in w for w in kept(rep)[d]), kept(rep)[d]
+
+
+def test_a_tree_holding_the_registry_at_both_places_goes_by_what_either_registers(node):
+    """A research of either age may have fetched into it, each from the place it names: both registries' paths are fixtures."""
+    d = _ignoring(node, "big/\nfx/\n", {"art:" + "1" * 64: "big/data.npz"}, ROOT, {BEFORE: {"art:" + "2" * 64: "fx/tree"}})
+    t = node.src / d
+    for p in ("big/data.npz", "fx/tree/a/b.bin"):
+        (t / p).parent.mkdir(parents=True, exist_ok=True)
+        (t / p).write_text("fixture")
+    _age(t, 5)
+    assert d in deleted(run(node, origin=None))
+
+
+def test_an_ignored_file_neither_place_registers_keeps_the_tree(node):
+    d = _ignoring(node, "big/\nfx/\nout/\n", {"art:" + "1" * 64: "big/data.npz"}, ROOT, {BEFORE: {"art:" + "2" * 64: "fx/tree"}})
+    t = node.src / d
+    for p in ("big/data.npz", "fx/tree/a/b.bin", "out/result.json"):
+        (t / p).parent.mkdir(parents=True, exist_ok=True)
+        (t / p).write_text("a run's output" if p.startswith("out/") else "fixture")
+    _age(t, 5)
+    rep = run(node, origin=None)
+    assert d not in deleted(rep), "an ignored file no registry of the tree registers went with it"
+    assert kept(rep)[d] == ["1: not recoverable on the node: 1 ignored path(s) no build regenerates, e.g. 'out/'"]
 
 
 def test_a_ship_s_own_exclude_and_config_let_the_tree_go(node):

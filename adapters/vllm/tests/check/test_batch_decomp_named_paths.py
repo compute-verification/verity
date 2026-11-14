@@ -16,6 +16,8 @@ import pytest
 from tests.check import test_batch_decomp_e2e as e2e
 from verity_vllm.check.match import batch_decomp as bd
 from verity_vllm.check.match import decomp_profile
+from verity_vllm.check.match import global_match as gm
+from verity_vllm.check.match import global_match_fast as gmf
 from verity_vllm.check.match import program_compare as C
 
 memory = e2e.memory                          # the toy's fixtures, under their own names
@@ -82,11 +84,11 @@ def test_a_criterion_that_is_neither_sequence_nor_dag_is_refused(tmp_path):
         bd.decompose(str(tmp_path), [], within_step="multiset")
 
 
-def test_a_view_with_no_recorded_rows_is_refused_as_the_fold(monkeypatch, tmp_path):
-    """A derived Program's view has none: passed as the fold it is refused by name, before any instance is attributed."""
+def test_a_view_with_no_recorded_rows_fails_as_the_fold_where_its_rows_are_read(monkeypatch, tmp_path):
+    """A derived Program's view has none: passed as the fold it fails before any instance is attributed, with Python's own error."""
     B = _two_requests()
     B.oracle_rows = None
-    with pytest.raises(ValueError, match="the view passed as the fold has no instances.jsonl rows"):
+    with pytest.raises(TypeError, match="'NoneType' object is not iterable"):
         _decompose(monkeypatch, tmp_path, B, {0: STEP0})
 
 
@@ -293,3 +295,116 @@ def test_the_profile_is_the_same_document_through_the_hook(memory, tmp_path, der
     prof = json.loads(profile_out.read_text())
     assert _how_the_requests_ran(prof) == "forked" and [p["request_id"] for p in prof["requests"]] == ["r0", "r1"]
     assert res["verdict"] == "PASS" and all("_profile" not in e for e in res["requests"])
+
+
+def test_a_profile_whose_memory_read_fails_says_so_in_place_of_the_two_figures(memory, tmp_path, derived_is_a_fold, profile_out, monkeypatch):
+    """The profile's peak memory is the resource usage of the process and of its children.  Where that read raises, the profile
+    carries the error in place of the two figures and is written all the same, and the document is the one of a run that read it."""
+    import resource
+
+    def refused(who):
+        raise OSError(f"no resource usage of {who}")
+    d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
+    derived = [e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"), e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
+    read = bd.decompose(d, derived)
+    assert "max_rss_error" not in json.loads(profile_out.read_text())
+    with monkeypatch.context() as m:
+        m.setattr(resource, "getrusage", refused)
+        res = bd.decompose(d, derived)
+    prof = json.loads(profile_out.read_text())
+    assert prof["max_rss_error"] == f"OSError('no resource usage of {resource.RUSAGE_SELF}')"
+    assert "max_rss_mib_parent" not in prof and "max_rss_mib_children" not in prof
+    assert (prof["verdict"], prof["seconds"], _how_the_requests_ran(prof)) == ("PASS", res["seconds"], "inline")
+    assert _same_but_time(res, read)
+
+
+def test_the_profiles_wrappers_on_the_view_hand_on_what_they_are_given_and_count_each_read_once(profile_out, monkeypatch):
+    """The three reads of an operand the profile wraps on `RootView`: each wrapper passes the view, the run or progression and
+    `unfold` to the read it wraps and returns its answer; a progression read a run at a time counts its runs; a second
+    installation wraps nothing again."""
+    seen: list[tuple] = []
+
+    def stand_in(name: str):
+        def read(self, x, unfold):
+            seen.append((name, self, x, unfold))
+            return [name]
+        return read
+
+    for name in ("_per_run", "_srcP", "_src"):
+        monkeypatch.setattr(C.RootView, name, stand_in(name))
+    decomp_profile._install_profile_counters()
+    decomp_profile._install_profile_counters()
+    view, run, progression = object(), ("n", 7, 0, 4), ("n", (7, 0, 4), (1, 0, 0), 3)
+    answers = [C.RootView._per_run(view, progression, True), C.RootView._srcP(view, progression, False), C.RootView._src(view, run, True)]
+    assert answers == [["_per_run"], ["_srcP"], ["_src"]]
+    assert seen == [("_per_run", view, progression, True), ("_srcP", view, progression, False), ("_src", view, run, True)]
+    assert decomp_profile._profile_counters == {"per_run_progressions": 1, "per_run_runs": 3, "srcP_calls": 1, "src_calls": 1}
+
+
+def test_the_profile_counts_no_run_for_an_operand_that_has_none(monkeypatch, tmp_path, profile_out):
+    """An operand of no runs counts none, in the request's instances and in its component's: stubs of the fold's view and of the
+    component, one request in one engine step, the comparison stated equal."""
+    one = {"workload": {"requests": HEADER["workload"]["requests"][:1]}}
+    steps = {0: {"rows": [(R0, 0), (R0, 1), (R0, 2)], "logits_rows": [(R0, 2)]}}
+    B = _fold([(2, EMB, [P0, [("n", 1, 0, 10)], []]), (3, SELECT, [[], [("n", 2, 0, 2)]])], [(2, 0, 0, 1, None), (3, 0, 0, 1, None)])
+    B.inputs, B.n_input_nodes = {0: ("Input", 3), 1: ("Input", 10)}, 2
+    for o in B.oracle_rows:
+        o["node"] += 1                                               # two input nodes here, not three
+    d = tmp_path / "LP3_T0"
+    d.mkdir()
+    (d / "construction_manifest.json").write_text(json.dumps({"structural_inputs": {"LP": 3, "T": 0}}))
+    monkeypatch.setattr(bd, "read_steps", lambda p: (one, steps))
+    component = types.SimpleNamespace(inst=[{"spec": "X_v1", "args": [[], [("n", 0, 0, 1)], []]}], steps=[[0]], digest="component")
+    ops = dataclasses.replace(_criteria_ops(True, True), load_derived=lambda d, label: component)
+    res = bd.decompose(str(tmp_path), [str(d)], log_path="ignored", oracle=B, ops=ops)
+    (p,) = json.loads(profile_out.read_text())["requests"]
+    assert res["verdict"] == "PASS" and (p["request_id"], p["sequence_equal"]) == (R0, True)
+    assert (p["p_runs_total"], p["a_runs_total"]) == (3, 1)        # the prompt, the weights and the select's one read; the component's one
+
+
+def _counted(phases: dict) -> dict:
+    """A profile's phases without their wall seconds: what the memo and the wrappers on `RootView` counted in each."""
+    return {name: {k: v for k, v in phase.items() if k != "seconds"} for name, phase in phases.items()}
+
+
+def test_under_the_fast_operations_the_profile_counts_the_records_runs_in_progressions_and_adds_the_memos_counters(
+        memory, tmp_path, profile_out, monkeypatch):
+    """`verity_vllm.check.match.decomp_profile` under the Match's fast operations, whose views hold an operand as progressions: the
+    document is the record's, a request's operand runs count the same in either form, and each phase states what the memo and the
+    wrappers counted in it, the same for a request run in this process and for one run on a worker."""
+    d, _ = e2e.fold_batched([e2e.R0, e2e.R1], tmp_path / "b2")
+    derived = [e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"), e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
+    res = bd.decompose(d, derived, ops=gm.match_ops(fast=False))
+    rec = json.loads(profile_out.read_text())
+    profs = {}
+    for workers in ("1", "2"):
+        monkeypatch.setenv(gmf.WORKERS_ENV, workers)
+        gmf.enter()
+        try:
+            assert _same_but_time(res, bd.decompose(d, derived, ops=gm.match_ops(fast=True))) and res["verdict"] == "PASS"
+        finally:
+            gmf.leave()                      # as `global_match.check` leaves them: every memo released
+        profs[workers] = json.loads(profile_out.read_text())
+    here, on_workers = profs["1"], profs["2"]
+    assert (rec["fold_compact"], here["fold_compact"], on_workers["fold_compact"]) == (False, True, True)
+    assert (_how_the_requests_ran(rec), _how_the_requests_ran(here), _how_the_requests_ran(on_workers)) == ("inline", "forked", "forked")
+    # a request's operand runs, counted a tuple a run in the record's form and by each progression's count in the compact one
+    runs = [(p["request_id"], p["p_runs_total"], p["a_runs_total"]) for p in here["requests"]]
+    assert runs == [(q["request_id"], q["p_runs_total"], q["a_runs_total"]) for q in rec["requests"]] and all(n > 0 for _, n, _ in runs)
+    for p, q in zip(here["requests"], rec["requests"]):
+        compare, was = _counted(p["phases"])["compare_steps"], _counted(q["phases"])["compare_steps"]
+        assert _counted(p["phases"])["projection_build"] == {"fast_stats": {"projection_built": 1}}
+        assert compare["fast_stats"]["compare_steps_miss"] == 1 and all("fast_stats" not in phase for phase in q["phases"].values())
+        # the record's runs are read one at a time; a progression is read whole, and a run at a time only where it cannot be
+        assert set(was["counters"]) == {"src_calls"} and compare["counters"]["srcP_calls"] > 0
+    per_run = [{k: v for k, v in _counted(p["phases"])["compare_steps"]["counters"].items() if k.startswith("per_run")} for p in here["requests"]]
+    assert per_run == [{"per_run_progressions": 2, "per_run_runs": 4}, {}]      # r0's two progressions of two runs each; r1 has none
+    # in this process the run's third phase holds the sum of its requests' counts; on workers the parent's wrappers read nothing
+    third, third_on_workers = (_counted(prof["phases"])[list(prof["phases"])[2]] for prof in (here, on_workers))
+    summed: collections.Counter[str] = collections.Counter()
+    for p in here["requests"]:
+        for phase in p["phases"].values():
+            summed.update(phase.get("counters", {}))
+    assert third["counters"] == dict(summed) and third["fast_stats"]["projection_built"] == 2
+    assert "counters" not in third_on_workers and "projection_built" not in third_on_workers["fast_stats"]
+    assert [_counted(p["phases"]) for p in on_workers["requests"]] == [_counted(p["phases"]) for p in here["requests"]]

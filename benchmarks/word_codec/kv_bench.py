@@ -47,7 +47,7 @@ sys.path.insert(0, str(HERE))
 import cuda_lib  # noqa: E402
 import kv as K  # noqa: E402
 
-from verity.hardware.cards import load  # noqa: E402
+from verity.device import load_card  # noqa: E402
 
 SEED = hashlib.sha256(b"verity/word-codec/kv/bench/seed").digest()
 SPIN_CYCLES = 20_000_000
@@ -69,7 +69,7 @@ ATTN_RTOL = 1e-3
 ATTN_FORMS = {1: "phased", 2: "ws"}  # kv_attn's encoded forms: decode and attention in turn, or in their own warps
 NATIVE_70B_S = 0.0457  # bench.py's tuned FP8 linears step at 70B, batch 1: x's denominator
 CLOCK_LOCKED_MHZ = 2092  # the nodes' locked SM clock (their clock-locking unit)
-CLOCK_MAX_MHZ = load("rtx-pro-6000-server")["clock"]["sm"]["value"]  # the card's max
+CLOCK_MAX_MHZ = load_card("rtx-pro-6000-server")["clock"]["sm"]["value"]  # the card's max
 RATES_SCHEMA = "verity/codec-frontier-rates/v0"
 
 
@@ -686,7 +686,7 @@ def write_result(res: dict, libs: list[Lib], out_dir: Path) -> None:
     run_dir, run_id = os.environ.get("RESEARCH_RUN_DIR"), os.environ.get("RESEARCH_RUN_ID")
     if not run_dir or not run_id:
         return
-    ms = [{"name": "read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
+    ms = [{"name": "memory-accounting/kv-codec.read", "value": res["read"]["gbps"], "unit": "GB/s"}] if "read" in res else []
     for b, nat in res.get("native", {}).items():
         ms.append({"name": f"native70b_m{b}_step", "value": nat["step_s"], "unit": "s"})
     for lib in libs:

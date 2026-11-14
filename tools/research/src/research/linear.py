@@ -29,9 +29,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, timezone, UTC
 from pathlib import Path
 from typing import Any, Callable
+
+from .timefmt import PACIFIC
 
 API = "https://api.linear.app/graphql"
 TOKEN_URL = "https://api.linear.app/oauth/token"
@@ -51,6 +53,7 @@ FROM_LABEL = "from:"                                             # the handle th
 STRAY_NOTE = (f"Canceled by the Linear audit's stray rule: an ask filed in another lane's team that nobody took up (a project "
               f"and a due date) or touched for {STRAY_H} h. If it is still wanted, its owner reopens it with a project and a date.")
 AUDIT_PAGE = 25                                                  # first: 50 with the nested fields is "Query too complex"
+COMMENT_PAGE = 250                                               # Linear's largest page; `comments` asks for few fields
 AUDIT_CHILDREN = 50                                              # a parent's most recently updated children the audit reads
 LANE_LABEL = "lane:"                                             # a handle with no team of its own marks its issues so
 NO_LANE = "-"
@@ -205,6 +208,20 @@ def _epoch(stamp: str | None) -> float | None:
     return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp() if stamp else None
 
 
+# A host with no tz database reads the team's days at PST, an hour off in summer.
+_TEAM_TZ = PACIFIC or timezone(timedelta(hours=-8))
+
+
+def team_day(now: float) -> str:
+    """The date at `now` where the team sets its dates (Pacific), as Linear writes a due or target date: YYYY-MM-DD."""
+    return datetime.fromtimestamp(now, _TEAM_TZ).date().isoformat()
+
+
+def day_end(day: str) -> float:
+    """When the Pacific day `day` (YYYY-MM-DD) ends, as an epoch."""
+    return (datetime.fromisoformat(day).replace(tzinfo=_TEAM_TZ) + timedelta(days=1)).timestamp()
+
+
 def asker_label(name: str) -> str:
     """The label of an ask whose outcome the person `name` asked for: `asker:daniel`."""
     who = name.strip().lower()
@@ -223,6 +240,15 @@ def _lane_label(i: dict) -> str | None:
 
 def _lane(i: dict, owners: dict[str, str]) -> str:
     return _lane_label(i) or owners.get(i["team"]["key"]) or NO_LANE
+
+
+def lane(i: dict, reg: dict) -> str | None:
+    """The handle an issue (with its `team { key }` and `labels { nodes { name } }`) belongs to: its `lane:` label's when
+    the Slack registry `reg` has that handle, else its team's handle (`owners`), else None."""
+    label = _lane_label(i)
+    if label and any(h["handle"] == label for h in reg.get("handles", [])):
+        return label
+    return owners(reg).get(i["team"]["key"])
 
 
 def ask_open(a: dict) -> bool:
@@ -390,12 +416,12 @@ class Linear:
 
     def current_milestone(self, team_id: str) -> dict | None:
         """The milestone an ask to the team (its id) lands on: of the milestones not yet past (a target date today or later,
-        UTC) in the team's active projects, the earliest; a tie goes to the one earlier in its project's ladder, then to the
+        Pacific) in the team's active projects, the earliest; a tie goes to the one earlier in its project's ladder, then to the
         project first by name.  {id, name, targetDate, sortOrder, project: {id, name}}, or None when no active project of
         the team has one (an undated milestone has no place on the ladder)."""
         q = ('query($id: String!) { team(id: $id) { projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name targetDate sortOrder } } } } } }")
-        today = datetime.fromtimestamp(self.now(), UTC).date().isoformat()
+        today = team_day(self.now())
         ms = [{**m, "project": {"id": p["id"], "name": p["name"]}} for p in self.gql(q, {"id": team_id})["team"]["projects"]["nodes"]
               for m in p["projectMilestones"]["nodes"] if (m.get("targetDate") or "") >= today]
         return min(ms, key=lambda m: (m["targetDate"], m.get("sortOrder") or 0, m["project"]["name"]), default=None)
@@ -572,15 +598,16 @@ class Linear:
               waiting: Callable[[list[int]], bool] | None = None) -> list[dict]:
         """One pass over the issues not closed (LIVE_TYPES), of `teams` (names or keys) or every team: each finding
         {issue, url, title, team, lane, state, kind, fix}, by lane, issue and kind (AUDIT_KINDS).  These hold in Backlog too:
-        - lapsed: its milestone's target date is before today (UTC).
+        - lapsed: its milestone's target date is before today (Pacific).
         - stray: labelled `from:<handle>` in another lane's team (the team has a handle, and the issue's lane isn't that one),
           not a person's ask, nobody took it up (it isn't started, and lacks a project or a due date) and nothing touched it
           (an update, a comment, a child's) for STRAY_H.  `close_strays` closes these; the audit only reports them.
-        - unheard: filed by a person (a creator and no bot), not yet started, with no comment UNHEARD_H after it was filed.
+        - unheard: filed by a person (a creator and no bot) and not assigned to that person (a note to themself), not yet
+          started, with no comment UNHEARD_H after it was filed.
           The sweep rings its lane for it, so no lane subscribes to its team's issue events, which wake it for its own.
         The rest hold on open issues (OPEN_TYPES), Backlog being where an issue that serves no goal waits:
         - orphan: in no project, ORPHAN_H after it was filed.  milestone: in a project with milestones, with none set.
-        - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (UTC).
+        - undated: Todo, In Progress or In Review with no due date.  overdue: due before today (Pacific).
         - quiet: In Progress with no comment and no start for QUIET_H (the last comment's and the start's times, not updatedAt,
           which bulk edits move).  stale: Todo neither updated nor commented on for STALE_D days (a comment leaves
           updatedAt as it was).  A parent counts its children's (AUDIT_CHILDREN of them) as its own: each one's updatedAt,
@@ -600,11 +627,11 @@ class Linear:
         on landing: it is neither overdue nor slipped, since the wait is the landing queue's.  Each such issue is in `landing`
         afterwards ({issue, lane, due, late_h}), for the one line the audit prints about them."""
         now, owners = self.now() if now is None else now, owners or {}
-        today = datetime.fromtimestamp(now, UTC).date().isoformat()
+        today = team_day(now)
         f: dict = {"state": {"type": {"in": list(LIVE_TYPES)}}}
         if teams:
             f["team"] = _team_filter(teams)
-        issues = self._paged("id identifier title url dueDate startedAt updatedAt createdAt creator { name } botActor { name } "
+        issues = self._paged("id identifier title url dueDate startedAt updatedAt createdAt creator { name } assignee { name } botActor { name } "
                              "state { name type } team { key } "
                              "project { id name } projectMilestone { id name targetDate } labels { nodes { name } } "
                              "comments(first: 1, orderBy: createdAt) { nodes { createdAt } } "
@@ -635,14 +662,15 @@ class Linear:
                          and all(p["status"] == "open" for p in prs) and waiting(numbers))
             if lands:
                 due = i.get("dueDate")
-                late = (now - datetime.fromisoformat(due).replace(tzinfo=UTC).timestamp()) / 3600 - 24 if due and due < today else 0
+                late = (now - day_end(due)) / 3600 if due and due < today else 0
                 self.landing.append({"issue": ident, "lane": lane, "due": due, "late_h": max(late, 0)})
             entered = reviewed.get(i["id"]) or _epoch(i.get("startedAt")) or _epoch(i["createdAt"])
             landed = (state in ("In Progress", "In Review") and prs and all(p["status"] in ("merged", "closed") for p in prs)
                       and not (last and closed and last > closed))
             person = (i.get("creator") or {}).get("name") if not i.get("botActor") else None
+            own_note = bool(person) and person == (i.get("assignee") or {}).get("name")
             found = {
-                "unheard": bool(person) and i["state"]["type"] in ("triage", "backlog", "unstarted") and not last
+                "unheard": bool(person) and not own_note and i["state"]["type"] in ("triage", "backlog", "unstarted") and not last
                 and now - _epoch(i["createdAt"]) > UNHEARD_H * 3600
                 and f"filed by {person} {(now - _epoch(i['createdAt'])) / 3600:.0f} h ago with no answer: take it up (a comment "
                     f"and a state, `research msg linear comment {ident} TEXT --as LANE`), or say there why not",
@@ -754,6 +782,20 @@ class Linear:
             issues += page["nodes"]
             if not page["pageInfo"]["hasNextPage"]:
                 return issues
+            after = page["pageInfo"]["endCursor"]
+
+    def comments(self, since: str) -> list[dict]:
+        """Every comment created after `since` (UTC ISO), on every team's issues these credentials read, COMMENT_PAGE a page:
+        {id, createdAt, body, user {name}, botActor {userDisplayName}, issue {identifier, url}}."""
+        q = ("query($f: CommentFilter!, $after: String) { comments(filter: $f, first: " + str(COMMENT_PAGE) + ", after: $after) "
+             "{ pageInfo { hasNextPage endCursor } nodes { id createdAt body user { name } botActor { userDisplayName } "
+             "issue { identifier url } } } }")
+        out, after = [], None
+        while True:
+            page = self.gql(q, {"f": {"createdAt": {"gt": since}}, "after": after})["comments"]
+            out += page["nodes"]
+            if not page["pageInfo"]["hasNextPage"]:
+                return out
             after = page["pageInfo"]["endCursor"]
 
     def comment(self, issue_id: str, sender: str, body: str) -> None:

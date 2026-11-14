@@ -1,0 +1,9 @@
+{
+ "held": {
+  "neither a Call of a served Program (targets.call_families), a serving cut (serving_templates) nor PoUW's: a subcircuit proved inside its callers' units, or a whole step's composition, which no window stages whole": [
+   "FlashMlaDecodeHead_v1{SPLITS=(0,1,3),D=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}",
+   "FlashMlaSplit_v1{NB=2,D=512,BN=64,PARTIAL=False,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}",
+   "FlashMlaSplit_v1{NB=2,D=512,BN=64,PARTIAL=True,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.04419417382415922}"
+  ]
+ }
+}
