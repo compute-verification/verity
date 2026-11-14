@@ -34,6 +34,14 @@ the challenger's host: the two sides and their frames, the request and its ids (
 record's verdicts: the wire (`OP_CHALLENGE`, `OP_PING`, `OP_CLOSE`, `HEADER`), `audit`, `calibrate`, `judge`, `verdict`
 and `lean_verdict`, and the clocks, counters and parameters a harness reads beside them.
 
+What leaves the challenger's host goes into the node that started its party. `challenger_party` answers on two
+channels only: its stdout, which goes to the node that started it (the salt's source, `{"listening": PORT}`, the report
+with the release, or a refusal), and the one connection its prover makes (the indices and the end frame). A refusal
+names the field and the rule the request breaks and quotes none of the request's bytes (`Refusal`, `setup_of`). Nothing
+else of a party leaves its host: its key, session log, salt log and kept setups stay in `DIR`; the auditor host's gate
+keeps each party's log for root on the host and serves it to no ssh caller; and it starts a party only for a caller
+whose address is a registered node's (`verity/protocols/accounting/poub/device/live_verifier/README.md`).
+
 Two files are named `timed_audit.py`, and they are two things. This directory's is the timed audit as the memory
 challenger runs it: the client of a responder's wire, the record it writes and `verdict`, the verdict on that record in
 Python, which is the reference. `verity/protocols/accounting/pous/verifier/check/timed_audit.py` is the Python beside PoUS's Lean

@@ -12,7 +12,7 @@ id (`push --preserve` on request), rewrite the entry, and record the superseded 
 put or written when every entry already hashes to its id.  `dry_run` computes and reports, writes nothing.
 
 An entry is *tracked* (git holds its bytes: the small ones) or *fetched* (its path is gitignored and `research data fetch-fixtures`
-materialises it: everything over `tests/test_repository.py`'s 256 KiB cap).  `fetch_registry` makes the fetched entries under the
+materialises it: everything over `tests/test_repository.py`'s 256 KiB limit).  `fetch_registry` makes the fetched entries under the
 given paths present and exactly their ids (a tree's directory holds its files and nothing else), fetching only what is missing
 through `fetchset`, and never writes over a file git tracks.  `export` copies every entry, `previous` included, to the public
 export, and `hydrate_stubs` puts the bytes back where the history rewrite left a stub (`STUB`).

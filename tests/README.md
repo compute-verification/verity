@@ -40,6 +40,12 @@ one entry each, or one line of its `held` table naming the workload of record th
 superseded version with neither fails, and so does a line for a version that is gone. The same gate reports a change that
 leaves its entries more than it found.
 
+`lint/allowlists/repo_python_verdicts.json` is the places where Python can accept, a reading's list, one entry a site: a
+file, the function a line is in, that line's text and a digest of the function (`test_repo_python_verdicts.py`). It is
+exact and only shrinks: a listed line that is not in its file once fails, and a listed function that changed since it
+was read warns. It looks for no place outside the list. `--record` rewrites each entry's function and digest from the
+tree, `--move OLD NEW` follows a moved file, and `--prune` deletes the entries whose file is no longer tracked.
+
 ## Bookkeeping
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:

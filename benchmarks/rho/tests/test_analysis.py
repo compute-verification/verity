@@ -3,6 +3,7 @@ import math
 import os
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -224,6 +225,29 @@ def test_run_prints_one_overhead_with_its_padded_size_ratio_and_the_attack_in_a_
     assert "hi" not in record and "lo" not in record
 
 
+def test_run_lists_omega_max_and_mu_where_the_serving_cut_sets_the_bound(tmp_path, monkeypatch, capsys):
+    """A lower bound the serving cut sets (`onsite-h200-kimi`, with `bounds.lock_only` off: the classes whose cap the
+    serving cut sets, `fanout-priced` and `fanout-split`, each cite a `draft:` statement of their own) rests on its
+    structure's `ω_max` and `μ`, its boundary term's: `rho.md` names both declarations and `rho.json`'s structure record
+    holds both values. A remote bound has no serving cut, so its text names neither."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    import run
+
+    monkeypatch.setattr(figures, "render", lambda reg, out, names, targets: {})
+    monkeypatch.setenv("OUT", str(tmp_path))
+    monkeypatch.setattr(sys, "argv", ["run.py", "--target", "10", "--scenario", "onsite-h200-kimi",
+                                      "--scenario", "reference-remote-h200", "--set", "bounds.lock_only=false"])
+    run.main()
+    out = capsys.readouterr().out
+    onsite, remote = (out.split(f"\n## {n}\n", 1)[1].split("\n## ", 1)[0]
+                      for n in ("onsite-h200-kimi", "reference-remote-h200"))
+    for text in ((tmp_path / "rho.md").read_text(), onsite):
+        assert "`structure.reference.omega_max`" in text and "`structure.reference.mu`" in text
+    assert "`structure.reference.mu`" not in remote
+    record = json.loads((tmp_path / "rho.json").read_text())["scenarios"]["onsite-h200-kimi"]["structure"]
+    assert (record["omega_max"], record["mu"]) == (REG["structure.reference.omega_max"], REG["structure.reference.mu"])
+
+
 def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatch, capsys):
     """The per-server bound at W63 (`onsite-w63`): 91.1 kbit/s a server over a 32-bucket link-window, intake 0.0282 at
     the reference policy, labelled the honest-δ form with an incorrect ingress unit's 356,592 bits excluded (and 0 when
@@ -281,6 +305,51 @@ def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices
         assert x["without_hosts"] <= x["slowdown"]
         assert [r["decades"] for r in x["ranking"]] == sorted((r["decades"] for r in x["ranking"]), reverse=True)
         assert any(r["what"] == "draft:no-straddle" for r in x["ranking"])
+
+
+@pytest.fixture
+def result_here(monkeypatch):
+    """The run's result goes to the directory a test names, under a fixed host stamp: the kit's asks nvidia-smi and git."""
+    from verity_bench import kit
+
+    for name in ("OUT", "RESEARCH_RUN_ID", "RESEARCH_RUN_DIR"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(kit, "host_stamp", lambda: {"commit": None})
+    monkeypatch.setattr(sys, "path", list(sys.path))
+
+
+def test_periods_writes_the_onsite_lower_bound_under_its_metrics_id(tmp_path, monkeypatch, capsys, result_here):
+    """The onsite scenario's lower bound over a year of the world's compute goes into the run's result under the id
+    `metrics.toml` declares, modeled, in the row's unit, as the run's one measurement: the other fleets and periods
+    stay in `periods.json`."""
+    import periods
+
+    (row,) = tomllib.loads((Path(periods.__file__).parent / "metrics.toml").read_text())["metric"]
+    monkeypatch.setattr(sys, "argv", ["periods.py", "--scenario", periods.METRIC_SCENARIO, "--out", str(tmp_path)])
+    periods.main()
+    capsys.readouterr()
+    rows = json.loads((tmp_path / "periods.json").read_text())["rows"]
+    (x,) = (x for x in rows if (x["fleet"], x["period"]) == ("world-h200", "year"))
+    (got,) = json.loads((tmp_path / "result.json").read_text())["measurements"]
+    assert len(rows) == len(periods.FLEETS) * len(periods.PERIODS)
+    assert (got["name"], got["value"], got["unit"], got["mark"], got["period"], got["over"]) == (
+        row["id"], x["slowdown"], row["unit"], "modeled", "year", "world")
+
+
+def test_periods_writes_no_measurement_off_the_registry_or_without_the_onsite_scenario(tmp_path, monkeypatch, capsys,
+                                                                                       result_here):
+    """A run with `--set` (even at a value the registry has), `--bounds` or `--measured` gives no lower bound of the
+    registry as it is, and one without the onsite scenario gives none of its: none writes a measurement."""
+    import periods
+
+    onsite = ["--scenario", periods.METRIC_SCENARIO]
+    for i, args in enumerate(([*onsite, "--set", "bounds.lock_only=true"], [*onsite, "--bounds", "cover"],
+                              [*onsite, "--measured", "smollm2-135m-step"], ["--scenario", "reference-remote-h200"])):
+        out = tmp_path / str(i)
+        monkeypatch.setattr(sys, "argv", ["periods.py", *args, "--out", str(out)])
+        periods.main()
+        assert (out / "periods.json").is_file() and not (out / "result.json").exists()
+    capsys.readouterr()
 
 
 def test_periods_sets_proofs_sampled_beside_every_unit_proved(monkeypatch):

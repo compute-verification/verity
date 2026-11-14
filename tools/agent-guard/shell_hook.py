@@ -116,6 +116,15 @@ still queued when the agent's turn ends is not delivered then (the stop hook, `s
 follow-up, and no delivery relies on that) and may be gone by the agent's next turn, since a cloud VM does not keep `/tmp`
 across a long pause: an agent whose turn has ended is resumed with the text itself.
 
+It tells a cloud agent whose turn runs on another model than it was launched on (`model_reason`): a turn the agent's own
+timer or a subscription starts can take another model than its launcher named, and nothing in the turn says so. Models
+are compared by family (`settings.model_family`), never by effort. The first command of such a turn that would pass is
+refused once, naming both models and the two ways on: hand the turn's job to a local child started with `Task` and
+`claude-opus-5-5-high` (or `claude-sonnet-5-5-high`), or end the turn and be resumed by the lead; the rest of
+the turn's commands pass, and `AGENT_GUARD_MODEL_OK=1` in that first command passes it too. The launch model is the one
+the agent's first turn in this machine's event log names, so a machine a wake or a resume booted, whose log holds no
+launch turn, takes its first turn there for the launch.
+
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
 every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
@@ -123,6 +132,7 @@ cloud worker's) otherwise merges each lean-audit.json line by line and shows con
 merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
 Security's lock to one `reads` group when an old branch merged main.
 """
+import fcntl
 import fnmatch
 import glob
 import importlib
@@ -136,7 +146,8 @@ import sys
 import time
 from pathlib import Path
 
-from settings import INBOX, INBOX_POLL_S, record_event
+from settings import (EVENT_LOG, EVENT_VALUE_MAX, INBOX, INBOX_POLL_S, MODEL_OK, MODEL_PASS, MODEL_REFUSAL,
+                      agent_events, launch_model, model_family, record_event)
 
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
@@ -1081,7 +1092,8 @@ def weight(text: str) -> int:
     """The heaviest simple command of `text` run on this VM: a command through `research run` or over ssh runs elsewhere."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split weighs nothing ({e})", file=sys.stderr)
         return 0
     return max((weight_words(words) for words, _ in commands), default=0)
 
@@ -1095,23 +1107,25 @@ def available() -> tuple[float, float] | None:
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", meminfo.read_text(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
-    except (OSError, KeyError, ValueError):
+    except (OSError, KeyError, ValueError) as e:
+        print(f"shell_hook: {meminfo} unread, so memory is not known ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     # the balloon's pages are counted as used, but the hypervisor hands them back as the VM asks for memory
     if (vmstat := meminfo.with_name("vmstat")).is_file():
         v = dict(re.findall(r"^(balloon_inflate|balloon_deflate) (\d+)$", vmstat.read_text(), re.M))
         avail = min(total, avail + max(0, int(v.get("balloon_inflate", 0)) - int(v.get("balloon_deflate", 0))) * 4096)
     try:
-        rel = open("/proc/self/cgroup").read().split("::", 1)[1].strip()
+        rel = open("/proc/self/cgroup").read().partition("::")[2].strip()
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
-        limit = open(f"{cg}/memory.max").read().strip()
+        limit = open(f"{cg}/memory.max").read().strip() if rel and os.path.exists(f"{cg}/memory.max") else "max"
         if limit != "max" and int(limit) < total:
             meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
             avail = min(meminfo_avail, total - used)        # stands when memory.stat can't be read
             cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M)).get("inactive_file", 0))
             avail = min(meminfo_avail, total - max(0, used - cache))
-    except (OSError, IndexError, ValueError):
-        pass
+    except (OSError, ValueError) as e:
+        print(f"shell_hook: the cgroup's memory unread, so what was read before stands ({type(e).__name__}: {e})",
+              file=sys.stderr)
     return avail, total
 
 
@@ -1187,7 +1201,8 @@ def blocks_text(text: str) -> float:
     """The longest any simple command of `text` plainly blocks for; one sent to the background (`&`) blocks nothing."""
     try:
         commands = words_of(text)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split blocks for no time ({e})", file=sys.stderr)
         return 0.0
     return max((blocks_words(words) for words, op in commands if op != "&"), default=0.0)
 
@@ -1291,7 +1306,8 @@ def checkout_reason(command: str, conversation: str, cwd: str) -> str | None:
     worktree_guard = guard()
     try:
         raw, (dirs, _) = flattened(command), cd_dirs(command, cwd)
-    except ValueError:
+    except ValueError as e:
+        print(f"shell_hook: a command the hook can't split passes the checkout guard ({e})", file=sys.stderr)
         return None
     next_ok = [assigned(w, "AGENT_GUARD_PUSH_NEXT_OK") for w in raw]
     return worktree_guard.reason([unwrap(w) for w in raw], conversation, cwd, next_ok, git_env(raw), dirs)
@@ -1346,9 +1362,12 @@ def delivery(conversation: str) -> str | None:
         return None
     box = os.path.join(INBOX, conversation + ".md")
     taking = box + ".taking"
+    if not os.path.exists(box):
+        return None
     try:
         os.replace(box, taking)
-    except OSError:
+    except OSError as e:
+        print(f"shell_hook: {box} not taken, so not delivered now ({type(e).__name__}: {e})", file=sys.stderr)
         return None
     try:
         with open(taking) as f:
@@ -1358,6 +1377,57 @@ def delivery(conversation: str) -> str | None:
     finally:
         os.remove(taking)
     return text if text.strip() else None
+
+
+#: a cloud agent's or a subagent's conversation id (`task_hook.AGENT_ID`); a local session's user picks its model turn
+#: by turn
+CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+MODEL_TOLD = ("Refused once, only to tell you (tools/agent-guard/shell_hook.py): this turn runs on `{model}`, and you "
+              "were launched on `{launch}`, the model your first turn in this machine's event log names. A turn your own "
+              "timer or a subscription starts can take another model than your launcher named. Two ways on: hand this "
+              "turn's job to a child started with Task and `model: claude-opus-5-5-high` (or `claude-sonnet-5-5-high` "
+              "for a fully specified task; never Fable 5.2), local (no `environment`), so it runs on this machine and "
+              "has your checkout; or end the turn and be resumed by your lead, which keeps your launch model. Nothing is "
+              "wrong with this command: it and the rest of this turn's commands now pass, so you can read your notes, "
+              "start the child and push. If your brief names another launch model than `{launch}`, this machine's log "
+              "began after your launch (a wake or a resume put you on a new machine): go by your brief.")
+
+
+def model_reason(event: dict, command: str) -> str | None:
+    """The model rule: the refusal's text for the first command the hook would otherwise pass in a cloud agent's turn
+    whose model's family differs from its launch model's (`settings.launch_model`, `settings.model_family`), once a
+    turn; else None. The refusal settles the turn, and so does MODEL_OK in that command, which passes it: either adds a
+    line to EVENT_LOG for the turn, and every later command of a settled turn passes. Never refused: an agent whose turns
+    all name one family, whatever their effort, one with no launch
+    model on record, and a payload that names no model, no turn or no cloud agent. The lock on EVENT_LOG makes the check
+    and the line one step, so of two commands a turn starts at once exactly one is refused; a log that can't be opened,
+    locked or written refuses nothing, and says so on stderr, since a turn the rule can't record as told it can't keep to
+    once. Every other refusal comes first (`main`): a command refused for another reason leaves the turn unsettled."""
+    agent, turn, model = (event.get(k) for k in ("conversation_id", "generation_id", "model"))
+    if not all(isinstance(v, str) and v for v in (agent, turn, model)) or not CLOUD_AGENT.fullmatch(agent):
+        return None
+    turn, model = turn[:EVENT_VALUE_MAX], model[:EVENT_VALUE_MAX]
+    try:
+        with open(EVENT_LOG, "a") as log:
+            fcntl.flock(log, fcntl.LOCK_EX)
+            events = agent_events(agent)
+            launch = launch_model(events)
+            if launch is None or model_family(launch) == model_family(model):
+                return None
+            if any(e.get("generation_id") == turn and e.get("event") in (MODEL_REFUSAL, MODEL_PASS) for e in events):
+                return None
+            passed = MODEL_OK in command
+            log.write(json.dumps({"t": int(time.time()), "hook": "shell_hook.py",
+                                  "event": MODEL_PASS if passed else MODEL_REFUSAL, "conversation_id": agent,
+                                  "generation_id": turn, "model": model, "launch_model": launch}) + "\n")
+    except OSError as e:
+        print(f"shell_hook: the model rule refuses nothing, since it can't record a turn as told in {EVENT_LOG}: {e}",
+              file=sys.stderr)
+        return None
+    if passed:
+        return None
+    shown = {k: "".join(c for c in v if c.isprintable()) for k, v in (("model", model), ("launch", launch))}
+    return MODEL_TOLD.format(**shown)
 
 
 def checkout(root: str, cwd: str) -> str:
@@ -1437,7 +1507,7 @@ def main() -> int:
         record_event("shell_hook.py", event)
     except (ValueError, AttributeError):
         record_event("shell_hook.py", raw)
-        command, conversation, cwd, root = raw, "", os.getcwd(), ""
+        event, command, conversation, cwd, root = {}, raw, "", os.getcwd(), ""
     try:
         deny = refused_text(command)
     except Exception:                                   # a bug here must not allow what the fallback would refuse
@@ -1466,12 +1536,22 @@ def main() -> int:
                           "agent_message": "Refused by tools/agent-guard/shell_hook.py (.cursor/hooks.json): " + reason}))
     else:
         try:
+            told = model_reason(event, command)
+        except (OSError, LookupError, TypeError, ValueError,
+                AttributeError) as e:                   # a bug in the model rule must not stop every command
+            print(f"shell_hook: model rule failed: {type(e).__name__}: {e}", file=sys.stderr)
+            told = None
+        if told:
+            print(json.dumps({"permission": "deny", "user_message": told, "agent_message": told}))
+            return 0
+        try:
             poll(conversation, checkout(root, cwd))
         except (OSError, ValueError) as e:              # nor a failed poll: the next command's hook tries again
             print(f"shell_hook: inbox poll failed: {e}", file=sys.stderr)
         try:
             message = delivery(conversation)
-        except Exception:                               # an unreadable inbox must not block the agent's command
+        except (OSError, ValueError) as e:              # an unreadable inbox must not block the agent's command
+            print(f"shell_hook: inbox unreadable, no message delivered: {type(e).__name__}: {e}", file=sys.stderr)
             message = None
         try:
             merge_drivers(command, cwd)
