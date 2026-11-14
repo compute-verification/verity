@@ -167,3 +167,22 @@ Tests by file, on 0bdd4179486 [ran]: 19 failed, 69 passed, over capture_loopback
 Left: warden_tokens and docket_names, untouched as you said. restack.py wasn't needed: no move commit lay under my commits, and [ran] none of the four moves the tip brought touches a file I changed.
 TIMER: none
 
+[2026-11-14T23:01Z] 3ad6b5d6c46b
+TERMGB2, 3:01 PM PST. Item 2: 7184 is right and not a fault. `Scan.start` is the scan's declared state width: period_case's `_scan` reads it as the start template's `sin` bits, which is IS.state_bits(TEST.cls) = 7184 [ran]. It is not a charge. The charge is the answer's `public.start`, `0 if p.first == 0 else p.scan.start` (period_case.py:1523). The test's period has first = 0 (test line 1030), so the charge is 0 and the rule holds. The test's `start = 0` was stale: the field came with 21b2a869126 (Charge a period ... at the state's full width), and 3a8a8d533ad only gave the Lean literal its sixth slot. I changed the expectation to `bits["start"]["sin"]` and added `out["public"]["start"] == 0`, the charge, in f58db92cea06. I told GATERELAY2 the same: public.start is the charge, an int beside scans. It has since landed 69a7f642ac4.
+
+Pushed b23f373c69c9 to cursor/na-architecture-b51f, no force. Commits:
+- 6cf32037b2ec: network_traces' pyproject gets `pythonpath = ["../.."]`, the repository root, for benchmarks.network_traces. This is how the benchmarks suites set their paths (pythonpath ini); there is no conftest and no per-test insert. It mends the five SUITESPLIT named, plus test_scan_zk_lean_one, which stopped the same way alone.
+- f58db92cea06: item 2.
+- Merges cb1a5b6f342a and b23f373c69c9.
+
+Crossing: `restack.py na-collect-termgb2 --main origin/architecture --dry-run` still refuses, at 08a0828b2fe (Move by tools/move/vllm_poub_option_map.toml). The refusal's text:
+"--move-commit 08a0828b2fe2 isn't what tools/move/layout.py writes on e26613503b5e: pass the commit the script generated, and a later commit on the move's branch as --onto (...). Where the move's own commit holds hand changes beside its script's output, list these paths as its `hand` in tools/move/move_lines.toml, with a `reason`. The 5 paths that differ: adapters/vllm/README.md, adapters/vllm/pyproject.toml, adapters/vllm/verity_vllm/pipeline/serve_remote.py, adapters/vllm/verity_vllm/protocols/README.md, adapters/vllm/verity_vllm/protocols/__init__.py"
+The move's own message names those hand edits. I crossed it, and pouw_sample_h1/ts, replay_chain, memory_gpu_build, inert_work_names and the inference_only, draw_compound and terms runs, by plain merge. Before each I [ran] a check that none of the maps' old names or paths is in my two commits' lines; there were no hits.
+
+Counts [ran], under suites.py's read guard, with no root on sys.path (the worktree's packages first by a symlink shim):
+- The six driver tests, each alone: test_warden_zk 5, test_leak_scan 28, test_n2_zk 5, test_egress_zk 3, test_scan_zk_challenger 1, test_scan_zk_lean_one 2. All passed, outside {}. Before the mend, each stopped at collection with "No module named 'benchmarks'" [ran].
+- Prover suite by file: test_scan_zk 40, test_scan_zk_v3c 8, test_n2_tie_zk 7. 55 passed, 0 failed, outside {}. Unmarked slow tests, none mine: test_scan_zk's host-read test at 43.5 s and others, and test_scan_zk_v3c's root-read test at 49.2 s.
+- On b23f373c69c9: rows_forms_case, test_n2_zk, test_leak_scan and test_scan_zk_lean_one pass again.
+
+Item 4 [ran]: `firewall`, `FC_FIREWALL`, `flock-firewall` and `build-firewall`, case-insensitive too, have 0 hits over my group: certifier/prover with its tests, network_traces' zk_drivers.py, pyproject and the six moved tests, and prove_path's served_*_zk.py, pyproject and test_served_tie_zk. Nothing is left. test_scan_zk_challenger patches `sz.WZ.zk_server` (now line 80), and passes alone, so the name exists.
+
