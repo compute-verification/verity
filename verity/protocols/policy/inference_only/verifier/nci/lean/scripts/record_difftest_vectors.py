@@ -4,13 +4,14 @@ for `NciCheck/RecordDifftestMain.lean`.
     python scripts/record_difftest_vectors.py <verity checkout> --out DIR [--count N]
 
 Writes two files under `DIR/record_difftest/`, one line per case: `cases.jsonl`, `{"instance", "trusted", "spot",
-"rows", "count"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`Record`'s
+"rows", "count", "block_rows"}`: the instance and the trusted input as `NciCheck.Record.check` reads them (`Record`'s
 docstring), the record's wires as SPOT's `wires` piece reads them (`spot_of`, each template's rows and outputs
 Python's own layout of it; `null` where the reference refuses the case before its wires, or that layout has no row
-for a port: leaves of two widths, or an output past a word that is not whole words), some input rows of its units (`[template, port, unit, row]` each) and the count's limits
-(`{"table", "c", "k", "n"}`); and `python.jsonl`, `{"detail", "public", "kinds", "exported", "count", "closed"}`:
-`nci_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, `count`, and each
-template's closed rows (`closed`). The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
+for a port: leaves of two widths, or an output past a word that is not whole words), some input rows of its units (`[template, port, unit, row]` each), the count's limits
+(`{"table", "c", "k", "n"}`) and the rows rule's (`{"table", "gamma", "alpha"}`, `rows_limits`); and `python.jsonl`,
+`{"detail", "public", "kinds", "exported", "count", "closed", "block_rows"}`:
+`nci_record_reference`'s `check_detail`, `check`, `kinds` and `exported` of those rows, `count`, each
+template's closed rows (`closed`), and `block_rows`. The Lean audit runs `NciCheck/RecordDifftestMain.lean` on the two (`runs` in
 `lean-audit.json`).
 
 Case `seed`, for the first `COUNT`, is a random circuit (`random_circuit`): one to four templates of a few gates, each
@@ -825,6 +826,49 @@ KEYED: dict[str, str] = {
     "a template keyed as an input bound at registration": "RegisteredInput7",
 }
 
+#: the history table the cases of `HISTORIES` declare
+HISTORY = "history/hidden"
+
+
+def _history(d: dict, **fields) -> None:
+    """The record `d` with one history table more: `Norm`'s output rows, a position a unit, as
+    `verity.commitments.windows.interface` records one (`History.doc`). `fields` replace its own, and one that is
+    None is left out."""
+    n = dict(d["templates"])[NORM]
+    h = {"name": HISTORY, "program": d["program"], "writer": NORM, "out": "o0", "words": 2,
+         "runs": [{"start": 0, "count": n, "writer": NORM, "out": "o0", "radix": [n], "base": 0, "step": [1]}],
+         "capacity": IF.HT.CAPACITY, **fields}
+    d["registered"].setdefault("histories", []).append({k: v for k, v in h.items() if v is not None})
+
+
+def _opened_from_history(d: dict) -> None:
+    """The record `d` with the history table, its table reads and its opening naming it in place of the weights'
+    table."""
+    _history(d)
+    for x in (*d["registered"]["roots"], *d["registered"]["openings"]):
+        x["table"] = HISTORY
+
+
+#: `lowered(2, 3)`'s record with `registered.histories`, a case each: the stage that refuses the record, None where
+#: the form takes it, and the edit that makes it. `LOOSE` names the one the form takes that
+#: `verity.commitments.windows.interface` refuses: the form reads a history's keys and its name, and nothing of its
+#: writer, rows and runs.
+HISTORIES: dict[str, tuple] = {
+    "histories, none of them": (None, lambda d: d["registered"].update(histories=[])),
+    "a history no row reads": (None, _history),
+    "a history that states no capacity": (None, lambda d: _history(d, capacity=None)),
+    "the opening against a history": (None, _opened_from_history),
+    "a history of no template's rows": (None, lambda d: _history(d, writer="Nope_v1")),
+    "a history under a table's name": ("inputs", lambda d: _history(d, name=TABLE)),
+    "a history under a registered parameter's name": ("inputs", lambda d: _history(d, name="weights/norm")),
+    "two histories of one name": ("inputs", lambda d: (_history(d), _history(d))),
+    "a history with a key more": ("inputs", lambda d: _history(d, rows=6)),
+    "a history that states no runs": ("inputs", lambda d: _history(d, runs=None)),
+    "a history named by no string": ("inputs", lambda d: _history(d, name=3)),
+    "histories that are no list": ("inputs", lambda d: d["registered"].update(histories=3)),
+}
+LOOSE = "a history of no template's rows"
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -870,7 +914,14 @@ def shaped() -> list[dict]:
     Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
     it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
-    (`templates`): a root node of a composite is no input, whatever its key reads as."""
+    (`templates`): a root node of a composite is no input, whatever its key reads as.
+
+    Then the accepted case with `registered.histories` (`HISTORIES`). With none of them, with a history table of
+    `Norm`'s output rows that no row reads, stating its capacity or not, and with one of a writer the circuit has no
+    template of, the record counts as the accepted case does. With its table reads and its opening naming the history
+    in place of the weights' table, they are fresh and the rate refuses: a history is over no registered parameter.
+    A history under a table's name, a registered parameter's or another history's, one with a key more or a key
+    less, one named by no string, and histories that are no list are refused with the declarations (`inputs`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -1010,6 +1061,9 @@ def shaped() -> list[dict]:
         seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
         first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
         first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
+    for k, (what, (stage, declare)) in enumerate(HISTORIES.items()):
+        first(f"2x3 {what}", lowered(2, 3), 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k, edit=declare,
+              broken=stage)
     return out
 
 
@@ -1034,8 +1088,8 @@ def listed(c: Circuit):
 def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[str, str], pins: list[str], *,
            before: int = 2, after: int = 0, order=None, policy: dict | None = None, refused: str | None = None) -> dict:
     """The case on circuit `c`: its instance (the Program, the record, `Γ`, `α` and the pins), the trusted input
-    (`trusted`), the wires as SPOT reads them, up to six of its units' input rows and the count's limits; with what it
-    was made from. The limits are at, just under or just over what the circuit's blocks hold; or `policy`'s, which an
+    (`trusted`), the wires as SPOT reads them, up to six of its units' input rows, the count's limits and the rows
+    rule's (`rows_limits`); with what it was made from. The limits are at, just under or just over what the circuit's blocks hold; or `policy`'s, which an
     empty `policy` is first filled with: a table of every primitive and exactly what the blocks hold; a primitive a
     later circuit computes that the policy's table lacks costs nothing. The reference takes the circuit as built;
     or `refused` names the stage that refuses it, and what the blocks hold is what the reference counts without that
@@ -1072,14 +1126,55 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
               "count": {"c": near(bools), "k": near(probe["fresh"]), "n": near(probe["blocks"])}}
     if policy is not None:
         limits = policy if policy else policy.update(limits, table=table) or policy
+    with _without(refused):
+        rows_rule = rows_limits(c, inst, tr, policy)
     inst.update(gamma=limits["gamma"], alpha=limits["alpha"])
     rows = [(codec.descriptor_id(fn), p, u, r) for fn, n in c.templates for p, _ in fn.signature()[0]
             for u in range(n) for r in range(c.cuts.get(codec.descriptor_id(fn), {}).get(p, 1))]
     return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, json.loads(record), order),
                      "rows": [list(r) for r in rng.sample(rows, min(6, len(rows)))],
-                     "count": {"table": table, **{k: limits["count"][k] for k in ("c", "k", "n")}}},
+                     "count": {"table": table, **{k: limits["count"][k] for k in ("c", "k", "n")}},
+                     "block_rows": rows_rule},
             "circuit": c, "inside": inside,
             "theta": sorted(p for p, (root, n, w) in held.items() if roots.get(p) == root and n * w == c.params[p])}
+
+
+def rows_limits(c: Circuit, inst: dict, tr: dict, policy: dict | None) -> dict:
+    """The rows rule's limits on a case (`RecordRows`' `{"table", "gamma", "alpha"}`): a table of every template's
+    rows of one unit, each at least 1, and `Γ` and `α` at, just under or just over what a block holds in rows under that
+    table. One table in ten then lacks a template, one in five has an entry for no template, one in twenty has an
+    entry of 0, and one set of limits in twenty is malformed in one other way. Under a `policy` the limits are its `block_rows`, which the first circuit under it
+    fills with exactly what its blocks hold; a template a later circuit has that the policy's table lacks has rows
+    of its own. Its random choices are a stream of their own, seeded by the record and the trusted input, so the rest
+    of a case is what it is without them."""
+    rr = random.Random("the rows rule's limits on " + inst["record"] + json.dumps(tr, sort_keys=True))
+    tids = sorted({codec.descriptor_id(fn) for fn, _ in c.templates})
+    if policy is None:
+        table = {t: rr.choice([1, 2, 3, rr.randint(1, 40), rr.randint(41, 5000)]) for t in tids}
+    else:
+        table = {t: 3 + 2 * k for k, t in enumerate(tids)} | policy.get("block_rows", {}).get("table", {})
+    held = ref.block_rows(inst, tr, {"table": table, "gamma": 0, "alpha": [0, 1]})
+    assert "error" not in held, (c.name, held)
+    rows, fresh = held["rows"], held["fresh"]
+
+    def near(x: int) -> int:
+        return x if policy is not None else max(0, x + rr.choices([0, -1, 1, rr.randint(-3, 3)], [5, 2, 2, 1])[0])
+    den = rr.randint(1, 5) if policy is None else max(rows, 1)
+    limits = {"table": table, "gamma": near(rows), "alpha": [near(-(-fresh * den // max(rows, 1))), den]}
+    if policy is not None:
+        return {**policy.setdefault("block_rows", limits), "table": table}
+    if tids and rr.random() < 0.1:
+        del table[rr.choice(tids)]
+    if rr.random() < 0.2:
+        table["RecNope_v1"] = rr.randint(1, 40)
+    if table and rr.random() < 0.05:
+        table[rr.choice(sorted(table))] = 0
+    if rr.random() < 0.05:
+        rr.choice([lambda: limits.pop(rr.choice(ref.ROWS_LIMITS)), lambda: limits.update(table=[]),
+                   lambda: limits.update(gamma=rr.choice([-1, "3", 1.5, None])),
+                   lambda: limits.update(alpha=rr.choice([[1], [1, 0], [1, 2, 3], [1.5, 1], [-1, 1], [1, "2"], "1/2", None])),
+                   lambda: table.update(RecNope_v1=rr.choice([-1, 1.5, "2"]))])()
+    return limits
 
 
 @contextlib.contextmanager
@@ -1583,16 +1678,17 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(HISTORIES)
 
 
 def results(case: dict) -> dict:
     """The reference's results on a case: the whole verdict, what is published, its rows' classes, what the form
-    exports of them (each row's slot and why it is held), the count, and each template's closed rows."""
+    exports of them (each row's slot and why it is held), the count, each template's closed rows, and the rows rule's
+    verdict."""
     inst, tr = case["instance"], case["trusted"]
     return {"detail": ref.check_detail(inst, tr), "public": ref.check(inst, tr), "kinds": ref.kinds(inst, tr, case["rows"]),
             "exported": ref.exported(inst, tr, case["rows"]), "count": ref.count(inst, tr, case["count"]),
-            "closed": ref.closed(inst, tr)}
+            "closed": ref.closed(inst, tr), "block_rows": ref.block_rows(inst, tr, case["block_rows"])}
 
 
 def write(out: Path, count: int | None = None) -> dict[str, Path]:
