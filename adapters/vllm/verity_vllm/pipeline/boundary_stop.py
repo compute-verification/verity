@@ -175,7 +175,7 @@ def filed(spans: Sequence[Span], stop: Stop | None = None,
 
 
 def stop_registration(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Stop,
-                      boundary: Mapping[str, Any]) -> RS.ServedRegistration:
+                      boundary: Mapping[str, Any]) -> RS.ServedDocket:
     """A stop class's stop population's registered values, from its ``commit.json``, the verifier's rule ``stop`` and
     its boundary record (``boundary``, `boundary_rows.record`'s, the log's): each of the stop block's parameters
     (`STOP_READS`) is the boundary record's port of that value, one row a span, as an output value under that port's

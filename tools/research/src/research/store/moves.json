@@ -2806,6 +2806,23 @@
     },
     {
       "paths": {
+        "demos/onsite_served/config.toml": "demos/onsite_full.toml"
+      }
+    },
+    {
+      "paths": {
+        "adapters/vllm/verity_vllm/properties/kernel_allowlist.py": "adapters/vllm/verity_vllm/observe/fold/profiles/kernel_allowlist.py",
+        "adapters/vllm/verity_vllm/properties/quarantine_lint.py": "adapters/vllm/tests/properties/quarantine_lint.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/harness/native/": "benchmarks/pouw/harness/native/",
+        "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/": "benchmarks/pouw/nvfp4_sm120/"
+      }
+    },
+    {
+      "paths": {
         "security/Definitions/Flock/Audit/Law.lean": "security/Definitions/Flock/Audit/SamplingDesign.lean",
         "security/Proofs/Flock/Bridge/DrawnLaw.lean": "security/Proofs/Flock/Bridge/DrawnSamplingDesign.lean",
         "security/Proofs/Flock/Claims/Sampling/Select/DrawLaw.lean": "security/Proofs/Flock/Claims/Sampling/Select/DrawDesign.lean",

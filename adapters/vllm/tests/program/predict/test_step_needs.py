@@ -49,7 +49,7 @@ def test_a_device_named_by_no_str_names_no_tuned_file(S):
         numbered.step(8, 8, [], [100 + i for i in range(8)], 8, {"greedy": 8}, True)
 
 
-def test_production_sizes_refuse_by_name(S):
+def test_sizes_past_class_g_refuse_by_name(S):
     """Past class G's limits each refusal `dsa` would raise is its own Need, and the step's other calls are still counted: a row
     past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, the 8,192-token launch has no captured
     all-reduce (vLLM's NCCL route), a 2,000-row prefill takes the dense-MHA backend and one past INDEX_TOPK keys the sparse-MQA

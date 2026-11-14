@@ -1813,7 +1813,7 @@ them.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof system returned for p (`Registration`, from
     `spot.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
-    registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
+    registration receipt (`one_stage.docket.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
     refuses while p's last ingress record, window p·k + k − 1's, is unpublished (t_d); once the certifier's own clock
