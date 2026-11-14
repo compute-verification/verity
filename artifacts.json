@@ -176,12 +176,13 @@
   "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "verity/protocols/proofs/flock/prover/tests/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "verity/protocols/proofs/flock/prover/tests/fixtures/rec-links",
   "art:b3c6b626af8e260c5d51316ab4cb69b8059cb2823a4dd16e4e57b11f6c7711b4": "verity/protocols/proofs/spot/verifier/tests/fixtures/form-refusals",
-  "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d": "verity/circuits/silicon/discrepancy_log.json",
   "art:7dd1c98def937458596a43889730245b4b2dff3c71af75cec5ae9e8dee0e9190": "verity/protocols/accounting/certifier/verifier/tests/fixtures/arith_encode_vectors.json",
   "art:4a1acc582ca22768ad4a658b6a9f5bb3c512ae49db3b50a1e48271b6ef9970b2": "benchmarks/training_slowdown/data/v3-selection.json",
   "art:1881d170c2833e3de28fa41662946272c99ca3e7edd13f10a3219b51bc657892": "benchmarks/network_e2e/encodings/tests/fixtures_draft",
   "art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742": "benchmarks/two_stage/tests/fixtures/guard.tar.xz",
+  "art:ed3b2d968923fe39be309d15f9e2c41cae215ff4fcce40590131b9f0b02a2d52": "verity/protocols/compose/verifier/lean/tests/fixtures/sampled-two-case",
   "art:3b4e100e16ec5f11bccadf73cab4d002d370ffe50815ac9eb4f3d37cbd36ec57": "verity/definitions/tests/fixtures/fa2_train_bwd_sm120.npz",
+  "art:d33c61991e10d9135f5fb7bb07227bcfacf90043d6f5b5810734664e6d89854d": "verity/circuits/silicon/discrepancy_log.json",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"

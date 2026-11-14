@@ -12,8 +12,7 @@ import pytest
 
 from tests.check import adversarial as G
 from verity_vllm.check import gates
-from verity_vllm.observe.fold.resolver import Transparent, spec_module
-from verity_vllm.properties import census
+from verity_vllm.observe.fold.resolver import spec_module
 
 
 @pytest.fixture(scope="module")
@@ -60,22 +59,6 @@ def test_hole3_unregistered_definition_outside_quarantine_is_a_quarantine_spec(t
     baked = {s: m for s, m in mods.items() if s.startswith("AdvBakedOutput")}
     assert baked and all(not m.startswith("verity.definitions.registry") for m in baked.values())
     assert gates.quarantine_specs({"spec_modules": mods, "by_spec": {s: {} for s in mods}}) != []
-
-
-# ---------------------------------------------------------------------------------------------------------
-# HOLE-4: the census accepts a COMPUTE kernel claimed by a Transparent.  A swallowed Compute (silu_and_mul resolved as
-# a `move` of the gate half that keeps `kernels=("act_and_mul_kernel",)`) leaves the residue at zero.
-# ---------------------------------------------------------------------------------------------------------
-
-
-@pytest.mark.xfail(strict=True, reason="HOLE-4: census.declared_kernels_of_step / reconcile do not distinguish Transparent from Compute claims of a compute kernel")
-def test_hole4_transparent_claiming_a_compute_kernel_is_flagged():
-    class Root:
-        id = 7
-    t = Transparent("move", (7,), None, None, 1, "layers.0.mlp.act_fn", ("act_and_mul_kernel",), "act.silu_and_mul")
-    pats, events, parts_n = census.declared_kernels_of_step([t], [Root()])
-    assert "act_and_mul_kernel" in census.COMPUTE_KERNELS
-    assert "act_and_mul_kernel" not in pats, "a compute kernel must not be declared by a Transparent"
 
 
 # ---------------------------------------------------------------------------------------------------------

@@ -12,9 +12,9 @@ import pytest
 from verity.commitments.randomness import derive
 
 from tests.check.test_sampled_replay import (
+    INTER,
     H,
     Honest,
-    I,
     V,
     _bf16,
     _program,
@@ -54,8 +54,8 @@ def _export(world, out, *, limits=None, mutate=None, root=ROOT):
 def test_sets_are_grouped_by_subcircuit_and_reevaluate(attn_world, tmp_path):
     s = _export(attn_world, tmp_path)
     names = {x["set"] for x in s["sets"]}
-    assert {f"gemm-coordinate-ampere-bf16-k{H}", f"gemm-coordinate-ampere-bf16-k{I}", "attention-head-fa2-d16-bn16", "rope-head-d16",
-            f"silumul-v1-i{I}", f"tokenselect-v1-v{V}"} <= names, names
+    assert {f"gemm-coordinate-ampere-bf16-k{H}", f"gemm-coordinate-ampere-bf16-k{INTER}", "attention-head-fa2-d16-bn16", "rope-head-d16",
+            f"silumul-v1-i{INTER}", f"tokenselect-v1-v{V}"} <= names, names
     assert not any(n.startswith("embedding") for n in names)
     assert any(n.startswith(f"rmsnormtriton-v1-n{H}-") for n in names) and any(n.startswith(f"rmsnormfusedcuda-v2-n{H}-") for n in names)
     for fam, c in s["by_family"].items():

@@ -23,7 +23,8 @@ untraced = ["tests/test_example_port.py", "tests/test_protocol_port.py"]
 # and what it imports; `Base.JsonParse`, the JSON parser's port). The annotation port's test builds `annot-difftest`,
 # which reads `Circuits.Annot`, `Circuits.AnnotExpand` and what they import (`verity_difftest.annot.INPUTS`), and holds
 # it to `verity.circuits.query_ast`. The protocol-mode tests build the core protocol interface's example
-# (`core-protocol-example`), which reads the interface package and, of Flock's verifier, which it requires by path, the
+# (`core-protocol-example`) and the canonical reader's port (`core-canonical-json-difftest`), which read the interface
+# package and, of Flock's verifier, which it requires by path, the
 # package's configuration, the names it imports the base modules by (`Flock.Bytes`, `Flock.Canon`, `Flock.Hash`) and
 # the packages that one requires.
 inputs = ["verity/protocols/interface", "verity/protocols/proofs/flock/verifier/lakefile.toml", "verity/protocols/proofs/flock/verifier/lake-manifest.json",
