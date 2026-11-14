@@ -198,7 +198,6 @@
   "Proofs.Flock.SpotFlock.AddressFacts.RowPublished",
   "Proofs.Flock.SpotFlock.AddressFacts.RowWires",
   "Proofs.Flock.SpotFlock.AddressFacts.RowFirst",
-  "Proofs.Properties.Challenger.CanonWf",
   "Proofs.Flock.SpotFlock.AddressFacts.Width",
   "Proofs.Flock.SpotFlock.AddressFacts.WidthOf",
   "Proofs.Flock.SpotFlock.AddressFacts.BitsIn",
@@ -358,7 +357,8 @@
   "Proofs.Flock.SpotFlock.RunsAs.SecondUnits",
   "Proofs.Flock.SpotFlock.RunsAs.StampedReads",
   "Proofs.Flock.SpotFlock.RunsAs.VerdictsWf",
-  "Proofs.Properties.Verity.SampledTwo.GoodCaseHeld"
+  "Proofs.Properties.Verity.SampledTwo.GoodCaseHeld",
+  "Proofs.Properties.Challenger.RunCoins"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
