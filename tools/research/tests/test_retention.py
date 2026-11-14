@@ -673,7 +673,7 @@ def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault
     bytes are on no remote, so gc keeps the dir."""
     root = tmp_path / "ws"
     d = run_dir(root, "research/runs/r1", extra={"work/big.bin": b"t" * UNIT})
-    monkeypatch.setattr(CU, "UNDECLARED_CAP_BYTES", 0)
+    monkeypatch.setattr(CU, "UNDECLARED_LIMIT_BYTES", 0)
     st = LocalStore(vault_store)
     art = CU.put_run_record(st, d, "r1")
     assert st.push(art, preserve=True)["preserved"] and [t["path"] for t in CU.trimmed_of(st, art)] == ["work/big.bin"]

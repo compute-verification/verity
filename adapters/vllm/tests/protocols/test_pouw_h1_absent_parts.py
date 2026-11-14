@@ -13,18 +13,18 @@ import pytest
 from verity.protocols.proofs.spot.device.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_pouw_h1_served import _unit
-from verity_vllm.protocols.pouw.h1 import CHALLENGER, H1Run, registered
-from verity_vllm.protocols.pouw.h1.challenger import drawn_of
-from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME, UNTIED
-from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
-from verity_vllm.protocols.pouw.h1.requests import (
+from verity.protocols.accounting.pouw.prover.serving.h1 import CHALLENGER, H1Run, registered
+from verity.protocols.accounting.pouw.prover.serving.h1.challenger import drawn_of
+from verity.protocols.accounting.pouw.prover.serving.h1.commit import ROOT_BYTES, SCHEME, UNTIED
+from verity_vllm.protocols.pouw.h1_ranks import Holder, RankExtension, executor_of
+from verity.protocols.accounting.pouw.prover.serving.h1.requests import (
     RoundOpening,
     slot_reason,
     step_digest,
     table_root,
     tables_reason,
 )
-from verity_vllm.protocols.pouw.h1.served import Served, declared, descriptor
+from verity.protocols.accounting.pouw.prover.serving.h1.served import Served, declared, descriptor
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
 COUNTS = {"expected_tensors": 2, "committed_tensors": 2, "errors_n": 0}

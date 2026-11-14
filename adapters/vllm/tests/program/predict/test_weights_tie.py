@@ -25,7 +25,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.program import model as M
 from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
 from verity.protocols.proofs.spot.verifier import service as SV
 from verity.protocols.proofs.spot.verifier.one_stage import draw as D

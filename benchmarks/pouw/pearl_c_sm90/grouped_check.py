@@ -175,7 +175,7 @@ def stock_arms(Ws: list[torch.Tensor], dense: list, counts: Sequence[int], x: to
 def check_shape(a: argparse.Namespace, n: int, k: int) -> dict:
     import torch
     import glm53_timing as T
-    from verity_vllm.protocols.pouw.pearl_c import grouped as PG
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import grouped as PG
 
     run, weights, kernel, gen = T.device_run([(n, k)] * EXPERTS, a.scheme, a.cubin, graphs=a.graphs)
     R, G = run.kernel.run, PG.module(run)

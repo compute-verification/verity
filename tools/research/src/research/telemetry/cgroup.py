@@ -256,7 +256,7 @@ class Cgroup:
 SESSION_DROPINS = Path("/etc/systemd/system/session-.scope.d")
 
 
-def session_cap(dropins: Path | None = None) -> str | None:
+def session_limit(dropins: Path | None = None) -> str | None:
     """The MemoryMax= this machine's systemd gives every login session scope (the last one set, as systemd reads them), or None."""
     limit = None
     try:
@@ -273,7 +273,7 @@ def session_cap(dropins: Path | None = None) -> str | None:
 
 
 def uncapped(limits: dict[str, Any], limit: str | None) -> str | None:
-    """Why a run whose own cgroup reads `limits` (Cgroup.limits()) would go without the per-session limit `limit` (session_cap()), or None.
+    """Why a run whose own cgroup reads `limits` (Cgroup.limits()) would go without the per-session limit `limit` (session_limit()), or None.
     When user-1001.slice is at its MemoryMax, logind can't create the login's session-N.scope and the login (and what it starts)
     stays in ssh.service: its memory.max is the service's, shared with every login that failed the same way, or none."""
     if limit is None:

@@ -88,29 +88,29 @@ from verity.protocols.proofs.spot.device import challenger as LC
 from verity.protocols.proofs.spot.device import remote as R
 from verity.protocols.proofs.spot.device.challenger import CoinError, LiveRecord
 
-import verity_vllm.protocols.pouw.h1.answers as AN
-import verity_vllm.protocols.pouw.h1.challenger as PHC
-import verity_vllm.protocols.pouw.h1.commit as CT
-import verity_vllm.protocols.pouw.h1.draw as PHD
-import verity_vllm.protocols.pouw.h1.drawn as DN
-import verity_vllm.protocols.pouw.h1.drawn_rows as DR
-import verity_vllm.protocols.pouw.h1.handoff as HO
-import verity_vllm.protocols.pouw.h1.hooks as PHK
-import verity_vllm.protocols.pouw.h1.kept as KP
-import verity_vllm.protocols.pouw.h1.live as LV
-import verity_vllm.protocols.pouw.h1.model_key as MK
-import verity_vllm.protocols.pouw.h1.prover as PV
-import verity_vllm.protocols.pouw.h1.ranks as PHR
-import verity_vllm.protocols.pouw.h1.receipts as RC
-import verity_vllm.protocols.pouw.h1.registered as NR
-import verity_vllm.protocols.pouw.h1.registered_device as RGD
-import verity_vllm.protocols.pouw.h1.requests as RQ
-import verity_vllm.protocols.pouw.h1.served as SV
-import verity_vllm.protocols.pouw.h1.served_files as SF
-import verity_vllm.protocols.pouw.h1.static as ST
-import verity_vllm.protocols.pouw.h1.tables_device as TBD
-import verity_vllm.protocols.pouw.h1.window as PHW
-import verity_vllm.protocols.pouw.h1.words as W
+import verity.protocols.accounting.pouw.prover.serving.h1.answers as AN
+import verity.protocols.accounting.pouw.prover.serving.h1.challenger as PHC
+import verity.protocols.accounting.pouw.prover.serving.h1.commit as CT
+import verity.protocols.accounting.pouw.prover.serving.h1.draw as PHD
+import verity.protocols.accounting.pouw.prover.serving.h1.drawn as DN
+import verity.protocols.accounting.pouw.prover.serving.h1.drawn_rows as DR
+import verity.protocols.accounting.pouw.prover.serving.h1.handoff as HO
+import verity_vllm.protocols.pouw.h1_hooks as PHK
+import verity.protocols.accounting.pouw.prover.serving.h1.kept as KP
+import verity.protocols.accounting.pouw.prover.serving.h1.live as LV
+import verity.protocols.accounting.pouw.prover.serving.h1.model_key as MK
+import verity.protocols.accounting.pouw.prover.serving.h1.prover as PV
+import verity_vllm.protocols.pouw.h1_ranks as PHR
+import verity.protocols.accounting.pouw.prover.serving.h1.receipts as RC
+import verity.protocols.accounting.pouw.prover.serving.h1.registered as NR
+import verity.protocols.accounting.pouw.prover.serving.h1.registered_device as RGD
+import verity.protocols.accounting.pouw.prover.serving.h1.requests as RQ
+import verity.protocols.accounting.pouw.prover.serving.h1.served as SV
+import verity.protocols.accounting.pouw.prover.serving.h1.served_files as SF
+import verity.protocols.accounting.pouw.prover.serving.h1.static as ST
+import verity.protocols.accounting.pouw.prover.serving.h1.tables_device as TBD
+import verity.protocols.accounting.pouw.prover.serving.h1.window as PHW
+import verity.protocols.accounting.pouw.prover.serving.h1.words as W
 from tests.protocols import challenger_host as CH
 from tests.protocols import test_pouw_h1_commit as TC
 from tests.protocols import test_pouw_h1_handoff as TH
@@ -141,7 +141,7 @@ from tests.protocols.test_pouw_h1 import (
 from verity_vllm import protocols as PO
 from verity_vllm.errors import Refused
 from verity_vllm.protocols import pouw
-from verity_vllm.protocols.pouw import h1 as PH
+from verity.protocols.accounting.pouw.prover.serving import h1 as PH
 
 #: what `LiveOpening.from_json` says of a coin that is no opening
 NO_OPENING = ("a live coin opening is {after, coin, epoch, index, label, path, salt}: integers, a string, lowercase hex and "
@@ -2498,9 +2498,9 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     built: list[tuple] = []
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     assert TBD.available.__wrapped__() is False and RGD.zy_available.__wrapped__() is False
-    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: "/a/toolchain/nvcc")
+    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: "/a/toolchain/nvcc")
     assert TBD.nvcc() == RGD.nvcc() == "/a/toolchain/nvcc"
-    monkeypatch.setattr("verity_vllm.protocols.pouw.device.nvcc", lambda: None)
+    monkeypatch.setattr("verity.protocols.accounting.pouw.prover.serving.device.nvcc", lambda: None)
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "current_device", lambda: 0)
     monkeypatch.setattr(torch.cuda, "get_device_capability", lambda device: (12, 0))

@@ -1,6 +1,6 @@
 """`research run --on ... --wait`: `run --on` returns once the machine has started the run, so a loop of launches never serialized
 them (a worker could hold 5 GPUs against a 2-GPU budget). `--wait` fetches the run's records until it ends and
-exits with its rc; an unreachable machine is waited out, for at most WAIT_CAP_S (no tool call may block more than 20
+exits with its rc; an unreachable machine is waited out, for at most WAIT_LIMIT_S (no tool call may block more than 20
 minutes)."""
 from __future__ import annotations
 
@@ -69,7 +69,7 @@ def test_wait_returns_the_runs_own_exit_once_it_ends(tmp_path, capsys, end, rc):
     assert "machine unreachable (rc 255); still waiting" in err and "research: run r1 " in err
 
 
-@pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_CAP_S, 0.0), (waitcap.WAIT_CAP_S, 45.0), (300.0, 0.0)],
+@pytest.mark.parametrize("max_s, fetch_s", [(waitcap.WAIT_LIMIT_S, 0.0), (waitcap.WAIT_LIMIT_S, 45.0), (300.0, 0.0)],
                          ids=["limit", "slow-fetches", "wait-max"])
 def test_wait_stops_at_its_limit_with_the_run_still_going_and_says_how_to_check_back(tmp_path, capsys, max_s, fetch_s):
     """Agents that blocked in one long `--wait` looked silent and missed their wake-ups. The wait ends within its
@@ -109,4 +109,4 @@ def test_wait_max_may_lower_the_limit_and_never_raise_it(capsys, flags, says):
     """Refused before anything launches."""
     assert cmd_run(["--on", "no-such-machine", "--project", "p", *flags, "--", "true"]) == 2
     assert says in capsys.readouterr().err
-    assert waitcap.max_s(None) == waitcap.WAIT_CAP_S == 1200 and waitcap.max_s(600) == 600
+    assert waitcap.max_s(None) == waitcap.WAIT_LIMIT_S == 1200 and waitcap.max_s(600) == 600

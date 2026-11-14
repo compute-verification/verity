@@ -27,10 +27,10 @@ from verity.protocols.accounting.pouw.verifier.audit import HM96, hm96_salt, row
 from verity.protocols.accounting.pouw.verifier.protocol import tagged
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
-from verity_vllm.protocols.pouw.h1 import registered as NR
-from verity_vllm.protocols.pouw.h1 import registered_device as D
-from verity_vllm.protocols.pouw.h1 import requests as RQ
-from verity_vllm.protocols.pouw.h1 import tables_device as TD
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as NR
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered_device as D
+from verity.protocols.accounting.pouw.prover.serving.h1 import requests as RQ
+from verity.protocols.accounting.pouw.prover.serving.h1 import tables_device as TD
 
 PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))

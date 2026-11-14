@@ -7,7 +7,7 @@
 # 1.693x), and Llama-3.1-8B's served linears (cquant, cwedit beside it, c_fx1) 1.83-1.99x at 2K-32K against 1.65-1.82x.
 name = "c-fx1"
 status = "measured"
-source = "BC-KERNEL's c_fx1 (benchmarks/pouw/edited_gemm/cgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3r-16's classes (bit-exact against cgemm_ref.py, which recomputes fx1's chain from the key, and rejects duo's receipts and a dropped IMAD)"
+source = "BC-KERNEL's c_fx1 (verity/protocols/accounting/pouw/prover/kernels/edited_gemm/cgemm.cu) at 8192^3, `eps_profile.py OUT --toml`, census VF3r-16's classes (bit-exact against cgemm_ref.py, which recomputes fx1's chain from the key, and rejects duo's receipts and a dropped IMAD)"
 L = 32
 
 [mma]

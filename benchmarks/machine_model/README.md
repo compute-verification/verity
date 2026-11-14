@@ -219,7 +219,7 @@ XOR-in folds' per-row keys did, and neither fold is an ε design ("ε in the ten
 
 ## Measure a facet
 
-A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../pouw/gpu_kit/`).
+A facet is measured by a microbenchmark that knows nothing about any algorithm (`../pouw/opcode_probe/`, on `../../verity/protocols/accounting/pouw/prover/kernels/gpu_kit/`).
 Its numbers enter `data/` only from a run that passes every gate below. A refused probe stays in the run as a visible
 failure.
 

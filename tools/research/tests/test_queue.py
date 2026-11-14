@@ -4961,9 +4961,9 @@ def test_a_remote_quick_tiers_wait_is_bounded_in_time_however_long_each_fetch_ta
     assert why == f"run r1 on vy-test didn't end within {bound:g} s (last seen without a status): `research inspect r1`"
     assert bound <= clock[0] <= bound + 30 + 900, "it ends with the poll under way at the deadline"
     clock[0] = 0.0
-    tier.max_wait_s = Q.waitcap.WAIT_CAP_S
+    tier.max_wait_s = Q.waitcap.WAIT_LIMIT_S
     _, why = tier._wait(d, "vy-test")
-    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_CAP_S <= clock[0] <= Q.waitcap.WAIT_CAP_S + 900
+    assert isinstance(why, Q.StillGoing) and Q.waitcap.WAIT_LIMIT_S <= clock[0] <= Q.waitcap.WAIT_LIMIT_S + 900
 
 
 def test_ready_on_stops_waiting_at_twenty_minutes_and_judge_marks_the_pr_once_the_run_ends(world, monkeypatch, capsys):

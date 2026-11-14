@@ -59,8 +59,7 @@ sent, its parameters name SPOT's one-stage form (`ParamsAt`), since its componen
 theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite) {o : Verity.Exchange}
     (hv : V.Verdict k .sampled o) : ∃ p, ParamsAt o.params p := by
   obtain ⟨-, hS, P, hP, ps, c₀, evs, hd, x, hx, hx1, hacc⟩ := hv
-  have hPeq : P = VStar.Recursive.Sampled.protocol := by
-    cases k <;> exact (Option.some.inj hP).symm
+  have hPeq : P = VStar.Recursive.Sampled.protocol := (Verity.component_eq_some.1 hP).2
   subst hPeq
   have hfind := find_case hS hd hx hx1
   have hacc' : Properties.Composition.DecodedAccepted

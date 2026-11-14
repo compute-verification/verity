@@ -101,7 +101,7 @@ json = "all_up_t"                    # the last minute every loop was up (runnin
 period_s = 300
 
 [r2]
-page_cap = 100                       # ListObjectsV2 pages (1000 keys, one class-A op each) per bucket per pass
+page_limit = 100                     # ListObjectsV2 pages (1000 keys, one class-A op each) per bucket per pass
 keep_sweeps = 60                     # complete sweeps kept per bucket (the 7-day mean needs a week of them)
 max_gib_per_day = 200
 mean_ratio = 2.0                     # ... or growth over 2 x the 7-day mean,

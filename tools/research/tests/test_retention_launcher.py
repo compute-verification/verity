@@ -48,12 +48,12 @@ def ran(tmp_path: Path, run: str = RUN, *, state: str | None = "done", record: b
     st = LocalStore(tmp_path / "machine" / "store")
     if big:
         (d / "inputs" / "reads.json").write_text("r" * 4096)
-        cap, CU.UNDECLARED_CAP_BYTES = CU.UNDECLARED_CAP_BYTES, 1024
+        was, CU.UNDECLARED_LIMIT_BYTES = CU.UNDECLARED_LIMIT_BYTES, 1024
     try:
         art = CU.put_run_record(st, d, run)
     finally:
         if big:
-            CU.UNDECLARED_CAP_BYTES = cap
+            CU.UNDECLARED_LIMIT_BYTES = was
     assert st.push(art, preserve=True)["preserved"]
     aged(Path(st.remote.root), art, days=1)
     if state:

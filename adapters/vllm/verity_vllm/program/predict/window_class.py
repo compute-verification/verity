@@ -38,8 +38,8 @@ from typing import Any
 
 from verity.protocols.accounting.pouw.prover.schemes import SCHEMES
 
-from verity_vllm.protocols.pouw.pearl_c import ROW_ALIGN
-from verity_vllm.protocols.pouw.pearl_c import window as PWR
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import ROW_ALIGN
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import window as PWR
 
 from . import scan_state as SS
 from .build import Unexpressible

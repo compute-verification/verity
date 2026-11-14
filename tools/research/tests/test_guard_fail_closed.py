@@ -106,7 +106,7 @@ def test_each_poll_terminates_before_it_logs():
     order = []
     real_terminate = api.terminate
     api.terminate = lambda pid: (order.append(("terminate", pid)), real_terminate(pid))
-    b = B.parse(TOML.replace("cap_usd = 3,", "cap_usd = 0,"))
+    b = B.parse(TOML.replace("limit_usd = 3,", "limit_usd = 0,"))
     G.poll(api, b, cfg(), state, T0, lambda m: order.append(("log", m.split()[0])))
     assert order[0] == ("terminate", "a") and [o[1] for o in order[1:]] == ["TRIPPED:", "TERMINATED", "1"]
 

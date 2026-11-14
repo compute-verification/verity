@@ -14,11 +14,11 @@
 # to end by it runs nothing).
 set -uo pipefail
 O=${OUT:?}
-ROOT=$PWD D=benchmarks/torch_gpu/commit_slots
+ROOT=$PWD D=benchmarks/torch_gpu/commit_slots V=verity/commitments/cuda/commit_slots
 PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")} || exit 2
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
 for c in "/usr/local/cuda-$TV" /usr/local/cuda /usr/local/cuda-13.0; do [ -x "$c/bin/nvcc" ] && { CUDA=$c; break; }; done
-export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$D:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
+export PATH=${CUDA:-/usr/local/cuda}/bin:$PATH PYTHONPATH=$ROOT:$ROOT/$V:$ROOT/tools/config PYTHONDONTWRITEBYTECODE=1
 git rev-parse HEAD > "$O/commit.txt" 2>/dev/null || echo "${RESEARCH_SOURCE_SHA:-unknown}" > "$O/commit.txt"
 { echo "python $PY"; $PY -c 'import sys, torch, numpy; print(sys.version.split()[0], torch.__version__, torch.version.cuda, numpy.__version__)'
   echo "cuda ${CUDA:-none}"; nvcc --version | tail -2; nvidia-smi --query-gpu=index,name,compute_cap,driver_version --format=csv; } \
@@ -36,7 +36,7 @@ case " $STEPS_ASKED " in *" tests "*)
     > "$O/fixtures.txt" 2>&1 && echo "fixtures fetched" >> "$O/rc.txt" \
     || echo "fixtures not fetched (fixtures.txt): the test that reads $FIXTURES skips" >> "$O/rc.txt" ;;
 esac
-export O PY D ROOT STEPS=$STEPS_ASKED CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-} STEP_ARGS=${STEP_ARGS:-}
+export O PY D V ROOT STEPS=$STEPS_ASKED CHECK_ARGS=${CHECK_ARGS:-} BENCH_ARGS=${BENCH_ARGS:-} STEP_ARGS=${STEP_ARGS:-}
 export STEP_WRAP=${STEP_WRAP:-}
 export LEASE_MIN=${LEASE_MIN:-25} LEASE_END=${LEASE_END:-}
 # shellcheck disable=SC2016
@@ -49,7 +49,7 @@ gpu-lease 1 --wait --max-min "$LEASE_MIN" -- bash -c '
     -i "$GPU_LEASE_UUID" > "$O/gpu.txt" 2>&1
   for s in $STEPS; do
     case $s in
-      tests) (cd "$D" && $PY -m pytest -q -p no:cacheprovider tests) > "$O/tests.txt" 2>&1 ;;
+      tests) (cd "$V" && $PY -m pytest -q -p no:cacheprovider tests) > "$O/tests.txt" 2>&1 ;;
       check) $PY "$D/check.py" --out "$O" ${CHECK_ARGS:-} > "$O/check.jsonl" 2> "$O/check.err" ;;
       bench) $PY "$D/bench.py" --out "$O" ${BENCH_ARGS:-} > "$O/bench.jsonl" 2> "$O/bench.err" ;;
       step) ${STEP_WRAP:-} $PY "$D/step.py" time ${STEP_ARGS:-} --out "$O" > "$O/step.jsonl" 2> "$O/step.err" ;;

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # PoUW's piece of a served H1 window with its sampled proof blocks proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
-# verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
+# verity.protocols.accounting.pouw.prover.serving.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
 # sampled call's J10-R units on the window's own registered values, and each sampled proof block of a lanes-form K as its lanes and
 # combine; each staged statement is proved by one Flock --zk session sampling all its instances (hidden_zk/job.sh's
 # `session`, at the slot its circuit file's META names), one session at a time, its prover under the ZK server

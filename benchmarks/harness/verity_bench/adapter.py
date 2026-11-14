@@ -21,8 +21,8 @@ lazy as they were.
 | `challenged` | `verity_vllm.protocols.pouw.challenged` | `verity_vllm.protocols.pouw.challenged` (I1: a protocols config whose PoUW coins are an in-process challenger's) | vllm/arms.py |
 | `h1_run` | `verity_vllm.protocols.pouw.h1_run` | `verity_vllm.protocols.pouw.h1_run` (I1: the H1 run an installed H1 option serves) | vllm/engine.py |
 | `pouw_refusals` | `verity_vllm.protocols.pouw.refusals` | `verity_vllm.protocols.pouw.refusals` (I1: why PoUW's option refuses a scheme in a context) | tests/test_bench.py |
-| `pearl_c_device_run` | `verity_vllm.protocols.pouw.pearl_c.PearlCDeviceRun` | the same, its module public (I1: an installed Pearl-C option's device run) | vllm/engine.py, tests/test_bench.py |
-| `pearl_c_schemes` | `verity_vllm.protocols.pouw.pearl_c.SCHEMES` | the same, its module public (I1: the Pearl-C schemes the device path runs) | tests/test_bench.py |
+| `pearl_c_device_run` | `verity.protocols.accounting.pouw.prover.serving.pearl_c.PearlCDeviceRun` | the same, its module public (I1: an installed Pearl-C option's device run) | vllm/engine.py, tests/test_bench.py |
+| `pearl_c_schemes` | `verity.protocols.accounting.pouw.prover.serving.pearl_c.SCHEMES` | the same, its module public (I1: the Pearl-C schemes the device path runs) | tests/test_bench.py |
 
 Each proposal makes the module public as it stands, with ``__all__`` listing at least these names. The last five are PoUW's
 serving code, which ARCHITECTURE.md moves under ``verity/protocols/accounting/pouw/``; until then they are the adapter's PoUW
@@ -83,12 +83,12 @@ def pouw_refusals(scheme: str, ctx: Any) -> tuple[str, ...]:
 
 def pearl_c_device_run() -> type:
     """The class."""
-    from verity_vllm.protocols.pouw.pearl_c import PearlCDeviceRun
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import PearlCDeviceRun
 
     return PearlCDeviceRun
 
 
 def pearl_c_schemes() -> tuple[str, ...]:
-    from verity_vllm.protocols.pouw.pearl_c import SCHEMES
+    from verity.protocols.accounting.pouw.prover.serving.pearl_c import SCHEMES
 
     return SCHEMES

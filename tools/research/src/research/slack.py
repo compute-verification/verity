@@ -125,7 +125,7 @@ except ImportError:                                                 # run as a s
         return text
 
     class waitcap:  # research/waitcap.py's cap, which a single file carries itself
-        WAIT_CAP_S, STILL_GOING = 1200, 79
+        WAIT_LIMIT_S, STILL_GOING = 1200, 79
 
         @staticmethod
         def still_going(what: str, check: str, waited_s: float, end: str) -> str:
@@ -4296,16 +4296,16 @@ def _decided(out: dict) -> bool:
 
 
 def _await_card(ns: argparse.Namespace, reg: dict, route: "AskDaniel", cid: str, polls: int) -> int:
-    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_CAP_S run
+    """`ask-daniel ... --wait`: poll card `cid` until it is decided or its page is answered, `polls` polls or WAIT_LIMIT_S run
     out; a card still pending at the cap exits STILL_GOING with the command that reads it later (research.waitcap)."""
     follow = page_follower(ns, reg)
     out, capped = wait_for(lambda: follow(route.call("GET", "/" + urllib.parse.quote(cid, safe=""))), sleep=_sleep, every=ns.every,
-                           polls=polls, max_s=waitcap.WAIT_CAP_S, clock=_clock)
+                           polls=polls, max_s=waitcap.WAIT_LIMIT_S, clock=_clock)
     ring_decision(ns, reg, cid, out)
     rc = _show(out, ns.json)
     if not capped:
         return rc
-    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_CAP_S,
+    print(waitcap.still_going(f"card {cid} (pending)", f"research msg ask-daniel status {cid}", waitcap.WAIT_LIMIT_S,
                               end="End your turn now; a subscription to the card's thread (subscribe_slack_thread) wakes you "
                                   "when Daniel answers."), file=sys.stderr)
     return waitcap.STILL_GOING
@@ -4753,7 +4753,7 @@ def main(argv: list[str], prog: str = "research msg") -> int:
     p.add_argument("--link", default=None, metavar="NOTION_URL", help="the ask's page, made with the Notion MCP, in place of --page")
     p.add_argument("--hours", type=float, default=24, metavar="H", help="pages: edited in the last H hours (default 24)")
     p.add_argument("--wait", action="store_true",
-                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_CAP_S} s (no tool "
+                   help=f"poll until the card is decided (or overdue) or its page is answered; exit 0 once decided, for at most {waitcap.WAIT_LIMIT_S} s (no tool "
                         f"call blocks longer than 20 minutes): a card still pending then exits {waitcap.STILL_GOING}, "
                         "naming `ask-daniel status ID` to check back")
     p.add_argument("--every", type=float, default=WAIT_EVERY_S, metavar="S", help=f"seconds between polls (default {WAIT_EVERY_S})")

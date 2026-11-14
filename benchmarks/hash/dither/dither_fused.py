@@ -528,7 +528,7 @@ def check(win: DitherState, lib_h1r: str, which: str = "gate", n_ref_units: int 
     doc["receipts_vs_h1r_bad"] = rc_bad
     doc["live_units"] = int(sum((min(m, t) + 31) // 32 * (n // 32) for n, _ in win.nk))
     # h1tile.reference on a few live units: z and receipt
-    from verity_vllm.protocols.pouw.h1 import receipts as RC
+    from verity.protocols.accounting.pouw.prover.serving.h1 import receipts as RC
     refs = []
     rng = np.random.default_rng(s)
     for w in [0, 3, 2][:n_ref_units]:

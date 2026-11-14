@@ -38,7 +38,7 @@ from pathlib import Path
 from verity.protocols.accounting.pouw.verifier import credit as CR
 from verity.protocols.proofs.spot.device import remote
 from verity.protocols.proofs.spot.device.challenger import CoinError, LiveOpening, ledger_head, pinned_session
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
+from verity.protocols.accounting.pouw.prover.serving.h1 import challenger as PHC
 
 
 def locate(calls: list[dict], tile: tuple[int, int], u: int) -> dict:

@@ -28,7 +28,7 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   that decode as sampled proofs' one-stage form, v2's, under parameters naming a challenger and a window, each with what
   its coins are read under (`Properties.Challenger.oneStageZkSource`) and the record its evidence carries. The
   parameters' challenger key (`keyOf`) is that of their first component of sampled proofs' id that names one.
-* **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`ids_nodup`), so
+* **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`Verity.ids_nodup`), so
   on parameters naming the one-stage form, the case the sampled component accepts is v2's (`caseOf`), its record is one
   of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2 held the sessions'
   records to the coin trees it read from it (`Verity.Sampled.Trees.accepted_trees`).
@@ -211,10 +211,6 @@ theorem triples_ids : ∀ {cs : List _root_.Core.Protocol} {ps : List Core.Compo
     rcases hx with rfl | hx
     · exact ⟨hp.1, he.1⟩
     · exact triples_ids (cs := cs) (ps := ps) (ev := ev) hp.2 he.2 x hx
-
-/-- Each composite names each of its components' ids once. -/
-theorem ids_nodup (k : Verity.Registration.Composite) : ((componentsOf k).map (·.id)).Nodup := by
-  cases k <;> decide
 
 /-- `findSome?` at the one element of a list where the function is defined. -/
 theorem findSome_eq {β γ : Type} {f : β → Option γ} :
@@ -1080,7 +1076,10 @@ theorem binds_of_prints (V : Vocab d α) (k : Verity.Registration.Composite) (de
   cases hc : Verity.Sampled.coinsRead o.sent with
   | none => exact (hl fun log hlog => by simp [readsV2, hc] at hlog).elim
   | some l =>
-    rcases accepted_run (composite_readsV2 k) (dev o) hs ha hc with ⟨x, hx, hk, hb⟩ |
+    have hv2 : ReadsV2 k := by
+      obtain ⟨P, hP, -⟩ := ha
+      exact readsV2_of_component hP
+    rcases accepted_run hv2 (dev o) hs ha hc with ⟨x, hx, hk, hb⟩ |
       ⟨dr, e, recs, r, hr, ho, hcr, -, h, ts, hts, hrecs⟩
     · exact .inl ⟨x, hx, by rw [← hθ]; exact hk, hb⟩
     · have hread := Lines.read_run (hP o hθ) hr ho hcr hts hrecs h

@@ -56,7 +56,7 @@ say so; none is computed from a run's K.
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
   so this is the network's amount of record. It stands against the same target, in bits.
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
-  the period, the scope's machines × a registered uplink's `beta` × the period's ticks. `beta` is bits a tick each
+  the period, the scope's machines × a registered uplink's `beta` × the period's seconds. `beta` is bits a second each
   way (`verity.device`) and the term is egress, so one direction counts. The uplink is read from a
   registration log, `--registration FILE`
   (`verity.protocols.accounting.registration.verifier.registration`'s committed log): the boundary link of its
