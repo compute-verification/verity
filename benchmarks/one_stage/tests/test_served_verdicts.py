@@ -2602,8 +2602,11 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     lowest terms and Γ = c of the policy's own numbers, in the unit of its c, with the count rule's (c, k, n) and the
     policy file's SHA-512, or the run's ALPHA and GAMMA where both are set (in the unit LIMITS_UNIT states), and the
     line says which, and that the developer wrote them. What the run's own two numbers prove is in the file and the
-    line where LIMITS_PROVE says it, and nowhere for the policy's own. A policy that names no c writes none and says
-    so, and the policy step still passes."""
+    line where LIMITS_PROVE says it, and nowhere for the policy's own. Where the run sets both HELD_ALPHA and
+    HELD_GAMMA, the file's ``held`` and one clause of the line state the record form's pair beside them, in lowest
+    terms, with its unit and whose weights θ is, and v0's pair is as it was; half a pair states none, and so does a
+    pair that is no limits (a gamma of 0, or text that is no number), whose clause names both values, the file still
+    v0's whole. A policy that names no c writes none and says so, and the policy step still passes."""
     policy = json.dumps({"c": 14, "k": 6, "n": 16})
     rc, lines, _ = _inference_only(tmp_path / "own", "inference-policy", IO_WRITE=policy)
     assert rc == 0 and lines[1:] == [
@@ -2631,6 +2634,30 @@ def test_the_policys_limits_are_fixed_with_it_before_the_serve_from_its_own_c_an
     assert rc == 0 and lines[1] == (
         "INFERENCE-ONLY LIMITS alpha = 3/7 and gamma = 14, the policy's c and k (alpha = k/c, gamma = c)" + LIMITS_SAID)
     assert "proves" not in json.loads((tmp_path / "half" / "out" / "inference-only-limits.json").read_text())
+    run = {"ALPHA": "2/4", "GAMMA": "100", "LIMITS_UNIT": "Program gates in a block", "LIMITS_PROVE": none}
+    rc, lines, _ = _inference_only(tmp_path / "held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8",
+                                   HELD_GAMMA="25", **run)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none}); held for the record "
+        "form, a block a slot and theta the serve's first registration record's weights, alpha = 3/4 and gamma = 25, "
+        "which no verdict of the run reads" + LIMITS_SAID]
+    held = json.loads((tmp_path / "held" / "out" / "inference-only-limits.json").read_text())
+    assert held.pop("held") == {
+        "alpha": [3, 4], "gamma": 25,
+        "unit": "the record form's, a block a slot: alpha in fresh input bits a gate of a block, gamma in a block's gates",
+        "theta": "the weights the serve's first registration record registers (deployment-registration.json)"}
+    assert held == json.loads((tmp_path / "proves" / "out" / "inference-only-limits.json").read_text())
+    rc, lines, _ = _inference_only(tmp_path / "half-held", "inference-policy", IO_WRITE=policy, HELD_ALPHA="6/8", **run)
+    assert rc == 0 and lines[1:] == [
+        f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none})" + LIMITS_SAID]
+    assert "held" not in json.loads((tmp_path / "half-held" / "out" / "inference-only-limits.json").read_text())
+    for name, ha, hg in (("zero-held", "6/8", "0"), ("text-held", "abc", "xyz")):
+        rc, lines, _ = _inference_only(tmp_path / name, "inference-policy", IO_WRITE=policy, HELD_ALPHA=ha,
+                                       HELD_GAMMA=hg, **run)
+        assert rc == 0 and lines[1:] == [
+            f"INFERENCE-ONLY LIMITS alpha = 1/2 and gamma = 100, the run's ALPHA and GAMMA ({none}); the held alpha "
+            f"{ha} and gamma {hg} are no limits, so the file states no held pair" + LIMITS_SAID]
+        assert json.loads((tmp_path / name / "out" / "inference-only-limits.json").read_text()) == held
     rc, lines, _ = _inference_only(tmp_path / "none", "inference-policy", IO_WRITE=json.dumps({"k": 6}))
     assert rc == 0 and lines[1].startswith("INFERENCE-ONLY LIMITS: none written, so the composite's inference-only case "
                                            "is at the run's ALPHA and GAMMA, or at what it reads off the served "
@@ -3851,24 +3878,65 @@ def test_the_rehearsals_settings_state_the_tied_windows_rule_a_stratified_rate(t
     the tied window's rule has no default, and the harness's preflight refuses such a launch (`NO_PEARL_RULE`), which the
     rehearsal would learn only on the serve node. The refusal names V3C_LAW and the form in the preflight's words;
     settings that state one are held."""
+    rc, said = _rehearsal_settings(tmp_path, V3C_LAW=law)
+    if held:
+        assert rc == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (rc, said)
+    else:
+        assert (rc, said) == (3, [
+            f"SETTINGS refused: V3C_LAW is {law or 'unset'}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch "
+            "states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
+            "proof block of each template while none holds more than DEN"]), (rc, said)
+
+
+HELD_FORM = {"HELD_ALPHA": "the record form's alpha is a positive number P/Q or P, each a whole number with no sign or "
+                           "leading zero",
+             "HELD_GAMMA": "the record form's gamma is a positive whole number with no sign or leading zero"}
+
+
+@pytest.mark.parametrize("pair", [
+    {"HELD_ALPHA": "3/4", "HELD_GAMMA": "25"}, {"HELD_ALPHA": "1", "HELD_GAMMA": "25"},
+    {"HELD_ALPHA": None, "HELD_GAMMA": None}, {"HELD_GAMMA": None},
+    *({"HELD_ALPHA": a} for a in ("abc", "0", "0/4", "-3/4", "3/0", "03/4", "0.75")),
+    *({"HELD_GAMMA": g} for g in ("xyz", "0", "-25", "025", "2.5", "25/1"))])
+def test_the_rehearsals_settings_state_the_record_forms_pair_in_the_form_the_limits_held_step_writes(tmp_path, pair):
+    """`rehearsal.sh settings FILE` holds HELD_ALPHA and HELD_GAMMA to values, not only to being set: HELD_ALPHA a
+    positive P/Q or P and HELD_GAMMA a positive whole number, each without a sign or a leading zero, the form `check`'s
+    limits-held step writes to its record.env.add; so a pair that is no limits (a gamma of 0, text that is no number)
+    never reaches the serve. A pair not both set is refused naming both and where to set them, and a pair set but in
+    another form is refused by the setting's name, saying the form; settings in that form are held."""
+    rc, said = _rehearsal_settings(tmp_path, **pair)
+    got = {"HELD_ALPHA": "3/4", "HELD_GAMMA": "25", **pair}
+    if None in got.values():
+        assert (rc, said) == (3, [
+            f"SETTINGS refused: HELD_ALPHA is {got['HELD_ALPHA'] or 'unset'} and HELD_GAMMA is "
+            f"{got['HELD_GAMMA'] or 'unset'}: set both in {tmp_path / 'record.env'}, beside ALPHA and GAMMA, to the "
+            "record form's pair of the class, the two lines `rehearsal.sh check` writes to its record.env.add "
+            "(limits.json's held)"])
+    elif len(pair) == 1:
+        (name, value), = pair.items()
+        assert (rc, said) == (3, [f"SETTINGS refused: {name} is {value}, and {HELD_FORM[name]}, as `rehearsal.sh check` "
+                                  "writes it to its record.env.add"])
+    else:
+        assert rc == 0 and len(said) == 1, (rc, said)
+        assert f"the record form's pair {got['HELD_ALPHA']} and {got['HELD_GAMMA']}, " in said[0]
+
+
+def _rehearsal_settings(tmp_path: Path, **changed: str | None) -> tuple[int, list[str]]:
+    """`rehearsal.sh settings` on settings a Pearl+-tied rehearsal's serve holds, but for ``changed`` (None: unset): its
+    exit status and its lines."""
     for name in ("main.txt", "key.json", "day-params.json"):
         (tmp_path / name).write_text("x\n")
     settings = {"POUW": "pearlplus", "PEARLPLUS_TIE": "1", "PRODUCT": "remote", "ROW": "stand-in",
                 "PP_CHALLENGER": "gate:nobody@gate.invalid", "PP_PEER": "stand-in", "MAIN_FILE": tmp_path / "main.txt",
                 "PP_CHALLENGER_KEY": tmp_path / "key.json", "ALPHA": "1/2", "GAMMA": "4", "LIMITS_UNIT": "a unit",
                 "LIMITS_PROVE": "what they prove", "DAY": "0", "DAY_PROGRAM": "00" * 64, "DAY_LOG": tmp_path / "day-log.json",
-                "DAY_PARAMS": tmp_path / "day-params.json", **({} if law is None else {"V3C_LAW": law})}
+                "DAY_PARAMS": tmp_path / "day-params.json", "V3C_LAW": "stratified-rate:1/977", "HELD_ALPHA": "3/4",
+                "HELD_GAMMA": "25"}
+    settings = {k: v for k, v in {**settings, **changed}.items() if v is not None}
     (tmp_path / "record.env").write_text("".join(f"{k}={shlex.quote(str(v))}\n" for k, v in settings.items()))
     run = subprocess.run(["bash", str(HERE.parent / "rehearsal.sh"), "settings", str(tmp_path / "record.env")],
                          env={"PATH": os.defpath}, capture_output=True, text=True, check=False)
-    said = run.stdout.splitlines()
-    if held:
-        assert run.returncode == 0 and len(said) == 1 and said[0].startswith("SETTINGS held: "), (run.returncode, said, run.stderr)
-    else:
-        assert (run.returncode, said) == (3, [
-            f"SETTINGS refused: V3C_LAW is {law or 'unset'}: under PEARLPLUS_TIE V3C_LAW has no default, and the launch "
-            "states it, a stratified rate, stratified-rate:NUM/DEN (0 < NUM <= DEN): stratified-rate:1/DEN samples one "
-            "proof block of each template while none holds more than DEN"]), (run.returncode, said, run.stderr)
+    return run.returncode, run.stdout.splitlines()
 
 
 def _no_transfer_gates(part: str, law: str, templates: list[str]) -> str:
