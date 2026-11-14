@@ -20,7 +20,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
 
 * **The verdicts are credit's own** (`_verified`). A window's evidence carries its statements' proof files, one
   statement a call with a sampled proof block (`STATEMENT_KEYS`: its circuit file, its public file and its sessions), never a
-  verdict. Credit runs the verifier (`proofs.verify`, `flock-verify verify --zk`) on each: on the circuit file
+  verdict. Credit runs the verifier (`proofs.verify`, `verity-verify-proof verify --zk`) on each: on the circuit file
   whose SHA-512 its period's open committed for the call's K (`CIRCUIT_FILES`, ``{k<K>: SHA-512}``, refused before the
   verifier runs when it differs), against the committed descriptor, its partition object (`partition_of`) and the
   call's ``--registered`` file credit builds from the descriptor and the window's entries (`registered_file`,
@@ -151,7 +151,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   ``req``), when it registers one, is round 0's: its root is ``request_table`` and its domain binds the session alike.
   That the Commit's values are the model's computation is the Commit's sample's, not credit's.
 * **The window serves its period's fixed length** (`committed_length`, `_length`): correct
-  tokens served past the honest run's end of sequence are not useful work, so a row of record serves each request's
+  tokens served past the honest run's end of sequence are not useful work, so a workload of record serves each request's
   public max_tokens whatever it samples (ignore_eos, circuits' ``public-cap`` done source). The period's open commits
   them before any window (`LENGTH_FIELD`, ``{max_tokens, stop}``, stop `window.STOP_FIXED`), so they are the verifier's
   own; an open with none (``no-fixed-length``) or an EOS-keyed stop mode (``eos-keyed-row``) credits nothing. Every
@@ -162,7 +162,7 @@ returns the credit bits whatever the proofs' outcome, and `_a_link` trusts the r
   the public schedule's.
 * **The proofs are the window's registration's** (`_registration`): each sampled proof block's proof outcome is the
   verifier's verdict for its session (`PROOF_KEYS`): the SHA-512 of the descriptor it verified the session against
-  (``program``) and the session's own registered finding (``registered``, flock-verify's: each registered port's value
+  (``program``) and the session's own registered finding (``registered``, verity-verify-proof's: each registered port's value
   and the root its reads were opened against). The entries are the registration's: each A value's domain, and each
   other value's a proof opened, is `domain_of` the committed descriptor's SHA-512 and, for every value but the weights'
   ``…/b/<K>`` (held across windows, `is_held`) and round 0's input-ids and request tables, the window's open root
@@ -382,8 +382,8 @@ BODY = ("the window's circuit's units are not its record's tiles: its root's nod
         "one (h1window.program's body)")
 #: a sampled proof block's proof outcome: the verifier's verdict for the session that proved it
 PROOF_KEYS = ("program", "registered", "unit", "verdict")
-PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier "
-               "of record's verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the "
+PROOFS_FORM = ("the drawn units' proof outcomes are not a list of {program, registered, unit, verdict}, each the verifier"
+               "'s verdict for a drawn unit's session: verdict accept or reject, program the SHA-512 of the "
                "circuit's descriptor it verified the session against, and registered its finding, each registered port's "
                "{value, root}, port and value printable ASCII and root a SHA-512 digest")
 LOG_FORM = "the round log is not a nonempty list"
@@ -448,7 +448,7 @@ LIVE_BODY = ("the window's live circuit's units are not its rounds: its root's n
              "calls of PouwLiveSlots_v2{T=…}, a composite of that id bound to its record's T alone, S its record's "
              "(circuit.live.program_v2's body)")
 LIVE_PROOFS_FORM = ("the window's live proof outcomes are not a list of {program, registered, unit, verdict}, each the "
-                    "verifier of record's verdict for round s's live@<s> session, unit s: verdict accept or reject, "
+                    "verifier's verdict for round s's live@<s> session, unit s: verdict accept or reject, "
                     "program the SHA-512 of the live descriptor, registered its finding")
 LIVE_PREFIX = ("the window's live Program's PREFIX is not its circuit's, so the tables its units read are not the "
                "window's: build the live Program under the window Program's PREFIX")
@@ -1341,7 +1341,7 @@ def _window_drawn(window: dict, draw: dict, ss: list[dict], k: Any
 
 
 def _finding(x: Any) -> list[tuple[str, str, str]] | None:
-    """A session's registered finding (flock-verify's ``registered``, ``{port: {value, root}}``: each registered port's
+    """A session's registered finding (verity-verify-proof's ``registered``, ``{port: {value, root}}``: each registered port's
     value and the root its reads were opened against) as ``(port, value, root)`` in port order, or None."""
     if not isinstance(x, dict):
         return None
@@ -1381,8 +1381,8 @@ def _proved(drawn: list[int], proofs: Any) -> tuple[str, str] | None:
     return None
 
 
-def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
-          ) -> tuple[list[int] | None, tuple[str, str] | None]:
+def drawn_twin(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
+               ) -> tuple[list[int] | None, tuple[str, str] | None]:
     """The units the sampling coin `coin` (its value, a SHA-512 digest in hex) samples from the window `layout` (`strata`)
     under `law` at the committed K `k`, ascending (`core_check.work_units` under the stream's digest `stream`, the
     registration `registration` and its `receipt`), and None; or None and the refusal (``layout``, ``draw``,
@@ -1396,6 +1396,19 @@ def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, 
     return _drawn(c, stream, registration, receipt, ss, k)
 
 
+def drawn(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any
+          ) -> tuple[list[int] | None, tuple[str, str] | None]:
+    """The sampled units of record and None, or None and the refusal: the Lean `Credit.drawn`'s (`verifier.of_record` on
+    ``drawn``), with `drawn_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
+    said = V.of_record("drawn", {"coin": coin, "stream": stream, "registration": registration, "receipt": receipt,
+                                 "layout": layout, "k": k},
+                       {"refused": list(why)} if why is not None else {"drawn": got})
+    if "drawn" in said:
+        return said["drawn"], None
+    return None, tuple(said["refused"])
+
+
 def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: Any, k: Any, proofs: Any
             ) -> tuple[str, str] | None:
     """None when every unit the sampling coin samples from the window (`drawn`, never a list the prover hands in) has exactly
@@ -1403,7 +1416,7 @@ def _outcome(coin: Any, stream: Any, registration: Any, receipt: Any, layout: An
     other unit has one; else the refusal (``layout``, ``draw``, ``sampler``, ``outcome``, ``missing`` or ``failed``, and
     why): the whole window is refused, with no partial credit. `window`'s rule on the sampling coin it read, the units
     sampled under the served window's arguments."""
-    got, why = drawn(coin, stream, registration, receipt, layout, k)
+    got, why = drawn_twin(coin, stream, registration, receipt, layout, k)
     return why if got is None else _proved(got, proofs)
 
 
@@ -1744,7 +1757,7 @@ def _judged(layout: dict, c: int, reg: dict, got: list[PF.Finding], out: list[di
     start = sum(sizes[:c])
     for f in got:
         if not f.accepted:
-            return ("failed", f"call {c}'s session {f.session} was rejected by the verifier of record ({f.why}): a "
+            return ("failed", f"call {c}'s session {f.session} was rejected by the verifier ({f.why}): a "
                               "failed drawn unit refuses the whole window, not only its call (no partial credit, and "
                               "no retry)")
         pub = reg["ports"][PUB_PORT]
@@ -2071,8 +2084,8 @@ def _leaf_judged(ask: dict, got: list[PF.Finding], held: dict) -> tuple[str, str
     want = sorted((p, e["value"], e["root"]) for p, e in reg["ports"].items())
     for f in got:
         if not f.accepted:
-            return ("failed", f"drawn leaf {u}'s {ask['leaf']} session {f.session} was rejected by the verifier of "
-                              f"record ({f.why}): a failed statement refuses the whole window (no partial credit, and "
+            return ("failed", f"drawn leaf {u}'s {ask['leaf']} session {f.session} was rejected by the verifier"
+                              f" ({f.why}): a failed statement refuses the whole window (no partial credit, and "
                               "no retry)")
         if tuple(f.units) != (0,) or f.program != ask["partition"]["program"]:
             return ("proof", f"drawn leaf {u}'s {ask['leaf']} session {f.session} proved units {list(f.units)} of "
@@ -2154,7 +2167,7 @@ def _lean_verified(statements: Any, files: Any, raw: bytes, entries: list, windo
                     break
             got = V.lean("credit-verified", {**q, "runs": runs})
     except V.LeanError as e:
-        return None, ("proof", f"the Lean verifier of record could not judge the window's statements, so the window "
+        return None, ("proof", f"the Lean verifier could not judge the window's statements, so the window "
                                f"stays refused: {e}")
     return (None, tuple(got["refused"])) if "refused" in got else (got["outcomes"], None)
 
@@ -2391,8 +2404,8 @@ def _live_verified(files: Any, run: Run) -> Lived:
                 return None, (why[0], f"round {s}'s live@{s}: {why[1]}")
             for f in found:
                 if not f.accepted:
-                    return None, (LIVE, f"round {s}'s live@{s} session {f.session} was rejected by the verifier of "
-                                        f"record ({f.why}): its served rows m_s = {ms[s]} are not proved (no retry)")
+                    return None, (LIVE, f"round {s}'s live@{s} session {f.session} was rejected by the verifier"
+                                        f" ({f.why}): its served rows m_s = {ms[s]} are not proved (no retry)")
                 if tuple(f.units) != (s,):
                     return None, (LIVE, f"round {s}'s live@{s} session {f.session} proved units {list(f.units)}, not "
                                         f"unit {s}: round s's statement proves its own round's unit")
@@ -2453,7 +2466,7 @@ def _lean_live_verified(files: Any, entries: Any, run: Run) -> Lived:
                         break
                 got = V.lean("credit-live-verified", {**q, "runs": runs})
         except V.LeanError as e:
-            return None, (LIVE, f"the Lean verifier of record could not judge the window's live statements, so the "
+            return None, (LIVE, f"the Lean verifier could not judge the window's live statements, so the "
                                 f"window stays refused: {e}")
         return (None, tuple(got["refused"])) if "refused" in got else (got["outcomes"], None)
     return lived
@@ -2581,14 +2594,14 @@ def _period_weights(key: Any, ledger: Any, window: dict, rounds: list, layout: d
 
 def no_fixed_length(name: str) -> str:
     return (f"no-fixed-length: period {name}'s open commits no fixed length ({LENGTH_FIELD}, {{max_tokens, stop}}), so "
-            "its windows are not of record: a row of record serves each request's public max_tokens whatever it "
+            "its windows are not of record: a workload of record serves each request's public max_tokens whatever it "
             f"samples (ignore_eos; Daniel, 19 Oct, ASK-39). Open the period with the row's max_tokens and stop "
             f"{Wd.STOP_FIXED}")
 
 
 def eos_keyed_row(name: str, stop: str) -> str:
     return (f"eos-keyed-row: period {name}'s open commits the stop mode {stop}, not {Wd.STOP_FIXED} (ignore_eos, "
-            "circuits' public-cap done source): a row of record is done only at each request's public max_tokens, "
+            "circuits' public-cap done source): a workload of record is done only at each request's public max_tokens, "
             "never at an EOS token")
 
 
@@ -2784,7 +2797,7 @@ def _window_outcomes(key: Any, ledger: Any, pins: Any, main: Any, window: Any, s
     return (None, why) if got is None else (got[0], None)
 
 
-def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
+def period_twin(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
     """None when `roots` are exactly the sessions the auditor's ledger `ledger` lists in period `name`'s close, by their
     open roots in its order (a served window's session, then its sample session's: `_period_of`), and that close is complete: every session
     between the period's open and its close, each opened and ended complete (`challenger.verify_periods`, under the
@@ -2935,7 +2948,7 @@ def _lean_committed_files(ledger: list, name: str) -> tuple[dict | None, tuple[s
     try:
         got = V.lean("credit-committed-files", {"ledger": ledger, "name": name})
     except V.LeanError as e:
-        return None, ("circuit", f"the Lean verifier of record could not read period {name}'s committed circuit files, "
+        return None, ("circuit", f"the Lean verifier could not read period {name}'s committed circuit files, "
                                  f"so the period earns nothing: {e}")
     return (None, tuple(got["refused"])) if "refused" in got else (got["files"], None)
 
@@ -3000,7 +3013,7 @@ DRAW_UNIT = "the draw session of window"
 CALL_RANGE_CODE, REPEATED_CALL = "call-range", "repeated-call"
 
 
-def passes_distinct(passes: Any) -> tuple[str, str] | None:
+def passes_distinct_twin(passes: Any) -> tuple[str, str] | None:
     """Why the Pearl-C pass manifests `passes`, credited together, are refused, or None: every call index below
     `protocol.CALL_RANGE` (``call-range``), and no index held by two passes of one epoch, nor twice by one pass
     (``repeated-call``). The epoch is the manifest's salt, since -h3's row seed binds the salt and the index but no pass,
@@ -3040,8 +3053,8 @@ EARLIER_FORM = ("the lane's earlier credited Pearl-C epochs are not a list of [w
 SALT_ONLY, PASS_REFUSED, INDEX = "salt-only", "pass", "index"
 
 
-def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
-                          verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
+def pearl_c_period_credit_twin(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
+                               verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
     """Pearl-C period `name`'s credit and None, or None and the refusal (the Pearl-C period rule). A
     live Pearl-C pass earns only inside a Pearl-C period, and the period earns only when every clause holds, each
     refused with its own code:
@@ -3091,7 +3104,7 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
         manifests.append(m)
         epochs.append((w, k, PS.epoch_open_root(w, k).hex()))
     roots = list(dict.fromkeys(r for _, _, r in epochs))
-    why = period(key, ledger, name, roots, verify)
+    why = period_twin(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
     ck, audited = Ch.ChallengerKey.from_json(key), []
@@ -3138,10 +3151,33 @@ def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any
                                  "weights' root, its epochs numbered from 0")
         nxt[w] = k + 1
         out.append([w, k])
-    why = passes_distinct(manifests)
+    why = passes_distinct_twin(manifests)
     if why is not None:
         return None, why
     return {"epochs": out, "passes": manifests}, None
+
+
+
+def period(key: Any, ledger: Any, name: Any, roots: Any, verify: Ch.Verify) -> tuple[str, str] | None:
+    """The verdict of record on a credit period's presented roots: the Lean `Credit.periodRoots`'s, not yet written, so
+    this raises (`verifier.not_written`); `period_twin` is its Python twin."""
+    return V.not_written("period", "PouwCheck.Credit.periodRoots")
+
+
+def passes_distinct(passes: Any) -> tuple[str, str] | None:
+    """The verdict of record on passes credited together, (code, why) or None: Pearl+'s Lean
+    `PouwCheck.PearlPlus.passesDistinct`'s, the one its run verdict reads (`verifier.of_record` on ``passes-distinct``),
+    with `passes_distinct_twin` its Python twin; a disagreement is the refusal ``verifier.DISAGREE``."""
+    why = passes_distinct_twin(passes)
+    said = V.of_record("passes-distinct", {"passes": passes}, None if why is None else {"refused": list(why)})
+    return None if said is None else tuple(said["refused"])
+
+
+def pearl_c_period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, passes: Any, earlier: Any,
+                          verify: Ch.Verify) -> tuple[dict | None, tuple[str, str] | None]:
+    """A Pearl-C credit period's credit of record: the Lean `Credit.pearlCMonitoringPeriodCredit`'s, not yet written, so this
+    raises (`verifier.not_written`); `pearl_c_period_credit_twin` is its Python twin."""
+    return V.not_written("pearl_c_period_credit", "PouwCheck.Credit.pearlCMonitoringPeriodCredit")
 
 
 def period_credit(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
@@ -3190,17 +3226,33 @@ def _period_outcomes(key: Any, ledger: Any, pins: Any, main: Any, name: Any, win
     return _period_of(key, ledger, pins, main, name, windows, verify, None)
 
 
+def _once(verify: Ch.Verify) -> Ch.Verify:
+    """`verify`, each answer held by its key, message and signature: a period's check reads its ledger 5W + 1 times
+    (`period`, then each window's two `credited_session`s, `_credited`, the rounds and `_period_weights`), all at the
+    verifier's one key, so each entry's signature is verified once. Lean's `PouwCheck.Credit.Once.periodCreditOnce`
+    replays the ledger once."""
+    held: dict[tuple[Ch.ChallengerKey, bytes, bytes], bool] = {}
+
+    def once(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
+        at = (key, message, signature)
+        if at not in held:
+            held[at] = verify(key, message, signature)
+        return held[at]
+    return once
+
+
 def _period_of(key: Any, ledger: Any, pins: Any, main: Any, name: Any, windows: Any, verify: Ch.Verify,
                run: Run | None, kept: list[_Outcomes] | None = None, files_of: Any = None
                ) -> tuple[dict | None, tuple[str, str] | None]:
     """`_period_outcomes`, or with `run` `period_credit`'s Python twin, each window's statement runs appended to `kept`
     and the committed circuit files' refusal set on `files_of` (``.refused``)."""
+    verify = _once(verify)
     keys, form = (PROVED_KEYS, WINDOWS_FORM) if run is None else (PERIOD_KEYS, PERIOD_FORM)
     if not _formed(windows, keys):
         return None, ("period", form)
     roots = [r for w in windows for r in (w["window"].get("root") if isinstance(w["window"], dict) else None,
                                           w["draw"].get("root") if isinstance(w["draw"], dict) else None)]
-    why = period(key, ledger, name, roots, verify)
+    why = period_twin(key, ledger, name, roots, verify)
     if why is not None:
         return None, why
     big_k, why = committed_k(ledger, name)
@@ -3599,7 +3651,8 @@ __all__ = ["CALL_RANGE_CODE", "CALLS_TAG", "CIRCUIT_FILES", "COMMIT_FORMAT", "CO
            "LIVE", "LIVE_FN", "LIVE_KEYS", "LIVE_RECORD", "LIVE_STATEMENT_KEYS", "LIVE_STATEMENTS", "LIVE_UNIT", "MAX_K", "MODEL_FIELD", "MODEL_KEYS", "MODELS", "PARTITION_FORMAT", "PASS_REFUSED", "PEARL_C_FORM", "PEARL_C_KEYS", "PERIOD_KEYS", "PINNED_MODELS", "PROOF_KEYS", "PROVED_KEYS", "QUERY", "RECORD", "REPEATED_CALL", "REQUESTS_IDS_TAG", "REQUESTS_OUTSIDE", "REQUESTS_TABLE", "ROUND_TAG",
            "SALT_ONLY", "SCHEMA", "SERVED_ROWS", "STATEMENT_KEYS", "TILE_FN", "VERDICTS", "WEIGHTS_FIELD", "WINDOW_FN", "WINDOW_KEYS",
            "call_work", "calls_root", "commit_ids", "commit_of", "commit_rows", "committed_files", "committed_k", "committed_length", "committed_rows", "committed_weights", "cover",
-           "credited_work", "domain_of", "draw_root", "drawn", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
-           "merkle_depth", "partition_of", "passes_distinct", "pearl_c_period_credit", "period", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
+           "credited_work", "domain_of", "draw_root", "drawn", "drawn_twin", "established", "a_value", "form_of", "ids_step", "is_a", "is_held", "is_requests", "is_tied", "lanes_files", "lanes_shape", "law", "layout_of", "leaf_call", "leaf_k", "leaf_of", "leaf_partition_of", "leaf_place", "leaf_registered_file", "leaf_unit_id", "live_of",
+           "merkle_depth", "partition_of", "passes_distinct", "passes_distinct_twin", "pearl_c_period_credit",
+           "pearl_c_period_credit_twin", "period", "period_twin", "period_credit", "registered_file", "requests_root", "round_root", "shape_of",
            "served_rows", "served_work", "slots_step", "step_row", "step_tables", "strata", "table_rows", "tree_root",
            "weights_root", "window"]

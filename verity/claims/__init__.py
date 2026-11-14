@@ -116,7 +116,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # the salts the prover's workers committed R's level-0 top rows under, at which the guarantee is applied
     Entry("registrant-holds-openings", "model",
           "Registrant holds its openings: the prover holds a row and salt under every leaf it registered at a row the "
-          "verifier's reads file names, and its own workers behind the firewall hold the salts they committed R's level-0 "
+          "verifier's reads file names, and its own workers behind the ZK server hold the salts they committed R's level-0 "
           "top rows under; a prover that registers a hash it can't open is outside the guarantee",
           "Registrant holds openings"),
     Entry("fiat-shamir", "model", "Fiat–Shamir (non-interactive) in the random-oracle model", "Fiat–Shamir"),
@@ -324,6 +324,26 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # the two halves of Pearl-C's TT_OUT at the H100 record, rev1 (security/Definitions/Pouw/Assumptions/PearlC/TTOutS8.lean),
+    # open premises of Pouw.Guarantees.PearlC.SampledH100Rev1S8_8192 and SampledH100Rev1S8Llama32_1b: `W1CompleteH100`
+    # (falsified on the H200) and `TTOutTilePearlCH100Rev1S8`; benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py is the
+    # conjecture's falsification test
+    Entry("w1-complete-h100", "assumption",
+          "W1 is complete for the H100's credited work: every adversary of the cost model at an in-domain workload "
+          "within a cost and a query count has a W1 adversary on the H100 (or the H200) with INT8 within the same cost "
+          "and count whose good tiles at the H100 record per second at the tensor clock (rev1) exceed every credit at "
+          "least as often over the oracle and the salt; W1's prices are the data sheets' per-MAC tensor-core ratios with the "
+          "SM pipes priced per second at the 1830 MHz tensor clock beside the 1980 MHz SM clock (H100 whitepaper "
+          "Tables 1 and 3, H200 data sheet), with SHA-512 compressions and first fetches free; refuted by a program on "
+          "the card, within a cost and a query count, that earns more good-tile credit with higher probability than "
+          "every W1 program within them; falsified on the H200, where the timed loop of FP32 beside the tensor pipe "
+          "refutes both data-sheet readings of an FP32 instruction's price", "W1 complete (H100)",
+          "measured"),
+    Entry("tt-out-tile-pearl-c-h100-rev1", "assumption",
+          "Pearl-C's TT_OUT(1/400) per audit tile at the H100 record per second at the tensor clock, rev1, over W1 on "
+          "the H100 with INT8 at its best case for the adversary: no W1 program outputs a good tile's words, before the "
+          "salt is drawn, at a cost below (1 − g₀) of the tile's credit except with probability δ; refuted by such a "
+          "program for a tile in the domain", "TT_OUT tile (H100, rev1)", "conjectured"),
     # the min-cut bound's cut conjectures (security/Definitions/Assumptions.lean): (H) is
     # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
     Entry("training-cut-hardness", "assumption",
@@ -467,7 +487,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
           "soundness at "
           "δ_ZK (ProofSoundAt: a proof is accepted with an opening that fails its relation with probability at most "
-          "δ_ZK), which Flock's EndToEndHiddenDrawn gives only for a cheater whose hash calls over the window are "
+          "δ_ZK), which Flock's EndToEndHiddenSampled gives only for a cheater whose hash calls over the window are "
           "capped, and only against its committed transcript: that the relation's rows are the leaves' committed rows "
           "is not stated there", "TS proofs sound", "standard"),
     Entry("accounting-ts-proofs-pin", "assumption",
@@ -479,8 +499,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "recompute every word they absorb, and nothing states that the served relations are PIN's", "TS proofs pin",
           "conjectured"),
     Entry("accounting-ts-accepted-live", "assumption",
-          "A proof is credited only after flock-verify --zk --registered accepts its session. Every served path today "
-          "verifies with plain flock-verify --zk and binds its served values through the public file (served_zk's Lean "
+          "A proof is credited only after verity-verify-proof --zk --registered accepts its session. Every served path today "
+          "verifies with plain verity-verify-proof --zk and binds its served values through the public file (served_zk's Lean "
           "checks, served_commit's verdict, h1_prove); of the audit's runners only one_stage/a0.py passes --registered. "
           "So no served path meets it until the served trees are registered as ports, or a bridge for public-file "
           "binding is stated", "TS accepted live", "standard"),
@@ -498,10 +518,10 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "beside the prover, which doesn't meet the fifth fact", "TS window law", "standard"),
     Entry("accounting-ts-served-checks", "assumption",
           "A proof's relation (its served Definition's check) holds at its Flock session's extracted value layer "
-          "wherever flock-verify accepts the session and every drawn unit is right at its own owned reads; under a "
+          "wherever verity-verify-proof accepts the session and every drawn unit is right at its own owned reads; under a "
           "sampled draw, only for a relation that reads the drawn units alone", "TS served checks", "conjectured"),
     Entry("accounting-ts-served-roots-linked", "assumption",
-          "Flock's rows link covers the served roots: outside δ_s, where flock-verify accepts a session and every "
+          "Flock's rows link covers the served roots: outside δ_s, where verity-verify-proof accepts a session and every "
           "drawn unit is right at its owned reads, the session's extracted value layer is the served layer's opening "
           "(the round's served leaves, committed before σ_w)", "TS served roots linked", "conjectured"),
     Entry("accounting-ts-leaf-checks", "assumption",
@@ -509,7 +529,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "tile's K) computes its Definition at its decoded port rows, registered or not: on every wire assignment its "
           "circuit's evaluation agrees with, an ok word of 1 means the lane's partials row is the honest one and its "
           "32 cells have z = A·Bᵀ and y = dq(z), or for the combine that the rows' XOR is the receipt. That every port "
-          "is registered and opens at its registered root is proved from flock-verify's complete check, not assumed",
+          "is registered and opens at its registered root is proved from verity-verify-proof's complete check, not assumed",
           "TS leaf checks", "conjectured"),
     Entry("accounting-ts-group-realizes", "assumption",
           "A leaf's group of statements (its lanes, each in n chunks along K, and its combine) realizes the leaf's "
@@ -530,7 +550,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "A PouwH1TileZy_v1 session's circuit computes its Definition at its decoded registered ports: on any wire "
           "assignment the key program's evaluation agrees with at a unit, whose ok wires carry the ok row (the word "
           "1), every cell of the unit's decoded view has z = A·Bᵀ and y = dq(z). It holds of the circuit only if "
-          "every input its ok reads is a registered port, which flock-verify's complete check establishes",
+          "every input its ok reads is a registered port, which verity-verify-proof's complete check establishes",
           "TS tile checks", "conjectured"),
     Entry("accounting-ts-lin-steer", "assumption",
           "LIN-STEER, false for a segmented consumer whose noise-active segments carry unequal counts: zeroing a "
@@ -559,7 +579,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
     # (security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
     Entry("flock-relay-serves", "assumption",
-          "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
+          "The ZK server's relay serves each session's requests as its IO code reads: at each request that reaches a "
           "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
           "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
           "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
@@ -571,14 +591,14 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "standard"),
     # `Claims.ZKServer.Loop.Src` (security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
-    Entry("flock-firewall-os-src", "assumption",
-          "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
+    Entry("flock-zk-server-os-src", "assumption",
+          "Every input the ZK server's session loop takes from its host and its operating system is the session tape's: "
           "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
           "tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
           "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
           "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
-          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
+          "since zero knowledge protects the developer", "ZkServer OS source", "standard"),
     # the training formalism v2's assumptions (security/Definitions/Assumptions.lean): A1 is
     # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
     # `Nci.Formalism.Assumptions.EfficiencyFloor`

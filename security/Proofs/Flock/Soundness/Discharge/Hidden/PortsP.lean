@@ -23,8 +23,8 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # The public leaves `HmIn.parse` accepted, and the rows `HmIn.delta` keeps
 
-* `parse_ports`, `parse_leaves`, `parse_noPorts`: with public input ports, one public leaf map per unit, each as long as
-  the unit's `leaves_in`; without, no public leaf map.
+* `parse_ports`, `parse_leaves`, `parse_empty`, `parse_noPorts`: with public input ports, one public leaf map per unit,
+  each as long as the unit's `leaves_in`; without, the empty ports `{}`, with no public leaf map.
 * `parse_leaves_lt`, `parse_leaf_lt`: each public leaf is a public word, below the ports' words.
 * `publicCol_at`: a column `HmIn.publicCol` names is bit `t` of public leaf `jj` of a unit slot `k`, at column
   `g0.col · WORD + 16 jj + t` of the slot, inside the unit's input rows (16-bit leaves, `CheckFacts.unit_groups`).
@@ -70,10 +70,10 @@ theorem mapM_size {α β ε : Type} {f : α → Except ε β} {xs : Array α} {y
 
 -- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
-/-- **What `HmIn.parse` accepted**: no public input port and no public leaf map, or public input ports with one public
-leaf map per unit, each as long as its `leaves_in`. -/
+/-- **What `HmIn.parse` accepted**: the empty ports `{}` (META names no public input), or public input ports with one
+public leaf map per unit, each as long as its `leaves_in`. -/
 theorem parse_ports {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) :
-    (pi.ports.isEmpty = true ∧ pi.leaves = #[]) ∨
+    pi = {} ∨
       (pi.ports.isEmpty = false ∧ pi.leaves.size = c.upv ∧
         ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size) := by
   unfold HmIn.parse at h
@@ -87,7 +87,7 @@ theorem parse_ports {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) 
     all_goals
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
-      exact Or.inl ⟨rfl, rfl⟩
+      exact Or.inl rfl
   | ok pj =>
     rw [hj] at h
     try dsimp only at h
@@ -118,16 +118,22 @@ theorem parse_ports {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) 
 /-- **With public input ports, one public leaf map per unit, each as long as its `leaves_in`**. -/
 theorem parse_leaves {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (hne : pi.ports.isEmpty = false) :
     pi.leaves.size = c.upv ∧ ∀ u < c.upv, (pi.leaves[u]!).size = (c.leavesIn.getD u #[]).size := by
-  rcases parse_ports h with ⟨he, -⟩ | ⟨-, h1, h2⟩
-  · rw [he] at hne; cases hne
+  rcases parse_ports h with rfl | ⟨-, h1, h2⟩
+  · exact absurd hne (by decide)
   · exact ⟨h1, h2⟩
+
+/-- **Without public input ports, `HmIn.parse` returned the empty ports `{}`**: a META naming public inputs names a
+port. -/
+theorem parse_empty {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (he : pi.ports.isEmpty = true) :
+    pi = {} := by
+  rcases parse_ports h with h0 | ⟨hne, -⟩
+  · exact h0
+  · rw [he] at hne; cases hne
 
 /-- **Without public input ports, no public leaf map.** -/
 theorem parse_noPorts {c : Circuit} {pi : HmIn.Ports} (h : HmIn.parse c = .ok pi) (he : pi.ports.isEmpty = true) :
     pi.leaves = #[] := by
-  rcases parse_ports h with ⟨-, h1⟩ | ⟨hne, -⟩
-  · exact h1
-  · rw [he] at hne; cases hne
+  rw [parse_empty h he]
 
 -- `walk_step` down `HmIn.parse`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in

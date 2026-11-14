@@ -43,7 +43,11 @@ from verity_vllm.query import router_softmax as RS
 from verity_vllm.query import scale_products as SP
 from verity_vllm.query import vocab_range as VR
 from verity_vllm.query.compose import compose_global, merge_ranks
-from verity_vllm.query.program_view import from_instances, iter_instance_rows, specialization
+from verity_vllm.query.program_view import (
+    from_instances,
+    iter_instance_rows,
+    specialization,
+)
 from verity_vllm.query.required import (
     Q_WORD_ID,
     QUERIES,

@@ -73,7 +73,7 @@ def test_table_refuses_another_schema(tmp_path: Path) -> None:
         RUN.main(["table", str(tmp_path / "x.json")])
 
 
-def test_a_firewalled_run_is_a_plain_run_on_a_cpu_node(capsys) -> None:
+def test_a_run_behind_the_zk_server_is_a_plain_run_on_a_cpu_node(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--steps", "vcap", "--repeat", "1"]) == 0
     cmd = capsys.readouterr().out.split()
     head, job = cmd[:cmd.index("--")], cmd[cmd.index("--") + 1:]
@@ -168,11 +168,11 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
         cmd = capsys.readouterr().out.split()
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
-    assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.FW_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
+    assert limit("--forge", "coef") - limit() == pytest.approx(RUN.MARGIN * RUN.RELEASE_S["L0"] / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
     # the message forgery proves alg-p1, which it leaves honest, beside alg-p0
-    alg = RUN.FW_S["alg-p0"] + RUN.FW_S["alg-p1"]
+    alg = RUN.RELEASE_S["alg-p0"] + RUN.RELEASE_S["alg-p1"]
     assert limit("--forge", "message") - limit() == pytest.approx(RUN.MARGIN * alg / 60 + RUN.OTHER_MIN["forge-after"], abs=1)
-    assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.FW_S["L0"] + RUN.FW_S["L3"] + alg) / 60, abs=1)
+    assert limit("--forge", "sum") - limit() == pytest.approx(RUN.MARGIN * (RUN.RELEASE_S["L0"] + RUN.RELEASE_S["L3"] + alg) / 60, abs=1)
     assert all(RUN.statements(name) for v in RUN.FORGED.values() for name in v.split(","))   # each names a measured statement
     with pytest.raises(SystemExit, match="--forge: nope"):
         RUN.main(["run", "--dry-run", "--forge", "coef,nope"])
@@ -191,7 +191,7 @@ def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statem
         return int(cmd[cmd.index("--timeout") + 1][:-1])
 
     assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")
-    big = max(RUN.FW_S.values())
+    big = max(RUN.RELEASE_S.values())
     assert limit("--env", "REC_LINKS=1") - limit() == pytest.approx(RUN.MARGIN * 2 * big / 60, abs=1)
     assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
         RUN.MARGIN * 3 * big / 60, abs=1)

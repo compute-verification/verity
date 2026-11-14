@@ -15,14 +15,14 @@ product, one Pearl+ epoch a Commit window, under the server's own Commit, whose 
   the 1B, layer by layer qkv, o, gate_up and down), and no warm-up pass is in the epoch.
 * **Coins.** ``coins(k)`` gives the pouw settings window k's salt coin comes from. With ``--challenger-gate``,
   ``--challenger-peer`` and ``--challenger-lane`` it is a live salt-only session of window k's own on the auditor device's
-  challenger (`live`): reserved at the window's open under the lane (`pouw_h1_window.reserve_salt`, joining the lane's
+  challenger (`live`): reserved at the window's open under the lane (`serving.reserve_salt`, joining the lane's
   open period), opened by the install on its salt epoch's root and its salt coin flipped from it
-  (`pouw_h1_window.salt_session`). Without them it is an in-process challenger of epoch k over the Lean
-  verifier's entropy (`verity.protocols.accounting.pouw.verifier.coins.Challenger`, `verifier.coins`), which credits nothing.
+  (`serving.salt_session`). Without them it is an in-process challenger of epoch k over the Lean
+  verifier's entropy (`serving.in_process_coins`), which credits nothing.
 * **Its close**, on the engine loop: the hooks off, the option closed (the last pass's files waited for,
   `PearlCDeviceRun.finish`), then ``pearl/w<k>/coins.json``, the epoch's coin commitment (`verify_run.epoch_coins`), and
-  ``served.json`` (`pearl_c.window.SERVED_SCHEMA`): the window's passes with calls, each timed, with its manifest's path,
-  and its coins (`pearl_c.window.coins_of`), which ``served_passes.py retain --window-record W`` and ``verify --tie W``
+  ``served.json`` (`serving.SERVED_SCHEMA`): the window's passes with calls, each timed, with its manifest's path,
+  and its coins (`serving.coins_of`), which ``served_passes.py retain --window-record W`` and ``verify --tie W``
   read. A window whose passes with calls aren't its Commit's steps, each with every linear's call, is the window's error.
   The window's seal is the Commit's (``windows/w<k>/``); ``pearl/`` is outside it.
 
@@ -40,11 +40,10 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
-from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
-from verity.protocols.accounting.pouw.prover.schemes.pearl_c_device import H100
+from verity.protocols.accounting.pouw.prover import serving as PS
 
 #: pearl_c_sm90's scheme, one of `pearl_c.SCHEMES`: v1 forming on the device record of an H100 or H200, -h3 hashing
-SCHEME = C.PearlC(forming="v1", device=H100, hashing="h3").name
+SCHEME = PS.PearlC(forming="v1", device=PS.H100, hashing="h3").name
 ENTRY = f"pouw:{SCHEME}"
 #: the precision the arm serves at: the BF16 checkpoint's own weights, which Pearl+ reads unquantized
 PRECISION = "bfloat16"
@@ -127,30 +126,26 @@ def refusal(opts: Any) -> str | None:
 def in_process(window: int) -> dict[str, Any]:
     """Window ``window``'s coins held in this process: epoch ``window``'s challenger over the Lean verifier's
     entropy, which credits nothing."""
-    from verity.protocols.accounting.pouw.verifier import verifier
-    from verity.protocols.accounting.pouw.verifier.coins import Challenger
-
-    return {"coins": Challenger(window, verifier.coins)}
+    return {"coins": PS.in_process_coins(window)}
 
 
 def live(gate: str, peer: str, lane: str, run: Any = None) -> Callable[[int], dict[str, Any]]:
     """Each window's coins from a live salt-only session of its own on the auditor device's challenger, through infra's gate
     ``gate`` (its command as one string, holding lane ``lane``'s gate key) as peer ``peer``: window k's reserved when it
-    opens (``reserve --peer PEER``, Pearl-C's salt coin alone, epoch k: `pouw_h1_window.reserve_salt`, joining the lane's
+    opens (``reserve --peer PEER``, Pearl-C's salt coin alone, epoch k: `serving.reserve_salt`, joining the lane's
     open period, refused before reserving while that period is H1's), which the install opens on its salt epoch's root and
-    samples the salt coin from (`pouw_h1_window.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the
+    samples the salt coin from (`serving.salt_session`), through the settings ``challenger`` (`AT`), ``session`` (the
     reserve answer), ``gate`` and ``period``. ``run`` replaces the gate's subprocess (tests). A refusal is `CoinError`
     (a ValueError), the window's failure."""
     from verity_vllm.pipeline.commit_coins import ChallengerGate
-    from verity_vllm.protocols.pouw.h1 import window as PHW
 
     g = ChallengerGate(gate, run)
 
     def coins(window: int) -> dict[str, Any]:
-        reserved, period = PHW.reserve_salt(g.call, g.ledger, lane, peer, window)
+        reserved, period = PS.reserve_salt(g.call, g.ledger, lane, peer, window)
         print(f"[serve-pearl] window {window}: reserved salt-only session {reserved.get('session')} on {peer} "
               f"(lane {lane}, period {(period or {}).get('period')})", flush=True)
-        return {"challenger": AT, "session": reserved, "gate": PHW.gate_of(g.call), "period": period}
+        return {"challenger": AT, "session": reserved, "gate": PS.gate_of(g.call), "period": period}
     return coins
 
 
@@ -184,16 +179,13 @@ class PearlWindows:
 
     def ready(self) -> dict[str, Any]:
         """What window 0's open would otherwise do first, done before the server listens: the kernel loaded
-        (`pearl_c.Kernel.load`, once a process) and, for in-process coins, the Lean verifier built
-        (`verifier.executable`, their entropy); ``readied``, with each part's time."""
-        from verity.protocols.accounting.pouw.verifier import verifier
-        from verity_vllm.protocols.pouw import pearl_c as PPD
-
+        (`serving.PearlCKernel.load`, once a process) and, for in-process coins, the Lean verifier built
+        (`serving.ready_verifier`, their entropy); ``readied``, with each part's time."""
         pw, t0 = self.config["pouw"], self.clock()
-        PPD.Kernel.load(pw["kernel"], pw.get("cubin"))
+        PS.PearlCKernel.load(pw["kernel"], pw.get("cubin"))
         t1 = self.clock()
         if not self.given:
-            verifier.executable()
+            PS.ready_verifier()
         t2 = self.clock()
         self.readied = {"seconds": {"kernel": round(t1 - t0, 4), "lean": round(t2 - t1, 4)}}
         print(f"[serve-pearl] ready: the kernel loaded in {t1 - t0:.1f} s"
@@ -265,10 +257,8 @@ class PearlWindows:
         """Window ``window``'s ``coins.json`` and ``served.json`` from its closed option ``opt``, whose Commit committed
         ``steps`` steps, and its outcome: ``error`` (``error`` given, or the passes with calls not the Commit's steps, a
         pass short of a linear's call or without its manifest) when it isn't one Pearl+ round a step."""
-        from verity_vllm.protocols.pouw.pearl_c import window as PWR
-
         d, c = self.dir_of(window), opt.commitment()
-        passes = [p for p in PWR.served_passes(opt.details["passes"]) if p["units"]]
+        passes = [p for p in PS.served_passes(opt.details["passes"]) if p["units"]]
         bad = ([] if len(passes) == steps else
                [f"its passes with calls are {len(passes)} and its Commit's steps {steps}, so round s isn't step s"])
         bad += [f"pass {p['pass']} has {p['units']} calls, not one a linear ({self.linears})" for p in passes
@@ -276,9 +266,9 @@ class PearlWindows:
         bad += [f"pass {p['pass']} retained no manifest" for p in passes if not p.get("manifest")][:4]
         error = error or ("; ".join(bad) or None)
         (d / "coins.json").write_text(json.dumps(c["coins"]) + "\n")
-        doc = {"schema": PWR.SERVED_SCHEMA, "entry": ENTRY, "run": self.run_id, "window": window, "retained": True,
+        doc = {"schema": PS.SERVED_SCHEMA, "entry": ENTRY, "run": self.run_id, "window": window, "retained": True,
                "commit_steps": steps, "passes": passes, "passes_with_calls": len(passes),
-               "coins": PWR.coins_of(opt, reserved), "ok": error is None, "error": error}
+               "coins": PS.coins_of(opt, reserved), "ok": error is None, "error": error}
         (d / "served.json").write_text(json.dumps(doc, indent=1) + "\n")
         out = {"entry": ENTRY, "window": window, "steps": steps, "passes": len(passes),
                "calls": sum(p["units"] for p in passes), "salt": c.get("salt"), "weights_root": c.get("weights_root"),

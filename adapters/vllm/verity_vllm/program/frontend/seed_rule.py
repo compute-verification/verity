@@ -235,7 +235,7 @@ def in_derive(ctx: Any, at: Any) -> None:
     """Where the traced source takes `PARAMS` (a stochastic request wrapper, `vllm_meta.StochasticRequest`), `check` of its
     ``seed`` and them as the Program's next Call and check (`Ctx.check`), which no fx node lowers; one it can't take refuses at fx
     node ``at``."""
-    from verity_vllm.program.frontend.outcomes import refuse
+    from verity_torch.frontend.outcomes import refuse
     have = [n for n in PARAMS if n in ctx.user_inputs]
     if not have:
         return

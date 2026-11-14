@@ -125,7 +125,7 @@ what it is.
 `specs/` holds the three plain int8 arms, the adopted design (`adopted`) with its halves (`adopted-linears`,
 `adopted-attention`) and `adopted-no-smooth`, and the variants measured against them. A design in the design registry
 (`benchmarks/machine_model/data/designs/`) names its arm as `ppl`. `attention.int8`'s `softmax = "lut"` is the
-integer softmax of `benchmarks/pouw/edited_gemm/fattn.cu`, which `steps.lut_softmax` states. A SPEC is an arm's
+integer softmax of `verity/protocols/accounting/pouw/prover/kernels/edited_gemm/fattn.cu`, which `steps.lut_softmax` states. A SPEC is an arm's
 name in `specs/` or, with its suffix, any TOML file's path.
 
 ## Adding an intervention
@@ -251,7 +251,7 @@ and each point's runs. The floor covers what moves a deterministic arm between h
 
 ## Tests
 
-`uv run tools/verity/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2 and block-FP8 GLM models: spec
+`uv run tools/check/suites.py benchmarks/ppl` runs the CPU tests on tiny random Llama, Qwen2 and block-FP8 GLM models: spec
 parsing, the window recipe and lock, the significance rule, the engine's bf16 stream against an independent float64
 forward, every gate on the adopted arms, gates that fail on sabotage reporting nothing, sharding, seeds, and HF parity
 where transformers is importable.

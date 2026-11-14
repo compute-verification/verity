@@ -4,7 +4,7 @@ audited by `a5.audit` as rank 0 of a one-rank step through its `service.Stream`,
 shell's ingress parse and egress render units have no Flock lowering, and no Commit was served behind the warden), so
 this window stands in for one, its cells a warden run's (`warden_serve.py rehearse`, ``--run``).
 
-* **The rows** are the warden's, one a bucket (`warden_rows`, registration v2): row t − first_bucket of a link-window is
+* **The rows** are the warden's, one a bucket (`warden_rows`, docket v2): row t − first_bucket of a link-window is
   bucket t, S = lanes·r slots of B bytes, slot j at bytes j·B (words j·B/2), a connection's cells at the slots its
   wiring gives it, a slot no connection holds B zero bytes.
 * **The window** (`window`), under ``<ROOT>/rank0`` and the sampling design ``work-rate:1/8``: 2n units of the transfer-gate template
@@ -23,17 +23,17 @@ this window stands in for one, its cells a warden run's (`warden_serve.py rehear
   Each chunk is a shared-row member (its ``row`` rows a table, each unit its own row) whose header names the units' value
   (`warden_rows.Units.value`, the head's value and the units' digest), its registered port's rows, each row's position in
   the link-window and its path to the warden's root (`warden_rows.Cells.statement`).
-* **The verifier's reads** (`reads`): each link-window's registration read under the deployment's key and session and the
+* **The verifier's reads** (`reads`): each link-window's docket read under the deployment's key and session and the
   schedule (`warden_rows.check_registration`), and from it the verifier's own ``--registered`` file of each chunk
   (`warden_rows.port` of the Program's units: their value, the head's root, and the row of each unit's read, placed by the
   wiring the warden signed), which a5 hands Lean's verify of each sampled chunk (`a5.audit`'s ``registered``), so a statement
   made for any other units' wiring is refused, even at the same rows. The wiring is opened to the verifier as the units'
   wiring is: `warden_rows`' named gap. A transfer gate is addressed as (row, byte, bit): bit 8k + i of a unit's
-  registered port is bit i of byte k of its row, row t − first_bucket bucket t (the registration's ``layout``), and the
+  registered port is bit i of byte k of its row, row t − first_bucket bucket t (the docket's ``layout``), and the
   unit's own cell is its slot's bytes, which the summary lists for each unit (``links``: the cell, row, bucket, slot and
   words).
-* **Provenance** (`source`): the registration's window names, for each link, the warden's value, root, certificate digest,
-  the registration's SHA-512, the units' digest, and the reads and rows its units open, and the verifier holds them to its
+* **Provenance** (`source`): the docket's window names, for each link, the warden's value, root, certificate digest,
+  the docket's SHA-512, the units' digest, and the reads and rows its units open, and the verifier holds them to its
   own read.
 * **Negatives**, beside a5's (the registered reads' three and the verdict reporting another root, on chunk c0; the
   transfer-gate negatives; R1 to R4 and the sample's): the prover's own root over the link-window's rows (one byte off) under
@@ -54,7 +54,7 @@ Lean's registered reads by its reason. ``--out`` holds the window as committed (
 a5's records (``rank0/``, ``challenger/``, ``summary.json``); the warden's rows and salts stay in ``--run``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm \\
-      python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
+      python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof \\
         [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
@@ -85,9 +85,9 @@ from verity.protocols.accounting.certifier.verifier.certificate import Certifica
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.warden import END, WardenParams  # noqa: E402
 from verity.protocols.proofs.spot.verifier import service as S  # noqa: E402
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R  # noqa: E402
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, docket as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
-from verity.commitments.windows import rows as CS  # noqa: E402
+from verity.commitments.periods import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
 
 #: the stand-in's session root, as a TP Commit's run root is its ranks' session root
@@ -110,7 +110,7 @@ def links(run: Path, n: int) -> dict[str, SimpleNamespace]:
     """Each link's link-window of connection q and the Program's units' wiring on it (`warden_rows.Units`), fixed from public
     structure alone (the schedule, the ordinals and the signed wiring, never the cells' bytes): q the lowest connection admitted
     (its first row past the window's first, or window 0) in link-windows the warden registered with n ingress cells and D·r + n
-    egress cells, unit i reading its cell `first_cells` + i. Each with the registration as the verifier reads it, the warden's
+    egress cells, unit i reading its cell `first_cells` + i. Each with the docket as the verifier reads it, the warden's
     opening (the record's rows and wiring under its salts) held to its head, the row and slot the warden's wiring places each
     unit's cell at, and how many of those cells hold the server's bytes (`data_units`, reported, never read to choose)."""
     dep = json.loads((run / "deployment.json").read_text())
@@ -183,8 +183,8 @@ def chunks(mine: CS.Binding) -> dict[str, CS.Member]:
 
 
 def provenance(at: dict[str, SimpleNamespace]) -> dict:
-    """What the window's registration names of the warden's cells: per link, its value, root, certificate digest, the
-    registration's SHA-512, and the units' reads (q, k) and the rows they open."""
+    """What the window's docket names of the warden's cells: per link, its value, root, certificate digest, the
+    docket's SHA-512, and the units' reads (q, k) and the rows they open."""
     return {"stand-in": "benchmarks/one_stage/a5_warden.py", "connection": at[ws.INGRESS].connection,
             "links": {name: {"value": x.head.value, "root": x.head.root.hex(), "certificate": x.registration["certificate"]["digest"],
                              "registration_sha512": hashlib.sha512(json.dumps(x.registration, sort_keys=True).encode()).hexdigest(),
@@ -270,7 +270,7 @@ def reads(mine: CS.Binding, at: dict[str, SimpleNamespace]) -> dict[str, dict]:
 
 
 def source_of(mine: CS.Binding, at: dict[str, SimpleNamespace]):
-    """The verifier's check of the registration's window: a stand-in of its run naming the warden's cells as it read them."""
+    """The verifier's check of the docket's window: a stand-in of its run naming the warden's cells as it read them."""
     want = provenance(at)
 
     def source(w: dict) -> dict:
@@ -444,8 +444,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if a.altered and a.made_for:
         ap.error("one refused statement a run: --altered or --made-for")
-    import a5
-    import a5_coins as AC
+    from verity.protocols.proofs.spot.prover.audit import window_audit as a5
+    from verity.protocols.proofs.spot.device import challenger_session as AC
 
     out = a.out
     at = links(a.run, a.units)

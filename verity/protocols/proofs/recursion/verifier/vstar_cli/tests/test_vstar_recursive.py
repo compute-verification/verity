@@ -1,5 +1,5 @@
 """The recursive audit's verdict (`VStar.Recursive.partVerdicts`, `vstar-recursive verdicts`: V*'s compiled check over a
-whole recursive session, one part per V* statement at the verifier's inner shape) against `flock-verify verify --zk` at
+whole recursive session, one part per V* statement at the verifier's inner shape) against `verity-verify-proof verify --zk` at
 each part's flags, as pod 85's lean step runs them (`85-rec-reprice.sh` STEP=lean: `--rec-inner`, `--rec-part`,
 `--rec-rows`, `--rec-bindings`, the inner statement's files, `--rec-inner-session` and `--rec-inner-transcript`). The rows
 are the one shared file every part is verified against (`rec_vstage.staged_shared_rows`, 85's ``rows.json``), which the
@@ -12,13 +12,13 @@ flags name, by SHA-512, and every file is handed to `verdicts` as a blob. The fo
 recursive sessions are put to both: the honest one, every part accepted by each; the inner session with rep 0's challenge
 coin flipped (85's ``inner-neg-challenge``), refused by the algebra's parts at rep 0's row of `v` and accepted by every
 other part; and the honest one with one bit of part 0's first rep file flipped. Each part's verdict is the same in
-both, and a refusal of the whole check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at
+both, and a refusal of the whole check (an input `verify` refuses before any session) is `verity-verify-proof`'s exit 2 at
 every part.
 
-The refusals the compiled check adds to `flock-verify`'s per-part path are each held to a refusal by both: the inner
+The refusals the compiled check adds to `verity-verify-proof`'s per-part path are each held to a refusal by both: the inner
 statement under Flock's plain verifier (`innerOk`, here an inner sample that does not parse), and plain SHA-512 leaves under
 `--zk` (`verifyCmd`'s message, which `partVerdict` gives word for word; its statement is the constant
-`verity/flock-circuit`, so only `flock-verify`'s side is driven). `fits`' bound, `2^56` bytes, is past any file a test can
+`verity/flock-circuit`, so only `verity-verify-proof`'s side is driven). `fits`' bound, `2^56` bytes, is past any file a test can
 stage; `statementFits`, the same bound on the whole statement the inputs name, is driven at a limit of the honest
 statement's own size (`vstar-recursive statement LIMIT`), which also checks that each parsed field's canonical bytes
 parse back to what the check read, the `Names` pins at the honest session."""
@@ -140,7 +140,7 @@ def lean_statement(exe: Path, inner: Inner, parts: list[Part], tmp: Path, limit:
 
 
 def flock_verdict(exe: Path, inner: Inner, rec_inner: Path, j: int, p: Part) -> dict:
-    """`flock-verify verify --zk` on part ``j``'s session at 85's flags: exit code, whether its last VERDICT accepted, why."""
+    """`verity-verify-proof verify --zk` on part ``j``'s session at 85's flags: exit code, whether its last VERDICT accepted, why."""
     reg = p.stmt / "registered.json"
     cmd = [str(exe), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(p.stmt / "circuit.txt"), "--public",
            str(p.stmt / "pub.bin"), "--partition", str(p.stmt / "partition.json"), "--program", str(p.stmt / "program.json"),
@@ -154,9 +154,9 @@ def flock_verdict(exe: Path, inner: Inner, rec_inner: Path, j: int, p: Part) -> 
 
 
 def agree(lean: dict, flock: list[dict], parts: list[Part]) -> list[tuple[str, bool]]:
-    """Each part's verdict is `flock-verify`'s; a whole-check refusal is its exit 2 (refused before any session) at every
+    """Each part's verdict is `verity-verify-proof`'s; a whole-check refusal is its exit 2 (refused before any session) at every
     part. Returns each part's (name, accepted)."""
-    print(json.dumps({"lean": lean, "flock-verify": flock}))
+    print(json.dumps({"lean": lean, "verity-verify-proof": flock}))
     if "refused" in lean:
         assert all(f["rc"] == 2 for f in flock), (lean, flock)
         return [(p.name, False) for p in parts]
@@ -213,13 +213,13 @@ PLAIN_LEAVES = ("verify --zk: refused: {name}, a statement with plain SHA-512 le
 
 
 def test_plain_leaves_under_zk_are_refused_with_the_compiled_checks_reason(tmp_path):
-    """`flock-verify verify --zk` at a plain-leaves statement refuses before reading a file (exit 2), with the reason
+    """`verity-verify-proof verify --zk` at a plain-leaves statement refuses before reading a file (exit 2), with the reason
     `partVerdict`'s `need (!tags0.plainLeaves)` gives."""
     name = "verity/flock-circuit+plain-leaves"
     for f in ("c", "p", "comp"):
         (tmp_path / f).write_bytes(b"")
     (tmp_path / "s").mkdir()
-    r = subprocess.run([str(D.build(FLOCK, "flock-verify")), "verify", "--zk", "--statement", name, "--circuit",
+    r = subprocess.run([str(D.build(FLOCK, "verity-verify-proof")), "verify", "--zk", "--statement", name, "--circuit",
                         str(tmp_path / "c"), "--comp", str(tmp_path / "comp"), "--public", str(tmp_path / "p"),
                         "--session", str(tmp_path / "s")], capture_output=True, text=True, check=False)
     assert r.returncode == 2 and PLAIN_LEAVES.format(name=name) in r.stderr, (r.returncode, r.stdout, r.stderr)
@@ -273,7 +273,7 @@ class Session:
         from verity_flock import rec_vstage as VS
 
         self.dd, self.o = dd, o
-        self.flock = D.build(FLOCK, "flock-verify")
+        self.flock = D.build(FLOCK, "verity-verify-proof")
         self.exe = D.build(RECURSIVE, "vstar-recursive")
         last = max((dd / "inner").glob("s[0-9]*"), key=lambda p: int(p.name[1:]))
         self.inner = Inner(dd / "stage", last)
@@ -319,7 +319,7 @@ def session(tmp_path_factory) -> Session:
 @pytest.mark.slow
 @DEPLOYED
 def test_the_honest_recursive_session_is_accepted_part_for_part(session, tmp_path):
-    """Every part of the honest session is accepted by V*'s compiled check, as by `flock-verify` at its flags."""
+    """Every part of the honest session is accepted by V*'s compiled check, as by `verity-verify-proof` at its flags."""
     got = session.check(session.inner, session.parts, tmp_path)
     assert all(a for _, a in got), got
 
@@ -357,7 +357,7 @@ def v_row_refusal(name: str, j: str) -> re.Pattern:
 @DEPLOYED
 def test_a_flipped_inner_coin_is_refused_where_flock_verify_refuses_it(session, tmp_path):
     """85's inner session with rep 0's challenge coin flipped (``inner-neg-challenge``, `rec_inner.py forge`): the
-    algebra's parts refuse it, by V*'s compiled check and by `flock-verify` alike and each at rep 0's row of `v`, and
+    algebra's parts refuse it, by V*'s compiled check and by `verity-verify-proof` alike and each at rep 0's row of `v`, and
     every other part is accepted as in the honest session. A session refused anywhere else (its record, another part,
     the whole check) fails here: the flipped coin is then not what was refused."""
     neg = session.dd / "inner-neg-challenge"
@@ -395,7 +395,7 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
 @DEPLOYED
 def test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both(session, tmp_path):
     """The inner statement's sample cut short: the compiled check refuses the whole check at Flock's plain verifier on the
-    inner statement (`innerOk`), and `flock-verify` accepts no part."""
+    inner statement (`innerOk`), and `verity-verify-proof` accepts no part."""
     inner = copy.copy(session.inner)
     inner.draw = tmp_path / "draw.json"
     inner.draw.write_bytes(session.inner.draw.read_bytes()[:-2])
@@ -403,5 +403,5 @@ def test_an_inner_statements_sample_that_does_not_parse_is_refused_by_both(sessi
     assert lean.get("refused", "").startswith("rec inner statement: Flock's plain verifier refuses it: draw: not JSON"), lean
     with ThreadPoolExecutor(settings.lean_jobs()) as ex:
         flock = list(ex.map(lambda jp: flock_verdict(session.flock, inner, session.rec_inner, *jp), enumerate(session.parts)))
-    print(json.dumps({"lean": lean, "flock-verify": flock}))
+    print(json.dumps({"lean": lean, "verity-verify-proof": flock}))
     assert not any(f["accepted"] for f in flock), flock

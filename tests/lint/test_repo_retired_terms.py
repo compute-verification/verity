@@ -62,7 +62,7 @@ LEFT_OUT = ()
 SKIP = {
     GLOSSARY: "the term source: its table of older names says where each old name stays",
     "tools/move/": "the word maps name the words they retire",
-    "tools/verity/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
+    "tools/check/tests/test_move_check.py": "its toy moves rename the words the maps retire",
     "fixtures/": "replicated fixtures and their notes are data, named by what they hold",
     "benchmarks/census/": "data only (AGENTS.md: verity never reads it)",
     f"tests/lint/test_{NAME}.py": "its examples are the terms it refuses",
@@ -159,6 +159,8 @@ OWN_CAPS = {
     "verity/protocols/accounting/pouw/verifier/lean/window/": "`window.py`'s session cap in its Lean port",
     "verity/protocols/proofs/flock/": "Flock's caps (a Merkle cap, the nodes a proof's rows open to; its bounds on runs and tables)",
     "verity/protocols/proofs/recursion/": "Flock's Merkle caps, as the recursion's verifier checks them",
+    "benchmarks/recursion_e2e/": "Flock's Merkle caps, the V* statements the recursion's benchmark proves and times",
+    "benchmarks/recursion_figures/": "Flock's Merkle caps, the V* parts the recursion's figures name",
     "security/Proofs/Flock/": "Flock's caps in its proofs: the Merkle cap, and its bounds on runs, tables and samples",
     **dict.fromkeys(LIVE_CAPS, "the live proof block's caps, its requests' public `max_tokens`; a session's cap"),
     **dict.fromkeys(REQUEST_CAPS, "a request's length cap, its `max_tokens`"),
@@ -625,7 +627,7 @@ def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_sen
 def test_a_kernel_s_grid_cap_is_another_sense_and_pearl_s_cap_beside_it_is_not() -> None:
     """A kernel's ``grid_cap`` as the identifier it is; Pearl's spellings beside it, and a longer name built on it, still
     count in the same file."""
-    path = "benchmarks/pouw/masked_gemm/sgemm.cu"
+    path = "verity/protocols/accounting/pouw/prover/kernels/masked_gemm/sgemm.cu"
     theirs = "static void ssetup(SProb& P, int grid_cap) {\n  P.grid = std::min(tiles, grid_cap > 0 ? grid_cap : nsm);\n"
     assert said(theirs, path) == []
     assert said(theirs + "// grid_cap, then Pearl's cap, CAP and capOK; grid_capOK, grid_cap_check\n", path) == [
@@ -704,8 +706,8 @@ def test_vendor_kernel_and_isa_names_are_other_senses_and_pearl_s_cap_in_their_s
             ["CAP", "capOK", "cap check"]),
     }
     for sense, (theirs, pearls, pearl) in cases.items():
-        assert said(theirs, "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [], sense
-        assert said(f"{theirs}\n{pearls}\n", "verity/protocols/accounting/pouw/prover/kernels/harness/native/lt.cu") == [(2, o) for o in pearl], sense
+        assert said(theirs, "benchmarks/pouw/harness/native/lt.cu") == [], sense
+        assert said(f"{theirs}\n{pearls}\n", "benchmarks/pouw/harness/native/lt.cu") == [(2, o) for o in pearl], sense
 
 
 def test_the_live_block_s_caps_are_its_own_in_capitals_too_and_pearl_s_other_spellings_there_are_not() -> None:

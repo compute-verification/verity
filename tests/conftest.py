@@ -18,11 +18,13 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 #: {test file: the tests of it whose findings warn}
 BOOKKEEPING = {
+    "tests/lint/test_device_figures.py": ("test_no_new_device_figures", "test_the_list_is_current"),
     "tests/lint/test_lean_bar.py": ("test_no_new_findings",),
     "tests/lint/test_repo_ruff.py": ("test_no_new_findings",),
     "tests/lint/test_repo_lane_text.py": ("test_no_new_lane_text", "test_pinned_files_hold_none",
                                           "test_the_list_is_well_formed_and_an_entry_moves_with_its_file"),
     "tests/lint/test_repo_retired_terms.py": ("test_no_new_retired_terms",),
+    "tests/lint/test_repo_python_verdicts.py": ("test_no_listed_function_changed_since_it_was_read",),
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
                                     "test_no_retired_word_in_a_new_lean_name", "test_the_glossary_records_the_retired_terms",
                                     "test_spot_s_older_name_only_falls"),

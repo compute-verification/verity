@@ -1,6 +1,6 @@
 """Pearl-C (``pearl-c-sm120-v1-h3``) as a `verity-bench` experimental arm (``--arm-module pearl_c_vllm.bench_arm:PEARL_C``
 with ``benchmarks/pouw`` on ``PYTHONPATH``), on one RTX PRO 6000; with ``PEARLC_KERNEL`` the tree's
-``benchmarks/pouw/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
+``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90``, ``pearl-c-h100-v1-h3`` on one H100 or H200.
 
 The arm serves the preset's model in BF16 with every linear computed and committed by `pouw_pearl_c_device.PearlCDeviceRun`,
 installed as `e2e.install` does (sites by type, the kernel directory's cubin, the fixed operands' roots, the epoch from a
@@ -15,7 +15,7 @@ each call's noise is seeded by its index across the epoch, so no two of the engi
 against x·Wᵀ within `ERR` rel RMS, the same call's commitment twice bit for bit, and the ``hash_leaf``-omitted negative
 control changing the transcript root.
 
-Env: ``PEARLC_KERNEL`` (default the tree's ``benchmarks/pouw/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
+Env: ``PEARLC_KERNEL`` (default the tree's ``verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120``), ``PEARLC_CUBIN`` (default the directory's
 build.sh cubin, ``<directory name>.cubin``), ``PEARLC_SCHEDULE`` (default ``deferred``, the served schedule),
 ``PEARLC_SCHEME`` (default the kernel directory's record, `KERNEL_SCHEMES`), ``PEARLC_BENCH_EPOCH``. The salt coin
 is a challenger's held in this process (``in-process``, a cost measurement) unless ``PEARLC_CHALLENGER_GATE`` (infra's gate
@@ -36,6 +36,8 @@ from typing import Any
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
+#: the sm_120 kernel's directory, the default kernel
+SM120 = HERE.parents[2] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c_sm120"
 settings = of(__file__)
 #: `e2e.gate`'s bound on served y against x·Wᵀ (rel RMS), Pearl's FP8 quantization noise
 ERR = 0.08
@@ -80,7 +82,7 @@ class _LiveSession:
 
     def __init__(self, gate: str, peer: str, epoch: int, lane: str, run: Any = None) -> None:
         from verity_vllm.pipeline.commit_coins import ChallengerGate
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
         self.gate = ChallengerGate(gate, run)
         self.reserved, self.period = PHW.reserve_salt(self.gate.call, self.gate.ledger, lane, peer, epoch)
@@ -88,7 +90,7 @@ class _LiveSession:
         self.carried: dict[str, Any] = {}
 
     def open(self, entry: str, root: bytes) -> Any:
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
         self.client, self.commitment, opening, _, self.carried = PHW.open_session(
             entry, self.gate.call, self.reserved["session"], root, self.k)
@@ -110,7 +112,7 @@ def live_coins(pouw: dict[str, Any], gate: str | None, peer: str | None, epoch: 
     answers), ``session`` (the reserve answer), ``gate`` and ``period`` (the lane's open period the reserve joined), its
     in-process ``coins`` dropped. Returns the settings and the reserve answer: `pouw` itself and None when neither is
     given, the coins then in-process. ValueError when one is given without the other, or the reserve is refused."""
-    from verity_vllm.protocols.pouw.h1 import window as PHW
+    from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
     if (gate, peer) == (None, None):
         return pouw, None
@@ -145,7 +147,7 @@ class LiveDraw:
     def __call__(self, root: bytes, asking: Any) -> tuple[bytes, dict[str, Any]]:
         from verity.protocols.accounting.pouw.verifier import window as Wd
         from verity.protocols.proofs.spot.device.challenger import CoinError
-        from verity_vllm.protocols.pouw.h1 import window as PHW
+        from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
         lines = self.gate.ledger()
         period = PHW.open_period(lines, self.lane)
@@ -201,7 +203,7 @@ class PearlCArm:
     run_options: dict[str, Any] = {}
 
     def __init__(self) -> None:
-        self.kernel_dir = Path(settings.PEARLC_KERNEL or HERE.parent / "pearl_c_sm120")
+        self.kernel_dir = Path(settings.PEARLC_KERNEL or SM120)
         self.cubin = settings.PEARLC_CUBIN
         self.scheme = settings.PEARLC_SCHEME or KERNEL_SCHEMES.get(self.kernel_dir.name, "pearl-c-sm120-v1-h3")
         self.schedule = settings.PEARLC_SCHEDULE
@@ -246,7 +248,7 @@ class PearlCArm:
         from verity_vllm.protocols.linear import vllm_site
         from verity_vllm.protocols.linear.api import Arm as StackArm
         from verity_vllm.protocols.linear.api import PassSpec, Stack
-        from verity_vllm.protocols.pouw import pearl_c as PPD
+        from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
 
         scheme = self.scheme
         sites = vllm_site.discover(target.model)
@@ -424,7 +426,7 @@ class PearlCWholeArm(PearlCArm):
 
     def ready(self, target: Any) -> None:
         from verity_vllm.engine import handle
-        from verity_vllm.protocols.pouw.pearl_c.whole import WholeStep
+        from verity.protocols.accounting.pouw.prover.serving.pearl_c.whole import WholeStep
 
         super().ready(target)
         self.whole = WholeStep(self.run, self.stack, handle.model_runner(target.engine.vllm), target.hooks)

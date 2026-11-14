@@ -22,7 +22,7 @@ from verity.circuits import codec
 from verity.circuits import partition_v2 as PV2
 from verity.circuits.defs import REGISTRY
 from verity.circuits.population import population_program
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.boolean import gate_table
 
 from verity_vllm.program.predict import block_counts as BC

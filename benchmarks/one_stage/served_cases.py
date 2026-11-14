@@ -1,4 +1,4 @@
-"""A served window's cases, each on the window's registration record R and beside its own Lean answer, in the directory
+"""A served window's cases, each on the window's docket R and beside its own Lean answer, in the directory
 form a composition of the window's subprotocols reads as a case: sampled proofs' one-stage v1 case (no composite's),
 both composites' sampled proofs case (one-stage v2's in the form ``one-stage``) and the inference-only case from its
 records audit, PoUW's period case held to the same record, Pearl+'s run case naming it, and with ``--v2`` one-stage v2's
@@ -18,7 +18,7 @@ H1's tie, `served_verdicts.sh`'s H1_TIE, the record H1 named as the window's Com
 written: that digest is what remote's record tie compares (`Core.Remote.windows`).
 
 * **`verity/sampled-proofs/one-stage/v1`** (`window_case`, `V1`): a5's ``window/case.json`` as a5 wrote it
-  (`a5.write_case`: the registration record, the evidence the audit's record was handed, the sessions' verdicts among
+  (`a5.write_case`: the docket, the evidence the audit's record was handed, the sessions' verdicts among
   it, and the verifier's params), exactly those three, and none when a5 wrote its ``case-error.txt`` instead (which says
   why). No composite takes it: both name sampled proofs (`VStar.Recursive.Sampled`) among their subprotocols
   (`Core.Onsite.components`, `Core.Remote.components`), which refuses it by name (`VStar.Recursive.Sampled.V1_REFUSED`).
@@ -31,7 +31,7 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
   its params name ``proofs`` and its evidence the proofs' files in place of v1's verdicts, as the dispatcher requires.
   None when v2's case is refused, which the refusal says, and each composite then names sampled proofs missing. a5
   writes v2's case only for a `--zk` audit that drew exactly one member (`a5.v2_proof`), and v2 refuses a windowed
-  registration (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's law is
+  docket (`a5.case_v2`), so a served window of several members has none: under H1's tie its audit's sampling design is
   `stratified:1`, a sampled reader of each table W registers. Its answer is `vstar-recursive sampled check` on the case
   and its blobs.
 * **The inference-only case** (`inference_only_case`, `INFERENCE_ONLY`: `verity/inference-only/v0`, the inference-only
@@ -41,12 +41,12 @@ written: that digest is what remote's record tie compares (`Core.Remote.windows`
     complies and they're no security setting, which the case's private ``policy.json`` says beside them; without
     either no case is written), ``log`` (the deployment's records before R, from its first, whose ``previous`` is
     null, as the policy's check reads them: ``--log``, else with ``--serve-dir`` the serve's H1 log through R's
-    ``previous``, `h1_log`, each window's registration W and record R up to the window's W; empty when R names no
+    ``previous``, `h1_log`, each window's docket W and record R up to the window's W; empty when R names no
     previous record), ``program`` (v1's params' Program as canonical text, the one the record's ``program`` names) and
     ``parameters`` (its program function's, which the descriptor doesn't carry: the population program rebuilt over its
     root's templates, and the registered values v1's own ``parameters`` name ahead of them, held to the record's
     ``program``, `parameters`);
-  - commitment: the registration record R;
+  - commitment: the docket R;
   - evidence: ``owner`` per root node of the Program, ``theta`` and ``provenance``. The window's Program is its
     population program (`interface.Circuit.program`), one batch node per template holding that template's instances for
     every slot, so no division into one block a slot is a division of its root nodes: every non-input node is block 0,
@@ -121,7 +121,7 @@ from typing import Any
 from verity.protocols.accounting.pouw.verifier import credit as Cr
 from verity.protocols.accounting.pouw.verifier import period_check as PC
 from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.verifier.one_stage import verifier as VF
 from verity.circuits import codec
 
@@ -179,7 +179,7 @@ def _json(path: Path) -> Any:
 
 
 def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
-    """The registration record ``case`` commits to, held to be canonical JSON, and its digest (`registration.digest`)."""
+    """The docket ``case`` commits to, held to be canonical JSON, and its digest (`registration.digest`)."""
     try:
         b = bytes.fromhex(case["commitment"])
         rec = json.loads(b)
@@ -191,7 +191,7 @@ def record_of(case: Mapping[str, Any]) -> tuple[dict[str, Any], str]:
 
 
 def window_case(audit: Path) -> dict[str, Any]:
-    """v1's case of the audit (module docstring), whose commitment is the window's registration record."""
+    """v1's case of the audit (module docstring), whose commitment is the window's docket."""
     w = audit / "window"
     if not (w / "case.json").is_file() and (w / "case-error.txt").is_file():
         raise Refused(f"no v1 case: {(w / 'case-error.txt').read_text().strip()}")
@@ -334,7 +334,7 @@ def _chain(log: Sequence[Mapping[str, Any]], rec: Mapping[str, Any]) -> None:
 
 def h1_log(path: Path, rec: Mapping[str, Any]) -> list[dict[str, Any]]:
     """The deployment's records before ``rec``, oldest first, as the serve's H1 log ``path`` names them (`H1_LOG`), through
-    the one ``rec`` names as its ``previous``: under H1's tie each window's registration W and record R, up to the
+    the one ``rec`` names as its ``previous``: under H1's tie each window's docket W and record R, up to the
     window's own W, which its R is chained right after. Empty when ``rec`` names no previous record."""
     if rec.get("previous") is None:
         return []

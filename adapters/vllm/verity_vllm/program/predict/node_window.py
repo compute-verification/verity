@@ -59,7 +59,7 @@ from typing import Any
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.refs import Refs, runs
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.definitions.registry import b1_tp2 as B1T
 
 from verity_vllm.pipeline import serving_templates as ST
@@ -630,7 +630,7 @@ def _stands(rows: Sequence[Row]) -> bool:
 
 
 def _peer(name: str) -> int:
-    return int(name[len(PEERS):]) if name[len(PEERS):].isdigit() else -1
+    return int(name[len(PEERS):]) if name[len(PEERS):].isdecimal() else -1
 
 
 def _lead(grid: Sequence[tuple[Row, ...]], shape: Sequence[int]) -> tuple[tuple[int, int], ...] | None:

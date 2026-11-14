@@ -12,7 +12,8 @@ public import CoreProtocol.Example
 public import CoreProtocol.Blobs
 public import CoreProtocol.BlobsExample
 public import CoreProtocol.Site
-public import CoreProtocol.Registration
+public import CoreProtocol.SiteExample
 public import CoreProtocol.Account
+public import CoreProtocol.SiteV2Guards
 
 @[expose] public section

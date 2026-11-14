@@ -42,9 +42,9 @@ import Mathlib.Topology.Sheaves.Init
 `Accounting.TS.Checked.checkedLayer`'s relation asks only that a port named `ok` exist. This layer, at the same
 sessions, takes two steps further:
 
-* (a) **The `ok` rows are the verifier's.** flock-verify `--registered F` registers the `ok` port at known content
+* (a) **The `ok` rows are the verifier's.** verity-verify-proof `--registered F` registers the `ok` port at known content
   (`Registered.KNOWN_KEY`: h1_prove's rows, each the one word `1` under the public `ok_salt`), and refuses a file whose
-  `ok` root is not the root of those rows (`Registered.checkKnownAll`). The layer's acceptance is flock-verify's,
+  `ok` root is not the root of those rows (`Registered.checkKnownAll`). The layer's acceptance is verity-verify-proof's,
   that check included. On an accepted session the registrant's row at every read of a port named `ok` has the
   `sha512/row/v2` bytes of the word `1` (`OkVal`), or the registrant's openings exhibit a SHA-512 collision
   (`OkColl`, a fact of the session's commit-time openings, with both preimages in hand: `FlockC3.RegLevels.knownColl`);
@@ -106,9 +106,9 @@ def HeldRel {ι : Type} (s : RowsSession) (o : s.Out) (ok : String) (Cd : Accoun
         ∀ u ∈ o.2.1, Accounting.Served.Held Cd cls (unitOf u) (dec vals)) ∨
       ∃ ks, (ok, ks) ∈ known ∧ OkColl s ok ks)
 
-/-- **The held layer through its Flock sessions**: proof `i` of round `w` is accepted where flock-verify
+/-- **The held layer through its Flock sessions**: proof `i` of round `w` is accepted where verity-verify-proof
 `--zk --registered` accepts its session at the registered file's known content `known x w i` (`LiveAcceptsZKR`, and
-`Registered.checkKnownAll`, which `flock-verify` runs on `--registered F`), opens the committed rows at the registered
+`Registered.checkKnownAll`, which `verity-verify-proof` runs on `--registered F`), opens the committed rows at the registered
 reads (`openedReg`), and its relation is `HeldRel` at round `w`'s declared circuit `Cd w`. -/
 noncomputable def heldLayer {ι Ω : Type} {S nπ : ℕ} (sess : Paths Ω S → Fin S → Fin nπ → RowsSession)
     (out : ∀ x w i, (sess x w i).Out) (ok : String)

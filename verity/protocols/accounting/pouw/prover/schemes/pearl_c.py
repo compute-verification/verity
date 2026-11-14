@@ -495,23 +495,23 @@ class PearlC:
                      "not credited; the model adopts s, ρ and α as its own FP8 quantizer (Costs.adopted)")
         rho, honest = device.cap, f"{float(100 * (1 - device.cap)):g}%"
         if device == H100:
-            hardware = (f"TT_OUT({rho}) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 "
-                        f"program outputs correct C̃ and U words for less than {honest} of their honest cost (research store "
-                        "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting",
+            hardware = ((f"TT_OUT({rho}) for Pearl-C's Π and domain (δ = 1, promotion every 4 atoms, k <= 2^16): no H100 W1 "
+                         f"program outputs correct C̃ and U words for less than {honest} of their honest cost (research store "
+                         "docs/pouw/cheap-binding.md §1); a conjecture, not proved by counting"),
                         "the H100's FP8 wgmma and BF16 wgmma are reproduced exactly (HOPPER_E4M3_K32, HOPPER_BF16_WGMMA_K16)")
         else:
             promotion = f"promotion every {device.g} atoms" if device.g else "no promotion"
-            hardware = (f"TT_OUT({rho}) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
-                        f"k <= {device.k_max}): no {device.name} W1 program outputs correct C̃ and U words for less than "
-                        f"{honest} of their honest cost; a conjecture stated for the H100 (research store "
-                        "docs/pouw/cheap-binding.md §1), not yet re-derived on this device's atom",
-                        f"the {device.name} FP8 and BF16 mma steps are reproduced exactly ({device.atom.name}, "
-                        f"{device.peel.name})",
+            hardware = ((f"TT_OUT({rho}) for Pearl-C's Π and domain on {device.name} (δ = 1, {promotion}, "
+                         f"k <= {device.k_max}): no {device.name} W1 program outputs correct C̃ and U words for less than "
+                         f"{honest} of their honest cost; a conjecture stated for the H100 (research store "
+                         "docs/pouw/cheap-binding.md §1), not yet re-derived on this device's atom"),
+                        (f"the {device.name} FP8 and BF16 mma steps are reproduced exactly ({device.atom.name}, "
+                         f"{device.peel.name})"),
                         *(f"stand-in: {s}" for s in device.standins))
         if self.census_ks:
-            hardware += (f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
-                         f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's inert work within ρr of its cells' credit and the "
-                         f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)",)
+            hardware += ((f"at k in {', '.join(map(str, self.census_ks))} (the census's): TT_OUT per tile at "
+                          f"ρr = {CENSUS_ROW_CAP * rho}, each credited row's inert work within ρr of its cells' credit and the "
+                          f"tile's within ρ (Lean `Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256`)"),)
         self.certificate = Certificate(
             conjecture="tt-out",
             gap0=None,
@@ -662,3 +662,11 @@ def keys_of(scheme: PearlC, epoch: Epoch, matmul: Matmul, seed_b: bytes) -> dict
             "dom_b": rows_domain(weight_binding(matmul.weight), -2, s.n, h).domain_id,
             "dom_t": transcript_domain(epoch, len(scheme.tiles(s)), h).domain_id,
             "unit": unit_block(salt, epoch.weight_roots[matmul.weight], matmul.index)}
+
+
+__all__ = ["CHUNK", "Checked", "D_LEAF", "D_MESSAGE", "FORMING_V0_UNITS", "Formed", "HASHINGS", "K_MIN", "LABELS",
+           "LINE_NORM_V1", "Noise", "Ops", "PEEL_K", "PearlC", "R", "ROW_SEEDED", "S512Seed", "S512_LABELS", "S5_FLOOR",
+           "S5_FOUR", "S5_LINE", "S5_QMAX", "S5_STRIDE", "SLICE", "TILE", "TREE_HASH", "chain", "eprime", "f32_row",
+           "form_v1", "gram", "keys_of", "leaf", "line_key", "live_row", "message_digest", "messages", "parse_f32_row",
+           "peel", "peel_factors_a", "peel_factors_b", "row_digest", "row_seed", "s512", "s5_stats", "sample_line",
+           "scaled_noise", "seed_b", "tickets", "unit_block", "unit_seed_a"]

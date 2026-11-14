@@ -1,4 +1,4 @@
-"""`research pods guard` (pods/guard.py), the one guard over budgets.toml, against a fake RunPod API: what is in scope, per-line caps
+"""`research pods guard` (pods/guard.py), the one guard over budgets.toml, against a fake RunPod API: what is in scope, per-line limits
 that hold until raised and spare pods that appear later, the balance floor, each line's max pod age, uncovered project pods, a
 removed line, never the clock, the last good budgets kept, dry runs, and the CLI."""
 from __future__ import annotations
@@ -25,8 +25,8 @@ uncovered_grace_min = 15
 exempt = ["vy-control-"]
 
 [budgets]
-"vy-a-" = { cap_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4, by = "test" }
-"vy-a-big-" = { cap_usd = 100, expires = "2026-09-24T20:00Z", max_pod_hours = 48 }
+"vy-a-" = { limit_usd = 3, expires = "2026-09-24T20:00Z", max_pod_hours = 4, by = "test" }
+"vy-a-big-" = { limit_usd = 100, expires = "2026-09-24T20:00Z", max_pod_hours = 48 }
 """
 
 
@@ -96,17 +96,17 @@ def test_scope_is_the_lines_and_the_project_minus_exempt_names_the_host_and_fore
     assert state["last_ok_poll"] == T0 + 600 and api.deleted == []
 
 
-def test_a_line_at_its_cap_terminates_its_pods_and_holds_until_the_cap_is_raised():
+def test_a_line_at_its_limit_terminates_its_pods_and_holds_until_the_limit_is_raised():
     api = FakeRunPod([pod("a", "vy-a-1", 2, 5), pod("b", "vy-a-2", 2, 5), pod("g", "vy-a-big-1", 2, 5)])
     state, lines = G.new_state(T0), []
     step(api, TOML, state, T0, lines)
     step(api, TOML, state, T0 + 3600, lines)
     assert sorted(api.deleted) == ["a", "b"], "$4/h x 1 h >= $3: the line trips; the big line's pod is not its"
-    assert "'vy-a-' CAP $3 reached (spent $4.00)" in state["lines"]["vy-a-"]["tripped"]["why"]
+    assert "'vy-a-' LIMIT $3 reached (spent $4.00)" in state["lines"]["vy-a-"]["tripped"]["why"]
     api.add(pod("n", "vy-a-3", 1, -60))
     step(api, TOML, state, T0 + 3700, lines)
-    assert "n" not in api.deleted and any("OVER-CAP n" in ln for ln in lines), "a pod that appears under a tripped line is not killed"
-    raised = TOML.replace("cap_usd = 3,", "cap_usd = 10,")
+    assert "n" not in api.deleted and any("OVER-LIMIT n" in ln for ln in lines), "a pod that appears under a tripped line is not killed"
+    raised = TOML.replace("limit_usd = 3,", "limit_usd = 10,")
     step(api, raised, state, T0 + 3760, lines)
     assert state["lines"]["vy-a-"]["tripped"] is None and any("UNTRIPPED 'vy-a-'" in ln for ln in lines)
 
@@ -179,10 +179,10 @@ def test_a_removed_line_leaves_its_pods_uncovered_and_its_tally_kept():
     state, lines = G.new_state(T0), []
     step(api, TOML, state, T0, lines)
     step(api, TOML, state, T0 + 3600, lines)
-    without = TOML.replace('"vy-a-big-" = { cap_usd = 100, expires = "2026-09-24T20:00Z", max_pod_hours = 48 }\n', "")
+    without = TOML.replace('"vy-a-big-" = { limit_usd = 100, expires = "2026-09-24T20:00Z", max_pod_hours = 48 }\n', "")
     step(api, without, state, T0 + 3660, lines)
     assert state["pods"]["g"]["line"] == "vy-a-", "the next-longest line covers it now"
-    only_other = "[guard]\nproject = [\"vy\"]\n[budgets]\n\"vy-z-\" = { cap_usd = 1, expires = \"2026-09-24T20:00Z\", max_pod_hours = 1 }\n"
+    only_other = "[guard]\nproject = [\"vy\"]\n[budgets]\n\"vy-z-\" = { limit_usd = 1, expires = \"2026-09-24T20:00Z\", max_pod_hours = 1 }\n"
     step(api, only_other, state, T0 + 3720, lines)
     step(api, only_other, state, T0 + 3720 + 15 * 60, lines)
     assert api.deleted == ["g"] and state["lines"]["vy-a-big-"]["spent"] == pytest.approx(1.0)
@@ -205,10 +205,10 @@ def test_the_last_good_budgets_stay_in_force_when_the_file_breaks_and_across_a_r
     t = [T0]
     clock, sleep = (lambda: t[0]), (lambda s: t.__setitem__(0, t[0] + 1800))
     assert G.run(cfg(tmp_path), api, clock=clock, sleep=sleep, iterations=1) == 0
-    f.write_text(TOML.replace("cap_usd = 3,", "cap = 300,"))
+    f.write_text(TOML.replace("limit_usd = 3,", "limit = 300,"))
     assert G.run(cfg(tmp_path), api, clock=clock, sleep=sleep, iterations=1) == 0
     state = json.loads((guard_dir / "guard-budgets.json").read_text())
-    assert "cap not a line key" in state["budgets"]["error"] and state["budgets"]["lines"]["vy-a-"]["cap_usd"] == 3.0
+    assert "limit not a line key" in state["budgets"]["error"] and state["budgets"]["lines"]["vy-a-"]["limit_usd"] == 3.0
     f.unlink()
     assert G.run(cfg(tmp_path), api, clock=clock, sleep=sleep, iterations=2) == 0
     assert api.deleted == ["a"], "a restart with no readable file enforces the budgets its state carries"
@@ -291,3 +291,30 @@ def test_the_cli_refuses_a_second_guard_and_status_stop_read_the_recorded_pid(tm
     assert research_main(["pods", "guard", "stop"]) == 1
 
 
+
+
+def test_budgets_with_the_old_keys_are_enforced_and_said_once(tmp_path):
+    f = tmp_path / "budgets.toml"
+    f.write_text(TOML.replace("limit_usd = 3,", "cap_usd = 3,"))
+    state, lines = G.new_state(T0), []
+    b = G.refresh(cfg(tmp_path), state, None, T0, lines.append)
+    G.refresh(cfg(tmp_path), state, b, T0 + 60, lines.append)
+    assert [ln for ln in lines if "read as" in ln] == [f"BUDGETS name cap_usd, read as limit_usd ({f})"], "said once, not every poll"
+    assert state["budgets"]["lines"]["vy-a-"]["limit_usd"] == 3.0 and "cap_usd" not in state["budgets"]["lines"]["vy-a-"]
+    api = FakeRunPod([pod("a", "vy-a-1", 4, 5)])
+    step(api, b, state, T0, lines)
+    step(api, b, state, T0 + 3600, lines)
+    assert api.deleted == ["a"] and state["lines"]["vy-a-"]["tripped"]["kind"] == "limit"
+
+
+def test_a_trip_an_older_guard_recorded_as_cap_holds_as_a_limit_trip():
+    api = FakeRunPod([pod("a", "vy-a-1", 4, 5), pod("n", "vy-a-2", 1, 5)])
+    state, lines = G.new_state(T0), []
+    step(api, TOML, state, T0, lines)
+    state["lines"]["vy-a-"]["spent"] = 5.0
+    state["lines"]["vy-a-"]["tripped"] = {"at": "t", "why": "old", "kind": "cap", "pods": ["a"]}
+    state["pods"]["n"]["over_cap_noted"] = True
+    step(api, TOML, state, T0 + 60, lines)
+    assert state["lines"]["vy-a-"]["tripped"]["kind"] == "limit" and not any("STILL TRIPPED" in ln for ln in lines)
+    assert api.deleted == ["a"] and state["pods"]["n"] == {**state["pods"]["n"], "over_limit_noted": True}
+    assert "over_cap_noted" not in state["pods"]["n"] and not any("OVER-LIMIT n" in ln for ln in lines), "noted once, by the older guard"

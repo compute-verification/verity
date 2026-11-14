@@ -1893,7 +1893,7 @@ PHASE = {
 
 
 def test_the_security_level_is_the_rows_binding_bound_named_by_what_it_is_over(tmp_path):
-    """Beside the GB the command prints the binding bound its row of record holds, the planner's: over one
+    """Beside the GB the command prints the binding bound its recorded planner row holds: over one
     verification phase and over a world-year of phases, each counted in calls and in compressions and named by what
     it is over, marked modeled; the inputs it assumes, each listed and marked assumed; and what Lean proves of each,
     by its theorem's name, or that nothing is proved at these sizes. It computes none of it, moves no GB, and says so

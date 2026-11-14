@@ -41,22 +41,22 @@ import Proofs.Flock.Soundness.ZK.Hiding
 
 `Flock.zk_server_lean`, `Flock.zk_server_blind` and `ZkServer.zk_deferred` sample the server's tape uniformly. Every random
 value on it is a read of the operating system that a Lean process makes: each rep's frame reads its samples in one call at
-its start (`flock-firewall frame`, `Frame.cmd`, which is `Frame.cmdWith IO.getRandomBytes`, or the session loop's frames,
-`Session.frames`, `Frame.serveWith IO.getRandomBytes` too: `Frame.drawsWith` reads
-`drawBytes l` bytes and `Draws.ofRead` refuses any other count, then parses them into the pads `h`, `μ`, the inner rows'
-padding, `τ`'s salt and the pads tree's salts), and the tap (`flock-firewall tap`) serves the prover's every other read:
+its start (`flock-zk-server frame`, `Frame.cmd`, which is `Frame.cmdWith IO.getRandomBytes`, or the session loop's frames,
+`Session.frames`, `Frame.serveWith IO.getRandomBytes` too: `Frame.samplesWith` reads
+`sampleBytes l` bytes and `Draws.ofRead` refuses any other count, then parses them into the pads `h`, `μ`, the inner rows'
+padding, `τ`'s salt and the pads tree's salts), and the tap (`flock-zk-server tap`) serves the prover's every other read:
 the mask slot's words, level 0's hiding, the other trees' salts, the coin tree's nonce and `ProverSeed`, from which a
 proving build expands nothing (`zk_hooks.rs`). The step from those reads to a uniform tape is A3 per test
 (`Assumptions.UniformRandomBytesTest`, `uniform/io-getrandombytes`), at the one event each theorem bounds, and its slack
 `η` enters the bound:
 
 * `OsTape`: the tape as the operating system's bytes, one for one (`OsTape.e`): a stream for each of the first `reps`
-  reps' frames, of exactly `drawBytes` bytes, and the tap's streams, which are every other byte of the tape.
+  reps' frames, of exactly `sampleBytes` bytes, and the tap's streams, which are every other byte of the tape.
   `OsTape.dec`: the same decoding of all the streams as one byte source, A3's form. `OsTape.frameBytes`: rep `i`'s
   frame's bytes on a tape. `OsTape.release`: the release whose frames read those bytes.
-* `frame_cmd`, `frame_draws`, `drawsWith_refuses`: the frame's read is the release's samples. `Frame.cmd` is
+* `frame_cmd`, `frame_samples`, `samplesWith_refuses`: the frame's read is the release's samples. `Frame.cmd` is
   `Frame.cmdWith IO.getRandomBytes`; the read `cmdWith` starts a rep with, on a source that returns rep `i`'s stream,
-  takes it as `drawsAt`; a read of any other length is refused, so no rep runs on a short read's zeros.
+  takes it as `samplesAt`; a read of any other length is refused, so no rep runs on a short read's zeros.
 * `Pr_os_prod`: an event of the tape the streams decode to, beside any independent randomness, has at most the
   probability it has at a uniform tape plus `η`, where the source passes the event's test up to `η` (A3 per test).
 * `ZkDeferredOs`, `ZkServerBlindOs`, `ZkServerLeanOs`: the three theorems with the experiment's tape the bytes of a
@@ -73,14 +73,14 @@ open Claims Claims.ZKMal
 open FlockSoundness.Discharge
 
 /-- **The server's tape as the operating system's bytes**, at rep `i`'s pad layout `lay i`: rep `i`'s frame reads
-stream `i` of the first part, `drawBytes (lay i)` bytes, for each of the first `reps` reps, and the tap serves the
+stream `i` of the first part, `sampleBytes (lay i)` bytes, for each of the first `reps` reps, and the tap serves the
 second part's streams, stream `j` its first `tapLen j` bytes. The two parts are the whole tape, read one for one
 (`e`). -/
 structure OsTape (R : Type) (lay : ℕ → _root_.Flock.Zk.PadLayout) where
   reps : ℕ
   taps : ℕ
   tapLen : Fin taps → ℕ
-  e : (((i : Fin reps) → Fin (_root_.Flock.Firewall.Frame.drawBytes (lay i)) → Fin 256) ×
+  e : (((i : Fin reps) → Fin (_root_.Flock.ZkServer.Frame.sampleBytes (lay i)) → Fin 256) ×
     ((j : Fin taps) → Fin (tapLen j) → Fin 256)) ≃ R
 
 namespace OsTape
@@ -89,53 +89,53 @@ variable {R : Type} {lay : ℕ → _root_.Flock.Zk.PadLayout}
 
 /-- The streams' lengths as one byte source's, the frames' then the tap's. -/
 def Ls (O : OsTape R lay) : Fin O.reps ⊕ Fin O.taps → ℕ :=
-  Sum.elim (fun i => _root_.Flock.Firewall.Frame.drawBytes (lay i)) O.tapLen
+  Sum.elim (fun i => _root_.Flock.ZkServer.Frame.sampleBytes (lay i)) O.tapLen
 
 /-- The tape from the streams as one byte source, the frames' then the tap's. -/
 def dec (O : OsTape R lay) : ((k : Fin O.reps ⊕ Fin O.taps) → Fin (O.Ls k) → Fin 256) ≃ R :=
   (Equiv.sumPiEquivProdPi fun k => Fin (O.Ls k) → Fin 256).trans O.e
 
 /-- Rep `i`'s frame's bytes on the tape `ρ`: its stream, as bytes. A rep from `reps` on has no stream and reads
-none, which the frame refuses (`drawsWith_refuses`). -/
+none, which the frame refuses (`samplesWith_refuses`). -/
 def frameBytes (O : OsTape R lay) (ρ : R) (i : ℕ) : ByteArray :=
-  if h : i < O.reps then FlockSoundness.Audit.Law.streamOf ((O.e.symm ρ).1 ⟨i, h⟩) else ByteArray.empty
+  if h : i < O.reps then FlockSoundness.Audit.SamplingDesign.streamOf ((O.e.symm ρ).1 ⟨i, h⟩) else ByteArray.empty
 
 /-- The release whose rep `i` reads stream `i` of the tape at its start. -/
 def release {W : Type} (O : OsTape R lay) (L : LeanRelease W R) : LeanRelease W R :=
   { L with draws := O.frameBytes }
 
 theorem frameBytes_of_lt (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
-    O.frameBytes ρ i = FlockSoundness.Audit.Law.streamOf ((O.e.symm ρ).1 i) :=
+    O.frameBytes ρ i = FlockSoundness.Audit.SamplingDesign.streamOf ((O.e.symm ρ).1 i) :=
   dif_pos i.isLt
 
 /-- Rep `i`'s frame reads exactly the bytes its samples take. -/
 theorem frameBytes_size (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
-    (O.frameBytes ρ i).size = _root_.Flock.Firewall.Frame.drawBytes (lay i) := by
+    (O.frameBytes ρ i).size = _root_.Flock.ZkServer.Frame.sampleBytes (lay i) := by
   rw [frameBytes_of_lt]
-  exact FlockSoundness.Audit.DrawExec.size_streamOf _
+  exact FlockSoundness.Audit.SampleExec.size_streamOf _
 
 end OsTape
 
-/-- **`flock-firewall frame` is the frame at the operating system's bytes**: `Frame.cmd` runs `Frame.cmdWith`, whose
-rep starts with `drawsWith get`, at `IO.getRandomBytes`. -/
-theorem frame_cmd : _root_.Flock.Firewall.Frame.cmd = _root_.Flock.Firewall.Frame.cmdWith IO.getRandomBytes := rfl
+/-- **`flock-zk-server frame` is the frame at the operating system's bytes**: `Frame.cmd` runs `Frame.cmdWith`, whose
+rep starts with `samplesWith get`, at `IO.getRandomBytes`. -/
+theorem frame_cmd : _root_.Flock.ZkServer.Frame.cmd = _root_.Flock.ZkServer.Frame.cmdWith IO.getRandomBytes := rfl
 
-/-- **The frame's read on the tape is the release's samples**: `drawsWith`, the read `Frame.cmdWith` starts a rep with, on
-a source that returns rep `i`'s stream of the tape, takes it whole as `drawsAt` of the release that reads the tape. -/
-theorem frame_draws {W R : Type} (L : LeanRelease W R) (x : Msg) (O : OsTape R (L.lay x)) (ρ : R) (i : Fin O.reps) :
-    _root_.Flock.Firewall.Frame.drawsWith (m := Id) (fun _ => pure (O.frameBytes ρ i)) (L.lay x i) =
-      .ok ((O.release L).drawsAt x ρ i) := by
-  show _root_.Flock.Firewall.Frame.Draws.ofRead (L.lay x i) (O.frameBytes ρ i) = _
-  rw [_root_.Flock.Firewall.Frame.Draws.ofRead, if_pos (O.frameBytes_size ρ i)]
+/-- **The frame's read on the tape is the release's samples**: `samplesWith`, the read `Frame.cmdWith` starts a rep with, on
+a source that returns rep `i`'s stream of the tape, takes it whole as `samplesAt` of the release that reads the tape. -/
+theorem frame_samples {W R : Type} (L : LeanRelease W R) (x : Msg) (O : OsTape R (L.lay x)) (ρ : R) (i : Fin O.reps) :
+    _root_.Flock.ZkServer.Frame.samplesWith (m := Id) (fun _ => pure (O.frameBytes ρ i)) (L.lay x i) =
+      .ok ((O.release L).samplesAt x ρ i) := by
+  show _root_.Flock.ZkServer.Frame.Draws.ofRead (L.lay x i) (O.frameBytes ρ i) = _
+  rw [_root_.Flock.ZkServer.Frame.Draws.ofRead, if_pos (O.frameBytes_size ρ i)]
   rfl
 
 /-- **A read of any other length is refused**: the frame starts no rep on bytes that are not exactly its samples', so no
 rep masks with the zeros `Draws.ofBytes` reads past a short input. -/
-theorem drawsWith_refuses (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
-    (h : b.size ≠ _root_.Flock.Firewall.Frame.drawBytes l) (d : _root_.Flock.Firewall.Frame.Draws) :
-    _root_.Flock.Firewall.Frame.drawsWith (m := Id) (fun _ => pure b) l ≠ .ok d := by
-  show _root_.Flock.Firewall.Frame.Draws.ofRead l b ≠ _
-  rw [_root_.Flock.Firewall.Frame.Draws.ofRead, if_neg h]
+theorem samplesWith_refuses (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
+    (h : b.size ≠ _root_.Flock.ZkServer.Frame.sampleBytes l) (d : _root_.Flock.ZkServer.Frame.Draws) :
+    _root_.Flock.ZkServer.Frame.samplesWith (m := Id) (fun _ => pure b) l ≠ .ok d := by
+  show _root_.Flock.ZkServer.Frame.Draws.ofRead l b ≠ _
+  rw [_root_.Flock.ZkServer.Frame.Draws.ofRead, if_neg h]
   intro hd
   cases hd
 
@@ -157,7 +157,7 @@ theorem Pr_os_prod {Ω Tp A ι : Type} [Fintype Ω] [Fintype Tp] [Fintype A] [Fi
       _ = FlockSoundness.Game.prCoin E + η :=
           congrArg (· + η) (FlockSoundness.ZK.prCoin_congr_equiv (Equiv.prodComm A Tp) E)
   have hE : FlockSoundness.Game.prCoin E ≠ ⊤ :=
-    ne_top_of_le_ne_top ENNReal.one_ne_top (FlockSoundness.Audit.DrawExec.prCoin_le_one E)
+    ne_top_of_le_ne_top ENNReal.one_ne_top (FlockSoundness.Audit.SampleExec.prCoin_le_one E)
   exact (ENNReal.toReal_mono (ENNReal.add_ne_top.2 ⟨hE, hη⟩) h).trans_eq (ENNReal.toReal_add hE hη)
 
 /-- **`ZkServer.zk_deferred` at the operating system's bytes**: the server's tape the bytes of a byte source, read one

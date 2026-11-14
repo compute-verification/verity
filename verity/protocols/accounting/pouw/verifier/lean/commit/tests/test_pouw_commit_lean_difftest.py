@@ -124,7 +124,7 @@ def test_the_python_is_the_lean(tmp_path):
     exe = D.build(PACKAGE, "pouw-commit-difftest")
     path = vectors.write(tmp_path)
     p = subprocess.run([str(exe), str(path), str(len(cases()))], capture_output=True, text=True)
-    assert p.returncode == 0, f"the Python differs from the Lean, PoUW's verifier of record:\n{p.stderr}{p.stdout}"
+    assert p.returncode == 0, f"the Python differs from the Lean, PoUW's verifier:\n{p.stderr}{p.stdout}"
     assert p.stdout.strip() == f"difftest: {len(cases())} cases compared, 0 differences"
 
 

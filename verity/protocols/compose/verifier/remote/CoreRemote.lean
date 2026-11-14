@@ -229,13 +229,13 @@ private def circuit : String :=
 
 private def query : Json := jsonOf r#"{"name":"Q_template_instance","params":{"template":"CoreSpotPair_v0"},"version":0}"#
 private def partition : Json := Json.mkObj [("program", circuit), ("query", query)]
-private def law : Json := jsonOf r#"{"k":1,"law":"subset"}"#
+private def samplingDesign : Json := jsonOf r#"{"k":1,"law":"subset"}"#
 private def ports : Json := Json.mkObj [("out", Json.mkObj [("domain", rep "d1"), ("leaves", 2)]),
   ("x", Json.mkObj [("domain", rep "d2"), ("leaves", 1)])]
 
 /-- The run's record after `previous`, registering `registered`. -/
 private def runRecord (previous : Json) (registered : Array Json) : Json := Json.mkObj [("anchors", Json.arr #[]),
-  ("format", "verity/registration/v2"), ("law", law), ("leaf_layer", rep "ee"),
+  ("format", "verity/registration/v2"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("partition", (Spot.Partition.digest partition).getD ""), ("population", 1), ("previous", previous),
   ("program", circuit), ("protocol", Spot.Registration.PROTOCOL),
   ("query", (Spot.Registration.queryDigest query).toOption.getD ""), ("registered", Json.arr registered),
@@ -254,7 +254,7 @@ private def outputsOf (record : String) : Json := Json.mkObj [
   (PouwCheck.Credit.commitIds 0, Json.mkObj [("record", record), ("value", "pouw/h1/ids@0")]),
   (PouwCheck.Credit.commitRows 0 64, Json.mkObj [("record", record), ("value", "pouw/h1/a/64@0")])]
 
-/-- The verifier's own registered file (`flock-verify --registered`'s): `R`'s tables under the Commit's names, which no
+/-- The verifier's own registered file (`verity-verify-proof --registered`'s): `R`'s tables under the Commit's names, which no
 proof block of the audited circuit reads. -/
 private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT), ("ports", Json.mkObj (reused.toList.map
   fun x => ((x.getObjValD "value").getStr?.toOption.getD "", Json.mkObj [("domain", x.getObjValD "domain"),
@@ -269,7 +269,7 @@ private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W"
 /-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the window's,
 and `proofs`, the circuit and public files' SHA-512s and the verifier's registered file. -/
 private def sampledParams (log : Array Json) (outputs : Option Json) : Json := Json.mkObj ([("anchors", Json.arr #[]),
-  ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", law), ("leaf_layer", rep "ee"),
+  ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", samplingDesign), ("leaf_layer", rep "ee"),
   ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
   ("program", jsonOf descriptor),
   ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"), ("registered", readsFile)]),
@@ -330,7 +330,7 @@ private def policy (log : Array Json) : Answer := answerOf NciCheck.Protocol.pro
 private def sampled (log : Array Json) (outputs : Option Json) : Answer :=
   answerOf (noBlobs VStar.Recursive.Sampled.protocol) (sampledOn log outputs recR)
 
-/-- The verdicts `flock-verify verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
+/-- The verdicts `verity-verify-proof verify --zk` writes for `e`'s sessions (`OneStageZk.verdictJson`'s names), each of record
 and accepting, reporting the roots it opened `rec`'s registered values against. -/
 private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (String × Json) :=
   let reads := match rec.getObjValD "registered" with
@@ -343,7 +343,8 @@ private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (Strin
 
 /-- Sampled proofs with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
 and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
-sessions' run gives (`grantedOf`); the recursive form refused. -/
+sessions' run gives (`grantedOf`), held to the caller's check as sampled proofs holds it (`VStar.Recursive.Caller.gate`);
+the recursive form refused. -/
 private def proved : Core.Protocol where
   id := VStar.Recursive.Sampled.PROTOCOL
   Params := VStar.Recursive.Sampled.Params
@@ -356,7 +357,8 @@ private def proved : Core.Protocol where
   evidence := VStar.Recursive.Sampled.evidenceOf
   digest c := c.digest
   check p c e := match p, e with
-    | .inl p, .inl e => Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e }
+    | .inl p, .inl e => VStar.Recursive.Caller.gate c.record p.base.verifier
+      (Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e })
     | _, _ => .reject "the one-stage form only"
   publicJson := Spot.OneStage.publicJson
   profileJson := Core.Integrity.toJson

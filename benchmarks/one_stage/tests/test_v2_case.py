@@ -66,7 +66,7 @@ def _members_window(w: Path, RP, members: list[dict], drawn: list[int], pins: di
 
 
 def test_a_window_of_several_members_has_no_v2_case_and_leaves_only_missing(tmp_path, RP):
-    """v2 reads one member's statement and refuses a windowed registration, so a window whose summary lists several
+    """v2 reads one member's statement and refuses a windowed docket, so a window whose summary lists several
     members gets no case, whichever of them were sampled: only ``missing.json`` saying so, which `composite.py` leaves
     out."""
     w, out = tmp_path / "window", tmp_path / "v2"

@@ -21,7 +21,7 @@ table (`--rec-links`) to the inner shape's; and `RecLinkPart.check` passes every
 files, or whose `trow` is not the table at its root, rows, domain and fixed rows. `RecLinkPart.checkUnit` refuses a unit
 that is not V*'s net (`checkUnit_refuses`, over every circuit), and `RecLinkPart.outsOk` passes V*'s link layout and
 refuses it laid out any other way. That V*'s own file passes `checkParsed`, `checkUnit` and `outsOk` is checked by
-`flock-verify` on a link part (`verity/ml/flock/tests/test_lean_rec_links_verify.py`): the interpreter can't build that
+`verity-verify-proof` on a link part (`verity/ml/flock/tests/test_lean_rec_links_verify.py`): the interpreter can't build that
 file, or V*'s net, in a module's time.
 -/
 

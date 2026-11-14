@@ -1,5 +1,5 @@
 """`verity.commitments.randomness` against its Lean spec (`verity/commitments/randomness/Randomness.lean`),
-which the keyed-draw theorems read (`KeyedDraw.lean`), through vectors the spec generates (`fixtures/randomness_lean.json`, `lean/generate.sh`)."""
+which the keyed-draw theorems read (`KeyedSample.lean`), through vectors the spec generates (`fixtures/randomness_lean.json`, `lean/generate.sh`)."""
 
 from __future__ import annotations
 
@@ -43,8 +43,8 @@ def test_python_matches_every_lean_vector():
             assert list(key.subset(k, n, tuple(_part(p) for p in idx))) == want
 
 
-def test_the_window_draw_is_plan_draw_per_call_under_one_key():
-    """`PlanDraw.window`: each call's `plan.draw` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
+def test_the_window_sample_is_plan_sample_per_call_under_one_key():
+    """`PlanDraw.executionPhase`: each call's `plan.draw` loop (each stratum's `Key.subset(k, len(units), context)` mapped through
     its units), the calls in order under the one key, and a window with a repeated call index refused. Restated here from
     `plan.draw`; the test against `verity.protocols.accounting.pouw.prover.circuit.plan` itself lands with `plan.draw`'s admission fix."""
     for w in FIXTURE["window"]:

@@ -24,7 +24,7 @@ from verity_flock import rec_sparse as RS
 
 from test_rec_sparse import _template, session
 
-BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "flock-verify"
+BIN = Path(__file__).resolve().parents[6] / "verity/protocols/proofs/flock/verifier" / ".lake" / "build" / "bin" / "verity-verify-proof"
 #: a stacked table of 2^22 bits, fast100's smallest m: 2^6 entries, 16 planes (ELL = 7), 2^12 types; two slots
 SPARSE = RS.Shape(6, 7, 1, 12)
 OPEN = A.Shape(22, 6, 2, opening_only=True)
@@ -33,7 +33,7 @@ U = (0, 1)
 
 # --- the honest opening ------------------------------------------------------------------------------------------------------
 
-class _Draw(A.CoinSource):
+class _Sample(A.CoinSource):
     """The verifier's coins flipped as the prover goes, in the rounds `rec_algebra.run` reads them."""
 
     def __init__(self, g: random.Random):
@@ -134,7 +134,7 @@ def open_table(sh: A.Shape, bits: np.ndarray, claims: list, g: random.Random) ->
     its messages (the zerocheck's and lincheck's fields empty, no opened rows) and each Ligerito level's consistency sums
     (`Messages.cons`, ``Σ_j eq(α)[j] row_j[l]`` per lane, from the committed tables rather than the encoded rows)."""
     sch, n = sh.sched, sh.m - 7
-    coins = _Draw(g)
+    coins = _Sample(g)
     t = pack(bits)
     assert len(t) == 1 << n
     rs = [ring_switch(bits, list(c.x[1:])) for c in claims]

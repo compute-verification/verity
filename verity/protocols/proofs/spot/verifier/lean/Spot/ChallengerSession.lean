@@ -79,7 +79,7 @@ open Flock (V)
 
 def CLOSE_ROLE : String := "verity/challenger-close/v1"
 def LOG_TAG : String := "verity/challenger/release-log/v1"
-def MAX_SESSION_ID : Nat := 128
+def MAX_CHALLENGE_PHASE_ID : Nat := 128
 /-- A release log's most coin-tree lines (`ChallengerTrees.coinTreesOf`): each tree the challenger sampled and each
 round it opened. -/
 def MAX_TREE_LINES : Nat := 2 ^ 23
@@ -91,13 +91,13 @@ def OPEN_EVENT : String := "tree-open"
 def CLOSE_FORM : String :=
   "a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in " ++
   "lowercase hex, how the session ended (null when its client closed it), the release log's line count, 1 to " ++
-  toString MAX_LOG_LINES ++ ", and a session id of at most " ++ toString MAX_SESSION_ID ++
+  toString MAX_LOG_LINES ++ ", and a session id of at most " ++ toString MAX_CHALLENGE_PHASE_ID ++
   " ASCII letters, digits, '-', '.' and '_'"
 def NO_CLOSE : String :=
   "no challenger close record: a session the challenger didn't close and sign shows nothing of the order it released its coins in"
 def LOG_FORM : String := "the challenger's release log is a list of its lines"
 def LOG_MALFORMED : String := "the challenger's release log is malformed"
-def SESSION_FORM : String :=
+def CHALLENGE_PHASE_FORM : String :=
   "a challenger session is {close, hellos, log, record}: its close record, its refused hellos' lines, its " ++
   "release log's lines and its record"
 def LOG_FILE : String := "releases.jsonl"
@@ -123,7 +123,7 @@ def MAX_MINUTES : Nat := 720
 /-- `RESERVED`: the request a reserve records and its session's open carries. -/
 def RESERVED : List String := ["by", "for", "peer", "scheme", "epoch", "families", "minutes"]
 def ZERO : String := Core.Record.ZERO
-def WINDOW_FORM : String := "a window's identity is {root}: the served Commit's root, 64 bytes in lowercase hex"
+def RUN_FORM : String := "a window's identity is {root}: the served Commit's root, 64 bytes in lowercase hex"
 def LEDGER_FORM : String :=
   "an auditor's ledger line is an entry {body, kind, prev, schema, seq, session, sig} as the auditor writes it " ++
   "(sorted keys, no whitespace, ASCII, no number but an integer): kind open, its body naming the window, the " ++
@@ -158,8 +158,8 @@ def NO_MAIN : String :=
   "the verifier holds no copy of main's history, so it can't tell whether the host's pinned tree is one main's " ++
   "check passed: give it the auditor's own `git rev-list --first-parent origin/main`"
 
-/-- A session id: a host's characters, at most `MAX_SESSION_ID` of them. -/
-def isChallengePhaseId (s : String) : Bool := s.length ≤ MAX_SESSION_ID && isHost s
+/-- A session id: a host's characters, at most `MAX_CHALLENGE_PHASE_ID` of them. -/
+def isChallengePhaseId (s : String) : Bool := s.length ≤ MAX_CHALLENGE_PHASE_ID && isHost s
 
 private def hexAt? (j : Json) : Option ByteArray :=
   match j with
@@ -715,9 +715,13 @@ structure Audited where
 /-- `audited_session` (module docstring): the one challenger session the auditor's ledger `ledger` (its lines, `null`
 when the verifier has none) opens under v2 for `window` (`{root}`) under the window's pinned key `key`, and ends closed,
 its end naming its record's leaf, its commitment and its refused hellos and sealing `SEALED_FILES`, in a period, if any,
-that committed its cap and circuit; and the body of the window's open (`_audited`). -/
+that committed its cap and circuit; and the body of the window's open (`_audited`).
+
+`auditedIn` holds the lines after the ledger's check a second time, for a check that reads many windows of one ledger.
+Statements read this definition and their records hold its term, so it is not restated through `auditedIn`:
+`auditedOpen_eq_auditedIn` holds the two to each other, and stops building when one is edited alone. -/
 def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Json) := do
-  unless isRun window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
+  unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
   let (wins, periods) ← checked ledger key
   let root := strOf (getD window "root")
   let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
@@ -744,6 +748,47 @@ def auditedOpen (ledger window : Json) (key : ChallengerKey) : V (Audited × Jso
             period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
             circuit := (p.map (·.circuit)).getD Json.null }, o.body)
 
+/-- `auditedOpen` on a ledger already checked: the one session among its windows `wins` that opens `window` (`{root}`)
+under v2 and ends closed, its end naming its record's leaf, its commitment and its refused hellos and sealing
+`SEALED_FILES`, in a period of `periods`, if any, that committed its cap and circuit; and the body of the window's
+open. A check of many windows of one ledger checks the ledger once (`checked`) and reads each window here.
+
+These are `auditedOpen`'s lines after its ledger's check, written a second time: `auditedOpen` is left the term the
+statements that read it record, and `auditedOpen_eq_auditedIn` holds the two to each other. -/
+def auditedIn (wins : Array Win) (periods : Array MonitoringPeriod) (window : Json) : V (Audited × Json) := do
+  let root := strOf (getD window "root")
+  let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
+  let o := w.opened
+  let s := o.session
+  unless o.schema == LEDGER_SCHEMA do
+    throw s!"the auditor's ledger opens this window's session {s} under {o.schema}, which names no prover and seals no refused hellos"
+  let some e := w.ended
+    | throw s!"the auditor's ledger has no end for session {s}: the session never ended, or the ledger is older than its end"
+  let b := e.body
+  unless jsonTrue (getD b "closed") do
+    throw s!"the auditor's ledger ends session {s} unclosed: its client didn't close it"
+  let files := getD b "files"
+  let malformed := s!"the auditor's ledger's end of session {s} is malformed: {END_FORM}"
+  let some recordLeaf := nat? (getD b "record_leaf") | throw malformed
+  let some refusedHellos := nat? (getD b "refused_hellos") | throw malformed
+  unless isDigest (getD b "commitment") && SEALED_FILES.all (fun f => (field? files f).isSome) do throw malformed
+  let p := periods.find? (·.windows.contains s)
+  if let some p := p then
+    if p.cap.isNull || p.circuit.isNull then
+      throw s!"the auditor's ledger's period {p.name}, which holds session {s}, commits no cap or circuit"
+  return ({ session := s, host := strOf (getD o.body "host"), prover := laneOf o.body, files, recordLeaf,
+            commitment := strOf (getD b "commitment"), refusedHellos, pinned := strOf (getD o.body "pinned"),
+            period := p.map (·.name), cap := (p.map (·.cap)).getD Json.null,
+            circuit := (p.map (·.circuit)).getD Json.null }, o.body)
+
+/-- `auditedOpen` is the ledger's check, then `auditedIn` on what it returns. The two definitions hold the same lines,
+and this stops building when one of them is edited alone. -/
+theorem auditedOpen_eq_auditedIn (ledger window : Json) (key : ChallengerKey) :
+    auditedOpen ledger window key = (do
+      unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
+      let (wins, periods) ← checked ledger key
+      auditedIn wins periods window) := rfl
+
 /-- `audited_session` (module docstring): `auditedOpen`'s session. -/
 def auditedChallengePhase (ledger window : Json) (key : ChallengerKey) : V Audited :=
   return (← auditedOpen ledger window key).1
@@ -753,7 +798,7 @@ under the window's pinned key `key`, the UTC day of its v2 open's `started_utc` 
 signed before that open, each `{blocks, day, program}`: `{day, declarations}`, what a per-day check holds the window's
 program to. -/
 def declaredDay (ledger window : Json) (key : ChallengerKey) : V Json := do
-  unless isRun window do throw s!"the window's identity is malformed: {WINDOW_FORM}"
+  unless isRun window do throw s!"the window's identity is malformed: {RUN_FORM}"
   let (wins, _) ← checked ledger key
   let root := strOf (getD window "root")
   let some w := wins.find? (·.root == root) | throw "the auditor's ledger opens no challenger session for this window"
@@ -798,7 +843,7 @@ def logDigest (lines : List String) : String :=
 signed at the leaf the ledger's end names over the commitment it names, and its release log and refused hellos are the
 ones the end sealed, as many hellos as the end counts. -/
 def challengePhaseNamed (a : Audited) (key : ChallengerKey) (session : Json) : V (LiveCommitment × Roots) := do
-  unless keys? session == some #["close", "hellos", "log", "record"] do throw SESSION_FORM
+  unless keys? session == some #["close", "hellos", "log", "record"] do throw CHALLENGE_PHASE_FORM
   let (c, roots, sid) ← challengePhaseOf key (getD session "record") (getD session "log") (getD session "close")
   unless sid == a.session do
     throw s!"the challenger's session is {sid}, not {a.session}, the one the auditor's ledger opens for this window"

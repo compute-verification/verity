@@ -142,7 +142,7 @@ def greet(backend, b: rstore.Binding | None, **kw) -> tuple[verifier.Verifier, V
     return v, refused, heard
 
 
-def test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_the_registry_draws(ckpt, tmp_path):
+def test_a_store_whose_root_isnt_the_pinned_models_is_refused_with_why_before_the_registry_samples(ckpt, tmp_path):
     """Each of: the right store salted with the prover's own key (`--seed-payload-key`), another checkpoint's arenas
     of the same shape, a store of other arenas, and a store short of the arenas. The verifier answers `bye` with the
     reason and the registry has sampled nothing for the node; the reason is the Lean's, which store.py's is word for

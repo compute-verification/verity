@@ -19,14 +19,14 @@ from verity_vllm.program.predict import node_window_embed as NE
 from verity_vllm.program.predict import node_window_values as NV
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.window_builder import Grain
-from verity_vllm.protocols.pouw.h1 import registered as H1R
+from verity.protocols.accounting.pouw.prover.serving.h1 import registered as H1R
 
 from tests.program.predict.test_node_window import LP, glm_request
 from verity.circuits.codec import descriptor_id
 from verity.circuits.evaluation.batch import evaluate_batch
 from verity.commitments.gates.embedding import arguments, reference
 from verity.commitments.gates.embedding import read as read_of
-from verity.commitments.windows import interface as IF
+from verity.commitments.periods import interface as IF
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 
 FAMILIES = {**NW.FAMILIES, **ND.FAMILIES, **NE.FAMILIES}

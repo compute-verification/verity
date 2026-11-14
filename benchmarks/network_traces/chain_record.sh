@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The network chain's run of record (chain_record.py) on a CPU machine, from the gate's fetched tarballs, on hidden_zk's
-# builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, the verifier) with the
+# builds (its job.sh, sourced: Flock's flock-circuit and the Lean verity-verify-proof, the verifier) with the
 # ZK server's Lean frame, N2's network-records and the sampled-proofs verifier built in the tree. From a clone, in one of
 # the network slots, as a job of at most 240 minutes on a CPU node whose input is the gate's tarball GATE.tgz:
-#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py --by LANE -- \
+#   env CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/check/slot.py --by LANE -- \
 #     env CR_MEM_GB=128 CR_GATES=GATE.tgz bash benchmarks/network_traces/chain_record.sh
 # Steps, each kept under $OUT and read by the report:
 #   custody  each gate run's files against its end.json (chain_record.py custody)

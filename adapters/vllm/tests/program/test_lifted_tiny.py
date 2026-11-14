@@ -44,7 +44,7 @@ from verity.definitions.registry.b1 import weights_type
 
 from tests.program.test_serve3 import D_MAX, EOS_FOR, LP, TINY, Y_RAW, _inputs, _v1
 
-I32, BF16, F32 = Value(32), Value(16), Value(32)
+I32, BF16 = Value(32), Value(16)
 N_EVENTS = D_MAX + 1  # prefill event + D_MAX decode events (the Serve_v2 skeleton; SPEC R3 maps this to Workload_v1's T = cap−1)
 BOT32, BOT16, INV32, INV16 = L.enc_bot(32), L.enc_bot(16), L.inv(32), L.inv(16)
 RNG = np.random.default_rng(1601)
@@ -676,7 +676,7 @@ def test_lserve_structure_and_digests():
     sp1 = bind(b1.Serve, C=TINY, LP=LP, STEPS=D_MAX)
     for eos in ((15,), (17,), (63,), (17, 63)):
         sp = L.lserve(TINY, LP, D_MAX, eos, lag=0)
-        # the guard's gates + the Continuation_v1 controller's (3 per slot over cap = D_MAX + 1 slots) — PAD-03 (address stability across them)
+        # the guard's gates + the Continuation_v1 controller's (3 per slot up to the bound = D_MAX + 1 slots) — PAD-03 (address stability across them)
         assert sp.gates == sp1.gates + 2 * D_MAX + len(eos) + 2 + 3 * (D_MAX + 1) == sp1.gates + L.continuation_gate_count(D_MAX + 1, len(eos), 0)  # +2: bot32, enable/one
         prog = Program(sp)
         assert len(_steps(prog)) == D_MAX
@@ -787,12 +787,12 @@ def test_codec_round_trip_of_a_lifted_program():
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Stage 1 of the padded acceptance: a test for each named item
+# Phase 1 of the padded acceptance: a test for each named item
 # ---------------------------------------------------------------------------------------------------------
 
 
-def test_stage1_state_step_is_select_update_new_old_and_preserves_old_bit_identically():
-    """Stage-1 item 4 'state preservation' as a tiny circuit: the state transition is `Select(update, new, old)` (LSelect, non-strict) --
+def test_phase1_state_step_is_select_update_new_old_and_preserves_old_bit_identically():
+    """Phase-1 item 4 'state preservation' as a tiny circuit: the state transition is `Select(update, new, old)` (LSelect, non-strict) --
     with `update = Active(0)` the state is the OLD word bit for bit even when the pending `new` value is bot (nothing happened, so the
     state is not bot); with `update = Active(1)` it is the new word; an inactive `update` (the request itself inactive) is bot, which
     a step of ANOTHER request never sees (the cross-request fixture is test_lifted_mixed.py)."""
@@ -807,8 +807,8 @@ def test_stage1_state_step_is_select_update_new_old_and_preserves_old_bit_identi
         assert st.evaluate(0, L.enc_bot(w), L.enc_bot(w)) == L.enc_bot(w)  # never-written state of an inactive request stays bot
 
 
-def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
-    """Stage-1 item 5 'malformed encodings': flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
+def test_phase1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_reads_as_bot():
+    """Phase-1 item 5 'malformed encodings': flip ONE payload bit of a bot word -> the word is `1||nonzero`; every class of
     the lifted relation names it (INV out; the encoding predicates say neither Active nor bot); it is never rewritten (the operand the
     evaluator saw is the raw word; the caller still holds the raw bits to commit)."""
     for w in (1, 16, 32):
@@ -842,8 +842,8 @@ def test_stage1_flip_one_payload_bit_of_bot_is_named_by_every_class_and_never_re
 
 
 @pytest.mark.slow
-def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
-    """Stage-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
+def test_phase1_reference_evaluator_exposes_the_complete_assignment_every_gate_with_its_reading(tmp_path):
+    """Phase-1 cross-cutting: `serve3_reference.materialize` assigns EVERY gate (not only outputs); `lifted_dump.rows` reads the complete
     assignment back with each gate's class / width / raw word / A3 reading; on the tiny serve fixture with EOS at the raw event the
     bot population is exactly the inactive suffix of the transcript and no INV word exists anywhere."""
     from verity_vllm.program.lifting import dump as D
@@ -863,9 +863,9 @@ def test_stage1_reference_evaluator_exposes_the_complete_assignment_every_gate_w
     assert s2 == s and n_lines == prog.gates
 
 
-def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
+def test_phase1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_named_revb_3a_3c():
     """`FixedSelect(r_j, z_0..z_{E-1})` as the specified member `LFixedSelect<E>x<w>_v1` (MOE-PAD-SPEC §2), against
-    Stage 1 item 3 of the padded acceptance: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
+    Phase 1 item 3 of the padded acceptance: (a) one object for every route -- the same Definition (id, params, ret, evaluator) whatever `r`
     is; (b) output = `z_r` for every admitted `r`, INCLUDING an inactive slot (-> bot), an unselected bot slot never poisons the read;
     (c) `r` out of range (E, E+1, -1, i32 min/max) -> INV_w NAMED, never a wrap, never a default slot; `r` bot -> bot; INV anywhere -> INV."""
     E = 4
@@ -921,7 +921,7 @@ def test_stage1_lfixed_select_one_object_every_route_z_r_incl_bot_out_of_range_n
     assert program_digest(dec) == d0
 
 
-def test_stage1_cold_decode_resolves_the_continuation_members_by_id():
+def test_phase1_cold_decode_resolves_the_continuation_members_by_id():
     """`LIsEOS<E>_v1` / `LEmitNext[H=h]_v1` and `LFixedSelect<E>x<w>_v1` resolve through the codec's lazy family table -- a Program
     decoded in a fresh registry state (no prior materialisation) finds them by id; the digest round-trips."""
     from verity.circuits.codec import _lookup_primitive

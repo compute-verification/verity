@@ -781,13 +781,13 @@ def test_a_pass_frees_the_ended_runs_however_many_refused_launches_wait(tmp_path
 
 def test_every_refused_launch_is_taken_within_ceil_n_over_max_paths_passes_that_act(tmp_path):
     """However many older runs every pass finds, the n-th refused launch by expiry is gone by pass ceil(n / --max-paths)."""
-    root, cap = tmp_path / "ws", 5
-    many, later, older = waiting(root, 2 * cap + 1), [], []
+    root, limit = tmp_path / "ws", 5
+    many, later, older = waiting(root, 2 * limit + 1), [], []
     for n in (1, 2, 3):
-        older += [ended(root, f"r20260918-{n}0000{i}-ab{n}{i}", when=WRITTEN - timedelta(days=5)) for i in range(cap + 1)]
-        collect(root, [*many, *older], apply=True, unpreserved=True, max_paths=cap)
-        assert sum(not d.exists() for d in many) == min(n * cap, len(many)), f"pass {n} takes the next {cap}, oldest first"
-        assert sum(not d.exists() for d in older) == n * cap, "and its paths still go to the runs"
+        older += [ended(root, f"r20260918-{n}0000{i}-ab{n}{i}", when=WRITTEN - timedelta(days=5)) for i in range(limit + 1)]
+        collect(root, [*many, *older], apply=True, unpreserved=True, max_paths=limit)
+        assert sum(not d.exists() for d in many) == min(n * limit, len(many)), f"pass {n} takes the next {limit}, oldest first"
+        assert sum(not d.exists() for d in older) == n * limit, "and its paths still go to the runs"
         if n == 1:
             later = [refused(root, f"r20260926-10000{i}-ef3{i}") for i in range(2)]
         assert n != 2 or all(d.exists() for d in later), "one that expires later waits behind those already waiting"

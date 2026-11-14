@@ -1,10 +1,10 @@
 """PoUW's check of one audit execution phase as a core protocol (`verity/protocols/interface`): the Python
 reference beside the Lean `pouw_check` (`verity/protocols/accounting/pouw/verifier/lean/check`), the served execution phase's verifier
-(`benchmarks/pouw/served_zk/of_record.py`), held to it answer for answer by the difftest.
+(`verity/protocols/accounting/pouw/prover/kernels/served_zk/of_record.py`), held to it answer for answer by the difftest.
 
 The proof system registers the execution phase, samples, proves and verifies; PoUW states what it registers and what the outcome
 must show, and publishes `window.PUBLIC` from it.  This is that composition in one function, the parts of
-`benchmarks/pouw/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
+`verity/protocols/accounting/pouw/prover/kernels/served_zk/served_commit.py` (`public_problem`, `register` and `Challenger.outcome`) that are PoUW's.
 
 * **Params**, canonical JSON: the check item (`check`: the tile template, its work per tile w, the commitment scheme,
   the public bound on entries and optionally its coin mode, ``coins``, live or seeded: `window.mode`), ε and δ as ratio
@@ -85,7 +85,7 @@ from verity.protocols.accounting.pouw.verifier import coins as Co
 from verity.protocols.accounting.pouw.verifier import salt as PS
 from verity.protocols.accounting.pouw.verifier import verifier as V
 from verity.protocols.accounting.pouw.verifier import window as Wd
-from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import docket as R
 from verity.protocols.proofs.spot.device import challenger as Ch
 from verity.protocols.proofs.spot.verifier.one_stage import registered as G
 from verity.protocols.proofs.spot.verifier.profile import Work, WorkStratum
@@ -565,7 +565,7 @@ def unit_draw(j: Any) -> dict:
 
 
 def law_name(d: dict) -> str:
-    """`parse_design`'s spelling of a sample's law."""
+    """`parse_design`'s spelling of a sampling design."""
     return f"bernoulli:{d['p']}" if d["law"] == "bernoulli" else f"{d['law']}:{d['k']}"
 
 
@@ -700,13 +700,8 @@ def verify_path(dom: CommitmentDomain, root: bytes, index: int, leaf: bytes, sib
 
 def _fromhex(s: Any, n: int) -> bytes | None:
     """`bytes.fromhex(s)` when `s` is a string of `n` bytes' hex, else None."""
-    if not _str(s):
-        return None
-    try:
-        b = bytes.fromhex(s)
-    except ValueError:
-        return None
-    return b if len(b) == n else None
+    b = _hex(s)
+    return b if b is not None and len(b) == n else None
 
 
 def _path(x: Any) -> list[bytes] | None:
@@ -908,7 +903,7 @@ def opening_twin(p: dict, c: dict, units: list[int] | None, unit: int, pub: byte
     try:
         h = json.loads(head.decode(), parse_constant=_no_constant) if nl else None
     except ValueError:
-        h = None
+        return "the proof's public file has no JSON header"
     if not isinstance(h, dict):
         return "the proof's public file has no JSON header"
     n = h.get("instances")
@@ -977,13 +972,12 @@ _MATMULS = "the pass's matmuls are not a list of objects with integer index, m, 
 _WEIGHTS = "the pass's weights are not an object from each weight, in decimal, to an object with a hex root"
 
 
+#: exactly the strings `bytes.fromhex` takes: pairs of ASCII hex digits, with ASCII whitespace before and after each pair
+_FROMHEX = re.compile(r"[ \t\n\v\f\r]*(?:[0-9a-fA-F]{2}[ \t\n\v\f\r]*)*")
+
+
 def _hex(s: Any) -> bytes | None:
-    if not _str(s):
-        return None
-    try:
-        return bytes.fromhex(s)
-    except ValueError:
-        return None
+    return bytes.fromhex(s) if _str(s) and _FROMHEX.fullmatch(s) else None
 
 
 def coins_of(j: Any, recorded: bool) -> tuple[str, int, bytes]:
@@ -1071,7 +1065,7 @@ def _manifest(raw: bytes) -> dict:
     try:
         m = json.loads(raw.decode(), parse_constant=_no_constant)
     except ValueError:
-        m = None
+        raise Refused("the pass's manifest is not a JSON object") from None
     if not isinstance(m, dict):
         raise Refused("the pass's manifest is not a JSON object")
     return m
@@ -1307,7 +1301,7 @@ def _uniform(n: int, src: bytes, pos: int) -> tuple[int, int] | None:
 
 
 def stream_subset(k: int, n: int, src: bytes) -> list[int] | None:
-    """Lean's ``Draw.subset`` on one stream (``flock-verify draw --stream``): partial Fisher-Yates, each step an exact
+    """Lean's ``Draw.subset`` on one stream (``verity-verify-proof draw --stream``): partial Fisher-Yates, each step an exact
     uniform word of `width` bytes; None when the stream runs out."""
     swapped: dict[int, int] = {}
     pos = 0

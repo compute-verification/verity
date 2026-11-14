@@ -88,7 +88,7 @@ def reference(stream) -> dict[str, bytes]:
 
 def open_population(c, run, bmap, pop, k: int = 16, salt: bytes = b"t"):
     picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt, source=COIN)
-    assert picks, "no identities drawn"
+    assert picks, "no identities sampled"
     bound = [(ident, e, leaf) for ident, e, leaf in picks if e is not None]
     unbound = [ident for ident, e, _ in picks if e is None]
     ops = c.open([(e["identity"]["step"], leaf) for _, e, leaf in bound])

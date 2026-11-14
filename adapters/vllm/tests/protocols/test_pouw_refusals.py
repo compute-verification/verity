@@ -44,15 +44,15 @@ from verity.protocols.proofs.spot.device import challenger as LC
 
 from verity_vllm.protocols import pouw as P
 from verity_vllm.protocols.interface import Context
-from verity_vllm.protocols.pouw import circuit as PC
-from verity_vllm.protocols.pouw import device as PD
-from verity_vllm.protocols.pouw import native as PN
-from verity_vllm.protocols.pouw import pearl_c as PPD
-from verity_vllm.protocols.pouw.lead import feed as PF
-from verity_vllm.protocols.pouw.operands import quantize
-from verity_vllm.protocols.pouw.pearl_c import grouped as PG
-from verity_vllm.protocols.pouw.pearl_c import kernel as PK
-from verity_vllm.protocols.pouw.pearl_c.lanes import schedule_of, whole_options
+from verity.protocols.accounting.pouw.prover.serving import circuit as PC
+from verity.protocols.accounting.pouw.prover.serving import device as PD
+from verity.protocols.accounting.pouw.prover.serving import native as PN
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PPD
+from verity.protocols.accounting.pouw.prover.serving.lead import feed as PF
+from verity.protocols.accounting.pouw.prover.serving.operands import quantize
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import grouped as PG
+from verity.protocols.accounting.pouw.prover.serving.pearl_c import kernel as PK
+from verity.protocols.accounting.pouw.prover.serving.pearl_c.lanes import schedule_of, whole_options
 
 HOST = ("ncp-v1", "ncp-v1-shift24", "ncp-v2")
 #: the least (n, k) of a linear the host schemes' domain takes

@@ -32,7 +32,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Claims.KS.PlainSampleK
 import Proofs.Flock.Claims.KS.PlainSlackFit
 
 /-!
@@ -67,12 +67,12 @@ theorem not_plainVerdictAtK_nil (keep : Bool → Bool) (I : Discharge.Exec.Input
     (C : Fin N → List 𝔽) (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) :
     ¬ plainVerdictAtK keep I d C rootB₀ o := by
   rintro ⟨hA, -, -⟩
-  have hp := (Claims.Bridge.PlainDraw.recordsLiveAtDK_wrPDK keep I d o hA).1
+  have hp := (Claims.Bridge.PlainSample.recordsLiveAtDK_wrPDK keep I d o hA).1
   rw [h] at hp
-  generalize Claims.Bridge.PlainDraw.wrPDK keep I d o = t at hA hp
+  generalize Claims.Bridge.PlainSample.wrPDK keep I d o = t at hA hp
   rcases t with ⟨record, proofs⟩
   subst hp
-  exact Claims.Bridge.PlainDraw.not_acceptsAtDK_nil keep I (some d) record hA
+  exact Claims.Bridge.PlainSample.not_acceptsAtDK_nil keep I (some d) record hA
 
 /-- **The abort at `VK keep`** (`PlainSimAbortAt` at `plainSimK keep` and `plainVerdictAtK keep`). -/
 def PlainSimAbortAtK (keep : Bool → Bool) (x : Claims.Msg) : Prop :=

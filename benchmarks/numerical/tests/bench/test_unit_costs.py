@@ -136,7 +136,7 @@ def test_registered_units(template, params, units, nnz_ab):
 
 
 def test_registered_none_says_why():
-    assert U.registered("token-select-greedy", {"V": 64}) == {"none": "no registered C-Flock lowering"}
+    assert U.registered("token-select-greedy", {"V": 64}) == {"none": "no registered Flock lowering"}
     assert "N = 1536" in U.registered("rmsnorm-fused-cuda", {"N": 1536, "EPS": 1e-6})["none"]
     assert "NotImplementedError" in U._reg_job(U._key("gemm-coordinate", {"K": 32, **HOPPER}))[1]["none"]
 
@@ -164,7 +164,7 @@ def test_inventory_takes_registered_counts_and_keeps_generic():
                                                        "counts": gen}}
     regs = {U._key("silu-mul", {"I": 16}): {"lowering": "l", "units": 4, "unit": {"rows": 5, "ands": 3, "nnz_a": 7, "nnz_b": 9,
                                                                                    "reads": 0}},
-            U._key("token-select-greedy", {"V": 64}): {"none": "no registered C-Flock lowering"}}
+            U._key("token-select-greedy", {"V": 64}): {"none": "no registered Flock lowering"}}
     step = {"rows": 2, "ands": 1, "nnz_a": 3, "nnz_b": 4}
     inv = U.inventory([w], subs=subs, regs=regs, step=step, log=lambda m: None)
     silu, ts = inv["rows"]

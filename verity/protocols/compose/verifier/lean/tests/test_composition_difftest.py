@@ -15,7 +15,7 @@ breaks the composition's own inputs (a subprotocol dropped, unknown, repeated or
 a wrong or short commitment, non-canonical or malformed evidence, blobs missing or malformed) or the case itself (a
 field missing or not hex, not an object), and every field of the outcome but its reason must agree exactly. Sampled
 proofs' cases all reject: v2 refuses evidence naming no session (`oneSession`), and a session on the challenger's coin
-trees is verified by `flock-verify`, which the mirror doesn't run. So every product rejects here, onsite often with a
+trees is verified by `verity-verify-proof`, which the mirror doesn't run. So every product rejects here, onsite often with a
 subprotocol undecided beside the rejection. Remote's `windows` tie decides only where no subprotocol rejects, so this
 difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds stray. Remote's case on one record
 that reuses the window's registration of its tables (`reusing`) is one made case, which sampled proofs refuses at
@@ -88,7 +88,7 @@ def _sha(b: bytes) -> str:
 @functools.cache
 def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin
     tree) is one proof block (a subset of one, the least a subset sampling design samples), its proved unit, and it names no session,
     and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
     to make."""
@@ -96,7 +96,7 @@ def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     part = {"program": s.sha512, "query": s.query}
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
     proved = OS.DR.proved(d)
     evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
@@ -131,7 +131,8 @@ def _v1(a: dict) -> dict:
 
 #: One change to v2's audit (`sessionless_draws`) that sampled proofs refuses at another step than its refusal of no
 #: session: the audit as v1's (refused by name at the params), v1's evidence under v2's params (refused by name at the
-#: evidence), v2's evidence naming verdicts, params naming no challenger or no partition, the public file named by the
+#: evidence), v2's evidence naming verdicts, params naming no challenger or no partition, params under a sampling design that is no
+#: subset one (refused by its kind, after a null partition), the public file named by the
 #: evidence rather than the params, one session whose coins are no tree the challenger logged, coins on another window
 #: or none. v2 reads no file and no proved unit before that refusal, so a change to those reaches it alone.
 V2_BREAKS = {
@@ -140,6 +141,10 @@ V2_BREAKS = {
     "verdicts": lambda a: {**a, "evidence": {**a["evidence"], "verdicts": {}}},
     "no-challenger": lambda a: {**a, "params": _without(a["params"], "challenger")},
     "no-partition": lambda a: {**a, "params": {**a["params"], "partition": None}},
+    "stratified": lambda a: {**a, "params": {**a["params"], "law": {"k": 1, "law": "stratified"}}},
+    "work": lambda a: {**a, "params": {**a["params"], "law": {"k": 1, "law": "work"}}},
+    "stratified-no-partition": lambda a: {**a, "params": {**a["params"], "law": {"k": 1, "law": "stratified"},
+                                                          "partition": None}},
     "public-in-evidence": lambda a: {**a, "evidence": {**a["evidence"], "proofs": {
         "public": a["params"]["proofs"]["public"], "sessions": []}}},
     "session": lambda a: {**a, "evidence": {**a["evidence"], "sessions": ["s"], "proofs": {
@@ -597,6 +602,34 @@ def test_spot_refuses_one_stage_v1(name, request):
     assert set(seen) == set(want), dict(seen)
 
 
+def test_spot_refuses_a_sampling_design_that_is_no_subset(remote_server):
+    """SPOT's one-stage form covers a subset sampling design alone: v2's audit under a `stratified` or a `work` one is
+    refused by the sampling design's kind (`OneStageZk.SUBSET_ONLY`) at its params, its last refusal there, so with no
+    partition too it is refused for the partition. Remote, every other subprotocol aimed at acceptance on the audit's
+    record, rejects with that refusal as SPOT's reason, in Lean as in Python."""
+    want = {"stratified": f"params: {OS.subset_only('stratified')}", "work": f"params: {OS.subset_only('work')}",
+            "stratified-no-partition": "params: partition is null: the sessions are verified against the verifier's own "
+                                       "partition object"}
+    others = [C for C in R.REMOTE.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(cases, audit):
+        for br, why in want.items():
+            sampled = broken_case(audit, br)
+            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
+            by_id = {c["id"]: c for c in (*cases, as_component(R.SAMPLED_PROOFS, sampled))}
+            case = product_case(R.REMOTE, one_record(R.REMOTE, [by_id[C.id] for C in R.REMOTE.components]))
+            assert R.REMOTE.answer(case)["verdict"] == R.REJECT
+            out = remote_server.exchange(case)
+            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            seen[br] += 1
+    check()
+    assert set(seen) == set(want), dict(seen)
+
+
 def _recursive(a: dict) -> dict:
     """v2's audit `a` as the recursive audit's case: its params v1's under the form ``recursive``, naming the recursive
     audit's own inputs (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a sample, no
@@ -671,11 +704,11 @@ def reusing(made: list[dict]):
 
 def reusing_audit(m: dict) -> dict:
     """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
-    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) is R's one proof block, its
+    challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin tree) is R's one proof block, its
     proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
     file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
-    ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
     proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
@@ -786,7 +819,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
 @functools.cache
 def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
-    and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
+    and its evidence: its sample at its challenger's coins (`_challenger_sample`, a session whose challenger sampled no coin
     tree) drew no unit (a subset of none), so it has no session and no proved unit, and `BLOBS` hold its circuit and
     public files. Its log is empty, or with `after` (a record's canonical JSON) that one record, which its record is
     chained right after. Made once each: a challenger's signed session is slow to make."""
@@ -795,7 +828,7 @@ def _empty_audit(i: int, after: str | None = None) -> tuple[dict, dict, dict]:
     log = [json.loads(after)] if after else []
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, previous=OS.R.digest(log[-1]) if log else None, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
+    ch, d, coins = OS._challenger_sample(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
     evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"public": _sha(PUBLIC), "sessions": []},
                 "proved_units": [], "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None,
                 "session_roots": None, "sessions": [], "statement": {}}

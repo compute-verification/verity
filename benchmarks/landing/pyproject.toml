@@ -1,6 +1,6 @@
 # Mark to `main` (README.md, `landing.py`). Not a package: the suite holds the computation (landings, marks across restacks,
 # the split, each class's numbers) and the result it writes to a small fixture, with stand-ins for the control pod, GitHub,
-# the store and git, so nothing is read from them (`uv run tools/verity/check/suites.py benchmarks/landing`).
+# the store and git, so nothing is read from them (`uv run tools/check/suites.py benchmarks/landing`).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

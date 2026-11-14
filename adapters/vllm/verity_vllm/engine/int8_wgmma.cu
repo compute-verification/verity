@@ -591,10 +591,10 @@ int launch(int v, const void* xq, const void* w, const float* sa, const float* s
     p.flags |= Y_TMA;
   }
   const int units = ((p.T + wm - 1) / wm + cl - 1) / cl * ((N + bn - 1) / bn);
-  int cap = cl == 1 ? g_sms[dev] : g_most[dev][v];
-  if (ctas > 0) cap = min(cap, cl == 1 ? ctas : max(ctas / 2, 1));
+  int most = cl == 1 ? g_sms[dev] : g_most[dev][v];
+  if (ctas > 0) most = min(most, cl == 1 ? ctas : max(ctas / 2, 1));
   // the fewest CTAs (pairs) that keep the same rounds of units
-  const int rounds = (units + cap - 1) / cap, n = (units + rounds - 1) / rounds;
+  const int rounds = (units + most - 1) / most, n = (units + rounds - 1) / rounds;
   *grid = n * cl;
   void* args[] = {&p};
   if (cudaLaunchKernel(VFN[z][v], dim3(n * cl), dim3(384), args, VSMEM[z][v], static_cast<cudaStream_t>(stream)) !=

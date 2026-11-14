@@ -3,9 +3,11 @@ module
 public import CoreProtocol.Account
 public import CoreProtocol.Cli
 public import PouwCheck.Credit
+public import PouwCheck.CreditOnce
 meta import CoreProtocol.Account
 meta import CoreProtocol.Cli
 meta import PouwCheck.Credit
+meta import PouwCheck.CreditOnce
 
 /-!
 # A PoUW period as a `Core.Protocol`: `verity/pouw/period/v1`
@@ -293,7 +295,7 @@ challenger key's ledger (`series`), which carry no clock reading, so the span or
 names no registration head and no place: the accounting layer binds the challenger key to a registered device, so
 until it does no registered account counts the answer. -/
 def account : Core.Account :=
-  { protocol := protocolId, head := none
+  { protocol := protocolId, witness := none
     amounts := [{ metric := "work", part := .compute, key := .published "work",
                   unit := Core.Account.macs, side := .verified,
                   time := .steps (.run (.published "start") (.published "length")) ⟨0, 1⟩,
@@ -363,7 +365,7 @@ private def accepted : Core.Answer :=
     profile := none }
 #guard ["registration_head", "place", "part"].all fun k => (published.getObjVal? k).toOption.isNone
 #guard account.Formed
-#guard account.head.isNone && account.amounts.all (·.place.isNone)
+#guard account.witness.isNone
 #guard (account.amounts.map fun m => (m.key.read accepted, m.series.bind (·.read accepted))) ==
   [(some (Lean.toJson [10, 20]), some (.str "k"))]
 #guard (account.amounts.map fun m => match m.time with

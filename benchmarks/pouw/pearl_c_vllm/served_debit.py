@@ -13,8 +13,9 @@ transcript `verify_run.py` reads), each opened from the pass's files and held to
   rejection); the debit's share of the cells' credit, the cap over ρ (`tile_numbers`), which is already rev1's
   (`creditDevRev1`, the first promotion add of every word out); and the debit's two counts, its flagged atoms and its
   later promotions into a +0 total (``atoms`` and ``later_zero_promotions``: `pearl_c_debit.tile_debit`, rev1's
-  `laterZeroPromos`), whose adds the debit already holds, and P3's forming elements (``forming_elements``, each
-  fs·|cols|/n of inert work).  Under a format with the row cap (-h3) the rule also caps each
+  `laterZeroPromos`), whose adds the debit already holds, P3's forming elements (``forming_elements``, each
+  fs·|cols|/n of inert work), and the words' products that no salt makes count (``mends``, one MAC each:
+  `pearl_c_debit.word_mend`).  Under a format with the row cap (-h3) the rule also caps each
   credited A row (`clear_work.row_cap`, 4ρ at Pearl-C's census ks), and ``row_ratio_max`` is the largest row's debit over
   its cap (the tile rule checked as far as it ran: the rows up to the first one over).
 - **The estimates** weight each stratum by its share of the pass's tiles and of its credited MACs (credited rows × credited
@@ -89,7 +90,7 @@ from verity.protocols.accounting.pouw.verifier.coins import CoinCommitment  # no
 from verity.protocols.accounting.pouw.verifier.protocol import Context, Matmul, Shape  # noqa: E402
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c_work as PW  # noqa: E402
 import clear_work as CW  # noqa: E402
-from verity_vllm.protocols.pouw import pearl_c as PD  # noqa: E402
+from verity.protocols.accounting.pouw.prover.serving import pearl_c as PD  # noqa: E402
 from verity_config.settings import of  # noqa: E402
 
 settings = of(__file__)
@@ -306,7 +307,7 @@ def _measure(item) -> dict:
         tile, chains = _SEEN[0] if _SEEN else (_DEBIT_CAP(scheme, rec, ref.tile, ops, rows, cols), len(_CHAINS))
         out.update(tile_numbers(scheme, *tile))
         if chains:
-            out["atoms"], out["later_zero_promotions"], out["forming_elements"] = _CHAINS[chains - 1]
+            out["atoms"], out["later_zero_promotions"], out["forming_elements"], out["mends"] = _CHAINS[chains - 1]
         if len(_SEEN) > 1:
             widen = CW.row_cap_multiple(scheme, u.shape.k)
             out["row_ratio_max"] = max(float(d / (c * widen)) for (d, c), _ in _SEEN[1:])
@@ -359,6 +360,8 @@ def summarize(label: str, job: dict, strata: dict, tiles: list[dict]) -> dict:
             "worst": {k: worst[k] for k in ("tile", "matmul", "m", "k", "n", "row0", "col0", "share", "ratio")} if worst else None,
             "later_zero_promotions": sum(t.get("later_zero_promotions", 0) for t in measured),
             "tiles_with_later_zero_promotions": sum(t.get("later_zero_promotions", 0) > 0 for t in measured),
+            "mends": sum(t.get("mends", 0) for t in measured),
+            "tiles_with_mends": sum(t.get("mends", 0) > 0 for t in measured),
             "share_median": statistics.median(t["share"] for t in measured) if measured else None,
             "share_p99": float(np.quantile([t["share"] for t in measured], 0.99)) if measured else None,
             "cpu_seconds": round(sum(t["seconds"] for t in tiles), 1), "strata": out_strata}

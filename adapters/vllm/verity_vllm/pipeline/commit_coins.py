@@ -45,8 +45,15 @@ from verity.protocols.proofs.spot.device.challenger import (
     live_reason,
 )
 
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity.protocols.accounting.pouw.prover.serving import (
+    challenger_carried,
+    connect_window,
+    lms_verify,
+    pins_head,
+    REPLY_FIELDS,
+    SESSION_FIELDS,
+    session_of,
+)
 
 SCHEME_TAG = "verity/vllm/commit-coins/v1"
 POSITIONS, IDENTITIES, REPLAY = "opening-positions", "opening-identities", "replay"
@@ -127,10 +134,10 @@ class ChallengePhase:
         if answer.get("commitment") is None:
             answer["commitment"] = self.gate.call("status", self.reserved["session"]).get("commitment")
         try:
-            self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)}) or {}
+            self.given = session_of({k: v for k, v in answer.items() if k in (*SESSION_FIELDS, *REPLY_FIELDS)}) or {}
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
-        self.client = PHW.connect(self._address(int(answer["port"])), self.given)
+        self.client = connect_window(self._address(int(answer["port"])), self.given)
         c = self.client.commitment
         if c.scheme != SCHEME_TAG or [list(f) for f in c.families] != families(self.runs):
             self.close()
@@ -150,7 +157,7 @@ class ChallengePhase:
             self._open(root)
         i, self.index = self.index, self.index + 1
         openings = {f: self.client.open(f, i, root) for f in FAMILIES}
-        return {"source": CHALLENGER, "index": i, "root": root.hex(), "session": PHC.carried(self.given),
+        return {"source": CHALLENGER, "index": i, "root": root.hex(), "session": challenger_carried(self.given),
                 "commitment": self.client.commitment.to_json(), "keys": {f: o.coin.hex() for f, o in openings.items()},
                 "openings": {f: o.to_json() for f, o in openings.items()}}
 
@@ -238,7 +245,7 @@ def tp_keys(rec: Mapping[str, Any]) -> tuple[bytes, bytes]:
 
 
 def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Sequence[Any], directory: Any,
-           key: Ch.ChallengerKey, verify: Ch.Verify = PHC.lms_verify, *, pins: Sequence[Any] | None,
+           key: Ch.ChallengerKey, verify: Ch.Verify = lms_verify, *, pins: Sequence[Any] | None,
            main: Sequence[str] | None) -> str | None:
     """Why the Commit's coins (`runs`, each instrumented run's ``coins`` record, in order) aren't the auditor device's
     challenger's, sampled after `roots` (each run's root of record as the verifier holds it); None when they are. The
@@ -257,7 +264,7 @@ def reason(runs: Sequence[Mapping[str, Any]], roots: Sequence[bytes], heads: Seq
     window = {"root": roots[0].hex()}
     try:
         lines = Ch.ledger_head([remote.ledger_lines(p) for p in heads], key, verify)
-        audited = Ch.pinned_session(lines, window, key, PHC.pins_head(pins), None if main is None else list(main),
+        audited = Ch.pinned_session(lines, window, key, pins_head(pins), None if main is None else list(main),
                                     verify)
         trusted, received = remote.trusted_session(directory, heads, window, key, verify)
     except CoinError as e:

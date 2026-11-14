@@ -37,9 +37,9 @@ from dataclasses import replace
 import numpy as np
 import pytest
 from verity_flock.class_statement import UnitStager
-from verity.commitments.windows import interface as IF
-from verity.commitments.windows import rows as CS
-from verity.commitments.windows import wiring as WI
+from verity.commitments.periods import interface as IF
+from verity.commitments.periods import rows as CS
+from verity.commitments.periods import wiring as WI
 from verity_vllm.pipeline import chain_rows as CH
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import serving_rows as SRW
@@ -54,7 +54,7 @@ from verity.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
-from verity.protocols.proofs.spot.verifier.one_stage import draw as D, registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, docket as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch

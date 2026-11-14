@@ -7,7 +7,7 @@ public import Definitions.Pouw.Barrier.Defs
 public import Definitions.Pouw.Game.Params
 
 /-!
-# NCP's game instance: pinned statements (trusted)
+# NCP's game instance: guarantees (trusted)
 -/
 
 @[expose] public section
