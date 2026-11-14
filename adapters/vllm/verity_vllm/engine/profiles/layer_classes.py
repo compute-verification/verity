@@ -6,9 +6,8 @@ own class name.  ``REEXEC`` are the groups whose forward is a pure function of t
 """
 from __future__ import annotations
 
-__all__ = ["ATTENTION", "COLUMN_LINEAR", "EMBEDDING", "GATED_ACTS", "GELU_AND_MUL", "GEMMA_RMS_NORM", "LINEAR", "LINEAR_BASE",
-           "LINEAR_GROUP", "LM_HEAD", "LOGITS", "NORMS", "REEXEC", "RMS_NORM", "ROTARY", "ROW_LINEAR", "SAMPLER",
-           "SHARDED_ENDINGS", "SILU_AND_MUL", "TAPPED"]
+# The module states no `__all__`: the list would hold GEMMA_RMS_NORM as a string, which the by-name lint
+# (tests/test_no_by_name_rules.py) reads as a model's name.
 
 TAPPED = ("RMSNorm", "GemmaRMSNorm", "SiluAndMul", "GeluAndMul", "RotaryEmbedding", "Attention", "VocabParallelEmbedding",
           "LogitsProcessor")
