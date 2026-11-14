@@ -10,7 +10,7 @@ public import Proofs.Nci.Cover.Sum
 # The cover theorem on a declaration that complies with the NCI policy, proved
 
 Pull a compliant division of `d` back to `c` (`pull`): piece `u` has at most `σ_u ≤ Γ` gates (`card_pull_gates_le`) and
-reads at most `α σ_u` bits of novel information (`novelReads_pull`). Its block in `c`'s bit view (`block`) is handed
+reads at most `α σ_u` bits of novel information (`freshInput_pull`). Its block in `c`'s bit view (`block`) is handed
 `k_u ≤ α σ_u` bits outside the free bits (`translation`) and has at most `s` bits (`card_block_le`), so it finishes at
 most `(k_u² + b k_u) / b` counted products (`intensity`). Every counted product's output bit reads something,
 so its gate is a computed gate of `c`, in some piece, whose block computes it (`mem_computed_block_of_pred`). Summed over
@@ -69,15 +69,15 @@ theorem training_of_block_bound {Γ : ℕ} {α b α₀ e : ℝ} {c d : Verity.Re
   have hσΓ : ∀ u, σ u ≤ Γ := fun u => by
     show (d.D.size (P.gates u) : ℝ) ≤ Γ
     exact_mod_cast (hP u).1
-  have hnov : ∀ u, (novelReads c (R u) : ℝ) ≤ α * σ u := fun u =>
-    (Nat.cast_le.2 (Nci.SecurityProofs.novelReads_pull M hB P u)).trans (hP u).2
+  have hnov : ∀ u, (freshInput c (R u) : ℝ) ≤ α * σ u := fun u =>
+    (Nat.cast_le.2 (Nci.SecurityProofs.freshInput_pull M hB P u)).trans (hP u).2
   have hku : ∀ u, (k u : ℝ) ≤ α * σ u := fun u =>
     (Nat.cast_le.2 (translation (R u) ((Nci.SecurityProofs.pull M P).gates_subset_computed u)).2.2).trans
       (hnov u)
   have hαΓ : ∀ u, α * σ u ≤ α * Γ := fun u => mul_le_mul_of_nonneg_left (hσΓ u) hα
   have hkD : ∀ u, (k u : ℝ) < b * D := fun u => ((hku u).trans (hαΓ u)).trans_lt hk
   have hcard : ∀ u, (block c (R u)).card ≤ s := fun u => by
-    have h1 : ((block c (R u)).card : ℝ) ≤ w₀ * (R u).card + novelReads c (R u) + c.D.width c.θ := by
+    have h1 : ((block c (R u)).card : ℝ) ≤ w₀ * (R u).card + freshInput c (R u) + c.D.width c.θ := by
       exact_mod_cast card_block_le hw (R u)
     have h2 : ((R u).card : ℝ) ≤ Γ := by
       exact_mod_cast (Nci.SecurityProofs.card_pull_gates_le u).trans (hP u).1
