@@ -302,7 +302,7 @@ theorem ThreadedThrottledDark_rate :
   exact ThreadedThrottledDarkSlots_rate Γ α b_w b_a c d T (Fit.idSlots T) dd e M hα hbw hba hdd hd hB hT
     (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW)
 
-/-- Weights are incompressible when each weight is a novel input gate at least `b_w` bits wide and every thread value
+/-- Weights are incompressible when each weight is a fresh input gate at least `b_w` bits wide and every thread value
 is at least `b_a` bits wide: a subcircuit reads every weight it uses, and those reads are disjoint from its thread reads. -/
 theorem weightsIncompressible_of_inputs {c : RegisteredCircuit} (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
     (hW : ∀ g ∈ T.W, c.D.isInput g = true ∧ g ∉ c.θ ∧ b_w ≤ c.D.w g)
@@ -350,7 +350,7 @@ theorem weightsIncompressible_of_inputs {c : RegisteredCircuit} (T : Threading c
     rw [mul_comm, ← nsmul_eq_mul]
     exact card_nsmul_le_sum _ _ _ fun g hg => hthread g t (mem_filter.1 hg).2
 
-/-- A subcircuit that holds a value of thread `t` reads a novel value of thread `t`, when every computed value of a
+/-- A subcircuit that holds a value of thread `t` reads a fresh input value of thread `t`, when every computed value of a
 thread reads a value of the same thread and no thread value is baseline. -/
 theorem threadReads_nonempty {c : RegisteredCircuit} (T : Threading c) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed)
     (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
@@ -370,7 +370,7 @@ theorem threadReads_nonempty {c : RegisteredCircuit} (T : Threading c) (R : Fins
 
 /-- **`(1, 0)`-threaded from thread closure** (the draft's weakest case): when every computed value of a thread reads a
 value of the same thread and no thread value is baseline, a subcircuit does none of a thread's counted multiplications
-without reading a novel value of that thread. -/
+without reading a fresh input value of that thread. -/
 theorem threaded_one_zero {c : RegisteredCircuit} (T : Threading c) (Γ : ℕ) (S : ℝ)
     (hθ : ∀ g t, T.thread g = some t → g ∉ c.θ)
     (hclosed : ∀ h t, c.D.isInput h = false → T.thread h = some t → ∃ g ∈ c.D.reads h, T.thread g = some t) :
@@ -393,7 +393,7 @@ theorem threaded_one_zero {c : RegisteredCircuit} (T : Threading c) (Γ : ℕ) (
     rw [hlt] at this
     exact notMem_empty _ this
 
-/-- **Theorem 1 from structure alone**: when weights are novel input gates at least `b_w` bits wide, threads are closed
+/-- **Theorem 1 from structure alone**: when weights are fresh input gates at least `b_w` bits wide, threads are closed
 and no thread value is baseline, with every thread value at least `b_a` bits wide, every small subcircuit computes at
 most `c · S / (4 b_w)` counted multiplications per `b_a` bits it reads, with no named assumption: a floor by the inference-only policy of
 `2 b_w b_a / (cS)`. -/

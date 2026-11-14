@@ -8,7 +8,7 @@ public import Lean.Data.Json.Parser
 
 `scripts/difftest_vectors.py` generates instances (declarations as descriptor v1 Programs with θ, divisions, `Γ` and
 `α`) and runs the Python reference on them (`scripts/inference_only_reference.py`). `InferenceOnlyCheck/DifftestMain.lean` reads both files
-and fails unless `InferenceOnlyCheck.check` gives every result: per inference block its size and novel reads, the verdict and the first failing
+and fails unless `InferenceOnlyCheck.check` gives every result: per inference block its size and fresh input bits, the verdict and the first failing
 inference block with its rule, or the code of the first malformation. The Lean audit runs it (`runs` in `lean-audit.json`): compiled
 evaluation, a test and not a proof.
 -/

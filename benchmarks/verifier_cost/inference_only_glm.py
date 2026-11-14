@@ -61,7 +61,7 @@ from run import EXE, _reference, timed
 
 SCHEMA = "verity/nci-glm/v1"
 DESCRIPTOR = "verity-ir/descriptor/v1"
-#: the demo's policy (README.md): Γ gates per inference block, α novel bits per gate
+#: the demo's policy (README.md): Γ gates per inference block, α fresh input bits per gate
 GAMMA = 2 ** 44
 ALPHA = (1, 2 ** 25)
 #: the stricter point C: α = 2^-28, at Γ and at Γ = 2^52
