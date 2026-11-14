@@ -1836,7 +1836,8 @@ private def oneProofs : Json :=
 
 #guard paramsWhy (paramsOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
   "the keys of proofs are not circuit, public, registered"
-#guard paramsWhy (membersParamsOfJson (proofsOnly oneProofs)) == "the keys of proofs are not members"
+#guard paramsWhy (membersParamsOfJson (proofsOnly oneProofs)) ==
+  "the keys of proofs are not members, or members and wiring"
 #guard paramsWhy (paramsOfJson (proofsOnly oneProofs)) != ""
 #guard paramsWhy (paramsOfJson (proofsOnly oneProofs)) != "the keys of proofs are not circuit, public, registered"
 #guard paramsWhy (membersParamsOfJson (proofsOnly (Json.mkObj [("members", Json.mkObj [])]))) ==
