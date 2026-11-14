@@ -42,7 +42,8 @@ from verity.protocols.accounting.certifier.prover import egress as EG
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import HEADER, id_request
+from verity.protocols.accounting.certifier.verifier.active import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.warden import DATA, END, PAD, WardenParams, cells
 
 B = 512

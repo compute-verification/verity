@@ -22,7 +22,7 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 ``completion_stream_generator`` does; ``max_tokens`` is bounded by its ``get_max_tokens`` rule. `serve_protocol.PlainProtocol`
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
-certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
+certifier's id request (exactly ``id_form.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
 scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
 engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
 ``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every

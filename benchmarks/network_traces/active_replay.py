@@ -263,11 +263,8 @@ def pack_record(record: BlockGrid) -> bytes:
         for slot in row[:n]:
             same = False
             if len(slot) >= HEADER.size:
-                kind, stream, payload = decode_frame(slot)
-                try:
-                    same = encode_frame(kind, stream, payload, len(slot)) == slot
-                except ValueError:
-                    pass
+                kind, stream, payload = decode_frame(slot)  # the payload is cut from the slot, so it fits its length
+                same = encode_frame(kind, stream, payload, len(slot)) == slot
             if same:
                 parts += [struct.pack(">BBII", 0, kind, stream, len(payload)), payload]
             else:

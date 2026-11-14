@@ -8,7 +8,9 @@ from __future__ import annotations
 import importlib.util
 import json
 import shutil
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 import pytest
@@ -97,6 +99,24 @@ def test_records_round_trip_through_their_packing():
     clean = BlockGrid("requests", 4, ((None, None),) * 3, COMPLETE)
     for r in (record, clean):
         assert ar.unpack_record(ar.pack_record(r), 64) == r
+
+
+def test_a_slot_that_is_not_a_frame_is_packed_as_its_bytes():
+    """`pack_record` stores a slot as (kind, stream, payload) only when those three give the slot back, and any other
+    slot as its bytes: one whose header claims more payload than the slot holds, one whose fill isn't zero, one shorter
+    than a header. Each comes back as it was, and none makes the packing raise."""
+    frame = encode_frame(DATA, 9, b"id: 0\n\n", 64)
+    claims_more = ar.HEADER.pack(DATA, 9, 1000) + bytes(64 - ar.HEADER.size)
+    record = BlockGrid("responses", 0, ((frame, claims_more, frame[:-1] + b"\x01", b"\x01\x02"),), COMPLETE)
+    blob = ar.pack_record(record)
+    assert ar.unpack_record(blob, 64) == record
+    data = zlib.decompress(blob)
+    at, as_bytes = 8 + struct.unpack_from(">I", data)[0] + 4, []
+    for _ in record.grid[0]:
+        as_bytes.append(data[at])
+        (length,) = struct.unpack_from(">I", data, at + (1 if data[at] else 6))
+        at += (5 if data[at] else 10) + length
+    assert as_bytes == [0, 1, 1, 1] and at == len(data)
 
 
 def test_the_plan_matches_each_session_to_its_request(setup):

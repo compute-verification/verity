@@ -891,7 +891,7 @@ def _three_ids(tmp_path: Path):
 
 def test_a_run_in_the_id_egress_form_at_the_id_fronts_cell_agrees_in_each_direction(tmp_path):
     """The id egress form at the id front's cell of 4,096 bytes (`ids.sh`'s): three id requests
-    (`active.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
+    (`id_form.id_request`), one whose prompt takes three cells, each answered in the id form, an event of exactly P
     bytes a token and then the trailer, and the watermark stream. The device's own read accepts the run, so every
     egress cell is one the id form reads. The schedule the reader rebuilds from the deployment is the id form's,
     whose digest each record's head holds and the bytes form's is not, so all three records are counted as

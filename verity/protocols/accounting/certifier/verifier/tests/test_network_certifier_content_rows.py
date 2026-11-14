@@ -17,7 +17,8 @@ from verity.protocols.accounting.certifier.prover import lengths_row as LR
 from verity.protocols.accounting.certifier.verifier import connection_rows as CR
 from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import HEADER, id_request
+from verity.protocols.accounting.certifier.verifier.active import HEADER
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 
 
 def test_a_class_is_two_powers_of_two():

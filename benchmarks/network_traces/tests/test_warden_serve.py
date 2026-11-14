@@ -60,14 +60,10 @@ async def _no_sleep(_: float) -> None:
 
 #: what the relay's runner still imports from the older form's files, by the file: the certificate's JSON and the
 #: endpoint's model from the older runner, a record's bytes on disk and its process's runtime and usage from its replay,
-#: and the id request's writer from the older form's protocol file. Each leaves its file in a change of its own, so this
-#: only shrinks.
+#: and nothing from the older form's protocol file. Each leaves its file in a change of its own, so this only shrinks.
 OLDER_FORM_READS = {"certifier_serve": {"certified_from_json", "certified_json", "served_model"},
                     "active_replay": {"_quiet_runtime", "_usage", "pack_record", "unpack_record"},
-                    "active": {"id_request"}}
-#: what a file beside the runner still imports from them, by the file and the older file: the rows' run the id
-#: request's writer, as the runner does. It only shrinks.
-BESIDE_READS = {("connection_rows_run.py", "active"): {"id_request"}}
+                    "active": set()}
 
 
 def _imports(path: Path) -> dict[Path, set[str]]:
@@ -94,9 +90,9 @@ def _imports(path: Path) -> dict[Path, set[str]]:
 
 def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_listed():
     """A file of the relay's runner is the runner's own or a file beside it that it reaches by its imports, the two
-    older runners left out. Of the older runners and the older form's protocol file, the runner imports
-    `OLDER_FORM_READS`, a file beside it `BESIDE_READS`, and no more, so once both are empty the older form can go
-    without the relay; and neither list names what its file no longer imports."""
+    older runners left out. Of the older runners and the older form's protocol file, only the runner's own imports, and
+    `OLDER_FORM_READS` and no more, so once that is empty the older form can go without the relay; and the list names
+    nothing the runner no longer imports."""
     runner = Path(ws.__file__)
     older = {runner.with_name("certifier_serve.py"), runner.with_name("active_replay.py"),
              ROOT.joinpath(*WR.__package__.split("."), "active.py")}
@@ -109,17 +105,15 @@ def test_the_relays_runner_imports_from_the_older_forms_files_only_what_is_liste
             todo += [f for f in files[path] if f.parent == runner.parent and f not in older]
     assert len(files) > 4, sorted(p.name for p in files)
     found = {(p.name, f.stem): names for p, imports in files.items() for f, names in imports.items() if f in older}
-    more = {k: sorted(names - (OLDER_FORM_READS[k[1]] if k[0] == runner.name else BESIDE_READS.get(k, set())))
-            for k, names in found.items()}
+    more = {k: sorted(names - (OLDER_FORM_READS[k[1]] if k[0] == runner.name else set())) for k, names in found.items()}
     assert not any(more.values()), (
         "\n".join(f"{f} imports {', '.join(names)} from {m}.py" for (f, m), names in sorted(more.items()) if names)
         + f"\nA file of the relay reads nothing of the older form's files. Move the definition to a module of the relay's "
           f"own, or to one named for what it holds, beside {runner.name} (a definition of the protocol's: beside the "
           f"relay's protocol file), and have the older form's file import it from there, so that it keeps one definition.")
     stale = {m: sorted(gone) for m, names in OLDER_FORM_READS.items() if (gone := names - found.get((runner.name, m), set()))}
-    stale |= {k: sorted(gone) for k, names in BESIDE_READS.items() if (gone := names - found.get(k, set()))}
-    assert not stale, (f"OLDER_FORM_READS or BESIDE_READS lists what its file no longer imports from the older form's "
-                       f"files: {stale}. Delete it from the list, which only shrinks.")
+    assert not stale, (f"OLDER_FORM_READS lists what {runner.name} no longer imports from the older form's files: "
+                       f"{stale}. Delete it from the list, which only shrinks.")
 
 
 def test_varied_traffic_is_fixed_by_its_seed_and_varies():
@@ -640,7 +634,7 @@ def test_a_response_cap_is_a_schedule_flag_rehearse_passes_to_serve():
 
 
 def test_the_fake_endpoint_answers_an_id_request_id_form_as_the_scans_egress_reads_it():
-    """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`active.id_request`), is answered with
+    """`rehearse --ids`: an `id_traffic` request, sent network-certifier-form (`id_form.id_request`), is answered with
     its `fake_ids` as id events of P bytes and the trailer, every cell an id-form `DATA` cell, then `END`'s trailer;
     `parse_id_response` reads its count, and a cut or altered response isn't complete."""
     sys.path.insert(0, str(HERE))

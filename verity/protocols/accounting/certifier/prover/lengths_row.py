@@ -27,7 +27,7 @@ bit 8b + i of the row bit i of its byte b. On a valid slot:
 
 - N + 1 is `id` + 1;
 - bytes is `request_bytes(B, P)`, the bytes of the canonical id request of P prompt ids in B-byte cells
-  (`active.id_request` at offset 0), computed from P alone: no field straddles a cell, so the request is its head and
+  (`id_form.id_request` at offset 0), computed from P alone: no field straddles a cell, so the request is its head and
   first prompt field's offset A0 (`io_request.layout`), 11 bytes a prompt id, the gap before the first id that doesn't
   fit the first cell and before every m-th id after it, the two closing bytes, and one more byte where those two would
   straddle. It is increasing in P, so the signed bytes hold P;
@@ -117,7 +117,7 @@ def form(B: int) -> Form:
 
 
 def request_bytes(B: int, P: int) -> int:
-    """The bytes of the canonical id request of P >= 1 prompt ids in B-byte cells (`active.id_request` at offset 0),
+    """The bytes of the canonical id request of P >= 1 prompt ids in B-byte cells (`id_form.id_request` at offset 0),
     whatever its other fields: a function of P and B alone, increasing in P. At P = 0 it is the head and the closing
     bytes, which no id request is."""
     if type(P) is not int or P < 0:

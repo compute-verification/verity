@@ -10,7 +10,7 @@ slots ρ·R … ρ·R + R − 1), and a slot no connection holds is B zero bytes
 cut as `warden.cells` cuts them: byte k in its request cell ⌊k / P⌋, a `DATA` of exactly P = B − 9 bytes while more
 follow, then an `END` with the last 1 … P; and a `PAD` on q (no payload) where fewer than P of its bytes wait and its
 client hasn't ended, and after its `END`. So a bucket's R cells on q are `DATA` cells, then its `END` or none, then
-`PAD`s. The bytes are a canonical id request (`active.id_request` at offset 0: the cells carry the bytes alone, no
+`PAD`s. The bytes are a canonical id request (`id_form.id_request` at offset 0: the cells carry the bytes alone, no
 LENGTH), whose every field is at a place fixed by the prompt's length and B alone, and whose length is its
 content-length plus `BODY_AT`. Each cell is parsed without its request's prompt length (`parse_frame`): the head and the
 fixed fields at their places, 11-byte prompt fields (`[` or `,`, then a u32 in 10 characters), the gap spaces only where
@@ -66,7 +66,7 @@ from verity.commitments.gates.frame_v3 import _part
 from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_tie as IT
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.grid import Certifier
 from verity.protocols.accounting.certifier.verifier.id_form import (ID_BODY_AT, ID_DIGITS, ID_FIELD_BYTES, ID_NAME_BYTES, ID_REQUEST_HEAD,
                                                     MAX_TOKENS_KEY, u32_field)

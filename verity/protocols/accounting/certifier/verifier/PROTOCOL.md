@@ -431,7 +431,7 @@ certifier"), and it charges a `format` failure the same.
 **Refused.** Any field not in the record: logprobs, n > 1, tool calls, stop strings, error bodies, and every header.
 None of them has a place in a cell, so a response that carries one fails the gate, and the run fails visibly instead
 of leaking it.
-- A request that asks for one isn't an id request: `active.id_request` fixes every field an id request carries.
+- A request that asks for one isn't an id request: `id_form.id_request` fixes every field an id request carries.
 - serve-openai answers such a request in vLLM's framing, which fails at its first cell.
 
 **The OpenAI server's fields.** Every field vLLM's OpenAI-compatible server emits falls into one of four classes:
@@ -662,7 +662,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
 1. each cell is a `PAD` on q, or a request cell on q: a `DATA` of exactly B − 9 bytes that doesn't end its request,
    or its `END` with the bytes left (`warden.cells`' cut, which the network certifier makes of the client's bytes), and no
    request cell follows a pad or its request's `END`;
-2. every request cell is that cell of a canonical id request (`active.id_request` at offset 0, since the cells carry
+2. every request cell is that cell of a canonical id request (`id_form.id_request` at offset 0, since the cells carry
    the bytes alone). The head and the fixed fields are at their places, a first cell's length is its
    content-length plus `BODY_AT`, the prompt fields are 11 bytes (`[` or `,`, then a u32 in 10 characters), gap
    spaces come only where the next piece would straddle a cell, and `]}` then zero fill ends the request at its last

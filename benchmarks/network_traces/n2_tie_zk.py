@@ -74,7 +74,8 @@ import n2_zk as Z  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import advice as ADV, head_check as HC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import io_request as Q, service as SVC  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W, warden_rows as WR  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS, id_request  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, ID_DIGITS  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import Direction  # noqa: E402
 from verity.protocols.proofs.spot.verifier.one_stage import partition as P  # noqa: E402
 

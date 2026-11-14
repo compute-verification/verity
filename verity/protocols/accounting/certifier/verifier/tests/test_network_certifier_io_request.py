@@ -16,7 +16,8 @@ from verity.protocols.accounting.certifier.verifier import head_check as HC
 from verity.protocols.accounting.certifier.verifier import io_request as Q
 from verity.protocols.accounting.certifier.verifier import warden as W
 from verity.protocols.accounting.certifier.verifier import warden_rows as WR
-from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.active import DATA, HEADER, PAD
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.certificate import Direction
 
 B = 512

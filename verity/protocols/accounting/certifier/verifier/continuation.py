@@ -42,7 +42,7 @@ stamped response past its `max_tokens` (`over`).
 
 **The records.** `Response` is one released request and its response as certified records give them, whatever their
 form. `read` reads the network certifier's own records (`warden.py`'s schedule in the id egress form: `Record`s of
-`WardenParams.window` buckets) up to b, through `warden.read_cell`, `io_tie.parse_cell` and `active.id_request`: a
+`WardenParams.window` buckets) up to b, through `warden.read_cell`, `io_tie.parse_cell` and `id_form.id_request`: a
 request is its connection's `DATA` cells and its `END`, released at the `END`'s bucket, and its response's id cells
 are its `DATA` cells, one id event each. It reads no bucket at or after b, and refuses a close that isn't a whole
 number of complete execution phases the records cover, a cell that isn't the certifier's, a request that isn't a
@@ -56,7 +56,7 @@ import json
 from typing import Collection, NamedTuple, Sequence
 
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.grid import BlockGrid, row_count
 from verity.protocols.accounting.certifier.verifier.io_tie import parse_cell
 from verity.protocols.accounting.certifier.verifier.link_frame import DATA, PAD
@@ -76,7 +76,7 @@ class Refused(ValueError):
 # --- the reference ---------------------------------------------------------------------------------------------------
 
 class Request(NamedTuple):
-    """A certified id request's fields, `active.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
+    """A certified id request's fields, `id_form.id_request`'s keywords: `id_request(**r._asdict(), frame_bytes=B,
     offset=0)` is the request in the network certifier's cells."""
 
     model: str

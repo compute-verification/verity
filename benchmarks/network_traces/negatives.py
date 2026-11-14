@@ -102,9 +102,8 @@ sys.path.insert(0, str(HERE))
 import active_replay as ar  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 from verity.protocols.accounting.certifier.verifier import audit as host_audit, head_check as HC  # noqa: E402
-from verity.protocols.accounting.certifier.verifier.active import (CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES,  # noqa: E402
-                                                     compact_finish_violations, compact_record_data, decode_frame,
-                                                     encode_frame, id_event_data, id_request)
+from verity.protocols.accounting.certifier.verifier.active import CANONICAL_STREAM, DATA, HEADER, ID_NAME_BYTES, compact_finish_violations, compact_record_data, decode_frame, encode_frame, id_event_data  # noqa: E402
+from verity.protocols.accounting.certifier.verifier.id_form import id_request  # noqa: E402
 from verity.protocols.accounting.certifier.verifier.certificate import (CertifiedRecord, Direction, frames_root,  # noqa: E402
                                                           real_frames)
 from verity.protocols.accounting.certifier.verifier import tie_service as TS, warden as W  # noqa: E402
@@ -749,7 +748,7 @@ def read_requests(path: Path) -> dict[str, dict]:
 
 
 def id_requests(advice, records: dict[str, dict] | None, frame_bytes: int, model: str = "") -> list[bytes]:
-    """The id requests (`active.id_request` at `frame_bytes`-byte cells and offset 0, as the network certifier's cells
+    """The id requests (`id_form.id_request` at `frame_bytes`-byte cells and offset 0, as the network certifier's cells
     carry them) of the advice's requests in its order, the ingress the network certifier certified: each from its record
     (`read_requests`: its prompt ids, user, and the
     max_tokens, temperature, top_p and seed it brought, a seed it brought none of 0, id requests' default), or, for a

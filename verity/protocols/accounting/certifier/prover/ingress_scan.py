@@ -8,7 +8,7 @@ in a Spec.
 (slots ρ·r … ρ·r + r − 1) the ρ-th live connection by ordinal and a block no connection holds r·B zero bytes. Its cells
 are the network certifier's (`warden.read_cell`): `DATA` of P = B − 9 bytes, `END` with the request's last 1 … P bytes,
 `PAD` of none, each on the connection's ordinal q. A connection's ingress is one network-certifier-form id request
-(`active.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
+(`id_form.id_request(..., offset=0)`: no LENGTH, its length the content-length plus the head), cut by `warden.cells`, so
 a bucket's cells of a connection are `DATA`, at most one `END`, then `PAD`s, and only `PAD`s once its `END` is in.
 
 **Fixed slots a timestep.** A timestep is EVERY buckets,
