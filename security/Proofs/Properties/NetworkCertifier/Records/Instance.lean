@@ -41,9 +41,6 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import NetworkCheck.RecordsBytes
-import Proofs.Properties.NetworkCertifier.Device.Basic
-import Proofs.Properties.NetworkCertifier.Device.Lms
-import Proofs.Properties.NetworkCertifier.DeviceOutput.Encode
 import Proofs.Properties.Hash.Identity
 import Proofs.Properties.NetworkCertifier.Check
 import Proofs.Properties.NetworkCertifier.Check.Check

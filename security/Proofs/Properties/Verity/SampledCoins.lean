@@ -4,7 +4,6 @@ public import Batteries.Data.ByteArray
 public import Definitions.Core.CoinBytes
 public import Proofs.Flock.Soundness.Assumptions
 public import Proofs.Flock.Soundness.ExecDraw
-public import Proofs.Properties.NetworkCertifier.DeviceOutput.Frames
 public import Properties.Challenger
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -123,8 +122,24 @@ theorem flatMap_byteBits_inj : ∀ {l l' : List UInt8}, l.flatMap byteBits = l'.
     obtain ⟨h1, h2⟩ := List.append_inj h (by simp [byteBits])
     rw [byteBits_inj h1, flatMap_byteBits_inj h2]
 
+theorem toList_loop (b : ByteArray) (i : Nat) (r : List UInt8) :
+    ByteArray.toList.loop b i r = r.reverse ++ b.data.toList.drop i := by
+  fun_induction ByteArray.toList.loop b i r with
+  | case1 i r h ih =>
+    rw [ih, List.reverse_cons, List.append_assoc, List.singleton_append]
+    congr 1
+    conv_rhs => rw [List.drop_eq_getElem_cons (by simpa using h)]
+    simp [ByteArray.get!, h]
+  | case2 i r h =>
+    rw [List.drop_eq_nil_of_le (by simp; simpa using h), List.append_nil]
+
+theorem toList_eq (b : ByteArray) : b.toList = b.data.toList := by
+  unfold ByteArray.toList
+  rw [toList_loop]
+  simp
+
 theorem bitsOf_eq (b : ByteArray) : bitsOf b = b.data.toList.flatMap byteBits :=
-  congrArg (fun l : List UInt8 => l.flatMap byteBits) (Properties.CertifierNetwork.Proofs.toList_eq b)
+  congrArg (fun l : List UInt8 => l.flatMap byteBits) (toList_eq b)
 
 theorem byteBits_ofFin (a : Fin 256) :
     byteBits (UInt8.ofFin a) = List.ofFn fun j : Fin 8 => a.val.testBit j.val := by
