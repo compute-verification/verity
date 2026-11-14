@@ -192,7 +192,7 @@ def sampling_of(rng: Any, max_tokens: int) -> dict[str, Any]:
 def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], max_tokens: int, rate: float,
             chat: bool = True, frame: tuple[str, str] | None = None, system_prompts: int = 0, system_tokens: int = 384,
             turns: int = 0) -> list[dict[str, Any]]:
-    """``n`` requests in arrival order: CERT-VARLEN's prompts and caps (the module docstring) arriving at Poisson engine
+    """``n`` requests in arrival order: CERT-VARLEN's prompts and max_tokens (the module docstring) arriving at Poisson engine
     steps, each with the sampling it asks for. ``encode(text)`` is the tokenizer's (special tokens added); ``frame`` the
     text around a user turn in place of CERT-VARLEN's (`template_frame`).
 

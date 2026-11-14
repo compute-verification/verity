@@ -334,8 +334,8 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
 def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int], _pi_steps: dict[str, int | None], _horizons: dict | None) -> list[dict[str, Any]]:
     """The DECLARED seed of each request = the SamplingParams.seed the run was asked for (the same per-request /
     sampling-level resolution vllm_adapter.sampling_params uses; None on a greedy row), and the Program's S of record from each request
-    Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload cap: horizon = min(cap,
-    Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
+    Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload's `max_tokens`: horizon =
+    min(max_tokens, Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
     are FEWER than its Program of record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request."""
     from verity_vllm.check.replay import driver as SR
 
@@ -345,7 +345,7 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
              "seed": (int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)),
              "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
              "program_steps": _pi_steps.get(_rl[str(r.get("request_id"))]),
-             # the horizon is the executed prefix of record (cap on a length stop; served + LAG on an EOS stop):
+             # the horizon is the executed prefix of record (max_tokens on a length stop; served + LAG on an EOS stop):
              # boundary_linkage verifies the EOS at steps[-1 - lag] and the placeholder row(s) fed the EOS inside it
              "steps": SR.linkage_horizon(_arr[_rl[str(r.get("request_id"))]], int(r.get("max_tokens") or sampling.get("max_tokens") or 1),
                                          _pi_steps.get(_rl[str(r.get("request_id"))]),
@@ -380,7 +380,7 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
         if _epr_r["any_eos_stop"] or _flt:
             (logger.warning if _flt else logger.info)(
                 "[delta] not-executed class -> sampled_replay(executed_prefix=): %s%s",
-                ", ".join(f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items()),
+                ", ".join(f"{k} a_r {v['a_r']} n_exec {v['n_exec']} max_tokens {v['cap']}" for k, v in _sr_kw["executed_prefix"].items()),
                 f"; FAULTS {_flt}" if _flt else "; no faults")
     elif _epr_r["any_eos_stop"]:
         logger.warning("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
@@ -465,7 +465,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     # (CUDA after fork) -> sampled_replay runs serial in this process; named in the replay record
     _retention = retention_of(s.com, args)
     # the executed prefix of record of every request bounds the replay population and the linkage horizon; a
-    # problem there leaves every horizon None (the cap's rows are then sampled and 'not evaluated' -> partial)
+    # problem there leaves every horizon None (the rows up to max_tokens are then sampled and 'not evaluated' -> partial)
     _epr_r = EPX.executed_prefix_of_record(sorted(_arr, key=lambda k: int(k[1:])), {_rl[str(k)]: [int(t) for t in v] for k, v in s.tokens.items() if str(k) in _rl},
                                            caps={_rl[str(q.get("request_id"))]: int(q.get("max_tokens") or sampling.get("max_tokens") or 1) for q in reqs},
                                            eos_of_record=s.stop_of_record.get("eos"), lag=s.stop_of_record.get("lag"))
@@ -476,7 +476,7 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
             "ok" if _epr_r["ok"] else "PROBLEMS " + str(_epr_r["problems"][:2]))
     _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
     # the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
-    # a request linked over fewer steps than its cap fails closed by name -- never the engine value as the rule
+    # a request linked over fewer steps than its max_tokens fails closed by name -- never the engine value as the rule
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
     lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
