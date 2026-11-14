@@ -287,7 +287,7 @@ def test_the_h100_h3_vectors_are_the_registered_schemes():
 
 def test_lifecycle_on_a_test_instance():
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), hashing="h0"), 128
     rows_a, rows_b = CV.rows("life", "A", 32, k), CV.rows("life", "B", 16, k)
@@ -580,7 +580,7 @@ def test_wref_is_leans_wref_of(m, k, n):
 def test_lifecycle_work_has_no_weight_side():
     """Two calls on one weight give W = the two units' `wrefOfRev1`; the weight side is `job_cost`, apart."""
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     work = Workload((Matmul(0, Shape(32, k, 16), 9), Matmul(1, Shape(16, k, 16), 9)))
@@ -591,7 +591,7 @@ def test_lifecycle_work_has_no_weight_side():
 
 def test_v1_lifecycle_on_a_test_instance():
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -706,7 +706,7 @@ def test_h3_lifecycle_commits_hm96_sha512_trees():
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG, row_leaf
     from verity.protocols.accounting.pouw.verifier.audit import (HM96_TRANSCRIPT, HM96_WEIGHTS, Epoch, Workload, activation_binding, hm96_salt,
                                                   rows_domain, transcript_domain, weight_binding)
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Sampled, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Sampled, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3"), 128
     rows_a, rows_b = CV.rows_f32("life", "A", 32, k), CV.rows_f32("life", "B", 16, k)
@@ -802,7 +802,7 @@ def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""
     from verity.protocols.accounting.pouw.verifier.audit import Epoch, Workload
-    from verity.protocols.accounting.pouw.clear.clear_audit import Prover, Verifier
+    from verity.protocols.accounting.pouw.prover.clear.clear_audit import Prover, Verifier
 
     s, k = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h0"), 128
     rows_a, rows_b = CV.rows_f32("weight-rule", "A", 16, k), CV.rows_f32("weight-rule", "B", 32, k)
