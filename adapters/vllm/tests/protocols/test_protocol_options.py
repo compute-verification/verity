@@ -10,13 +10,27 @@ import json
 import subprocess
 import sys
 import types
+from collections.abc import Callable
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
-from verity_vllm import config
+from verity_vllm import config, errors
+from verity_vllm import llm as L
 from verity_vllm import protocols as PO
+from verity_vllm.config import RowConfig
 from verity_vllm.engine import hooks
-from verity_vllm.program.frontend.target_profile import ApplicabilityError, ArtifactIdentity, TargetProfile, check_reuse
+from verity_vllm.pipeline import cli, row_stages
+from verity_vllm.pipeline import row as ROW
+from verity_vllm.pipeline import row_records as R
+from verity_vllm.program.frontend.target_profile import (
+    ApplicabilityError,
+    ArtifactIdentity,
+    TargetProfile,
+    check_reuse,
+)
+from verity_vllm.records.schema_ids import PROTOCOL_COMPOSITION_SCHEMA
 
 DEFAULT_DIGEST = "86c255b375c6cf028a3bc3b7deeed96fd10b520956325accb8b541fbc90026b1"   # TargetProfile() on main before the field existed
 ALL = ("pouw:ncp-v1", "pous:band-chain/d12/v1", "sampled-proofs:rows-sha512")
@@ -29,7 +43,7 @@ def test_a_set_is_spelled_one_way_in_install_order():
     assert config.parse_protocols("sampled-proofs:rows-sha512, pous:band-chain/d12/v1,pouw:ncp-v1") == ALL
     assert config.parse_protocols({"pous": "band-chain/d12/v1", "pouw": "ncp-v1"}) == ALL[:2]
     assert config.parse_protocols(list(reversed(ALL))) == ALL
-    assert config.PROTOCOLS == tuple(e.partition(":")[0] for e in ALL)
+    assert tuple(e.partition(":")[0] for e in ALL) == config.PROTOCOLS
 
 
 @pytest.mark.parametrize("value,match", [("zk:v1", "unknown protocol"), ("pous", "expected pous:<scheme>"), ("pous:", "expected"),
@@ -86,8 +100,17 @@ class Model:
         return iter(self.layers)
 
 
+class FakeAdapter(types.ModuleType):
+    """A stand-in adapter module, with what `verity_vllm.protocols` reads from every adapter."""
+
+    NAME: str
+    schemes: Callable[[], tuple[str, ...]]
+    refusals: Callable[[str, Any], tuple[str, ...]]
+    install: Callable[[str, Any], Any]
+
+
 def _fake_adapter(monkeypatch, name, install, *, refuse=(), schemes=("s1",)):
-    mod = types.ModuleType(f"verity_vllm.protocols.fake_{name.replace('-', '_')}")
+    mod = FakeAdapter(f"verity_vllm.protocols.fake_{name.replace('-', '_')}")
     mod.NAME = name
     mod.schemes = lambda: schemes
     mod.refusals = lambda scheme, ctx: tuple(refuse)
@@ -116,7 +139,7 @@ def _pous(log):
         for m in target.model.modules():
             m.stored = m.weight + 100
             h.wrap(m.quant_method, "apply",
-                   lambda orig, m=m: (lambda layer, x, bias=None: orig(types.SimpleNamespace(weight=layer.stored - 100), x, bias)))
+                   lambda orig, m=m: (lambda layer, x, bias=None: orig(SimpleNamespace(weight=layer.stored - 100), x, bias)))
         h.service("responder", lambda: log.append("responder up") or "handle", lambda handle: log.append(f"responder down {handle}") or {"answered": 0})
         log.append("pous")
         return PO.Option(name=f"pous:{scheme}", hooks=h, commits={"storage_root": "c"}, release=lambda: log.append("pous released"))
@@ -161,6 +184,15 @@ def test_the_record_says_what_each_option_committed_to(monkeypatch):
     assert comp.info()["sampled-proofs:rows-sha512"]["commitment_scheme"] == "rows-sha512"
 
 
+def test_the_records_schema_is_the_registered_id_letter_for_letter(monkeypatch):
+    """A Commit's `protocols.json` on disk carries this string: the package's name for it, the registered id and what
+    `Composition.record` writes are that string, letter for letter."""
+    assert PO.RECORD_SCHEMA == PROTOCOL_COMPOSITION_SCHEMA == "verity-vllm/protocol-composition/v0"
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    with PO.install(Model(), PO.Context(stage="commit", enabled=("pous:s1",))) as comp:
+        assert comp.record("d" * 64)["schema"] == "verity-vllm/protocol-composition/v0"
+
+
 def test_an_install_that_raises_leaves_nothing_installed(monkeypatch):
     log: list[str] = []
     _fake_adapter(monkeypatch, "pouw", _pouw(log), schemes=("ncp-v1",))
@@ -189,8 +221,171 @@ def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
     assert any(r.startswith("sampled-proofs:rows-sha512: SPOT runs in the Commit stage") for r in got)
     with pytest.raises(PO.Refused) as e:
         PO.install(Model(), ctx)
-    assert e.value.reasons == got
+    assert e.value.reasons == got and str(e.value) == "protocol options refused: " + "; ".join(got)
     assert PO.refusals(_serve("pouw:ncp-v2")) == ("pouw:ncp-v2: pouw registers no scheme 'ncp-v2' (registered: ncp-v1)",)
+
+
+def test_an_unknown_protocol_has_no_adapter():
+    reason = f"unknown protocol 'zk' (known: {', '.join(config.PROTOCOLS)})"
+    with pytest.raises(PO.Refused) as e:
+        PO.adapter("zk")
+    assert e.value.reasons == (reason,) and str(e.value) == f"protocol options refused: {reason}"
+
+
+def test_the_door_refuses_a_set_in_the_packages_words():
+    """`verity_vllm.llm.protocol_context` refuses a set the package refuses as the package does, before any engine
+    exists: `Refused` with every reason, reading "protocol options refused: " and then the reasons."""
+    opts = {"protocols": ALL[2], "protocols_config": None, "tensor_parallel_size": 1, "enforce_eager": True}
+    with pytest.raises(PO.Refused) as e:
+        L.protocol_context(opts)
+    assert e.value.reasons == PO.refusals(_serve(ALL[2], enforce_eager=True))
+    assert len(e.value.reasons) == 1 and e.value.reasons[0].startswith(f"{ALL[2]}: SPOT runs in the Commit stage")
+    assert str(e.value) == "protocol options refused: " + e.value.reasons[0]
+
+
+def test_the_packages_refusal_is_the_adapters_one_refused_named_protocol_options():
+    """`protocols.Refused` is `errors.Refused` under its old name; `refused`, which the package declares, builds it for
+    a caller to raise, named "protocol options"."""
+    assert PO.Refused is errors.Refused and "refused" in PO.__all__
+    r = PO.refused(["a", "b"])
+    assert type(r) is errors.Refused
+    assert (r.reasons, r.what, str(r)) == (("a", "b"), "protocol options", "protocol options refused: a; b")
+    assert PO.refused("a").reasons == ("a",)
+    with pytest.raises(errors.Refused) as e:
+        PO.adapter("zk")
+    assert type(e.value) is errors.Refused and e.value.what == "protocol options"
+
+
+def _no_runner(scheme, settings, llm, epoch):
+    raise RuntimeError("no runner")
+
+
+def _beside_a_live_option():
+    with PO.install(Model(), _serve(ALL[0])):
+        PO.install(Model(), _serve("pous:s1"))
+
+
+SPOT = config.PROTOCOLS[2]
+(POUB,) = PO.DRIVERS
+ROW_SET = ("pous:s1", ALL[2])
+AT_TP_2 = "protocol options at TP 2: each rank would install its own composition, which is not wired yet"
+NO_REGISTRY = "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry"
+#: a refusal by name, the dict of the package it needs changed first (name, key, value), the call, and its reasons
+SAID = [
+    ("a driver off this tree", ("DRIVERS", POUB, "not_landed_here"), lambda: PO.driver(POUB, "remote"),
+     (f"{POUB}: its driver verity_vllm.protocols.not_landed_here.remote is not on this tree",)),
+    ("a protocol with no driver", None, lambda: PO.driver("pous", "remote"), (f"no driver of protocol 'pous' (known: {POUB})",)),
+    ("a circuit registry not installed", ("CIRCUITS", "pouw", NO_REGISTRY), lambda: PO.circuit_registry("pouw"),
+     (f"pouw: its circuit registry {NO_REGISTRY} is not installed ({NO_REGISTRY})",)),
+    ("an engine that fills nothing", None, lambda: PO.from_engine(_serve(ALL[0], filled={"pouw": ("runner",)}), object()),
+     (f"{ALL[0]}: its settings ['runner'] come from the built engine, which doesn't supply them: no runner",)),
+    ("an install beside a live option", None, _beside_a_live_option, (f"options installed outside this composition are live: ['{ALL[0]}']",)),
+    ("a Commit at TP 2", None, lambda: PO.commit_context(TargetProfile(protocols=ROW_SET), world=2), (AT_TP_2,)),
+    ("a row whose knob contradicts its target", None,
+     lambda: PO.at_row(",".join(ROW_SET), {"engine": {"target": {"protocols": [ALL[0], ALL[2]]}}}),
+     (f"PROTOCOLS {list(ROW_SET)} contradicts the workload target's protocols {[ALL[0], ALL[2]]}",)),
+    ("a row without SPOT", None, lambda: PO.at_row("pous:s1", {}),
+     (f"['pous:s1']: a row is a {SPOT} run, so its set names {SPOT}:<scheme> (serve without it through verity_vllm.LLM)",)),
+    ("a row at TP 2", None, lambda: PO.at_row(",".join(ROW_SET), {}, world=2), (AT_TP_2,)),
+]
+
+
+@pytest.mark.parametrize("patched,call,reasons", [c[1:] for c in SAID], ids=[c[0] for c in SAID])
+def test_a_refusal_reads_protocol_options_refused_and_then_its_reasons(monkeypatch, patched, call, reasons):
+    """Each refusal the package raises to its caller is a `Refused`, a `ValueError`, whose ``reasons`` is the tuple of its
+    reasons and whose text is "protocol options refused: " and then the reasons, joined by "; "."""
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",)).from_engine = _no_runner
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    if patched is not None:
+        monkeypatch.setitem(getattr(PO, patched[0]), *patched[1:])
+    with pytest.raises(PO.Refused) as e:
+        call()
+    assert e.value.reasons == reasons and isinstance(e.value, ValueError)
+    assert str(e.value) == "protocol options refused: " + "; ".join(reasons) and e.value.args == (str(e.value),)
+
+
+@pytest.mark.parametrize("kw,reason", [
+    ({"installs": False}, "this Commit (TP) installs no protocol options yet"),
+    ({"commit_scheme": "vllm-v1"}, (f"{ALL[2]} is what the target declares the Commit commits under, but its committer commits "
+                                    "under vllm-v1: run it with --commit-scheme rows-sha512"))])
+def test_the_commit_guard_says_its_own_refusal_as_the_package_does_on_one_line(monkeypatch, capsys, kw, reason):
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    with pytest.raises(SystemExit) as e:
+        PO.commit_guard(TargetProfile(protocols=ROW_SET), **kw)
+    assert e.value.code == 3
+    assert capsys.readouterr().out == f"[delta] REFUSE (fail-closed): protocol options refused: {reason}\n"
+
+
+def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    _fake_adapter(monkeypatch, "pous", _pous([]))
+    model = Model()
+    with PO.install(model, _serve("pouw:ncp-v1")):
+        live = hooks.live()
+        with pytest.raises(PO.Refused) as e:
+            PO.install(model, _serve("pous:s1"))
+        assert e.value.reasons == ("options installed outside this composition are live: ['pouw:ncp-v1']",)
+        assert hooks.live() == live
+
+
+def test_a_capture_runs_the_set_without_spot_and_refuses_what_the_set_refuses(monkeypatch):
+    _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=("ncp-v1",))
+    p = TargetProfile(protocols=ALL[:1] + ALL[2:], compilation="piecewise")
+    ctx = PO.capture_context(p, settings={"pouw": {"rounds": 7}, config.PROTOCOLS[2]: {}})
+    assert (ctx.stage, ctx.enabled, ctx.enforce_eager, ctx.settings) == ("capture", ALL[:1], False, {"pouw": {"rounds": 7}})
+    assert PO.capture_context(None) is None and PO.capture_context(TargetProfile()) is None
+    with pytest.raises(PO.Refused) as e:
+        PO.capture_context(p, settings={"pous": {}})
+    assert e.value.reasons == ("the protocols config names ['pous'], which this run does not enable",)
+    assert str(e.value) == "protocol options refused: the protocols config names ['pous'], which this run does not enable"
+
+
+def test_a_protocols_config_holds_one_object_a_protocol(tmp_path):
+    assert PO.load_settings(None) == {} and PO.load_settings({"pouw": {"rounds": 7}}) == {"pouw": {"rounds": 7}}
+    (tmp_path / "protocols.json").write_text(json.dumps({"pous": {"rounds": 2}}))
+    assert PO.load_settings(tmp_path / "protocols.json") == {"pous": {"rounds": 2}}
+    with pytest.raises(ValueError, match=r"protocols config: the entries of \['pous', 'pouw'\] are not objects"):
+        PO.load_settings({"pouw": 7, "pous": [], "zk": {}})
+
+
+def test_an_adapter_this_tree_does_not_hold_fills_nothing_from_the_engine(monkeypatch):
+    """`engine_fills` and `from_engine` pass over an entry whose adapter cannot be imported: `refusals` names it."""
+    monkeypatch.setitem(PO.ADAPTERS, "pous", "not_landed_here")
+    ctx = _serve("pous:s1", filled={"pous": ("runner",)})
+    assert PO.engine_fills(ctx) == {}
+    got = PO.from_engine(ctx, object())
+    assert (got.enabled, got.settings, got.filled) == (ctx.enabled, {}, {})
+    assert any("not_landed_here is not on this tree" in r for r in PO.refusals(got))
+
+
+def test_a_composition_binds_only_what_it_installed_and_one_option_releases_a_weight(monkeypatch):
+    def released(name):
+        def install(scheme, target):
+            return PO.Option(name=f"{name}:{scheme}", hooks=target.hooks(f"{name}:{scheme}"), decoded=lambda: {"l0.weight": "W0"})
+        return install
+
+    _fake_adapter(monkeypatch, "pouw", released("pouw"))
+    _fake_adapter(monkeypatch, "pous", released("pous"))
+    with PO.install(Model(), _serve("pous:s1")) as comp:
+        assert comp.weights() == {"l0.weight": "W0"}
+        with pytest.raises(ValueError, match=r"no bindable option 'pouw' in \['pous:s1'\]"):
+            comp.bind("pouw", weight_roots="w")
+    with PO.install(Model(), _serve("pouw:s1", "pous:s1")) as comp, \
+            pytest.raises(ValueError, match=r"'l0.weight' is released by two options \(pous:s1 and an earlier one\)"):
+        comp.weights()
+
+
+def test_an_adapter_that_installs_another_entry_leaves_nothing_installed(monkeypatch):
+    def install(scheme, target):
+        h = target.hooks("pous:other")
+        h.wrap(target.model.layers[0].quant_method, "apply", lambda orig: orig)
+        return PO.Option(name="pous:other", hooks=h)
+
+    _fake_adapter(monkeypatch, "pous", install)
+    model, before = Model(), hooks.live()
+    with pytest.raises(ValueError, match="the pous adapter installed 'pous:other' for 'pous:s1'"):
+        PO.install(model, _serve("pous:s1"))
+    assert hooks.live() == before and all("apply" not in vars(m.quant_method) for m in model.layers)
 
 
 def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
@@ -264,7 +459,8 @@ def test_the_commit_guard_exits_3_naming_every_reason(monkeypatch, capsys, kw, m
 def test_a_commit_with_pous_records_its_options_and_its_verdict_stands(monkeypatch, tmp_path):
     log: list[str] = []
     _fake_adapter(monkeypatch, "pous", _pous(log), schemes=("band-chain/d12/v1",))
-    p, model, versions = TargetProfile(protocols=ALL[1:]), Model(), {}
+    p, model = TargetProfile(protocols=ALL[1:]), Model()
+    versions: dict[str, Any] = {}
     assert PO.commit_guard(p) is p
     comp = PO.at_commit(p, model, versions)
     assert versions["protocols"]["entries"] == list(ALL[1:]) and "apply" in vars(model.layers[0].quant_method)
@@ -392,13 +588,6 @@ def test_a_row_without_protocols_is_the_row_as_before(monkeypatch):
 
 
 def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_path, capsys):
-    from types import SimpleNamespace
-
-    from verity_vllm.config import RowConfig
-    from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline import row as ROW
-    from verity_vllm.pipeline import row_records as R
-    from verity_vllm.pipeline import row_stages
     row = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
     seen = {}
 
@@ -419,13 +608,14 @@ def test_run_row_refuses_first_and_hands_the_set_to_the_stages(monkeypatch, tmp_
     assert "REFUSE (fail-closed)" in capsys.readouterr().out
     _fake_adapter(monkeypatch, "pous", _pous([]))
     assert ROW.run_row(SimpleNamespace(**{**vars(o), "protocols": "pous:s1,sampled-proofs:rows-sha512"}), "build") == 0
-    assert seen["protocols"] == ("pous:s1", "sampled-proofs:rows-sha512")
+    enabled = ("pous:s1", "sampled-proofs:rows-sha512")
+    assert seen["protocols"] == enabled
     tp = SimpleNamespace(**{**vars(o), "row": row.replace("__tp1__", "__tp2__"), "protocols": "pous:s1,sampled-proofs:rows-sha512"})
     assert ROW.run_row(tp, "build") == 3
     wl = tmp_path / "wl.json"
     wl.write_text(json.dumps({"engine": {"target": {"flash_attn_version": 2}}}))
     assert R.declared_target(str(wl)) == '{"flash_attn_version": 2}'
-    assert json.loads(R.declared_target(str(wl), seen["protocols"])) == {"flash_attn_version": 2, "protocols": list(seen["protocols"])}
+    assert json.loads(R.declared_target(str(wl), enabled)) == {"flash_attn_version": 2, "protocols": list(enabled)}
 
 
 def test_every_protocol_has_an_adapter_module_name():
@@ -465,10 +655,10 @@ def _commit(*enabled):
 
 
 def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
-    """`verity.protocols.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
+    """`verity.protocols.accounting.pouw.prover.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
     proofs nothing changes."""
-    from verity.protocols.pouw.prover import circuit
+    from verity.protocols.accounting.pouw.prover import circuit
     assert set(circuit.SCHEMES) == {"ncp-v2", "ncp-v2-shift24"} and PO.CIRCUITS["pouw"] == circuit.__name__
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
@@ -537,7 +727,7 @@ def test_beside_sampled_proofs_pearl_c_is_admitted_only_in_a_window_cut_at_its_s
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():
-    from verity.protocols.pouw.verifier.protocol import DomainError
+    from verity.protocols.accounting.pouw.verifier.protocol import DomainError
     t = PO.traced_as("pouw:ncp-v2", 16, 64, 16)
     assert t.scheme == "ncp-v2" and t.definition.name == "NcpLinear" and t.served == 16 * 16
     assert PO.traced_as("pouw:ncp-v1", 16, 64, 16) is None and PO.traced_as("pouw:pearl-fp8-v4", 16, 64, 16) is None
@@ -549,10 +739,10 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
 def test_without_its_circuit_registry_pouw_stays_refused_beside_spot(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
-    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.pouw.verifier.not_a_circuit_registry")
+    monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.protocols.accounting.pouw.verifier.not_a_circuit_registry")
     got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
     assert got[-1] == _refused_beside_spot("ncp-v2")
-    assert got[0].startswith("pouw: its circuit registry verity.protocols.pouw.verifier.not_a_circuit_registry is not installed")
+    assert got[0].startswith("pouw: its circuit registry verity.protocols.accounting.pouw.verifier.not_a_circuit_registry is not installed")
     with pytest.raises(PO.Refused, match="is not installed"):
         PO.traced_as("pouw:ncp-v2", 16, 64, 16)
 
@@ -564,8 +754,12 @@ def test_every_option_commits_to_the_weights_before_any_installs(monkeypatch):
         def install(scheme, target):
             log.append(f"install {name} seeing {sorted(target.weight_commitments)}")
             return PO.Option(name=f"{name}:{scheme}", hooks=target.hooks(f"{name}:{scheme}"))
-        mod = _fake_adapter(monkeypatch, name, install)
-        mod.commit_weights = lambda scheme, target: log.append(f"commit {name}") or {"root": f"{name}-w"}
+
+        def commit_weights(scheme, target):
+            log.append(f"commit {name}")
+            return {"root": f"{name}-w"}
+
+        _fake_adapter(monkeypatch, name, install).commit_weights = commit_weights
 
     adapter("pouw")
     adapter("pous")

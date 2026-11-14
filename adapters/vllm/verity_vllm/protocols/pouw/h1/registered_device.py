@@ -1,11 +1,11 @@
 """`pouw_h1_registered.commit`'s hashing on the GPU: a registered value's ``b || c`` strings and every level of its
-frame-v3-sha512 tree, computed by `protocol_options/pouw_cuda/registered_rows.cu` from the rows' words, the salts sampled on
-the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given, under the domain id the host
-computes (`registered.domain`).
+frame-v3-sha512 tree, computed by `verity/protocols/accounting/pouw/prover/kernels/pouw_cuda/registered_rows.cu` from the
+rows' words, the salts sampled on the device (ChaCha20 under the run's key at the value's nonce, `audit.hm96_salt`) or given,
+under the domain id the host computes (`registered.domain`).
 
 A call's z/y records are two tables' rows: its registered ``zy@<c>`` and its call z table (`pouw_h1_tables_device`, under
 ``hm96-sha512/row-seg/v1``). With ``also``, `device_hash` commits both from one read of each record
-(`pouw_cuda/zy_commit.cu`, on `verity.definitions.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
+(`pouw_cuda/zy_commit.cu`, on `verity.circuits.kernels`' ``row_commit.cuh``): each record's two row digests from the same loads,
 each table's leaf, the value's tree as before and the call table's a level at a time, the call table's root `Hashing.also`.
 `host_zy` is its twin on the CPU (`zy_commit_host.cpp`).
 
@@ -40,7 +40,7 @@ from verity.commitments.rowleaf import (
     sha512_row_seg_segments,
     sha512_row_v2_prefix,
 )
-from verity.definitions.kernels import ROW_COMMIT, SHA512
+from verity.circuits.kernels import ROW_COMMIT, SHA512
 
 from verity_vllm.commit import row_tables_device as RTD
 from verity_vllm.protocols.pouw.h1.nodes import Nodes

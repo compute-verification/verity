@@ -40,14 +40,14 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pouw.verifier import credit as Cr
-from verity.protocols.pouw.verifier import weights as PW
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as DR
-from verity.protocols.spot.verifier.one_stage import partition as P
-from verity.protocols.spot.verifier.one_stage import proofs as PF
-from verity.protocols.spot.verifier.one_stage import registered as G
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.accounting.pouw.verifier import credit as Cr
+from verity.protocols.accounting.pouw.verifier import weights as PW
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as DR
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import proofs as PF
+from verity.protocols.proofs.spot.verifier.one_stage import registered as G
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
 from verity.circuits import codec, partition_object as PO
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
@@ -374,8 +374,8 @@ def test_without_v2_no_v2_case_is_made(tmp_path, capsys):
 
 
 def test_on_a_tree_without_the_policy_the_inference_only_case_is_refused_by_name(tmp_path, capsys, monkeypatch):
-    """Where the tree leaves the inference-only policy out (the public release: no module `SC.POLICY`, which names the
-    policy's Lean package and the Python its check is held to), the inference-only case is refused saying so, never
+    """Where the tree leaves the inference-only policy out (no module `SC.POLICY`, which names the policy's Lean package
+    and the Python its check is held to), the inference-only case is refused saying so, never
     skipped, its Lean never runs, and v1's and sampled proofs' cases are still written; a caller that asks for the
     package is refused the same way."""
     program, query = toy()

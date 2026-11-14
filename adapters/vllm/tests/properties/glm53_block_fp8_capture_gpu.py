@@ -3,7 +3,7 @@ of the served fused-MoE chain, `Fp8GroupQuantUe8m0_v1` (the input's quant), `Moe
 (`silu_and_mul`), `Fp8GroupQuantUe8m0_v1` (the activation's quant), `MoeExpertFp8GemmW_v1` (the w2 launch) and `MoeSum_v1`
 (`moe_sum`), at GLM-5.3's shapes and at each launch's served tile and DOT (`fp8_moe.sm90_dot`).
 
-One GPU process writes `<out>/glm53_block_fp8_capture.json`, the property record `glm53_block_fp8_capture` (`properties.record`), and
+One GPU process writes `<out>/glm53_block_fp8_capture.json`, the property record `glm53_block_fp8_capture` (`records.property_record`), and
 prints one line per case and then `GLM53-BLOCK-FP8 GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and
 nothing else runs when it fails (exit 3).  vLLM runs at its defaults, as a served GLM-5.3 engine does: `engine.env.served_defaults`
 clears every switch the process inherited before vLLM is imported, so DeepGEMM is on with its ue8m0 scales, the run is not batch
@@ -88,7 +88,7 @@ import numpy as np
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.circuits.evaluation.batch import type_shape
-from verity.definitions.kernels.tc import group_sum_total_batch
+from verity.circuits.kernels.tc import group_sum_total_batch
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.deepgemm_twins import (
@@ -103,15 +103,15 @@ from verity.definitions.numerics.fp8_moe_rows import (
     TWIN_DOT_OF,
     moe_expert_fp8_block_row,
 )
-from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
+from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
 from verity.definitions.registry import act as ACT
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import fp8_moe as MO
 from verity.definitions.registry import fp8_moe_experts as MX
 from verity.definitions.registry import moe as MOE_R
 from verity.definitions.registry.fp8_moe import sm90_dot
-from verity.definitions.silicon.cast import e4m3_to_f32_word
-from verity.definitions.silicon.models import (
+from verity.circuits.silicon.cast import e4m3_to_f32_word
+from verity.circuits.silicon.models import (
     AMPERE_BF16_M16N8K16,
     HOPPER_BF16_M16N8K16,
 )
@@ -119,7 +119,7 @@ from verity.definitions.silicon.models import (
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
 from verity_vllm.engine.env import served_defaults
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-block-fp8-capture/v4"
 RECORD = "glm53_block_fp8_capture.json"

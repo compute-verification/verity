@@ -1,4 +1,4 @@
-"""A served Commit window's advice: I1 v0 (`verity.protocols.certifier.verifier.advice`) with the state of the requests the window
+"""A served Commit window's advice: I1 v0 (`verity.protocols.accounting.certifier.verifier.advice`) with the state of the requests the window
 carries across its open and its close.
 
 A Commit window closes at idle or after ``window_steps`` engine steps (`serve_commit.CommitWindows`), so under load a request
@@ -41,8 +41,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
-import verity.protocols.certifier.verifier.advice as I1
-from verity.protocols.certifier.verifier.advice import (  # the advice's parts, as `predict.batch._solo` reads them
+import verity.protocols.accounting.certifier.verifier.advice as I1
+from verity.protocols.accounting.certifier.verifier.advice import (  # the advice's parts, as `predict.batch._solo` reads them
     KINDS,
     WIDTH_BITS,
     MalformedAdvice,

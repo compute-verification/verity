@@ -27,9 +27,9 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.device import challenger as Ch, coins as CC
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier import second_stage as SS, service as S
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
@@ -37,7 +37,7 @@ from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boun
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("a5_coins")
@@ -496,16 +496,16 @@ class OneSession(CC.ChallengerCoins):
         pass
 
     def files(self) -> dict:
-        """The session's published files under the verifier's key, the auditor's ledger and the host's pins; the first
-        call closes the session."""
+        """The session's published files, the auditor's ledger, the host's pins and the copy of main's history the
+        session was pinned on, naming no key; the first call closes the session."""
         if self._files is None:
             with open(self.directory / FC.R.RELEASES, "a", encoding="utf-8") as log:
                 log.write("".join(line + "\n" for line in self._lines))
             self.session.lines.extend(self._lines)
             FC.R.close_session(self.session, None)
             self.ledger.end(self.session.id, self.session.directory, True)
-            self._files = {"key": FC.pinned_key().to_json(), "ledger": self.ledger.lines, "main": FC.MAIN,
-                           "pins": FC.HOST_PINS, "session": FC.R.session_files(self.directory)}
+            self._files = {"ledger": self.ledger.lines, "main": FC.MAIN, "pins": FC.HOST_PINS,
+                           "session": FC.R.session_files(self.directory)}
         return self._files
 
     def evidence(self, digest: str) -> dict:
@@ -513,11 +513,12 @@ class OneSession(CC.ChallengerCoins):
         return {**self.files(), "segment": next(s for s in self.segments if s.after == bytes.fromhex(digest)).to_json()}
 
 
-def _start(one: OneSession):
+def _start(one: OneSession, key: Ch.ChallengerKey | None = None):
     """`a5_coins.start` in process: its ranks' turns on ``one``, opened and published as `start`'s thread does a served
-    session's, and refused, as it refuses, when a rank ended before it planned."""
+    session's, and refused, as it refuses, when a rank ended before it planned. The verifier holds ``key`` as the
+    challenger's (the session's own, the pinned one, when none is given) with the fixture's copy of main's history."""
     def start(challenger: str, root: str, ranks: list[int], dest: Path, main: object, **kwargs: object):
-        turns = AC.Draws(root, ranks)
+        turns = AC.Draws(root, ranks, (key or FC.pinned_key()).to_json(), list(FC.MAIN))
 
         def finish() -> None:
             needs = turns.wait_planned()
@@ -542,7 +543,7 @@ def _start(one: OneSession):
 
 def _args(tmp_path: Path, **more: object) -> NS:
     return NS(**{"challenger": "test", "out": str(tmp_path), "main": None, "ssh_key": None, "peer": None,
-                 "challenger_key": None, "replay": f"rate:{Q}/{N}", "k": K, "proof_deadline": 60.0, "delta": 0.5,
+                 "challenger_key": None, "challenger_host": None, "replay": f"rate:{Q}/{N}", "k": K, "proof_deadline": 60.0, "delta": 0.5,
                  "stop_design": None, **more})
 
 
@@ -564,7 +565,8 @@ def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sa
     assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
     read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])
     assert s["family"] == FC.LABEL
-    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, FC.LABEL, after, read, AC.lms_verify) is None
+    assert read and CC.coins_reason(FC.pinned_key(), FC.MAIN, coins.evidence(s["registration"]), ROOT, FC.LABEL, after,
+                                    read, AC.lms_verify) is None
     other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, FC.Challenger("other"), stop=STOP)
     with pytest.raises(ValueError, match="not this commitment's values"):
         TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record)
@@ -579,7 +581,9 @@ def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
     then the stop registration's, each in a family of its own, and the stop sample read exactly the latter. It names
     why otherwise: no published log; no family; a coin released after the stop registration left unread, or bytes that
     are not those coins'; the boundary registration's coins handed in as the stop sample's, or the stop sample's held
-    to the boundary registration's family; another window's root; a log the challenger's close does not sign (a
+    to the boundary registration's family; another window's root; another challenger key than the session's, no key,
+    evidence that names a key, even the session's own, and another copy of main's history than the evidence carries;
+    a log the challenger's close does not sign (a
     prover's own ordering of the same lines); the stop registration's coins released first; no coin after the boundary
     registration at all; and a stop sample whose family holds the boundary registration's coins before its own, the
     one family a prover that registers again after reading would use."""
@@ -592,8 +596,11 @@ def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
             read[c], family[c] = one(2 * Ch.COIN_BYTES), one.label
         return one, read[s], family
 
-    def order(evidence: dict | None, read: bytes, family: str | None, root: str = ROOT) -> str | None:
-        return TS.stop_order(evidence, root, family, b, s, read, AC.lms_verify)
+    ours = FC.pinned_key()
+
+    def order(evidence: dict | None, read: bytes, family: str | None, root: str = ROOT,
+              key: Ch.ChallengerKey | None = ours) -> str | None:
+        return TS.stop_order(key, FC.MAIN, evidence, root, family, b, s, read, AC.lms_verify)
 
     one, read, family = session("order", b, s)
     assert family == {b: AC.family(0), s: AC.family(1)}
@@ -606,6 +613,12 @@ def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
     assert f"not the challenger's {family[s]} family's" in order(one.evidence(b), read, family[s])
     assert f"not the challenger's {family[b]} family's" in order(ev, read, family[b])
     assert order(ev, read, family[s], "22" * 64) is not None
+    other = replace(FC.pinned_key(), public=bytes(x ^ 1 for x in FC.pinned_key().public))
+    assert "the stop sample's coins: " in order(ev, read, family[s], key=other)
+    assert "holds no challenger key" in order(ev, read, family[s], key=None)
+    assert order({**ev, "key": FC.pinned_key().to_json()}, read, family[s]) == f"the stop sample's coins: {CC.DRAW_FORM}"
+    assert TS.stop_order(FC.pinned_key(), FC.MAIN[1:], ev, ROOT, family[s], b, s, read, AC.lms_verify) == (
+        f"the stop sample's coins: {CC.COINS_MAIN}")
     log = ev["session"]["log"]
     assert len(log) == 9
     forged = {**ev, "session": {**ev["session"], "log": [log[0], *log[5:], *log[1:5]]}}
@@ -675,3 +688,59 @@ def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order
     assert "rank(s) [0, 2] ended before planning" in plain["error"]
     for o in run("no-rule", stop=None):
         assert "units" not in o and "not the verifier's own" in o["error"] and "was not opened" in o["session"]["error"]
+
+
+def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers_key(tmp_path, monkeypatch):
+    """`second` holds the challenger's key itself and reads the first stage's coins, the hand-off's, under it. A
+    hand-off whose session ran under the key `second`'s challenger has goes on to the replay. One whose session ran
+    under another key is refused (`first-coins`) before the replay, and so is one whose evidence names a key, the
+    right one too: no key is read from the file. Each refusal opens no session on the interior's root. Under
+    ``--challenger local`` the challenger is the one the first stage kept: without ``--challenger-host``, or with a
+    directory that holds no challenger, `second` is refused before it reads the class."""
+    c = _stop_class(False)
+    monkeypatch.setattr(AC, "start", _start(OneSession("first")))
+    (first,) = TS._first_all(_args(tmp_path), [json.loads(json.dumps(c.public()))], PAIR, RULE, None, STOP)
+    assert len(first["units"]) == Q and sorted(first["evidence"]) == ["ledger", "main", "pins", "segment", "session"]
+    monkeypatch.setattr(TS, "template_fn", lambda t: PAIR)
+    monkeypatch.setattr(BR, "reopen", lambda *a, **k: c)
+    opened: list[dict] = []
+
+    def second(name: str, handoff: dict, key: Ch.ChallengerKey | None = None, **more: object) -> dict:
+        out = tmp_path / name
+        out.mkdir()
+        (out / "handoff.json").write_text(json.dumps(handoff))
+        real = _start(OneSession(name), key)
+
+        def start(*a: object, **k: object):
+            manager, turns, finisher = real(*a, **k)
+            opened.append({"name": name, "turns": turns})
+            return manager, turns, finisher
+        monkeypatch.setattr(AC, "start", start)
+        a = _args(out, stage1=str(out / "handoff.json"), boundary=str(tmp_path), capture=str(tmp_path / "capture"),
+                  rids=None, proofs=None, unlinked=False, stop=json.dumps(STOP.to_json()), **more)
+        assert TS._second(a) == 1
+        return json.loads((out / "summary.json").read_text())
+
+    def replay(*a: object, **k: object):
+        raise ValueError("the replay is reached")
+    monkeypatch.setattr(TS, "replayed", replay)
+    assert second("same", first)["refused"] == "ValueError: the replay is reached"
+    assert "error" not in opened[-1]["turns"].evidence()
+
+    monkeypatch.setattr(TS, "replayed", lambda *a, **k: pytest.fail("a refused hand-off reached the replay"))
+    other = replace(FC.pinned_key(), public=bytes(x ^ 1 for x in FC.pinned_key().public))
+    named = {**first, "evidence": {**first["evidence"], "key": FC.pinned_key().to_json()}}
+    for name, handoff, key, why in (("other-key", first, other, "the first stage's coins: "),
+                                    ("names-its-key", named, None, f"the first stage's coins: {CC.DRAW_FORM}"),
+                                    ("names-another", {**first, "evidence": {**first["evidence"], "key": other.to_json()}},
+                                     None, CC.DRAW_FORM),
+                                    ("no-evidence", {**first, "evidence": None}, None, CC.DRAW_FORM)):
+        got = second(name, handoff, key)
+        assert got["refused"].startswith(f"{TS.FIRST_COINS}: ") and why in got["refused"] and got["held"] is False, name
+        assert "was not opened" in opened[-1]["turns"].evidence()["error"], name
+
+    sessions = len(opened)
+    assert TS.NO_HOST in second("no-host", first, challenger="local")["refused"]
+    (tmp_path / "empty").mkdir()
+    got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
+    assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"

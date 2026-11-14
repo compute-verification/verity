@@ -2,7 +2,7 @@
 
 Definitions, guarantees and proofs for the bucketed certifier's timing channel: how much a covert sender inside a
 spatial unit X can carry across its boundary ∂X through **when** frames leave, once the declared Program fixes their
-content and order. Conventions follow POUS's package (`verity/protocols/pous/lean/`): the same toolchain and Mathlib pin,
+content and order. Conventions follow POUS's package (`tools/pous_grader/`): the same toolchain and Mathlib pin,
 `autoImplicit` off, no `axiom` (an assumption is a named `Prop` hypothesis), and a check file.
 
 ~~~text
@@ -198,7 +198,7 @@ Causal.lean     a later window's sync never changes an earlier window's grid (`E
 lake exe cache get                                          # Mathlib's prebuilt oleans; never build Mathlib from source
 lake build                                                  # NetTiming (the default target)
 python3 ../../../tools/verity/lean/check.py .                      # Verity's Lean check
-# the difftest is the certifier program's: see its package, ../../../verity/protocols/certifier/device/program/lean/
+# the difftest is the certifier program's: see its package, ../../../verity/protocols/accounting/certifier/device/program/lean/
 ~~~
 
 **Trusted without proof:** the statements in `../../Definitions/NetworkCertifier/`,
@@ -289,7 +289,7 @@ last two by `pooledIncorrectBlocks` and `pooledLeak`). All 28 are under `shape.f
 possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
 program implements yet), not over the network check's code, and an accepted run reaches the first 18 through
 `AcceptedRunsAreProgramRuns`. Three are the
-theorems whose bounds the calibration reports (`verity.protocols.certifier.verifier.calibration`, `PROTOCOL.md`'s
+theorems whose bounds the calibration reports (`verity.protocols.accounting.certifier.verifier.calibration`, `PROTOCOL.md`'s
 "Capacity"):
 
 - egress over a monitoring period, for the reference schedule (`NetTiming.SecurityProofs.Schedule`):
@@ -416,7 +416,7 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
 
 **The program's agreements, proved and audited, not guarantees.** Five theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references
-to the certifier program (`verity/protocols/certifier/device/program/lean/`, Lean core only, `NetworkCertifier`), and
+to the certifier program (`verity/protocols/accounting/certifier/device/program/lean/`, Lean core only, `NetworkCertifier`), and
 these say the program computes what the definitions above define. Each is stated in `Code.lean` over both sides'
 definitions, relating them by their fields, since `security` requires nothing but Mathlib
 (`tests/test_lean_packages.py`) and so `Definitions/` cannot name the program:
@@ -465,7 +465,7 @@ that added them, and the review of the content versions is on the one stacked on
 constant-rate Program's five statements and the definitions they read were frozen on `sorry` stubs and recorded before
 their proofs. Their statement review gave GO with one change: the four counts take
 `n ≤ W·T`. All 38 statements (25 guarantees, 13 lemmas) and 16 witnesses are proved. The reference
-implementation, `verity/protocols/certifier` (`verity.protocols.certifier.verifier`), mirrors 19 of the statements and the three
+implementation, `verity/protocols/accounting/certifier` (`verity.protocols.accounting.certifier.verifier`), mirrors 19 of the statements and the three
 lemmas by name in its tests; its `PROTOCOL.md` lists them per test file. The witnesses have no Python counterpart.
 
 ## Modelling choices a reader of the statements checks

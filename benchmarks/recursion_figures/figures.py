@@ -5,7 +5,7 @@
 
 The bench is public and states what it measured; this side reads the census's fleets and the monitoring periods, which
 stay private, and scales the measurement over them: its cost, its knowledge-soundness error
-and its stop-leak bound, for one window and pooled over the monitoring periods (`reporting.PERIODS`: a week, a month,
+and its stop-leak bound, for one window and pooled over the monitoring periods (`verity.protocol`'s `MONITORING_PERIODS`: a week, a month,
 a year), over one datacenter (``benchmarks/census/deployments.json``'s reference) and over the world's compute (the
 adversary resource model, ``adversary.json``'s reference). Every figure says its basis: ``measured`` (this run),
 ``proved`` (a Lean theorem, by name, with what it assumes) or ``scaled`` (and what is scaled).
@@ -51,11 +51,11 @@ sys.path.insert(0, str(HERE.parent / "recursion_e2e"))
 
 from rec_profile import SESSION_STEPS  # noqa: E402
 
-from verity.protocols.reporting import PERIODS  # noqa: E402
+from verity.protocol import MONITORING_PERIODS  # noqa: E402
 
 FORMAT = "recursion-e2e/figures/v2"
 CENSUS = HERE.parent / "census"
-YEAR_S = dict(PERIODS)["year"]
+YEAR_S = dict(MONITORING_PERIODS)["year"]
 #: κ, the per-session term, and ε, the per-SHA-512-call term, log₂ (``RecDeploy.recursiveBitsK_deployed``)
 KAPPA_LOG2 = -167.7
 EPS_LOG2 = -174.95
@@ -165,7 +165,7 @@ def figures(doc: dict[str, Any], times: dict[str, dict[str, float] | None], cens
             "ks": ks(1, w, ands),
             "leak": {"bits": leak_session, "bits_per_and": leak_session / ands if leak_session and ands else None}}
         periods = {}
-        for p, secs in PERIODS:
+        for p, secs in MONITORING_PERIODS:
             R = secs // w
             n = f["machines"] * R
             per_stream = log2_binom_sum(R * S, R) if S else None

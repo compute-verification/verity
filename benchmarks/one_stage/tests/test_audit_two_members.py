@@ -7,8 +7,9 @@ stops included (`_kept_prover`).
 
 * **The window** (`_window`): two templates of one proof block each, `ScaledMmS8Coordinate` at K = 128 and K = 256 (the
   smallest whose rows give Flock's composer a compression before a row's last block), recorded, committed and written
-  through the interface as serving writes one, under ``stratified:1``. A template is a stratum, so the sample always
-  holds both proof blocks, one a member, and the audit runs two sessions.
+  through the interface as serving writes one, under ``stratified:1``, the design the audit's rule (`RULE`, a stratified
+  rate) names over its two proof blocks. A template is a stratum, so the sample always holds both proof blocks, one a
+  member, and the audit runs two sessions.
 * **The coins** are a challenger's: ``--challenger local`` starts a development session of the auditor host's own
   service on this machine (`a5_coins.Local`: `live_challenger`'s reserve, admit, run and `serve.py`), pinned on
   this checkout's first-parent line. `test_a5_reserve` opens one the same way under a stub of the Lean verifier's coins;
@@ -52,13 +53,13 @@ import numpy as np
 import pytest
 
 from verity.commitments import coin_tree as CT
-from verity.protocols.spot.device import challenger as C
-from verity.protocols.spot.verifier import service as S
-from verity.protocols.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R
+from verity.protocols.proofs.spot.device import challenger as C
+from verity.protocols.proofs.spot.verifier import service as S
+from verity.protocols.proofs.spot.verifier.one_stage import draw as D, members as M, proofs as PF, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import gemm as G
+from verity.circuits.ops import gemm as G
 from verity.commitments.windows import interface as IF
 
 HERE = Path(__file__).resolve().parents[1]
@@ -69,8 +70,8 @@ import a5_coins as AC  # noqa: E402
 import member_trees as MT  # noqa: E402
 import records_audit as RA  # noqa: E402
 
-LEAN = ROOT / "verity" / "protocols" / "flock" / "verifier" / ".lake" / "build" / "bin"
-BUILD = ROOT / "verity" / "protocols" / "flock" / "prover" / "check_build.sh"
+LEAN = ROOT / "verity" / "protocols" / "proofs" / "flock" / "verifier" / ".lake" / "build" / "bin"
+BUILD = ROOT / "verity" / "protocols" / "proofs" / "flock" / "prover" / "check_build.sh"
 #: `check_build.sh bin`'s exit where the machine has no Flock checkout, not its toolchain or not its crates
 NOTHING_TO_BUILD_ON = 3
 KS = (128, 256)
@@ -135,9 +136,9 @@ def _audit(tmp: Path, window: Path, binaries: dict[str, Path], *flags: str,
     main.write_text(subprocess.run(["git", "-C", str(ROOT), "rev-list", "--first-parent", "HEAD"], capture_output=True,
                                    text=True, check=True).stdout)
     m0 = os.pathsep.join(str(ROOT / p) for p in ("", "benchmarks/numerical/python",
-                                                 "verity/protocols/flock/prover/python", "adapters/vllm"))
+                                                 "verity/protocols/proofs/flock/prover/python", "adapters/vllm"))
     argv = [sys.executable, str(ROOT / "benchmarks" / "prove_path" / "records_audit.py"), "audit", "--window", str(window),
-            "--law", DESIGN, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
+            "--law", RULE, "--circuit", hashlib.sha512((window / "circuit.json").read_bytes()).hexdigest(), "--run", RUN,
             "--challenger", "local", "--main", str(main), "--m0-pythonpath", m0, *(x for k, p in binaries.items()
                                                                                     for x in (f"--{k}", str(p))),
             "--ports", "2", "--out", str(out), *flags]
@@ -173,14 +174,16 @@ def _evidence_hex(evidence: dict) -> str:
 def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
-    the rate the audit makes of the window's design (`records_audit.rule_of`), which the service takes where it refuses the
-    design's fixed count, and the stream sampled by it accepts its outcome on the challenger's coins. The audit record
-    names whose coins those are, the key and the session the challenger's ledger opens on the run's root, and says it
-    wrote no case for the compiled check; SPOT's answer on the audit accepts with both in its public outputs."""
+    the rate the audit is given (``--law``), which the service takes where it and the audit refuse the design's fixed
+    count by name; over the window's two proof blocks that rate names the design the window was committed under
+    (`records_audit.verifier_window`), and the stream sampled by it accepts its outcome on the challenger's coins. The
+    audit record names whose coins those are, the key and the session the challenger's ledger opens on the run's root,
+    and says it wrote no case for the compiled check; SPOT's answer on the audit accepts with both in its public
+    outputs."""
     window = _window(tmp_path / "window")
-    assert RA.rule_of(D.parse_design(DESIGN), len(TEMPLATES)) == RULE and S.Law(RULE).text == RULE
+    assert RA.verifier_window(window, RULE, None)[0].law == D.parse_design(DESIGN) and S.Law(RULE).text == RULE
     with pytest.raises(ValueError, match="a fixed count"):
-        S.Law(DESIGN)
+        RA.verifier_window(window, DESIGN, None)
     rc, row, out, said = _audit(tmp_path, window, binaries)
     assert rc == 0 and row.get("ok") is True, said
     assert row["refused"] is None and row["population"] == 2 and row["draw"] == [0, 1], row

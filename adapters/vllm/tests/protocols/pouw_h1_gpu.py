@@ -128,11 +128,11 @@ from typing import Any
 
 import numpy as np
 import torch
-from verity.protocols.pouw.verifier import verifier
-from verity.protocols.pouw.verifier import window as Wd
-from verity.protocols.pouw.verifier.audit import salt_of
-from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
-from verity.protocols.spot.device.challenger import LiveRecord
+from verity.protocols.accounting.pouw.verifier import verifier
+from verity.protocols.accounting.pouw.verifier import window as Wd
+from verity.protocols.accounting.pouw.verifier.audit import salt_of
+from verity.protocols.accounting.pouw.verifier.coins import Challenger, CoinCommitment, CoinOpening
+from verity.protocols.proofs.spot.device.challenger import LiveRecord
 
 from tests.engine.int8_exact_gpu import PROMPTS as SERVE_H1_PROMPTS
 from tests.engine.int8_exact_gpu import generate, pin, scratch_checkpoints
@@ -149,12 +149,12 @@ PROMPTS = ["The capital of France is", "def fibonacci(n):\n    \"\"\"Return the 
 
 PERIOD_DIGEST = """
 import json, resource, sys, time
-from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
 from verity_vllm.protocols.pouw.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
-    from verity.protocols.pouw.prover.circuit import h1tile as HT, h1window as HW
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT, h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
@@ -171,8 +171,8 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.protocols.pouw.prover.circuit import h1tile as HT
-    from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.accounting.pouw.prover.circuit import h1tile as HT
+    from verity.protocols.accounting.pouw.prover.circuit import h1window as HW
 
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
@@ -250,7 +250,20 @@ def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
     return status()
 
 
-def gate_command(argv: list[str]) -> Any:
+@dataclasses.dataclass(frozen=True, eq=False)
+class GateCommand:
+    """What `gate_command` answers. Called with a challenge phase and its root it is ``call``, the gate's open of it;
+    ``argv`` is the command its verbs run through, and ``reserve`` and ``ended`` are as `gate_command` says."""
+    call: Callable[..., dict[str, Any]]
+    argv: list[str]
+    reserve: Callable[[str, int | None], dict[str, Any]]
+    ended: Callable[[str], dict[str, Any]]
+
+    def __call__(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
+        return self.call(session, root, withhold)
+
+
+def gate_command(argv: list[str]) -> GateCommand:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
     S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a sample's
@@ -294,8 +307,7 @@ def gate_command(argv: list[str]) -> Any:
             raise ValueError(f"the gate reserved draw challenge phase {answer.get('session')} plain: {PHW.WITHHELD_OPEN}")
         return answer
 
-    gate.argv, gate.reserve, gate.ended = argv, reserve, lambda session: await_end(lambda: verb("status", session))
-    return gate
+    return GateCommand(gate, argv, reserve, lambda session: await_end(lambda: verb("status", session)))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -959,7 +971,7 @@ def served_measures(got: list[dict[str, Any]], want: list[dict[str, Any]], cap: 
                     stamps: dict[int, float]) -> dict[str, Any]:
     """What only the serving process sees of a fill window: its rate, each step's seconds (at linear 0 of the next), its
     tokens against the plain run's and the static schedule's check."""
-    step_s = [round((stamps[s + 1] if s + 1 in stamps else end) - stamps[s], 4) for s in sorted(stamps)]
+    step_s = [round(stamps.get(s + 1, end) - stamps[s], 4) for s in sorted(stamps)]
     return {"serve": rate(got, end - t0, served_steps), "step_s": step_s, "served_end_unix": round(time.time(), 3),
             "decode_step_s_median": float(np.median(step_s[1:])) if len(step_s) > 1 else None,
             "same_tokens": [g["token_ids"] for g in got] == [g["token_ids"] for g in want], "tokens_digest": tokens_digest(got),
@@ -1128,7 +1140,19 @@ def negatives_of(layers: list[Any]) -> tuple[str, ...]:
     return NEGATIVES + ((EXPERT_NEGATIVE,) if PHK.expert_names(layers) else ())
 
 
-def editor(kind: str) -> Any:
+class Edit:
+    """An edit of the arm's codes, called as ``codes(layer, xq)`` is (`edited`); ``at`` names the expert site it zeroed,
+    None while it has zeroed none."""
+
+    def __init__(self, codes: Callable[[Any, Any], Any]) -> None:
+        self.codes = codes
+        self.at: str | None = None
+
+    def __call__(self, layer: Any, xq: Any) -> Any:
+        return self.codes(layer, xq)
+
+
+def editor(kind: str) -> Edit:
     """The codes H1 is handed of the ones the arm quantized: every call's all zero (``a-zero``, the A = 0 probe),
     row 1's first code moved off by one in the first call of two rows or more (``a-row-off``), or the first routed
     expert down call with rows all zero (``a-zero-expert``: its K, the intermediate width, is the experts' alone). The
@@ -1136,7 +1160,7 @@ def editor(kind: str) -> Any:
     from verity_vllm.engine import int8_experts as X
     done = [False]
 
-    def edit(layer: Any, xq: Any) -> Any:
+    def codes(layer: Any, xq: Any) -> Any:
         if kind == "a-zero":
             return torch.zeros_like(xq)
         if kind == EXPERT_NEGATIVE:
@@ -1149,7 +1173,7 @@ def editor(kind: str) -> Any:
         done[0], xq = True, xq.clone()
         xq[1, 0] = 1 if int(xq[1, 0]) != 1 else 2
         return xq
-    edit.at = None
+    edit = Edit(codes)
     return edit
 
 
@@ -1195,7 +1219,7 @@ def core_verdict(ev: dict[str, Any]) -> dict[str, Any]:
     (`record_reason`), each A table and input-ids table committed whole by its round's root (`credit._a_link`), and each
     the Commit's value of its rows (`credit._arow`), each at the rows the layout gives it (`credit.table_rows`: n chunk
     leaves a row past K = 4096). ``tied`` when none refuses."""
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     c, raw = ev["commitment"], bytes.fromhex(ev["descriptor"])
     entries, rounds = (c.get("served") or {}).get("entries") or [], c.get("rounds")
     layout, why = CR.layout_of(raw)
@@ -1325,6 +1349,7 @@ PRODUCER = Path(__file__).resolve().parents[4] / "benchmarks" / "pouw" / "served
 def producer() -> Any:
     """Kernels' producer module (`PRODUCER`), loaded by path: it is a benchmark's, outside this package."""
     spec = importlib.util.spec_from_file_location("served_h1_producer", PRODUCER)
+    assert spec is not None and spec.loader is not None, f"{PRODUCER} is not a file Python loads as a module"
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -1366,7 +1391,7 @@ def credit_check(h1: Any, served: Any, made: Any) -> dict[str, Any]:
     and the last step), their operands and receipts the producer's on the serving GPU; then each prover-side negative
     (`pouw_h1_credit.NEGATIVES`) at the first of them."""
     from tests.protocols import pouw_h1_credit as PC
-    from verity.protocols.pouw.verifier import credit as CR
+    from verity.protocols.accounting.pouw.verifier import credit as CR
     from verity_vllm.protocols.pouw.h1 import served as SV
     t0 = time.monotonic()
     w = PC.of_run(h1, served)
@@ -1449,9 +1474,8 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     its tree), from which its sampling coin is read (none refuses it). With `lean_answers` (a memo directory in the
     verifier's scratch) credit's verifier runs are `answers.Answers` on it: a run another step answered is taken by key,
     and its ``lean_answers`` says how many."""
-    from verity.protocols.spot.device import remote
+    from verity.protocols.proofs.spot.device import remote
 
-    from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import answers as A
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
@@ -1539,7 +1563,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--compile", action="store_true", help="compile every served shape in this process too")
     ap.add_argument("--compile-from", metavar="CALLS_JSON", help="no GPU: compile a served run's record (pouw-h1-calls.json)")
     ap.add_argument("--challenger", metavar="HOST:PORT", help="the window's salt and round coins from the auditor host's "
-                                                              "challenger (verity/composite/device/live_challenger/run.sh, SCHEME "
+                                                              "challenger (verity/protocols/compose/device/live_challenger/run.sh, SCHEME "
                                                               "verity/pouw/epoch-coins/live/v1, FAMILIES "
                                                               "pouw_h1_challenger.families(S)); else held in this process")
     ap.add_argument("--check-challenger", nargs=2, metavar=("CALLS_JSON", "CHALLENGER_DIR"),
@@ -1701,12 +1725,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.check_challenger:
         if not (a.key_sha512 and a.ledger):
             ap.error("--check-challenger needs --key-sha512 (the auditor's pin from config) and --ledger (once a head)")
-        from verity.protocols.spot.device import remote
+        from verity.protocols.proofs.spot.device import remote
         desc = gzip.decompress(Path(a.descriptor).read_bytes()) if a.descriptor else None
         main = None if a.main is None else remote.main_lines(a.main)
         statements = json.loads(Path(a.statements).read_text()) if a.statements else ()
         live = json.loads(Path(a.live_evidence).read_text()) if a.live_evidence else None
-        return 0 if check_challenger(*a.check_challenger, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
+        calls_file, directory = a.check_challenger
+        return 0 if check_challenger(calls_file, directory, a.key_sha512, a.out, a.ledger, a.window, a.period, desc,
                                      a.pins, main, statements, live, a.draw_dir, a.lean_answers)["ok"] else 1
     if not (a.at and a.by):
         ap.error("serving needs --at and --by (the pin entry's, if one is made)")

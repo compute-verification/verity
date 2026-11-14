@@ -1,7 +1,7 @@
 """FA2 with a logit soft cap on a target: the stock vllm-flash-attn `Is_softcap` kernel vLLM launches for Gemma-2, against
 `AttentionSoftcap_v2` (`registry.fa2_softcap`), the softcapped `Attention_v5` the target binds.
 
-One GPU process writes `<out>/fa2_softcap_capture.json`, the property record `fa2_softcap_capture` (`properties.record`).  `ok` = the
+One GPU process writes `<out>/fa2_softcap_capture.json`, the property record `fa2_softcap_capture` (`records.property_record`).  `ok` = the
 gate, MUFU ex2 / rcp, MUFU.TANH, every launch's tile and determinism, and every row equal to `AttentionSoftcap_v2` (which the target
 binds) on every head.  The device gate runs first and nothing else runs when it fails (exit 3):
 
@@ -43,16 +43,16 @@ from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import rows as RK
 from verity.definitions.numerics import softcap_rows as SR
-from verity.definitions.ops import mufu
+from verity.circuits.ops import mufu
 from verity.definitions.registry import b1, hopper
 from verity.definitions.registry import fa2_softcap as F2S
 from verity.definitions.registry import prims as P
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.fa_tap_exactness import PAGE
-from verity_vllm.properties.fa_tap_exactness import cases as tap_cases
-from verity_vllm.properties.record import seal as seal_record
+from tests.properties.fa_tap_exactness import PAGE
+from tests.properties.fa_tap_exactness import cases as tap_cases
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/fa2-softcap-capture/v1"
 RECORD = "fa2_softcap_capture.json"
@@ -76,7 +76,7 @@ def tanh_table() -> tuple[np.ndarray, int, dict[str, Any]]:
 
 
 def tanh_probe(work: Path, outdir: Path, ref: Path, lo: int, hi: int, sm: str) -> dict[str, Any]:
-    from verity.definitions.ops import mufu
+    from verity.circuits.ops import mufu
 
     R = mufu.MUFU_TANH_RULES
     exe = work / "tanh_probe_jit_compute_80"

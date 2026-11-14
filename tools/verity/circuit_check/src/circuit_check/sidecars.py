@@ -42,7 +42,7 @@ from . import entries as E
 
 REPO = Path(__file__).resolve().parents[5]
 #: `verity`'s packages whose modules may have a sidecar: the ones that define Definitions (`targets._authored`)
-PACKAGES = ("verity", "verity.circuits", "verity.definitions.kernels", "verity.core")
+PACKAGES = ("verity", "verity.circuits", "verity.circuits.kernels", "verity.core")
 #: the repository's directories of other distributions' packages, one directory per serving stack holding the package that
 #: attaches Verity to it.  A package there registers itself by a sidecar of its own module
 #: (``adapters/<stack>/<package>/__init__.circuit-check.py``, or its ``.json``), and then every sidecar under it is found;
@@ -78,7 +78,7 @@ def discover() -> dict[str, dict[str, Path]]:
     it has from the top of the regular packages it is in (``__init__.py`` all the way down), so a package inside another's
     tree names its own (`verity_flock`'s is inside `verity`'s).  One counts only where Python imports that top directory as
     the package of its name: a copy of a package behind a directory without ``__init__.py`` would name modules that another
-    directory owns (``verity.protocols.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
+    directory owns (``verity.protocols.proofs.flock.prover.python.verity_flock.rec_open``), and importing it registers their Definitions twice."""
     out: dict[str, dict[str, Path]] = {}
     imported: dict[Path, bool] = {}
     with CC.internal():
@@ -132,15 +132,36 @@ def binding_modules() -> list[tuple[str, ModuleType]]:
     """(module, its loaded binding file) for every sidecar that has one, by module name; each loaded once per process, after the
     registries (`targets.load_registries`)."""
     for mod, files in discover().items():
-        if "py" in files and mod not in _LOADED:
-            name = f"{mod}{SUFFIX}"
-            spec = importlib.util.spec_from_file_location(name, files["py"])
-            m = importlib.util.module_from_spec(spec)
-            sys.modules[name] = m
-            spec.loader.exec_module(m)
-            _LOADED[mod] = m
+        if "py" in files:
+            _load(mod, files["py"])
     CC.unit_files(str(files["py"]) for files in discover().values() if "py" in files)
     return [(mod, _LOADED[mod]) for mod in discover() if mod in _LOADED]
+
+
+def _load(mod: str, path: Path) -> ModuleType:
+    """``mod``'s binding file, loaded once per process by its path under the name ``<module>.circuit-check``."""
+    if mod not in _LOADED:
+        name = f"{mod}{SUFFIX}"
+        spec = importlib.util.spec_from_file_location(name, path)
+        m = importlib.util.module_from_spec(spec)
+        sys.modules[name] = m
+        spec.loader.exec_module(m)
+        _LOADED[mod] = m
+    return _LOADED[mod]
+
+
+@cache
+def _defines(path: Path) -> frozenset[str]:
+    with CC.internal():
+        return frozenset(_top_level_names(str(path)))
+
+
+def handing(name: str) -> list[tuple[str, ModuleType]]:
+    """(module, its loaded binding file) for each sidecar whose top level defines ``name``: found by reading each binding file
+    (`_top_level_names`) and loaded alone, so what a sidecar hands circuit-check is read before any module with a sidecar is
+    imported (`targets.load_registries`), and before any other binding file is loaded."""
+    return [(mod, _load(mod, files["py"])) for mod, files in discover().items()
+            if "py" in files and name in _defines(files["py"])]
 
 
 # --- pins ---------------------------------------------------------------------------------------------------------------------
@@ -247,18 +268,18 @@ _NAMED: dict[str, Any] = {}
 
 
 def composite_lift(fid: str) -> Any | None:
-    """`lifted.lift_composite` of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the lift a body calling it
-    makes, or its hand lift), whatever version the id writes; None when the id wraps no registered composite.  The on-demand
-    ``Lifted[...]`` families lift primitives only."""
+    """The lift (`targets.HOOKS`' ``lift_composite``) of the registered composite a ``Lifted[<composite>]_v<k>`` id wraps (the
+    lift a body calling it makes, or its hand lift), whatever version the id writes; None when the id wraps no registered
+    composite.  The on-demand ``Lifted[...]`` families lift primitives only."""
     from verity.circuits.defs import REGISTRY, CompositeDefinition
 
     m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fid)
     inner = REGISTRY.defs.get(m[1]) if m else None
     if not isinstance(inner, CompositeDefinition):
         return None
-    from verity.definitions.registry import lifted as L
+    from . import targets as TG
 
-    return L.lift_composite(inner)
+    return TG._handed("lift_composite")(inner)
 
 
 def named(fid: str) -> Any | None:

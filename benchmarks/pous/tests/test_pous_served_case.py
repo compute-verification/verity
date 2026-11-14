@@ -19,9 +19,9 @@ from pathlib import Path
 
 import pytest
 
-from verity.protocols.pous.device import memory_challenger as mc
-from verity.protocols.pous.verifier import streamed_wipe as sw
-from verity.protocols.pous.verifier import wipe_period as W
+from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.verifier import streamed_wipe as sw
+from verity.protocols.accounting.pous.verifier import wipe_period as W
 from verity.commitments.identity import canonical_json_bytes
 
 pytest.importorskip("torch")
@@ -174,12 +174,12 @@ def test_a_pous_window_whose_session_did_not_complete_has_no_case(served, tmp_pa
         SC.pous_piece(served.out, schemes=ts.SCHEMES, hf_home=served.hf, device="cpu", pins=served.pins)
 
 
-def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_bits: int = W.UNCOUNTED) -> tuple[Path, Path, W.Wipe]:
+def _wipe_window(tmp_path: Path, *, protocol: str = WIPE_ID, egress_mib: int | None = None) -> tuple[Path, Path, W.Wipe]:
     """A served wipe's public directory as `served_wipe.sh` leaves it, and the serve dir its ``served.json`` names."""
     w = W.run("n0", SMALL_WIPE, signer=ts.TestSigner(b"served case wipe", 2, directory=tmp_path),
               log=ts.session_log(tmp_path), schemes=ts.SCHEMES,
               protocol=protocol, clock=iter(range(10 ** 9, 10 ** 12)).__next__, coin_secret=b"coins",
-              egress_bits=egress_bits)
+              egress_mib=egress_mib)
     assert w.verdict == "accept", w.answer
     serve, window = tmp_path / "serve", tmp_path / "pieces" / "wipe"
     window.mkdir(parents=True)
@@ -215,14 +215,25 @@ def test_the_wipe_case_kept_privately_is_the_one_read(tmp_path):
 
 def test_a_tampered_wipe_case_is_refused(tmp_path):
     """Another commitment is another digest than the answer's; a signed session changed after the challenger signed it
-    is rejected, not as the run answered; a case that is not what its own parts make is refused."""
+    is rejected, not as the run answered; another egress in the evidence is another answer than the run's; evidence in
+    an earlier format (a signed egress, no egress beside the session) doesn't decode; a case that is not what its own
+    parts make is refused."""
     window, serve, w = _wipe_window(tmp_path)
-    c = _hexjson(w.case["commitment"])
+    c, ev = _hexjson(w.case["commitment"]), _hexjson(w.case["evidence"])
+    assert ev["egress_mib"] is None and "egress_bits" not in ev["signed"]
     for name, case, reason in [
         ("commitment", w.case | {"commitment": _rehex(c | {"session": "44" * 32})},
          "the answer's commitment is not the digest"),
-        ("evidence", w.case | {"evidence": _rehex({"signed": _hexjson(w.case["evidence"])["signed"] | {"egress_bits": 7}})},
+        ("evidence", w.case | {"evidence": _rehex(ev | {"signed": ev["signed"] | {
+            "fill_start_ns": ev["signed"]["fill_start_ns"] - 1}})}, "the wipe protocol answers the case reject"),
+        ("egress", w.case | {"evidence": _rehex(ev | {"egress_mib": 0})}, "the wipe protocol answers the case accept"),
+        ("egress out of range", w.case | {"evidence": _rehex(ev | {"egress_mib": -1})},
          "the wipe protocol answers the case reject"),
+        ("egress no integer", w.case | {"evidence": _rehex(ev | {"egress_mib": True})}, "null or an integer of MiB"),
+        ("signed egress", w.case | {"evidence": _rehex({"signed": ev["signed"] | {"egress_bits": 7}})},
+         "the wipe's case doesn't decode"),
+        ("signed egress beside", w.case | {"evidence": _rehex(ev | {"signed": ev["signed"] | {"egress_bits": 7}})},
+         "is not the one its decoded commitment"),
         ("params", w.case | {"params": w.case["params"] | {"extra": 1}}, "is not the one its decoded commitment"),
     ]:
         (window / "wipe.case.json").write_text(json.dumps(case))

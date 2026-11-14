@@ -15,10 +15,10 @@ Standard library and `verity_config` only: the node side reads it too.
     setup = "..."         # a script of the tree the launcher sources: it builds the prover and names it and its Python
     [env]                 # variables the point's run is given
     [admission]           # max_minutes: the run's bound, its slot's and its lease's; mem_gb: the lease's host memory
-    [[row]]               # a block type
+    [[row]]               # a block type at one statement size
     type = "..."          # the stager's word for it (`benchmarks/served_units/stage.py`)
-    n = 1                 # the units of its full statement
-    pin = "..."           # the SHA-512 of the statement's circuit: another circuit takes no GPU time
+    n = 1                 # the units of its statement, the proof blocks it holds: its full statement's, or a part's
+    pin = "..."           # the SHA-512 of the block's circuit: another circuit takes no GPU time
     provers = [1, 2, 4]   # a point a count
     warm = 2              # warm sessions a prover, before any timed one
     period = 4            # optional: the sessions a prover's filings repeat over, where they file in bursts
@@ -47,9 +47,14 @@ directory on the node, which the node side copies, or a directory of an artifact
 fetches into its scratch with the read-only key the launch gives such a point's run. Either copy is held to the row's
 `pin` and `n` like a statement staged in the run, and goes with the scratch.
 
-**A passed point** (`point_why`): a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and
-that passes `steady`'s ten checks against the files of the run that measured it. A row of a run of the point itself
-also holds the point's load (its timed and warm sessions, its period) and the versions read on the node.
+**A type at several sizes**: two rows may name one `type` at two `n`, a full statement and a part of one (a quarter),
+whose `pin` is the same: the pin is the block circuit's, not the statement's. A point's id is `NAME-kK`, and
+`NAME-nN-kK` for each row of a type the spec names at more than one `n`.
+
+**A passed point** (`point_why`): a row whose `pin`, statement blocks (`row_blocks`), `provers` and `cores.count` are
+the point's and its spec's, and that passes `steady`'s ten checks against the files of the run that measured it. A row
+of a run of the point itself also holds the point's load (its timed and warm sessions, its period) and the versions
+read on the node.
 """
 
 from __future__ import annotations
@@ -70,7 +75,7 @@ from verity_bench.vllm.presets import ENV_NAME, GPUS, RESERVED_ENV, SOURCE_ROOT,
 SCHEMA = "verity-bench/steady-spec/v0"
 #: what a point's time depends on in the tree, beside its spec's setup: the prover (its sources, its patches of
 #: upstream and its Python, which drives the provers), the scripts that build it, and the script that times it
-CLOSURE = ("verity/protocols/flock/prover", "verity/protocols/flock/pod", "benchmarks/one_stage/server_rate.py")
+CLOSURE = ("verity/protocols/proofs/flock/prover", "verity/protocols/proofs/flock/prover/pod", "benchmarks/one_stage/server_rate.py")
 #: what of `CLOSURE`'s directories is no source: tests, documents and the interpreter's caches
 NOT_SOURCE = re.compile(r"(^|/)(tests|__pycache__)/|\.(md|pyc)$")
 #: the row's field for the versions the node side read on the node: the driver's (`driver`) and the toolkit's
@@ -139,21 +144,25 @@ class SteadySpec:
     def points(self) -> tuple[SteadyPoint, ...]:
         """Each row at each of its prover counts, in the spec's order."""
 
-        return tuple(SteadyPoint(row, provers, timed_sessions(self.sessions, provers, row.period))
+        names = [row.name for row in self.row]
+        return tuple(SteadyPoint(row, provers, timed_sessions(self.sessions, provers, row.period),
+                                 sized=names.count(row.name) > 1)
                      for row in self.row for provers in row.provers)
 
 
 @dataclass(frozen=True)
 class SteadyPoint:
-    """One row of a spec at one prover count, with the sessions it times (`timed_sessions`)."""
+    """One row of a spec at one prover count, with the sessions it times (`timed_sessions`). `sized`: the spec names
+    the row's type at more than one `n`, so the point's id says its `n`."""
 
     row: SteadyRow
     provers: int
     sessions: int
+    sized: bool = False
 
     @property
     def id(self) -> str:
-        return f"{self.row.name}-k{self.provers}"
+        return f"{self.row.name}-n{self.row.n}-k{self.provers}" if self.sized else f"{self.row.name}-k{self.provers}"
 
     def to_json(self) -> dict[str, Any]:
         row = self.row
@@ -248,9 +257,10 @@ def load_spec(source: str | Path, *, root: Path = SOURCE_ROOT) -> SteadySpec:
             raise ConfigError(f"{where}: `staged` {row.staged!r} isn't an absolute path on the node, nor a directory "
                               "of an artifact in the store (`art:` and the artifact's 64 hexadecimal digits, `/`, the "
                               "directory)")
-    names = [row.name for row in spec.row]
-    if twice := sorted({name for name in names if names.count(name) > 1}):
-        raise ConfigError(f"{path}: two rows are named {', '.join(twice)} in the rate file: a block type is one row")
+    sizes = [(row.name, row.n) for row in spec.row]
+    if twice := sorted({f"{name} at n = {n}" for name, n in sizes if sizes.count((name, n)) > 1}):
+        raise ConfigError(f"{path}: two rows are named {', '.join(twice)} in the rate file: a block type at one statement "
+                          "size is one row")
     return spec
 
 
@@ -329,21 +339,48 @@ def own_row(files: steady.Files, item: SteadyPoint) -> Mapping[str, Any] | str:
     if isinstance(found, str):
         return found
     mine = [row for row in found if row.get("type") == item.row.name and row.get("provers") == item.provers]
+    sized = ""
+    if len(mine) > 1:
+        mine, sized = [row for row in mine if row_blocks(row) == item.row.n], f" of {item.row.n} blocks"
     if len(mine) != 1:
-        return (f"{steady.CANNOT_TELL}: the run's `{steady.RATES}` holds {len(mine)} rows of `{item.row.name}` at "
+        return (f"{steady.CANNOT_TELL}: the run's `{steady.RATES}` holds {len(mine)} rows of `{item.row.name}`{sized} at "
                 f"{item.provers} provers")
     return mine[0]
 
 
+def row_blocks(row: Mapping[str, Any]) -> int | str:
+    """The proof blocks of the statement a row timed, or why the row doesn't say them: its `n` and its `stage.blocks`,
+    which `TIMER` writes alike from the staged statement (a row from before it wrote `stage.blocks` holds `n` alone).
+    A row that holds both as counts that differ says no one count."""
+
+    stage = row.get("stage")
+    said = {"n": row.get("n"), "stage.blocks": stage.get("blocks") if isinstance(stage, Mapping) else None}
+    said = {name: value for name, value in said.items() if value is not None}
+    if not said:
+        return f"its row doesn't say its statement's blocks (`n`, `stage.blocks`, which {TIMER} writes)"
+    first = next(iter(said.values()))
+    if isinstance(first, int) and not isinstance(first, bool) and first > 0 and all(
+            value == first and type(value) is int for value in said.values()):
+        return first
+    return ("its row's " + " and ".join(f"`{name}` ({value!r})" for name, value in said.items())
+            + f" {'is' if len(said) == 1 else 'are'}n't one count of its statement's blocks")
+
+
 def point_why(row: Mapping[str, Any], files: steady.Files, spec: SteadySpec, item: SteadyPoint, *,
               own: bool = False) -> str | None:
-    """Why a row of a run isn't a passed point of the spec, or None when it is one: its `pin`, `provers` and
-    `cores.count` are the point's, and it passes the ten checks against the run's `files`. `own`: the row is a run of
-    the point's own identity, so it also holds the point's load (its timed and warm sessions, its period) and the
-    versions the node side read, the spec's."""
+    """Why a row of a run isn't a passed point of the spec, or None when it is one: its `pin`, its statement's blocks
+    (`row_blocks`, the row's `n`), `provers` and `cores.count` are the point's, and it passes the ten checks against the
+    run's `files`. The blocks tell a part of a statement from the full one: both are one circuit, one `pin`. `own`: the
+    row is a run of the point's own identity, so it also holds the point's load (its timed and warm sessions, its
+    period) and the versions the node side read, the spec's."""
 
     if row.get("pin") != item.row.pin:
         return f"{steady.FAIL}: its `pin` is another circuit's ({str(row.get('pin'))[:16]}...)"
+    blocks = row_blocks(row)
+    if isinstance(blocks, str):
+        return f"{steady.CANNOT_TELL}: {blocks}"
+    if blocks != item.row.n:
+        return f"{steady.FAIL}: its statement holds {blocks} blocks; the point's `n` is {item.row.n}"
     if row.get("provers") != item.provers:
         return f"{steady.FAIL}: its row is at {row.get('provers')!r} provers"
     cores = row.get("cores")

@@ -1,4 +1,4 @@
-"""warden-serve: the active warden (`verity.protocols.certifier.verifier.warden`) on one host, a relay in front of any TCP
+"""warden-serve: the active warden (`verity.protocols.accounting.certifier.verifier.warden`) on one host, a relay in front of any TCP
 server, and the offline check of what it published.
 
 **Topology.** Each client connection reaches the network certifier's listener. The network certifier opens one
@@ -23,14 +23,14 @@ its own, which it never reads; `warden.json` keeps its last line, the lost relea
 
 **What it can't enforce here.**
 - Run directly, the network certifier runs on the server's host (`trusted-host` stands for the auditor's host). The
-  gate's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
+  gate's `warden-rehearse` (`verity/protocols/compose/device/live_challenger/auditor.py`) runs it on the auditor's host instead, the server
   reached through an ssh tunnel to the peer's loopback. Either way the server's host can reach anyone by any other
   route, which nothing here sees.
 - TLS is not terminated: both legs are plain TCP.
 - The rehearsal's client is on the same host, so its link is loopback, and its arrival times are read on the network
   certifier's host clock (`origin_unix`).
 - The keys are LMS at H = `cs.HEIGHT` (2^10 one-time keys) unless `--height` says otherwise, where the deployed key's
-  is H = 20 (the auditor gate's default, `verity/composite/device/live_challenger/auditor.py`).
+  is H = 20 (the auditor gate's default, `verity/protocols/compose/device/live_challenger/auditor.py`).
 
 **Traffic** (`traffic`, `varied_traffic`): varied, as `certifier_serve`'s: Poisson arrivals at `--rate` a second,
 prompts of 16–1024 tokens (log-uniform; words at 0.75 a token, so approximately), `max_tokens` of 16 … `--max-tokens`
@@ -109,7 +109,9 @@ session (`check_load`) at the relay's roots.
 
 **The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1|2 [--content P,O[,ROWS] ...]`,
 the schedule's lengths rows and its content rows' classes (`P,O,ROWS` under `--lengths 1`, `P,O` under `--lengths 2`,
-where a class's tables hold a row a release filed in it), which `rehearse` passes to its `serve`; without them a
+where a class's tables hold a row a release filed in it), and with `--lengths 2`, `--content` and `--max-tokens-cap`
+`--request-words`, a fourth table a class of what the network certifier reads of each released request (its
+`max_tokens` and count of prompt ids), which `rehearse` passes to its `serve`; without them a
 run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
 `rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has
@@ -152,12 +154,12 @@ import certifier_serve as cs
 import connection_rows_run as crr
 import load_relay as lr
 import stall_probe
-from verity.protocols.certifier.verifier import io_tie as IT, warden_rows as WR
-from verity.protocols.certifier.verifier.active import DATA, PAD, id_request
-from verity.protocols.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
-from verity.protocols.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
-from verity.protocols.certifier.verifier.release import WATERMARK_PATH
-from verity.protocols.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
+from verity.protocols.accounting.certifier.verifier import io_tie as IT, warden_rows as WR
+from verity.protocols.accounting.certifier.verifier.active import DATA, PAD, id_request
+from verity.protocols.accounting.certifier.verifier.certificate import CertifiedRecord, Direction, Issuer, LmsKey, record_head
+from verity.protocols.accounting.certifier.verifier.grid import GridParams, BlockGrid, Status, row_count
+from verity.protocols.accounting.certifier.verifier.release import WATERMARK_PATH
+from verity.protocols.accounting.certifier.verifier.warden import (EGRESS_FORMS, END, FAIL, INTEGER_FIELDS, REFUSED, Shim, Warden,
                                                     WardenParams, audit, cells)
 
 HERE = Path(__file__).resolve().parent

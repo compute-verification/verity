@@ -419,7 +419,7 @@ def _cut_pending(i: int, verify_below: int, jobs: int = 1) -> dict[str, Any]:
 
 class Units:
     """Q_word{X=16} units per activation of each Definition: a unit rule cached under the Definition's content digest
-    (`verity.definitions.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
+    (`verity.circuits.word`'s rule directories, whose cut code is core's `cut_word`, or this tool's JSONL `log`), else cut by
     `lean_units` in `jobs` forked processes, largest first, each result appended to `log` as it lands.  A Definition of at most
     `verify_below` gates is also cut by the reference (`evaluate_definition`, `CallGraph`); `recut` recuts cached ones too.
     Any disagreement is listed in `summary()["mismatches"]`."""
@@ -448,7 +448,7 @@ class Units:
 
     def of(self, fns: dict[str, Any]) -> dict[str, int]:
         """name -> units per activation of `fns[name]`."""
-        from verity.definitions.word import closure_digest
+        from verity.circuits.word import closure_digest
         digest = {fn.id: closure_digest(fn) for fn in fns.values()}
         by_id: dict[str, int] = {}
         todo: dict[str, Any] = {}
@@ -776,7 +776,7 @@ def analyze_served(build: dict[str, Any], *, units: Units | bool = False, ignore
     with it (the Build doesn't record the sampling), so no stop happens and both counts are what one would key."""
     from verity.circuits.codec import encode_program
     from verity.circuits.program import Program
-    from verity.definitions.call_scope import specialization
+    from verity_vllm.query.program_view import specialization
 
     P = build["program"]
     width = {k: int(v["width"]) for k, v in P["values"].items()}
@@ -1025,7 +1025,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--out", required=True)
     for x in (d, s):
         x.add_argument("--rules", action="append", default=[], metavar="PATH",
-                       help="cached unit rules: a `verity.definitions.word` rule directory or a --units-log JSONL (repeatable)")
+                       help="cached unit rules: a `verity.circuits.word` rule directory or a --units-log JSONL (repeatable)")
         x.add_argument("--units-log", default=None, help="append each Definition's cut here (JSONL) as it lands")
         x.add_argument("--jobs", type=int, default=1, help="forked processes cutting Definitions, largest first")
         x.add_argument("--verify-below", type=int, default=0, metavar="GATES",

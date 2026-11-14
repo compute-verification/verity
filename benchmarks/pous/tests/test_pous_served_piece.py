@@ -30,12 +30,12 @@ from pathlib import Path
 import pytest
 
 from verity.runtime.stream import Side
-from verity.protocols.pous.device import challenger_party as CP
-from verity.protocols.pous.device import challenger_session as CS
-from verity.protocols.pous.device import memory_challenger as mc
-from verity.protocols.pous.verifier import period
-from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
-from verity.protocols.poub.verifier import ledger, p2_case, p2_lean
+from verity.protocols.accounting.pous.device import challenger_party as CP
+from verity.protocols.accounting.pous.device import challenger_session as CS
+from verity.protocols.accounting.pous.device import memory_challenger as mc
+from verity.protocols.accounting.pous.verifier import period
+from verity.protocols.accounting.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.accounting.poub.verifier import ledger, p2_case, p2_lean
 from verity.commitments import advice
 from verity.commitments.identity import canonical_json_bytes
 
@@ -67,8 +67,8 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
 BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 
@@ -448,7 +448,7 @@ def _script(directory: Path, name: str, body: str) -> Path:
 def run_exe(tmp_path_factory) -> Path:
     """`pous-run-protocol`, built in the run protocol's package, behind a script of its name that runs it under
     ``--test``: the protocol of the test signers' schemes, which the deployed one refuses."""
-    real = _built(ROOT / "verity" / "protocols" / "pous" / "verifier" / "check", RUN_EXE)
+    real = _built(ROOT / "verity" / "protocols" / "accounting" / "pous" / "verifier" / "check", RUN_EXE)
     return _script(tmp_path_factory.mktemp("lean"), RUN_EXE, f'exec {real} --test "$@"\n')
 
 
@@ -523,7 +523,7 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
     site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps
     as ``record`` has it, and a short session, which a toy party's flags hold it to."""
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.poub.verifier.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.accounting.poub.verifier.p2_party "
              f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
              f"--windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
     auditor = Auditor(tmp_path, keep=tmp_path / "parties" / "pous", record=record, draw=lambda n: SOURCE[:n])
@@ -582,7 +582,9 @@ def test_the_bandwidth_session_is_over_the_store_pous_held_its_case_private_and_
                     for k, v in SP.HB.p2_party.SESSION.items())
     assert lean == own | {"profile": None, "public": None, "reason": f"the request is refused: {why}", "verdict": "reject"}
     assert own["commitment"] == p2_case.digest(case).hex() and own["profile"]["units"] == 2
-    assert _jsonl(tmp_path / "parties" / "bw" / "private" / "cases.jsonl") == [case]
+    kept = tmp_path / "parties" / "bw" / "private"
+    assert (kept / SP.HB.p2_party.CASE_DIGESTS).read_text().splitlines() == [SP.HB.p2_party.case_digest(case)]
+    assert sorted(p.name for p in kept.iterdir()) == [SP.HB.p2_party.CASE_DIGESTS]
     assert _jsonl(tmp_path / "parties" / "bw" / "answers.jsonl")[-1]["verdict"] == "accept"
 
     assert {k: v for k, v in bw["public"].items() if k not in ("gamma", "r_bytes_per_s")} == own["public"]

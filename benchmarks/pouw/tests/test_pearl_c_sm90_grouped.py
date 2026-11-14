@@ -16,9 +16,9 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier.audit import weights_root  # noqa: E402
-from verity.protocols.pouw.verifier.coins import Challenger  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.audit import weights_root  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.coins import Challenger  # noqa: E402
+from verity.protocols.accounting.pouw.verifier.protocol import Matmul, Shape  # noqa: E402
 from verity_vllm.protocols.pouw import pearl_c as PPD  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import grouped as PG  # noqa: E402
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY  # noqa: E402
@@ -267,7 +267,7 @@ def device_run(experts: int, n: int = 128, k: int = 1024, retain=None, schedule=
     rng = np.random.default_rng(5)
     weights = {w: torch.from_numpy((rng.standard_normal((n, k)).astype(np.float32) * 0.05)).to(torch.bfloat16)
                for w in range(experts)}
-    kernel = PPD.Kernel(R, F, dev or RecordingDev(), "0" * 64)
+    kernel = PPD.Kernel(R, dev or RecordingDev(), "0" * 64)
     roots = PPD.weight_roots(kernel, weights, SCHEME, salt_key=SALT_KEY)
     ch = Challenger(0, np.random.default_rng(7).bytes)
     coins = ch.commitment, ch.open("salt", weights_root(roots))

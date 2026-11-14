@@ -87,14 +87,14 @@ from typing import Any, Callable, NamedTuple, Sequence
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.forms import const_bits
 from verity.circuits.boolean.trace import word_of
-from verity.definitions.circuits.census import silicon_step
+from verity.circuits.census import silicon_step
 from verity.circuits.defs import CompositeDefinition, bind
-from verity.definitions.ops import fp32 as F
-from verity.definitions.ops import gemm as G
-from verity.definitions.ops import prims as P
-from verity.definitions.ops.boolean import cast as BCAST
-from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.ops.boolean import gemm as BG
+from verity.circuits.ops import fp32 as F
+from verity.circuits.ops import gemm as G
+from verity.circuits.ops import prims as P
+from verity.circuits.ops.boolean import cast as BCAST
+from verity.circuits.ops.boolean import elementwise as EW
+from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.refs import Coll, array_of, broadcast, concat
 from verity.circuits.types import Array, Type
 from verity.definitions.evidence import EVIDENCE

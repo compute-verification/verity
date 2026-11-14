@@ -3,12 +3,13 @@
 Recursive witness zero knowledge proves an inner statement with Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
 proves V*, the inner verifier written as Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
 releases only. This is the one runner for that pipeline. It drives the steps of the pod script,
-`verity/protocols/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
-N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut
+`verity/protocols/proofs/flock/prover/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
+N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof), whether its parts
+passed, and whether it was accepted: Lean composed V*'s parts into the recursive statement and accepted it. Speed work measures each cut
 before and after with it.
 
 This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
-`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/flock/pod/88-rec-c3-inner.sh`; this runner doesn't
+`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/proofs/flock/prover/pod/88-rec-c3-inner.sh`; this runner doesn't
 time it yet.
 
 ~~~text
@@ -101,12 +102,21 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   table part over it (`rec_vstage stage-links`: `links`, the table registered as V*'s value `rec-links`, and the forgery
   `forged-link`, a table whose first row names a writer whose output is not its reader's row), oprove proves both beside
   the other statements, and `rec-inner`, every verify and `rec-compose` read the table's `--rec-links ROOT:N`. Lean's
-  `verify` and `statement` refuse `--rec-links` (`RecLinks.refuseLinks`), and `rec-compose` refuses it (`NO_LINKS`),
-  until a guarantee covers the table, so such a run's lean step refuses every part. `--max-min` budgets the link
+  `verify`, `statement` and `rec-compose` read it too (`RecLinkTree.linksArg`): V*'s link part (`RecLinkPart.check`)
+  holds every row of the table to the inner statement's, and `rec-compose` requires every part to name the composition's
+  table, so the lean step judges the link part and `forged-link` like any other part. `--max-min` budgets the link
   part's releases and its forgery's each as the largest measured statement's (`max_min` in `run.py`).
 - **The verdict** (`headline` in the result, the table's first line): `complete` when every step that one recursive
-  run needs ran (build, inner, vstage, vcap, oprove, lean). `ok` when, in addition, every invocation exited 0, every
-  honest verdict accepted, every flipped coin and every forgery was refused. A merged table's verdict is only as whole as its runs.
+  run needs ran (build, inner, vstage, vcap, oprove, lean). `parts_ok` when, in addition, every invocation exited 0, every
+  honest verdict accepted, every flipped coin and every forgery was refused. `composed` when Lean composed V*'s parts
+  into the recursive statement, which the lean step records beside its logs (`lean/rec-compose.json`): it composes only
+  a run of every V* part whose challenger kept its record of the run, as the default modes do with one session a
+  statement behind the ZK server, so a `dev` or `host` run, or one of some of `LEVELS`, exits 0 on its parts and is not
+  composed. `ok`, an accepted recursive run, only when its parts passed and Lean accepted the composition. For a run
+  that passed on its parts and was not composed, the table's first line says so, with the oprove modes and the reason,
+  and the `compose` row has no verdict. A run whose composition Lean refused is not accepted, and the line gives
+  Lean's reason (`refused`): a forced retry's (`RETRY`) starts with the retry. A merged table's verdict is only as
+  whole as its runs.
 - **Data.** the pod script's staged statements and runs go under `$FLOCK_WORK/data/rb-<run id>` and are removed at the end unless
   `--env KEEP_DATA=1`. A later run takes them with `--env TAG=rb-<run id> --env KEEP_DATA=1 --steps oprove,...`. Runs on
   one TAG must not overlap oprove and lean, because both use `data/$TAG/v-sess`.

@@ -239,7 +239,7 @@ def template(t: str) -> Template:
     from verity.circuits.codec import descriptor_id
     from verity.circuits.defs import CompositeDefinition, bind
     from verity.definitions import boolean as BB
-    from verity.definitions.call_scope import specialization
+    from verity.circuits.call_scope import specialization
     from verity_vllm.query.program_view import spec_base, spec_statics
 
     # registers EmbeddingRead_v1, a read's and a READ static's Definition, which BB.load does not
@@ -525,6 +525,25 @@ def fused_block(spec: str, n: int) -> Any:
 def block_rows(N: int, G: int) -> list[int]:
     """The rows n of an ``EXPERTS`` row's blocks: each power of two that divides N and G, so a block's rows are one G-block's."""
     return [1 << j for j in range(G.bit_length()) if G % (1 << j) == 0 and N % (1 << j) == 0]
+
+
+#: the most u16 words of a row of an embedding shard's tables (`shard_block`).  A key's tables are at the widths this gives,
+#: so another value is another nonce scheme: `expert_tables.NONCES` changes with it, and a key minted for this one is refused
+SHARD_ROW = 256
+
+
+def shard_block(H: int) -> int:
+    """The one width, in u16 words, an ``EmbeddingShard_v1`` row of H columns is read at and its tables are registered at: the
+    widest H / 2^k of at most `SHARD_ROW` words, a column block of the row a ``READ`` keyed by the token over a table of the
+    whole vocabulary (`expert_rows.shard_param`).  It is a function of H alone, so a field has one width and nothing asks for a
+    second: a table's nonce is its field's place and its block (`expert_tables.nonces`), and a second width of the field would
+    sample the first's salts."""
+    w = int(H)
+    while w > SHARD_ROW and w % 2 == 0:
+        w //= 2
+    if not 1 <= w <= SHARD_ROW:
+        raise ValueError(f"an embedding shard of {H} columns: no H / 2^k of at most {SHARD_ROW} words")
+    return w
 
 
 def _bind(spec: str, family: str | None = None, **over: Any) -> Any:

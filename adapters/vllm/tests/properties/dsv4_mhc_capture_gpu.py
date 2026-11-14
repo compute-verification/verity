@@ -4,7 +4,7 @@ DeepSeek-V4-Pro's statics on one TP8 rank (mHC is replicated: each rank runs it 
 the TF32 wgmma step DeepGEMM's `tf32_hc_prenorm_gemm` issues (`HopperTf32WgmmaDot8_v1`; core's instruction catalog has no
 core-owned model for it).
 
-One GPU process writes `<out>/dsv4_mhc_capture.json`, the property record `dsv4_mhc_capture` (`properties.record`), and
+One GPU process writes `<out>/dsv4_mhc_capture.json`, the property record `dsv4_mhc_capture` (`records.property_record`), and
 TileLang's generated CUDA of the mHC kernels under `<out>/cuda/`; it prints one line per phase, a `DSV4-MHC TF32` line, then
 `DSV4-MHC-CAPTURE GO` or `NO-GO`.  `ok` (GO) = every check below.  The device gate runs first and nothing else runs when it fails
 (exit 3).  vLLM's mHC wrappers run as DeepSeek-V4-Pro's decoder layer calls them (deepseek_v4/nvidia/model.py:1186-1267, 1471),
@@ -87,11 +87,11 @@ from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import mhc_twin as W
 from verity.definitions.registry import mhc as R
-from verity.definitions.silicon.models import GroupSum
+from verity.circuits.silicon.models import GroupSum
 
 from tests.properties import fa2_target_capture_gpu as C
 from tests.properties import fa_tap_exactness_gpu as G
-from verity_vllm.properties.record import seal as seal_record
+from verity_vllm.records.property_record import seal as seal_record
 
 SCHEMA = "verity-vllm/dsv4-mhc-capture/v1"
 RECORD = "dsv4_mhc_capture.json"
@@ -478,7 +478,7 @@ def phase_mufu(work: Path) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """The tables and sweeps on this GPU (module docstring); the expf sweep's words go to comparison jobs."""
     import torch
 
-    from verity.definitions.ops import mufu as MU
+    from verity.circuits.ops import mufu as MU
     from verity.definitions.numerics import derived_rows as DR
 
     x = mufu_inputs()

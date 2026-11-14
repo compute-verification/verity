@@ -1,9 +1,9 @@
-"""The Commit, sampled proofs' commitment of every served value, as experimental arms: a spec names
+"""The Commit, SPOT's commitment of every served value, as experimental arms: a spec names
 ``verity_bench.vllm.commit_arm:COMMIT`` (``commit``, eager) or ``verity_bench.vllm.commit_arm:COMMIT_COMPILED``
 (``commit@compiled``, at vLLM's compiled serving defaults) in ``arm_modules`` and the arm's id in ``arms``.
 
-``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where sampled
-proofs refuses (`protocol_options.spot.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
+``sampled-proofs:rows-sha512`` can't be a protocol arm: `verity_vllm.LLM` builds its options at stage ``serve``, where SPOT
+refuses (`protocol_options.spot.refusals`: it runs in a row's Commit phase). So these arms install the Commit's
 committer on the served engine themselves, configured as a row's Commit phase runs it (`config.CommitConfig`,
 `pipeline.commit.make_committer`): ``native_collect_v2b`` (gather windows, size-adaptive blocks, native worker, GPU tree, fast
 copy) over a ring of 8 x 256 MiB device windows, with bounded learning, under the committer's default scheme, which each arm
@@ -78,7 +78,7 @@ def host_memory(root: Path = CGROUP_ROOT, self_cgroup: Path = Path("/proc/self/c
 
 def committer_engine(llm: Any) -> SimpleNamespace:
     """The engine `NativeCollectCommitter` takes (as `verity_vllm.engine.build.Engine`), from the public names of the
-    harness's ``target.engine`` (``verity_vllm.LLM``, or for a local checkpoint the runner's stand-in, which has no pin):
+    harness's ``target.engine`` (``verity_vllm.LLM``, or for a local checkpoint the harness's stand-in, which has no pin):
     the ``vllm.LLM``, its in-process model runner, the served model, and the checkpoint's repo and revision (into its
     geometry digest), which are the pin's, or for a local checkpoint vLLM's model path with no revision."""
     from verity_vllm.engine import handle

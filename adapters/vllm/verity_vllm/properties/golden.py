@@ -11,7 +11,7 @@ canonical digest.  Additive specializations leave both unchanged; anything else 
 versioned migration (a new corpus entry recorded by the integrator with the decision id), never a silent edit.
 
 Corpus manifest: `verity_vllm/properties/golden/corpus.json`.  Logs live under `data/logs/`, registered fixtures
-(`fixtures/artifacts.json`) that `check` fetches where they are not.
+(`artifacts.json`) that `check` fetches where they are not.
 """
 from __future__ import annotations
 
@@ -27,7 +27,7 @@ from typing import Any
 
 from verity_vllm.config import ROOT as REPO
 from verity_vllm.config import UsageError, option
-from verity_vllm.properties.record import REGISTRY, seal
+from verity_vllm.records.property_record import REGISTRY, seal
 
 CORPUS = Path(__file__).resolve().parent / "golden" / "corpus.json"
 

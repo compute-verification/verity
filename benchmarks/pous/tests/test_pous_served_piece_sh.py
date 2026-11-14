@@ -10,13 +10,14 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = ROOT / "benchmarks" / "pous" / "served_piece.sh"
-CHECK, AUDIT = "verity/protocols/pous/verifier/check", "verity/protocols/poub/verifier/lean"
+CHECK, AUDIT = "verity/protocols/accounting/pous/verifier/check", "verity/protocols/accounting/poub/verifier/lean"
 RUN_EXE, BW_EXE = "pous-run-protocol", "remote-audit-p2-protocol"
 
 LAKE = """#!/usr/bin/env bash
@@ -143,6 +144,24 @@ def test_the_composed_run_gives_the_piece_time_for_its_leans(tmp_path, env, want
                           'exec env'], env={"PATH": os.defpath, "HOME": str(home), "TREE": str(tree)} | env,
                          check=True, capture_output=True, text=True).stdout.splitlines()
     assert [line for line in got if line.startswith("POUS_TIMEOUT=")] == ([f"POUS_TIMEOUT={want}"] if want else [])
+
+
+@pytest.mark.parametrize("repo, revision, rc", [
+    ("verity-int8/Llama-3.2-1B-INT8", "15b0976d400d796ee589e7737d03a919526bf800", 0),
+    ("verity-int8/Llama-3.2-1B-INT8", "0" * 40, 3),
+    ("nobody/no-model", "0" * 40, 3),
+])
+def test_the_preflight_asks_the_piece_itself_whether_it_pins_a_checkpoint(tmp_path, repo, revision, rc):
+    """`onsite_pous_pins REPO REVISION` is served_verdicts.sh's preflight question, answered by the piece's own lookup
+    (served_piece.py's `_pin` over its `PINS`) and by no list of its own: 0 for a checkpoint the piece pins at that
+    revision, 3 with the piece's refusal for one it doesn't, before a run serves a window the piece would then not
+    answer. It runs as the piece does, here under this suite's Python."""
+    got = subprocess.run(["bash", "-uc", f'. {SCRIPT.parent / "onsite_pieces.sh"}; onsite_pous_pins "$1" "$2"', "_",
+                          repo, revision], env={"PATH": os.defpath, "HOME": str(tmp_path), "TREE": str(ROOT),
+                                                "PY": sys.executable},
+                         check=False, capture_output=True, text=True)
+    assert got.returncode == rc, got.stderr[-600:]
+    assert (got.stdout == "") if rc == 0 else (f"{repo}@{revision}" in got.stdout and got.stdout.count("\n") == 1)
 
 
 def test_the_scratch_copy_holds_every_package_the_two_leans_require():
