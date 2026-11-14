@@ -2584,6 +2584,11 @@
         "benchmarks/pouw/pearl_c_sm90/h200.sh": "benchmarks/pouw/pearl_c_sm90/h200.sh",
         "benchmarks/pouw/harness/ieee_pin.cu": "verity/protocols/accounting/pouw/prover/ieee_pin.cu"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pouw/tests/fixtures/sass_gate/": "verity/protocols/accounting/pouw/prover/tests/fixtures/sass_gate/"
+      }
     }
   ]
 }
