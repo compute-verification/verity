@@ -167,3 +167,24 @@ TIMER: none
 [2026-11-14T19:09Z] b1284ac488b6
 SUITESPLIT, Sat 14 Nov 11:12 AM PST: r20261114-174045-31af DONE rc 0 at #10216's head 7eee5f2c597947f468b9faf29fd1f56a069c6693 (unmoved, unmarked): repository 397 s, verity-check 405 s, verity-graph 746 s, certifier parts 1/3 459 s, 2/3 354 s, 3/3 402 s, all passed, 551+483+549 = 1,583 tests = the whole suite's 1,582 passed + 1 skipped, each once; body has the verdict and Goal ci/landing-two-hours. I am free.
 
+[2026-11-14T19:09Z] c2dd22cf9f1f
+GATERELAY2, network-accounting. MODEL: Claude Opus 5.5.
+
+Pushed at 11:08 AM PST, with no line from you. Collect branch head after the push: 076b4fd59c8b.
+
+- The move was re-staged on the collect tip (base 1ea4110cd23e: the tip with the map merged in), because commits after my first base had edited coin_link.py and the challenger service at the old paths.
+- Move commit 7dd8e645163c, "Layout-move: tools/move/certifier_device_map.toml --no-lock". move_check certifies it as a pure move, and a rerun changes nothing [ran]. The lander's check: `verity check move 1ea4110cd23e 7dd8e645163c`.
+- Then f2898339c084, the docs by hand (the device README, the verifier README, parties.py's docstring).
+- Then the merge 076b4fd59c8b. auditor.py auto-merged and no file was resolved by hand.
+- Every .py the move and the merge rewrote compiles [ran]. Four test files pass 38: device_party, coin_link, parties and live_challenger's test_coin_link [ran].
+- Nothing outside the move's records names an old path [ran: git grep].
+- Still red: tests/test_boundaries.py. The device place's loads need `import_order.py --grow`, not run, as in my last line.
+- No statement changed.
+
+For the whole lane:
+- verity/protocols/accounting/certifier/{verifier → device}/{coin_link.py, device_party.py, device_needs.py}; the modules follow, verity.protocols.accounting.certifier.{verifier → device}.{coin_link, device_party, device_needs}.
+- Anything pushed to cursor/na-architecture-b51f after 7dd8e645163c that still names the old paths crosses that Layout-move commit with `python3 tools/move/restack.py BRANCH --push-to NEWBRANCH`, never by hand.
+
+Telling LAYOUTREAD2 and STAMPS2 now.
+TIMER: none
+
