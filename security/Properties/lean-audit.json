@@ -1134,12 +1134,21 @@
      "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
      "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
+   },
+   "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest",
+     "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites"
+    ]
    }
   },
   "not": {
    "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim"
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.Publishes": "the subprotocol's acceptance of a record's bytes at the public outputs it publishes, which `QBytesAtSubprotocol` reads in its event and `PublishedQBytes` spells out: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.QBytesBy": "`q_bytes` within the right receipts at a verifier's record, which `QBytesAtSubprotocolBy` reads in its event: an event, no claim"
   }
  },
  "witnesses": {
@@ -8663,6 +8672,114 @@
    },
    "type_hash": "006b33c12d24ecdd617d1c8501408d55a34eb4781d23f9e405d3ce404c81cd0f"
   },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_bites :",
+    "  Exists fun node =>",
+    "    Exists fun r =>",
+    "      Exists fun sm =>",
+    "        Exists fun T =>",
+    "          Exists fun pub =>",
+    "            And (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm) T Unit.unit node r pub)",
+    "              (Not",
+    "                (Properties.RemoteAudit.Subprotocol.QBytesBy (fun x x_1 => Option.some sm)",
+    "                  { blocks := T.blocks, passes := T.passes, accepts := T.accepts, tick := T.tick, plan := T.plan,",
+    "                    correct := fun x x_1 => Finset.instEmptyCollection.emptyCollection, mem := T.mem, chip := T.chip,",
+    "                    rebuilt := T.rebuilt, disk := T.disk, link := T.link }",
+    "                  Unit.unit node r pub))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8adaaa52c3f7066d093fbd85cb406e9922ffabddeb774e5bfeef65e6d3a986ad"
+  },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_honest (node : Properties.RemoteAudit.Line.Node) (κ : Nat)",
+    "  (X Cm : Type) [Fintype X]",
+    "  (prf : Fin node.samples → Pous.Bits κ → Accounting.Remote.Draw.Blocks Properties.RemoteAudit.Line.receiptMax)",
+    "  (recs : Cm → Accounting.Remote.Draw.DrawCoins node.samples κ X → Properties.RemoteAudit.Line.Record)",
+    "  (com : Accounting.Remote.Draw.DrawCoins node.samples κ X → Cm) (R : Accounting.Remote.Draw.Receipts node.samples κ X)",
+    "  (passes : Nat) (tick : Accounting.Remote.Draw.DrawCoins node.samples κ X → Nat → Nat)",
+    "  (hS : Properties.RemoteAudit.Subprotocol.HonestSchedule node passes tick recs com) :",
+    "  And",
+    "    (∀ (c : Cm),",
+    "      Accounting.Remote.Draw.Assumptions.Live",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).view",
+    "          c))",
+    "    (And",
+    "      (Accounting.Remote.Draw.Assumptions.Refused",
+    "        ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "              Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "          com)",
+    "        prf (fun x x_1 x_2 => 0)",
+    "        (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "          (Properties.RemoteAudit.Line.played recs com))",
+    "        R)",
+    "      (And",
+    "        (Accounting.Remote.Draw.Assumptions.Counted",
+    "          ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "            com)",
+    "          (Properties.RemoteAudit.Line.ofRecord (Properties.RemoteAudit.Subprotocol.honestTrace node passes tick) node",
+    "            (Properties.RemoteAudit.Line.played recs com)))",
+    "        (And",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              (Pous.StreamedWipe.prfAdvantage (prf t)",
+    "                (((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                          Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).play",
+    "                      (Accounting.Remote.Draw.Committed.junk com t)).distinguisher",
+    "                  prf RemoteAudit.Protocol.DELTA.cast t))",
+    "              0)",
+    "          (∀ (t : Fin node.samples),",
+    "            Eq",
+    "              ((Properties.RemoteAudit.Line.recordCommitted node recs fun x x_1 x_2 =>",
+    "                    Finset.range (instHAdd.hAdd Properties.RemoteAudit.Line.receiptMax 1)).hide",
+    "                com prf RemoteAudit.Protocol.DELTA.cast t)",
+    "              0))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Properties.RemoteAudit.Subprotocol.HonestSchedule"],
+    "reads": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ]
+   },
+   "type_hash": "d612f0fd599a28c98b1cf684d4a0c1fc246b80dcaf2c8c5f8fb093f24533ec66"
+  },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial": {
+   "owner": "@memory-accounting",
+   "signature": [
+    "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocolBy_nontrivial :",
+    "  Not",
+    "    (Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy (fun x x_1 x_2 x_3 x_4 x_5 => True) (fun x x_1 => True)",
+    "      fun x x_1 => Option.none)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [
+     "Accounting.Remote.Draw.Assumptions.Counted",
+     "Accounting.Remote.Draw.Assumptions.Live",
+     "Accounting.Remote.Draw.Assumptions.Refused"
+    ],
+    "reads": []
+   },
+   "type_hash": "60aa3babbf4897496fcfe47730d7b47d0c2e7356d19b1b2ca2b849c2fe4ab685"
+  },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "owner": "@memory-accounting",
    "signature": ["Properties.RemoteAudit.acceptChecksOpenings : Properties.RemoteAudit.AcceptChecksOpenings"],
@@ -13340,7 +13457,9 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
+   "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof",
+   "Properties.RemoteAudit.Subprotocol.PublishedQBytes": "unstated: on the subprotocol's acceptance, `q_bytes` plus `BLOCK_BYTES` times the pooled bound of the record's samples at `DELTA` is at most `BLOCK_BYTES` times its receipts, with no premise: what `RemoteAudit.Protocol.certify` computes; unproved, a statement that gets a guarantee entry beside `publishedEps`'s, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -23689,7 +23808,7 @@
    }
   },
   "Properties.Accounting.Remote.Line.Record": {
-   "digest": "4a79e96d003fcc36c9cc1ba8a2159cbf32e34ee4e71ad51537bee52c2c5187f9",
+   "digest": "87760342aa4c13e535d435f3f91244d56a5be4ffe4c1f0e20a3d1a8abe35c6dc",
    "definitions": {
     "Properties.RemoteAudit.Line.Node": "42711f27299bb2712c065ce499996be68bd26c2633bfabda7bdab0a113062b7d",
     "Properties.RemoteAudit.Line.Node.blockBytes": "01096187cab77105f77d1a06703965cd55de643c51b4e42a5d232ab07571c01e",
@@ -23729,6 +23848,7 @@
     "Properties.RemoteAudit.Line.recordPace": "1316e56cadcaa8849c67b093609407a0feaf4bc4a574736c2a27d058028c4cf4",
     "Properties.RemoteAudit.Line.recordSample": "532a4396ed137fa98a253640228c7234ad91b4aa9d6ee17a700efb223b4da383",
     "Properties.RemoteAudit.Line.released": "aa4c0e9650f0b709d54c8d67184b2d817882506059c4d3911b5b57a581e66c97",
+    "Properties.RemoteAudit.Line.sampleReceipts": "6029613ef43c2b62eb2c619ad1e5725d763d2c507a1d8f3c594912ac760e7f04",
     "Properties.RemoteAudit.Line.spanStart": "5abeb3e47b0228283062b5aa31507abf65ad01d964a30e39c7d247a3f8401e39",
     "Properties.RemoteAudit.Line.spanStop": "08dfa9d81578347c8ff30e3a1b7ca3c1e38c13f6b39385197a7fa52b0e208a9b",
     "Properties.RemoteAudit.Line.stretchPace": "769e5729fa2b2f7bc4a15a7c50795065e231a8c88508686a0ce1714239d4d488"
@@ -23807,7 +23927,7 @@
    }
   },
   "Properties.Accounting.Remote.Subprotocol": {
-   "digest": "c0c190d8c2cd0cac68514fad9d93235f51e0a53faf56c77334d6d16fb2f706ea",
+   "digest": "de20ba68841183d4212170ae7de894887f8615dafc78ce63a1c7f8b02b9e0d48",
    "definitions": {
     "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": "5fc90912a6b189249808541a053d8d89b883764124ce64eb0781e90572d0520b",
     "Properties.RemoteAudit.Subprotocol.HonestSchedule": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
@@ -23815,6 +23935,8 @@
     "Properties.RemoteAudit.Subprotocol.LineHeldBy": "4f4117c4d5da44abee2d5ff68c56edc9f54b731808c5122db0d175ddd298702d",
     "Properties.RemoteAudit.Subprotocol.Plays": "cd90e454b261689d2136d86ff2e3c47523d396d72d2934a29d8724bf45587a80",
     "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": "9e7658d9ad6bfd062b2b5601fff6cfdddcdd435cb1692f222debe9d51296f602",
+    "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": "eb11e697dfc89eeb8e0ad836792fee48968565a6975701ac4a8769a12f197054",
+    "Properties.RemoteAudit.Subprotocol.QBytesBy": "f199917ff3d94900a1a721731ca4c8ca57a84563356b5262bae9370ce6afea5a",
     "Properties.RemoteAudit.Subprotocol.ReadBy": "b6bb8c08db864db7b362e5bc4eae9246e510634f345595a098d15c38867ccaf4",
     "Properties.RemoteAudit.Subprotocol.groupsBy": "158c1d4767d23fcbb4b0f277fb71816a87a4dfad310df14d4f5bd010ac8e44d8",
     "Properties.RemoteAudit.Subprotocol.honestEvidence": "400483a989e2fe6103a34e5657efa843e9385ed5ea8ef044244eed91e7ba586d",
@@ -23824,6 +23946,7 @@
     "Properties.RemoteAudit.Subprotocol.noOutside": "d36249429e424b260ddd542d3cd729c0ec12049fc45804e18e8055e9654f18f1",
     "Properties.RemoteAudit.Subprotocol.paceBy": "ffe59f9943bbe1369fabf94a6d962e2aa26ef93b3feb6c8c311b7929826de8fe",
     "Properties.RemoteAudit.Subprotocol.quietIngress": "8b16be2ac77baf6987ae14f5345941589075996ae63e5f6a144c9b06d772fb49",
+    "Properties.RemoteAudit.Subprotocol.receiptsBy": "4f33f9a3ac1500eddb978ba583f0a33bd9cfcd3db7fc0f2007c2fc83879a94c1",
     "Properties.RemoteAudit.Subprotocol.traceBy": "a0c77c62142ab0734b25f19c39b1eb487c5e873c3eb94d7e8eed1807bf65dc62"
    }
   },
@@ -26148,9 +26271,9 @@
    }
   },
   "RemoteAudit.Protocol": {
-   "digest": "147f3643c503b7a1b3d650abb2ecf624fbc594ce3ffcf87065d302ce2f35e27c",
+   "digest": "336c9159eb47946ca6e69f8611594183eafbc5f7e8ceec4f76e0b129bbfa964b",
    "definitions": {
-    "RemoteAudit.Protocol.DELTA": "ebf9a44a7dd92b1cf379f2a61b40202693a821d055fff22fb0fd693aad616177",
+    "RemoteAudit.Protocol.DELTA": "668f6cf3703c5fa1fac6d5dca8e0320f5ecf6a63012b59ecbe49cd394bd99f35",
     "RemoteAudit.Protocol.Evidence": "8f1e577fa67565d95c78100ad54ccab0f0f435a936e773610b1066ce5805a8d9",
     "RemoteAudit.Protocol.Evidence.appendCoins": "6008c3d4107d1c095a04071c82482027cd921e8cd7111d1ded1167cb9200e003",
     "RemoteAudit.Protocol.Evidence.coins": "95679a98f56076b0535c53a8e37265eee6461ba6515898c414a605b69e05231e",

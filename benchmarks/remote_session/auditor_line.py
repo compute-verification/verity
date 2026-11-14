@@ -81,18 +81,18 @@ tier, `line`'s `filler`), which the line doesn't count as weights. Each form cha
 their bursts (`rates_at`; `--bursts none` for the reading of gate runs up to 7), and deducts the chips' S_chip at no
 less than the auditor's (`verifier.recorded_chip_bytes`). What every accepted paced session
 measured, credited or not, is `measured`. `--table` writes each session's four checks and the line as Markdown.
-Each session's `sketch` is its δs at the outside-compute factor F its verifier charged, Q = F·C (`verifier.sketch_at`),
-and `sketch_outside` every F the run's sessions were charged at.
+Each session's `sketch` is its δs at the queries Q its verifier charged (`verifier.sketch_at`: the prover's budget, or
+F·C in a record written before it), and `sketch_queries` every Q the run's sessions were charged at.
 
 **Error.** Each accepted paced session's line fails, crediting more than the node held, with probability at most its
 `error`'s total (`session_error`): the memory line's δ as the ledger computed it, read from the record, with its six
-parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 67 bits, and
-41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
-commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
-sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
-total of a record whose ledger didn't charge them). The total leaves out the windows' PRF advantages Σ_t adv_t, which
-nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim prf/sha-512) with no number,
-in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
+parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack its ledger was charged at: 140 bits, 67
+in a record written before it, and 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's
+2118 passes), the coin commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the
+sketch's, and the sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the
+rejection added to the total of a record whose ledger didn't charge them). The total leaves out the windows' PRF
+advantages Σ_t adv_t, which nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim
+prf/sha-512) with no number, in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
@@ -476,7 +476,7 @@ def session_error(session: dict) -> dict:
     charged at (its `inputs`' `slack_log2`, else `V.UNRECORDED_SLACK_LOG2`), both exact, and δs as the rest. A ledger
     that didn't charge the hiding, the binding or the rejection (no such part) has it added to its total: the hiding
     from its windows (`recorded_windows`, as `ledger.hiding` reads them), the binding at the session's bounds
-    (`recorded_binding`, as `ledger.binding` reads them), reading F·C off the record's sketch term (`sketch_failure`),
+    (`recorded_binding`, as `ledger.binding` reads them), reading Q off the record's sketch term (`sketch_failure`),
     so a record with none has no binding term here, and the rejection at its windows' requested draws (the session's
     `samples` in each, as `ledger.rejection` reads them off the record). Each in floats and exact beside them
     (`exact`), the total's log2, and `named_terms`, the error's terms with no numeric value (`NAMED_TERMS`), in no
@@ -534,8 +534,8 @@ def recorded_binding(session: dict) -> Fraction:
     """`ledger.binding` from an accepted session's record, at the session's bounds (`ledger.binding_over`): its samples
     (`V.recorded_windows`, a window each at `groups_per_coin` g = 1), the most receipts a sample of it can have (g times
     `ledger.window_receipts`, at its pace's k, its registered blocks and, when its append coins aren't recorded
-    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, F·C the queries its sketch term
-    (`sketch_failure`) charged; 0 for a record with no sketch term, which states no C."""
+    (`recorded_append_coins`), the codec's `max_blocks`) and its sample cap `samples`, Q the queries its sketch term
+    (`sketch_failure`, `V.recorded_queries`) charged; 0 for a record with no sketch term, which states no Q."""
     sf = (session.get("ledger") or {}).get("sketch_failure")
     if not sf:
         return Fraction(0)
@@ -545,7 +545,7 @@ def recorded_binding(session: dict) -> Fraction:
     L = ledger.window_receipts(None if pace is None else audit.Pace(pace["k"], pace["window_ns"]), public["blocks"],
                                1 if appends is None else appends, wire.codec_named(public["codec"]).max_blocks)
     return Fraction(ledger.binding_over(len(V.recorded_windows(session)[0]), public.get("groups_per_coin", 1) * L,
-                                        session["samples"], sf.get("outside", 1) * sf["compressions"]))
+                                        session["samples"], V.recorded_queries(sf)))
 
 
 def union_error(rows: list[dict]) -> dict:
@@ -1078,7 +1078,7 @@ def analyse(out: Path, *, host_bytes: int, pin: str | None, period: str | None, 
     doc["sessions"], doc["measured"] = rows, measured
     doc["line"], doc["credit"] = credited_line(rows)
     doc["conditional_on"] = conditional_on(rows, bound)
-    doc["sketch_outside"] = sorted({r["sketch"]["outside"] for r in rows if r["sketch"]})
+    doc["sketch_queries"] = sorted({r["sketch"]["queries"] for r in rows if r["sketch"]})
     return doc
 
 
