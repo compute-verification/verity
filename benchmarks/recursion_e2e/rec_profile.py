@@ -51,6 +51,8 @@ LOOP_PROCESSES = ("flock-zk-server", "flock-firewall")
 STOPS = ("ZK-SERVER-REFUSED", "FIREWALL-REFUSED", "PROVER-STOPPED")
 #: prover buckets a recorded run names otherwise, by the name read
 RECORDED_BUCKETS = {"t.firewall_recheck": "t.zk_server_recheck"}
+#: the icheck row of a run recorded while 85 still timed V*'s Python hashing reference there; V*'s verdict is Lean's now
+RECORDED_VSTAR = ("rec_vstar", ("icheck/time-vstar.txt", "V*'s hashing reference over the inner run"))
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
@@ -212,9 +214,12 @@ def read(root: Path) -> dict[str, Any]:
                                  ("zk", "baseline --zk", "the non-recursive hm96 statement with --zk, loopback serve")):
             if (o / "inner" / sub).exists():
                 rows.append(prover_row(o / "inner" / sub, stage, "inner", what))
-    rows += tool_rows(repeats(root, "icheck"), "icheck", {
-        "inner replay": ("icheck/time-replay-proxy.txt", "flock-circuit replay of the last inner run (upstream's verifier)")},
-        verdict=lambda o, n: _upstream(o, "icheck/replay-proxy.txt") if n == "inner replay" else None)
+    ic = repeats(root, "icheck")
+    tools = {"inner replay": ("icheck/time-replay-proxy.txt", "flock-circuit replay of the last inner run (upstream's verifier)")}
+    if any((o / RECORDED_VSTAR[1][0]).exists() for o in ic):
+        tools |= dict([RECORDED_VSTAR])
+    rows += tool_rows(ic, "icheck", tools,
+                      verdict=lambda o, n: _upstream(o, "icheck/replay-proxy.txt") if n == "inner replay" else None)
     vs = repeats(root, "vstage")
     if vs:
         rel = {"V* points": ("vstage/time-points.txt", "the verifier's fold points from the inner coins (rec_vstage points)"),

@@ -3206,6 +3206,26 @@
     },
     {
       "paths": {
+        "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_core.py": "benchmarks/pouw/served_zk/replay_core.py",
+        "verity/protocols/accounting/pouw/prover/kernels/served_zk/replay_window.py": "benchmarks/pouw/served_zk/replay_window.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/spot/prover/tests/test_kept_scan.py": "benchmarks/network_traces/tests/test_kept_scan.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/hardware/README.md": "hardware/README.md",
+        "verity/hardware/tests/test_cards.py": "verity/tests/tests/test_cards.py",
+        "verity/hardware/tests/test_nodes.py": "verity/tests/tests/test_nodes.py",
+        "verity/hardware/tests/test_package.py": "verity/tests/tests/test_imports.py",
+        "verity/hardware/tests/test_sheet_lean.py": "verity/tests/tests/test_sheet_lean.py"
+      }
+    },
+    {
+      "paths": {
         "adapters/vllm/verity_vllm/pipeline/m1_capture.py": "adapters/vllm/verity_vllm/pipeline/match_capture.py",
         "adapters/vllm/tests/pipeline/test_m1_capture_main.py": "adapters/vllm/tests/pipeline/test_match_capture_main.py"
       }
