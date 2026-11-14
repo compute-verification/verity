@@ -187,21 +187,25 @@ def test_the_longest_minutes_fit_in_the_rehearsal_units_runtime_and_leave_an_h20
 
 
 SALT = "5a" * 64
+#: a load value's registration as the stand-in writes it: its root, and its certificate's digest and signature
+ROOT, DIGEST, SIGNATURE = "ab" * 64, "9f" * 64, "e7" * 40
+LOAD_DOC = {"format": "load/v1", "values": [
+    {"value": "w", "root": ROOT, "certificate": {"key": "0c" * 16, "digest": DIGEST, "signature": SIGNATURE}}]}
 LOAD_SUMMARY = {"values": 19, "registered": 19, "relayed": True}
 RELAY = {"shape": "tiny", "values": 19, "bytes": 34240, "streams": 4, "sinks": [{"accepted": True}] * 4}
-#: a stand-in for `warden_serve.py rehearse --load-store`'s files: public, then witness
+#: a stand-in for `warden_serve.py rehearse --load-store`'s files
 LOAD_FILES = (
     '(out / "deployment.json").write_text(json.dumps({"upstream": url, "session": "00" * 32}))\n'
     '(out / "cells.jsonl").write_text("")\n'
     f'(out / "certified.jsonl").write_text(json.dumps({{"salt_c": {SALT!r}}}) + "\\n")\n'
-    '(out / "load.json").write_text(json.dumps({"format": "load/v1", "registrations": [{"root": "ab" * 64}]}))\n'
+    f'(out / "load.json").write_text(json.dumps({LOAD_DOC!r}))\n'
     f'(out / "load-relay.json").write_text(json.dumps({RELAY!r}))\n'
-    '(out / "load-heads.json").write_text(json.dumps({"heads": [{"root": "ab" * 64}]}))\n'
+    f'(out / "load-heads.json").write_text(json.dumps({{"heads": [{{"root": {ROOT!r}}}]}}))\n'
     f'(out / "check.json").write_text(json.dumps({{"accepted": True, "problems": [], '
     f'"summary": {{"requests": 4, "load": {LOAD_SUMMARY!r}}}}}))\n')
 
 
-def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_registrations_and_relay_alone(stored):
+def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_relay_alone(stored):
     rc, out = gate(stored, LOAD)
     run = json.loads(out)["run"]
     tunnels, sinks, ups, seen = [], [], [], []
@@ -226,12 +230,12 @@ def test_a_load_runs_through_a_tunnel_to_the_sink_a_stream_and_publishes_its_reg
     assert end["device"] == "warden" and end["rc"] == 0 and end["ended"] == "the rehearsal ended"
     assert end["load"] == RELAY and end["verdict"] == {"accepted": True, "problems": 0, "requests": 4,
                                                        "load": LOAD_SUMMARY}
-    assert set(end["files"]) == {"deployment.json", "cells.jsonl", "certificates.jsonl", "load.json",
-                                 "load-relay.json", "tunnel.log", "rehearse.log"}
-    assert json.loads((d / "out" / "load.json").read_text())["registrations"] == [{"root": "ab" * 64}]
-    assert "load-heads.json" in end["witness"]
+    assert set(end["files"]) == {"deployment.json", "cells-certificates.jsonl", "certificates.jsonl",
+                                 "load-relay.json"}
+    assert json.loads((d / A.WITNESS / "load.json").read_text()) == LOAD_DOC
+    assert {"load.json", "load-heads.json", "rehearse.log", "tunnel.log"} <= set(end["witness"])
     public = b"".join(p.read_bytes() for p in (d / "out").rglob("*") if p.is_file()) + (d / "end.json").read_bytes()
-    assert SALT.encode() not in public
+    assert not any(x.encode() in public for x in (SALT, ROOT, DIGEST, SIGNATURE))
 
 
 def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_why(stored):
@@ -243,7 +247,8 @@ def test_a_load_whose_sink_tunnel_doesnt_come_up_runs_nothing_and_its_end_says_w
                           command=lambda *a, **k: pytest.fail("ran without its sink's tunnels"))
     assert end["rc"] == 2 and end["ended"] == \
         "a tunnel to vy-nebius-1's sink at 127.0.0.1:8021 didn't come up (tunnel.log)"
-    assert len(ups) == 3 and end["verdict"] is None and "load" not in end and set(end["files"]) == {"tunnel.log"}
+    assert len(ups) == 3 and end["verdict"] is None and "load" not in end
+    assert end["files"] == {} and end["witness"] == {"tunnel.log": 0}
 
 
 def test_a_loads_rehearsal_is_warden_serves_with_its_load_flags_after_the_rehearsals(tmp_path):
