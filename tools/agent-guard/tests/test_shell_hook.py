@@ -1896,3 +1896,29 @@ def test_a_merge_sets_origin_main_s_merge_drivers_over_an_older_command(tmp_path
                          capture_output=True, text=True, env={**env, "AGENT_GUARD_MIN_AVAIL": "0"}, check=True)
     assert json.loads(out.stdout)["permission"] == "allow", out.stderr
     assert git("config", "--get", "merge.lean-audit.driver") == "python3 main.py %O %A %B %P"
+
+
+def test_a_command_the_hook_cant_split_weighs_nothing_and_says_so(monkeypatch, capsys):
+    shell_hook = guard_module("shell_hook", monkeypatch)
+    assert shell_hook.weight("echo 'unclosed") == 0 and shell_hook.blocks_text("echo 'unclosed") == 0.0
+    err = capsys.readouterr().err
+    assert "shell_hook: a command the hook can't split weighs nothing (No closing quotation)" in err
+    assert "shell_hook: a command the hook can't split blocks for no time (No closing quotation)" in err
+
+
+def test_unreadable_memory_is_not_known_and_said_while_an_empty_inbox_says_nothing(tmp_path, monkeypatch, capsys):
+    shell_hook = guard_module("shell_hook", monkeypatch)
+    monkeypatch.setenv("AGENT_GUARD_MEMINFO", str(tmp_path / "meminfo"))
+    assert shell_hook.available() is None
+    assert f"shell_hook: {tmp_path / 'meminfo'} unread, so memory is not known (FileNotFoundError" in capsys.readouterr().err
+    monkeypatch.setattr(shell_hook, "INBOX", str(tmp_path))
+    assert shell_hook.delivery("bc-x") is None and capsys.readouterr().err == ""
+
+
+def test_a_branch_registry_that_does_not_parse_reads_as_none_registered_and_says_so(tmp_path, monkeypatch, capsys):
+    worktree_guard = guard_module("worktree_guard", monkeypatch)
+    monkeypatch.setattr(worktree_guard, "STATE", tmp_path)
+    assert worktree_guard.registry() == {} and capsys.readouterr().err == ""
+    (tmp_path / "branches.json").write_text("{")
+    assert worktree_guard.registry() == {}
+    assert "branches.json unreadable, read as no branch registered (JSONDecodeError" in capsys.readouterr().err

@@ -65,3 +65,8 @@ def test_only_the_cron_secret_authorizes_the_cron():
 def test_the_cron_is_scheduled_every_every_s():
     v = json.loads((Path(D.__file__).parents[1] / "vercel.json").read_text())
     assert v["crons"] == [{"path": "/api/deadman", "schedule": f"*/{D.EVERY_S // 60} * * * *"}]
+
+
+def test_a_time_that_does_not_parse_counts_as_none_and_says_so(capsys):
+    assert D.epoch("yesterday") is None
+    assert "deadman: time 'yesterday' does not parse, so it counts as no time" in capsys.readouterr().err

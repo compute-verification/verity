@@ -1661,3 +1661,11 @@ def test_the_probe_reads_the_machines_a_machine_reaches_only_when_asked(tmp_path
     (tmp_path / "peers").write_text(f"# name, ssh options\n{CPU5} -i /k research@10.0.0.5\n\n{CPU1} research@10.0.0.1 # itself\nbare\n")
     assert read(peers=True)["peers"] == [CPU1, CPU5]
     assert "peers" not in read()
+
+
+def test_a_description_that_does_not_parse_gives_no_share_and_says_so(tmp_path, capsys):
+    (tmp_path / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (tmp_path / auto.DESCRIPTION).write_text("[shares\n")
+    assert auto.share_cpus(tmp_path) is None
+    assert f"research run: {tmp_path / auto.DESCRIPTION} unread, so verity has no share on vy-nebius-2 (TOMLDecodeError" in \
+        capsys.readouterr().err
