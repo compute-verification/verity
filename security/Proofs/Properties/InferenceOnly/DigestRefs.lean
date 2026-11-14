@@ -3,7 +3,6 @@ module
 public import Circuits.Program
 public import InferenceOnlyCheck.DefinitionDigest
 import Batteries.Tactic.OpenPrivate
-import all Circuits.Program
 import all Lean.Data.Json.Basic
 
 /-!

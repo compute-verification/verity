@@ -1521,7 +1521,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     f = sub.add_parser("first", help="every class's boundary registration and first stage")
     f.add_argument("--boundary", nargs="+", required=True, help="each class's directory (w<window>/p<P>-o<O>/), one window's")
     f.add_argument("--check", required=True, help="the check template's descriptor id (serving_templates.template)")
-    f.add_argument("--replay", required=True, help="the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T")
+    f.add_argument("--replay", required=True, help="the first stage's sampling design over a class's spans, a rate sampling "
+                                                   "design: rate:NUM/DEN or rate:NUM/DEN:T")
     f.add_argument("--k", required=True, help="proof blocks the second stage samples of each check template in each sampled span: "
                                               "a whole number, or a JSON file of each template's, {descriptor id: k_t}, "
                                               "which names each template of every class's check once")

@@ -397,7 +397,7 @@ SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soun
 
 `SlowdownRemote` is the slowdown bound max(1, 1/(s + x/MFU₀)) (`Slowdown.Slowdown.remoteSlowdown`; MFU₀ divides only
 x), not the bound displayed above: arithmetic over inline hypotheses (`Slowdown.Assumptions.PouwSound` among them), with
-the declared work bounded by `CountHE`.
+the registered circuit's work bounded by `CountHE`.
 
 ### 7. What is completeness, not security
 
@@ -507,8 +507,8 @@ The slowdown, `SlowdownRemote`:
   - `Slowdown.Assumptions.SampledDetection`: SPOT catches each incorrect proof block with probability at least q,
     whatever came before.
   - `Slowdown.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- (H) and (E), `Slowdown.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the declared
-  work, and the count's verdict `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`), a hypothesis until
+- (H) and (E), `Slowdown.Cut.Assumptions.Hardness` and `Exports` (`security/Definitions/Assumptions.lean`), on the registered
+  circuit's work, and the count's verdict `InferenceOnly.CompliesAtMost c k n` (`security/Definitions/InferenceOnly.lean`), a hypothesis until
   `DescCountsCK` is proved (part 4, link 7).
 
 The local bounds (part 6):

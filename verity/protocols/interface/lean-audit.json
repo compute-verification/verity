@@ -1,5 +1,5 @@
 {
- "format": 1,
+ "format": 2,
  "roots": ["CoreProtocol", "CoreProtocol.PeriodDifftest", "CoreProtocol.CanonicalJsonDifftest"],
  "exempt": {
   "CoreProtocol.ExampleMain": "the core-protocol-example executable's entry point, one line; its command is Core.Protocol.main, audited under CoreProtocol",
@@ -55,15 +55,10 @@
    "imports": ["CoreProtocol.Period", "Difftest", "Lean.Data.Json", "Base.Canon"],
    "except": [],
    "why": "the difftest's functions reach Lean only through the code's periods and the harness"
-  },
-  "CoreProtocol.Registration": {
-   "imports": ["CoreProtocol.Protocol", "CoreProtocol.Site", "Base.Hash"],
-   "except": [],
-   "why": "the registration log in code is spec: its property (`Properties.Accounting.Registration.Code`) is stated over its check, entries and view, so it imports only the interface's `Protocol`, for its command, the Site it folds site entries into, and C-Flock's SHA-512, for its entries' digests"
   }
  },
  "guarantees": {},
  "dependencies": {
-  "toolchain": "9861e83df7e59cd690a56f1b1123a7d6cfeca7df65d05a986f3a0c9794f60079"
+  "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"
  }
 }
