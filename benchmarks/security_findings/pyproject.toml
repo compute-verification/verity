@@ -1,5 +1,5 @@
-# The security review's open findings (`open_findings.py`). Not a package: the suite holds each rule of the count (a check
-# decides its finding, a reading counts only whole and under seven days old, nothing else closes one, the mark) on stand-in
+# The security review's open findings (`open_findings.py`). Not a package: the suite holds each rule of the count (only the
+# check the script holds for a finding closes it, the guard and address checks, the mark, the value `main` writes) on stand-in
 # findings and toy checkouts, and holds the list itself to naming no address, key or auditor's machine
 # (`uv run tools/verity/check/suites.py benchmarks/security_findings`).
 [tool.pytest.ini_options]

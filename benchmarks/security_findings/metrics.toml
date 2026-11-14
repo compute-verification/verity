@@ -4,7 +4,7 @@
 # a research run on any CPU machine: it reads only the checkout it runs in, with no secret and no reach to another machine
 [[metric]]
 id = "infra/security-findings-open"
-title = "Serious findings of the security review still open: not closed by a check or by a reading less than 7 days old"
+title = "Serious findings of the security review still open, of the six it lists: each closed only by a check the script runs"
 owner = "infra"
 unit = "findings"
 better = "lower"

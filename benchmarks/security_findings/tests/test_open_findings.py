@@ -1,125 +1,114 @@
-"""The count of the security review's open findings (`open_findings.py`): a check decides its finding either way; a reading
-counts only whole and less than seven days old at the run's time, which is injected; a finding with neither is open; the
-mark is `measured` only when every finding is decided by a check of the tree; tonight's list closes nothing by itself;
-the two checks on toy checkouts; and the list names no address, key or auditor's machine.
+"""The count of the security review's open findings (`open_findings.py`): only the check the script holds for a finding's id
+closes it; a finding with no check is open whatever the list holds, and the list holds no reading; the mark is `measured`
+only when every finding is decided by a check of the tree; tonight's list closes nothing by itself and its exceptions are
+pinned; the guard check takes only commands that run the guard from `/opt/agent-guard/`; the address check counts every
+tracked file the list doesn't except; `main` writes the open count; and the list names no address, key or auditor's machine.
 
-No test reads the clock or the network: the run's time is a fixed instant, and the checks run on stand-ins or on toy git
-checkouts under `tmp_path`."""
+No test reads the clock or the network: the checks run on stand-ins or on toy git checkouts under `tmp_path`, and the
+script is imported with the repository's root on `sys.path` only through `monkeypatch`."""
 from __future__ import annotations
 
+import importlib
 import json
 import re
 import subprocess
 import sys
 import tomllib
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT))
-
-from benchmarks.security_findings import open_findings as O  # noqa: E402
-
-NOW = datetime(2026, 1, 10, 12, 0, tzinfo=UTC)
-FINDING = {"id": "x", "statement": "s", "how": "h"}
+FINDING = {"id": "x", "statement": "s", "would_close": "a check that would"}
+CHECKED = {"guard-runs-from-the-branch": ("guard-outside-checkout", "declared"),
+           "machine-addresses-in-the-tree": ("no-public-address", "tree")}
+PUBLIC = ".".join(["81", "2", "3", "4"])
 
 
-def reading(**kw: object) -> dict:
-    return {"command": "sudo -n id -u", "reader": "infra", "at": NOW - timedelta(days=1), "showed": "refused on each",
-            "closed": True, **kw}
+@pytest.fixture
+def O(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
+    monkeypatch.syspath_prepend(str(ROOT))
+    return importlib.import_module("benchmarks.security_findings.open_findings")
 
 
-def stand_in(closed: bool) -> dict[str, O.Check]:
-    return {name: O.Check(c.reads, lambda root, closed=closed: (closed, "stand-in")) for name, c in O.CHECKS.items()}
+def stand_in(O: ModuleType, closed: bool) -> dict:
+    return {fid: O.Check(c.name, c.reads, lambda root, f, closed=closed: (closed, "stand-in")) for fid, c in O.CHECKS.items()}
 
 
-def test_a_finding_with_neither_check_nor_reading_is_open() -> None:
-    assert O.status(FINDING, NOW, checks={}) == O.Status("x", True, "none", "no check and no reading")
+def test_the_suite_leaves_sys_path_alone() -> None:
+    assert str(ROOT) not in sys.path
 
 
-def test_a_whole_fresh_reading_closes_its_finding_and_one_that_says_open_does_not() -> None:
-    assert O.status({**FINDING, "reading": reading()}, NOW) == O.Status("x", False, "reading", "read by infra: refused on each")
-    assert O.status({**FINDING, "reading": reading(closed=False)}, NOW).open
+def test_a_finding_without_a_check_is_open_whatever_its_entry_holds(O: ModuleType) -> None:
+    why = "no check; what would close it: a check that would"
+    assert O.status(FINDING, checks={}) == O.Status("x", True, "none", why)
+    reading = {"command": "true", "reader": "infra", "showed": "ok", "closed": True}
+    assert O.status({**FINDING, "reading": reading}, checks={}).open
+    named = O.status({**FINDING, "check": "no-public-address", "reads": "tree"}, checks=stand_in(O, True))
+    assert (named.open, named.basis) == (True, "refused")
 
 
-def test_an_expired_reading_counts_open() -> None:
-    assert not O.status({**FINDING, "reading": reading(at=NOW - O.FRESH + timedelta(seconds=1))}, NOW).open
-    expired = O.status({**FINDING, "reading": reading(at=NOW - O.FRESH)}, NOW)
-    assert (expired.open, expired.basis) == (True, "none") and "expired" in expired.why
-    assert O.status({**FINDING, "reading": reading(at=NOW - timedelta(days=30))}, NOW).open
+def test_the_list_takes_no_reading_and_says_what_would_close_an_unchecked_finding(O: ModuleType, tmp_path: Path) -> None:
+    p = tmp_path / "findings.toml"
+    for body, why in [('would_close = "w"\n[finding.reading]\ncommand = "true"\nclosed = true\n', "holds reading"),
+                      ("", "would close it"), ('would_close = """two\nlines"""\n', "would close it"),
+                      ('would_close = "w"\ncheck = "c"\nreads = "tree"\nhow = "h"\n', "would close it"),
+                      ('check = "c"\nreads = "tree"\n', "would close it")]:
+        p.write_text(f'[[finding]]\nid = "a"\nstatement = "s"\n{body}', encoding="utf-8")
+        with pytest.raises(ValueError, match=why):
+            O.load(p)
+    p.write_text('[[finding]]\nid = "a"\nstatement = "s"\nwould_close = "w"\n' * 2, encoding="utf-8")
+    with pytest.raises(ValueError, match="share an id"):
+        O.load(p)
 
 
-@pytest.mark.parametrize("field", O.READING)
-def test_a_reading_without_a_field_is_refused(field: str) -> None:
-    for r in ({k: v for k, v in reading().items() if k != field}, reading(**{field: ""})):
-        got = O.status({**FINDING, "reading": r}, NOW)
-        assert (got.open, got.basis, got.why) == (True, "refused", f"its reading is refused: it lacks {field}")
+def test_each_check_is_the_scripts_for_its_finding_and_the_list_cant_move_it(O: ModuleType) -> None:
+    assert {fid: (c.name, c.reads) for fid, c in O.CHECKS.items()} == CHECKED
+    f = {"id": "machine-addresses-in-the-tree", "statement": "s", "check": "no-public-address", "reads": "tree", "how": "h"}
+    assert O.status(f, checks=stand_in(O, True)) == O.Status(f["id"], False, "tree", "stand-in")
+    assert O.status(f, checks=stand_in(O, False)) == O.Status(f["id"], True, "tree", "stand-in")
+    for other in ({**f, "reads": "declared"}, {**f, "check": "guard-outside-checkout"}, {**f, "id": "agents-have-root"}):
+        assert O.status(other, checks=stand_in(O, True)).open, other
 
 
-def test_a_reading_without_its_command_or_reader_is_refused() -> None:
-    for field in ("command", "reader"):
-        got = O.status({**FINDING, "reading": reading(**{field: None})}, NOW)
-        assert (got.open, got.basis) == (True, "refused") and field in got.why
-    assert O.status({**FINDING, "reading": reading(reader="  ")}, NOW).basis == "refused"
-
-
-def test_a_reading_whose_time_is_not_utc_or_later_than_the_run_is_refused() -> None:
-    for at in (NOW.replace(tzinfo=None) - timedelta(days=1), "2026-01-09T12:00:00Z", NOW + timedelta(seconds=1)):
-        got = O.status({**FINDING, "reading": reading(at=at)}, NOW)
-        assert (got.open, got.basis) == (True, "refused"), at
-    assert O.status({**FINDING, "reading": reading(closed="yes")}, NOW).basis == "refused"
-
-
-def test_a_check_decides_its_finding_either_way() -> None:
-    f = {**FINDING, "check": "no-public-address", "reads": "tree"}
-    assert O.status(f, NOW, checks=stand_in(True)) == O.Status("x", False, "tree", "stand-in")
-    assert O.status(f, NOW, checks=stand_in(False)) == O.Status("x", True, "tree", "stand-in")
-    assert O.status({**f, "reading": reading()}, NOW, checks=stand_in(False)).basis == "refused"
-    assert O.status({**f, "reading": reading()}, NOW, checks=stand_in(True)).open
-    assert O.status({**f, "reads": "declared"}, NOW, checks=stand_in(True)).basis == "refused"
-    assert O.status({**f, "check": "nothing"}, NOW, checks=stand_in(True)).basis == "refused"
-
-
-def test_a_check_that_cannot_run_counts_open() -> None:
-    def broken(root: Path) -> tuple[bool, str]:
+def test_a_check_that_cannot_run_counts_open(O: ModuleType) -> None:
+    def broken(root: Path, f: dict) -> tuple[bool, str]:
         raise OSError("no checkout")
-    f = {**FINDING, "check": "c", "reads": "tree"}
-    got = O.status(f, NOW, checks={"c": O.Check("tree", broken)})
+    got = O.status({**FINDING, "check": "c", "reads": "tree"}, checks={"x": O.Check("c", "tree", broken)})
     assert (got.open, got.basis) == (True, "refused")
 
 
-def test_the_mark_is_measured_only_when_every_finding_rests_on_a_check_of_the_tree() -> None:
-    def s(basis: str, open_: bool = False) -> O.Status:
+def test_the_mark_is_measured_only_when_every_finding_rests_on_a_check_of_the_tree(O: ModuleType) -> None:
+    def s(basis: str, open_: bool = False):
         return O.Status("x", open_, basis, "")
     assert O.mark([s("tree"), s("tree", True)]) == "measured"
-    for other in ("declared", "reading", "none", "refused"):
+    for other in ("declared", "none", "refused"):
         assert O.mark([s("tree"), s(other)]) == "partial", other
     assert O.mark([]) == "partial"
 
 
-def test_tonights_list_closes_nothing_by_itself() -> None:
-    """Whatever the checks find, no reading or entry of the list closes a finding: 6 open when both checks find their
-    finding open, and only the two checked findings close when both find them closed."""
+def test_tonights_list_closes_nothing_by_itself(O: ModuleType) -> None:
+    """Whatever the checks find, nothing in the list closes a finding: 6 open when both checks find their finding open, and
+    only the two checked findings close when both find them closed."""
     findings = O.load()
-    assert len(findings) == 6
-    open_ = [O.status(f, NOW, checks=stand_in(False)) for f in findings]
+    assert [f["id"] for f in findings] == ["agent-holds-personal-and-cloud-keys", "guard-runs-from-the-branch",
+                                           "agents-have-root", "security-updates-and-kernel", "store-key-writes",
+                                           "machine-addresses-in-the-tree"]
+    open_ = [O.status(f, checks=stand_in(O, False)) for f in findings]
     assert sum(s.open for s in open_) == 6 and O.mark(open_) == "partial"
-    closed = [O.status(f, NOW, checks=stand_in(True)) for f in findings]
-    assert sorted(s.id for s in closed if not s.open) == ["guard-runs-from-the-branch", "machine-addresses-in-the-tree"]
+    closed = [O.status(f, checks=stand_in(O, True)) for f in findings]
+    assert sorted(s.id for s in closed if not s.open) == sorted(CHECKED)
     assert O.mark(closed) == "partial"
 
 
-def test_the_list_refuses_an_entry_without_its_words_or_a_repeated_id(tmp_path: Path) -> None:
-    p = tmp_path / "findings.toml"
-    p.write_text('[[finding]]\nid = "a"\nstatement = "s"\n', encoding="utf-8")
-    with pytest.raises(ValueError, match="how it is checked"):
-        O.load(p)
-    p.write_text('[[finding]]\nid = "a"\nstatement = "s"\nhow = "h"\n' * 2, encoding="utf-8")
-    with pytest.raises(ValueError, match="share an id"):
-        O.load(p)
+def test_the_address_exceptions_are_these_nine(O: ModuleType) -> None:
+    """Each exception drops a file's addresses from finding 6's count, so adding one changes this test in the same change."""
+    six = next(f for f in O.load() if f["id"] == "machine-addresses-in-the-tree")
+    allowed = O.excepted(six)
+    assert (len(allowed), sum(allowed.values())) == (9, 15)
+    assert {e["kind"] for e in six["except"]} == set(O.EXCEPT_KINDS)
 
 
 def _checkout(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -127,17 +116,35 @@ def _checkout(tmp_path: Path, files: dict[str, str]) -> Path:
         (tmp_path / rel).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / rel).write_text(text, encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
+    _commit(tmp_path)
     return tmp_path
 
 
-def test_the_address_check_finds_a_public_address_and_no_documentation_one(tmp_path: Path) -> None:
-    public = ".".join(["81", "2", "3", "4"])
-    root = _checkout(tmp_path, {"a.sh": "ssh research@192.0.2.7\n", "b/c.toml": 'v = "12.9.1.4"\n'})
-    assert O.no_public_address(root) == (True, "0 tracked files hold a public IPv4 address")
-    (root / "b" / "d.txt").write_text(f"host {public}\n", encoding="utf-8")
+def _commit(root: Path) -> None:
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
-    assert O.no_public_address(root) == (False, "1 tracked files hold a public IPv4 address")
+    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-qm", "c", "--allow-empty"],
+                   cwd=root, check=True)
+
+
+def test_the_address_check_counts_every_tracked_file_the_list_doesnt_except(O: ModuleType, tmp_path: Path) -> None:
+    root = _checkout(tmp_path, {"a.sh": "ssh research@192.0.2.7\n", "b/c.toml": 'v = "12.9.1.4"\n'})
+    none = {"id": "machine-addresses-in-the-tree"}
+    assert O.no_public_address(root, none) == (True, "0 tracked files hold a public IPv4 address the list doesn't except")
+    for rel in ("tests/d.py", "e/tests/f.txt", "g.md"):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(f"host {PUBLIC} and {PUBLIC}\n", encoding="utf-8")
+    _commit(root)
+    assert O.no_public_address(root, none)[0] is False and O.no_public_address(root, none)[1].startswith("3 ")
+
+    def entry(path: str, count: int, kind: str = "example") -> dict:
+        return {"path": path, "count": count, "kind": kind, "reason": "r"}
+    some = {**none, "except": [entry("tests/d.py", 2), entry("e/tests/f.txt", 1)]}
+    assert O.no_public_address(root, some)[1].startswith("2 ")
+    every = {**none, "except": [entry("tests/d.py", 2), entry("e/tests/f.txt", 2), entry("g.md", 2)]}
+    assert O.no_public_address(root, every)[0] is True
+    for bad in (entry("g.md", 2, "ours"), entry("g.md", 0), {"path": "g.md", "count": 2, "kind": "example"}):
+        with pytest.raises(ValueError):
+            O.no_public_address(root, {**none, "except": [bad]})
 
 
 MAIN_LIKE = ("sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\" \"$1\"; d=$(ls -td "
@@ -145,30 +152,92 @@ MAIN_LIKE = ("sh -c 'h=tools/agent-guard/hook.sh; [ -f \"$h\" ] && exec sh \"$h\
              "[ -f \"$d$1\" ] || d=/opt/agent-guard/; exec python3 \"$d$1\"' guard shell_hook.py")
 
 
-@pytest.mark.parametrize(("command", "inside"), [
-    (MAIN_LIKE, True),
+@pytest.mark.parametrize(("command", "outside"), [
+    ("/opt/agent-guard/shell_hook.py", True),
+    ("/opt/agent-guard/hook guard shell_hook.py --timeout=10", True),
+    (MAIN_LIKE, False),
     ("python3 /opt/agent-guard/shell_hook.py", False),
-    ("sh -c 'd=${AGENT_GUARD_HOME:-/opt/agent-guard}; exec python3 \"$d/task_hook.py\"'", False),
-    ("python3 \"$CURSOR_PROJECT_DIR/tools/agent-guard/shell_hook.py\"", True),
-    ("python3 \"$(git rev-parse --show-toplevel)/tools/agent-guard/shell_hook.py\"", True),
-    ("./tools/agent-guard/hook.sh shell_hook.py", True),
-    ("cd tools && python3 agent-guard/shell_hook.py", True),
-    ("python3 /opt/tools/agent-guard/shell_hook.py", False),
+    ('sh -c \'exec python3 "$PWD"/tools/agent-guard/shell_hook.py\'', False),
+    ('python3 "$PWD"/tools/agent-guard/shell_hook.py', False),
+    ('/opt/agent-guard/hook "$PWD"/tools/agent-guard/shell_hook.py', False),
+    ('/opt/agent-guard/hook "${CURSOR_PROJECT_DIR}"/tools/agent-guard/shell_hook.py', False),
+    ("/opt/agent-guard/hook $(git rev-parse --show-toplevel)", False),
+    ("git show HEAD:tools/agent-guard/shell_hook.py | python3 -", False),
+    ("python3 -m research.guard", False),
+    (".venv/bin/python tools/agent-guard/shell_hook.py", False),
+    ("./tools/agent-guard/hook.sh shell_hook.py", False),
+    ("/opt/agent-guard/../../agent/repos/verity/tools/agent-guard/hook.sh", False),
+    ("/opt/agent-guard/hook /agent/repos/verity/tools/agent-guard/shell_hook.py", False),
+    ("/opt/agent-guard/hook tools", False),
+    ("/opt/agent-guard/hook --root=tools", False),
+    ("/opt/agent-guard/hook; sh tools/agent-guard/hook.sh", False),
+    ("/opt/agent-guard/hook && sh x", False),
+    ("/opt/agent-guard/hook < tools/x", False),
+    ("/opt/agent-guard/hook 'a b'", False),
+    ('/opt/agent-guard/hook "unterminated', False),
+    ("/opt/agent-guard/sub/hook", False),
+    ("/opt/tools/agent-guard/shell_hook.py", False),
+    ("", False),
 ])
-def test_a_hook_command_naming_a_file_of_the_checkout_is_found(command: str, inside: bool) -> None:
-    assert O.runs_checkout_file(command, {"tools", ".cursor", "tests"}) is inside
+def test_only_a_command_that_runs_the_guard_from_opt_alone_is_outside(O: ModuleType, command: str, outside: bool) -> None:
+    assert O.outside_checkout(command, {"tools", ".cursor", ".venv", "tests"}) is outside
 
 
-def test_the_guard_check_reads_every_hook_command(tmp_path: Path) -> None:
-    def hooks(*commands: str) -> str:
-        return json.dumps({"version": 1, "hooks": {"stop": [{"command": c} for c in commands]}})
-    root = _checkout(tmp_path, {".cursor/hooks.json": hooks("python3 /opt/agent-guard/stop_hook.py"),
+def _hooks(*commands: str) -> str:
+    return json.dumps({"version": 1, "hooks": {"stop": [{"command": c} for c in commands]}})
+
+
+def test_the_guard_check_reads_every_hook_the_commit_declares(O: ModuleType, tmp_path: Path) -> None:
+    root = _checkout(tmp_path, {".cursor/hooks.json": _hooks("/opt/agent-guard/stop_hook.py"),
                                 "tools/agent-guard/hook.sh": "#!/bin/sh\n"})
-    assert O.guard_outside_checkout(root) == (True, "0 of 1 hook commands of .cursor/hooks.json run a file of the checkout")
-    (root / ".cursor/hooks.json").write_text(hooks("python3 /opt/agent-guard/stop_hook.py", MAIN_LIKE), encoding="utf-8")
-    assert O.guard_outside_checkout(root) == (False, "1 of 2 hook commands of .cursor/hooks.json run a file of the checkout")
-    (root / ".cursor/hooks.json").write_text(hooks(), encoding="utf-8")
-    assert O.guard_outside_checkout(root)[0] is False
+    tail = "hook commands of .cursor/hooks.json at the commit don't run the guard from /opt/agent-guard/ alone"
+    assert O.guard_outside_checkout(root, {}) == (True, f"0 of 1 {tail}")
+    (root / ".cursor/hooks.json").write_text(_hooks("/opt/agent-guard/stop_hook.py", MAIN_LIKE), encoding="utf-8")
+    assert O.guard_outside_checkout(root, {}) == (True, f"0 of 1 {tail}"), "the working tree's edit is not the commit's"
+    _commit(root)
+    assert O.guard_outside_checkout(root, {}) == (False, f"1 of 2 {tail}")
+    (root / ".cursor/hooks.json").write_text(_hooks(), encoding="utf-8")
+    _commit(root)
+    assert O.guard_outside_checkout(root, {})[0] is False
+
+
+def test_a_commit_that_tracks_no_hooks_file_declares_no_cure(O: ModuleType, tmp_path: Path) -> None:
+    """A VM's boot writes an untracked hooks file when the commit tracks none, and any branch can still bring its own: the
+    tree then declares nothing about the guard, so the finding stays open."""
+    root = _checkout(tmp_path, {"tools/x": "x\n"})
+    (root / ".cursor").mkdir()
+    (root / ".cursor/hooks.json").write_text(_hooks("/opt/agent-guard/stop_hook.py"), encoding="utf-8")
+    closed, why = O.guard_outside_checkout(root, {})
+    assert closed is False and why.startswith("the commit tracks no .cursor/hooks.json")
+    got = O.status({"id": "guard-runs-from-the-branch", "statement": "s", "check": "guard-outside-checkout",
+                    "reads": "declared", "how": "h"}, root)
+    assert (got.open, got.basis) == (True, "declared")
+
+
+def test_main_writes_the_count_of_open_findings(O: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                 capsys: pytest.CaptureFixture) -> None:
+    """Every finding of the list counts, checked or not, and the value written is the count printed."""
+    root = tmp_path / "tree"
+    (root / "list").mkdir(parents=True)
+    path = root / "list/findings.toml"
+    path.write_text("".join(f'[[finding]]\nid = "{i}"\nstatement = "s"\nwould_close = "w"\n' for i in ("a", "b", "c")) +
+                    '[[finding]]\nid = "shut"\nstatement = "s"\ncheck = "c"\nreads = "tree"\nhow = "h"\n'
+                    '[[finding]]\nid = "ajar"\nstatement = "s"\ncheck = "d"\nreads = "declared"\nhow = "h"\n', encoding="utf-8")
+    checks = {"shut": O.Check("c", "tree", lambda r, f: (True, "shut")), "ajar": O.Check("d", "declared", lambda r, f: (False, "ajar"))}
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
+    O.main(["--out", str(tmp_path / "out")], path=path, root=root, checks=checks)
+    assert capsys.readouterr().out.splitlines()[0] == "security findings open: 4 of 5 (mark partial)"
+    result = json.loads((tmp_path / "run/result.json").read_text(encoding="utf-8"))
+    (m,) = result["measurements"]
+    assert (m["name"], m["value"], m["unit"], m["target"], m["mark"]) == (O.METRIC, 4, "findings", 0, "partial")
+    assert result["validation"]["status"] == "passed"
+
+
+def test_main_on_tonights_list_writes_six(O: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    O.main([], checks=stand_in(O, False))
+    (m,) = json.loads((tmp_path / "result.json").read_text(encoding="utf-8"))["measurements"]
+    assert (m["value"], m["mark"]) == (6, "partial")
 
 
 #: a dotted quad of any kind, and a run of key material: 24 or more base64 or hex characters holding a digit and a letter
@@ -177,7 +246,7 @@ _KEYLIKE = re.compile(r"[A-Za-z0-9+/=]{24,}")
 _KEY_PREFIXES = ("-----BEGIN", "AKIA", "ASIA", "ghp_", "gho_", "ghs_", "github_pat_", "xox", "eyJ", "sk-", "vsk_", "rpa_")
 
 
-def test_the_list_names_no_address_key_or_auditors_machine() -> None:
+def test_the_list_names_no_address_key_or_auditors_machine(O: ModuleType) -> None:
     from research import addresses
 
     text = O.LIST.read_text(encoding="utf-8")
