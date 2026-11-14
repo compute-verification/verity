@@ -295,7 +295,7 @@ theorem linkBinds_rec {I : Claims.Recursion.Inner FlockDeploy.Coin Claims.Flock.
   rcases linksHold_or_coll hS hcs (hIR _ _ hRi) with hL | ⟨a, ha, a', ha', hc⟩
   · exact (hQ hL).elim
   · refine ⟨a, ?_, a', ?_, hc⟩ <;>
-      simp only [Claims.Recursion.linkInputs, Claims.Recursion.drawsOf, List.map_cons, Claims.Recursion.drawView,
+      simp only [Claims.Recursion.linkInputs, Claims.Recursion.drawsOf, List.map_cons, Claims.Recursion.sampleView,
         hws, Option.getD_some, linkIns] <;>
       assumption
 

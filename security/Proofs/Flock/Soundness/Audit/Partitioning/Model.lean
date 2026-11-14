@@ -10,7 +10,7 @@ A computation is divided into `n` proof blocks. Unit `u` does work `w u`, and pr
 units by a sampling design `L` (`Law`), a sampled incorrect proof block is caught, and the prover fixes its transcript before the sample. These are
 the definitions the partitioning guarantees (`Partitioning.Guarantees`) read:
 
-* `cost L c = ∑_u incl(u) · c(u)`, the verifier's expected proving cost, and `meanDraws L = ∑_u incl(u)`, the expected
+* `cost L c = ∑_u incl(u) · c(u)`, the verifier's expected proving cost, and `meanSamples L = ∑_u incl(u)`, the expected
   number of units it samples;
 * `unitCost f o s = f + o · s`, the simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of
   work;
@@ -39,7 +39,7 @@ variable {n : ℕ}
 noncomputable def cost (L : Law n) (c : Fin n → ℝ) : ℝ := ∑ u, (L.incl u).toReal * c u
 
 /-- The expected number of units a sampling design samples. -/
-noncomputable def meanDraws (L : Law n) : ℝ := ∑ u, (L.incl u).toReal
+noncomputable def meanSamples (L : Law n) : ℝ := ∑ u, (L.incl u).toReal
 
 /-- The simple cost model: a fixed cost `f` per sampled proof block plus an overhead `o` per unit of work `s`. -/
 def unitCost (f o s : ℝ) : ℝ := f + o * s

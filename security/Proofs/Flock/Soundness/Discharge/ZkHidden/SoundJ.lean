@@ -32,7 +32,7 @@ The sampling design, `miss(K)`, `ε_ks` and `δ_link` are `zk_session_soundJ`'s:
 under A3 at its one byte source. What changes is what hidden outputs change at one table (`zk_session_soundH`): the
 circuit and public file are `HmOut`'s, each table is `setupHidden`'s (`setupTables_partsH` at `J > 1`), the sites and
 rows are HiddenExec's `keyPlaceH` and `keyRowsH` (`rsZHJ`), the tags are `TagsOkZHJ`, and the challenger's live-coin part's samples are
-`DrawOkZKHJ`. The record is `RecordsLiveZKJ`, unchanged.
+`SampleOkZKHJ`. The record is `RecordsLiveZKJ`, unchanged.
 -/
 
 @[expose] public section
@@ -50,7 +50,7 @@ variable {mPts n : ℕ} {Reg : Type}
 theorem zk_session_soundHJ
     (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
-    (y₀ : DrawSetupZHJ (inputsJ I 0) mPts S₀ d₀)
+    (y₀ : SampleSetupZHJ (inputsJ I 0) mPts S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) → LiveOutJ (planZHJ (Reg := Reg) dj y₀ S R).length mPts → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the session's circuit and public file
@@ -61,7 +61,7 @@ theorem zk_session_soundHJ
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the challenger's live-coin part's sample at each of the sampling design's samples
-    (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
+    (hDraw : ∀ ω, SampleOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
     -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters

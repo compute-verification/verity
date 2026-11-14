@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Assumptions.Zk
 public import Proofs.Flock.Soundness.Discharge.Composed.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundSampleOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
 import Mathlib.Tactic.Echelon.Zsqrtd
@@ -25,9 +25,9 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # One hidden-output `--zk` sampled session is sound, under the record's custody
 
 `zk_session_soundH_custody`: `zk_session_soundH` with its two premises about the record, `hRec` (`RecordsLiveZK`) and
-`hDraw` (`DrawOkZKH` at each of `Law.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
+`hDraw` (`SampleOkZKH` at each of `Law.execOS`'s samples), replaced by one named assumption, `RecordCustodyZK`
 (`live-verifier`), at `mPts := mPtsOf c.g (∑ s, ks s)`, the link points verity-verify-proof sets up at each of the sampling design's samples
-(`drawOkZKH_of_exec`), as `Composed.zk_session_sound_custody` is `zk_session_sound`'s. It rests on five: `cr/sha-512`
+(`sampleOkZKH_of_exec`), as `Composed.zk_session_sound_custody` is `zk_session_sound`'s. It rests on five: `cr/sha-512`
 (`hCR`), `ecr/sha-512` (A2, inside `δ_link`), A3 (`hA3`), A6 and `live-verifier` (`hCust`).
 -/
 
@@ -43,7 +43,7 @@ variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session is sound, under `live-verifier`.** `zk_session_soundH` at the link
 points of the sampling design's own samples, `mPtsOf c.g (∑ s, ks s)`, with the record's custody (`RecordCustodyZK`) in place of
-`hRec` and `hDraw`: `hRec` is its first half, and `hDraw` at every sample of `Law.execOS` is `drawOkZKH_of_exec` from its
+`hRec` and `hDraw`: `hRec` is its first half, and `hDraw` at every sample of `Law.execOS` is `sampleOkZKH_of_exec` from its
 second. -/
 theorem zk_session_soundH_custody
     (I : Inputs) (ht : I.tags.typed = false)
@@ -57,7 +57,7 @@ theorem zk_session_soundH_custody
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the record, at the link points of the sampling design's samples
-    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
+    (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : SampleSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
     -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
@@ -71,31 +71,31 @@ theorem zk_session_soundH_custody
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH dj y₀
         ((Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop).draw ω)
         (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))) j
       (zcStrat execArith hs512 (planAtZKH dj y₀)
         (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ) ω)) qF qS) :
     prob (fun o => LiveAcceptsZK I o ∧
         K₀ ≤ (((keyProg c hU n).partition (Layout.outsOf c hU n)).wrong
           (XplurZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
             ((rsZH dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZH_computes dj y₀ ht hc hscope hU hpub hpt))
             (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
             (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) k Rw)).card)
         (auditLive (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) Reg (liveOf dg (mPtsOf c.g (∑ s, ks s)) N wr)) τ ≤
       (Law.stratified σs ks hks).miss K₀ +
         ksAvgStrictZ (planAtZKH dj y₀) (Law.execOS (n := n) src (.stratified Kd (Array.ofFn St)) pop) k qF qS
           (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) +
         linkBoundZC execArith hs512 ((keyProg c hU n).partition (Layout.outsOf c hU n)) (planAtZKH dj y₀) (tabAtZKH dj y₀)
           ((rsZH dj y₀ ht hc hscope hU hpub hpt).bindingZ (rsZH_computes dj y₀ ht hc hscope hU hpub hpt))
           k Rw M ρ t' (reg (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ))
           (cont (simZ execArith hs512 _ I wr _ dg _ _ _ _ N (decodesOnZK_of_runsOnZC execArith hs512 _ I wr _ _ _ _ (runsZC_liveH I ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj y₀ wr _ tablesAtZKH_live hTags hCust.1
-          (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) := by
+          (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω))) τ)) := by
   exact zk_session_soundH I ht dj y₀ wr dg N hc hU hpub hpt hscope σs ks hks St hS Kd pop Lb src hA3
-    (fun ω => drawOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀
+    (fun ω => sampleOkZKH_of_exec I hc σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀
     τ hCR
 
 end FlockSoundness.Discharge.ZkHidden

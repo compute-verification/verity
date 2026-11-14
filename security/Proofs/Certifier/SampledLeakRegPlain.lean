@@ -37,7 +37,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainLeafKS
 import Proofs.Flock.Claims.Sampling.Assembled
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+import Proofs.Flock.Claims.Sampling.Select.SampleLaw
 import Proofs.Flock.Claims.Sampling.Select.Scope
 import Proofs.Flock.SamplingGeneric
 import Proofs.Certifier.SampledAuditAccepted
@@ -113,7 +113,7 @@ set_option synthInstance.maxSize 1024 in
 (`SamplingDeploy.ks_compiled`), at Flock's plain KS (`FlockDeploy.KS.plain_KS`), its decoder within the radius
 (`listWithin_deployPlainTrim`), the commitment's binding and the code's facts. -/
 theorem sampledLeak_registered_plain_sha512
-    (hfixed : DrawFixed Dp) (hsessions : SessionRuns shaD Dp) (hnum : SamplingDeploy.SessionsInPlain c)
+    (hfixed : SampleFixed Dp) (hsessions : SessionRuns shaD Dp) (hnum : SamplingDeploy.SessionsInPlain c)
     (hslots : DrawSlots Dp) (hopens : SessionOpens shaD Dp iroots)
     (hfix : InteriorFixed shaD Dp iroots) (hprog : ProgramScope Dp) (hchecks : ChecksScope shaD Dp) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
@@ -128,7 +128,7 @@ theorem sampledLeak_registered_plain_sha512
   sampledLeak_registered_plain relD c iroots shaD
     (SamplingDeploy.ks_compiled (FlockDeploy.deployPlainTrim relD) c iroots shaD FlockDeploy.KS.plain_KS
       (listWithin_deployPlainTrim relD) (binds_deployOf (FlockDeploy.deployPlainTrim relD) c shaD)
-      (drawLaw_of_slots Dp hslots)
+      (sampleLaw_of_slots Dp hslots)
       (refuses_of shaD Dp (scopeMatches_of Dp hslots hprog) hchecks) hfix hfixed hsessions
       (SamplingDeploy.innerNumbers_deployPlain relD c hnum) hopens)
     L K S lay k δ hδ reg ops Dj x hx hreg Ω P

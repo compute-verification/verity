@@ -8,7 +8,7 @@ public import Proofs.Flock.Claims.Sampling.Select.Take
 /-!
 # The deployed sample runs out of bytes with probability at most `k_d·2⁻⁶⁴`
 
-The deployed sample (`Spot.Draw.drawUnits`) reads one byte stream in order (`Spot.Draw.take`): a subset sample is one
+The deployed sample (`Spot.Draw.sampleUnits`) reads one byte stream in order (`Spot.Draw.take`): a subset sample is one
 stage, a stratified or work sample one stage per stratum, each stage's sampler run on its first `need` bytes and on
 `need` more whenever it returns nothing (`Flock.Draw.onWith`). A stage whose sampler returns a sample on its first read
 reads nothing more, so the next stage's first read starts where it ends. On a stream that holds every stage's first
@@ -19,11 +19,11 @@ probability at most `k_s·2⁻⁶⁴` (`Law.subset_prefix_none_le`), whatever th
 * `firstOk_fail_le`: on a uniform stream that holds the stages' first reads, some stage's first read fails with
   probability at most the stages' bounds added (the stages' first reads are disjoint blocks of the stream).
 * `onWith_take_first`, `stratifiedWith_take_first`, `units_ok_of_firstOk`: where every first read samples,
-  `onWith`, the stratified sample and `drawUnits` return.
+  `onWith`, the stratified sample and `sampleUnits` return.
 * `Flock.Bridge.firstRead`: the bytes the stages read first, in all.
 * `Flock.Bridge.strata_fail_le`: some stratum's first read fails with probability at most `(Σ_s k_s)·2⁻⁶⁴`.
 * `Flock.Bridge.units_error_le`: under a sampling design on strata that samples `kd` units (`LawOn`), on a uniform
-  stream of at least `firstRead law n` bytes, `drawUnits` returns no sample with probability at most `kd·2⁻⁶⁴`.
+  stream of at least `firstRead law n` bytes, `sampleUnits` returns no sample with probability at most `kd·2⁻⁶⁴`.
 * `Flock.Bridge.execSel_error_le`, `execSel_card_le`: the same of the deployed sample on a uniform byte source
   (A3), and a deployed sample that ends holds at most `kd` proof blocks.
 -/
@@ -32,7 +32,7 @@ probability at most `k_s·2⁻⁶⁴` (`Law.subset_prefix_none_le`), whatever th
 
 namespace Properties.Spot.SecurityProofs
 
-open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.DrawExec Finset
+open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.SampleExec Finset
 open scoped ENNReal
 
 /-! ## Every stage's first read samples -/
@@ -253,10 +253,10 @@ theorem stratifiedWith_take_first (src : ByteArray) (strata : Array Flock.Draw.S
       exact ⟨_, _, hr.symm⟩
   exact key _ rfl
 
-/-- **`drawUnits` returns a sample** where every stage's first read samples. -/
+/-- **`sampleUnits` returns a sample** where every stage's first read samples. -/
 theorem units_ok_of_firstOk (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (miss : ℕ → Array ℕ → Prop)
     (h : FirstOk (lawStages law n miss) src 0) :
-    ∃ units read, _root_.Spot.Draw.drawUnits law n src = .ok (units, read) := by
+    ∃ units read, _root_.Spot.Draw.sampleUnits law n src = .ok (units, read) := by
   have key : ∀ r, (Flock.Draw.drawWith (fun _ need => _root_.Spot.Draw.take src need) law n).run 0 = r →
       ∃ d read, r = .ok (some d, read) := by
     intro r hr
@@ -296,7 +296,7 @@ theorem units_ok_of_firstOk (law : Flock.Draw.Law) (n : ℕ) (src : ByteArray) (
       exact ⟨_, _, hr.symm⟩
   obtain ⟨d, read, hd⟩ := key _ rfl
   refine ⟨d.units, read, ?_⟩
-  unfold _root_.Spot.Draw.drawUnits
+  unfold _root_.Spot.Draw.sampleUnits
   rw [hd]
   rfl
 
@@ -352,7 +352,7 @@ samples (`units_ok_of_firstOk`), and stage `s`'s fails with probability at most 
 theorem units_error_le {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (hlaw : LawOn law ns kd)
     (hns : ns.sum = n) (L : ℕ) (hL : firstRead law n ≤ L) :
     prCoin (fun f : Fin L → Fin 256 => ¬ ∃ units read,
-      Spot.Draw.drawUnits law n (Properties.Spot.bytesOf f) = .ok (units, read)) ≤
+      Spot.Draw.sampleUnits law n (Properties.Spot.bytesOf f) = .ok (units, read)) ≤
       (kd : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
   refine le_trans (prCoin_mono (q := fun f : Fin L → Fin 256 =>
     ¬ Properties.Spot.SecurityProofs.FirstOk (Properties.Spot.SecurityProofs.lawStages law n fun _ _ => True)
@@ -405,11 +405,11 @@ theorem execSel_error_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {law : Flock.Draw.Law}
     {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd) (hns : ns.sum = n) (hL : firstRead law n ≤ L 0) :
     prCoin (fun ω => ¬ ∃ units read,
-      Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) ≤
+      Spot.Draw.sampleUnits law n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) ≤
       (kd : ℝ≥0∞) * (2 ^ 64 : ℝ≥0∞)⁻¹ := by
   classical
   let E : (i : Fin 1) → (Fin (L i) → Fin 256) → Prop := fun _ g => ¬ ∃ units read,
-    Spot.Draw.drawUnits law n (Properties.Spot.bytesOf g) = .ok (units, read)
+    Spot.Draw.sampleUnits law n (Properties.Spot.bytesOf g) = .ok (units, read)
   calc prCoin (fun ω => E 0 (t ω 0))
       = prCoin (fun f : (i : Fin 1) → Fin (L i) → Fin 256 => E 0 (f 0)) := ht fun f => E 0 (f 0)
     _ ≤ prCoin (fun f : (i : Fin 1) → Fin (L i) → Fin 256 => ∀ s ∈ (univ : Finset (Fin 1)), E s (f s)) :=
@@ -419,19 +419,19 @@ theorem execSel_error_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : F
     _ ≤ _ := units_error_le hlaw hns (L 0) hL
 
 /-- **A deployed sample that ends holds at most `kd` proof blocks**: the units of `[0, n)` among the `kd` it returns
-(`drawUnits_size`). -/
+(`sampleUnits_size`). -/
 theorem execSel_card_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ}
     (hlaw : LawOn law ns kd) (ω : Ω)
-    (h : ∃ units read, Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) :
+    (h : ∃ units read, Spot.Draw.sampleUnits law n (Properties.Spot.bytesOf (t ω 0)) = .ok (units, read)) :
     ((execSel (n := n) t law n).draw ω).card ≤ kd := by
   obtain ⟨units, read, hu⟩ := h
   have hd : (execSel (n := n) t law n).draw ω = univ.filter fun u : Fin n => u.val ∈ units := by
-    change (match Spot.Draw.drawUnits law n (Properties.Spot.bytesOf (t ω 0)) with
+    change (match Spot.Draw.sampleUnits law n (Properties.Spot.bytesOf (t ω 0)) with
       | .ok r => univ.filter fun u : Fin n => u.val ∈ r.1
       | .error _ => univ) = univ.filter fun u : Fin n => u.val ∈ units
     rw [hu]
   rw [hd]
-  exact (Audit.Law.card_filter_mem_le n units).trans (le_of_eq (drawUnits_size hlaw hu))
+  exact (Audit.Law.card_filter_mem_le n units).trans (le_of_eq (sampleUnits_size hlaw hu))
 
 end Flock.Bridge

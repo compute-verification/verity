@@ -8,7 +8,7 @@ a registered Definition. The package's docstring and each module's say what it h
 - **Provides:** the frontends that lower a traced model onto the Definitions (`frontend`), the workload Program over a
   run's requests (`workload`), the lifted Program (`lifting`), and the provisional Definitions awaiting admission
   (`quarantine`).
-- **Loaded by:** the integration's `pipeline`, `observe`, `check`, `engine`, `acquire`, `query`, `properties` and
+- **Loaded by:** the integration's `pipeline`, `observe`, `check`, `engine`, `acquire`, `query` and
   `protocols` packages and its tools, `circuit-check`, and the benchmarks that build or read a Program.
 - **Loads:** `verity.circuits` and `verity.definitions`; torch, and vLLM inside functions; the integration's
   `engine`, `config` and `correspondence`; and, inside functions, its `check`, `observe` and `settings` and

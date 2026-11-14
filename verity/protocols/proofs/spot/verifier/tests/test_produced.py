@@ -50,7 +50,7 @@ def _rec(registration=REG):
     return PR.record(REG, DRAW, [tree.entry()], {"partials": PR.rows_of(tree)}), tree
 
 
-def test_the_record_is_held_to_the_registration_the_draw_and_the_verifiers_entries():
+def test_the_record_is_held_to_the_registration_the_sample_and_the_verifiers_entries():
     mine = {"partials": PR.entry(PD, "partials", 3, 2, REG)}
     rec, _tree = _rec()
     assert PR.check(rec, REG, DRAW, mine) == ()

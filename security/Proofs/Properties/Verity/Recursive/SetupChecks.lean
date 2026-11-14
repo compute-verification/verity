@@ -129,7 +129,7 @@ structure RecChecks (h : VStar.Recursive.InnerHeld) (j : ℕ) (tags0 tags : Tags
     (some h.link)) = .ok ()
   linkParts : sts.forM (RecLinkPart.check · registered (some h.src) none) = .ok ()
   labels : RecVStar.checkLabels draw 1 sts = .ok ()
-  law : draw.isSome = true → ProvedScope.drawLaw true tags false draw = .ok ()
+  law : draw.isSome = true → ProvedScope.sampleLaw true tags false draw = .ok ()
 
 /-- At a shape without a RecSparse phase, the inner checks don't read the inner circuit's META binding. -/
 theorem checkInner_dense {sh : RecVStar.Inner} {src : RecCoins.Source}
@@ -377,7 +377,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
     rcases D with _ | d
     · first
-        | (simp [ProvedScope.drawLaw, bind, Except.bind] at hv; done)
+        | (simp [ProvedScope.sampleLaw, bind, Except.bind] at hv; done)
         | cases hv
     have hdraw : T.hm96Rows = true ∧ Witness.recordDraw record = some d := by
       cases hh : T.hm96Rows
@@ -388,8 +388,8 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     try dsimp only at hst
     split at hst
     · rename_i spec sts hb0
-      have hlaw : ProvedScope.drawLaw true T false (some d) = .ok () := by
-        cases hl : ProvedScope.drawLaw true T false (some d) with
+      have hlaw : ProvedScope.sampleLaw true T false (some d) = .ok () := by
+        cases hl : ProvedScope.sampleLaw true T false (some d) with
         | error e => simp [hl, Except.map] at hst
         | ok u => rfl
       obtain ⟨⟨⟩, hprog, hb1⟩ := bind_ok hb0

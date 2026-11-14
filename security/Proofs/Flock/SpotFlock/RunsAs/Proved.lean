@@ -5,7 +5,7 @@ public import Proofs.Flock.SpotFlock.SampleInts
 public import Proofs.Properties.Spot
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Stmt
-public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.ExecSample
 import all Lean.Data.Json.Basic
 import Std.Data.TreeMap.Raw.Lemmas
 
@@ -61,9 +61,9 @@ theorem closure_not_key {law : Json} {names : Array String} (hk : Spot.keys? law
     have h1 : "closure" ∈ kvs.toArray.map Prod.fst := by
       rw [Array.mem_def, Array.toList_map]
       simpa [Spot.entries] using hc
-    have h2 := (FlockSoundness.Audit.DrawExec.mem_qsort _ (· < ·) _).2 h1
+    have h2 := (FlockSoundness.Audit.SampleExec.mem_qsort _ (· < ·) _).2 h1
     rw [show (kvs.toArray.map Prod.fst).qsort (· < ·) = Spot.sortStrings names from hk] at h2
-    exact (FlockSoundness.Audit.DrawExec.mem_qsort _ _ _).1 h2
+    exact (FlockSoundness.Audit.SampleExec.mem_qsort _ _ _).1 h2
   | _ => simp [Spot.keys?] at hk
 
 /-- **A select under a sampling design, with no closure map, accepted**: its sampling design `flockLaw` accepts, its sample object is the sampling design's
@@ -108,7 +108,7 @@ theorem proved_select {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
   have hcd' : Spot.Draw.checkDraw (Json.mkObj ((Spot.entries law).toList ++
       [("population", Lean.toJson n), ("units", Spot.natsJson units)])) (Lean.toJson n) law = #[] := by
     simpa using hcd
-  obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, -, -⟩ := (Properties.Spot.checkDraw_nil _ _ _).1 hcd'
+  obtain ⟨-, -, -, -, -, us, xs, hus, hxs, hasc, -, -⟩ := (Properties.Spot.checkSample_nil _ _ _).1 hcd'
   have hu : Spot.getD (Json.mkObj ((Spot.entries law).toList ++
       [("population", Lean.toJson n), ("units", Spot.natsJson units)])) "units" = Spot.natsJson units := by
     rw [show (Spot.entries law).toList ++ [("population", Lean.toJson n), ("units", Spot.natsJson units)] =

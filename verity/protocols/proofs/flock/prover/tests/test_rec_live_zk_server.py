@@ -289,7 +289,7 @@ def test_a_session_that_ends_without_finish_is_written_and_counted_as_a_stop(tmp
     assert _held(_run(w))
     w.close()
     t.join()
-    assert drew == [RL.RESP_DRAW, RL.RESP_OK, RL.RESP_COINS, RL.RESP_OK, RL.RESP_OK, RL.RESP_COINS] and "crash" not in got
+    assert drew == [RL.RESP_SAMPLE, RL.RESP_OK, RL.RESP_COINS, RL.RESP_OK, RL.RESP_OK, RL.RESP_COINS] and "crash" not in got
     res = got["res"]
     assert [r["session"] for r in res] == [None, None, str(tmp_path / "s2" / "session")]
     assert [(r["refused"], r["rounds"]) for r in res[:2]] == [("rec proxy: the session ended without Finish", 1),

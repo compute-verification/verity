@@ -21,7 +21,7 @@ scan, some only through its carry or only as its outputs, or handed to a callee 
 among the digits; wires from earlier templates that keep to the reader's slot, cross slots or do either unit by unit,
 each from an output of the row's bits whose leaves' width divides the reader's (the same width, or bits under a
 word) or, into a closed row, from any output of the row's bits, written unit by unit and merged into runs
-(`verity.commitments.windows.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
+(`verity.commitments.periods.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
 root the run's own record commits or another; row formats (`formats`): 32-bit leaves, of either schema, of
 parameters the run's own record or the first one registers in those leaves, and 16-bit leaves in segment rows of
@@ -81,7 +81,7 @@ import random
 from pathlib import Path
 
 import verity.circuits
-import verity.commitments.windows.interface as IF
+import verity.commitments.periods.interface as IF
 from verity.circuits import codec
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.population import mixed_population_program
@@ -270,7 +270,7 @@ def reading(rng, params: list, outs: list, share: float) -> list:
 
 class Circuit:
     """A circuit as its record states it, built declaration by declaration: `templates`, each `(Definition, units)`;
-    `cuts`; `wires` and `reads`, `verity.commitments.windows.interface` patterns; the registered `params`, `tables`, `roots`
+    `cuts`; `wires` and `reads`, `verity.commitments.periods.interface` patterns; the registered `params`, `tables`, `roots`
     (table reads) and `openings`; `ingress`; the inference `entries` with the class's `slots` and `steps`; the `order`
     it states, or None; `values`, the registered parameters its Program takes as inputs of its own; and `formats`, by
     registered parameter the format of its rows where they are not 16-bit leaves in `hm96-sha512/row/v2` rows."""
@@ -854,7 +854,7 @@ HISTORY = "history/hidden"
 
 def _history(d: dict, **fields) -> None:
     """The record `d` with one history table more: `Norm`'s output rows, a position a unit, as
-    `verity.commitments.windows.interface` records one (`History.doc`). `fields` replace its own, and one that is
+    `verity.commitments.periods.interface` records one (`History.doc`). `fields` replace its own, and one that is
     None is left out."""
     n = dict(d["templates"])[NORM]
     h = {"name": HISTORY, "program": d["program"], "writer": NORM, "out": "o0", "words": 2,
@@ -873,7 +873,7 @@ def _opened_from_history(d: dict) -> None:
 
 #: `lowered(2, 3)`'s record with `registered.histories`, a case each: the stage that refuses the record, None where
 #: the form takes it, and the edit that makes it. `LOOSE` names the one the form takes that
-#: `verity.commitments.windows.interface` refuses: the form reads a history's keys and its name, and nothing of its
+#: `verity.commitments.periods.interface` refuses: the form reads a history's keys and its name, and nothing of its
 #: writer, rows and runs.
 HISTORIES: dict[str, tuple] = {
     "histories, none of them": (None, lambda d: d["registered"].update(histories=[])),
@@ -1177,7 +1177,7 @@ def _registered(root: str, n: int, bits: int, stated: int | None = None) -> tupl
 
 
 def listed(c: Circuit):
-    """The edit that makes `c`'s record one that lists its members, as `verity.commitments.windows.interface` writes one
+    """The edit that makes `c`'s record one that lists its members, as `verity.commitments.periods.interface` writes one
     (`_listed`): a member a template, in the templates' order, beside the registered reads, with no wires, cuts,
     order, ingress or blocks."""
     def edit(d: dict) -> None:
@@ -1312,7 +1312,7 @@ def _without(stage: str | None):
 
 def spot_of(c: Circuit, doc: dict, order=None) -> dict | None:
     """The record `doc`'s wires as SPOT's `wires` piece reads them (`Spot.Wires.Wiring.ofJson`), each template's rows
-    and outputs Python's own layout of it (`verity.commitments.windows.interface.layout`, what `check_wires` reads): the order
+    and outputs Python's own layout of it (`verity.commitments.periods.interface.layout`, what `check_wires` reads): the order
     the record's, else `order` where one is given beside it. None where that layout has no row for a port: its leaves
     of two widths, or an output of 16 bits or more that is not whole 16-bit words."""
     if any(len(ty.width_set()) != 1 for fn, _ in c.templates
