@@ -76,6 +76,16 @@ def _tp(rank, B, served, arm, reps, **kw):
                        "served_macs": served, "reps": [[ms, MHZ, 300] for ms in reps], **kw})
 
 
+SMI = "4, GPU-x, 2092, 2430, 300, 600, {}, 2430, 0x0\n"  # an nvidia-smi row: its application clock, then the default
+
+
+def _ncu(kernel, unit, *launches, ms):
+    """ncu's CSV of a kernel's launches: each one's DRAM bytes, in `unit`, and its `ms` on the GPU."""
+    return '"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n' + "".join(
+        f'"{i}","{kernel}","dram__bytes.sum","{unit}","{b}"\n'
+        f'"{i}","{kernel}","gpu__time_duration.sum","msecond","{ms}"\n' for i, b in enumerate(launches))
+
+
 def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
     """A pfill-k run: MMA-counted fill, every run-level gate's file."""
     d = tmp_path / "set0"
@@ -93,14 +103,9 @@ def _write_pfill(tmp_path, *, mma="IMMA.16832.S8.S8", app="2430", slow=41):
     (tmp_path / "sass.txt").write_text(f"     16 {mma}\n")
     (tmp_path / "alone.jsonl").write_text(json.dumps({"mode": "alone", "ok": True, "share_gpu": 0.75,
                                                       "share_fill_sms": 0.78}) + "\n")
-    hdr = '"ID","Kernel Name","Metric Name","Metric Unit","Metric Value"\n'
-    (tmp_path / "ncu-filler.csv").write_text(hdr + "".join(
-        f'"{i}","void kfill_k<4>(...)","dram__bytes.sum","Kbyte","20"\n'
-        f'"{i}","void kfill_k<4>(...)","gpu__time_duration.sum","msecond","2.4"\n' for i in range(3)))
-    (tmp_path / "ncu-control.csv").write_text(hdr + "".join(
-        f'"{i}","bw_read(...)","dram__bytes.sum","Gbyte","1.075"\n'
-        f'"{i}","bw_read(...)","gpu__time_duration.sum","msecond","0.7"\n' for i in range(3)))
-    (tmp_path / "gpu.txt").write_text(f"4, GPU-x, 2092, 2430, 300, 600, {app}, 2430, 0x0\n" * 2)
+    (tmp_path / "ncu-filler.csv").write_text(_ncu("void kfill_k<4>(...)", "Kbyte", 20, 20, 20, ms=2.4))
+    (tmp_path / "ncu-control.csv").write_text(_ncu("bw_read(...)", "Gbyte", 1.075, 1.075, 1.075, ms=0.7))
+    (tmp_path / "gpu.txt").write_text(SMI.format(app) * 2)
     return served
 
 
@@ -161,6 +166,7 @@ def test_one_failed_gate_fails_the_set_and_only_the_wrapped_point_is_flagged(tmp
                           for r in (0, 1)])
     got = [(row["tp"], row["B"], row["L"], row["gates_ok"], row["kv_wrapped"]) for row in R.rows(str(tmp_path))]
     assert got == [(*key, False, key == points[0]) for key in sorted(points)]
+    assert R.gates(str(tmp_path), [])["pf_gate"]["ok"] is False  # and it fails the run's gate, whichever rank's it is
 
 
 def test_the_fillers_arms_are_read_at_their_own_clock_time_and_fold(tmp_path):
@@ -213,6 +219,46 @@ def test_pfill_gates_fail(tmp_path, kw, gate):
     _write_pfill(tmp_path, **kw)
     g = R.gates(str(tmp_path), list(R.rows(str(tmp_path))))
     assert not g[gate]["ok"] and not g["all_ok"]
+
+
+def _failing(tmp_path, rows):
+    """The run's gates that are not ok for the points' `rows`, by name; all_ok says whether there is one."""
+    g = R.gates(str(tmp_path), rows)
+    failing = [k for k, v in g.items() if k != "all_ok" and not v["ok"]]
+    assert g["all_ok"] == (not failing)
+    return failing
+
+
+def test_a_run_that_wrote_nothing_passes_no_gate(tmp_path):
+    assert _failing(tmp_path, []) == ["pf_gate", "receipts", "slowdown", "sass", "alone", "dram", "clocks"]
+
+
+SPOILED = [  # the gate that fails, if one does; a file of _write_pfill's run; what the file holds in its place
+    ("sass", "sass.txt", "     16 IMMA.16832.S8.S8\n      2 HMMA.16816.F32\n"),  # a second MMA opcode
+    ("sass", "sass.txt", "     16 IMMA.16832.S8.S8\nnon-RZ IMMA: 0\nnon-RZ IMMA: 3\n"),  # the second count is not zero
+    ("alone", "alone.jsonl", '{"ok": true, "share_gpu": 0.75, "share_fill_sms": 0.78}\n{"ok": false}\n'),
+    ("dram", "ncu-control.csv", _ncu("bw_read(...)", "Gbyte", 1.3, 1.3, 1.3, ms=0.7)),  # the control over its 1 GiB
+    ("dram", "ncu-control.csv", _ncu("bw_read(...)", "Gbyte", 0.9, 0.9, 0.9, ms=0.7)),  # and under it
+    (None, "ncu-control.csv", _ncu("bw_read(...)", "Gbyte", 1.075, 1.3, 1.075, ms=0.7)),  # its median is in range
+    ("dram", "ncu-filler.csv", _ncu("void kfill_k<4>(...)", "Kbyte", 20, 80000, 20, ms=2.4)),  # one launch over
+    ("clocks", "gpu.txt", SMI.format(2430) + SMI.format(1800)),  # one row's application clock is not its default
+]
+
+
+@pytest.mark.parametrize("gate, file, text", SPOILED)
+def test_a_spoiled_file_fails_its_own_gate_and_no_other(tmp_path, gate, file, text):
+    _write_pfill(tmp_path)
+    (tmp_path / file).write_text(text)
+    assert _failing(tmp_path, list(R.rows(str(tmp_path)))) == ([gate] if gate else [])
+
+
+def test_one_points_bad_receipts_or_slowdown_fail_the_runs_gate(tmp_path):
+    _write_pfill(tmp_path)
+    (row,) = R.rows(str(tmp_path))
+    assert _failing(tmp_path, [row]) == []
+    for gate, bad in (("receipts", {"rec_bad": 1}), ("receipts", {"shape_bad": 1}), ("receipts", {"rec_checked": 0}),
+                      ("slowdown", {"slowdown": 1.06})):
+        assert _failing(tmp_path, [row, {**row, **bad}]) == [gate]  # a second point, one field of its row gone bad
 
 
 def test_proved_fraction_by_fold():
@@ -277,3 +323,19 @@ def test_the_deferred_pass_is_read_from_every_record_of_the_defer_arm(tmp_path):
     assert (row["dp_whole_bad"], row["dp_whole_checked"], row["defer_fill_bad"]) == (110, 1000, 10)
     assert (row["dcap"], row["dSd"], row["dT"]) == (10, 64, 8192)
     assert (row["dalone_ms"], row["dalone_cost"]) == (60, pytest.approx(60 / 80))
+
+
+def test_the_deferred_pass_has_two_gates_of_its_own(tmp_path):
+    _write_defer(tmp_path, nc=2, xin=False)
+    for r in (0, 1):  # rank 1's dp_gate fails: one control came out equal to its receipt
+        gate = {"mode": "dp_gate", "rank": r, "ok": r == 0, "bad": 0, "control_equal": r, "q_bad": 0}
+        with (tmp_path / "set0" / f"rank{r}.jsonl").open("a") as f:
+            f.write(json.dumps(gate) + "\n")
+    (row,) = R.rows(str(tmp_path))
+    assert row["defer_fill_bad"] == 2  # neither rank's defer record says its fill's shape was checked
+    good = {**row, "defer_fill_bad": 0}
+    g = R.gates(str(tmp_path), [good])
+    assert g["dp_gate"] == {"ok": False, "records": 2, "bad": 1} and g["defer_receipts"]["ok"]
+    for bad in ({"dp_whole_bad": 1}, {"defer_fill_bad": 1}):
+        assert not R.gates(str(tmp_path), [good, {**good, **bad}])["defer_receipts"]["ok"]
+    assert not R.gates(str(tmp_path), [])["defer_receipts"]["ok"]  # no point's deferred receipts were checked
