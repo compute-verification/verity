@@ -71,7 +71,7 @@ end Live
 
 /-- **The openings `op` of the committed files `r` hold at their constants**: a gate `r` fixes to `b` opens to every
 value all of whose bits are `b`, as `Vocab.Opens` reads a constant. -/
-def ConstsOpen (r : Verity.FileRead) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
+def ConstsOpen (r : Verity.WindowFiles) (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) : Prop :=
   ∀ g b, r.consts g = some b → ∀ v : BitVec (r.circuit.w g), (∀ i : Fin (r.circuit.w g), v.getLsbD i.val = b) → op g v
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
@@ -130,7 +130,7 @@ theorem units_eq : A.fileRead.units = A.n :=
 `tr`, on the committed files `r` the session reads, fails the claim at the session's share under openings that hold
 wherever the deployed commitment opens and at the constants, is accepted by Flock's `--zk` verifier with probability at
 most the session's error at `t` calls, where the session's per-finder premises hold at `t`. -/
-theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
+theorem ks {r : Verity.WindowFiles} (hr : r = Verity.WindowFiles.one A.fileRead)
     (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (hop : A.OpensUnder r op) (hc : ConstsOpen r op)
     (tr : r.circuit.Trace) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
     (hF : A.FinderCR τ t) (hI : ¬ Accounting.IntegrityHolds r.parts op tr A.ε) :

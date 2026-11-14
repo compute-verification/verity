@@ -33,11 +33,11 @@ theorem deployedKey_params {key : ChallengerKey} (h : OneStageZk.deployedKey key
   obtain ⟨⟨rfl, rfl⟩, rfl⟩ := h
   rfl
 
-/-- **Every challenger key v2's parameters name is at `Lms.deployed`**: they name one, and `paramsOfJson` refuses it
-at other parameters (`KEY_PARAMS`). -/
-theorem paramsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsOfJson j = .ok p) :
+/-- **Every challenger key parsed parameters name is at `Lms.deployed`**: they name one, and `paramsParsed` refuses
+it at other parameters (`KEY_PARAMS`). -/
+theorem paramsParsed_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsParsed j = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
-  unfold OneStageZk.paramsOfJson at h
+  unfold OneStageZk.paramsParsed at h
   simp only [bind, Except.bind] at h
   repeat' split at h
   all_goals try contradiction
@@ -47,8 +47,18 @@ theorem paramsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk
   subst h
   exact ⟨_, _, hch, deployedKey_params (by simpa using hk)⟩
 
-/-- **v2's evidence holds its coins within `LIMITS`**: `evidenceOf` refuses them past (`LIMITS.form`). -/
-theorem evidenceOf_within {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceOf b = .ok e) :
+/-- **Every challenger key v2's parameters name is at `Lms.deployed`**, in either form: the v1 part of parameters
+either form's parse returns is that of parameters `paramsParsed` returned but for its registration check's members
+(`paramsEitherOfJson_base`). -/
+theorem paramsOfJson_deployed {j : Json} {p : OneStageZk.Params} (h : OneStageZk.paramsEitherOfJson j = .ok p) :
+    ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
+  obtain ⟨j', p', ms, hp', hb⟩ := OneStageZk.paramsEitherOfJson_base h
+  rw [hb]
+  exact paramsParsed_deployed hp'
+
+/-- **The one statement's evidence holds its coins within `LIMITS`**: `evidenceOf` refuses them past
+(`LIMITS.form`). -/
+theorem evidenceParsed_within {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceOf b = .ok e) :
     withinAt LIMITS e.base.coins = true := by
   unfold OneStageZk.evidenceOf at h
   simp only [bind, Except.bind] at h
@@ -354,11 +364,19 @@ theorem readHashed_le (l : Limits) (key : ChallengerKey) (label : String) (coins
   have := pinsHashed_length l coins h
   omega
 
+/-- **v2's evidence holds its coins within `LIMITS`**, in either form: the per-member form's v1 part is one
+`evidenceOf` read (`evidenceEitherOf_base`). -/
+theorem evidenceOf_within {b : ByteArray} {e : OneStageZk.Evidence} (h : OneStageZk.evidenceEitherOf b = .ok e) :
+    withinAt LIMITS e.base.coins = true := by
+  obtain ⟨b', e', h', hb⟩ := OneStageZk.evidenceEitherOf_base h
+  rw [hb]
+  exact evidenceParsed_within h'
+
 /-! ## A v2 record -/
 
 /-- Every challenger key v2's parameters name, decoded from bytes, is at `Lms.deployed`. -/
 theorem params_deployed {a : ByteArray} {p : OneStageZk.Params}
-    (h : (Core.canonicalJson a >>= OneStageZk.paramsOfJson) = .ok p) :
+    (h : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p) :
     ∃ key label, p.base.challenger = some (key, label) ∧ key.params = Lms.deployed := by
   cases hj : Core.canonicalJson a with
   | error => simp [hj, bind, Except.bind] at h
@@ -368,7 +386,7 @@ theorem params_deployed {a : ByteArray} {p : OneStageZk.Params}
 
 /-- The key v2's samples are read under (`oneStageZkSource`) is at `Lms.deployed`. -/
 theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {d : Draws}
-    (hp : (Core.canonicalJson a >>= OneStageZk.paramsOfJson) = .ok p) (hd : oneStageZkSource p c = some d) :
+    (hp : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p) (hd : oneStageZkSource p c = some d) :
     d.key.params = Lms.deployed := by
   obtain ⟨key, label, hch, hk⟩ := params_deployed hp
   unfold oneStageZkSource oneStageSource at hd
@@ -381,8 +399,8 @@ theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Co
 and reads the samples `d` under them, the signatures `drawCoins` checks in the evidence's coins, at `L` each under the
 key's parameters, and the strings SHA-512 hashes as it reads them are at most `LIMITS`' counts at `Lms.deployed`. -/
 theorem record_calls_le (L : Lms.Params → Nat) {a b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment}
-    {e : OneStageZk.Evidence} {d : Draws} (hp : (Core.canonicalJson a >>= OneStageZk.paramsOfJson) = .ok p)
-    (he : OneStageZk.evidenceOf b = .ok e) (hd : oneStageZkSource p c = some d) :
+    {e : OneStageZk.Evidence} {d : Draws} (hp : (Core.canonicalJson a >>= OneStageZk.paramsEitherOfJson) = .ok p)
+    (he : OneStageZk.evidenceEitherOf b = .ok e) (hd : oneStageZkSource p c = some d) :
     (signatures d.key e.base.coins).length * L d.key.params + (readHashed d.key d.label e.base.coins).length ≤
       signaturesAt LIMITS * L Lms.deployed + readsAt LIMITS := by
   rw [source_deployed hp hd]
