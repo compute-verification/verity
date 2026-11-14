@@ -1,12 +1,13 @@
 module
 
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceGap
 import Proofs.Pouw.PearlC.TTOutW1
 import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # The unpromoted record, the cap, and g at sm_120's prices

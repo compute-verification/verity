@@ -42,7 +42,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from verity_vllm.engine.env import apply_target
+from verity_bench.adapter import apply_target, native_collect_committer
 
 #: the row Commit's staging (`config.CommitConfig`): 256 MiB windows, 8 slots; learning bounded, nothing raw retained
 ENV = {"VERITY_WINDOW_MB": "256", "VERITY_WINDOW_SLOTS": "8", "VERITY_STAGING_BOUNDED": "1", "VERITY_RETAIN": "none"}
@@ -107,12 +107,12 @@ class CommitArm:
         return committer_engine(target.engine)
 
     def ready(self, target: Any) -> None:
-        from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+        collector = native_collect_committer()
 
         apply_target(ENV)
         engine = self.engine(target)
-        com = NativeCollectCommitter(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
-                                     native_hooks=True, auto_blocks=True, native_worker=True)
+        com = collector(engine, run_id=f"bench:{self.id}", arena_bytes=None, wrap=True, gather=True,
+                        native_hooks=True, auto_blocks=True, native_worker=True)
         if not (com.windowed and com.bounded and com.retain == "none"):
             raise RuntimeError(f"{self.id} arm: the committer did not take the row Commit's staging {ENV}")
         if com.commit_scheme != SCHEME:

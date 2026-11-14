@@ -12,7 +12,7 @@ raised) and posts once in #agent-alerts naming infra's user group; it clears onc
 clear is a reply in the open post's thread. A post Slack refuses is tried again next pass. At `digest_hour_utc` each day the
 digest posts every check's lines: loop liveness, R2's size by top-level prefix, Neon, spend month to date and projected, the
 GitHub rate limit and the public endpoints. A check whose credential isn't in the environment is skipped, and the digest says
-once per check which key would close the gap (under *Unmonitored*: `needs KEY: what it would watch`). State: `state` in the config.
+once per check which key would close the gap (under *Unwatched*: `needs KEY: what it would watch`). State: `state` in the config.
 
 The checks (cloud_watch.toml holds every threshold, price and path):
 
@@ -471,13 +471,13 @@ def spend_runpod(ctx: Ctx, rep: Report, lines: dict) -> None:
         line = lines.get(prefix)
         if not line or epoch(str(line.get("expires", "1970-01-01T00:00Z"))) < ctx.now:
             continue
-        cap, spent = line.get("cap_usd"), float(st.get("spent") or 0)
+        limit, spent = line.get("cap_usd"), float(st.get("spent") or 0)
         if line.get("cap_usd_per_day") is not None:
-            cap, spent = line["cap_usd_per_day"], float(st.get("window_usd") or 0)
-        if cap and spent >= cfg["line_alert_share"] * cap:
-            rep.findings.append(Finding(f"spend|runpod|{prefix}", f"*Budget line `{prefix}` at {usd(spent)} of {usd(cap)}*"
+            limit, spent = line["cap_usd_per_day"], float(st.get("window_usd") or 0)
+        if limit and spent >= cfg["line_alert_share"] * limit:
+            rep.findings.append(Finding(f"spend|runpod|{prefix}", f"*Budget line `{prefix}` at {usd(spent)} of {usd(limit)}*"
                                                                   + (" today" if line.get("cap_usd_per_day") is not None else "")
-                                                                  + " on RunPod (the guard terminates its pods at the cap)."))
+                                                                  + " on RunPod (the guard terminates its pods at the limit)."))
 
 
 def nebius_instances(ctx: Ctx, rep: Report) -> list[dict] | None:
@@ -543,13 +543,13 @@ def spend_nebius(ctx: Ctx, rep: Report, lines: dict) -> None:
         hours = max(epoch(str(line["expires"])) - ctx.now, 0) / 3600 if line.get("expires") else month_hours(ctx.now)[1]
         rep.lines.append(f"  `{prefix}`: {usd(rate)}/h, " + (f"{usd(rate * 24)}/day of {usd(line['cap_usd_per_day'])}/day"
                                                          if line.get("cap_usd_per_day") is not None else
-                                                         f"{usd(rate * hours)} more to its expiry, cap {usd(line.get('cap_usd') or 0)}"))
+                                                         f"{usd(rate * hours)} more to its expiry, limit {usd(line.get('cap_usd') or 0)}"))
         if line.get("cap_usd_per_day") is not None and rate * 24 > line["cap_usd_per_day"]:
             rep.findings.append(Finding(f"spend|nebius|{prefix}|day", f"*Budget line `{prefix}` burning {usd(rate * 24)}/day* on Nebius, "
                                                                       f"over its {usd(line['cap_usd_per_day'])}/day."))
         elif line.get("cap_usd") and rate * hours > line["cap_usd"]:
             rep.findings.append(Finding(f"spend|nebius|{prefix}|cap", f"*Budget line `{prefix}`'s running VMs alone reach "
-                                                                      f"{usd(rate * hours)} by its expiry*, over its {usd(line['cap_usd'])} cap "
+                                                                      f"{usd(rate * hours)} by its expiry*, over its {usd(line['cap_usd'])} limit "
                                                                       f"({usd(rate)}/h for {hours:.0f} h)."))
 
 
@@ -711,7 +711,7 @@ def digest(ctx: Ctx, reports: dict[str, Report]) -> str:
     gaps = sorted({g for r in reports.values() for g in r.gaps})
     return "\n".join([head, *(f"• {ln}" for ln in body),
                       *([f"*Open* ({len(open_)}):"] + [f"• {t}" for t in open_] if open_ else ["Nothing open."]),
-                      *([f"*Unmonitored* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
+                      *([f"*Unwatched* ({len(gaps)}), each until its key is in the pod's environment:"] if gaps else []),
                       *(f"• {g}" for g in gaps)])
 
 

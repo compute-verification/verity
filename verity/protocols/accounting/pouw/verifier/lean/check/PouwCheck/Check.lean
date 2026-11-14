@@ -57,7 +57,7 @@ def expected (p : Params) (f : Fixed) : List (String × Json) :=
 
 def subsetLaw (k : Nat) : Json := Json.mkObj [("k", k), ("law", "subset")]
 
-/-- The registered work level. -/
+/-- The level of the registered `work` item. -/
 def levelOf (items : Json) : Option Nat := PouwWindow.field? (get items "work") "level" >>= nat?
 
 /-- The items that differ from the verifier's, by their canonical strings. -/

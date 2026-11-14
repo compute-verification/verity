@@ -32,6 +32,8 @@ open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
 open _root_.Flock.Firewall.Finish (squeezeP sampleP sampleVecP zerocheckFw lincheckFw repPiop)
 open _root_.Flock.Firewall.Skeleton (RecM recAsks)
 
+variable {wideLeaf : Bool}
+
 /-! ## Taking the algebraic phase's coins -/
 
 /-- **The coins from `j` fit the counts `ns`**: the `i`-th is there and holds `ns[i]` coins. -/
@@ -442,7 +444,7 @@ theorem rounds_fold {st : _root_.Flock.Setup} {k0 : ℕ} {cap dom : ByteArray} {
     exact (tally_run' (p := _) hT hv).1
 
 /-- `--zk` needs `m ≥ 25`. -/
-theorem schedule_m {m : ℕ} {r : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule m = .ok r) : 25 ≤ m := by
+theorem schedule_m {m : ℕ} {r : _root_.Flock.Schedule × ℕ} (h : _root_.Flock.Zk.schedule wideLeaf m = .ok r) : 25 ≤ m := by
   by_contra hc
   unfold _root_.Flock.Zk.schedule _root_.Flock.Zk.queries0 at h
   rw [ite_eq_left (show m ≤ 24 by omega)] at h

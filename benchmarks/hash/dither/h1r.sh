@@ -11,7 +11,7 @@ ROOT=$PWD
 git rev-parse HEAD | tee "$OUT/commit.txt"
 CUDA=${CUDA:-/usr/local/cuda-13.0}
 "$CUDA/bin/nvcc" -O3 -std=c++17 -gencode arch=compute_120a,code=sm_120a -Xptxas -v -Xcompiler -fPIC -shared \
-  -o "$S/libh1r.so" benchmarks/hash/dither/h1r.cu > "$OUT/build.log" 2>&1 \
+  -o "$S/libh1r.so" verity/protocols/experimental/dither/prover/kernels/h1r.cu > "$OUT/build.log" 2>&1 \
   || { echo "h1r: NVCC_FAIL"; grep -v "^ptxas info" "$OUT/build.log" | tail -30; exit 11; }
 grep -A2 "h1r_units_k\|h1r_seeds" "$OUT/build.log" | grep -i "registers\|spill" | head
 "$CUDA/bin/nvcc" -O3 -std=c++17 -I verity/commitments/cuda -gencode arch=compute_120a,code=sm_120a -cubin \

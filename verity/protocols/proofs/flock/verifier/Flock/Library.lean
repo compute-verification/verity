@@ -1,10 +1,11 @@
-/-
+module
+
+/-!
 The library (Project doc `constant-api-public.md` §2.9; core's `verity.ml.circuits.library`, version 2): the tables core owns
 as hardware semantics, public in both tracks. A table is `library` exactly when its SHA-512 (of its raw little-endian u32
 words, the archive key) is listed here, and `program` otherwise. `verity/ml/flock/tests/test_table_library.py` checks this
 list against core's.
 -/
-module
 
 @[expose] public section
 

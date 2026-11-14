@@ -2418,6 +2418,43 @@
     },
     {
       "paths": {
+        "benchmarks/pouw/harness/native/": "verity/protocols/accounting/pouw/prover/kernels/harness/native/",
+        "benchmarks/pouw/nvfp4_sm120/": "verity/protocols/accounting/pouw/prover/kernels/nvfp4_sm120/"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/hash/dither/h1c.cu": "verity/protocols/experimental/dither/prover/kernels/h1c.cu",
+        "benchmarks/hash/dither/h1f.cu": "verity/protocols/experimental/dither/prover/kernels/h1f.cu",
+        "benchmarks/hash/dither/h1o.cu": "verity/protocols/experimental/dither/prover/kernels/h1o.cu",
+        "benchmarks/hash/dither/h1r.cu": "verity/protocols/experimental/dither/prover/kernels/h1r.cu",
+        "benchmarks/hash/dither/h1u.cu": "verity/protocols/experimental/dither/prover/kernels/h1u.cu",
+        "benchmarks/hash/dither/h1sha.cuh": "verity/protocols/experimental/dither/prover/kernels/h1sha.cuh",
+        "benchmarks/hash/dither/tests/test_h1u_domain.py": "verity/protocols/experimental/dither/tests/test_h1u_domain.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/dashboard/": "infra/dashboard/"
+      }
+    },
+    {
+      "paths": {
+        "fixtures/typed-obligation-v0/": "benchmarks/numerical/tests/checker/fixtures/typed-obligation-v0/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/recursion/verifier/recursive/": "verity/protocols/proofs/spot_flock/verifier/lean/"
+      }
+    },
+    {
+      "paths": {
+        "verity/protocols/proofs/flock/sigma/": "verity/protocols/proofs/flock/verifier/sigma/"
+      }
+    },
+    {
+      "paths": {
         "verity/circuits/kernels/sha512.cuh": "verity/commitments/cuda/sha512.cuh",
         "verity/circuits/kernels/row_commit.cuh": "verity/commitments/cuda/row_commit.cuh",
         "verity/circuits/kernels/tests/": "verity/commitments/cuda/tests/",
