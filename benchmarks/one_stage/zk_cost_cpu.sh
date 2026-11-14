@@ -2,7 +2,7 @@
 # Flock's zero-knowledge session cost on a CPU node (zk_cost.py --cpu): zk_cost.sh's sweep of W8A8 coordinates in statements
 # of c units, each session proving k sampled by Lean, by `flock-circuit prove --zk` on the node's CPUs with the ZK server's send
 # check, then Lean `verify --zk` on every session; what one sampled statement costs a CPU node, for sizing a block's sample.
-# The prover is built as prove_path/run.sh builds it (60-circuit.sh GPU=0), the Lean verifier and ZK server binaries in the tree,
+# The prover is built as prove_path.sh builds it (60-circuit.sh GPU=0), the Lean verifier and ZK server binaries in the tree,
 # and flock-read-tmpl, the template a table read (stage.py's `table-read`) is staged on; with ZK_UNITS, flock-tmpl-unit in a
 # copy of the package (hidden_zk/job.sh's build_tmpl_unit), which places a templated unit's rows for its prover.
 # Run from the verity tree in a proofs slot (one point at a time, so a session's peak is its own):
@@ -46,7 +46,7 @@ sha256sum "$BIN" "$LEAN" "$FC_FIREWALL_LEAN" | tee "$O/binaries.sha256" | tee -a
 export PYTHONPATH=$REPO:$REPO/verity/protocols/proofs/flock/prover/python:$REPO/adapters/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 export RAYON_NUM_THREADS=$(nproc)
 # flock-circuit's rayon pool keeps Rust's default 2 MiB thread stack, which a --zk prover at m=27 can overflow on a many-core
-# node (prove_path/run.sh)
+# node (prove_path.sh)
 export RUST_MIN_STACK=$((64 << 20))
 Z=$W/zk
 ZK() { "$PY" benchmarks/one_stage/zk_cost.py "$@" --out "$Z"; }
