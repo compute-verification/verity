@@ -1,6 +1,7 @@
 """`verity bench overhead`'s rules: the cards, the operating points' rule, the prover overhead γ and its interval, and what
 γ means per monitoring period. Standard library only, and loadable alone by its path, but for γ's pairing, which is the
-harness kit's (`kit.paired`): the node's sweep (`overhead_node`) and the store side (`overhead_records`) both read it.
+harness kit's (`kit.paired`), and a card's figures, which `verity.device` reads (`Gpu.sms`, `Gpu.l2_bytes`): the node's
+sweep (`overhead_node`) and the store side (`overhead_records`) both read it.
 
 **The operating points** belong to a card, a model and a precision. Over one layer of the model's linears (`MODELS`), the
 fastest stock kernel at each m is the fastest of every library and scaling the card runs (`Gpu.libraries`, the precision's
@@ -33,6 +34,8 @@ import math
 import statistics
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from fractions import Fraction
+from functools import cached_property
 from typing import Any
 
 POINTS_SCHEMA = "verity-bench/overhead-points/v1"
@@ -53,8 +56,9 @@ POINTS = ("C", "L")
 
 @dataclass(frozen=True)
 class Gpu:
-    """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`, `sms`), the
-    harness's build target, the L2 the operand sets must pass twice, host CPU core-seconds' weight in SM-seconds (the
+    """A GPU the door measures on (its `--card`): what its device reports (`name` within the device's name, `capability`),
+    its card (`sku`, whose `sm.count` and `store.l2` are `sms` and the L2 the operand sets must pass twice, `l2_bytes`), the
+    harness's build target, host CPU core-seconds' weight in SM-seconds (the
     node's CPU capacity over its GPUs'), and the scalings and libraries its
     fastest stock kernel is chosen among; `bridge`: its CUTLASS and DeepGEMM are vLLM's, through torch (`bench.py --bridge`),
     since the harness's own CUTLASS is sm_120's; `datasheet`: its dense FP8 rate's id in `benchmarks/census/hardware.json`
@@ -63,22 +67,35 @@ class Gpu:
     gpu: str
     name: str
     capability: str
-    sms: int
+    sku: str
     arch: str
-    l2_bytes: int
     cpu_sm_s_per_core_s: float
     precisions: Mapping[str, tuple[str, ...]]
     libraries: tuple[str, ...]
     bridge: bool
     datasheet: str
 
+    @cached_property
+    def sms(self) -> int:
+        return int(self._figure("sm", "count"))
+
+    @cached_property
+    def l2_bytes(self) -> int:
+        return int(self._figure("store", "l2"))
+
+    def _figure(self, table: str, key: str) -> Fraction:
+        # imported here, so the rules above load alone by this file's path, with no package beside them
+        from verity.device import load_card, number
+
+        return number(load_card(self.sku)[table][key])
+
 
 #: each precision's scalings, as the PoUW harness names its baseline families: per-tensor, rowwise and 128-block FP8
 FP8 = ("fp8-e4m3", "fp8-e4m3-rowwise", "fp8-blk128")
 CARDS = {card.gpu: card for card in (
-    Gpu("h200", "H200", "9.0", 132, "sm_90a", 50 << 20, 0.48, {"fp8": FP8},
+    Gpu("h200", "H200", "9.0", "h200-sxm-141gb", "sm_90a", 0.48, {"fp8": FP8},
          ("cublaslt", "cutlass", "deepgemm"), True, "h100-sxm5-80gb/e4m3"),
-    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", 188, "sm_120a", 128 << 20, 1.64,
+    Gpu("rtx-pro-6000", "RTX PRO 6000", "12.0", "rtx-pro-6000-server", "sm_120a", 1.64,
          {"fp8": FP8, "nvfp4": ("nvfp4",)}, ("cublaslt", "cutlass"), False, "rtx-pro-6000-server/e4m3"),
 )}
 
@@ -117,7 +134,7 @@ class Scheme:
 SCHEMES = {s.id: s for s in (
     Scheme("stock", "fp8-e4m3-rowwise"),
     Scheme("pearl-plus", "fp8-e4m3-rowwise", "overhead_arm:PearlPlus", "benchmarks/pouw/pearl_c_sm90",
-           "overhead_arm:epsilon"),
+           "overhead_arm:epsilon", commits_y=True),
 )}
 
 

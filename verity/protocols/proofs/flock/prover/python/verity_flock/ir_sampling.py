@@ -22,7 +22,7 @@ lane bodies in the circuit and the row-level values out of it:
   the scalar operands (top_p, seed, pos, temp, splits) are public, their frame-v3 row digests computed natively; the token
   (lane V-1's ``best_i``, a u64 as the row kernel returns it) is public.
 
-The unit netlist does not depend on V (only the arrangement does) and is pinned by :data:`PIN`.
+The unit's circuit description does not depend on V (only the arrangement does) and is pinned by :data:`PIN`.
 """
 from __future__ import annotations
 
@@ -147,8 +147,8 @@ class Lane:
 
     @property
     def cut(self) -> dict:
-        """The cut structure the netlist pins: the word count, no tail program (every unit-less cut word is native), the native
-        rule, and per lane its cut ports as ``[column, cut word]``."""
+        """The cut structure the circuit description pins: the word count, no tail program (every unit-less cut word is native),
+        the native rule, and per lane its cut ports as ``[column, cut word]``."""
         lay = self.layout
         cin = lay.in_port_cols[1:]
         cout = [c - lay.out_col * IL.WORD for c in lay.out_port_cols]
@@ -165,7 +165,7 @@ class Lane:
 
     @property
     def unit_text(self) -> str:
-        """The netlist without its cut line: what does not depend on V (:data:`PIN`)."""
+        """The circuit description without its cut line: what does not depend on V (:data:`PIN`)."""
         return IL.netlist(self.layout, self.name)
 
     @property
@@ -231,8 +231,8 @@ def _scan(y: np.ndarray):
 
 def row_words(logits: np.ndarray, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[np.ndarray, int]:
     """Every cut word of one instance (:func:`words` of them) and its token: the units' words by the vectorised twins of the
-    IR primitives (``verity.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the primitives
-    and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
+    circuits' primitives (``verity.definitions.registry.sampling_rows``, held word-equal to them), the native ones by the
+    primitives and the top-p split pipeline (``TopPMaskWordx{V}``'s own reference)."""
     from verity.definitions.registry import sampling as SM
     from verity.definitions.registry import sampling_rows as SR
 
