@@ -1,8 +1,8 @@
 module
 
-public import NciCheck.Protocol
-public import NciCheck.RecordRows
-public import NciCheck.RecordChosen
+public import InferenceOnlyCheck.Protocol
+public import InferenceOnlyCheck.RecordRows
+public import InferenceOnlyCheck.RecordChosen
 public import CoreProtocol.Blobs
 public import Spot.OneStageZk
 public import Spot.FilePart
@@ -90,7 +90,7 @@ namespace InferenceOnly.RowsProtocol
 
 open Lean (Json toJson)
 open Flock (V)
-open NciCheck
+open InferenceOnlyCheck
 
 def protocolId : String := "verity/inference-only/rows/v1"
 

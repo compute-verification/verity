@@ -1,5 +1,5 @@
 """The inference-only policy's check in rows as a core protocol (`RowsProtocol.lean`, `inference-only-rows`,
-`verity/inference-only/rows/v1`) against `nci_record_reference` behind the protocol's decoders.
+`verity/inference-only/rows/v1`) against `inference_only_record_reference` behind the protocol's decoders.
 
 The reference decodes the protocol's parts (`RowsProtocol.lean`'s module docstring), rebuilds the record check's
 instance and trusted input (the params' log with the run's own record, the commitment, appended, and that record's
@@ -346,7 +346,7 @@ def made(draw, m: str) -> dict:
 #: The honest case on circuit files a random `serve` run takes now and then (`SERVE_FILE_ONE_IN` of its cases), each
 #: with the verdict it aims at: both templates on one taken file of 56 MB, at its limits and one past each.
 SERVE_FILES = ("plain-tree", "plain-tree")
-SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-inference_only": "nci"}
+SERVE_FILE_CASES = {"file-accept": "accept", "file-size": "size", "file-nci": "nci"}
 SERVE_FILE_ONE_IN = 40
 #: what `limits` names: `at`, `Γ` and `α` exactly what a block holds; `rows`, `Γ` one under it; `fresh`, `α` one
 #: fresh bit under it

@@ -36,7 +36,7 @@ the table's count and its row's words, which the reader's template fixes; an ope
 
 @[expose] public section
 
-namespace NciCheck.Properties.Record
+namespace InferenceOnlyCheck.Properties.Record
 
 open Flock.Program (Prog Defn)
 open Accounting
@@ -125,4 +125,4 @@ noncomputable def portsOf (ct : Flock.Circuit) (hB : FlockSoundness.Built (Flock
       (outRowGate (Flock.Desc.tmpl ct).unroll d n un) ro out count words
   else none
 
-end NciCheck.Properties.Record
+end InferenceOnlyCheck.Properties.Record

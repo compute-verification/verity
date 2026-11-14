@@ -1,7 +1,7 @@
 module
 
 public import CoreProtocol.Cli
-public import NciCheck.RowsProtocol
+public import InferenceOnlyCheck.RowsProtocol
 
 /-! The `inference-only-rows` executable: `Core.BlobProtocol.main` of `InferenceOnly.RowsProtocol.protocol`
 (`verity/inference-only/rows/v1`), the core CLI that the protocol's own difftest drives. Its `check` takes the

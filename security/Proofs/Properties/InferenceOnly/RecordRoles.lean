@@ -39,16 +39,16 @@ the opening's, which the two table reads cover; a row of a table read's rectangl
 
 @[expose] public section
 
-namespace NciCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Lean (Json)
 open Flock.Program (Prog Defn)
-open NciCheck.Theta (getD strAt digest lastWith Trusted trustedOf)
-open NciCheck.Properties (Chained)
-open NciCheck.Record (Case Front Layout front finish rolesOf layoutOf pinOf isTheta openingHeld covered)
-open NciCheck.Record.SecurityProofs (read_front finish_text mem_of_lookup)
-open NciCheck.RecordText (Row Tmpl Decl Fill Inputs Table TableRead Opening Held Declared inputsOf fillAt)
-open NciCheck.Properties.SecurityProofs.ThetaSteps (forIn_each trustedOf_ok findIdx_eq)
+open InferenceOnlyCheck.Theta (getD strAt digest lastWith Trusted trustedOf)
+open InferenceOnlyCheck.Properties (Chained)
+open InferenceOnlyCheck.Record (Case Front Layout front finish rolesOf layoutOf pinOf isTheta openingHeld covered)
+open InferenceOnlyCheck.Record.SecurityProofs (read_front finish_text mem_of_lookup)
+open InferenceOnlyCheck.RecordText (Row Tmpl Decl Fill Inputs Table TableRead Opening Held Declared inputsOf fillAt)
+open InferenceOnlyCheck.Properties.SecurityProofs.ThetaSteps (forIn_each trustedOf_ok findIdx_eq)
 
 /-! ## The trusted input and the run -/
 
@@ -151,7 +151,7 @@ theorem layoutOf_reads {d d' : Defn} (hp : d.params = d'.params) (hr : d.ret = d
 
 /-- **A pin is the template's closure digest in the descriptor, and one of the pins.** -/
 theorem pinOf_some {desc : Json} {pins : Array String} {tid d : String} (h : pinOf desc pins tid = some d) :
-    NciCheck.DefinitionDigest.closureDigest desc tid = .ok d ∧ d ∈ pins.toList := by
+    InferenceOnlyCheck.DefinitionDigest.closureDigest desc tid = .ok d ∧ d ∈ pins.toList := by
   unfold pinOf at h
   repeat' split at h
   all_goals try (cases h; done)
@@ -355,4 +355,4 @@ theorem heldAt_opened {f : Front} {pin : String → Option String} {c : Case} (h
   exact ⟨hpin, t, l, ht, hl, (hops o (List.mem_of_getElem? ho) hor).2.1 ▸ hport, key true hc1 _ rfl,
     key false hc2 _ rfl⟩
 
-end NciCheck.Properties.Record.SecurityProofs
+end InferenceOnlyCheck.Properties.Record.SecurityProofs

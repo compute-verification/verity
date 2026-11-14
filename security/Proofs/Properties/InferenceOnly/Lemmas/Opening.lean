@@ -45,7 +45,7 @@ check's own form has some, and `PinnedReadNontrivial`, that with the verdict bit
 
 @[expose] public section
 
-namespace NciCheck.Properties.Record.SecurityProofs
+namespace InferenceOnlyCheck.Properties.Record.SecurityProofs
 
 open Flock.Program (Prog Defn)
 open Accounting
@@ -354,4 +354,4 @@ theorem pinnedReadBinds : PinnedReadBinds := by
     unfold Hash.EmbeddingRead.h
     exact (ite_eq_right hlt).trans (ite_eq_right hlt).symm
 
-end NciCheck.Properties.Record.SecurityProofs
+end InferenceOnlyCheck.Properties.Record.SecurityProofs
