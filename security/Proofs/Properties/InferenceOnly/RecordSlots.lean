@@ -22,7 +22,7 @@ enough:
 
 namespace InferenceOnlyCheck.Record.SecurityProofs
 
-open RecordText
+open Spot.RecordText
 
 /-- `min q (r - s · q)` as a function of the slot `s` changes only at `r / q` and at the next slot. -/
 private theorem min_sub_const (q r s s' : ℕ) (hss : s ≤ s') (h1 : ¬ (s < r / q ∧ r / q ≤ s'))
