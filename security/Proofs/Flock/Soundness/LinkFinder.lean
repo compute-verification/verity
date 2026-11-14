@@ -26,9 +26,10 @@ expectation, whatever `r` (`expect_finderCost_le`, a Wald identity). Under expec
 resistance for the finder (`Assumptions.SHA512CRExpected`), and when every success outputs a
 collision, `s + Σ_{v ≠ Xv} p v ≤ 2·E[trial cost]/2^256 + 1/(eM)` (`link_mass_le`).
 
-The finder's output (`outOf`) is a search: each trial comes with the list of what it read, every value with an opening
-of it, and the output is the collision at the first two listed readings with different values. A trial that holds no
-such list gets one from `listed`, whose order is `Finset.toList`'s and so taken by choice.
+The finder's output is a search (`outOfOps`): each trial comes with the list of what it read, every value with an
+opening of it, and the output is the collision at the first two listed readings with different values. A trial that
+holds no such list gets one from `listed`, whose order is `Finset.toList`'s and so taken by choice: `outOf` is the
+search at that list.
 -/
 
 @[expose] public section
@@ -367,27 +368,27 @@ theorem firstTwo_of_mem {l l' : List (Val × O)} {p p' : Val × O} (hp : p ∈ l
   have hd := List.find?_some hq
   exact ⟨(a, b), hq, ha, hb, of_decide_eq_true hd⟩
 
-/-- **The finder's output from openings**: a collision from two openings with different values, the first from its first
-trial, the second from the first further trial that reads anything when the first trial read one value, and from the
-first trial otherwise (`secondTrial`). `ops e` lists what trial `e` read, each value with an opening of it, and the
-output is at the first two listed readings with different values (`firstTwo`): a search of the two trials' lists,
-which chooses nothing. It reads the further trials only where `finderCost` charges them. `collide` turns two openings
-into the two byte strings. -/
-noncomputable def outOf (ops : τ → List (Val × O)) (collide : O → O → List UInt8 × List UInt8)
+/-- **The finder's output from listed readings**: a collision from two openings with different values, the first from
+its first trial, the second from the first further trial that reads anything when the first trial read one value, and
+from the first trial otherwise (`secondTrial`). `ops e` lists what trial `e` read, each value with an opening of it,
+and the output is at the first two listed readings with different values (`firstTwo`): a search of the two trials'
+lists, which chooses nothing. It reads the further trials only where `finderCost` charges them. `collide` turns two
+openings into the two byte strings. -/
+noncomputable def outOfOps (ops : τ → List (Val × O)) (collide : O → O → List UInt8 × List UInt8)
     (x : τ × List τ) : Option (List UInt8 × List UInt8) :=
   (secondTrial rd x).bind fun e' => (firstTwo (ops x.1) (ops e')).map fun q => collide q.1.2 q.2.2
 
 omit [Fintype Val] in
 /-- **Every success of the finder outputs a collision**, when every listed reading's opening is of its value (`hops`),
 every reading is listed (`hrd`), and two openings of different values collide (`hcol`). -/
-theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (ops : τ → List (Val × O))
+theorem outOfOps_spec {Dh : Type} {Hc : List UInt8 → Dh} (ops : τ → List (Val × O))
     (collide : O → O → List UInt8 × List UInt8) (Good : O → Prop) (val : O → Val)
     (hops : ∀ e, ∀ p ∈ ops e, Good p.2 ∧ val p.2 = p.1)
     (hrd : ∀ e, ∀ v ∈ rd e, ∃ o, (v, o) ∈ ops e)
     (hcol : ∀ o o', Good o → Good o' → val o ≠ val o' →
       (collide o o').1 ≠ (collide o o').2 ∧ Hc (collide o o').1 = Hc (collide o o').2)
     (x : τ × List τ) (hS : Succ rd x) :
-    ∃ a b, outOf rd ops collide x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
+    ∃ a b, outOfOps rd ops collide x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
   classical
   have hex : ∃ e', secondTrial rd x = some e' ∧ ∃ v ∈ rd x.1, ∃ w ∈ rd e', v ≠ w := by
     rcases hS with h2 | ⟨v, hv, e', hn, hne⟩
@@ -414,7 +415,7 @@ theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (ops : τ → List (Val 
   have s1 := hops _ _ h1
   have s2 := hops _ _ h2
   refine ⟨_, _, ?_, hcol _ _ s1.1 s2.1 (by rw [s1.2, s2.2]; exact hne)⟩
-  unfold outOf
+  unfold outOfOps
   rw [he']
   show ((firstTwo (ops x.1) (ops e')).map fun q => collide q.1.2 q.2.2) = _
   rw [hq]
@@ -425,16 +426,25 @@ openings: the readings in the order `Finset.toList` gives them. That order is ta
 output reads `listed` still chooses, here and wherever `op` does. -/
 noncomputable def listed (op : τ → Val → O) (e : τ) : List (Val × O) := (rd e).toList.map fun v => (v, op e v)
 
-omit [Fintype Val] in
-/-- `outOf_spec` at the readings `listed` lists: every reading comes with an opening of its value (`hop`). -/
-theorem outOf_listed_spec {Dh : Type} {Hc : List UInt8 → Dh} (op : τ → Val → O)
+/-- **The finder's output from openings**, for trials that hold no list of their openings: the search `outOfOps` at
+each trial's readings as `listed` lists them. `op e v` is an opening trial `e` found for value `v`, and `collide` turns
+two openings into the two byte strings. The search itself chooses nothing. The list's order is taken by choice, and two
+values are told apart classically, so this output still chooses, here and wherever `op` does. -/
+noncomputable def outOf (op : τ → Val → O) (collide : O → O → List UInt8 × List UInt8) (x : τ × List τ) :
+    Option (List UInt8 × List UInt8) :=
+  @outOfOps τ Val (Classical.decEq Val) rd O (listed rd op) collide x
+
+omit [Fintype Val] [DecidableEq Val] in
+/-- **Every success of the finder outputs a collision**, when every reading comes with an opening of its value (`hop`)
+and two openings of different values collide (`hcol`): `outOfOps_spec` at the readings `listed` lists. -/
+theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (op : τ → Val → O)
     (collide : O → O → List UInt8 × List UInt8) (Good : O → Prop) (val : O → Val)
     (hop : ∀ e v, v ∈ rd e → Good (op e v) ∧ val (op e v) = v)
     (hcol : ∀ o o', Good o → Good o' → val o ≠ val o' →
       (collide o o').1 ≠ (collide o o').2 ∧ Hc (collide o o').1 = Hc (collide o o').2)
     (x : τ × List τ) (hS : Succ rd x) :
-    ∃ a b, outOf rd (listed rd op) collide x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec rd (listed rd op) collide Good val
+    ∃ a b, outOf rd op collide x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
+  @outOfOps_spec τ Val (Classical.decEq Val) rd O Dh Hc (listed rd op) collide Good val
     (fun e p hp => by
       obtain ⟨v, hv, rfl⟩ := List.mem_map.1 hp
       exact hop e v (Finset.mem_toList.1 hv))

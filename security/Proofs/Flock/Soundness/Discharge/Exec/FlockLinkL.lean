@@ -149,12 +149,12 @@ noncomputable def opsTL (c : vb.Pos) (e : TrialOutL L D Sl) : List (vb.Val × vb
     (firsts (accωL plan R e.1) e.2.2).elim [] fun bs => opensL P H E Lf plan tab vb R τ e.1 bs c
   else []
 
-/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOf`), from
+/-- **The finder's output**: a collision from two openings of `c` with different values (`LinkFinder.outOfOps`), from
 the trials its cost charges. It searches the openings those trials found (`opsTL`) and chooses none; the message each
 opening is of is the one the extraction settles on (`candL`), which is still chosen. -/
 noncomputable def outCL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl)) :
     Option (List UInt8 × List UInt8) :=
-  outOf (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide x
+  outOfOps (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide x
 
 open Classical in
 /-- **The plurality value at `c`**: the value the trial reads alone most often. -/
@@ -253,7 +253,7 @@ theorem opsTL_of_mem_rdTL {c : vb.Pos} {e : TrialOutL L D Sl} {v : vb.Val}
 theorem outC_specL (c : vb.Pos) (x : TrialOutL L D Sl × List (TrialOutL L D Sl))
     (hS : Succ (rdTL P H E Lf plan tab vb R τ c) x) :
     ∃ a b, outCL P H E Lf plan tab vb R τ c x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b :=
-  outOf_spec (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide
+  outOfOps_spec (rdTL P H E Lf plan tab vb R τ c) (opsTL P H E Lf plan tab vb R τ c) vb.collide
     (fun o => vb.com o = vb.cs R c) vb.val (fun _ _ hp => opsTL_spec P H E Lf plan tab vb R τ hp)
     (fun _ _ hv => opsTL_of_mem_rdTL P H E Lf plan tab vb R τ hv)
     (fun o o' h h' hv => vb.collide_spec o o' (h.trans h'.symm) hv) x hS
