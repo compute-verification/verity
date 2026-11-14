@@ -1,6 +1,6 @@
 module
 
-public import Properties.Pouw.PearlPlusDraw
+public import Properties.Pouw.PearlPlusSample
 public import Properties.Pouw.PearlPlus.Witnesses
 public import Proofs.Properties.Pouw.Commit
 public import Proofs.Flock.Soundness.ExecSample
@@ -9,7 +9,7 @@ import Proofs.Core.Game.Prob
 import Proofs.Pouw.Prob
 
 /-!
-# Pearl+'s run sample (`Properties.Pouw.PearlPlusDraw`)
+# Pearl+'s run sample (`Properties.Pouw.PearlPlusSample`)
 
 `DrawIsOnItsStreams`, by `pearlDraw`'s steps. Its filter keeps the positive tickets with their positions (`posOf`), and
 `weightedDraw` reads sample `j`'s integer below their total, which is the run's `W` (`last_sums`), from `uniform`, which

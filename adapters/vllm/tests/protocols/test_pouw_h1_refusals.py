@@ -2011,7 +2011,7 @@ def test_h1_hashes_with_numpy_and_says_why_where_cuda_is_there_and_its_kernels_d
     why = ("H1's registered values hash with NumPy: the GPU path doesn't build here "
            "(RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on the path))")
     assert [str(w.message) for w in said] == [why]
-    monkeypatch.setattr(RGD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    monkeypatch.setattr(RGD.RTL.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert RGD.available.__wrapped__() is True and built == [(0, RGD.device_lib, "rr_midstates")]
 
 
@@ -2523,7 +2523,7 @@ def test_h1s_call_tables_hash_on_the_host_and_say_why_where_cuda_is_there_and_th
     assert [str(w.message) for w in said] == [("H1's call z tables hash apart from their zy@<c> values: zy_commit.cu "
                                                "doesn't build here (RuntimeError: no nvcc (pouw_device.TOOLCHAIN, or on "
                                                "the path))")]
-    monkeypatch.setattr(TBD.RTD.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
+    monkeypatch.setattr(TBD.RTL.DeviceLibrary, "of", lambda *asked: built.append(asked[1:]))
     assert TBD.available.__wrapped__() is True and built == [(0, TBD.device_lib, "rt_midstates", TBD.STREAMS)]
     asked: list[tuple] = []
 

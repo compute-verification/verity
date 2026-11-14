@@ -35,12 +35,14 @@ from verity.commitments.gates import embedding as E
 from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
                                   interior_rows as IR, serving_rows as SRW)
 
-HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent / "benchmarks" / "one_stage" / "tests")
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "proofs" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("verity.protocols.proofs.spot.prover.audit.two_stage")
 FC = importlib.import_module("fake_challenger")
 AC = importlib.import_module("verity.protocols.proofs.spot.device.challenger_session")
+VT = importlib.import_module("test_verdict_record")
+VR, NAMES, _design, _record = VT.VR, VT.NAMES, VT._design, VT._record
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -515,8 +517,9 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
     """`outcome_of` reports ``complete`` beside ``accepted``. The replay block here is a stand-in for the class's
     request Definition (`REQUEST_DEFINITION`) and the two-stage form is off (`second_stage.FORM`), so an outcome whose
     stream accepted on two audit records that accepted and are complete is still not complete; nor is it with either
-    one switched on alone. With both on it is, and then only for an accepted outcome whose records both accepted and
-    are complete. A refused outcome is not."""
+    one switched on alone. Completeness is Lean's (`second_stage.complete`), which no entry answers yet, so with both on
+    it is not either. With Lean's answer (its twin standing in) and both on it is, and then only for an accepted
+    outcome whose records both accepted and are complete. A refused outcome is not."""
     handed = {"sessions": [], "verdicts": {}, "statement": {}, "proved_units": [], "instances": 0, "served": [],
               "session_roots": {}}
     whole = {"accepted": True, "complete": True, "checks": {}}
@@ -526,6 +529,12 @@ def test_no_outcome_of_a_stand_in_replay_block_says_it_is_complete(monkeypatch):
 
     assert TS.REQUEST_DEFINITION is False and SS.FORM is False
     assert TS.outcome_of(_Decided(True, whole, whole), None, handed, [None, None], [], {})["accepted"] is True
+    assert said(_Decided(True, whole, whole)) is False
+    with monkeypatch.context() as m:
+        m.setattr(SS, "FORM", True)
+        m.setattr(TS, "REQUEST_DEFINITION", True)
+        assert said(_Decided(True, whole, whole)) is False
+    monkeypatch.setattr(SS, "complete", SS.complete_twin)
     assert said(_Decided(True, whole, whole)) is False
     with monkeypatch.context() as m:
         m.setattr(SS, "FORM", True)
@@ -931,3 +940,33 @@ def test_the_second_stage_reads_the_first_stages_coins_under_its_own_challengers
     (tmp_path / "empty").mkdir()
     got = second("empty-host", first, challenger="local", challenger_host=str(tmp_path / "empty"))
     assert AC.NO_HOST in got["refused"] and len(opened) == sessions, "no challenger of the second stage's own was started"
+
+
+@pytest.mark.slow
+def test_the_writer_reads_a_stop_class_as_the_driver_and_the_stop_audit_write_it(tmp_path, monkeypatch):
+    """The verdict record's fixtures (`test_verdict_record.py`) are written in the form the writer expects, so they
+    can't show that the form is the drivers'. This registers a stop class's first stage on a test's challenger as `two_stage.py first --stop` does,
+    builds its stop stream again as the stop audit does, and takes `stop_audit.summary_of`'s own summary: the record
+    names the class's boundary record, the directory the class is filed under and the rate its stop record registers.
+    No session is proved and Lean is not called."""
+    SA = importlib.import_module("verity.protocols.proofs.spot.prover.audit.stop_audit")
+    pubs = [json.loads(json.dumps(_stop_class().public()))]
+    monkeypatch.setattr(AC, "start", _start(OneSession("verdict-record")))
+    (wrote,) = TS._first_all(_args(tmp_path), pubs, PAIR, RULE, None, STOP)
+    first = json.loads(json.dumps(wrote))
+    design = f"rate:{Q}/{N}"
+    r = SA.resume(first, PAIR, STOP, design, proof_deadline=RULE.proof_deadline)
+    audit = {"accepted": True, "complete": False, "verdicts": {}, "checks": {}}
+    summary = json.loads(json.dumps(SA.summary_of(r, STOP, design, {"accepted": True, "audit": audit})))
+    got = VR.record("stop_record", first, summary, **NAMES)
+    layout = r.layout
+    assert got["class"] == f"w{pubs[0]['window']}/p{layout.prompt}-o{layout.outputs}"
+    assert got["registration"] == r.boundary == first["registration"] != r.registration.digest
+    assert got["rate"] == VR.rate({"population": layout.spans, **_design("subset", len(r.sample.units))})
+    assert (got["verdict"], got["verifier"]["module"]) == ("not complete", SA.TOOL)
+    assert (got["stream_registration"], got["stream_names_boundary"]) == (r.registration.digest, True)
+    assert r.registration.digest == first["stop"]["registration"] and first["stop"]["record"]["previous"] == r.boundary
+    interior = _record(4, 4, previous=r.boundary, interior=True)
+    second = {"first_stage": {"registration": r.first.registration.digest}, "held": True, "outcome": {"accepted": False},
+              "second_stage": {"registration": R.digest(interior)}}
+    assert VR.record("second_stage", first, second, stream=interior, **NAMES)["verdict"] == "withheld"

@@ -41,12 +41,12 @@ from collections import deque
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 
 from verity_vllm.commit import row_tables as RTB
 from verity_vllm.commit import row_tables_device as D
-from verity.protocols.accounting.pouw.prover.serving import row_table_nvcc, row_table_side_stream
+from verity.protocols.accounting.pouw.prover.serving import row_table_nvcc
+from verity_torch.pouw import row_table_side_stream
 from verity_vllm.engine import int8_exact as E
 
 RESULT_SCHEMA = "research/result/v0.1"
