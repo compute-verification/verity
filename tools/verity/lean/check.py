@@ -4776,7 +4776,10 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     `TREE`, differs there. A
     failure names the module and its file, the report's `mismatched` lists each module failed so ({module: its package's
     directory}, the package's own and never its seal's), which a records run has Lake compile before it audits again
-    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them.
+    (`lean_changed.mismatched`), and the recompile's outputs stay under ``work``/`sampled`; a pass removes them. Each such
+    module's entry in the node's artifact cache (`ARTIFACTS`) goes then, with its artifacts (`forget_mismatched`, the
+    report's `dropped`): `put` stores nothing of a build whose sample failed, so no clean compile would replace it, and
+    every later run here would restore it again, caught only when its sample drew it.
 
     Without the sandbox ``sealed`` is None, and the audit calls this before its seal: nothing is recompiled and the
     report's `unsampled` says so. A module of the population (there: those with a trace in their package's build) that
@@ -4879,9 +4882,32 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     rep["by_graph"] = graphs
     if fails:
         rep["mismatched"] = {f.entry: str(keyed[f.entry].package.dir.resolve()) for f in fails}
+        if ARTIFACTS:
+            rep["dropped"] = forget_mismatched(mk, ARTIFACTS, keyed, sorted(rep["mismatched"]), sealed)
+            for m, gone in rep["dropped"].items():
+                log(f"sampled: {pkg}: {m}: " + (f"its entry in the artifact cache is removed, with its {len(gone) - 1} "
+                                               f"artifacts, so no later run here restores it" if isinstance(gone, list)
+                                               else gone))
     else:
         shutil.rmtree(top, ignore_errors=True)
     return fails, rep
+
+
+def forget_mismatched(mk, store: Path, keyed: dict, mods: Iterable[str], sealed: "Sealed") -> dict[str, list[str] | str]:
+    """Remove from the node's artifact cache (``store``) the entry each module of ``mods`` (the sample's `mismatched`) was
+    restored under, with its artifacts (``mk``: `module_keys`, `forget`): {module: the store's names of what went, or why
+    nothing did}. The key is the one a build's `stage` computes, from the outputs of what the module loads, read here from
+    the seal (``sealed``), which holds the bytes the build read; ``keyed`` is the build's `module_keys.keys`."""
+    got: dict[str, list[str] | str] = {}
+    for m in mods:
+        loaded = mk.loads(m, keyed)
+        digests = {(g, o): mk.digest(f) for g, level in loaded.items() for o in mk.read(level, keyed[g].module)
+                   if (f := sealed.mapped(mk.file_of(keyed[g].package.build().resolve(), g, o))).is_file()}
+        if (k := mk.key(m, keyed, digests, loaded)) is None:
+            got[m] = "it has no key here (the seal lacks an output of a module it loads), so no entry was restored for it"
+        else:
+            got[m] = mk.forget(store, k, m, keyed[m].package.name) or "the artifact cache holds no entry of it under its key"
+    return got
 
 
 def bound(lakes: Iterable[Path], tree: Path | None = None) -> list[str]:

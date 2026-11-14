@@ -813,6 +813,29 @@ def entry(store: Path, key: str, mod: str, scope: str) -> dict | None:
     return e if valid(e) and e["module"] == mod and e["scope"] == scope else None
 
 
+def forget(store: Path, key: str, mod: str, scope: str) -> list[str] | None:
+    """Remove ``mod``'s index entry under ``key`` in ``store`` (of package ``scope``) and each artifact it names that has
+    the digest it names, under the store's lock (`LOCK`) held alone, so no `stage` reads it half removed: the store's
+    names of what it removed, the entry's first, or None when the index holds no such entry. A sampled recompile that
+    found a restored module's outputs other than its source compiles to calls it (`check.sampled_recompile`): the entry
+    would be restored by every later build on this node, and its artifact, left beside a clean compile of the same name,
+    would keep that compile out of the index (`LakeArtifacts._index`). An entry that loads the module is keyed on its
+    digests, so no build stages it once this one is gone."""
+    store.mkdir(parents=True, exist_ok=True)
+    with open(store / LOCK, "a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if (e := entry(store, key, mod, scope)) is None:
+            return None
+        at = entry_path(store, key)
+        at.unlink()
+        gone = [at.relative_to(store).as_posix()]
+        for name, d in sorted(e["digests"].items()):
+            if (f := store / "artifacts" / name).is_file() and digest(f) == d:
+                f.unlink()
+                gone.append(f.relative_to(store).as_posix())
+        return gone
+
+
 #: a store's record of each key `LakeArtifacts.put` computed for a module a build compiled and could not index
 #: (`<key>.json`: the module, its package, why): `settle` leaves such a module to Lake, as a module without a key is
 UNSTORED = "unstored"

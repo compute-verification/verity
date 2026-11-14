@@ -6819,6 +6819,19 @@ def test_a_planted_olean_among_the_restored_modules_fails_once_it_is_sampled(tmp
     assert ".lake/build/lib/lean/P/M2.olean differs from what its source compiles to (olean differ" in fails[0]
     assert rep["mismatched"] == {"P.M2": str(b.resolve())}, "the report names the module and its package's directory"
     assert files_of(build) == before, "the build is never written"
+    assert rep["dropped"]["P.M2"][0] == f.relative_to(store).as_posix() and not f.exists(), \
+        "the planted entry, under the key the seal gives the module, leaves the node's artifact cache"
+    assert not (store / "artifacts" / theirs).exists(), "and so does the artifact it named"
+    nxt = tree(tmp_path / "next" / "b")
+    shutil.copy(a / "lake-manifest.json", nxt)
+    _, said = A.stage_build(mk, nxt, ["P"], store / mk.STAGE / "next")
+    assert said["modules"] == 9 and set(said["first"].values()) == {"P.M2", "P"}, \
+        "the next run restores neither the module nor what imports it"
+    assert "P.M2" in lake(nxt, "-u", "LAKE_ARTIFACT_CACHE", f"LAKE_CACHE_DIR={store / mk.STAGE / 'next'}")
+    assert arts.put({nxt: {"sandbox": True}}, log=lambda s: None) >= 1
+    now = mk.entry(store, f.stem, "P.M2", "p")
+    assert now is not None and now["digests"][mine] == mk.digest(mk.output(nxt / ".lake" / "build", "P.M2", mine)) and \
+        (store / "artifacts" / mine).read_bytes() == honest, "the clean compile is indexed under the same key"
     kept = tmp_path / "w2" / "sampled" / str(rep["modules"].index("P.M2"))
     assert (kept / "P/M2.olean").read_bytes() == honest
     setup = json.loads((kept / "setup.json").read_text())

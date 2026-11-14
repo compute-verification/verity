@@ -1460,6 +1460,24 @@ def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_pa
     assert (out / "audit-pkg" / "sampled.log").read_text() == "audit 2"
     assert any("compiled P.M to other outputs" in s and "audits pkg once more" in s and str(aside) in s for s in said)
     assert outcome_line(said)["outcome"] == LC.PASS
+    assert outcome_line(said)["mismatched"] == {"P.M": "pkg"}, "the run that caught the module names it, and its package"
+
+
+def test_a_recorded_run_whose_sample_caught_a_module_names_it_in_its_result(tmp_path, monkeypatch):
+    """A caught module is compiled again and the run's outcome is the second audit's, so nothing but the result says a
+    restored or kept module was not what its source compiles to: `result.json` names each one with its package, in
+    `mismatched` and in its validation's detail, as the last line does. A run that caught none says nothing of it."""
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-caught")
+    for caught in ({"P.M": "pkg", "Q.N": "pkg/Proofs"}, {}):
+        said: list[str] = []
+        assert LC.finish("pkg", LC.PASS, 0, run_dir / "lean-audit", False, "slot", {}, said.append, mismatched=caught) == 0
+        doc = json.loads((run_dir / "result.json").read_text())
+        assert doc.get("mismatched") == (caught or None) and outcome_line(said).get("mismatched") == (caught or None)
+        assert doc["validation"]["status"] == "passed"
+        assert ("caught P.M, Q.N, whose restored or kept outputs" in doc["validation"]["detail"]) == bool(caught)
 
 
 SEALED = ("sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean "

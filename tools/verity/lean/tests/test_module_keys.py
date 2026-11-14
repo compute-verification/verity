@@ -1099,6 +1099,40 @@ def test_a_build_stages_under_the_store_s_lock(tmp_path, monkeypatch):
     assert held == [True, True]
 
 
+def test_a_forgotten_entry_and_its_artifacts_are_gone_under_the_lock_and_no_build_stages_it_or_what_reads_it(
+        tmp_path, monkeypatch):
+    """A sampled recompile that caught a restored module removes the entry it was restored under (`forget`): no later
+    build stages it, nor a module that reads it, and its artifacts go with it, so a clean compile of the same name is
+    indexed rather than refused beside them. It removes only that module's entry of that package, each artifact only
+    with the digest the entry names, and holds the store's lock alone, so no `stage` reads the entry half removed."""
+    root = _workspace(tmp_path / "ws")
+    keyed, store = MK.keys(root), tmp_path / "store"
+    k = _stock(store, keyed, {"D.X": ("1" * 16, X), "R.A": ("2" * 16, A), "R": ("3" * 16, R)})
+    assert len(MK.stage(store, root, [], tmp_path / "c1")[0]) == 3
+    assert MK.forget(store, k["R.A"], "R.A", "d") is None and MK.forget(store, k["D.X"], "R.A", "r") is None, \
+        "no entry of that module of that package under that key"
+    (store / "artifacts" / ("d" * 16 + ".ilean")).write_bytes(b"not the bytes R.A's entry names")
+    held, digest = [], MK.digest
+
+    def checked(f: Path) -> str:
+        with open(store / MK.LOCK, "a") as other:
+            try:
+                fcntl.flock(other, fcntl.LOCK_SH | fcntl.LOCK_NB)
+                held.append(False)
+            except BlockingIOError:
+                held.append(True)
+        return digest(f)
+
+    monkeypatch.setattr(MK, "digest", checked)
+    assert MK.forget(store, k["R.A"], "R.A", "r") == [MK.entry_path(store, k["R.A"]).relative_to(store).as_posix(),
+                                                      "artifacts/" + "c" * 16 + ".olean"]
+    assert held and all(held), "the lock is held alone while it reads the artifacts"
+    monkeypatch.setattr(MK, "digest", digest)
+    assert (store / "artifacts" / ("d" * 16 + ".ilean")).is_file(), "an artifact with other bytes than it names stays"
+    assert MK.stage(store, root, [], tmp_path / "c2")[0] == {("d", "1" * 16): "D.X"}, "R.A is gone, and R, which reads it"
+    assert MK.forget(store, k["R.A"], "R.A", "r") is None
+
+
 def test_two_modules_under_one_input_hash_of_one_package_are_both_left_out(tmp_path):
     """Lake finds a module in its cache by its package and input hash alone: staging both would let Lake restore one from
     the other's outputs."""
