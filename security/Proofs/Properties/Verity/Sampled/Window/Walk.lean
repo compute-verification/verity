@@ -37,7 +37,7 @@ for it, which consumes no stop, and the next member's session starts from the sa
   round coins written at its own stops (`WindowCoinMap.member`). The decoders are a member's each, by its place in the
   window.
 * **The sessions in order** (`seqP`, `seqW`, `seqOff`, `SeqReach`): member `i`'s session at its decoders and coin map
-  where the sample holds one of its proof blocks (`memberDrawn`), then the rest from where it ends.
+  where the sample holds one of its proof blocks (`memberSampled`), then the rest from where it ends.
 * **The window's projection** (`windowP`) and **the joint distribution** it simulates (`windowG`): the projected play's
   outcome beside the period's tape; the projected play's events have their probabilities under it (`prob_windowP`).
 * **The two premises** off the held-off events (`WindowCouples`, the coin map's; `WindowDecodes`, the decoders'), the
@@ -523,20 +523,20 @@ noncomputable abbrev memberTabs (m : Flock.Guarantees.MemberV5 Reg nJ) : ℕ :=
 open Classical in
 /-- **Whether the sample `S` holds one of the member's proof blocks**: whether the member has a statement at `S`, and
 so a session in the period's play. -/
-noncomputable def memberDrawn (m : Flock.Guarantees.MemberV5 Reg nJ) : Bool :=
+noncomputable def memberSampled (m : Flock.Guarantees.MemberV5 Reg nJ) : Bool :=
   decide (m.part S).Nonempty
 
 open Classical in
 variable {S} in
 /-- A member is sampled exactly where its part of the sample is not empty. -/
-theorem memberDrawn_iff {m : Flock.Guarantees.MemberV5 Reg nJ} : memberDrawn S m = true ↔ (m.part S).Nonempty :=
+theorem memberSampled_iff {m : Flock.Guarantees.MemberV5 Reg nJ} : memberSampled S m = true ↔ (m.part S).Nonempty :=
   decide_eq_true_iff
 
 variable {S} in
 /-- A member that is not sampled has an empty part of the sample. -/
-theorem not_nonempty_of_memberDrawn {m : Flock.Guarantees.MemberV5 Reg nJ} (h : memberDrawn S m = false) :
+theorem not_nonempty_of_memberSampled {m : Flock.Guarantees.MemberV5 Reg nJ} (h : memberSampled S m = false) :
     ¬ (m.part S).Nonempty :=
-  fun hne => Bool.false_ne_true (h.symm.trans (memberDrawn_iff.2 hne))
+  fun hne => Bool.false_ne_true (h.symm.trans (memberSampled_iff.2 hne))
 
 /-- **The sessions' projection, in the members' order** from the position `p`: the member at place `i`'s session at
 its decoders and coin map on its part of the sample, then the rest from the position its walk ends at. A member with
@@ -548,7 +548,7 @@ noncomputable def seqP : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg 
     memberK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
       (fun a => (FlockSoundness.Game.seqG
         (fun m : Flock.Guarantees.MemberV5 Reg nJ => m.live (m.part S) Rg) l).map (a :: ·))
-      (fun q _ => Strategy.map _ _ (seqP (i + 1) l q)) m.N p (memberDrawn S m)
+      (fun q _ => Strategy.map _ _ (seqP (i + 1) l q)) m.N p (memberSampled S m)
 
 /-- **The sessions' joint distribution, in the members' order** from the position `p`: the members' transcripts beside the
 period's tape, over the sessions' live coins. -/
@@ -557,7 +557,7 @@ noncomputable def seqW : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg 
   | _, [], p => .ret ([], p.tape)
   | i, m :: l, p =>
     memberWK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
-      (fun q a => (seqW (i + 1) l q).map fun o => (a :: o.1, o.2)) m.N p (memberDrawn S m)
+      (fun q a => (seqW (i + 1) l q).map fun o => (a :: o.1, o.2)) m.N p (memberSampled S m)
 
 /-- **An event of the period's tape under the sessions' joint distribution off the held-off events** from the position `p`:
 each member's session's share off its own, then the rest's from the position its walk ends at. -/
@@ -566,7 +566,7 @@ noncomputable def seqOff (Q : CoinTape g σ → Prop) :
   | _, [], p => tapeInd Q p
   | i, m :: l, p =>
     memberOffK (D i) (M.member i (memberPts m)) (memberTabs S Rg m) (B i) (BL i (memberPts m))
-      (fun q => seqOff Q (i + 1) l q) m.N p (memberDrawn S m)
+      (fun q => seqOff Q (i + 1) l q) m.N p (memberSampled S m)
 
 /-- **The sessions' joint distribution's support off the held-off events** from the position `p`: each member's session's
 trace off its own, ending at its transcript, then the rest's from the position its walk ends at; at a member with no
@@ -577,7 +577,7 @@ def SeqReach : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) → P
   | i, m :: l, p, o =>
     MemberReachK (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (B i) (m.wr (m.part S) Rg)
       (BL i (memberPts m)) (fun q a o' => ∃ ts, SeqReach (i + 1) l q (ts, o'.2) ∧ o'.1 = a :: ts) m.N p o
-      (memberDrawn S m)
+      (memberSampled S m)
 
 /-- The sessions' joint distribution's strategy: it has no message to send. -/
 noncomputable def seqWS : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg nJ)) →
@@ -586,7 +586,7 @@ noncomputable def seqWS : (i : ℕ) → (l : List (Flock.Guarantees.MemberV5 Reg
   | i, m :: l, p =>
     memberWKS (D i) (M.member i (memberPts m)) m.dg (memberTabs S Rg m) (m.wr (m.part S) Rg)
       (fun q a => (seqW D M S Rg (i + 1) l q).map fun o => (a :: o.1, o.2))
-      (fun q _ => Strategy.map _ _ (seqWS (i + 1) l q)) m.N p (memberDrawn S m)
+      (fun q _ => Strategy.map _ _ (seqWS (i + 1) l q)) m.N p (memberSampled S m)
 
 /-- **The sessions' projection has its events' probabilities under the sessions' joint distribution.** -/
 theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List Transcript → Prop) (i : ℕ)
@@ -605,7 +605,7 @@ theorem prob_seqP : ∀ (l : List (Flock.Guarantees.MemberV5 Reg nJ)) (E : List 
         ((prob_seqP l (fun ts => E (a :: ts)) (i + 1) q (Strategy.ofMap _ _ w)).trans
           (prob_map (fun o : List Transcript × CoinTape g σ => E o.1)
             (fun o : List Transcript × CoinTape g σ => (a :: o.1, o.2)) _ w).symm))
-      m.N p (memberDrawn S m) w
+      m.N p (memberSampled S m) w
 
 open Classical in
 /-- **The sessions' joint distribution off the held-off events gives an event of the tape at most `E`'s probability**
@@ -631,7 +631,7 @@ theorem seqOff_le_prob (Q : CoinTape g σ → Prop) : ∀ (l : List (Flock.Guara
           fun o ho hQ => hq (a :: o.1, o.2) ⟨o.1, ho, rfl⟩ hQ).trans_eq
         (prob_map (fun o : List Transcript × CoinTape g σ => E o.1)
             (fun o : List Transcript × CoinTape g σ => (a :: o.1, o.2)) _ w).symm)
-      m.N p (memberDrawn S m) w h
+      m.N p (memberSampled S m) w h
 
 end Seq
 

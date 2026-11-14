@@ -582,11 +582,11 @@ theorem innerHist_fin (hreal : real = realOf src) (x : Msg) (w : Flock.Wit)
   rw [hk2] at hst
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src
     real j r hst
-  have hd := LeanRelease.draws_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src
+  have hd := LeanRelease.samples_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws)) src
     real
   have hz := hSrc.2.size (relIn L₁ src real) hd ν t j r hlay
   have hpads := hSrc.2.pads (relIn L₁ src real) hd ν t j r hlay (Masked.UE.tapeZk t)
-  obtain ⟨hHc, -, -⟩ := cfg_tapeOfDraws (relIn L₁ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
+  obtain ⟨hHc, -, -⟩ := cfg_tapeOfSamples (relIn L₁ src real) x (ν, t) ((m₀, ρ₀) :: ops) (Masked.UE.tapeZk t)
     Loop.frepOf j.val r.val hrep hz
   rw [hlay, ← hpads] at hHc
   have hLay : ((relIn L₁ src real).cfg x (ν, t) ((m₀, ρ₀) :: ops)).lay = Masked.layE x j := by
@@ -774,11 +774,11 @@ theorem innerReq_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg) (w
   rw [hk2] at hst0
   have hlayR := LeanRelease.lay_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws))
     src real j r hst0
-  have hd' := LeanRelease.draws_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws))
+  have hd' := LeanRelease.samples_ofLoopLink (L₀ := LeanRelease.withInner Masked.dataE L₁ real (finOf real L₁.draws))
     src real
   have hzS := hSrc.2.size (relIn L₁ src real) hd' ν t j r hlayR
   have hpads := hSrc.2.pads (relIn L₁ src real) hd' ν t j r hlayR (Masked.UE.tapeZk t)
-  have hq₀d : q₀.draws = (relIn L₁ src real).drawsAt x (ν, t) (Loop.frepOf j.val r.val) := by
+  have hq₀d : q₀.draws = (relIn L₁ src real).samplesAt x (ν, t) (Loop.frepOf j.val r.val) := by
     rw [hqd]
     show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes ((relIn L₁ src real).lay x (Loop.frepOf j.val r.val))
       (L₁.draws (ν, t) (Loop.frepOf j.val r.val))
@@ -1285,7 +1285,7 @@ theorem finInner_tau_own (vs : finS.SwVals) (hreal : real = realOf src) (x : Msg
     rw [hQ]; rfl
   have hPd : (_root_.Flock.ZkServer.Finish.padsOf Q.draws).toC =
       FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val (Masked.layE x j) := by
-    rw [hQ, askOf_draws]
+    rw [hQ, askOf_samples]
     exact hP
   have hPQ : (_root_.Flock.ZkServer.Finish.padsOf Q.draws).toC = Masked.innerPadsE x t j r :=
     hPd.trans (congrArg (FlockComplete.padsOf (Masked.UE.tapeZk t) j.val r.val) (Masked.innerLayE_layE x j)).symm

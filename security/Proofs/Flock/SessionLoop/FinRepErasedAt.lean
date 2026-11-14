@@ -156,10 +156,10 @@ theorem finRepErased_at (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.F
     rw [e, hk2, hstart]
     all_goals rfl
   have hlay := LeanRelease.lay_ofLoopLink (L₀ := L₀) src (realOf src) j r hstart
-  have hd := LeanRelease.draws_ofLoopLink (L₀ := L₀) src (realOf src)
+  have hd := LeanRelease.samples_ofLoopLink (L₀ := L₀) src (realOf src)
   have hz := hS.size (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t j r hlay
   have hpads := hS.pads (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t j r hlay (Masked.UE.tapeZk t)
-  have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).drawsAt x (ν, t) (Loop.frepOf j.val r.val) := by
+  have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).samplesAt x (ν, t) (Loop.frepOf j.val r.val) := by
     rw [hqd]
     show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes
       ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x (2 * j.val + r.val)) (L₀.draws (ν, t) (2 * j.val + r.val))

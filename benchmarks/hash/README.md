@@ -7,7 +7,6 @@ trees, "One hash" in AGENTS.md); nothing here changes a committed format, and no
 | Directory | What it holds |
 |---|---|
 | `dither/` | PoUW's H1 receipts served in compiled vLLM: the one-stream linear (`h1o.cu`) whose noised MMAs serve y, with the peel z = A Bᵀ from the receipted words (H1V3); the A tables (`h1c.cu`); J10-R's per-call-noise units (`h1u.cu`, `j10r*.py`); each kernel gated against the credit's H1V3 reference (`h1ogate.py`), and the served overhead against stock vLLM int8, paired rep by rep (`sbench.py`, run on a leased GPU by `sbench.sh`) |
-| `maxtput/` | a Build of record for a model that has none: the served match alone, on one RTX PRO 6000 (`build_job.sh`) |
 
 Each script's header says how to run it, from the source tree's root, and on what hardware. They share one layout: a
 run writes its results to `$RESEARCH_RUN_DIR/out` (`OUT` where a header names it) and reads the files it is given, a

@@ -21,7 +21,7 @@ definitions they read are in `Partitioning.Model`; `Λ` below is `ln(1/δ)`.
 * `ServedGranularityChoice`: so over granularities of the same work `F`, the leading served cost
   `c(s) · (F/C) · Λ + w · (F/s) · β · h` (`servedCost`) is least at `s* = √(wβhC/(oΛ))`, not at the finest `s`.
 * `HeavyUnit`: a unit doing work at least `C` is sampled with probability at least `1 − δ`.
-* `UnequalDraws`, `UnequalCost`: with unequal units of work in `[a, A]` and `A · Λ ≤ C`, every sampling design meeting the target
+* `UnequalSamples`, `UnequalCost`: with unequal units of work in `[a, A]` and `A · Λ ≤ C`, every sampling design meeting the target
   samples at least `1/ρ` of `Achievability`'s `F/C · Λ` (`F` the total work), and pays at least `1/ρ²` of its cost, less
   one term per class `[aρ^j, aρ^{j+1})` of units. `UnequalCost` also assumes `a ≤ A`, which matters only with no units.
 
@@ -55,13 +55,13 @@ open Finset
 most `δ` samples at least `(n − K + 1)(1 − δ^{1/K})` units in expectation. -/
 def ConverseExact : Prop :=
   ∀ (n K : ℕ) (L : Law n) (δ : ℝ), 0 < K → K ≤ n → (L.miss K).toReal ≤ δ →
-    ((n : ℝ) - K + 1) * (1 - δ ^ ((K : ℝ)⁻¹)) ≤ meanDraws L
+    ((n : ℝ) - K + 1) * (1 - δ ^ ((K : ℝ)⁻¹)) ≤ meanSamples L
 
 /-- **The converse, asymptotically**: `(n − K + 1)(1 − δ^{1/K}) ≥ (n − K + 1)/K · Λ · (1 − Λ/(2K))`, so a sampling design meeting
 `ConverseExact`'s hypothesis samples about `(n/K) · ln(1/δ)` units when `K ≫ ln(1/δ)`. -/
 def ConverseAsymptotic : Prop :=
   ∀ (n K : ℕ) (L : Law n) (δ : ℝ), 0 < K → K ≤ n → 0 < δ → δ ≤ 1 → (L.miss K).toReal ≤ δ →
-    ((n : ℝ) - K + 1) / K * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * K)) ≤ meanDraws L
+    ((n : ℝ) - K + 1) / K * Real.log δ⁻¹ * (1 - Real.log δ⁻¹ / (2 * K)) ≤ meanSamples L
 
 /-- **Achievability**: for any `ε > 0`, some sampling design meets the free-compute target while sampling unit `u` with probability
 at most `min(1, Λ/C · w u) + ε`. -/
@@ -118,11 +118,11 @@ def HeavyUnit : Prop :=
 /-- **The converse for unequal units, in samples.** With every unit's work in `[a, A]`, `A · Λ ≤ C` and `ρ > 1`, every sampling design
 meeting the free-compute target samples at least `Λ (1 − AΛ/(2C)) (F/(ρC) · (1 − A/C) − J)` units in expectation, where
 `F` is the total work and `J = ⌊log_ρ (A/a)⌋ + 1` the number of classes `[aρ^j, aρ^{j+1})`. -/
-def UnequalDraws : Prop :=
+def UnequalSamples : Prop :=
   ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ : ℝ), 1 < ρ → 0 < a → (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 →
     A * Real.log δ⁻¹ ≤ C → ∀ L : Law n, MeetsTarget L w C δ →
       Real.log δ⁻¹ * (1 - A * Real.log δ⁻¹ / (2 * C)) *
-          ((∑ u, w u) / (ρ * C) * (1 - A / C) - (⌊Real.logb ρ (A / a)⌋₊ + 1)) ≤ meanDraws L
+          ((∑ u, w u) / (ρ * C) * (1 - A / C) - (⌊Real.logb ρ (A / a)⌋₊ + 1)) ≤ meanSamples L
 
 /-- **The converse for unequal units, in cost**, with unit `u` costing `c(w u) = f + o · w u`: every sampling design meeting the
 target pays at least `Λ (1 − AΛ/(2C)) (∑_u w u · c(w u)/(ρ²C) · (1 − A/C) − J · c(A))`, against `Achievability`'s
@@ -141,8 +141,8 @@ least `(n − K)(1 − δ^{1/(K+1)})` units in expectation, and some sampling de
 def ExfiltrationOptimum : Prop :=
   ∀ (n b K : ℕ) (δ ℓ : ℝ), 0 < δ → δ ≤ 1 → (b : ℝ) * K + locBits n K ≤ ℓ →
     ℓ < (b : ℝ) * (K + 1) + locBits n (K + 1) →
-    (∀ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ → ((n : ℝ) - K) * (1 - δ ^ ((K + 1 : ℝ)⁻¹)) ≤ meanDraws L) ∧
-    ∀ ε > 0, ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanDraws L ≤ n * Real.log δ⁻¹ / (K + 1) + ε
+    (∀ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ → ((n : ℝ) - K) * (1 - δ ^ ((K + 1 : ℝ)⁻¹)) ≤ meanSamples L) ∧
+    ∀ ε > 0, ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanSamples L ≤ n * Real.log δ⁻¹ / (K + 1) + ε
 
 /-- **The refinement rule, for the bound.** Split each of `n` units of work `s` and width `b` into `r` units of work
 `s/r` and width `b'`, with `K` as in `ExfiltrationOptimum` and `2(K + 1) ≤ n`. If `b + log₂(K+2)/(K+1) ≤ b' + log₂ r`,

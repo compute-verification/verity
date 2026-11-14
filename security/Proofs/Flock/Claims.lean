@@ -317,7 +317,7 @@ public import Proofs.Flock.Claims.DeployRoundsZk
 public import Proofs.Flock.Claims.DeployK
 public import Proofs.Flock.Claims.DeployEfficient
 public import Proofs.Flock.Claims.Assembled
-public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkSampleJ
 public import Proofs.Flock.Claims.KS.ConflictRun
 public import Proofs.Flock.Claims.KS.PlainWrP
 public import Proofs.Flock.Claims.CompleteFails

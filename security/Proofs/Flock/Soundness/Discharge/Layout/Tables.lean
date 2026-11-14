@@ -13,8 +13,8 @@ set_option Elab.async false
 /-!
 # A population without shared rows, from the statement's tag
 
-`bc_drawn` and the headline's sites read the registered population's `b ‖ c` as `n · np` consecutive pieces of its
-public file, which holds for a file without shared rows (`pop.tables = none`; `BcSite` and `bc_drawnS` take any
+`bc_sampled` and the headline's sites read the registered population's `b ‖ c` as `n · np` consecutive pieces of its
+public file, which holds for a file without shared rows (`pop.tables = none`; `BcSite` and `bc_sampledS` take any
 population, `Layout.SharedRows`). `HmRow.sharedRows` refuses a
 header's `shared_rows` unless the statement's tag has shared-row files, so under any tag without them every population
 `HmRow.loadPublic` accepts has no tables (`loadPublic_tables`; `@eb90718f` by `rfl`, `circuitEb90718f_sharedRows`).

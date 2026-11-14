@@ -12,7 +12,7 @@ public import Proofs.Properties.Verity.Sampled.MemberForm.Order
 decoders (`sessionDecoders`: the roots and a round's submission as one session's, and the proof files decoded from the
 evidence the session's closing round reveals).
 
-* **The sessions in the sample's order** (`drawnBefore`): the session of the member at place `i` is the one after as
+* **The sessions in the sample's order** (`sampledBefore`): the session of the member at place `i` is the one after as
   many sessions as members before `i` have a proof block in the sample.
 * **What the verdict gives at a window** (`WindowSessions`, the premise): at the sample `S`, each tree the log opens
   names its streams once (`WindowSessions.specs`), an opening of a tree opened before is of the last tree opened
@@ -116,30 +116,30 @@ theorem countP_take_exists {γ : Type _} (p : γ → Bool) (l : List γ) : ∀ n
 /-- **The sessions before the member at place `i`**, at the sample `S`: the members before place `i` with a proof
 block in `S`. A member with none has no statement and no session, so the session of the member at place `i` is the
 play's session after as many. -/
-noncomputable def drawnBefore {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (i : ℕ) : ℕ :=
+noncomputable def sampledBefore {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (i : ℕ) : ℕ :=
   (ms.take i).countP fun m => @decide (m.part S).Nonempty (Classical.propDecidable _)
 
-theorem drawnBefore_zero {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) : drawnBefore ms S 0 = 0 :=
+theorem sampledBefore_zero {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) : sampledBefore ms S 0 = 0 :=
   countP_take_zero _ ms
 
 /-- A member with a proof block in the sample has a session. -/
-theorem drawnBefore_succ_of_drawn {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (Fin nJ)} {i : ℕ} {m : Member nJ}
-    (h : ms[i]? = some m) (hd : (m.part S).Nonempty) : drawnBefore ms S (i + 1) = drawnBefore ms S i + 1 :=
+theorem sampledBefore_succ_of_sampled {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (Fin nJ)} {i : ℕ} {m : Member nJ}
+    (h : ms[i]? = some m) (hd : (m.part S).Nonempty) : sampledBefore ms S (i + 1) = sampledBefore ms S i + 1 :=
   countP_take_succ_pos _ h (@decide_eq_true _ (Classical.propDecidable _) hd)
 
 /-- A member with no proof block in the sample has no session. -/
-theorem drawnBefore_succ_of_not {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (Fin nJ)} {i : ℕ} {m : Member nJ}
-    (h : ms[i]? = some m) (hd : ¬ (m.part S).Nonempty) : drawnBefore ms S (i + 1) = drawnBefore ms S i :=
+theorem sampledBefore_succ_of_not {nJ : ℕ} {ms : List (Member nJ)} {S : Finset (Fin nJ)} {i : ℕ} {m : Member nJ}
+    (h : ms[i]? = some m) (hd : ¬ (m.part S).Nonempty) : sampledBefore ms S (i + 1) = sampledBefore ms S i :=
   countP_take_succ_neg _ h fun hp => hd (@of_decide_eq_true _ (Classical.propDecidable _) hp)
 
-theorem drawnBefore_le {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (i : ℕ) : drawnBefore ms S i ≤ i :=
+theorem sampledBefore_le {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (i : ℕ) : sampledBefore ms S i ≤ i :=
   countP_take_le _ ms i
 
 /-- **Each session before a place is a sampled member's**: the session after `v` others, of fewer than the sessions
 before place `n`, is that of a member with a proof block in the sample that `v` sessions come before. -/
-theorem drawnBefore_exists {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (n v : ℕ)
-    (h : v < drawnBefore ms S n) :
-    ∃ i m, ms[i]? = some m ∧ (m.part S).Nonempty ∧ drawnBefore ms S i = v := by
+theorem sampledBefore_exists {nJ : ℕ} (ms : List (Member nJ)) (S : Finset (Fin nJ)) (n v : ℕ)
+    (h : v < sampledBefore ms S n) :
+    ∃ i m, ms[i]? = some m ∧ (m.part S).Nonempty ∧ sampledBefore ms S i = v := by
   obtain ⟨i, m, hm, hp, hv⟩ := countP_take_exists _ ms n v h
   exact ⟨i, m, hm, @of_decide_eq_true _ (Classical.propDecidable _) hp, hv⟩
 
@@ -235,18 +235,18 @@ structure WindowSessions (W : Window) (tb : String) (ev : ℕ → Exchange → O
     (filesDec : Claims.Msg → Array ByteArray) (S : Finset (Fin W.nJ)) (x : Exchange) : Prop where
   specs : ∀ sp ∈ helloSpecs x.log, sp.streams.toList.Nodup
   order : OpensLast x.log
-  trees : (openedTrees x.log).length ≤ drawnBefore W.ms S W.ms.length
+  trees : (openedTrees x.log).length ≤ sampledBefore W.ms S W.ms.length
   session : ∀ (i : ℕ) (m : Member W.nJ), W.ms[i]? = some m → (m.part S).Nonempty →
     ∃ (a : StepAt) (bs : _root_.Core.Blobs) (keys : Array String) (s : _root_.Spot.OneStageZk.RunFiles)
       (record : String) (spec : Flock.SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
       (proofs : Array ByteArray) (units : Array ℕ) (J : Json) (sess : Flock.RunRecord) (w : Claims.Msg) (τ : ℕ),
       StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
       Exec.recordDraw record = some (printedPart (m.part S)) ∧
-      sentRecordAt (drawnBefore W.ms S i) x.sent = some record ∧
+      sentRecordAt (sampledBefore W.ms S i) x.sent = some record ∧
       Flock.Record.decode spec record = .ok sess ∧
-      SessionRead x.log #[tb] (drawnBefore W.ms S i) record J sess w ∧
-      (openedTrees x.log)[drawnBefore W.ms S i]? = some τ ∧
-      ev (drawnBefore W.ms S i) x = some w ∧ filesDec w = proofs
+      SessionRead x.log #[tb] (sampledBefore W.ms S i) record J sess w ∧
+      (openedTrees x.log)[sampledBefore W.ms S i]? = some τ ∧
+      ev (sampledBefore W.ms S i) x = some w ∧ filesDec w = proofs
 
 /-- **A sampled member's session, with the session `--zk` sets up at the member**: `WindowSessions.session` with the
 session's shape at a member of one table (`Member.spec_at`). -/
@@ -261,8 +261,8 @@ theorem WindowSessions.specAt {W : Window} {tb : String} {ev : ℕ → Exchange 
       StatesMember a m ∧ SessionVerdict a bs keys s record spec tabs rest proofs units ∧
       Exec.recordDraw record = some (printedPart (m.part S)) ∧
       Exec.setupOfP (ZkExec.zkInputs m.I) m.own record = .ok (spec, sts) ∧
-      SessionSpecAt x tb (drawnBefore W.ms S i) record spec tabs proofs sess J w ∧
-      (openedTrees x.log)[drawnBefore W.ms S i]? = some τ ∧ ev (drawnBefore W.ms S i) x = some w ∧
+      SessionSpecAt x tb (sampledBefore W.ms S i) record spec tabs proofs sess J w ∧
+      (openedTrees x.log)[sampledBefore W.ms S i]? = some τ ∧ ev (sampledBefore W.ms S i) x = some w ∧
       filesDec w = proofs := by
   obtain ⟨a, bs, keys, s, record, spec, tabs, rest, proofs, units, J, sess, w, τ, hst, hv, hdr, hsent, hdec, hread,
     hτ, hev, hfd⟩ := h.session i m hm hd
@@ -282,8 +282,8 @@ theorem WindowSessions.all {W : Window} {tb : String} {ev : ℕ → Exchange →
       (tabs : Array Flock.Setup) (proofs : Array ByteArray) (sess : Flock.RunRecord) (J : Json) (w₀ : Claims.Msg),
       SessionSpecAt x tb v text spec tabs proofs sess J w₀ := by
   intro v τ hτ
-  have hv : v < drawnBefore W.ms S W.ms.length := lt_of_lt_of_le (List.getElem?_eq_some_iff.1 hτ).1 h.trees
-  obtain ⟨i, m, hm, hd, hdv⟩ := drawnBefore_exists W.ms S W.ms.length v hv
+  have hv : v < sampledBefore W.ms S W.ms.length := lt_of_lt_of_le (List.getElem?_eq_some_iff.1 hτ).1 h.trees
+  obtain ⟨i, m, hm, hd, hdv⟩ := sampledBefore_exists W.ms S W.ms.length v hv
   obtain ⟨_, _, _, _, record, spec, tabs, _, proofs, _, J, sess, w, _, _, -, -, -, -, hA, -, -, -⟩ :=
     h.specAt hMA hm hd
   rw [hdv] at hA
@@ -708,7 +708,7 @@ theorem SessDone.of_eq {R : ℕ} {P : Fin R → List Release → Frame → Prop}
 place `i` and the position `p` its member's session starts at: the walk from `p` stops where `StopOf` says, with
 the releases after the logs `done` answered in the log of the play on `r`'s tape (`Walked`), those being the picks
 of the sessions before the one after as many as members before `i` have a proof block in the sample (`SessDone`,
-`drawnBefore`), and `p` is past the play's start on the coin map's tape. -/
+`sampledBefore`), and `p` is past the play's start on the coin map's tape. -/
 def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (W : Window)
     (rd : Reading W.rounds) (σ : Strategy (V.game θ F c)) (M : WindowCoinMap (V.game θ F c) σ W.Ω W.rounds)
     (ω : (W.extend M.widening).L.Ω) (r : Pos (V.game θ F c) σ Claims.Msg (Fin W.rounds)) (i : ℕ)
@@ -718,7 +718,7 @@ def StepInv (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArr
     StopOf rd.round rd.reveal pre f a p.toStop ∧
     Walked rd.round (CoinTape.run (V.game θ F c) σ r.tape).log pre a done ∧
     SessDone rd.round (fun j => j.val / 1026) (CoinTape.run (V.game θ F c) σ r.tape).log done
-      (drawnBefore W.ms ((W.extend M.widening).L.draw ω) i) ∧
+      (sampledBefore W.ms ((W.extend M.widening).L.draw ω) i) ∧
     (Pos.root (roundCuts V θ F c rd) (M.start ω)).Past p
 
 /-- **The members' steps, from each session's read** (`MemberSteps`): at a window whose members each have the one
@@ -728,7 +728,7 @@ map that writes the link points' and each round's coins' bits into a stop's open
 accepts and `P` holds of has the sessions of the sample at `ω` (`WindowSessions`). The start is the play's first
 stop (`stopOf_rootStop`) with nothing answered; a member with no proof block in the sample has no session, so the
 sessions before the next place are the same; and a sampled member's step is `session_step` at its session, the one
-after `drawnBefore` others, with the moves its record decodes to (`MemberMovesOf`). -/
+after `sampledBefore` others, with the moves its record decodes to (`MemberMovesOf`). -/
 theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (k : Verity.Registration.Composite) (P : Exchange → Prop) (W : Window) (t : ℕ)
     (reg : Option Claims.Msg → ByteArray) (tb : String) (ev : ℕ → Exchange → Option Claims.Msg)
@@ -755,7 +755,7 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
     (fun ω i m p q r out hm hd hI hpi _ hmr hqr _ hacc => ?_) (fun ω i m p r hm hd hI => ?_)
     (fun ω r hpr hacc => (hses ω r.tape hpr.through hacc.1 hacc.2.2).1)
   · exact ⟨[], _, fun _ => True, [], fun _ => rfl, stopOf_rootStop V θ F c _ σ (M.start ω) hP, walked_nil _ _,
-      (sessDone_nil _ _ _).of_eq (drawnBefore_zero _ _).symm, Pos.Past.refl _⟩
+      (sessDone_nil _ _ _).of_eq (sampledBefore_zero _ _).symm, Pos.Past.refl _⟩
   · obtain ⟨pre, f, a, done, hf, hSO, hW, hDn, hrp⟩ := hI
     have hdS : (m.part ((W.extend M.widening).L.draw ω)).Nonempty := hd
     obtain ⟨hE, hWS⟩ := hses ω r.tape (hrp.trans (hmr.past.trans hqr)).through hacc.1 hacc.2.2
@@ -763,13 +763,13 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
       hτ, hev, hfd⟩ := hWS.specAt hMA hm hdS
     have hmP := m.mPts_eq t hs hdr ((W.extend M.widening).hcls m (List.mem_of_getElem? hm) ω hE)
     have hTr : (openedTrees (CoinTape.run (V.game θ F c) σ r.tape).log).length * 1026 ≤ W.rounds :=
-      (Nat.mul_le_mul_right 1026 (hWS.trees.trans (drawnBefore_le _ _ _))).trans (Nat.le_of_eq W.rounds_eq.symm)
+      (Nat.mul_le_mul_right 1026 (hWS.trees.trans (sampledBefore_le _ _ _))).trans (Nat.le_of_eq W.rounds_eq.symm)
     obtain ⟨⟨pre'', f'', a'', done'', hf'', hSO'', hW'', hDn''⟩, hB, hPt, hRp, hPf⟩ :=
       session_step reg ev filesDec record₀ recordDigest rfl hML hMR t hmr hqr hpi hacc.2.1 hf hSO hW hDn
         hWS.specs hWS.order hTr (hWS.all hMA) hA hτ hev hfd hmP
     refine ⟨⟨pre'', f'', a'', done'', hf'', hSO'', hW'', ?_, hrp.trans (hmr.past.trans (Pos.past_consume q))⟩,
       a₀, bs, keys, s, record, spec, tabs, rest, proofs, units, hst, hv, ?_⟩
-    · exact hDn''.of_eq (drawnBefore_succ_of_drawn hm hdS).symm
+    · exact hDn''.of_eq (sampledBefore_succ_of_sampled hm hdS).symm
     · intro spec' sts' sess' hs' hdec'
       have hspec : spec = spec' := (Prod.mk.inj (Except.ok.inj (hs.symm.trans hs'))).1
       rw [← hspec] at hdec' ⊢
@@ -777,6 +777,6 @@ theorem memberSteps_of_sessions (V : Vocab d α) (θ : ByteArray) (F : Array Byt
       exact ⟨hdr, hB, hPt, hRp, hPf⟩
   · obtain ⟨pre, f, a, done, hf, hSO, hW, hDn, hrp⟩ := hI
     have hdS : ¬ (m.part ((W.extend M.widening).L.draw ω)).Nonempty := hd
-    exact ⟨pre, f, a, done, hf, hSO, hW, hDn.of_eq (drawnBefore_succ_of_not hm hdS).symm, hrp⟩
+    exact ⟨pre, f, a, done, hf, hSO, hW, hDn.of_eq (sampledBefore_succ_of_not hm hdS).symm, hrp⟩
 
 end Verity.Sampled

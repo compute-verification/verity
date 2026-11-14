@@ -14,9 +14,9 @@ table is one `Level0`, from which everything of level 0 that leaves is read: the
 * `Level0`: the table's `m`, level 0 of its `--zk` schedule and its `t_pad`, the packed witness `g`, the hiding the loop
   drew (the four extra lanes, every lane's padding, a salt per tree position), the padded codeword's rows, the Merkle
   tree's layers from the leaves to the cap, and the root.
-* `ofDraws`: a table's `Level0` from its witness and the samples' bytes, in `Link.parse`'s layout after the witness: the
+* `ofSamples`: a table's `Level0` from its witness and the samples' bytes, in `Link.parse`'s layout after the witness: the
   extra lanes, the paddings, the salts. `draw` reads those bytes from the OS in one read.
-* `ofDraws_ok`: what `ofDraws` keeps is what it commits: the rows, layers and root of a `Level0` it returns are `Link`'s
+* `ofSamples_ok`: what `ofSamples` keeps is what it commits: the rows, layers and root of a `Level0` it returns are `Link`'s
   of its own inputs (`toIn`), its root `Link.root toIn`, so a statement over `toIn` needs none of the stored fields.
 * `Slots`, `commit`: the loop's tables, sampled for a live session named by the loop's id for it (`nameOf`,
   `Slots.draw`) all at once, on every table's witness, and once: a second sample for the session, or one whose witnesses
@@ -36,7 +36,7 @@ namespace Flock.ZkServer.Level0
 /-- **A table's level 0**: its `m`, level 0 of its `--zk` schedule (`lv`) and `t_pad`; the host's packed witness `g`
 (`2^(lanes + cols)` words); the hiding the loop drew: the four extra lanes (`extra`, `2^cols` words each), every lane's
 padding coefficients (`pads`, `t_pad` each, the witness lanes' then the extra lanes'), and the salts (`salts`, 192 bytes
-for each of the `2^d` tree positions, `salt q`); and what level 0 commits of them (`build`, `ofDraws_ok`): the padded
+for each of the `2^d` tree positions, `salt q`); and what level 0 commits of them (`build`, `ofSamples_ok`): the padded
 codeword's `2^d` rows (`Link.rows`), the Merkle tree's layers from the leaves (`layers[0]`) to the cap
 (`layers[d − cap]`, `Link.layer`'s), and the root (`Link.root`'s: the cap, concatenated). -/
 structure Level0 where
@@ -122,23 +122,23 @@ def buildFast (wide : Bool) (m : Nat) (lv : Level) (tPad : Nat) (g : Array F128)
 
 /-- The OS bytes level 0 samples at level `lv` with `t_pad` paddings: the extra lanes' words, the paddings' and the
 salts. -/
-def drawSize (lv : Level) (tPad : Nat) : Nat :=
+def sampleSize (lv : Level) (tPad : Nat) : Nat :=
   16 * Zk.EXTRA_LANES * 2 ^ lv.cols + 16 * (2 ^ lv.lanes + Zk.EXTRA_LANES) * tPad + 192 * 2 ^ lv.d
 
-/-- The OS bytes a table's level 0 samples at `m` (`drawSize` at level 0 of its `--zk` schedule; `wide`: a wide-leaf
+/-- The OS bytes a table's level 0 samples at `m` (`sampleSize` at level 0 of its `--zk` schedule; `wide`: a wide-leaf
 statement's). -/
-def drawBytes (wide : Bool) (m : Nat) : V Nat := do
+def sampleBytes (wide : Bool) (m : Nat) : V Nat := do
   let (s, tPad) ← Zk.schedule wide m
-  return drawSize (s.levels.getD 0 default) tPad
+  return sampleSize (s.levels.getD 0 default) tPad
 
 /-- **A table's level 0** at `m` (`wide`: of a wide-leaf statement) from its packed witness `g` and the samples' bytes
-`d` (`drawBytes wide m`), in `Link.parse`'s layout after the witness: the extra lanes, the paddings, the salts. -/
-def ofDraws (wide : Bool) (m : Nat) (g : Array F128) (d : ByteArray) : V Level0 := do
+`d` (`sampleBytes wide m`), in `Link.parse`'s layout after the witness: the extra lanes, the paddings, the salts. -/
+def ofSamples (wide : Bool) (m : Nat) (g : Array F128) (d : ByteArray) : V Level0 := do
   let (s, tPad) ← Zk.schedule wide m
   let lv := s.levels.getD 0 default
   let (nG, nC, nL) := (2 ^ (lv.lanes + lv.cols), 2 ^ lv.cols, 2 ^ lv.lanes + Zk.EXTRA_LANES)
   if g.size != nG then throw s!"level 0: a {g.size}-word witness where m = {m} takes {nG}"
-  if d.size != drawSize lv tPad then throw s!"level 0: {d.size} bytes drawn where m = {m} takes {drawSize lv tPad}"
+  if d.size != sampleSize lv tPad then throw s!"level 0: {d.size} bytes drawn where m = {m} takes {sampleSize lv tPad}"
   let oP := 16 * Zk.EXTRA_LANES * nC
   let l := build wide m lv tPad g ((Array.range Zk.EXTRA_LANES).map fun e => Link.wordsAt d (16 * nC * e) nC)
     ((Array.range nL).map fun l => Link.wordsAt d (oP + 16 * tPad * l) tPad) (d.extract (oP + 16 * nL * tPad) d.size)
@@ -170,16 +170,16 @@ theorem root_of (l : Level0) (s : Schedule) (hz : Zk.schedule l.wideLeaf l.m = .
   unfold Link.root
   rw [show l.toIn.m = l.m from rfl, show l.toIn.wideLeaf = l.wideLeaf from rfl, hz, hl]
 
-/-- **What `ofDraws` keeps is what it commits**: a `Level0` it returns is `build` at level 0 of `m`'s `--zk` schedule, so
+/-- **What `ofSamples` keeps is what it commits**: a `Level0` it returns is `build` at level 0 of `m`'s `--zk` schedule, so
 its rows, layers and root are `Link`'s of its own inputs (`toIn`), and its root is `Link.root`'s. -/
-theorem ofDraws_ok {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0}
-    (h : ofDraws wide m g d = .ok l) :
+theorem ofSamples_ok {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0}
+    (h : ofSamples wide m g d = .ok l) :
     l.m = m ∧ l.g = g ∧ (∃ s, Zk.schedule wide m = .ok (s, l.tPad) ∧ l.lv = s.levels.getD 0 default) ∧
       l.rows = Link.rows l.lv l.tPad l.toIn.g l.toIn.extra l.toIn.lanePad ∧
       l.layers = (Array.range (l.lv.d - l.lv.cap + 1)).map
         (Link.layer l.lv.d fun q => (Link.leaves l.lv l.tPad l.toIn)[q]!) ∧
       l.root = Link.root l.toIn := by
-  unfold ofDraws at h
+  unfold ofSamples at h
   cases hz : Zk.schedule wide m with
   | error e => rw [hz] at h; cases h
   | ok p =>
@@ -197,10 +197,10 @@ theorem ofDraws_ok {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l :
     rw [root_of l s (by rw [hm, hw, ht]; exact hz) hl]
     exact build_root hb
 
-/-- A `Level0` `ofDraws` returns is at the version it was given. -/
-theorem ofDraws_wideLeaf {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0}
-    (h : ofDraws wide m g d = .ok l) : l.wideLeaf = wide := by
-  unfold ofDraws at h
+/-- A `Level0` `ofSamples` returns is at the version it was given. -/
+theorem ofSamples_wideLeaf {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray} {l : Level0}
+    (h : ofSamples wide m g d = .ok l) : l.wideLeaf = wide := by
+  unfold ofSamples at h
   cases hz : Zk.schedule wide m with
   | error e => rw [hz] at h; cases h
   | ok p =>
@@ -214,13 +214,13 @@ theorem ofDraws_wideLeaf {wide : Bool} {m : Nat} {g : Array F128} {d : ByteArray
 /-- **A table's level 0** at `m` (`wide`: of a wide-leaf statement) from its packed witness `g`, its hiding sampled from
 `get` in one read. -/
 def draw (get : USize → IO ByteArray) (wide : Bool) (m : Nat) (g : Array F128) : IO (V Level0) := do
-  match drawBytes wide m with
+  match sampleBytes wide m with
   | .error e => return .error e
   | .ok n =>
     let d ← get n.toUSize
-    return ofDraws wide m g d
+    return ofSamples wide m g d
 
-/-- What the prover gets back of its table's level 0: the samples, in `ofDraws`'s layout, then the root. -/
+/-- What the prover gets back of its table's level 0: the samples, in `ofSamples`'s layout, then the root. -/
 def drawsOf (l : Level0) : ByteArray :=
   let w := fun (v : Array F128) => v.foldl F128.pushBytes .empty
   (l.extra ++ l.pads).foldl (fun b v => b ++ w v) .empty ++ l.salts ++ l.root

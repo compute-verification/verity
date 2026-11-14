@@ -50,7 +50,7 @@ open Lean (Json)
 def lawObj (named : Json) (derived : Option Flock.Draw.Law) : Json := (derived.map (·.toJson)).getD named
 
 /-- **`Select.select`'s steps**: an accepted sample read the population `n`, the rule's sampling design over it and its expansion, and
-proves every unit it drew: all of `[0, n)` under `All`, else the units `drawUnits` samples from the coins under the sampling design
+proves every unit it drew: all of `[0, n)` under `All`, else the units `sampleUnits` samples from the coins under the sampling design
 `flockLaw` accepts. -/
 theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
@@ -59,7 +59,7 @@ theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Opt
       Draw.deriveLaw d query named table = .ok derived ∧ ∃ units : Array ℕ, (∀ x ∈ units, x ∈ proved) ∧
         ((rule = .all ∧ units = Array.range n) ∨
           (rule ≠ .all ∧ ∃ parsed read', Draw.flockLaw (lawObj named derived) n = .ok parsed ∧
-            Draw.drawUnits (derived.getD parsed) n src = .ok (units, read'))) := by
+            Draw.sampleUnits (derived.getD parsed) n src = .ok (units, read'))) := by
   unfold Select.select at h
   obtain ⟨n, hn, h⟩ := bind_eq_ok.1 h
   obtain ⟨named, hnamed, h⟩ := bind_eq_ok.1 h

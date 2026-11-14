@@ -370,7 +370,7 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
     fun p e hp he hc => words_slot hF.1 hp he hc
   -- the samples
   have hdraws : ((LeanRelease.ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src)
-      (realOf src)).drawsAt x (ν, t) (2 * j.val + r.val)) = q.draws := by
+      (realOf src)).samplesAt x (ν, t) (2 * j.val + r.val)) = q.draws := by
     obtain ⟨-, hq', -⟩ := hRep
     unfold repInOf at hq'
     obtain ⟨⟨lay, ms⟩, hds, hq'⟩ := bok hq'

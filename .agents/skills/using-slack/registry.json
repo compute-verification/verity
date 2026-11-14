@@ -500,7 +500,7 @@
         "benchmarks/vllm_encoded/",
         "benchmarks/word_codec/",
         "demos/onsite_served/",
-        "demos/configurations.toml",
+        "tests/configurations.toml",
         "adapters/vllm/verity_vllm/protocols/pous.py",
         "verity/protocols/accounting/pous/device/",
         "verity/protocols/accounting/pous/",
@@ -758,7 +758,7 @@
       ],
       "owns": [
         "tools/config/",
-        "tools/verity/check/",
+        "tools/check/",
         "tools/verity/cli/",
         "tools/verity/graph/",
         "tools/verity/landq/",
@@ -872,7 +872,7 @@
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
       "owns": [
-        "verity/commitments/windows/",
+        "verity/commitments/periods/",
         "adapters/vllm/",
         "demos/vllm/",
         "benchmarks/replay_determinism/",

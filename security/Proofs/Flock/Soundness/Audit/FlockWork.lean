@@ -17,8 +17,8 @@ verifier's work table, and U2 holds each stratum of a work sample to it. It is `
 
 namespace FlockSoundness.Audit.Law
 
-theorem workRule_eq_draw : Flock.Draw.workK = workRule := rfl
+theorem workRule_eq_sample : Flock.Draw.workK = workRule := rfl
 
-theorem countRule_eq_draw : Flock.Draw.stratumK = countRule := rfl
+theorem countRule_eq_sample : Flock.Draw.stratumK = countRule := rfl
 
 end FlockSoundness.Audit.Law

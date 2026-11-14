@@ -12,7 +12,7 @@ public import Proofs.Flock.Soundness.Finders
 its own statement at one table (`SampledKSLiveV5`'s binders: its circuit file's descriptor, public input ports and public
 file, and the verifier's own recomputation `own`), as one-stage v2 verifies them. The window's audit (`JointAuditV5`)
 registers every member, samples one sample over all their proof blocks on live coins with the deployed sample
-(`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream) under the registration's sampling design (`Bridge.LawOn`: subset,
+(`Bridge.execSel`, `Spot.Draw.sampleUnits` on one stream) under the registration's sampling design (`Bridge.LawOn`: subset,
 stratified or work, a stratum free to span members), each member's proof blocks `MemberV5.emb` into the population, and
 then runs one verity-verify-proof session per member in the registration's order, member `m` proving its part of the sample
 (`MemberV5.part`, sampled by `subset |part|`). A member's sampled count is random and may be zero. The deployed sample
@@ -88,7 +88,7 @@ structure MemberV5 (Reg : Type) (nJ : ℕ) where
   dj : Finset (Fin n) → Lean.Json
   S₀ : Finset (Fin n)
   d₀ : Lean.Json
-  y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
+  y₀ : SampleSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀
   wr : (S : Finset (Fin n)) → (R : Reg) →
     LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript
   dg : ByteArray → ByteArray
@@ -185,11 +185,11 @@ noncomputable def link (L : Law m.n) : ℝ≥0∞ :=
 
 end MemberV5
 
-/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.drawUnits`) under `design` over
+/-- **The sample ended** on the bytes `src ω`: the deployed sample (`Spot.Draw.sampleUnits`) under `design` over
 `[0, pop)` returned a sample before the stream ran out. `Bridge.execSel` samples every unit where it did not. -/
 def sampleEnded {Ω : Type} {Lb : Fin 1 → ℕ} (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (design : Flock.Draw.Law)
     (pop : ℕ) (ω : Ω) : Bool :=
-  match Spot.Draw.drawUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
+  match Spot.Draw.sampleUnits design pop (Properties.Spot.bytesOf (src ω 0)) with
   | .ok _ => true
   | .error _ => false
 
@@ -375,7 +375,7 @@ structure AuditRecV5 (W : ℕ → JointAuditV5) where
   idx : ℕ
   accepted : Prop
   wrong : Finset (Fin (W idx).nJ)
-  drawnWrong : Prop
+  sampledWrong : Prop
 
 namespace AuditRecV5
 

@@ -22,7 +22,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   `verity-verify-proof --archive` finds one) are other than those refuse (`tablesHeld`, `NO_TABLES`) before the session is set
   up: the tables the session `run` sets up reads are the registered circuit's. The per-member form holds each member
   to its own circuit's tables instead (below, **per member**);
-* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.drawCoins` reads from the evidence's `coins` under
+* **coins** (`coinsOf`): v1's (`OneStage.coinsOf`), what `Challenger.sampleCoins` reads from the evidence's `coins` under
   the challenger's key, on the verifier's window; none read refuses. The check below runs at them (`checkBlobsAt`): v1's
   `checkAt` refuses a sample other than the one they give before v1's `check`;
 * **trees** (`treesOf`, `orderHeld`, `treesHeld`): the coin trees that same session's signed release log shows the
@@ -40,10 +40,12 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   program's proof blocks read stratum by stratum must be the record's `population` units in order (`Slots.popOk`), as
   the service's run refuses at registration (`Run.run`, `population-order`), else the check refuses, before any session
   is verified. v1's R2 holds only their count, and the session's knowledge soundness reads slot `u` as proof block `u`;
-* **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublic`): its scheme,
+* **public** (`publicHeld`): the public file's header held to the registration (`Record.matchesPublicBy`): its scheme,
   roots and their domains and its instance count the record's, and its `units.indices` the population's units in
   order (`indicesHeld`, `indicesHeld_of_publicHeld`), so no header written after the sample relabels an instance as
-  another unit; else the check refuses, before any session is verified;
+  another unit; else the check refuses, before any session is verified. The public file names its ports bare; a window
+  of one member registers them `<member>/<port>`, and the header is held to that member's roots with its name taken
+  off (`publicPorts`); a registration of several members' roots refuses (`NOT_ONE_MEMBER`);
 * **check**: `verity-verify-proof verify --zk --statement verity/flock-circuit` with `--circuit`, `--public`, `--partition`,
   `--program` and `--registered` the verifier's own and one `--session` a session, as `one_stage.proofs.verify` runs it
   (`verdicts`, the Flock library calls `verifyCmd` makes on that path, its last the files' ports, domains and roots,
@@ -57,7 +59,7 @@ v1 audit (`OneStage`) with the verdicts computed here, from the statement's file
   file no blob holds is that session's reject, as a file `verity-verify-proof` can't read is. So does a length a session's
   statement can't hold, since it writes each in an 8-byte word: the circuit or public file, the lookup tables, the
   program, the partition object, the registered reads or a session's sample at `2^64` bytes or more (`fitsWhy`,
-  `drawFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
+  `sampleFitsWhy`, the JSON ones as `Flock.RecordText.printT` prints them);
 * **per member** (`checkMembersAt`): the form for a population of several members, a statement a sampled member. It
   accepts where every statement's session accepted and v1's check at the coins accepts on their verdicts, as the one
   statement's check does (`checkMembersAt_accept`). v1's check reads the members there
@@ -131,7 +133,7 @@ public import Spot.OneStage
 public import Spot.ChallengerTrees
 public import Spot.Slots
 public import Spot.FilePart
-public import Spot.WiresDrawn
+public import Spot.WiresSampled
 public import Spot.CircuitKept
 public import Spot.OneStageZkStatement
 public import Flock
@@ -142,7 +144,7 @@ meta import Spot.OneStage
 meta import Spot.ChallengerTrees
 meta import Spot.Slots
 meta import Spot.FilePart
-meta import Spot.WiresDrawn
+meta import Spot.WiresSampled
 meta import Spot.OneStageZkStatement
 meta import Flock
 meta import Flock.JsonParse
@@ -543,7 +545,7 @@ partition's ranges `rs` (each its template, first unit and count), the members `
 count), the units of the sample `sample` and each member's rows (`load`, by name): each template of the wiring is one
 range of `rs` of exactly its units, so its unit `u` is the population's unit `first + u` (else `WIRES_TEMPLATE`); and
 every wired row of every unit of the sample is its writer's output row (`Spot.Wires.Summary.drawnOk`, the reference's
-check on the sample's units by `Spot.Wires.drawnOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
+check on the sample's units by `Spot.Wires.sampledOk_iff`): the row's `b ‖ c` in its member's public file, at the unit's
 slot and the port the row names (`rowName`), is the writer's output row's in the writer's member's, neither empty
 (else `WIRES_SAMPLED`). It loads the members a unit of the sample with a wired row, or one of its writers, is in. -/
 def wiresOn (W : Spot.Wires.Wiring) (S : Spot.Wires.Summary) (rs : Array (String × Nat × Nat))
@@ -1081,6 +1083,33 @@ private def refusal : V Unit → String
   "{\"frame_v3\":{\"domain_ids\":{\"x\":\"de\"},\"roots\":{\"x\":\"aa\",\"y\":\"bb\"}},\"instances\":3,\"scheme\":\"s\"}".toUTF8) ==
   "public file: not the registration's: roots, domains, population"
 #guard (refusal (publicHeld heldRecord "not a public file".toUTF8)).startsWith "the public file's header is not JSON: "
+
+/-- A registration of population 2 whose roots are at `ports`, roots `aa`, `ab`, … and domains `da`, `db`, … in order. -/
+private def portsRecord (ports : List String) : Json :=
+  Json.mkObj [("population", Lean.toJson (2 : Nat)), ("scheme", .str "s"), ("roots", .arr (ports.toArray.mapIdx
+    fun i p => Json.mkObj [("domain", .str s!"d{i}"), ("port", .str p), ("root", .str s!"r{i}")]))]
+
+/-- A public file of population 2 naming its roots at `ports`, as `portsRecord`'s in order. -/
+private def portsPublic (ports : List String) : ByteArray :=
+  let named (pre : String) := Json.mkObj (ports.mapIdx fun i p => (p, .str s!"{pre}{i}"))
+  let header := Json.mkObj [("frame_v3", Json.mkObj [("domain_ids", named "d"), ("roots", named "r")]),
+    ("instances", Lean.toJson (2 : Nat)), ("scheme", .str "s"),
+    ("units", Json.mkObj [("indices", Lean.toJson #[(0 : Nat), 1])])]
+  (header.compress ++ "\nrest").toUTF8
+
+#guard commonMember ["T{K=1}/c0/x", "T{K=1}/c0/y"] == some "T{K=1}/c0"
+#guard commonMember ["T/c0/x", "T/c1/x"] == none
+#guard commonMember ["A/c0/x", "B/c0/x"] == none
+#guard commonMember ["x", "T/c0/y"] == none
+#guard commonMember [] == none
+#guard refusal (publicHeld (portsRecord ["x", "y"]) (portsPublic ["x", "y"])) == ""
+#guard refusal (publicHeld (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y"]) (portsPublic ["x", "y"])) == ""
+#guard refusal (publicHeld (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y"]) (portsPublic ["y", "x"])) ==
+  "public file: not the registration's: roots, domains"
+#guard refusal (publicHeld (portsRecord ["T{K=1}/c0/x", "T{K=1}/c0/y"])
+  (portsPublic ["T{K=1}/c0/x", "T{K=1}/c0/y"])) == "public file: not the registration's: roots, domains"
+#guard [["T/c0/x", "T/c1/x"], ["A/c0/x", "B/c0/x"], ["x", "T/c0/y"], ["T/c0/x", "row-table/s0/t"]].all fun ps =>
+  refusal (publicHeld (portsRecord ps) (portsPublic ["x", "y"])) == NOT_ONE_MEMBER
 
 /-- A circuit file whose META looks up the MUFU tables `names`. -/
 private def lookingUp (names : List String) : ByteArray :=

@@ -43,7 +43,7 @@ import json
 import sys
 from pathlib import Path
 
-from verity.commitments.windows.interface import circuit_bytes
+from verity.commitments.periods.interface import circuit_bytes
 
 
 def _load(name: str):

@@ -167,8 +167,8 @@ end ND
 
 theorem guard_eq {A : Type} {err : String} {rest : CM A} (k : Nat) (src : CoinSource) :
     (read >>= fun s : CoinSource => get >>= fun k : Nat =>
-      if (!s.drawnAll k) = true then (throw err : CM A) else rest) k src =
-      (if (!src.drawnAll k) = true then (throw err : CM A) else rest) k src := rfl
+      if (!s.sampledAll k) = true then (throw err : CM A) else rest) k src =
+      (if (!src.sampledAll k) = true then (throw err : CM A) else rest) k src := rfl
 
 /-- Whenever `x` succeeds at a record with no round of no coins, it has sampled every round of the record. -/
 def E {A : Type} (x : CM A) : Prop :=
@@ -200,16 +200,16 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → E x₁) (
   · rename_i hc; exact h₂ hc
 
 /-- The check that every recorded round was sampled (RecAlgebra.lean:513), before a tail that samples nothing. -/
-theorem guardDrawn {err : String} {rest : CM A} (h : ND rest) :
+theorem guardSampled {err : String} {rest : CM A} (h : ND rest) :
     E (read >>= fun s : CoinSource => get >>= fun k : Nat =>
-      if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
+      if (!s.sampledAll k) = true then (throw err : CM A) else rest) := by
   intro rounds k b j hne hx
   rw [guard_eq] at hx
   split at hx
   · cases hx
   · rename_i hc
     rw [h _ _ _ _ hx]
-    have e : (CoinSource.ofRounds rounds).drawnAll k = (k == rounds.size) := by
+    have e : (CoinSource.ofRounds rounds).sampledAll k = (k == rounds.size) := by
       show (k == (rounds.filter (·.size ≠ 0)).size) = _
       rw [filter_noEmpty hne]
     rw [e] at hc
@@ -274,19 +274,19 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → Z t x₁)
   · rename_i hc; exact h₂ hc
 
 /-- The check that every recorded round was sampled (RecAlgebra.lean:513), before a tail that samples nothing. -/
-theorem guardDrawn {err : String} {rest : CM A} (h : NZ rest) :
+theorem guardSampled {err : String} {rest : CM A} (h : NZ rest) :
     Z 0 (read >>= fun s : CoinSource => get >>= fun k : Nat =>
-      if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
+      if (!s.sampledAll k) = true then (throw err : CM A) else rest) := by
   intro k a j hx
   rw [guard_eq] at hx
-  have hz : CoinSource.zeros.drawnAll k = true := rfl
+  have hz : CoinSource.zeros.sampledAll k = true := rfl
   rw [hz] at hx
   simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte] at hx
   obtain ⟨hj, H⟩ := h k a j hx
   subst j
   refine ⟨[], rfl, (fun _ h => by simp at h), fun rounds hne _ hs => ?_, fun rounds b j' _ _ h' => ?_⟩
   · rw [guard_eq]
-    have hd : (CoinSource.ofRounds rounds).drawnAll k = true := by
+    have hd : (CoinSource.ofRounds rounds).sampledAll k = true := by
       show (k == (rounds.filter (·.size ≠ 0)).size) = true
       rw [filter_noEmpty hne, hs]
       simp
@@ -472,7 +472,7 @@ theorem ligeritoRun_z (sch : Schedule) : ZL t (ligeritoRun sch M) := by
 
 theorem ligerito_z (sch : Schedule) (tIn : Lin) (sws : Array Switched) : Z 0 (ligerito sch M tIn sws) := by
   unfold ligerito
-  refine Z.bind (ligeritoRun_z sch _) fun ⟨⟨initCh, levels, ext⟩, st⟩ => Z.guardDrawn ?_
+  refine Z.bind (ligeritoRun_z sch _) fun ⟨⟨initCh, levels, ext⟩, st⟩ => Z.guardSampled ?_
   exact NZ.ite' (fun _ => NZ.throw' _) fun _ => NZ.bind NZ.liftE' fun _ =>
     NZ.ite' (fun _ => NZ.throw' _) fun _ => NZ.pure'
 
@@ -485,7 +485,7 @@ theorem run_z (sh : Shape) (extras : Array Claim) : Z 0 (run sh M extras) := by
 
 theorem ligerito_e (sch : Schedule) (tIn : Lin) (sws : Array Switched) : E (ligerito sch M tIn sws) := by
   unfold ligerito
-  exact E.bind fun ⟨⟨initCh, levels, ext⟩, st⟩ => E.guardDrawn (ND.ite' (fun _ => ND.throw' _) fun _ =>
+  exact E.bind fun ⟨⟨initCh, levels, ext⟩, st⟩ => E.guardSampled (ND.ite' (fun _ => ND.throw' _) fun _ =>
     ND.bind ND.liftE' fun _ => ND.ite' (fun _ => ND.throw' _) fun _ => ND.pure')
 
 theorem run_e (sh : Shape) (extras : Array Claim) : E (run sh M extras) := by

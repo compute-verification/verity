@@ -13,7 +13,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
 * **Each opening a proof block.** Sample (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
   DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:
   the chunk, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's proof blocks are one
-  statement of the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified sampling
+  statement of the one-stage audit (`one_stage.docket`, the template-instance partition, the stratified sampling
   design, every proof block sampled by the verifier's Lean), proved by `flock-circuit prove --zk` and held by Lean
   `verify --zk --partition --program`.
 * **What the verifier opens.** Of each proof block its public rows (``pub`` and ``signs``, which it derives itself:
@@ -25,7 +25,7 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   first sample replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its
   place). Its proof block's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on
   one stager, so the circuit is lowered once.
-* **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
+* **What the verifier received** (`scan`): every file the verifier side holds (the docket, partition, program,
   circuit, public file, the session's record and proofs, the sample, the openings it was sent and v0's messages), scanned
   at every offset, raw and as hex, for each sampled chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
   tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on

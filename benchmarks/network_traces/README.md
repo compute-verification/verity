@@ -14,7 +14,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
-- The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
+- The tests: `uv run tools/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
 
 ## Entry points
 

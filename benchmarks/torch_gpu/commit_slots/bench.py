@@ -23,8 +23,10 @@ from typing import Any
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "commitments" / "cuda" / "commit_slots"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "sha512_rows"))
 
 import slots as S  # noqa: E402
+import torch_engine as T  # noqa: E402
 import slots_gpu as G  # noqa: E402
 from verity.commitments.identity import identity_digest_sha512  # noqa: E402
 
@@ -63,7 +65,7 @@ def step(plan: G.Plan, bufs: list[torch.Tensor], slots: int, layers: int) -> dic
 def alone(layout: S.CommitShape, slots: int, reps: int, rest_s: list[float], step_slots: int, per_group: int = 1) -> dict[str, Any]:
     layers = len(layout.groups)
     layout = G.regroup(layout, per_group)
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, "cuda", build=T.BUILD, default=T.VARIANT)
     bufs = data(layout, slots)
     step(plan, bufs, slots, len(layout.groups))
     runs = [step(plan, bufs, slots, len(layout.groups)) for _ in range(reps)]
@@ -81,7 +83,7 @@ def alone(layout: S.CommitShape, slots: int, reps: int, rest_s: list[float], ste
 
 def beside(layout: S.CommitShape, slots: int, reps: int) -> dict[str, Any]:
     """A layer's GEMMs alone, its commit alone, and both at once (GEMMs on the current stream, the commit on the side)."""
-    plan = G.Plan(CTX, layout)
+    plan = G.Plan(CTX, layout, "cuda", build=T.BUILD, default=T.VARIANT)
     bufs = data(layout, slots)
     x = torch.randint(-128, 128, (slots, D), dtype=torch.int8, device="cuda")
     h = torch.randint(-128, 128, (slots, F), dtype=torch.int8, device="cuda")
