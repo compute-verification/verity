@@ -55,7 +55,7 @@ CERTIFIER_PIECE = "benchmarks/network_traces/certifier_piece.py"
 ONSITE = "verity/onsite/v0"
 #: the deploy bindings `begin` keeps beside the run (`verity_cli.run.BINDINGS`)
 BINDINGS = "bindings.json"
-WORKERS, FIREWALL, PROVER, VERIFIER = SP.WORKERS, SP.FIREWALL, WP.PROVER, SP.VERIFIER
+WORKERS, ZK_SERVER, PROVER, VERIFIER = SP.WORKERS, SP.ZK_SERVER, WP.PROVER, SP.VERIFIER
 CHALLENGER, MEMORY_CHALLENGER = SP.CHALLENGER, WP.CHALLENGER
 BANDWIDTH_VERIFIER, NETWORK_CERTIFIER = "bandwidth-verifier", NC.NETWORK_CERTIFIER
 #: served_verdicts.py's record reads each piece's answer by its runner name
@@ -148,7 +148,7 @@ ONSITE_COMPONENTS = ("sampled-proofs", "pouw", "inference-only", "pous", "bandwi
 PROTOCOLS = ONSITE_COMPONENTS
 PROVER_NODE, AUDITOR_HOST, GATE_HOST = "prover-node", "auditor-host", "gate-host"
 #: each party's machine: the developer's on the prover node, the auditor's devices on machines it doesn't control
-PLACEMENT = {WORKERS: PROVER_NODE, FIREWALL: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
+PLACEMENT = {WORKERS: PROVER_NODE, ZK_SERVER: PROVER_NODE, PROVER: PROVER_NODE, CHALLENGER: GATE_HOST,
              NETWORK_CERTIFIER: GATE_HOST, MEMORY_CHALLENGER: AUDITOR_HOST, BANDWIDTH_VERIFIER: AUDITOR_HOST,
              VERIFIER: AUDITOR_HOST}
 HEADER = ("The onsite run of the served window: onsite's seven subprotocols, each party on its machine. Run it on each",
@@ -277,14 +277,14 @@ def _certifier_piece(cfg, params, bound):
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
               "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
-              "(C-Flock --zk behind the Lean firewall, the Lean verifier) and each listed component's piece",
+              "(C-Flock --zk behind the Lean ZK server, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece
 PARTIES: dict[str, dict[str, Piece]] = {
     "sampled-proofs": {
         CHALLENGER: Piece("sampled-proofs", CHALLENGER, GATE, "the gate: the auditor's live challenger, whose coins "
                           "draw the proof blocks after the window's commitment"),
-        FIREWALL: Piece("sampled-proofs", FIREWALL, SERVED_WINDOW, "the Lean firewall every outer proof goes through, "
+        ZK_SERVER: Piece("sampled-proofs", ZK_SERVER, SERVED_WINDOW, "the Lean ZK server every outer proof goes through, "
                         "one at a time, in the records audit"),
         WORKERS: Piece("sampled-proofs", WORKERS, SERVED_WINDOW, "the window's values committed under hiding leaves "
                        "and sealed, its registration before the draw, and the drawn proof blocks proved in C-Flock --zk; "

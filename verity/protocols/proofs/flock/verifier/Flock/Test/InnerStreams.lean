@@ -98,10 +98,10 @@ def why (x : Flock.V Unit) : Option String := match x with | .error e => some e 
 #guard (checkOpeningShape "rec-opening/m23-c2-p0" (held (some r23))).toOption.isSome
 #guard (checkOpeningShape "rec-opening/m23-c2-p3" (held (some r23))).toOption.isSome
 #guard why (checkOpeningShape "rec-opening/m24-c2-p0" (held (some r23))) == some
-  "FIREWALL-REFUSED: registration: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at the shape staging committed R at (m 23, claims 2, META's stacked)"
+  "ZK-SERVER-REFUSED: registration: rec-opening/m24-c2-p0 opens R at (m 24, claims 2), not at the shape staging committed R at (m 23, claims 2, META's stacked)"
 #guard (checkOpeningShape "rec-opening/m23-c3-p0" (held (some r23))).toOption.isNone
 #guard why (checkOpeningShape "rec-opening/m23-c2-p0" (held none)) == some
-  "FIREWALL-REFUSED: registration: rec-opening/m23-c2-p0 opens R at (m 23, claims 2), not at the shape staging committed R at (no shape, META's stacked)"
+  "ZK-SERVER-REFUSED: registration: rec-opening/m23-c2-p0 opens R at (m 23, claims 2), not at the shape staging committed R at (no shape, META's stacked)"
 #guard (checkOpeningShape "rec-sparse/n18-e13-s6-t0" (held none)).toOption.isSome
 
 /-! Candidate 3's V* list at the e2e's shape (m 25, k_log 22, the bucket's RecSparse (18, 13, 6, 0), R at (m 23, claims 2)):

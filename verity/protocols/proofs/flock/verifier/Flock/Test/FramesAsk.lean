@@ -1,7 +1,7 @@
 module
 
-public import Flock.Firewall.Frames
-meta import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
+meta import Flock.ZkServer.Frames
 
 /-!
 `Frames.askOf`, the answer to a prover's `place`, against its rep's own requests (`Frames.roundStep`,
@@ -16,7 +16,7 @@ writes no frame, so nothing but a rep's round and coins puts its frame back.
 
 namespace Flock.Test.FramesAsk
 
-open Flock Flock.Firewall Flock.Firewall.Frames
+open Flock Flock.ZkServer Flock.ZkServer.Frames
 open Flock.Transcript (header)
 
 def h0 : F128 := ⟨0x1111, 0x2222⟩

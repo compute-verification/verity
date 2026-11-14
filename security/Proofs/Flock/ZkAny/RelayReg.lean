@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Frames
+public import Flock.ZkServer.Frames
 
 /-!
 # A rep's frame has one writer: its own session's rounds and coins
@@ -36,7 +36,7 @@ time: so between that session's requests only `Kept` updates of its reps come.
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (SessionSpec Stmt F128)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- A rep's key in the loop's frames: its session, table and rep. -/
 def keyOf (p : Rep) : Nat × Nat × Nat := (p.sid, p.table, p.rep)
@@ -49,7 +49,7 @@ def frameAt (R : Sessions) (sid i r : Nat) : Option Rep := R.reps.find? (keyIs s
 
 /-- `Sessions.find` finds a rep's frame at `frameAt`. -/
 theorem find_frameAt (R : Sessions) (sid i r : Nat) : (R.find sid i r).map (·.2) = frameAt R sid i r := by
-  unfold _root_.Flock.Firewall.Frames.Sessions.find frameAt
+  unfold _root_.Flock.ZkServer.Frames.Sessions.find frameAt
   rcases h : R.reps.findIdx? (keyIs sid i r) with _ | j
   · have h' : R.reps.findIdx? (fun p => p.sid == sid && p.table == i && p.rep == r) = none := h
     have hn : R.reps.find? (keyIs sid i r) = none :=
@@ -164,7 +164,7 @@ theorem keyIs_comp_put (p : Rep) (sid i r : Nat) :
 /-- **A put at another key keeps the rep's frame.** -/
 theorem frameAt_put_other (R : Sessions) (p : Rep) {sid i r : Nat} (hk : keyOf p ≠ (sid, i, r)) :
     frameAt (R.put p) sid i r = frameAt R sid i r := by
-  unfold frameAt _root_.Flock.Firewall.Frames.Sessions.put
+  unfold frameAt _root_.Flock.ZkServer.Frames.Sessions.put
   simp only
   rw [Array.find?_map, keyIs_comp_put]
   rcases hf : R.reps.find? (keyIs sid i r) with _ | q
@@ -184,7 +184,7 @@ theorem frameAt_put_other (R : Sessions) (p : Rep) {sid i r : Nat} (hk : keyOf p
 /-- **A put at the rep's key leaves its frame that put**, where it had one. -/
 theorem frameAt_put_self (R : Sessions) (p : Rep) {sid i r : Nat} (hk : keyOf p = (sid, i, r))
     (hs : (frameAt R sid i r).isSome) : frameAt (R.put p) sid i r = some p := by
-  unfold frameAt _root_.Flock.Firewall.Frames.Sessions.put at *
+  unfold frameAt _root_.Flock.ZkServer.Frames.Sessions.put at *
   simp only
   rw [Array.find?_map, keyIs_comp_put]
   rcases hf : R.reps.find? (keyIs sid i r) with _ | q
@@ -219,13 +219,13 @@ theorem frameAt_keptStep {sid i r : Nat} {R R' : Sessions} (h : KeptStep sid i r
     unfold keepOf
     split <;> rfl
   | file root r' b hf =>
-    unfold _root_.Flock.Firewall.Frames.Sessions.file at hf
+    unfold _root_.Flock.ZkServer.Frames.Sessions.file at hf
     split at hf
     · cases hf
     · cases hf
       rfl
   | inner root r' j b hf =>
-    unfold _root_.Flock.Firewall.Frames.Sessions.innerRound at hf
+    unfold _root_.Flock.ZkServer.Frames.Sessions.innerRound at hf
     simp only at hf
     split at hf
     · cases hf
@@ -271,8 +271,8 @@ theorem find_own {sid i r : Nat} {R₁ R₂ R₃ : Sessions} {p : Rep} (hs : (fr
 
 /-- **A round's coins put back a frame at the rep's key.** -/
 theorem coinsStep_key {R : Sessions} {sid i r : Nat} {cs : Array F128} {p' : Rep}
-    (h : _root_.Flock.Firewall.Frames.coinsStep R sid i r cs = .ok p') : keyOf p' = (sid, i, r) := by
-  unfold _root_.Flock.Firewall.Frames.coinsStep at h
+    (h : _root_.Flock.ZkServer.Frames.coinsStep R sid i r cs = .ok p') : keyOf p' = (sid, i, r) := by
+  unfold _root_.Flock.ZkServer.Frames.coinsStep at h
   rcases hf : R.find sid i r with _ | ⟨j, p⟩
   · simp only [hf] at h
     cases h
@@ -284,10 +284,10 @@ theorem coinsStep_key {R : Sessions} {sid i r : Nat} {cs : Array F128} {p' : Rep
     all_goals cases h
 
 /-- `withAlg` keeps a rep's key. -/
-theorem withAlg_key {s : _root_.Flock.Firewall.Frames.Release} {l0 : _root_.Flock.Firewall.Level0.Level0}
-    {name : String} {p q : Rep} (h : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok q) :
+theorem withAlg_key {s : _root_.Flock.ZkServer.Frames.Release} {l0 : _root_.Flock.ZkServer.Level0.Level0}
+    {name : String} {p q : Rep} (h : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok q) :
     keyOf q = keyOf p := by
-  unfold _root_.Flock.Firewall.Frames.withAlg at h
+  unfold _root_.Flock.ZkServer.Frames.withAlg at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
@@ -295,21 +295,21 @@ theorem withAlg_key {s : _root_.Flock.Firewall.Frames.Release} {l0 : _root_.Floc
     | (cases h; rfl)
 
 /-- `placeOf` keeps a rep's key. -/
-theorem placeOf_key {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.Firewall.Level0.Level0}
-    {s : _root_.Flock.Firewall.Frames.Release} {p : Rep} {dom : ByteArray} {pl : _root_.Flock.Firewall.Frame.Place}
-    {n : Nat} {q : Rep} (h : _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = .ok (pl, n, q)) :
+theorem placeOf_key {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
+    {s : _root_.Flock.ZkServer.Frames.Release} {p : Rep} {dom : ByteArray} {pl : _root_.Flock.ZkServer.Frame.Place}
+    {n : Nat} {q : Rep} (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok (pl, n, q)) :
     keyOf q = keyOf p := by
-  unfold _root_.Flock.Firewall.Frames.placeOf at h
+  unfold _root_.Flock.ZkServer.Frames.placeOf at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first
     | (cases h; done)
     | (cases h; rfl)
 
-theorem placeOf_key' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.Firewall.Level0.Level0}
-    {s : _root_.Flock.Firewall.Frames.Release} {p : Rep} {dom : ByteArray}
-    {v : _root_.Flock.Firewall.Frame.Place × Nat × Rep}
-    (h : _root_.Flock.Firewall.Frames.placeOf salts l0 s p dom = .ok v) : keyOf v.2.2 = keyOf p :=
+theorem placeOf_key' {salts : Array (ByteArray × Nat × Array ByteArray)} {l0 : _root_.Flock.ZkServer.Level0.Level0}
+    {s : _root_.Flock.ZkServer.Frames.Release} {p : Rep} {dom : ByteArray}
+    {v : _root_.Flock.ZkServer.Frame.Place × Nat × Rep}
+    (h : _root_.Flock.ZkServer.Frames.placeOf salts l0 s p dom = .ok v) : keyOf v.2.2 = keyOf p :=
   placeOf_key (pl := v.1) (n := v.2.1) h
 
 theorem throw_ne_ok {α : Type} {e : String} {v : α} : (throw e : Except String α) ≠ .ok v := fun h => by cases h
@@ -317,12 +317,12 @@ theorem throw_ne_ok {α : Type} {e : String} {v : α} : (throw e : Except String
 set_option maxHeartbeats 1000000 in
 /-- **A round's frame is at its rep's key**: the frame `roundPlace` readies for session `sid`'s table `i`'s rep `r`'s
 round. -/
-theorem roundPlace_key {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
-    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.Firewall.Frame.Place} {f : Bool}
+theorem roundPlace_key {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String}
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
     keyOf q = (sid, i, r) := by
-  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  unfold _root_.Flock.ZkServer.Frames.roundPlace at h
   rcases hf : R.find sid i r with _ | ⟨j, p⟩
   · simp only [hf] at h
     cases h
@@ -345,11 +345,11 @@ theorem roundPlace_key {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} 
             exact e1.trans (e2.trans hk0)))
 
 /-- **A round puts back a frame at its rep's key** (`Frames.round`'s put of `roundStep`'s frame). -/
-theorem roundStep_key {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundStep_key {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {p' : Rep}
-    (h : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p') :
+    (h : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p') :
     keyOf p' = (sid, i, r) := by
-  unfold _root_.Flock.Firewall.Frames.roundStep at h
+  unfold _root_.Flock.ZkServer.Frames.roundStep at h
   repeat' (first | split at h | simp only at h)
   all_goals first
     | (cases h; done)

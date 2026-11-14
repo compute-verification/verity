@@ -59,7 +59,7 @@ pads of an `L0Round`, so the frame releases the live opening's body as the rep's
 namespace FlockComplete.LigLock
 
 open Flock
-open _root_.Flock.Firewall.Frame (Cfg Draws MaskSlot Masker)
+open _root_.Flock.ZkServer.Frame (Cfg Draws MaskSlot Masker)
 open FlockSoundness.Refine (Frame encs)
 open Claims.ZKServer (L0Round LeanRelease absPos zeros_get!)
 

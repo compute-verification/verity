@@ -28,9 +28,9 @@ other tasks may update the frames between that read and that put. Here that run 
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128 SessionSpec)
-open _root_.Flock.Firewall.Session (State Placed byte?)
-open _root_.Flock.Firewall.Frame (Masker)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Session (State Placed byte?)
+open _root_.Flock.ZkServer.Frame (Masker)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **A run of updates that keep a rep's frame, then another, keeps it.** -/
 theorem Kept.trans {sid i r : Nat} {R R' R'' : Sessions} (h₁ : Kept sid i r R R') (h₂ : Kept sid i r R' R'') :
@@ -69,16 +69,16 @@ requests (`Between`) reached from `R`; `Frames.coins` read frames those reached 
 `Frames.feedOf` reads off `a`; its put landed on frames those reached from what it read; and from that put they reach
 `R₃`, the frames the session's next round reads. -/
 structure RoundRun (sid : Nat) (st : State) (pl : Placed) (stream : String) (n i r : Nat) (dom content : ByteArray)
-    (e : Env) (R : Sessions) (L0 : _root_.Flock.Firewall.Level0.Slots) (R₃ : Sessions) : Prop where
+    (e : Env) (R : Sessions) (L0 : _root_.Flock.ZkServer.Level0.Slots) (R₃ : Sessions) : Prop where
   rep_eq : streamRep st stream = (i, r)
   dom_eq : streamDom st stream = dom
   round : st.request pl (.round stream n) = none →
-    e.round = (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out
+    e.round = (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out
   coins : ∀ {o : ByteArray} {p₁ : Rep} {a : ByteArray}, st.request pl (.round stream n) = none → e.round = .ok o →
-    (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁ → e.ans = some a →
+    (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁ → e.ans = some a →
     byte? a 0 = some 2 → (st.answer (.round stream n) a).1.stop = none → e.coins = .ok () →
     ∃ R₁ R₂ R₂' p', Between sid R R₁ ∧ Between sid (R₁.put p₁) R₂ ∧
-      _root_.Flock.Firewall.Frames.coinsStep R₂ sid i r (_root_.Flock.Firewall.Frames.feedOf n a.data.toList) =
+      _root_.Flock.ZkServer.Frames.coinsStep R₂ sid i r (_root_.Flock.ZkServer.Frames.feedOf n a.data.toList) =
         .ok p' ∧ Between sid R₂ R₂' ∧ Between sid (R₂'.put p') R₃
 
 /-- **A rep's frame is one `Sessions.find` finds.** -/
@@ -96,10 +96,10 @@ theorem find_of_frameAt {R : Sessions} {sid i r : Nat} {p : Rep} (h : frameAt R 
 /-- **The coins a rep's frame took**: where `Frames.coinsStep` puts a frame back, the frame it found took the coins, and
 the frame put back is `Loop.coinsOf`'s. -/
 theorem coinsStep_inv {R : Sessions} {sid i r j : Nat} {p p' : Rep} {cs : Array F128}
-    (hf : R.find sid i r = some (j, p)) (h : _root_.Flock.Firewall.Frames.coinsStep R sid i r cs = .ok p') :
-    ∃ st₂, _root_.Flock.Firewall.Frame.step p.cfg p.st (.coins (.ok cs)) = (.ok, st₂) ∧
+    (hf : R.find sid i r = some (j, p)) (h : _root_.Flock.ZkServer.Frames.coinsStep R sid i r cs = .ok p') :
+    ∃ st₂, _root_.Flock.ZkServer.Frame.step p.cfg p.st (.coins (.ok cs)) = (.ok, st₂) ∧
       p' = Loop.coinsOf p st₂ cs := by
-  unfold _root_.Flock.Firewall.Frames.coinsStep at h
+  unfold _root_.Flock.ZkServer.Frames.coinsStep at h
   simp only [hf] at h
   split at h
   · cases h
@@ -111,15 +111,15 @@ round read the loop's frames, the round released and put a frame back, and the r
 updates from the round's read to its put, from its put to the coins' put, and from that to the session's next round
 keep the rep's frame and the session's stop, and the coins' put is `Loop.coinsOf`'s of the frame the round put. -/
 theorem roundRun_chain {sid : Nat} {st : State} {pl : Placed} {stream : String} {n i r : Nat}
-    {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {R₃ : Sessions}
+    {dom content : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {R₃ : Sessions}
     (hr : RoundRun sid st pl stream n i r dom content e R L0 R₃) (hreq : st.request pl (.round stream n) = none)
     (hfr : (frameAt R sid i r).isSome) {o : ByteArray} {p₁ : Rep}
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁) {a : ByteArray}
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁) {a : ByteArray}
     (ha : e.ans = some a) (hb : byte? a 0 = some 2) (hs : (st.answer (.round stream n) a).1.stop = none)
     (hc : e.coins = .ok ()) :
     ∃ R₁ R₂ cs st₂, Kept sid i r R R₁ ∧ SessKept sid R R₁ ∧ Kept sid i r (R₁.put p₁) R₂ ∧
-      SessKept sid (R₁.put p₁) R₂ ∧ _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂) ∧
+      SessKept sid (R₁.put p₁) R₂ ∧ _root_.Flock.ZkServer.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂) ∧
       SessKept sid (R₂.put (Loop.coinsOf p₁ st₂ cs)) R₃ := by
   obtain ⟨R₁, R₂, R₂', p', h01, h12, hcs, h22, h23⟩ :=
     hr.coins hreq ((hr.round hreq).trans ho) hput ha hb hs hc
@@ -136,11 +136,11 @@ theorem envOk_round_run {W Rr : Type} (L : LeanRelease W Rr) (nN : Msg → Nat) 
     (hn : h.length + 1 < nN x) (hlt : h.length < L.last x) {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
     (hcr : L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false)
     {m : Masker} (hm : L.answered x ρ h = .ok m) {sid : Nat} {st : State} {pl : Placed} {stream : String}
-    {i r : Nat} {dom : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
+    {i r : Nat} {dom : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
     {R₃ : Sessions} (hr : RoundRun sid st pl stream (L.coins x h.length) i r dom ⟨v.toArray⟩ e R L0 R₃)
     (hreq : st.request pl (.round stream (L.coins x h.length)) = none) {q : Rep} {f : Bool} {nd : Option String}
     (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
       .ok (q, .sched ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩, f, nd))
     (hnd : nd.isSome = R.stopped sid) (hcfg : q.cfg = L.cfg x ρ h) (hu : unstop q.st.m = unstop m)
     (hst : R.stopped sid = !L.toSrv.liveBefore wk x w ρ κ h) {spec : SessionSpec} {seen : List String} {k : Nat}
@@ -157,16 +157,16 @@ theorem stopped_round_run {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Wor
     {v : Msg} (hv : wk x w ρ h 0 = some (v, false))
     (hcr : L.cross x h.length w ρ h v = false → L.pass x w ρ h v = false)
     {m : Masker} (hm : L.answered x ρ h = .ok m) {sid : Nat} {st : State} {pl : Placed} {stream : String}
-    {i r : Nat} {dom : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
+    {i r : Nat} {dom : ByteArray} {e : Env} {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots}
     {R₃ : Sessions} (hr : RoundRun sid st pl stream (L.coins x h.length) i r dom ⟨v.toArray⟩ e R L0 R₃)
     (hreq : st.request pl (.round stream (L.coins x h.length)) = none) {q p₁ : Rep} {f : Bool}
     {nd : Option String} {o : ByteArray} (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length) =
       .ok (q, .sched ⟨(L.scheduled x w ρ h (computedOf (L.computed x w ρ h))).toArray⟩, f, nd))
     (hnd : nd.isSome = R.stopped sid) (hcfg : q.cfg = L.cfg x ρ h) (hu : unstop q.st.m = unstop m)
     (hst : R.stopped sid = !L.toSrv.liveBefore wk x w ρ κ h)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom ⟨v.toArray⟩ (L.coins x h.length)).put =
       some p₁)
     {a : ByteArray} (ha : e.ans = some a) (hb : byte? a 0 = some 2)
     (hs : (st.answer (.round stream (L.coins x h.length)) a).1.stop = none) (hc : e.coins = .ok ())

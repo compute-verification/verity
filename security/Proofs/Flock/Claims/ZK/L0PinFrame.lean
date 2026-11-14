@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Drive
+public import Flock.ZkServer.Drive
 public import Proofs.Flock.Claims.ZK.FinishBridge
 public import Proofs.Flock.Claims.ZK.FinishLive
 public import Proofs.Flock.Claims.ZK.FrameOpenCut
@@ -64,8 +64,8 @@ the fed coins and zero pads.
 namespace FlockComplete.LigLock.Fed
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
-open _root_.Flock.Firewall.Finish (AsksRel Asks.toC)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Finish (AsksRel Asks.toC)
 
 abbrev Got := Array (Array F128)
 
@@ -335,7 +335,7 @@ theorem fr_link (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (a b : Arr
   fr_fail _ fun _ => rfl
 
 /-- `asksCut` as the ZK server's `Asks`. -/
-def cutAsks (coin : Nat → Nat → F128) (n : Nat) : _root_.Flock.Firewall.Finish.Asks PS :=
+def cutAsks (coin : Nat → Nat → F128) (n : Nat) : _root_.Flock.ZkServer.Finish.Asks PS :=
   ⟨(asksCut coin n).link, (asksCut coin n).round⟩
 
 theorem cutAsks_toC (coin : Nat → Nat → F128) (n : Nat) : (cutAsks coin n).toC = asksCut coin n := rfl
@@ -349,13 +349,13 @@ theorem asksRel_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) :
 
 section Opening
 
-open _root_.Flock.Firewall.Finish (repOpening repOpening_rel commitFw ligeritoPZk_fw ringSwitchP_eq)
+open _root_.Flock.ZkServer.Finish (repOpening repOpening_rel commitFw ligeritoPZk_fw ringSwitchP_eq)
 
 /-- **A rep's opening, fed, is its cut run.** -/
 theorem repOpening_feed (coin : Nat → Nat → F128) (n : Nat) (coins : Got) (st : _root_.Flock.Setup)
     (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule)
     (lay : _root_.Flock.Zk.PadLayout)
-    (tPad rep : Nat) (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit) (claims : Array _root_.Flock.Claim)
+    (tPad rep : Nat) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (claims : Array _root_.Flock.Claim)
     (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
     ((feedSim coin n coins).st _root_.Flock.Transcript).R
       (repOpening (stepAsks coins true) (fun lv g s => pure (commitFw lv g s)) st sch lay tPad rep g cm0 claims h extra
@@ -371,13 +371,13 @@ round `l₂.size`, the switch's target and basis and the opening's pads. -/
 theorem repOpening_cutL0 (coin : Nat → Nat → F128) (st : _root_.Flock.Setup)
     (hm : st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (sch : _root_.Flock.Schedule)
     (lay : _root_.Flock.Zk.PadLayout)
-    (tPad rep : Nat) (g : Array F128) (cm0 : _root_.Flock.Firewall.Finish.Commit) (claims : Array _root_.Flock.Claim)
+    (tPad rep : Nat) (g : Array F128) (cm0 : _root_.Flock.ZkServer.Finish.Commit) (claims : Array _root_.Flock.Claim)
     (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) (tr : _root_.Flock.Transcript)
     (l : Array Claims.Msg) {j : Nat} (hj : j < sch.k0 + 4) (hk : 1 ≤ sch.k0) (hn : sch.n ≠ 0)
     {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched} {tr₂ : _root_.Flock.Transcript}
     {l₂ : Array Claims.Msg}
     (hrs : ((ringSwitchCut (asksCut coin (l₂.size + j))
-      (fun k => _root_.Flock.Firewall.Finish.switchVec g claims[k]!) claims).run tr).go l =
+      (fun k => _root_.Flock.ZkServer.Finish.switchVec g claims[k]!) claims).run tr).go l =
       (.ok ((ss, T, sws), tr₂), l₂)) :
     CutStop (fun L => L.toList = l₂.toList ++ (List.range (j + 1)).map
         (l0BodyAt coin l₂.size tr₂.pending.data.toList T (flat cm0.toC.cap) sch g (basisVals sws (st.m - 7)) lay h rep
@@ -451,8 +451,8 @@ end Congr
 
 section Sched
 
-open _root_.Flock.Firewall.Finish (repOpening repPiop commitFw claimsOf)
-open _root_.Flock.Firewall.Drive (openStep)
+open _root_.Flock.ZkServer.Finish (repOpening repPiop commitFw claimsOf)
+open _root_.Flock.ZkServer.Drive (openStep)
 
 theorem step_bind_eq {α β : Type} (s : Step α) (g : α → Step β) : s >>= g = s.bind g := rfl
 
@@ -484,29 +484,29 @@ theorem getThe_run {β : Type} (f : Got → _root_.Flock.TMW OpenM β) (t : _roo
 
 /-- **A rep's scheduled opening is its opening past its PIOP**: fed, `openStep` sends nothing, or its PIOP on the
 algebraic phase's coins returned having taken them all, and it sends what the opening from there sends. -/
-theorem openStep_sent (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
+theorem openStep_sent (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
-    (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
+    (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
     (cs : List (Array F128)) :
     sentQ (feedR (openStep t rep dom xs hi coins) cs) = [] ∨
       ∃ r, ((repPiop (stepAsks coins false) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-          (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
+          (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
           (_root_.Flock.Transcript.init #[] dom)).run #[] = .done r ∧ r.2.size = coins.size ∧
         sentQ (feedR (openStep t rep dom xs hi coins) cs) =
           sentQ (feedR (((repOpening (stepAsks coins true) (fun lv g s => pure (commitFw lv g s)) t.st t.sch
             (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) t.tPad rep t.g t.cm0 r.1.1.2.2
             (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) t.extra t.lanePad
-            fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)).run r.1.2).run r.2)
+            fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)).run r.1.2).run r.2)
             cs) := by
   obtain ⟨st, sch, tPad, g, extra, lanePad, cm0⟩ := t
   have hna := _root_.Claims.ZKServer.Count.piop_na coins st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0)
-    (_root_.Flock.Firewall.Finish.flat cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
+    (_root_.Flock.ZkServer.Finish.flat cm0.cap) ByteArray.empty (claimsOf xs) (fun _ => 0) hdg hcn (by decide) hm _
     (_root_.Claims.ZKServer.Sched.trAlike_init dom hdom) #[]
   unfold openStep
   dsimp only at hna ⊢
   rw [sentQ_run', StateT.run_bind, StateT.run_bind]
   rcases hp : ((repPiop (stepAsks coins false) st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0)
-      (_root_.Flock.Firewall.Finish.flat cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
+      (_root_.Flock.ZkServer.Finish.flat cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
       (_root_.Flock.Transcript.init #[] dom)).run #[] with r | e | ⟨c, n, k⟩
   · rw [step_bind_eq]
     simp only [Step.bind]
@@ -529,20 +529,20 @@ theorem openStep_sent (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : 
 PIOP returned having taken the algebraic phase's coins; and where the ring switch's cut run from there returns at `l₂`,
 the rounds it sent up to `j < k₀ + 4` past the switch are level 0's first `j + 1` bodies at the fed coins from round
 `l₂.size`, the switch's target and basis and zero pads. -/
-theorem openStep_l0 (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
+theorem openStep_l0 (t : _root_.Flock.ZkServer.Finish.Tab) (rep : Nat) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (coins : Got) (hdom : dom.size < 2 ^ 64) (hdg : t.st.digest.size < 2 ^ 64)
-    (hcn : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
+    (hcn : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64) (hm : t.st.m < 2 ^ 64)
     (hmk : t.st.merkle = _root_.Flock.MerkleScheme.hm96Sha512) (cs : List (Array F128))
     (coin : Nat → Nat → F128) (l : Array Claims.Msg) (hc : CoinAt coin l.size cs)
     (h0 : sentQ (feedR (openStep t rep dom xs hi coins) cs) ≠ []) :
     ∃ r, ((repPiop (stepAsks coins false) t.st (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-          (_root_.Flock.Firewall.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
+          (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) ByteArray.empty (claimsOf xs) fun _ => 0).run
           (_root_.Flock.Transcript.init #[] dom)).run #[] = .done r ∧ r.2.size = coins.size ∧
       ∀ {j : Nat} {ss : Array (Array F128)} {T : F128} {sws : Array _root_.Flock.Switched}
         {tr₂ : _root_.Flock.Transcript} {l₂ : Array Claims.Msg}, j < t.sch.k0 + 4 → 1 ≤ t.sch.k0 → t.sch.n ≠ 0 →
         l.size ≤ l₂.size →
         ((ringSwitchCut (asksCut coin (l₂.size + j))
-          (fun k => _root_.Flock.Firewall.Finish.switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run
+          (fun k => _root_.Flock.ZkServer.Finish.switchVec t.g r.1.1.2.2[k]!) r.1.1.2.2).run
           r.1.2).go l = (.ok ((ss, T, sws), tr₂), l₂) →
         l₂.size + j < l.size + (sentQ (feedR (openStep t rep dom xs hi coins) cs)).length →
         l.toList ++ ((sentQ (feedR (openStep t rep dom xs hi coins) cs)).take (l₂.size + j + 1 - l.size)).map
@@ -559,12 +559,12 @@ theorem openStep_l0 (t : _root_.Flock.Firewall.Finish.Tab) (rep : Nat) (dom : By
   obtain ⟨-, hF⟩ := repOpening_feed coin (l₂.size + j) coins t.st hmk t.sch
     (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) t.tPad rep t.g t.cm0 r.1.1.2.2
     (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) t.extra t.lanePad
-    (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 r.2 l cs (by omega) hc
+    (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 r.2 l cs (by omega) hc
   have e := hF (by omega) hlen
   obtain ⟨L, hL, hLQ⟩ := repOpening_cutL0 coin t.st hmk t.sch
     (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) t.tPad rep t.g t.cm0 r.1.1.2.2
     (Array.replicate (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).len 0) t.extra t.lanePad
-    (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 l hj hk hn hrs
+    (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty)) r.1.2 l hj hk hn hrs
   have hL' := (Prod.mk.inj (e.symm.trans hL)).2
   rw [← hLQ, ← hL']
   simp only [Array.toList_append, List.toList_toArray]

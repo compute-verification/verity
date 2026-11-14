@@ -74,8 +74,8 @@ open Claims Claims.ZKMal
 open _root_.Flock (V F128)
 open _root_.Flock (Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker isLabel roundFree INNER_ROUNDS check labelFrame wordBytes words)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker isLabel roundFree INNER_ROUNDS check labelFrame wordBytes words)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 set_option synthInstance.maxSize 100000
@@ -138,7 +138,7 @@ theorem innerOff_labelPast {c : Cfg} {s : Masker} {l : ByteArray} {q : Masker ×
       all_goals cases h
       all_goals exact ⟨hon, hd, hL⟩
     · by_cases hpos : s.pos = c.order.size
-      · by_cases hrho : s.rho.size = _root_.Flock.Firewall.Frame.RHO_COINS
+      · by_cases hrho : s.rho.size = _root_.Flock.ZkServer.Frame.RHO_COINS
         · simp [Masker.label, hon, hd, hI, hl0, hC, hpos, hrho] at h
           all_goals cases h
           all_goals exact ⟨rfl, rfl, fun _ => rfl⟩
@@ -253,7 +253,7 @@ theorem innerOff_roundFree {c : Cfg} {s : Masker} {content : ByteArray} {n : ℕ
     · cases hy
 
 theorem innerOff_round {c : Cfg} {s s' : Masker} {content out : ByteArray} {n : ℕ}
-    (h : _root_.Flock.Firewall.Frame.round c s content n = .ok (out, s')) (hs : InnerOff c s) : InnerOff c s' := by
+    (h : _root_.Flock.ZkServer.Frame.round c s content n = .ok (out, s')) (hs : InnerOff c s) : InnerOff c s' := by
   obtain ⟨fr, hf⟩ := Sched.roundFree_round h
   exact innerOff_roundFree hs hf
 
@@ -289,46 +289,46 @@ theorem innerOff_answer {c c' : Cfg} {s s' : Masker} {cs : Array F128} (hs : Inn
       intro _
       split <;> (try split) <;> exact ⟨hon, hd, hL⟩
 
-open _root_.Flock.Firewall.Frame (Reply) in
+open _root_.Flock.ZkServer.Frame (Reply) in
 /-- **A step of the frame keeps it outside every masked phase past the inner proof's label**, whatever the request. -/
-theorem innerOff_step (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (q : _root_.Flock.Firewall.Frame.Req)
-    (hs : InnerOff c st.m) : InnerOff c (_root_.Flock.Firewall.Frame.step c st q).2.m := by
+theorem innerOff_step (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (q : _root_.Flock.ZkServer.Frame.Req)
+    (hs : InnerOff c st.m) : InnerOff c (_root_.Flock.ZkServer.Frame.step c st q).2.m := by
   cases q with
   | round n v p =>
     obtain ⟨s, b⟩ := st
     cases ho : s.owed with
     | some k =>
-      simp only [_root_.Flock.Firewall.Frame.step, ho]
+      simp only [_root_.Flock.ZkServer.Frame.step, ho]
       exact hs
     | none =>
       cases p with
       | sched r =>
         cases hc : check c s v r n with
         | error e =>
-          cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
-            simp only [_root_.Flock.Firewall.Frame.step, ho, hc, hst, Bool.false_eq_true, ↓reduceIte] <;>
+          cases hst : e.startsWith _root_.Flock.ZkServer.Frame.STOP <;>
+            simp only [_root_.Flock.ZkServer.Frame.step, ho, hc, hst, Bool.false_eq_true, ↓reduceIte] <;>
             exact hs
         | ok x =>
           obtain ⟨out, s', why⟩ := x
-          simp only [_root_.Flock.Firewall.Frame.step, ho, hc]
+          simp only [_root_.Flock.ZkServer.Frame.step, ho, hc]
           exact innerOff_check hc hs
       | fail =>
-        simp only [_root_.Flock.Firewall.Frame.step, ho, bind, Except.bind]
-        generalize hR : _root_.Flock.Firewall.Frame.round c _ v n = R
+        simp only [_root_.Flock.ZkServer.Frame.step, ho, bind, Except.bind]
+        generalize hR : _root_.Flock.ZkServer.Frame.round c _ v n = R
         cases R with
         | error e =>
-          cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+          cases hst : e.startsWith _root_.Flock.ZkServer.Frame.STOP <;>
             simp only [hst, Bool.false_eq_true, ↓reduceIte] <;> exact hs
         | ok x =>
           obtain ⟨out, s'⟩ := x
           simp only [pure, Except.pure]
           exact innerOff_round hR hs
       | own =>
-        simp only [_root_.Flock.Firewall.Frame.step, ho, bind, Except.bind]
-        generalize hR : _root_.Flock.Firewall.Frame.round c _ v n = R
+        simp only [_root_.Flock.ZkServer.Frame.step, ho, bind, Except.bind]
+        generalize hR : _root_.Flock.ZkServer.Frame.round c _ v n = R
         cases R with
         | error e =>
-          cases hst : e.startsWith _root_.Flock.Firewall.Frame.STOP <;>
+          cases hst : e.startsWith _root_.Flock.ZkServer.Frame.STOP <;>
             simp only [hst, Bool.false_eq_true, ↓reduceIte] <;> exact hs
         | ok x =>
           obtain ⟨out, s'⟩ := x
@@ -341,43 +341,43 @@ theorem innerOff_step (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (q : _r
     cases cs with
     | error e => exact hs
     | ok cs =>
-      simp only [_root_.Flock.Firewall.Frame.step]
+      simp only [_root_.Flock.ZkServer.Frame.step]
       split
       · rename_i heq
         exact innerOff_answer hs heq
       · exact hs
   | prior k b =>
-    simp only [_root_.Flock.Firewall.Frame.step]
+    simp only [_root_.Flock.ZkServer.Frame.step]
     split
     · exact hs
     · split
       · exact hs
       · exact hs
   | finish =>
-    simp only [_root_.Flock.Firewall.Frame.step]
+    simp only [_root_.Flock.ZkServer.Frame.step]
     split <;> exact hs
 
-theorem innerOff_stepEq {c : Cfg} {st st' : _root_.Flock.Firewall.Frame.State} {q : _root_.Flock.Firewall.Frame.Req}
-    {a : _root_.Flock.Firewall.Frame.Reply} (h : _root_.Flock.Firewall.Frame.step c st q = (a, st'))
+theorem innerOff_stepEq {c : Cfg} {st st' : _root_.Flock.ZkServer.Frame.State} {q : _root_.Flock.ZkServer.Frame.Req}
+    {a : _root_.Flock.ZkServer.Frame.Reply} (h : _root_.Flock.ZkServer.Frame.step c st q = (a, st'))
     (hs : InnerOff c st.m) : InnerOff c st'.m := by
   have h1 := innerOff_step c st q hs
   rw [h] at h1
   exact h1
 
 /-- **The frame over any requests stays outside every masked phase past the inner proof's label.** -/
-theorem innerOff_run (c : Cfg) : ∀ (st : _root_.Flock.Firewall.Frame.State) (qs : List _root_.Flock.Firewall.Frame.Req),
-    InnerOff c st.m → InnerOff c (_root_.Flock.Firewall.Frame.run c st qs).1.m
+theorem innerOff_run (c : Cfg) : ∀ (st : _root_.Flock.ZkServer.Frame.State) (qs : List _root_.Flock.ZkServer.Frame.Req),
+    InnerOff c st.m → InnerOff c (_root_.Flock.ZkServer.Frame.run c st qs).1.m
   | st, [], hs => hs
   | st, q :: qs, hs => by
-    simp only [_root_.Flock.Firewall.Frame.run]
+    simp only [_root_.Flock.ZkServer.Frame.run]
     have h1 := innerOff_step c st q hs
     split
     · exact h1
     · exact innerOff_run c _ qs h1
 
-theorem innerOff_runIf (c : Cfg) (qs : List _root_.Flock.Firewall.Frame.Req) :
+theorem innerOff_runIf (c : Cfg) (qs : List _root_.Flock.ZkServer.Frame.Req) :
     InnerOff c
-      (if (_root_.Flock.Firewall.Frame.run c {} qs).2 then {} else (_root_.Flock.Firewall.Frame.run c {} qs).1.m) := by
+      (if (_root_.Flock.ZkServer.Frame.run c {} qs).2 then {} else (_root_.Flock.ZkServer.Frame.run c {} qs).1.m) := by
   split
   · exact innerOff_empty c
   · exact innerOff_run c {} qs (innerOff_empty c)
@@ -584,23 +584,23 @@ against the inner proof's round `k` as the frame schedules it (`Frame.innerSched
 and a row of pads within a `u64`'s count past round 0, `v` is that round and the release is that round as it came. -/
 theorem check_innerSched {c : Cfg} {m s' s : Masker} {fin : Array ByteArray} {n k : ℕ} {v out : ByteArray}
     (hk : k < INNER_ROUNDS)
-    (h : check c m v (_root_.Flock.Firewall.Frame.innerSched c s fin n k) n = .ok (out, s', none))
+    (h : check c m v (_root_.Flock.ZkServer.Frame.innerSched c s fin n k) n = .ok (out, s', none))
     (hst : 0 < k → m.on = false ∧ c.rowH.size < 2 ^ 64) :
-    v = _root_.Flock.Firewall.Frame.innerSched c s fin n k ∧
-      out.data.toList = (_root_.Flock.Firewall.Frame.innerSched c s fin n k).data.toList := by
+    v = _root_.Flock.ZkServer.Frame.innerSched c s fin n k ∧
+      out.data.toList = (_root_.Flock.ZkServer.Frame.innerSched c s fin n k).data.toList := by
   have hw : (wordBytes (words (fin.getD 0 .empty) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16)
       1)).size = 16 := by
     simp only [wordBytes_size, Loop.words_size]
   have ht : (wordBytes (words (fin.getD 2 .empty) 16 4)).size = 64 := by
     simp only [wordBytes_size, Loop.words_size]
   rcases Nat.eq_zero_or_pos k with rfl | hk0
-  · have e : _root_.Flock.Firewall.Frame.innerSched c s fin n 0 =
+  · have e : _root_.Flock.ZkServer.Frame.innerSched c s fin n 0 =
         labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++ header 3 1 1 ++
           wordBytes (words (fin.getD 0 .empty) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1) ++
           header 4 1 1 := rfl
     rw [e] at h ⊢
     exact check_inner0 hw h
-  · have e : _root_.Flock.Firewall.Frame.innerSched c s fin n k = ownRound c s
+  · have e : _root_.Flock.ZkServer.Frame.innerSched c s fin n k = ownRound c s
         (wordBytes (words (fin.getD 0 .empty) ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1))
         (wordBytes (words (fin.getD 2 .empty) 16 4)) n k := rfl
     obtain ⟨hon, hrow⟩ := hst hk0
@@ -696,7 +696,7 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
     (hki : CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1))
     {tr : Tab} {hr : Array ByteArray} (hreal : real x w ρ k = .ok (tr, hr)) {rsched : Array (ByteArray × ℕ)}
     (hrs0 : schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+      (_root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]!
         (wordsAt x cs 0))) hr ((Array.range (j + 1)).map fun i => wordsAt x cs (q - (j + 1) + i + 1)) = .ok rsched)
     (hlt : rsched.size < j + 1) :
     j - rsched.size < INNER_ROUNDS ∧ m.inner = some (j - rsched.size + 1) ∧
@@ -735,7 +735,7 @@ theorem ofLoop_answered_inner (T : CoinLayer.TableData)
     simpa [roundsOf] using this
   obtain ⟨lay, mask, hst, hc', hdm, hxe⟩ := placeholder_ok hph'
   obtain ⟨-, hd, hx2, hlay⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec sts hx) hk
-  have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+  have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.ZkServer.Frames.COIN_MAX := by
     rw [← hcs]
     cases h1 with
     | nil => simp at hq

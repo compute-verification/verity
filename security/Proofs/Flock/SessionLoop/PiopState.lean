@@ -51,7 +51,7 @@ schedule (`Sched.rounds_piop`), so the loop's state at a rep's PIOP round is tha
 namespace Claims.ZKServer.Loop
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker roundFree LABEL_ZC)
+open _root_.Flock.ZkServer.Frame (Cfg Masker roundFree LABEL_ZC)
 open FlockSoundness.Refine (Frame encs)
 
 /-- **The frame through the PIOP's round `a`**, from a rep's start past an earlier rep's coins: where the schedule's
@@ -68,19 +68,19 @@ theorem run_piop {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
         (ByteArray.mk (encs (piopFr m kLog digest cap root lay mk k) ++ (Frame.sq (piopK k) (piopN m k)).enc).toArray,
           piopN m k)) →
       (piopV m kLog digest cap root lay mk (a + 1)).length ≤ c.order.size →
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).2 = false →
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).1.m.owed ≠ none →
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).1.m.owed = some (piopN m a) ∧
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).1.m.on = true ∧
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).1.m.inner = none ∧
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).1.m.l0 = false ∧
-      (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).1.m.pos =
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).2 = false →
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).1.m.owed ≠ none →
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).1.m.owed = some (piopN m a) ∧
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).1.m.on = true ∧
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).1.m.inner = none ∧
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).1.m.l0 = false ∧
+      (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).1.m.pos =
         (piopV m kLog digest cap root lay mk (a + 1)).length := by
   induction a with
   | zero =>
     intro _ _ h2 ho
     have e0 : schedReqs P sched cr 0 =
-        (if P.isEmpty then [] else [.prior P.size (_root_.Flock.Firewall.Frame.wordBytes P)]) ++
+        (if P.isEmpty then [] else [.prior P.size (_root_.Flock.ZkServer.Frame.wordBytes P)]) ++
           [.round (sched.getD 0 (.empty, 0)).2 (sched.getD 0 (.empty, 0)).1
             (.sched (sched.getD 0 (.empty, 0)).1)] := by
       unfold schedReqs
@@ -142,7 +142,7 @@ theorem run_piop {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
         exact ⟨fun f hf => by simp at hf, fun f hf => by simp at hf⟩
       · exact piopFr_frames m kLog digest cap root lay mk (by omega)
     rw [schedReqs_succ, run_append] at h2 ho ⊢
-    cases hr : (_root_.Flock.Firewall.Frame.run c {} (schedReqs P sched cr a)).2 with
+    cases hr : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs P sched cr a)).2 with
     | true =>
       rw [if_pos hr, hr] at h2
       cases h2
@@ -188,18 +188,18 @@ theorem run_piop {c : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.s
 after it, with the values of rounds `0` to `a` inside the configuration's order, it is in the algebraic phase, outside
 the inner proof and level 0, at their absorbed position (`run_piop` on the skeleton's rounds, `Sched.rounds_piop`). -/
 theorem repState_piop {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]! < c.h.size)
-    {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+    {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr0 cr : Array (Array F128)} {ns : ℕ → ℕ} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr.pop = .ok sched) (hm : 14 ≤ t.st.m) (hm' : t.st.m < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcap : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hdom : dom.size < 2 ^ 64) {a : ℕ} (ha : a < piopNR t.st.m t.st.fold.kLog)
-    (hb : (piopV t.st.m t.st.fold.kLog t.st.digest (_root_.Flock.Firewall.Finish.flat t.cm0.cap) Sched.root0
+    (hb : (piopV t.st.m t.st.fold.kLog t.st.digest (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (fun _ => 0) (a + 1)).length ≤ c.order.size)
     {cs : Array F128} {m : Masker} (hA : (repState c t rep dom xs hi cr0 cr ns (a + 1)).answer c'' cs = .ok m) :
     m.on = true ∧ m.inner = none ∧ m.l0 = false ∧
-      m.pos = (piopV t.st.m t.st.fold.kLog t.st.digest (_root_.Flock.Firewall.Finish.flat t.cm0.cap) Sched.root0
+      m.pos = (piopV t.st.m t.st.fold.kLog t.st.digest (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) Sched.root0
         (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (fun _ => 0) (a + 1)).length := by
   obtain ⟨hsz, hpi⟩ := Sched.rounds_piop hm hm' hal
   obtain ⟨ha0, -⟩ := Sched.rounds_two hm hm' hal
@@ -208,17 +208,17 @@ theorem repState_piop {c c'' : Cfg} (hc : ∀ p, p < c.order.size → c.order[p]
   have hg : ∀ k, k < alg.size → sched.getD k (.empty, 0) = (alg[k]?).getD (.empty, 0) := fun k hk => by
     rw [hrest, Array.getD_eq_getD_getElem?, Array.getElem?_append_left hk]
   have h0 : sched.getD 0 (.empty, 0) = (ByteArray.mk (encs [.dom dom, .label "flock-r1cs-v0".toUTF8,
-      .bytes t.st.digest, .bytes (_root_.Flock.Firewall.Finish.flat t.cm0.cap),
+      .bytes t.st.digest, .bytes (_root_.Flock.ZkServer.Finish.flat t.cm0.cap),
       .label LABEL_ZC.toUTF8] ++ (Frame.sq 2 6).enc).toArray, 6) := by
     rw [hg 0 (by omega), ha0, Option.getD_some, head_encs]
   have hsk : ∀ k, 1 ≤ k → k ≤ a → sched.getD k (.empty, 0) = (ByteArray.mk (encs (piopFr t.st.m t.st.fold.kLog
-      t.st.digest (_root_.Flock.Firewall.Finish.flat t.cm0.cap) Sched.root0
+      t.st.digest (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) Sched.root0
       (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (fun _ => 0) k) ++
       (Frame.sq (piopK k) (piopN t.st.m k)).enc).toArray, piopN t.st.m k) := fun k h1 h2 => by
     rw [hg k (by omega), hpi k (by omega) (by omega), Option.getD_some]
   rw [repState_at c t rep dom xs hi cr0 cr ns a hal hs (by rw [hrest, Array.size_append]; omega)] at hA
   dsimp only at hA
-  cases h2 : (_root_.Flock.Firewall.Frame.run c {} (schedReqs
+  cases h2 : (_root_.Flock.ZkServer.Frame.run c {} (schedReqs
       (if rep = 0 then #[] else (cr0.extract 0 alg.size).foldl (· ++ ·) #[]) sched cr a)).2
   · rw [h2] at hA
     simp only [Bool.false_eq_true, ↓reduceIte] at hA

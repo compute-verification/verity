@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Recursive.Target
 public import Proofs.Flock.Claims.Recursion.InnerSetupCount
-public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.ZkServer
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,7 +37,7 @@ import Proofs.Flock.Claims.Recursion.AcceptedScope
 import Proofs.Flock.Claims.Recursion.CallsClosed
 import Proofs.Flock.Claims.Recursion.DeployedCounts
 import Proofs.Flock.Claims.Recursion.LamDeployedTight
-import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.KSProved
 
 /-!
@@ -45,7 +45,7 @@ import Proofs.Flock.Recursive.KSProved
 
 `Flock.Guarantees.RecursiveAuditC3` is sampled proofs at the recursive configuration, the sample checked by V\*'s
 compiled check (`verity/sampled-proofs/recursive/v1`, the recursive form of onsite's and remote's sampled-proofs
-component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`).
+component), at every composite, with zero knowledge (`RecursiveZkServerPrivate`).
 
 * `SpotRecursive Acc` is `spotRecursive`'s bound at every deployment `RecursiveKS` is stated at
   (`Dep.deployed`: the deployed weights, and any brings, live-coin record and decoders meeting the list-decoding spec)
@@ -203,7 +203,7 @@ recursive configuration's verdict `RecVerdict`), at every composite `k`: whereve
 prover sent `k` names the recursive form, V\*'s compiled check (`verity/sampled-proofs/recursive/v1`), the probability
 that the play is accepted while sampled proofs' claim fails on the extracted transcript is at most
 `δs + E_ξ[ksAt] + √(min(bits, 2n)·E[bindBudget]/2^256)`, `n` the units, where the finders built from the strategy
-meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
+meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveZkServerPrivate`.
 
 Its knowledge-soundness term `ksAt` (`Verity.Recursive.Dep.ksAt`) is `t'·2^{-λ}` with `λ = λ₂ = 135.7`, route 2C's
 level (`Claims.Recursion.lamLin2`), and at a sample whose statement is at the deployment's tables (`Dep.OneTable`) the
@@ -214,14 +214,14 @@ accepted run with the deployed caps (`RecDeploy.lamLin2_R_ge_in`, `RecDeploy.set
 `RecDeploy.lamLin2_deployed_ge_dep_tight`). The bound record's level (`Claims.Recursion.lam`), which no theorem
 evaluates at the deployment, is one (i) doesn't use. -/
 def RecursiveAuditC3 : Prop :=
-  Verity.Recursive.SpotRecursive Verity.Recursive.RecVerdict ∧ RecursiveFirewallPrivate
+  Verity.Recursive.SpotRecursive Verity.Recursive.RecVerdict ∧ RecursiveZkServerPrivate
 
 end Flock.Guarantees
 
 namespace Flock.SecurityProofs
 
-/-- **The recursive audit**, from `RecursiveKS` and `RecursiveFirewallPrivate`. -/
+/-- **The recursive audit**, from `RecursiveKS` and `RecursiveZkServerPrivate`. -/
 theorem RecursiveAuditC3 : Flock.Guarantees.RecursiveAuditC3 :=
-  ⟨Verity.Recursive.spotRecursive_of_ks RecursiveKS, RecursiveFirewallPrivate⟩
+  ⟨Verity.Recursive.spotRecursive_of_ks RecursiveKS, RecursiveZkServerPrivate⟩
 
 end Flock.SecurityProofs

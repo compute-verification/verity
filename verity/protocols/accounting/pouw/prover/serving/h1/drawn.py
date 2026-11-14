@@ -504,7 +504,7 @@ class FileStager:
 
 def bind_files(d: Path, program: bytes, partition: dict) -> None:
     """A statement's ``program.json`` and ``partition.json`` in `d`: the Program and partition object credit verifies it
-    under (`credit._asks`), which the ZK server's Lean ``Hello`` is set up on (``FC_FIREWALL_HELLO_ARGS``)."""
+    under (`credit._asks`), which the ZK server's Lean ``Hello`` is set up on (``FC_ZK_SERVER_HELLO_ARGS``)."""
     (d / "program.json").write_bytes(program)
     (d / "partition.json").write_text(json.dumps(partition))
 

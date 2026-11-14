@@ -154,7 +154,7 @@ theorem commitString_exec (r : Msg) (salt : ByteArray) :
 
 /-! ## Check 5's own evaluations -/
 
-/-- The bytes `Firewall.rowDigest` hashes: the `sha512/row/v1` prefix at the row's word count, then its words, each
+/-- The bytes `ZkServer.rowDigest` hashes: the `sha512/row/v1` prefix at the row's word count, then its words, each
 two bytes little-endian. -/
 def rowInput (row : Array ℕ) : Msg :=
   (row.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8)
@@ -205,11 +205,11 @@ def resSetup (xO : Msg) : List Msg :=
         openSetupSt (RecCoins.Source.atC3 i.src i.inner i.commits) st
   | none => []
 
-theorem rowDigest_eq (row : Array ℕ) : Firewall.rowDigest row = Sha512.hash ⟨(rowInput row).toArray⟩ := by
+theorem rowDigest_eq (row : Array ℕ) : ZkServer.rowDigest row = Sha512.hash ⟨(rowInput row).toArray⟩ := by
   rw [rowInput, FlockSoundness.Refine.bytes_of_list]
   rfl
 
-/-- A row's words as `Firewall.rowDigest` lays them after its prefix: each two bytes, little-endian. -/
+/-- A row's words as `ZkServer.rowDigest` lays them after its prefix: each two bytes, little-endian. -/
 def wordBytes (ws : Array ℕ) : Msg := ws.toList.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
 
 /-- **The copy a piece keyed `(jj, o, g, u)` reads**: instance `n = o + g` of the outer part's one table, at block

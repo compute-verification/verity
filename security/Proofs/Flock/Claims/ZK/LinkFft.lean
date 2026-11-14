@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Link
+public import Flock.ZkServer.Link
 public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
 public import Proofs.Flock.Claims.Complete.Zk.Level0Pad
 public import Proofs.Flock.Claims.Complete.Zk.Ligerito
@@ -44,9 +44,9 @@ import Proofs.Flock.Soundness.ZK.PadNonvanishing40
 import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
-# `Flock.Firewall.Link`'s FFT is level 0's padded codeword
+# `Flock.ZkServer.Link`'s FFT is level 0's padded codeword
 
-`Flock.Firewall.Link.rowsFft` evaluates each lane's entry, one polynomial in the novel basis over `cols + 1` bits
+`Flock.ZkServer.Link.rowsFft` evaluates each lane's entry, one polynomial in the novel basis over `cols + 1` bits
 (`coeffs`), on all `2^d` points by the additive FFT (`fft`). Where the padding fits below `2^cols` and `cols < d ≤ 64`,
 its rows are `FlockComplete.encodeRowsZk`'s (`rowsFft_eq`), so the recheck's rows are the analysis's in every case
 (`rows_eq`).
@@ -61,7 +61,7 @@ its rows are `FlockComplete.encodeRowsZk`'s (`rowsFft_eq`), so the recheck's row
 
 @[expose] public section
 
-namespace Flock.Firewall.Link
+namespace Flock.ZkServer.Link
 
 open FlockSoundness.Refine
 
@@ -396,4 +396,4 @@ theorem rows_eq (lv : Level) (tPad : ℕ) (g : Array F128) (extra lanePad : ℕ 
     exact rowsFft_eq lv tPad g extra lanePad h.1 h.2.1 h.2.2
   · rfl
 
-end Flock.Firewall.Link
+end Flock.ZkServer.Link

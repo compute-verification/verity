@@ -1,8 +1,8 @@
 """The layers of Flock's Lean package (`verity/protocols/proofs/flock/verifier`), read from its import lines; no Lean runs.
 
 Low to high: the base packages it requires (`Base`, `Circuits`, `Commitments`, whose own order Lake's requires hold);
-Flock alone; the ZK server (`Flock.Firewall` and the modules under it, the library `FlockZkServer`, with the executables
-`flock-firewall` and `flock-frame-tape`); and the recursion (`Flock.Rec*` and ``REC_MODULES``, the library `FlockRec`,
+Flock alone; the ZK server (`Flock.ZkServer` and the modules under it, the library `FlockZkServer`, with the executables
+`flock-zk-server` and `flock-frame-tape`); and the recursion (`Flock.Rec*` and ``REC_MODULES``, the library `FlockRec`,
 with V*'s circuit `VStar` and the `flock-rec-*` and `flock-witness` executables). A module imports its own layer and the
 layers below it, so Flock alone reads neither the ZK server nor the recursion, and the ZK server reads nothing of the
 recursion. The umbrella `Flock` and the tests (`Flock.Test.*`) read every layer. ``UP`` holds the imports that still
@@ -25,7 +25,7 @@ BASE = {"Base": VERITY / "circuits" / "base", "Circuits": VERITY / "circuits" / 
 
 LAYERS = ("the base packages", "Flock alone", "the ZK server", "the recursion", "every layer")
 BELOW, FLOCK, ZK, REC, ALL = range(5)
-ZK_ROOTS = {"FlockZkServer", "FlockFirewall", "FlockFrameTape"}
+ZK_ROOTS = {"FlockZkServer", "FlockZkServerMain", "FlockFrameTape"}
 REC_ROOTS = {"FlockRec", "FlockRecLinks", "FlockRecOpening", "FlockRecSparse", "FlockWitness"}
 #: the recursion's modules that `Flock.Rec…` doesn't spell: the recursive audit's predicates
 REC_MODULES = {"Flock.Witness"}
@@ -52,7 +52,7 @@ def layer(module: str) -> int:
     root = module.split(".")[0]
     if module == "Flock" or module.startswith("Flock.Test."):
         return ALL
-    if module == "Flock.Firewall" or module.startswith("Flock.Firewall.") or module in ZK_ROOTS:
+    if module == "Flock.ZkServer" or module.startswith("Flock.ZkServer.") or module in ZK_ROOTS:
         return ZK
     if root == "VStar" or module in REC_ROOTS | REC_MODULES or (
             re.fullmatch(r"Flock\.Rec\w*", module) and module not in NOT_REC):
@@ -96,16 +96,16 @@ def test_no_module_imports_a_layer_above_its_own():
 def test_an_upward_import_is_found():
     """The scan isn't vacuous: an import in a comment isn't one, `import all` and `meta import` are, and each layer reads
     down and never up."""
-    assert imports("module\n\npublic import Flock.Hash\n-- import Flock.RecCoins\n/- import Flock.Firewall -/\n"
+    assert imports("module\n\npublic import Flock.Hash\n-- import Flock.RecCoins\n/- import Flock.ZkServer -/\n"
                    "import all Init.System.ST\npublic meta import Flock.Canon\n") == ["Flock.Hash", "Init.System.ST", "Flock.Canon"]
-    assert [layer(m) for m in ("Init.Data", "Base.Hash", "Flock.Verify", "Flock.Record", "FlockVerify", "Flock.Firewall",
-                               "Flock.Firewall.Honest", "FlockFirewall", "Flock.RecCoins", "VStar.Cli", "FlockRecLinks",
+    assert [layer(m) for m in ("Init.Data", "Base.Hash", "Flock.Verify", "Flock.Record", "FlockVerify", "Flock.ZkServer",
+                               "Flock.ZkServer.Honest", "FlockZkServerMain", "Flock.RecCoins", "VStar.Cli", "FlockRecLinks",
                                "Flock.Witness", "Flock.WitnessZk", "Flock", "Flock.Test.RecCap")] == [
         BELOW, BELOW, FLOCK, FLOCK, FLOCK, ZK, ZK, ZK, REC, REC, REC, REC, FLOCK, ALL, ALL]
-    sources = {"Flock.Verify": "import Flock.Firewall.Coins\nimport Base.Hash\n", "Flock.Firewall.Coins": "import Flock.RecCoins\n",
-               "Flock.RecCoins": "import Flock.Firewall\nimport Flock.Verify\nimport VStar.Cli\n",
+    sources = {"Flock.Verify": "import Flock.ZkServer.Coins\nimport Base.Hash\n", "Flock.ZkServer.Coins": "import Flock.RecCoins\n",
+               "Flock.RecCoins": "import Flock.ZkServer\nimport Flock.Verify\nimport VStar.Cli\n",
                "Flock.Test.RecCap": "import Flock\n", "Flock": "import Flock.RecCoins\n"}
-    assert upward(sources) == [("Flock.Firewall.Coins", "Flock.RecCoins"), ("Flock.Verify", "Flock.Firewall.Coins")]
+    assert upward(sources) == [("Flock.ZkServer.Coins", "Flock.RecCoins"), ("Flock.Verify", "Flock.ZkServer.Coins")]
 
 
 def test_each_library_holds_its_layer():

@@ -33,7 +33,7 @@ What code outside this directory may use. Everything else here is internal.
 | party | principal | machine | its pieces (`served_table.PARTIES`) |
 | --- | --- | --- | --- |
 | `workers` | developer | `prover-node` | the served window, `benchmarks/one_stage/served_verdicts.sh`, run once with every piece's hooks; sampled proofs' commitment and proofs; PoUW's H1 on the engine; the certifier's developer side, its front and its piece (`benchmarks/network_traces/certifier_piece.py`) |
-| `firewall` | developer | `prover-node` | the Lean ZK server of the records audit, inside the served window |
+| `zk_server` | developer | `prover-node` | the Lean ZK server of the records audit, inside the served window |
 | `prover` | developer | `prover-node` | PoUS's served piece, PoUB's served session and the wipe, inside the served window |
 | `challenger` | auditor | `gate-host` | the gate: sampled proofs' live challenger and PoUW's H1 coins |
 | `network-certifier` | auditor | `gate-host` | the network certifier in front of the endpoint, reached through the gate |

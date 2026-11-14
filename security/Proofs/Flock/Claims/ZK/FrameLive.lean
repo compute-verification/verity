@@ -59,7 +59,7 @@ and no history past `Hello` was live. This file pins that the corrected release 
 namespace Claims.ZKServer
 
 open _root_.Flock (V Stmt SessionSpec)
-open _root_.Flock.Firewall.Frame (Cfg Masker)
+open _root_.Flock.ZkServer.Frame (Cfg Masker)
 
 namespace LeanRelease
 
@@ -139,7 +139,7 @@ theorem toSrv_live_honest {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (
 `Frame.check` passes the device round at `m` against the ZK server's scheduled round, and the cross-round check passes. -/
 theorem roundOk_of_check {W R : Type} (L : LeanRelease W R) (x : Msg) (w : W) (ρ : R) (g : List (Msg × Msg))
     {m : Masker} (ha : L.answered x ρ g = .ok m) {out : ByteArray} {s' : Masker}
-    (hc : _root_.Flock.Firewall.Frame.check (L.cfg x ρ g) { m with stopped := false } ⟨(L.devOf x w ρ g).toArray⟩
+    (hc : _root_.Flock.ZkServer.Frame.check (L.cfg x ρ g) { m with stopped := false } ⟨(L.devOf x w ρ g).toArray⟩
       ⟨(L.scheduled x w ρ g (computedOf (L.computed x w ρ g))).toArray⟩ (L.coins x g.length) = .ok (out, s', none))
     (hcr : L.cross x g.length w ρ g (L.devOf x w ρ g) = true) :
     L.roundOk x w ρ g = true := by
@@ -160,7 +160,7 @@ theorem ofLoop_answered_link (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) :
@@ -181,7 +181,7 @@ theorem ofLoop_ownMsg_link (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
@@ -202,7 +202,7 @@ theorem ofLoop_answered_first (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 e1 : Msg × Msg) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
@@ -210,7 +210,7 @@ theorem ofLoop_answered_first (T : ZKMal.CoinLayer.TableData)
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 0).1
       (wordsAt x ([e1].map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi))
     {alg : _}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 0).1 % 2 = 0) :
     (ofLoop T L₀ real).answered x ρ [e0, e1] = .ok {} := by
@@ -237,7 +237,7 @@ theorem ofLoop_answered_same (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q j : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
@@ -261,7 +261,7 @@ theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (κ : (ofLoop T L₀ real).toSrv.Chk) (e0 e1 e2 : Msg × Msg) {s0 : _} {spec : SessionSpec} {sts : Array Stmt}
@@ -271,12 +271,12 @@ theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
     (hph : placeholder spec sts (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 0).1
       (wordsAt x ([e1].map fun p => ZKMal.CoinLayer.rd p.2) 0) = .ok (c', t, dom, xs, hi))
     {alg : _}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hk : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 0).1 % 2 = 0)
     (hj : (ZKMal.CoinLayer.locate (roundsOf spec sts) 0 1).2 = 0 + 1)
     {out2 : ByteArray} {s2 : Masker}
-    (hc2 : _root_.Flock.Firewall.Frame.check ((ofLoop T L₀ real).cfg x ρ [e0, e1]) {}
+    (hc2 : _root_.Flock.ZkServer.Frame.check ((ofLoop T L₀ real).cfg x ρ [e0, e1]) {}
       ⟨((ofLoop T L₀ real).devOf x w ρ [e0, e1]).toArray⟩
       ⟨((ofLoop T L₀ real).scheduled x w ρ [e0, e1]
         (computedOf ((ofLoop T L₀ real).computed x w ρ [e0, e1]))).toArray⟩
@@ -287,7 +287,7 @@ theorem ofLoop_live_three (T : ZKMal.CoinLayer.TableData)
       ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) (coinsAt x [e0, e1, e2]) = .ok m3)
     (hrk3 : rankFails ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) m3 = false)
     {out3 : ByteArray} {s3 : Masker}
-    (hc3 : _root_.Flock.Firewall.Frame.check ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) { m3 with stopped := false }
+    (hc3 : _root_.Flock.ZkServer.Frame.check ((ofLoop T L₀ real).cfg x ρ [e0, e1, e2]) { m3 with stopped := false }
       ⟨((ofLoop T L₀ real).devOf x w ρ [e0, e1, e2]).toArray⟩
       ⟨((ofLoop T L₀ real).scheduled x w ρ [e0, e1, e2]
         (computedOf ((ofLoop T L₀ real).computed x w ρ [e0, e1, e2]))).toArray⟩

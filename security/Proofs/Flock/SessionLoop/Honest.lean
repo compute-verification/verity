@@ -100,7 +100,7 @@ theorem finS_tapeOK : finS.TapeOK :=
 
 /-- **`L` with Rust's checks passing**: Rust's own checks beside the Lean frame (`LeanRelease.cross`) accept every round.
 The guarantees hold at every `cross`, since Rust's checks only fail a round more. That they pass the honest worker's
-rounds is completeness, which `verity/ml/flock/verifier/firewall_controls.sh` checks under `FC_FIREWALL=1`. -/
+rounds is completeness, which `verity/ml/flock/verifier/zk_server_controls.sh` checks under `FC_ZK_SERVER=1`. -/
 def acceptCross (L : LeanRelease Flock.Wit Tp) : LeanRelease Flock.Wit Tp :=
   { L with cross := fun _ _ _ _ _ _ => true }
 
@@ -126,7 +126,7 @@ on a live history of `refK x` openings whose last coins the frame takes, no zero
 (`outer_ne_one_ofLoopLink`), where the rows hold at the honest values (`rowsOK_honestVals`). -/
 theorem finishRows_honestVals (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hSv : Serves x) :
     FinishRows finS finS.honestVals (ofLoopLink L₀ src real) CoinOpen.shaH wk x w :=

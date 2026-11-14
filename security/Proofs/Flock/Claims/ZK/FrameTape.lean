@@ -56,7 +56,7 @@ frames' bytes give the masked prover exactly the frames' pads:
 
 namespace Claims.ZKServer
 
-open _root_.Flock.Firewall.Frame (Draws drawBytes codeLen SALT)
+open _root_.Flock.ZkServer.Frame (Draws drawBytes codeLen SALT)
 
 /-- `n` bytes of exactly `n` bytes are those bytes. -/
 theorem fitBytes_of_size (n : ℕ) (b : ByteArray) (h : b.size = n) : FlockComplete.fitBytes n b = b := by

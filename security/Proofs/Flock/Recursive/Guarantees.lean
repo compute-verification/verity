@@ -64,7 +64,7 @@ section ZK
 /-- The ZK server's commitments at the auditor's tape and the developer's randomness `ω` and the salts `y`. -/
 def commits {Ωa Ωp : Type} {nh : ℕ} (msgs : Ωa → Ωp → Fin nh → ByteArray) (ω : Ωa × Ωp)
     (y : Fin nh → ZkView.Salt) : Fin nh → ByteArray :=
-  fun i => Flock.Guarantees.firewallLeaf (msgs ω.1 ω.2 i) (y i)
+  fun i => Flock.Guarantees.zkServerLeaf (msgs ω.1 ω.2 i) (y i)
 
 /-- The salts and the outer session's randomness, exchanged. -/
 def swapLast (A B C : Type) : (A × C) × B ≃ (A × B) × C where
@@ -87,13 +87,13 @@ theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [
     (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
     (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo δ : ℝ≥0∞}
     (hOuter : ∀ a p y (E : V → Prop),
-      prCoin (fun r : Ωo => E (view a (fun i => Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) p y r))
-        ≤ prCoin (fun s : Ωs => E (sim a (fun i => Flock.Guarantees.firewallLeaf (msgs a p i) (y i)) s)) + εo)
+      prCoin (fun r : Ωo => E (view a (fun i => Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) p y r))
+        ≤ prCoin (fun s : Ωs => E (sim a (fun i => Flock.Guarantees.zkServerLeaf (msgs a p i) (y i)) s)) + εo)
     (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ)
     (E : Ωa × (Fin nh → ByteArray) × V → Prop) :
     prCoin (fun w : ((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo =>
-        E (w.1.1.1, (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
-          view w.1.1.1 (fun i => Flock.Guarantees.firewallLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
+        E (w.1.1.1, (fun i => Flock.Guarantees.zkServerLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)),
+          view w.1.1.1 (fun i => Flock.Guarantees.zkServerLeaf (msgs w.1.1.1 w.1.1.2 i) (w.1.2 i)) w.1.1.2 w.1.2 w.2))
       ≤ prCoin (fun w : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs =>
           E (w.1.1, (fun i => Flock.Guarantees.idealLeaf (w.1.2 i)),
             sim w.1.1 (fun i => Flock.Guarantees.idealLeaf (w.1.2 i)) w.2))

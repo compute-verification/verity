@@ -54,10 +54,10 @@ PART=(--partition $D/partition.json)
 # the schedule the proxy holds the session to, from the statement's public shape before the session (rec_live --schedule-for)
 env $INNER_COINS $B statement --instances $D/pub-$N.bin --circuit $D/circuit.txt "${TB[@]}" > $O/statement.txt 2>&1 || { tail -5 $O/statement.txt; exit 1; }
 python3 -m verity_flock.rec_live --schedule-for $O/statement.txt > $O/schedule.json || exit 1
-# the session's send check is Lean's flock-firewall live, built beside the Lean verifier
-wait $LP; [ -x $FIREWALL_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
+# the session's send check is Lean's flock-zk-server live, built beside the Lean verifier
+wait $LP; [ -x $ZK_SERVER_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
 python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $O/inner --schedule $O/schedule.json --draw $D/draw.json \
-  --coin-tree "${TREE[@]}" --lean $FIREWALL_BIN > $O/proxy.log 2>&1 &
+  --coin-tree "${TREE[@]}" --lean $ZK_SERVER_BIN > $O/proxy.log 2>&1 &
 PP=$!
 ADDR=
 for i in $(seq 600); do ADDR=$(awk '/^SERVING/ {print $2}' $O/proxy.log); [ -n "$ADDR" ] && break; kill -0 $PP 2>/dev/null || break; sleep 0.5; done

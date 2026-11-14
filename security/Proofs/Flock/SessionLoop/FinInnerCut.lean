@@ -28,7 +28,7 @@ public import Proofs.Flock.Claims.ZK.FinishTrunc
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open Flock With Transcript
 
@@ -129,13 +129,13 @@ theorem repCons_cut (st : Setup) (hms : st.merkle = MerkleScheme.hm96Sha512) (sc
 
 end
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 TMW Transcript Round liftTM)
-open _root_.Flock.Firewall.Finish (Asks)
+open _root_.Flock.ZkServer.Finish (Asks)
 
 namespace Loop
 
@@ -153,8 +153,8 @@ theorem asksPad_round_size (C : Array (Array F128)) (c : ByteArray) {k : ℕ} {c
 
 /-- `asksPad C` and `asksOf C` answer each round below `C.size` alike. -/
 theorem asksPad_relOf (C : Array (Array F128)) :
-    _root_.Flock.Firewall.Finish.AsksRel (padSim C.size) (asksPad C).toC
-      (_root_.Flock.Firewall.Finish.asksOf C).toC where
+    _root_.Flock.ZkServer.Finish.AsksRel (padSim C.size) (asksPad C).toC
+      (_root_.Flock.ZkServer.Finish.asksOf C).toC where
   link _ _ _ _ _ h := by cases h
   round c k a k' h := by
     change ((asksPad C).round c).run k = _ at h
@@ -167,9 +167,9 @@ theorem asksPad_relOf (C : Array (Array F128)) :
     have hpc : padCoin C k = fun i => C[k][i]! := by
       unfold padCoin
       rw [hk]
-    show ((_root_.Flock.Firewall.Finish.asksOf C).round c).run k = _
+    show ((_root_.Flock.ZkServer.Finish.asksOf C).round c).run k = _
     rw [ha, hpc, hk']
-    simp only [_root_.Flock.Firewall.Finish.asksOf, StateT.run_bind, StateT.run_get, pure_bind, hk, hn',
+    simp only [_root_.Flock.ZkServer.Finish.asksOf, StateT.run_bind, StateT.run_get, pure_bind, hk, hn',
       Bool.false_eq_true, ↓reduceIte, StateT.run_set, StateT.run_pure]
     all_goals rfl
 
@@ -180,14 +180,14 @@ theorem repCons_ofPad (C : Array (Array F128)) (st : _root_.Flock.Setup)
     (dom : ByteArray) (g : Array F128) (cm0 : _) (extras : Array _root_.Flock.Claim) (pads : _) (ic : _)
     (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) (tr : _root_.Flock.Transcript)
     {r : _} {tr' : _root_.Flock.Transcript} {k' : ℕ}
-    (h : ((_root_.Flock.Firewall.Finish.repCons (asksPad C)
-      (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
+    (h : ((_root_.Flock.ZkServer.Finish.repCons (asksPad C)
+      (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
       extra lanePad salt).run tr).run 0 = .ok ((r, tr'), k'))
     (hk : k' ≤ C.size) :
-    ((_root_.Flock.Firewall.Finish.repCons (_root_.Flock.Firewall.Finish.asksOf C)
-      (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
+    ((_root_.Flock.ZkServer.Finish.repCons (_root_.Flock.ZkServer.Finish.asksOf C)
+      (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
       extra lanePad salt).run tr).run 0 = .ok ((r, tr'), k') :=
-  ((_root_.Flock.Firewall.Finish.repCons_rel (padSim C.size) (asksPad_relOf C) st hm sch tPad rep dom g cm0 extras
+  ((_root_.Flock.ZkServer.Finish.repCons_rel (padSim C.size) (asksPad_relOf C) st hm sch tPad rep dom g cm0 extras
     pads ic vals extra lanePad salt tr 0 (r, tr') k' h).2 hk)
 
 /-- A verifier action lifted to the rep's rounds keeps the round. -/
@@ -204,13 +204,13 @@ theorem liftTM_k {α : Type} {x : _root_.Flock.Transcript.TM α} {t : Flock.Tran
 to round `k + 1`; inside `C`, round `k` holds `n` coins. -/
 theorem squeezeP_pad (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64)
     {t : Flock.Transcript} {k : ℕ} {v : Array F128} {t' : Flock.Transcript} {k' : ℕ}
-    (h : ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n).run t).run k = .ok ((v, t'), k')) :
+    (h : ((_root_.Flock.ZkServer.Finish.squeezeP (asksPad C) kind n).run t).run k = .ok ((v, t'), k')) :
     v = (Array.range n).map (padCoin C k) ∧ k' = k + 1 ∧ ∀ cs, C[k]? = some cs → cs.size = n := by
-  change ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n t).run k) = _ at h
-  unfold _root_.Flock.Firewall.Finish.squeezeP at h
+  change ((_root_.Flock.ZkServer.Finish.squeezeP (asksPad C) kind n t).run k) = _ at h
+  unfold _root_.Flock.ZkServer.Finish.squeezeP at h
   dsimp only at h
   rw [if_neg hn] at h
-  obtain ⟨coin, k₁, h1, h2⟩ := _root_.Flock.Firewall.Finish.sv_bind_ok h
+  obtain ⟨coin, k₁, h1, h2⟩ := _root_.Flock.ZkServer.Finish.sv_bind_ok h
   obtain ⟨rfl, rfl⟩ := asksPad_round C _ h1
   cases h2
   refine ⟨rfl, rfl, fun cs hcs => ?_⟩
@@ -219,10 +219,10 @@ theorem squeezeP_pad (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n �
 
 /-- A coin answered by `asksPad C` from round `k` is round `k`'s first, which inside `C` holds one coin. -/
 theorem sampleP_pad (C : Array (Array F128)) {t : Flock.Transcript} {k : ℕ} {a : F128} {t' : Flock.Transcript} {k' : ℕ}
-    (h : ((_root_.Flock.Firewall.Finish.sampleP (asksPad C)).run t).run k = .ok ((a, t'), k')) :
+    (h : ((_root_.Flock.ZkServer.Finish.sampleP (asksPad C)).run t).run k = .ok ((a, t'), k')) :
     a = padCoin C k 0 ∧ k' = k + 1 ∧ ∀ cs, C[k]? = some cs → cs.size = 1 := by
-  unfold _root_.Flock.Firewall.Finish.sampleP at h
-  obtain ⟨c, t₁, k₁, h1, h2⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  unfold _root_.Flock.ZkServer.Finish.sampleP at h
+  obtain ⟨c, t₁, k₁, h1, h2⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
   obtain ⟨rfl, rfl, hs⟩ := squeezeP_pad C 1 (by decide) (by norm_num) h1
   cases h2
   exact ⟨by simp [Array.getD_eq_getD_getElem?], rfl, hs⟩
@@ -252,10 +252,10 @@ theorem tauLift_ok {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArray
 round `k + 1` held `|cons| + 3`, and its `τ` commitment is `InZ.tau` at the coins `padCoin C k` and `padCoin C (k + 1)`,
 committed through SHA-512 under the pads' `τ` salt. -/
 theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
-    (p : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (finalC : F128)
+    (p : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (finalC : F128)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) {t : Flock.Transcript} {k : ℕ}
     {ip : _root_.Flock.Zk.InnerProof} {t' : Flock.Transcript} {k' : ℕ}
-    (h : ((_root_.Flock.Firewall.Finish.innerP (asksPad C) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) lay
+    (h : ((_root_.Flock.ZkServer.Finish.innerP (asksPad C) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) lay
       p ic finalC cons).run t).run k = .ok ((ip, t'), k')) :
     (∀ cs, C[k]? = some cs → cs.size = 1) ∧ (∀ cs, C[k + 1]? = some cs → cs.size = cons.size + 3) ∧
       ip.tauCommit = FlockComplete.Replay.InZ.tcOf _root_.Flock.Sha512.hash
@@ -267,24 +267,24 @@ theorem innerP_pad_tau (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout
       (x.run tr).run k₀ = .ok ((a, tr'), k₀') → Rets (fun ip : _root_.Flock.Zk.InnerProof => ip.tauCommit = c) x →
         a.tauCommit = c :=
     fun e hx => hx _ _ _ _ _ e
-  unfold _root_.Flock.Firewall.Finish.innerP at h
+  unfold _root_.Flock.ZkServer.Finish.innerP at h
   try dsimp only at h
-  obtain ⟨_, t₁, k₁, h1, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  obtain ⟨_, t₁, k₁, h1, h⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
   rw [liftTM_k h1] at h
-  obtain ⟨_, t₂, k₂, h2, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  obtain ⟨_, t₂, k₂, h2, h⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
   rw [liftTM_k h2] at h
-  obtain ⟨eps, t₃, k₃, h3, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  obtain ⟨eps, t₃, k₃, h3, h⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
   obtain ⟨he, hk3, hs1⟩ := sampleP_pad C h3
   subst he hk3
   try dsimp only at h
-  obtain ⟨_, t₄, k₄, h4, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  obtain ⟨_, t₄, k₄, h4, h⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
   rw [liftTM_k h4] at h
-  obtain ⟨gammas, t₅, k₅, h5, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
-  unfold _root_.Flock.Firewall.Finish.sampleVecP at h5
+  obtain ⟨gammas, t₅, k₅, h5, h⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
+  unfold _root_.Flock.ZkServer.Finish.sampleVecP at h5
   obtain ⟨hg, hk5, hs2⟩ := squeezeP_pad C 2 (by rw [hsz]; omega) (by rw [hsz]; exact hcs) h5
   subst hg hk5
   try dsimp only at h
-  obtain ⟨tc, t₆, k₆, h6, h⟩ := _root_.Flock.Firewall.Finish.tmw_bind_ok h
+  obtain ⟨tc, t₆, k₆, h6, h⟩ := _root_.Flock.ZkServer.Finish.tmw_bind_ok h
   obtain ⟨htc, -, -⟩ := tauLift_ok h6
   refine ⟨hs1, fun cs hc => (hs2 cs hc).trans (hsz _ _ _), ?_⟩
   rw [key (c := tc) h (by
@@ -348,7 +348,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     (hl : l.size = repBase x (2 * j.val + r.val))
     {res : _root_.Flock.Proof × _root_.Flock.Zk.Level0Msgs × Array (String × _root_.Flock.Zk.Lin)}
     {t : _root_.Flock.Transcript} {l' : Array Msg}
-    (h : ((_root_.Flock.Firewall.Finish.repConsC (FlockComplete.asksCut (ligCoin c) n) st (zkTab x j).sch tPad r.val
+    (h : ((_root_.Flock.ZkServer.Finish.repConsC (FlockComplete.asksCut (ligCoin c) n) st (zkTab x j).sch tPad r.val
       dom g cm0 xs pads ic vals extra lanePad salt).run t₀).go l = (.ok (res, t), l'))
     (hmk : ∀ k < (Composed.layOf (zkTab x j).table (stAt x j)).zp 64,
       ((swSrcE x c w v τ j.val).rep r.val).masked k = vals[k]! + pads.h[k]!) :
@@ -435,7 +435,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
           (_root_.Flock.Zk.PadLayout.new st.m st.kLog (zkTab x j).sch.k0)
           (fun i => vals[i]! + pads.h[i]!) zc).run t₁).go l₁ = (.ok ((lp, lc), t₂), l₂) →
       ((FlockComplete.ringSwitchCut (FlockComplete.asksCut (ligCoin c) n)
-          (fun k => _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
+          (fun k => _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
             (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!)
           (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)).run t₂).go l₂ = (.ok ((ss, T, sws), t₃), l₃) →
       ss[0]! = Composed.shArr (swViewE x c w v τ j).pre.1 (2 * r.val) ∧
@@ -457,7 +457,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
-          _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
+          _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
             (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]! := by
       intro k hk2
       obtain ⟨hzc, hl₁⟩ := FlockComplete.zerocheckCut_at (ligCoin c) n hm14 _ _ _ _ _ h₁
@@ -525,27 +525,27 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     rw [Nat.add_zero] at e0
     exact ⟨e0, e 1 (by norm_num)⟩
   -- the run: the PIOP, Ligerito, the replay and level 0's constraints, then the inner proof
-  dsimp only [_root_.Flock.Firewall.Finish.repConsC] at h
-  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  dsimp only [_root_.Flock.ZkServer.Finish.repConsC] at h
+  obtain ⟨⟨zp, zc⟩, t₁, l₁, h₁, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp, lc⟩, t₂, l₂, h₂, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss, T, sws⟩, t₃, l₃, h₃, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lg, zl, rec⟩, t₄, l₄, h₄, h⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := _root_.Flock.Firewall.Finish.run_bind_ok h
-  rw [_root_.Flock.Firewall.Finish.get_run_go] at h₅
+  obtain ⟨tr', t₅, l₅, h₅, hg⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok h
+  rw [_root_.Flock.ZkServer.Finish.get_run_go] at h₅
   simp only [Prod.mk.injEq, Except.ok.injEq] at h₅
   obtain ⟨⟨htr, ht₅⟩, hl₅⟩ := h₅
   subst tr' t₅ l₅
   try dsimp only at hg
-  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hg
-  obtain ⟨hrp, ht₆, hl₆⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₆
+  obtain ⟨⟨rp, tt⟩, t₆, l₆, h₆, hr₆⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hg
+  obtain ⟨hrp, ht₆, hl₆⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₆
   subst t₆ l₆
   try dsimp only at hr₆
-  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := _root_.Flock.Firewall.Finish.run_bind_ok hr₆
-  obtain ⟨hlgc, ht₇, hl₇⟩ := _root_.Flock.Firewall.Finish.liftV_run_ok h₇
+  obtain ⟨lgc, t₇, l₇, h₇, hc⟩ := _root_.Flock.ZkServer.Finish.run_bind_ok hr₆
+  obtain ⟨hlgc, ht₇, hl₇⟩ := _root_.Flock.ZkServer.Finish.liftV_run_ok h₇
   subst t₇ l₇
   try dsimp only at hc
   simp only [StateT.run_pure, FlockComplete.JsonRT.go_pure, Prod.mk.injEq, Except.ok.injEq] at hc
@@ -561,9 +561,9 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
     (fun i => vals[i]! + pads.h[i]!) (fun i => vals[i]! + pads.h[i]!) zc t₁ (l := l₁) rfl
     (by omega) (fun _ _ _ => ⟨rfl, rfl⟩) (fun _ _ _ => rfl)).2 _ _ h₂
   obtain ⟨hl3, -, -⟩ := (FlockComplete.CutEq.ringSwitchCut_eqAt (ligCoin c) n
-    (fun k => _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
+    (fun k => _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
       (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!)
-    (fun k => _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)
+    (fun k => _root_.Flock.ZkServer.Finish.switchVec (ligTab x w τ j)
       (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)[k]!)
     (_root_.Flock.abcClaims st.m st.kLog zc lc ++ xs)
     (by rw [Array.size_append, FlockComplete.abcClaims_size]; omega) t₂ (l := l₂) rfl (by omega)

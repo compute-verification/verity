@@ -7,7 +7,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Public
 import Flock.Statement
@@ -76,7 +76,7 @@ statement: `zkOk`, the same tables, the scope and hidden outputs (`hiddenOf_x`).
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets
+open Flock Flock.ZkServer RecDeploy.VStarNets
 open Flock.Readable (Read)
 open Properties.Flock.Nets (sparseOf FixedNetsBuild)
 open FlockDeploy.Concrete (shaB hmB bne_self plainStr_hexOf)

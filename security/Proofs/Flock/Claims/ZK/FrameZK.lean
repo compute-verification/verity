@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Session
+public import Flock.ZkServer.Session
 public import Proofs.Flock.Claims.ZK.FrameInner
 public import Proofs.Flock.Claims.ZK.FrameReal
 public import Proofs.Flock.Claims.ZK.FrameState
@@ -71,9 +71,9 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker labelFrame)
-open _root_.Flock.Firewall.Frames (COIN_MAX)
-open _root_.Flock.Firewall.Session (sizesOk)
+open _root_.Flock.ZkServer.Frame (Cfg Masker labelFrame)
+open _root_.Flock.ZkServer.Frames (COIN_MAX)
+open _root_.Flock.ZkServer.Session (sizesOk)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
@@ -85,14 +85,14 @@ session, at some nonce). Where it does not, the loop refuses the `Hello` and sto
 past its frames' (`Session.sizesOk`) is refused there. -/
 def Serves (x : Msg) : Prop :=
   ∀ (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt), FlockDeploy.setupOf true x = some (s0, spec, sts) →
-    ∃ (nonce : ByteArray) (r : _root_.Flock.Firewall.Session.State × ByteArray),
-      ({} : _root_.Flock.Firewall.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r
+    ∃ (nonce : ByteArray) (r : _root_.Flock.ZkServer.Session.State × ByteArray),
+      ({} : _root_.Flock.ZkServer.Session.State).sendHello (.ok (spec, sts)) nonce = .ok r
 
 /-- Where the loop's `Hello` leaves, the setup passes `sizesOk`. -/
-theorem sizesOk_of_sendHello {S : _root_.Flock.Firewall.Session.State} {spec : SessionSpec} {sts : Array Stmt}
-    {nonce : ByteArray} {r : _root_.Flock.Firewall.Session.State × ByteArray}
+theorem sizesOk_of_sendHello {S : _root_.Flock.ZkServer.Session.State} {spec : SessionSpec} {sts : Array Stmt}
+    {nonce : ByteArray} {r : _root_.Flock.ZkServer.Session.State × ByteArray}
     (h : S.sendHello (.ok (spec, sts)) nonce = .ok r) : sizesOk spec sts = true := by
-  unfold _root_.Flock.Firewall.Session.State.sendHello at h
+  unfold _root_.Flock.ZkServer.Session.State.sendHello at h
   cases hs : S.stop with
   | some why => simp [hs] at h
   | none =>
@@ -113,7 +113,7 @@ theorem sizesOk_at {spec : SessionSpec} {sts : Array Stmt} (h : sizesOk spec sts
     (sts[k / 2]!.mPts = spec.mPts ∧ 0 < spec.mPts ∧ spec.points * spec.mPts ≤ COIN_MAX) ∧
       (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8.size < 2 ^ 64 ∧
       sts[k / 2]!.regions.size * COIN_MAX + 2 < 2 ^ 64 ∧
-      ∀ lay mask, _root_.Flock.Firewall.Drive.start sts[k / 2]! = .ok (lay, mask) →
+      ∀ lay mask, _root_.Flock.ZkServer.Drive.start sts[k / 2]! = .ok (lay, mask) →
         lay.len + _root_.Flock.Zk.K_PAD < 2 ^ 64 := by
   have h' := List.all_eq_true.1 h k (List.mem_range.2 hk)
   simp only [Bool.and_eq_true, decide_eq_true_eq] at h'
@@ -124,8 +124,8 @@ theorem sizesOk_at {spec : SessionSpec} {sts : Array Stmt} (h : sizesOk spec sts
 
 /-- The extra claims at the link points `pts`: the table's regions at each point. -/
 theorem extras_size (st : Stmt) (pts : Array (Array F128)) :
-    (_root_.Flock.Firewall.Drive.extras st pts).size = st.regions.size * pts.size := by
-  unfold _root_.Flock.Firewall.Drive.extras
+    (_root_.Flock.ZkServer.Drive.extras st pts).size = st.regions.size * pts.size := by
+  unfold _root_.Flock.ZkServer.Drive.extras
   rw [Array.size_flatMap]
   rcases st.regions with ⟨l⟩
   simp only [List.map_toArray, List.sum_toArray, List.size_toArray]
@@ -134,8 +134,8 @@ theorem extras_size (st : Stmt) (pts : Array (Array F128)) :
   | cons a l ih => simp [Nat.succ_mul]; omega
 
 theorem linkPoints_size_le (st : Stmt) (c : Array F128) :
-    (_root_.Flock.Firewall.Drive.linkPoints st c).size ≤ c.size := by
-  unfold _root_.Flock.Firewall.Drive.linkPoints
+    (_root_.Flock.ZkServer.Drive.linkPoints st c).size ≤ c.size := by
+  unfold _root_.Flock.ZkServer.Drive.linkPoints
   rw [Array.size_map, Array.size_range]
   exact Nat.div_le_self _ _
 
@@ -176,7 +176,7 @@ theorem ofLoop_progChecks_sizes (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Flock.Wit)
     (hSz : ∀ (s0 : _) (spec : SessionSpec) (sts : Array Stmt),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → sizesOk spec sts = true)
@@ -185,11 +185,11 @@ theorem ofLoop_progChecks_sizes (T : ZKMal.CoinLayer.TableData)
       FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
     (hL0 : ∀ (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (vals : _) (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ)
-      (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
+      (tr : _root_.Flock.ZkServer.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
       ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1) → real x w ρ k = .ok (tr, hr) →
       schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+        (_root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]!
           (wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hr
         ((Array.range (j + 1)).map
           fun i => wordsAt x (h.tail.map fun p => ZKMal.CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →
@@ -240,7 +240,7 @@ theorem Flock.zk_server_lean_ofLoop
       ((CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (hOk : (CoinLayer.session Loop.loopNr T).StopsOk (LeanRelease.rfOf (CoinLayer.session Loop.loopNr T)
       (LeanRelease.ofLoop T L₀ real) Loop.progOf Loop.freshOf Loop.readCoins) (Loop.SwOk T))
     (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
@@ -250,11 +250,11 @@ theorem Flock.zk_server_lean_ofLoop
       FlockDeploy.setupOf true x = some (s0, spec, sts) → Count.RealTabs sts (real x w ρ))
     (hL0 : ∀ (ρ : (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
       (h : List (Msg × Msg)) (vals : _) (s0 : _) (spec : SessionSpec) (sts : Array Stmt) (q k j : ℕ)
-      (tr : _root_.Flock.Firewall.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
+      (tr : _root_.Flock.ZkServer.Finish.Tab) (hr : Array ByteArray) (rsched : Array (ByteArray × ℕ)),
       FlockDeploy.setupOf true x = some (s0, spec, sts) → h.length = q + 2 →
       CoinLayer.locate (Loop.roundsOf spec sts) 0 q = (k, j + 1) → real x w ρ k = .ok (tr, hr) →
       Loop.schedSoFar tr (k % 2) (spec.domain (spec.tables[k / 2]!) (k % 2)).toUTF8
-        (_root_.Flock.Firewall.Drive.extras sts[k / 2]! (_root_.Flock.Firewall.Drive.linkPoints sts[k / 2]!
+        (_root_.Flock.ZkServer.Drive.extras sts[k / 2]! (_root_.Flock.ZkServer.Drive.linkPoints sts[k / 2]!
           (Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) 0))) hr
         ((Array.range (j + 1)).map
           fun i => Loop.wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) (q - (j + 1) + i + 1)) = .ok rsched →

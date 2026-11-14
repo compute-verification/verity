@@ -13,8 +13,8 @@ change that closes it has to say so here. Two recorded sets, both fetched fixtur
   register`). V*'s sessions hide their outputs, as `ZkOuterR.hTags` (`TagsOkZHJ`) takes them, and their shared-row
   public file passes `ScopeZR`, `Typable`'s statement check; the public-output one-table checks, `TagsOk` and
   `ScopeZ`, refuse them.
-* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two firewalled
-  runs of `benchmarks/recursion_e2e` (MODES=firewall). The first staged its inner statement with every instance's own
+* `f1-gate`, the F1 gate (`PublicAudit`, the recursive audit at public units): 85 at K = 4096, N = 2, two zk_served
+  runs of `benchmarks/recursion_e2e` (MODES=zk_server). The first staged its inner statement with every instance's own
   rows under `Q_template_instance` (`85-rec-reprice.sh`'s `stage_inner`) and proved its inner session on the
   challenger's coin tree; the second, over that inner session (`STAGE=0`, its partition, program and sample kept),
   staged V*'s statements with the inner program, every level registering its opened rows and their siblings, RecCap's

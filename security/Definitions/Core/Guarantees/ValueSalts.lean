@@ -22,7 +22,7 @@ opened the session its registration registered, so `m i ≥ 1` and that is at mo
 
 **`m` is the service's, not the stack's.** Both statements hold for every `m`, but a stack that chose `m` from its values
 would leak through `m` itself as well, which neither counts. The ZK server's value service of record
-(`core-firewall values`, `Flock.Firewall.Values.answer`) fixes `m` at 1: it refuses a commit while its epoch's session is
+(`core-zk-server values`, `Flock.ZkServer.Values.answer`) fixes `m` at 1: it refuses a commit while its epoch's session is
 not yet registered. So the stack chooses no `m` and no session, every record says `m = 1`, `RegisteredLeakage` at
 `m = 1` is the whole of what a registration leaks (no `log₂ m` term), and over a stream, at every `m i = 1`, the stack's
 only choice is which registrations it passes over: at most `log₂ ∑_{i ≤ b} C(r, i)` bits.

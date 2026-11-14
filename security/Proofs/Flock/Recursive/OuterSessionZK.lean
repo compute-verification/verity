@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.ZkServer
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime
@@ -14,7 +14,7 @@ import Mathlib.Tactic.NormNum.Ordinal
 import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
-import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.OuterZK
 import Proofs.Flock.Soundness.CROnly.Hiding
 
@@ -27,8 +27,8 @@ session's zero knowledge as an obligation on the view and simulator they range o
 models them, run by the honest prover's code (`proverExe`, whatever a stopped run sends), with the commitments the
 ZK server sends when every message is fixed by the auditor's tape before the first commitment (the committed-coin case).
 
-* `committed`, `firewallCommits_committed`: messages that read none of the commit strings before them, at which the
-  ZK server's commitments are `firewallLeaf` of each message under its own salt.
+* `committed`, `zkServerCommits_committed`: messages that read none of the commit strings before them, at which the
+  ZK server's commitments are `zkServerLeaf` of each message under its own salt.
 * `recursiveZK_of_sessionZK`: `OuterSessionsZK` at `Sessions.view` and `Sessions.sim`, with `ε_o` V*'s sessions' error
   at the pinned key's hiding gap (`errAt`), from Flock's zero knowledge of one `--zk` table at every coin vector
   (`ZkEveryCoin.coin_close_le`, through `OuterZK.vstar_outer_zk`), on V*'s staging, each a named obligation:
@@ -60,11 +60,11 @@ def committed {Prog Wit Ωa Ωp : Type} {nr nh : ℕ}
   fun P w r a p i _ => msgs P w r a p i
 
 /-- **The committed-coin case of the ZK server's commitments**: where no message reads the commit strings before it,
-commitment `i` is `firewallLeaf` of message `i` under its salt. -/
-theorem firewallCommits_committed {nh : ℕ} (m : Fin nh → ByteArray) (y : Fin nh → ZkView.Salt) :
-    Flock.Guarantees.firewallCommits (fun i _ => m i) y = fun i => Flock.Guarantees.firewallLeaf (m i) (y i) := by
+commitment `i` is `zkServerLeaf` of message `i` under its salt. -/
+theorem zkServerCommits_committed {nh : ℕ} (m : Fin nh → ByteArray) (y : Fin nh → ZkView.Salt) :
+    Flock.Guarantees.zkServerCommits (fun i _ => m i) y = fun i => Flock.Guarantees.zkServerLeaf (m i) (y i) := by
   funext i
-  rw [Flock.Guarantees.firewallCommits, FirewallZK.firewallPairs_eq, Flock.Guarantees.firewallLeaf]
+  rw [Flock.Guarantees.zkServerCommits, ZkServerZK.zkServerPairs_eq, Flock.Guarantees.zkServerLeaf]
 
 /-- **V*'s sessions give the committed-coin statements their `_hOuter`** (`OuterSessionsZK`), at the registration by
 hm96 leaves of the private circuit's rows (`regLeaves rows pub`): the view is V*'s sessions' (`Sessions.view`) run by
@@ -90,9 +90,9 @@ theorem recursiveZK_of_sessionZK {Out Prog Wit Rv Ωa Ωp Pub : Type} {nr nh : �
     (tablesOK_of_sessions V LP Vs D draw tab ys hCeq) (selfCheckSilent_exe stopped) hH
     (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash)
   intro o P w hw r a p y E
-  have e : Flock.Guarantees.firewallCommits (committed msgs P w r a p) y =
-      fun i => Flock.Guarantees.firewallLeaf (msgs P w r a p i) (y i) :=
-    firewallCommits_committed (msgs P w r a p) y
+  have e : Flock.Guarantees.zkServerCommits (committed msgs P w r a p) y =
+      fun i => Flock.Guarantees.zkServerLeaf (msgs P w r a p i) (y i) :=
+    zkServerCommits_committed (msgs P w r a p) y
   have h := hO o P w hw r a p y E
   rw [e] at h
   exact h

@@ -38,7 +38,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 /-!
 # The ZK server's inner proof is the masked session's where no constraint fails on the pads
 
-`Flock.Firewall.Finish`'s pads commitment and inner proof are copies of `FlockComplete.innerCommitP` and
+`Flock.ZkServer.Finish`'s pads commitment and inner proof are copies of `FlockComplete.innerCommitP` and
 `FlockComplete.innerP` on its own `PadsZk` and `InnerCommit` (the same fields, read through `PadsZk.toC` and
 `InnerCommit.toC`), except that the port's `innerP` never checks the batched constraint on the pads: `repFw` stops first
 where a constraint the rep hands the inner proof fails there (`failingOn`).
@@ -54,7 +54,7 @@ where a constraint the rep hands the inner proof fails there (`failingOn`).
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 open FlockComplete FlockLevel3 FlockSoundness.Discharge.Composed.ZerocheckMasked
 open FlockSoundness.Discharge.Composed.Zerocheck (eq_of_of dot_eq_foldl of_foldl_dot)
@@ -121,4 +121,4 @@ theorem batched_of_failingOn (lay : Zk.PadLayout) {h : Array F128} {cons : Array
   rw [e]
   rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

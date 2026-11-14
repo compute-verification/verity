@@ -30,7 +30,7 @@ Each PRF gap is at fixed values under a key its test does not depend on: the bou
 before any coin, and the interior's under a key independent of the boundary record and the auditor's coins. So the
 auditor's choice is no adaptive query of either key. The value service's interior commits sample from the operating
 system the interior's salts and each interior session's own key `ks`, which its tags are under
-(`Flock.Firewall.Values.answer`'s `interior`, `Flock.Firewall.Salts.interiorAnswer`); the boundary's key only tags `ks`
+(`Flock.ZkServer.Values.answer`'s `interior`, `Flock.ZkServer.Salts.interiorAnswer`); the boundary's key only tags `ks`
 on the ZK server's record (`Salts.keyTagOf`). So those keys and salts are the operating system's bytes, no function of
 the boundary's key, uniform and independent of the boundary and of the auditor's coins: they are `k₁` here.
 `Flock.Guarantees.SampledAuditTwoChosenAnyRelayDeployed` is this view at the deployed session loop, through the held

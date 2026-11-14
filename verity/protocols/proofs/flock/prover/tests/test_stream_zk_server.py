@@ -49,10 +49,10 @@ from verity_flock.proof_server import ProofServer, Statement
 LEAN = Path(__file__).resolve().parents[2] / "verifier"
 #: the Lean verifier, and the ZK server's Lean: its tap and its session loop
 VERIFY = LEAN / ".lake" / "build" / "bin" / "verity-verify-proof"
-LOOP = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
+LOOP = LEAN / ".lake" / "build" / "bin" / "flock-zk-server"
 BIN = settings.flock_circuit()
 #: what puts a `--zk` prover behind the ZK server
-ZK_SERVER = {"FC_FIREWALL": "1"}
+ZK_SERVER = {"FC_ZK_SERVER": "1"}
 real = pytest.mark.skipif(BIN is None or shutil.which("lake") is None,
                           reason="FLOCK_CIRCUIT names no proving build of flock-circuit, or there is no Lean toolchain")
 
@@ -247,8 +247,8 @@ def window(tmp_path_factory):
     members = [(statements[i], {"k": len(units), "law": "subset", "population": PH.N, "units": units}) for i, units in MEMBERS]
 
     def env(at: Path) -> dict:
-        return {**os.environ, **ZK_SERVER, "FC_FIREWALL_LEAN": str(_stamping(at)),
-                "FC_FIREWALL_HELLO_ARGS": f"--partition {stages[0] / 'partition.json'} --program {stages[0] / 'program.json'}"}
+        return {**os.environ, **ZK_SERVER, "FC_ZK_SERVER_LEAN": str(_stamping(at)),
+                "FC_ZK_SERVER_HELLO_ARGS": f"--partition {stages[0] / 'partition.json'} --program {stages[0] / 'program.json'}"}
 
     out = d / "stream"
     with ProofServer(BIN, out / "server", env=env(out), challenger=True, verify_ahead=0) as server:

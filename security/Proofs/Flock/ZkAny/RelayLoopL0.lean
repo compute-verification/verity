@@ -23,28 +23,28 @@ session gives is the one `Loop.realOf src` gives the table's reps.
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (V F128 SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Release)
+open _root_.Flock.ZkServer.Frames (Release)
 
 variable {wideLeaf : Bool}
 
 /-- **Two level 0s `Level0.ofDraws` gave at one `m` with one input give one table**: `Finish.tabOfLevel0` reads a level
 0's `m`, `t_pad`, input and commitment, which its `m` and input fix (`Level0.ofDraws_ok`). -/
-theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _root_.Flock.Firewall.Level0.Level0}
-    (hl : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g d = .ok l)
-    (hl' : _root_.Flock.Firewall.Level0.ofDraws wideLeaf m g' d' = .ok l') (he : l.toIn = l'.toIn) (st : _root_.Flock.Setup) :
-    _root_.Flock.Firewall.Finish.tabOfLevel0 st l = _root_.Flock.Firewall.Finish.tabOfLevel0 st l' := by
-  obtain ⟨hm, -, ⟨s, hz, hlv⟩, hrw, hly, -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl
-  obtain ⟨hm', -, ⟨s', hz', hlv'⟩, hrw', hly', -⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok hl'
+theorem tab_of_toIn {m : Nat} {g g' : Array F128} {d d' : ByteArray} {l l' : _root_.Flock.ZkServer.Level0.Level0}
+    (hl : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g d = .ok l)
+    (hl' : _root_.Flock.ZkServer.Level0.ofDraws wideLeaf m g' d' = .ok l') (he : l.toIn = l'.toIn) (st : _root_.Flock.Setup) :
+    _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = _root_.Flock.ZkServer.Finish.tabOfLevel0 st l' := by
+  obtain ⟨hm, -, ⟨s, hz, hlv⟩, hrw, hly, -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl
+  obtain ⟨hm', -, ⟨s', hz', hlv'⟩, hrw', hly', -⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok hl'
   obtain ⟨hs, htp⟩ := Prod.mk.inj (Except.ok.inj (hz.symm.trans hz'))
   have hlv2 : l.lv = l'.lv := by rw [hlv, hlv', hs]
   have hrows : l.rows = l'.rows := by rw [hrw, hrw', hlv2, htp, he]
   have hlay : l.layers = l'.layers := by rw [hly, hly', hlv2, htp, he]
-  have hc : _root_.Flock.Firewall.Finish.commitOf l = _root_.Flock.Firewall.Finish.commitOf l' := by
-    unfold _root_.Flock.Firewall.Finish.commitOf
-    rw [hrows, hlay, hlv2, show l.salt = l'.salt from congrArg _root_.Flock.Firewall.Link.In.salt he]
-  unfold _root_.Flock.Firewall.Finish.tabOfLevel0
-  rw [hm.trans hm'.symm, show l.wideLeaf = l'.wideLeaf from congrArg _root_.Flock.Firewall.Link.In.wideLeaf he, htp,
-    show l.g = l'.g from congrArg _root_.Flock.Firewall.Link.In.g he, he, hc]
+  have hc : _root_.Flock.ZkServer.Finish.commitOf l = _root_.Flock.ZkServer.Finish.commitOf l' := by
+    unfold _root_.Flock.ZkServer.Finish.commitOf
+    rw [hrows, hlay, hlv2, show l.salt = l'.salt from congrArg _root_.Flock.ZkServer.Link.In.salt he]
+  unfold _root_.Flock.ZkServer.Finish.tabOfLevel0
+  rw [hm.trans hm'.symm, show l.wideLeaf = l'.wideLeaf from congrArg _root_.Flock.ZkServer.Link.In.wideLeaf he, htp,
+    show l.g = l'.g from congrArg _root_.Flock.ZkServer.Link.In.g he, he, hc]
 
 /-- **The level-0 half of `RealAt` at the loop's own tables**, at the loop `σ` for session `sid`, where the model's
 samples are `src`'s at its statement, witness and tapes (`hsrc`), the session's entry is the setup's (`SessOn`), the
@@ -59,14 +59,14 @@ theorem real_of_builtAt {Rr : Type} {M : LoopModel Claims.Flock.Wit Rr}
     (hK : SessOn spec sts σ.R sid)
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hB : BuiltAt M spec sts σ.L0 sid)
     (h1 : ∀ j g d hi l, j < sts.size → M.src (2 * j) = .ok (g, d, hi) →
-      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l →
+      _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l →
       ∃ g' d' hi' l', M.src (2 * j + 1) = .ok (g', d', hi') ∧
-        _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g' d' = .ok l' ∧ l'.toIn = l.toIn) :
-    ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt)
-      (t : _root_.Flock.Firewall.Finish.Tab), r < 2 →
+        _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g' d' = .ok l' ∧ l'.toIn = l.toIn) :
+    ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.ZkServer.Level0.Level0) (stm : Stmt)
+      (t : _root_.Flock.ZkServer.Finish.Tab), r < 2 →
       sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
-      _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+      _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
+      _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hi, Loop.realOf src M.x M.w M.ρ (2 * i + r) = .ok (t, hi) := by
   intro i r rel name l0 stm t hr hss hn hl0 hst ht
   obtain ⟨hsp, hsts⟩ := hK.eq hss
@@ -76,8 +76,8 @@ theorem real_of_builtAt {Rr : Type} {M : LoopModel Claims.Flock.Wit Rr}
   obtain ⟨hlt, hse⟩ := Array.getElem?_eq_some_iff.mp hst
   have hstm : sts[i]! = stm := by rw [← hsts, getElem!_pos rel.sts i hlt, hse]
   have key : ∀ k g d hi l, k / 2 = i → M.src k = .ok (g, d, hi) →
-      _root_.Flock.Firewall.Level0.ofDraws sts[i]!.wideLeaf sts[i]!.m g d = .ok l →
-      _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t →
+      _root_.Flock.ZkServer.Level0.ofDraws sts[i]!.wideLeaf sts[i]!.m g d = .ok l →
+      _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l = .ok t →
       Loop.realOf src M.x M.w M.ρ k = .ok (t, hi) := by
     intro k g d hi l hk hs hd htl
     rw [hsrc] at hs
@@ -106,11 +106,11 @@ theorem level0Src_rep1 {src : Msg → Claims.Flock.Wit →
     (hS : Loop.Level0Src src x w) (ν : (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).Nonce)
     (t : (ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).Tape) (hlive : ZKMal.Masked.Live x) {s0 : _}
     {spec : SessionSpec} {sts : Array Stmt} (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) {j : Nat}
-    {g : Array F128} {d : ByteArray} {hi : Array ByteArray} {l : _root_.Flock.Firewall.Level0.Level0}
+    {g : Array F128} {d : ByteArray} {hi : Array ByteArray} {l : _root_.Flock.ZkServer.Level0.Level0}
     (hj : j < sts.size) (hs : src x w (ν, t) (2 * j) = .ok (g, d, hi))
-    (hd : _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l) :
+    (hd : _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok l) :
     ∃ g' d' hi' l', src x w (ν, t) (2 * j + 1) = .ok (g', d', hi') ∧
-      _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g' d' = .ok l' ∧ l'.toIn = l.toIn := by
+      _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g' d' = .ok l' ∧ l'.toIn = l.toIn := by
   have hsts : ZKMal.Masked.stsOf x = sts := by
     unfold ZKMal.Masked.stsOf
     rw [hx]
@@ -148,11 +148,11 @@ theorem realAt_h0 {M : LoopModel Claims.Flock.Wit
     (hK : SessOn spec sts σ.R sid)
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hB : BuiltAt M spec sts σ.L0 sid)
     (hS : Loop.Level0Src src M.x M.w) (hlive : ZKMal.Masked.Live M.x) :
-    ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt)
-      (t : _root_.Flock.Firewall.Finish.Tab), r < 2 →
+    ∀ (i r : Nat) (rel : Release) (name : String) (l0 : _root_.Flock.ZkServer.Level0.Level0) (stm : Stmt)
+      (t : _root_.Flock.ZkServer.Finish.Tab), r < 2 →
       sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
-      _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+      _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
+      _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hi, Loop.realOf src M.x M.w M.ρ (2 * i + r) = .ok (t, hi) :=
   real_of_builtAt hsrc hx hK hnd hB fun j g d hi l hj hs hd => by
     rw [hsrc] at hs ⊢

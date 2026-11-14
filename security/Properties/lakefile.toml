@@ -51,8 +51,8 @@ name = "core_memory_challenger"
 path = "../../verity/protocols/accounting/pous/device/lean"
 
 [[require]]
-name = "core_firewall"
-path = "../../verity/protocols/proofs/recursion/verifier/firewall"
+name = "core_zk_server"
+path = "../../verity/protocols/proofs/recursion/verifier/zk_server"
 
 [[require]]
 name = "network_check"
@@ -119,5 +119,5 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
   "Properties.Flock.Nets", "Properties.Remote", "Properties.Nci.Record", "Properties.Pous.WipeSigned",
-  "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet",
+  "Properties.Challenger", "Properties.ZkServer", "Properties.Core.Site", "Properties.Flock.ReadNet",
   "Properties.Assumptions", "Properties.Verity.WindowFiles"]

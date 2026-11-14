@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall.Finish
+public import Flock.ZkServer.Finish
 public import Proofs.Flock.Claims.ZK.CutSession
 public import Proofs.Flock.Claims.ZK.FinishCommit
 import Mathlib.Algebra.Order.Floor.Extended
@@ -38,8 +38,8 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The ZK server's PIOP is the masked session's from its source
 
-`Flock.Firewall.Finish`'s transcript, zerocheck, lincheck and ring switch are copies of the analysis's, its sends an
-`Asks` of its own (`Flock.Firewall.Finish.Asks`, the same two fields, read through `Asks.toC`). Each is the analysis's
+`Flock.ZkServer.Finish`'s transcript, zerocheck, lincheck and ring switch are copies of the analysis's, its sends an
+`Asks` of its own (`Flock.ZkServer.Finish.Asks`, the same two fields, read through `Asks.toC`). Each is the analysis's
 by unfolding:
 
 * `squeezeP_eq`, `sampleP_eq`, `sampleVecP_eq`, `sampleKP_eq`: the transcript's squeezes are `FlockComplete`'s.
@@ -51,7 +51,7 @@ by unfolding:
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 /-- The port's sends as the analysis's: the same two fields. -/
 def Asks.toC {M : Type → Type} (io : Asks M) : FlockComplete.Asks M := ⟨io.link, io.round⟩
@@ -87,4 +87,4 @@ end
 
 theorem basisVals_eq : basisVals = FlockComplete.basisVals := rfl
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish

@@ -301,16 +301,16 @@ def test_a_trust_gap_grown_by_hand_comes_first_and_one_that_shrank_is_shown_afte
 def test_a_guarantee_deployed_or_no_longer_and_a_premise_trusted_or_no_longer_are_shown():
     old = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.G"], {}, {"C.CR": "collision resistance",
                                                                                    "C.Old": "an old bound"},
-                 {"A.G": {"C.Src": "the firewall's randomness"}})
+                 {"A.G": {"C.Src": "the ZK server's randomness"}})
     new = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.H"], {}, {"C.CR": "collision resistance, strict",
                                                                                    "C.New": "a new bound"},
-                 {"A.H": {"C.Src": "the firewall's randomness"}})
+                 {"A.H": {"C.Src": "the ZK server's randomness"}})
     assert spec.changes(old, new) == [
         "• deployed guarantee `A.H` listed: it states the deployed system",
         "• `A.G` no longer listed as deployed",
         "• trust base `C.CR`: collision resistance, strict (was: collision resistance)",
         "• trust base `C.New`: a new bound, listed",
-        "• deployed guarantee `A.H` also trusts `C.Src`: the firewall's randomness",
+        "• deployed guarantee `A.H` also trusts `C.Src`: the ZK server's randomness",
         "• trust base `C.Old` no longer listed (it stated: an old bound)",
         "• deployed guarantee `A.G` no longer trusts `C.Src`"]
     assert spec._tally([k for k, _ in spec._entries(old, new)]) == \

@@ -23,7 +23,7 @@ it; a line marked "Target, not yet" says what the layout of record has and the t
     no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
     its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
     auditor's device (the network certifier, the memory challenger, the challenger).
-    `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
+    `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.ZkServer`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`).
     `spot_flock/verifier/lean/` is SPOT[Flock], the argument SPOT builds over Flock: what stands on compose's two lists
@@ -288,9 +288,9 @@ that holds it. Nobody is asked first, and a superseded PR is not left open as a 
   (`tests/test_lean_vocabulary.py`).
 - **Lean is code or security analysis.** Code stays with its subsystem and never requires `security/`: Flock's
   executable verifier and the ZK server (`verity/protocols/proofs/flock/verifier/`, with the release side in
-  `verity/protocols/proofs/recursion/verifier/firewall/`), the PoUS grader, the certifier program, the inference-only policy's check and
-  PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_FIREWALL=1` every byte that leaves is
-  computed by `Flock.Firewall`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
+  `verity/protocols/proofs/recursion/verifier/zk_server/`), the PoUS grader, the certifier program, the inference-only policy's check and
+  PoUB's verifier, each in its protocol's `lean/` with a difftest. Under `FC_ZK_SERVER=1` every byte that leaves is
+  computed by `Flock.ZkServer`; the ZK theorem (`Flock.zk_server_lean_loop`) still reads the released bytes through
   hypotheses not yet proved about the live path. The analysis is `security/`, three trees: definitions
   (`Definitions/`, the package `security`, Mathlib only: the vocabulary, named assumptions and guarantee
   statements a reader checks), properties (`Properties/`, `security_properties`: statements about the code's Lean

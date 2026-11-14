@@ -43,7 +43,7 @@ is live on a history whose rounds' coins the frame all took, where each such rou
 (`Loop.RoundsPass`, the frame's completeness for that device; `Loop.live_honestWk`). Where the frame refuses a round's
 coins no device round passes them (`LeanRelease.roundOk_of_refusesCoins`), so that completeness reads only taken coins.
 
-The release's coin stop sticks as the session loop's does (`Flock.Firewall.Session`'s `State.refuse`): once it refuses
+The release's coin stop sticks as the session loop's does (`Flock.ZkServer.Session`'s `State.refuse`): once it refuses
 the coins after a prefix of a history it refuses the history's own (`LeanRelease.refusesCoins_of_take`). So a history
 whose last coins the frame takes had every round's coins taken, and `FillRoundEq` holds at the honest worker
 (`LeanRelease.fillRoundEq_honestWk`). At the loop's own frames, link and `Finish` (`ofLoopLink`) these are
@@ -64,7 +64,7 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -95,7 +95,7 @@ end LeanRelease
 namespace Loop
 
 /-- Completeness (the frame's, for `L`'s device, which Lean does not model for the deployed device; the honest session
-of `verity/ml/flock/verifier/firewall_controls.sh` checks it under `FC_FIREWALL=1`). **Each round of `L`'s device passes
+of `verity/ml/flock/verifier/zk_server_controls.sh` checks it under `FC_ZK_SERVER=1`). **Each round of `L`'s device passes
 the frame's checks where the frame takes its coins**: at `x` and `w`, after every history of `2` to `refK x` rounds
 whose last coins the frame takes, the frame round passes the frame's checks at `L`'s device round
 (`LeanRelease.roundOk`). -/

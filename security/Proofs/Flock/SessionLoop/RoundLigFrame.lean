@@ -32,7 +32,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Finish (Tab)
 
 namespace LeanRelease
 
@@ -57,8 +57,8 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     ∃ (tb : Tab) (hi : Array ByteArray) (xs : Array (Array F128)) (algC : Array (Array F128)) (base : ℕ)
       (cs : List (Array F128)),
       real x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi) ∧
-      xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[j.val]!
-        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[j.val]!
+      xs = _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[j.val]!
+        (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[j.val]!
           (Loop.wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) ∧
       algC.size ≤ base ∧
       Masked.repBase x (2 * j.val + r.val) + algC.size = base ∧
@@ -73,14 +73,14 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
           (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt tb.st.m tb.st.fold.kLog
               (FlockComplete.LigLock.Fed.recCoin algC) 0 zc lc ∧
             sws = FlockComplete.Replay.Rs.sws
-              (_root_.Flock.abcClaims tb.st.m tb.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf xs)
+              (_root_.Flock.abcClaims tb.st.m tb.st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf xs)
               ⟨fun k i => (cs.getD k #[])[i]!, fun i => (cs.getD (xs.size + 2) #[])[i]!⟩) ∧
           (((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin ops.length)
               (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) _root_.Flock.MerkleScheme.hm96Sha512 tb.sch T
               tb.cm0.toC tb.g (FlockComplete.basisVals sws (tb.st.m - 7))
               (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0)
               (Array.replicate (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).len 0) r.val tb.tPad
-              tb.extra tb.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty))
+              tb.extra tb.lanePad (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty))
               (fun _ _ => 0)).run tr₂).go l₂).2 = L ∧
           (∀ p, l₂.size ≤ p → p < ops.length → ∀ (t' : _root_.Flock.Transcript) (kind : UInt8) (k : ℕ),
             k < 2 ^ 64 → L[p]? = some (Claims.toMsg (t'.framed kind k)) →
@@ -140,19 +140,19 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     have e := wordsAt_size x ops (s := ops.length) (p := 0) hpos le_rfl
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
-  have hXS : (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+  have hXS : (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size =
       spec.points * (Masked.stAt x j).regions.size := by
     rw [Count.extras_size, Count.linkPoints_size, hW0, hmp', Nat.mul_div_cancel _ hmp0]
     exact Nat.mul_comm _ _
   obtain ⟨-, hdom', hxr, -⟩ := sizesOk_at (sizesOk_of_serves hSv s0 spec _ hsx) hq2
   rw [hst] at hxr
-  have hXb : (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints
+  have hXb : (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints
       (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))).size + 2 < 2 ^ 64 := by
     rw [Count.extras_size]
     have := Nat.mul_le_mul_left (Masked.stAt x j).regions.size
       ((Loop.linkPoints_size_le (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)).trans
-        (show _ ≤ _root_.Flock.Firewall.Frames.COIN_MAX by rw [hW0]; exact hpc))
+        (show _ ≤ _root_.Flock.ZkServer.Frames.COIN_MAX by rw [hW0]; exact hpc))
     omega
   -- the located round
   have hbase : Masked.repBase x (2 * j.val + r.val) =
@@ -251,8 +251,8 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   -- the loop's own round there: the real table's schedule at the rep's coins from its first round
   have hs'' : schedSoFar tr ((2 * j.val + r.val) % 2)
       (spec.domain (spec.tables[(2 * j.val + r.val) / 2]!) ((2 * j.val + r.val) % 2)).toUTF8
-      (_root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
-        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+      (_root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
+        (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[(2 * j.val + r.val) / 2]!
           (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0))) hir
       ((Array.range (a + 1)).map fun q =>
         wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (i0 + 1 - (a + 1) + q + 1)) = .ok sched' := by
@@ -271,8 +271,8 @@ theorem lig_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
   rw [hmod] at hdomR
   obtain ⟨cr, hcrd⟩ : ∃ cr : Array (Array F128), cr = (Array.range (a + 1)).map fun q =>
       wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) (Masked.repBase x (2 * j.val + r.val) + q) := ⟨_, rfl⟩
-  obtain ⟨xs', hxs'd⟩ : ∃ xs' : Array (Array F128), xs' = _root_.Flock.Firewall.Drive.extras (Masked.stAt x j)
-      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)) :=
+  obtain ⟨xs', hxs'd⟩ : ∃ xs' : Array (Array F128), xs' = _root_.Flock.ZkServer.Drive.extras (Masked.stAt x j)
+      (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stAt x j) (wordsAt x (ops.map fun p => ZKMal.CoinLayer.rd p.2) 0)) :=
     ⟨_, rfl⟩
   obtain ⟨dm, hdmd⟩ : ∃ dm : ByteArray, dm = (spec.domain (spec.tables[(2 * j.val + r.val) / 2]!) r.val).toUTF8 :=
     ⟨_, rfl⟩
@@ -412,8 +412,8 @@ theorem release_lig_frame (L₀ : LeanRelease Flock.Wit Loop.Tp)
     ∃ (tb : Tab) (hi : Array ByteArray) (xs : Array (Array F128)) (algC : Array (Array F128)) (base : ℕ)
       (cs : List (Array F128)),
       real x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi) ∧
-      xs = _root_.Flock.Firewall.Drive.extras (Masked.stsOf x)[j.val]!
-        (_root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[j.val]!
+      xs = _root_.Flock.ZkServer.Drive.extras (Masked.stsOf x)[j.val]!
+        (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[j.val]!
           (Loop.wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) ∧
       algC.size ≤ base ∧
       Masked.repBase x (2 * j.val + r.val) + algC.size = base ∧
@@ -428,14 +428,14 @@ theorem release_lig_frame (L₀ : LeanRelease Flock.Wit Loop.Tp)
           (∃ zc lc, FlockComplete.LigLock.Fed.PtsAt tb.st.m tb.st.fold.kLog
               (FlockComplete.LigLock.Fed.recCoin algC) 0 zc lc ∧
             sws = FlockComplete.Replay.Rs.sws
-              (_root_.Flock.abcClaims tb.st.m tb.st.kLog zc lc ++ _root_.Flock.Firewall.Finish.claimsOf xs)
+              (_root_.Flock.abcClaims tb.st.m tb.st.kLog zc lc ++ _root_.Flock.ZkServer.Finish.claimsOf xs)
               ⟨fun k i => (cs.getD k #[])[i]!, fun i => (cs.getD (xs.size + 2) #[])[i]!⟩) ∧
           (((FlockComplete.ligeritoPZk (FlockComplete.asksCut coin ops.length)
               (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) _root_.Flock.MerkleScheme.hm96Sha512 tb.sch T
               tb.cm0.toC tb.g (FlockComplete.basisVals sws (tb.st.m - 7))
               (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0)
               (Array.replicate (_root_.Flock.Zk.PadLayout.new tb.st.m tb.st.kLog tb.sch.k0).len 0) r.val tb.tPad
-              tb.extra tb.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty))
+              tb.extra tb.lanePad (fun l => _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty))
               (fun _ _ => 0)).run tr₂).go l₂).2 = L ∧
           (∀ p, l₂.size ≤ p → p < ops.length → ∀ (t' : _root_.Flock.Transcript) (kind : UInt8) (k : ℕ),
             k < 2 ^ 64 → L[p]? = some (Claims.toMsg (t'.framed kind k)) →

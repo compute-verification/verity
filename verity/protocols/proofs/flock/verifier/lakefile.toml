@@ -1,6 +1,6 @@
 name = "flock_verifier"
 version = "0.1.0"
-defaultTargets = ["verity-verify-proof", "flock-rows", "flock-firewall", "flock-witness", "flock-rec-opening",
+defaultTargets = ["verity-verify-proof", "flock-rows", "flock-zk-server", "flock-witness", "flock-rec-opening",
   "flock-rec-sparse", "flock-frame-tape", "flock-rec-links", "flock-read-tmpl"]
 
 [leanOptions]
@@ -22,7 +22,7 @@ path = "../../../../commitments/lean"
 [[lean_lib]]
 name = "Flock"
 
-# the ZK server (`Flock.Firewall` and the modules under it), above Flock alone
+# the ZK server (`Flock.ZkServer` and the modules under it), above Flock alone
 [[lean_lib]]
 name = "FlockZkServer"
 
@@ -42,8 +42,8 @@ name = "flock-rows"
 root = "FlockRows"
 
 [[lean_exe]]
-name = "flock-firewall"
-root = "FlockFirewall"
+name = "flock-zk-server"
+root = "FlockZkServerMain"
 
 [[lean_exe]]
 name = "flock-frame-tape"

@@ -35,7 +35,7 @@ stream `k`'s link points off opening `0`'s words are `Masked.ptsE` at the opened
 theorem linkPoints_slot {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {spec : SessionSpec}
     (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x)) {ops : List (Msg × Msg)}
     (hpos : 0 < ops.length) (hl : ops.length ≤ refK x) {k : ℕ} (hk : k < spec.repStreams.size) :
-    _root_.Flock.Firewall.Drive.linkPoints (Masked.stsOf x)[k / 2]!
+    _root_.Flock.ZkServer.Drive.linkPoints (Masked.stsOf x)[k / 2]!
         (wordsAt x (ops.map fun e => CoinLayer.rd e.2) 0) =
       Masked.ptsE (finS.pad (K := refK x) (ops.map fun p => finS.decOf p.2)) spec := by
   obtain ⟨hmp, hmp0, hpc⟩ := Masked.live_links hx hsx hk
@@ -47,7 +47,7 @@ theorem linkPoints_slot {x : Msg} (hx : Masked.Live x) {s0 : FlockDeploy.Ins} {s
     have e := wordsAt_size x ops (s := ops.length) (p := 0) hpos le_rfl
     rw [List.take_length] at e
     rw [e, hl0, Nat.min_eq_left hpc]
-  unfold _root_.Flock.Firewall.Drive.linkPoints Masked.ptsE
+  unfold _root_.Flock.ZkServer.Drive.linkPoints Masked.ptsE
   rw [hsz, hmp, Nat.mul_div_cancel _ hmp0]
   refine Array.map_congr_left fun p hp => ?_
   have hp' : p < spec.points := by simpa using hp
@@ -88,7 +88,7 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} (hS0 : Level0Src src x w)
     (ν : finS.Nonce) (t : finS.Tape) (ops : List (Msg × Msg)) (hpos : 0 < ops.length) (hl : ops.length ≤ refK x)
     {cs : List finS.Coin} (hcs : (ops.map fun p => finS.decOf p.2) = cs) (j : Fin (Masked.jOf x)) (r : Fin 2)
-    {tr : _root_.Flock.Firewall.Finish.Tab} {hir : Array ByteArray}
+    {tr : _root_.Flock.ZkServer.Finish.Tab} {hir : Array ByteArray}
     (hre : realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tr, hir))
     (hst : tr.st = _root_.Flock.Setup.ofCircuit (Masked.stAt x j)) {zc : _root_.Flock.ZcOut}
     {lc : _root_.Flock.LcOut}
@@ -98,12 +98,12 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
     (hN : ¬ Masked.Refused x (finS.pad (K := refK x) cs) ops.length) {extras : Array _root_.Flock.Claim}
     (hext : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE (finS.pad (K := refK x) cs) spec) =
       .ok extras) :
-    (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j) (_root_.Flock.Firewall.Drive.linkPoints (Masked.stAt x j)
+    (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j) (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stAt x j)
       (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0))).size = extras.size ∧
     (k < extras.size + 2 →
-      _root_.Flock.Firewall.Finish.switchVec tr.g (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++
-        _root_.Flock.Firewall.Finish.claimsOf (_root_.Flock.Firewall.Drive.extras (Masked.stAt x j)
-          (_root_.Flock.Firewall.Drive.linkPoints (Masked.stAt x j)
+      _root_.Flock.ZkServer.Finish.switchVec tr.g (_root_.Flock.abcClaims tr.st.m tr.st.kLog zc lc ++
+        _root_.Flock.ZkServer.Finish.claimsOf (_root_.Flock.ZkServer.Drive.extras (Masked.stAt x j)
+          (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stAt x j)
             (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0))))[k]! =
         ((Masked.swSrcE x (finS.pad (K := refK x) cs) w (vs x w ν (finS.pad (K := refK x) cs) (finS.seenOf x t)) t j.val).rep
           r.val).sv k) := by
@@ -129,8 +129,8 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
   obtain ⟨h1, h3, h5, -, -⟩ := loopNr_piop hsx hq2 hzq (by rw [Masked.stsOf_half]; omega)
     (by rw [Masked.stsOf_half]; exact hk6)
   rw [Masked.stsOf_half, ← Masked.repBase_eq hsx (2 * j.val + r.val)] at h1 h3 h5
-  have hCM : _root_.Flock.Firewall.Frames.COIN_MAX = 65536 := rfl
-  have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.Firewall.Frames.COIN_MAX →
+  have hCM : _root_.Flock.ZkServer.Frames.COIN_MAX = 65536 := rfl
+  have hW : ∀ p e, p < ops.length → e < min (loopNr x p) _root_.Flock.ZkServer.Frames.COIN_MAX →
       (wordsAt x (ops.map fun p => CoinLayer.rd p.2) p)[e]! = Masked.slotAt (finS.pad (K := refK x) cs) p e := by
     intro p e hp he
     have hw := wordsAt_slot Masked.dataE x ops hl (s := ops.length) (p := p) (e := e) hp le_rfl
@@ -164,8 +164,8 @@ theorem switch_sv (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
   have heS : (Masked.stAt x j).extraClaims (Masked.ptsE (finS.pad (K := refK x) cs) spec) = .ok extras := by
     rw [Masked.tabsOf_stAt] at hext
     exact hext
-  have hXE : extras.map (·.x) = _root_.Flock.Firewall.Drive.extras (Masked.stAt x j)
-      (_root_.Flock.Firewall.Drive.linkPoints (Masked.stAt x j) (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) := by
+  have hXE : extras.map (·.x) = _root_.Flock.ZkServer.Drive.extras (Masked.stAt x j)
+      (_root_.Flock.ZkServer.Drive.linkPoints (Masked.stAt x j) (wordsAt x (ops.map fun p => CoinLayer.rd p.2) 0)) := by
     have e := linkPoints_slot hx hsx hpos hl hq2
     rw [Masked.stsOf_half] at e
     rw [extraClaims_xs heS, ← hcs, ← e]

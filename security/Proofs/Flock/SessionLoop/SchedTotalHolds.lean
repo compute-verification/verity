@@ -23,7 +23,7 @@ zerocheck point of the skeleton's sizes (`SchedTotalPiop`), and past them, answe
 namespace Claims.ZKServer.Count
 
 open _root_.Flock (V F128 Transcript TMW liftTM)
-open _root_.Flock.Firewall.Drive (Step OpenM stepAsks)
+open _root_.Flock.ZkServer.Drive (Step OpenM stepAsks)
 
 variable {A : Adm} {coins : Got}
 
@@ -54,7 +54,7 @@ theorem os_of_fact {α : Type} {c : Prop} {P : Got → Hist → Prop} {B : α �
 
 /-- **The opening doesn't stop** on the algebraic phase's coins `coins`, each of its round's count, at a fold returning
 at every zerocheck point, where `A` makes the answer after `ρ₀`'s independent of it. -/
-theorem openStep_st (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
+theorem openStep_st (t : _root_.Flock.ZkServer.Finish.Tab) (rep : ℕ) (dom : ByteArray) (xs : Array (Array F128))
     (hi : Array ByteArray) (hm : t.st.m < 2 ^ 64) (hF : Fits coins 0 (zcCounts t.st.m ++ lcCounts t.st.fold.kLog))
     (hsz : coins.size = (zcCounts t.st.m ++ lcCounts t.st.fold.kLog).length)
     (hfold : ∀ zc : _root_.Flock.ZcOut, zc.rho.size = t.st.m - 6 → ∀ α, ∃ v,
@@ -65,19 +65,19 @@ theorem openStep_st (t : _root_.Flock.Firewall.Finish.Tab) (rep : ℕ) (dom : By
         (⟨(hs.getD (xs.size + 2 + (sq (xs.size + 2)).length + (sq t.sch.n).length + 1 + t.sch.k0) #[])[0]!,
           (hs.getD (xs.size + 2 + (sq (xs.size + 2)).length + (sq t.sch.n).length + 1 + t.sch.k0) #[])[1]!⟩,
           ⟨cs[0]!, cs[1]!⟩) = true) :
-    ST A (fun _ _ => True) (_root_.Flock.Firewall.Drive.openStep t rep dom xs hi coins) [] := by
-  unfold _root_.Flock.Firewall.Drive.openStep
+    ST A (fun _ _ => True) (_root_.Flock.ZkServer.Drive.openStep t rep dom xs hi coins) [] := by
+  unfold _root_.Flock.ZkServer.Drive.openStep
   dsimp only
   refine st_run' (R := fun _ => True) (os_start ?_ _)
   refine os_bind (os_mono (os_of_pt (repPiop_pt _ _ _ _ _ _ hm hfold) #[] []) (fun _ _ h => ⟨h.1, hF, h.2⟩)
-    (B' := fun a g hs => a.2.2.size = (_root_.Flock.Firewall.Finish.claimsOf xs).size + 2 ∧ g.size = coins.size ∧
+    (B' := fun a g hs => a.2.2.size = (_root_.Flock.ZkServer.Finish.claimsOf xs).size + 2 ∧ g.size = coins.size ∧
       hs = [])
     fun _ _ _ h => ⟨h.1, by rw [h.2.1, hsz, Array.size_empty, Nat.zero_add], h.2.2⟩) fun r => ?_
   obtain ⟨zp, lp, claims⟩ := r
   dsimp only
   refine os_of_fact (fun _ _ h => h.1) fun hc => ?_
   have hc' : claims.size = xs.size + 2 := by
-    rw [hc, _root_.Flock.Firewall.Finish.claimsOf, Array.size_map]
+    rw [hc, _root_.Flock.ZkServer.Finish.claimsOf, Array.size_map]
   refine os_bind os_getThe fun v => ?_
   split
   · next hne =>
@@ -182,7 +182,7 @@ theorem scheduleTotal (x : Msg) : ScheduleTotal x := by
       hmst, hkst]
     unfold FlockComplete.piopRoundsZk
     omega
-  have hrel : sched = alg ++ ((_root_.Flock.Firewall.Drive.openStep t (k % 2) dom xs hi
+  have hrel : sched = alg ++ ((_root_.Flock.ZkServer.Drive.openStep t (k % 2) dom xs hi
       ((p.push b).extract 0 alg.size)).feed ((p.push b).extract alg.size (p.push b).size).toList #[]).2 := by
     by_cases hle : p.size < alg.size
     · simp only [hle, ↓reduceIte, pure, Except.pure, Except.ok.injEq] at hS
@@ -198,7 +198,7 @@ theorem scheduleTotal (x : Msg) : ScheduleTotal x := by
           ite_eq_left (show alg.size ≤ p.size by omega), Array.toList_push]
       rw [e1, e2, feed_append]
       revert hS
-      generalize (_root_.Flock.Firewall.Drive.openStep t (k % 2) dom xs hi (p.extract 0 alg.size)).feed
+      generalize (_root_.Flock.ZkServer.Drive.openStep t (k % 2) dom xs hi (p.extract 0 alg.size)).feed
         (p.extract alg.size p.size).toList #[] = P
       obtain ⟨S, rs⟩ := P
       intro hS
@@ -240,7 +240,7 @@ theorem scheduleTotal (x : Msg) : ScheduleTotal x := by
     intro j hj
     have hj' : alg.size + j < (p.push b).size := by omega
     rw [Array.getElem_toList, Array.getElem_extract, getElem!_pos (p.push b) (alg.size + j) hj']
-  generalize _root_.Flock.Firewall.Drive.openStep t (k % 2) dom xs hi ((p.push b).extract 0 alg.size) = S0
+  generalize _root_.Flock.ZkServer.Drive.openStep t (k % 2) dom xs hi ((p.push b).extract 0 alg.size) = S0
     at hST hcnt ⊢
   generalize ((p.push b).extract alg.size (p.push b).size).toList = L at hcnt hLget hLlen ⊢
   have hnf : ∀ e, (S0.feed L #[]).1 ≠ .fail e := by

@@ -20,7 +20,7 @@ import Proofs.Flock.Claims.ZK.Reference
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed helloOf)
+open _root_.Flock.ZkServer.Session (State Placed helloOf)
 open _root_.Flock (V SessionSpec Stmt)
 
 /-- **The deployed loop's release checks the setup's `Hello` at the transport's nonce** (`Loop.helloChkAt`). -/
@@ -31,7 +31,7 @@ theorem LoopModel.Deployed.helloChk {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {nonce : ByteArray} (hn : nonce = ⟨(ZKMal.CoinLayer.nb M.ρ.1).toArray⟩) :
     ∀ hl, helloOf spec sts nonce = some hl → M.L.helloChk M.x M.ρ = .ok hl := by
@@ -52,7 +52,7 @@ theorem LoopModel.Deployed.req {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts) :
     ∀ j, M.L.req M.x j = Loop.reqOf M.x j := fun j => by
   rw [hD.rel]
@@ -68,7 +68,7 @@ theorem LoopModel.Deployed.frameAnswer_one {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     (hlt : 0 < M.τ.length) : (M.L.frameAnswer M.x M.ρ (M.hist 1)).isOk = true := by
   have h1 : M.hist 1 = [((M.τ[0]'hlt).1, msgOf (M.τ[0]'hlt).2)] := M.hist_snoc hlt

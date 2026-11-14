@@ -1,11 +1,11 @@
 module
 
-public import Flock.Firewall.Session
+public import Flock.ZkServer.Session
 
 /-!
 # The deployed relay's release is the schedule's
 
-`Flock.Firewall.Session.relay` is the ZK server's session loop: it reads the worker's requests one at a time and decides
+`Flock.ZkServer.Session.relay` is the ZK server's session loop: it reads the worker's requests one at a time and decides
 what leaves for the auditor from the session's state, with `State.request`, `State.place`, `State.answer`,
 `State.sendHello` and `State.wire`. Here its loop body is `stepK`, which makes the same decisions with the same pure
 functions. What the loop reads from its sockets, its rep frames and the operating system at a request is gathered in an
@@ -23,7 +23,7 @@ possibly chosen after reading the answers before it, and so are the answers.
   `reach_step` keeps it at every request that leaves.
 * `request_slot`: before a stop, a request `State.request` lets through is the slot's.
 * `out_stopped`: nothing leaves after a stop, where the hold's barrier refuses a stopped session (the deployed hold's
-  does: `Core.Firewall.Decision.after` stops at the loop's refusal).
+  does: `Core.ZkServer.Decision.after` stops at the loop's refusal).
 * `out_sched`: at every list of requests, what leaves is what leaves at the schedule's slots, at the requests that
   reach one (`pick`), a sublist of what the loop read. A request the session refuses sends nothing and stops it, and a
   `Ping` or a `Proof` sends nothing.
@@ -48,8 +48,8 @@ Scope: the released bytes and their order, not their times. When each frame leav
 
 namespace Claims.ZKServer.Relay
 
-open Flock.Firewall.Session
-open Flock.Firewall hiding State
+open Flock.ZkServer.Session
+open Flock.ZkServer hiding State
 open Flock (V SessionSpec Stmt)
 
 /-- **What the relay reads at one request beyond the request's frame and its own state**: the setup at the sample

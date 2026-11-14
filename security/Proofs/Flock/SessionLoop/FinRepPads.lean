@@ -181,12 +181,12 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     (hschs : (FlockComplete.schedsPZk (FlockDeploy.tabsOf (Masked.stsOf x)) : V _) = .ok schs)
     {k : ℕ} (hk : k < 2 * spec.tables.size) {ic : FlockComplete.InnerCommit} {l : Array Msg}
     (hic : (padsView vs x w ν t ops schs k).go l = (.ok ic, l))
-    {h : List (Msg × Msg)} {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
-    {q : _root_.Flock.Firewall.Finish.RepIn} {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) h spec k tb hi q f)
-    {ic' : _root_.Flock.Firewall.Finish.InnerCommit}
-    (hic' : (_root_.Flock.Firewall.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-        (_root_.Flock.Firewall.Finish.padsOf q.draws) (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
-        V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic') :
+    {h : List (Msg × Msg)} {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
+    {q : _root_.Flock.ZkServer.Finish.RepIn} {f : ByteArray} (hRep : RepAt L₀.draws src x w (ν, t) h spec k tb hi q f)
+    {ic' : _root_.Flock.ZkServer.Finish.InnerCommit}
+    (hic' : (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
+        (_root_.Flock.ZkServer.Finish.padsOf q.draws) (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts) :
+        V _root_.Flock.ZkServer.Finish.InnerCommit) = .ok ic') :
     ic.ch.size = ic'.toC.ch.size ∧ ic.root = ic'.toC.root ∧ ic.layers = ic'.toC.layers := by
   have bok : ∀ {α β : Type} {y : V α} {f : α → V β} {b : β}, y >>= f = .ok b → ∃ a, y = .ok a ∧ f a = .ok b := by
     intro α β y f b hb
@@ -224,11 +224,11 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
   obtain ⟨-, hq, -⟩ := hRep
   unfold repInOf at hq
   obtain ⟨⟨lay, ms⟩, hst, hq⟩ := bok hq
-  have hqd : q.draws = _root_.Flock.Firewall.Frame.Draws.ofBytes lay (L₀.draws (ν, t) k) := by
+  have hqd : q.draws = _root_.Flock.ZkServer.Frame.Draws.ofBytes lay (L₀.draws (ν, t) k) := by
     cases hq
     rfl
   have hLk : (LeanRelease.ofLoopLink L₀ src (realOf src)).lay x k = lay := by
-    have e : Loop.startOf x k = _root_.Flock.Firewall.Drive.start (Masked.stsOf x)[k / 2]! := by
+    have e : Loop.startOf x k = _root_.Flock.ZkServer.Drive.start (Masked.stsOf x)[k / 2]! := by
       unfold Loop.startOf
       rw [hsx]
       try dsimp only
@@ -242,19 +242,19 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     (Masked.UE.tapeZk t)
   have hq' : q.draws = (LeanRelease.ofLoopLink L₀ src (realOf src)).drawsAt x (ν, t) (Loop.frepOf (k / 2) (k % 2)) := by
     rw [hk2, hqd]
-    show _ = _root_.Flock.Firewall.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x k)
+    show _ = _root_.Flock.ZkServer.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x k)
       (L₀.draws (ν, t) k)
     rw [hLk]
-  have hP : (_root_.Flock.Firewall.Finish.padsOf q.draws).toC =
+  have hP : (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC =
       FlockComplete.padsOf (Masked.UE.tapeZk t) (k / 2) (k % 2) (Masked.layE x ⟨k / 2, hj⟩) :=
     Masked.pads_frame_eq (LeanRelease.ofLoopLink L₀ src (realOf src)) (ν, t) (Masked.UE.tapeZk t) Loop.frepOf x t
       ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ q hq' hlay hz hpads
   have hicC : (FlockComplete.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-      (_root_.Flock.Firewall.Finish.padsOf q.draws).toC (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
+      (_root_.Flock.ZkServer.Finish.padsOf q.draws).toC (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts) :
       V FlockComplete.InnerCommit) = .ok ic'.toC := by
-    have e := _root_.Flock.Firewall.Finish.innerCommitP_eq (M := V)
-      (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) (_root_.Flock.Firewall.Finish.padsOf q.draws)
-      (_root_.Flock.Firewall.Finish.saltAt q.draws.salts)
+    have e := _root_.Flock.ZkServer.Finish.innerCommitP_eq (M := V)
+      (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) (_root_.Flock.ZkServer.Finish.padsOf q.draws)
+      (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts)
     rw [hic'] at e
     exact e.symm
   have hpdH : ((FlockComplete.padsOf (Masked.UE.tapeZk t) (k / 2) (k % 2) (Masked.layE x ⟨k / 2, hj⟩)).h ++
@@ -263,9 +263,9 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     rw [Array.size_append, FlockComplete.padsOf_size]
     simp [FlockComplete.padsOf]
   have hsalt : ∀ j, j < N → FlockComplete.fitBytes 192 ((Masked.UE.tapeZk t).innerSalt (k / 2) (k % 2) j) =
-      FlockComplete.fitBytes 192 (_root_.Flock.Firewall.Finish.saltAt q.draws.salts j) := by
+      FlockComplete.fitBytes 192 (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts j) := by
     intro j hjN
-    have hjc : j < _root_.Flock.Firewall.Frame.codeLen (Masked.layE x ⟨k / 2, hj⟩) := by
+    have hjc : j < _root_.Flock.ZkServer.Frame.codeLen (Masked.layE x ⟨k / 2, hj⟩) := by
       rw [hN] at hjN
       exact hjN
     have hE := (hS.innerSalt (LeanRelease.ofLoopLink L₀ src (realOf src)) hd ν t ⟨k / 2, hj⟩ ⟨k % 2, hr⟩ hlay
@@ -273,14 +273,14 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
       (innerSalt_fit (Masked.UE.tapeZk t) ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x)
         ((LeanRelease.ofLoopLink L₀ src (realOf src)).draws (ν, t)) Loop.frepOf (k / 2) (k % 2) j hz
         (by rw [hlay]; exact hjc))
-    have hF : _root_.Flock.Firewall.Finish.saltAt q.draws.salts j =
-        (_root_.Flock.Firewall.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x (Loop.frepOf (k / 2) (k % 2)))
+    have hF : _root_.Flock.ZkServer.Finish.saltAt q.draws.salts j =
+        (_root_.Flock.ZkServer.Frame.Draws.ofBytes ((LeanRelease.ofLoopLink L₀ src (realOf src)).lay x (Loop.frepOf (k / 2) (k % 2)))
           ((LeanRelease.ofLoopLink L₀ src (realOf src)).draws (ν, t) (Loop.frepOf (k / 2) (k % 2)))).salts.extract
-          (_root_.Flock.Firewall.Frame.SALT * j) (_root_.Flock.Firewall.Frame.SALT * j + _root_.Flock.Firewall.Frame.SALT) := by
+          (_root_.Flock.ZkServer.Frame.SALT * j) (_root_.Flock.ZkServer.Frame.SALT * j + _root_.Flock.ZkServer.Frame.SALT) := by
       rw [hq']
       all_goals rfl
     have e := hE.trans hF.symm
-    have hsz : (_root_.Flock.Firewall.Finish.saltAt q.draws.salts j).size = 192 := by
+    have hsz : (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts j).size = 192 := by
       rw [← e]
       exact FlockComplete.JsonRT.fitBytes_size 192 _
     rw [Claims.ZKServer.fitBytes_of_size _ _ hsz]
@@ -291,7 +291,7 @@ theorem padsView_ic (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock
     have hcg := FlockComplete.innerCommitP_salt_congr (M := V) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
       (FlockComplete.padsOf (Masked.UE.tapeZk t) (k / 2) (k % 2) (Masked.layE x ⟨k / 2, hj⟩))
       (salt := (Masked.UE.tapeZk t).innerSalt (k / 2) (k % 2))
-      (salt' := _root_.Flock.Firewall.Finish.saltAt q.draws.salts)
+      (salt' := _root_.Flock.ZkServer.Finish.saltAt q.draws.salts)
       (fun j hj' => hsalt j (by rw [hN, ← hpdH]; exact hj'))
     rw [hcg, ← hP]
     exact hicC

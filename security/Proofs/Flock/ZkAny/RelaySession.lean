@@ -30,7 +30,7 @@ invariant's start and its step from one round to the session's next request, ove
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
 
 /-- **A session none of whose frames is in the loop's frames has not stopped.** -/
 theorem stopped_fresh {R : Sessions} {sid : Nat} (h : ∀ p ∈ R.reps, p.sid ≠ sid) : R.stopped sid = false := by
@@ -82,12 +82,12 @@ theorem stopped_two {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (
 
 set_option maxHeartbeats 1000000 in
 /-- **A stopped session's round takes no device round**, at every place `roundPlace` readies. -/
-theorem roundPlace_nd {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
-    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.Firewall.Frame.Place} {f : Bool}
+theorem roundPlace_nd {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String}
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd))
     (hR : R.stopped sid = true) : nd.isSome = true := by
-  unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  unfold _root_.Flock.ZkServer.Frames.roundPlace at h
   rcases hf : R.find sid i r with _ | ⟨j, p⟩
   · simp only [hf] at h
     cases h
@@ -107,13 +107,13 @@ set_option maxHeartbeats 1000000 in
 /-- **A round takes no device round exactly where its session stopped**, at every place `roundPlace` readies: in a
 session that has not stopped it takes the device's round wherever it has a place, the inner proof's rounds included,
 since the loop refuses one its finish has not computed. -/
-theorem roundPlace_nd_eq {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
-    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.Firewall.Frame.Place} {f : Bool}
+theorem roundPlace_nd_eq {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
+    {dom content : ByteArray} {n : Nat} {q : Rep} {pl : _root_.Flock.ZkServer.Frame.Place} {f : Bool}
     {nd : Option String}
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pl, f, nd)) :
     nd.isSome = R.stopped sid := by
   cases hR : R.stopped sid
-  · unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  · unfold _root_.Flock.ZkServer.Frames.roundPlace at h
     rcases hf : R.find sid i r with _ | ⟨j, p⟩
     · simp only [hf] at h
       cases h
@@ -154,13 +154,13 @@ theorem stopped_put_kept {R R₁ : Sessions} {sid i r : Nat} {p₁ : Rep} (hfr :
 
 /-- **A round of a stopped session puts back a stopped frame**: it reaches the frame as no device round, which the
 frame's check fails (`Ranked.check_empty`). -/
-theorem roundStep_put_stopped {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundStep_put_stopped {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {rr : ByteArray} {f : Bool} {nd : Option String}
     {o : ByteArray} (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
     (hnd : R.stopped sid = true → nd.isSome = true) (hq : R.stopped sid = false → q.st.m.stopped = false)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁) :
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁) :
     R.stopped sid = true → p₁.st.m.stopped = true := by
   intro hR
   obtain ⟨out, why, hc, -⟩ := roundStep_stopped hfr hrp hnd hq ho hput
@@ -174,8 +174,8 @@ stop, and the frame the round puts back is stopped wherever the session had stop
 theorem stopped_round_coins {R R₁ R₂ R₃ : Sessions} {sid i r : Nat} {p₁ : Rep} (hfr : (frameAt R sid i r).isSome)
     (hk : keyOf p₁ = (sid, i, r)) (hK₀₁ : Kept sid i r R R₁) (hS₀₁ : SessKept sid R R₁)
     (hK₁₂ : Kept sid i r (R₁.put p₁) R₂) (hS₁₂ : SessKept sid (R₁.put p₁) R₂) {cs : Array F128}
-    {st₂ : _root_.Flock.Firewall.Frame.State}
-    (hcs : _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂))
+    {st₂ : _root_.Flock.ZkServer.Frame.State}
+    (hcs : _root_.Flock.ZkServer.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂))
     (hS₂₃ : SessKept sid (R₂.put (Loop.coinsOf p₁ st₂ cs)) R₃)
     (hp : R.stopped sid = true → p₁.st.m.stopped = true) :
     R₃.stopped sid = (R.put p₁).stopped sid := by
@@ -186,16 +186,16 @@ theorem stopped_round_coins {R R₁ R₂ R₃ : Sessions} {sid i r : Nat} {p₁ 
 read**: at a round of the session's rep `(i, r)` at a scheduled place, where a live session's frame is not stopped,
 through the loop's updates that keep the rep's frame and the session's stop, between the round's read and its put,
 between its put and its coins, and after them up to the session's next request (`stopped_round_coins`). -/
-theorem stopped_next {R R₁ R₂ R₃ : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem stopped_next {R R₁ R₂ R₃ : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q p₁ : Rep} {rr : ByteArray} {f : Bool} {nd : Option String}
     {o : ByteArray} (hfr : (frameAt R sid i r).isSome)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, .sched rr, f, nd))
     (hq : R.stopped sid = false → q.st.m.stopped = false)
-    (ho : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
-    (hput : (_root_.Flock.Firewall.Frames.roundStep R L0 sid i r dom content n).put = some p₁)
+    (ho : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).out = .ok o)
+    (hput : (_root_.Flock.ZkServer.Frames.roundStep R L0 sid i r dom content n).put = some p₁)
     (hK₀₁ : Kept sid i r R R₁) (hS₀₁ : SessKept sid R R₁) (hK₁₂ : Kept sid i r (R₁.put p₁) R₂)
-    (hS₁₂ : SessKept sid (R₁.put p₁) R₂) {cs : Array F128} {st₂ : _root_.Flock.Firewall.Frame.State}
-    (hcs : _root_.Flock.Firewall.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂))
+    (hS₁₂ : SessKept sid (R₁.put p₁) R₂) {cs : Array F128} {st₂ : _root_.Flock.ZkServer.Frame.State}
+    (hcs : _root_.Flock.ZkServer.Frame.step p₁.cfg p₁.st (.coins (.ok cs)) = (.ok, st₂))
     (hS₂₃ : SessKept sid (R₂.put (Loop.coinsOf p₁ st₂ cs)) R₃) :
     R₃.stopped sid = (R.put p₁).stopped sid :=
   stopped_round_coins hfr (roundStep_key hput) hK₀₁ hS₀₁ hK₁₂ hS₁₂ hcs hS₂₃

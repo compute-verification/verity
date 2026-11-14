@@ -93,10 +93,10 @@ end Claims.ZKServer.LeanRelease
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session (State Placed planOf reqAt)
+open _root_.Flock.ZkServer.Session (State Placed planOf reqAt)
 open _root_.Flock (V SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions Rep)
-open _root_.Flock.Firewall.Frame (Masker Place)
+open _root_.Flock.ZkServer.Frames (Sessions Rep)
+open _root_.Flock.ZkServer.Frame (Masker Place)
 
 /-- **The model's run is the deployed loop's**: its release is the loop's own frames' (`LeanRelease.ofLoop`) at the
 tables `T`, the release `L₀` and the tables' samples `real`, the statement sets up as `(s0, spec, sts)`, the setup's rep
@@ -109,7 +109,7 @@ structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (s0 : FlockDeploy.Ins) (spec : SessionSpec) (sts : Array Stmt) : Prop where
   rel : M.L = LeanRelease.ofLoop T L₀ real
   setup : FlockDeploy.setupOf true M.x = some (s0, spec, sts)
@@ -118,12 +118,12 @@ structure LoopModel.Deployed {T : ZKMal.CoinLayer.TableData}
   next : M.L.last M.x < M.nN M.x
 
 /-- **The frame `roundPlace` readies a round on is one the loop's frames hold.** -/
-theorem roundPlace_find {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i r : Nat}
+theorem roundPlace_find {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i r : Nat}
     {dom content : ByteArray} {n : Nat} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     ∃ j p, R.find sid i r = some (j, p) := by
   rcases hf : R.find sid i r with _ | ⟨j, p⟩
-  · unfold _root_.Flock.Firewall.Frames.roundPlace at h
+  · unfold _root_.Flock.ZkServer.Frames.roundPlace at h
     simp only [hf] at h
     cases h
   · exact ⟨j, p, rfl⟩
@@ -131,19 +131,19 @@ theorem roundPlace_find {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots}
 set_option maxHeartbeats 1000000 in
 /-- **At rep 1's first round rep 0's frame holds the rep's algebraic phase's coins**: `roundPlace` refuses rep 1's
 first round before rep 0's algebraic phase ended. -/
-theorem roundPlace_prior_size {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid i j j0 : Nat}
+theorem roundPlace_prior_size {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid i j j0 : Nat}
     {dom content : ByteArray} {n : Nat} {p p0 p' q : Rep} {pl : Place} {f : Bool} {nd : Option String}
     (hf : R.find sid i 1 = some (j, p))
-    (h : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i 1 dom content n = .ok (q, pl, f, nd))
-    (hfst : (p.coins.isEmpty && !p.st.begun) = true) {s : _root_.Flock.Firewall.Frames.Release} {name : String}
-    {l0 : _root_.Flock.Firewall.Level0.Level0} (hs : R.sessions.find? (·.sid == sid) = some s)
-    (hn : s.spec.tables[i]? = some name) (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0)
-    (hw : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok p') (h0 : R.find sid i 0 = some (j0, p0)) :
+    (h : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i 1 dom content n = .ok (q, pl, f, nd))
+    (hfst : (p.coins.isEmpty && !p.st.begun) = true) {s : _root_.Flock.ZkServer.Frames.Release} {name : String}
+    {l0 : _root_.Flock.ZkServer.Level0.Level0} (hs : R.sessions.find? (·.sid == sid) = some s)
+    (hn : s.spec.tables[i]? = some name) (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0)
+    (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p') (h0 : R.find sid i 0 = some (j0, p0)) :
     p'.alg.size ≤ p0.coins.size := by
   rcases Nat.lt_or_ge p0.coins.size p'.alg.size with hlt | hge
   · exfalso
     have h11 : ((1 : Nat) == 1) = true := rfl
-    unfold _root_.Flock.Firewall.Frames.roundPlace at h
+    unfold _root_.Flock.ZkServer.Frames.roundPlace at h
     simp only [hf, bind, Except.bind, pure, Except.pure] at h
     repeat' (first
       | simp only [hs, hn, hl0, hfst, hw, h11, h0, hlt, ↓reduceIte] at h
@@ -161,12 +161,12 @@ def RealAt {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)) (sid : Nat) (σ : LoopAt) : Prop :=
-  ∀ (i r : Nat) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-    (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt) (t : _root_.Flock.Firewall.Finish.Tab), r < 2 →
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)) (sid : Nat) (σ : LoopAt) : Prop :=
+  ∀ (i r : Nat) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+    (l0 : _root_.Flock.ZkServer.Level0.Level0) (stm : Stmt) (t : _root_.Flock.ZkServer.Finish.Tab), r < 2 →
     sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-    _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
-    _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+    _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
+    _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
     ∃ hi, real M.x M.w M.ρ (2 * i + r) = .ok (t, hi) ∧ ∀ r0 q0 hi',
       σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == r) = some (r0, q0, hi') → hi' = hi
 
@@ -174,7 +174,7 @@ def RealAt {T : ZKMal.CoinLayer.TableData}
 the salts are the ones `src` gives it. -/
 theorem realOf_hi {R : Type}
     {src : Msg → Claims.Flock.Wit → R → Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
-    {x : Msg} {w : Claims.Flock.Wit} {ρ : R} {k : Nat} {t : _root_.Flock.Firewall.Finish.Tab}
+    {x : Msg} {w : Claims.Flock.Wit} {ρ : R} {k : Nat} {t : _root_.Flock.ZkServer.Finish.Tab}
     {hi : Array ByteArray} (h : Loop.realOf src x w ρ k = .ok (t, hi)) : ∃ g d, src x w ρ k = .ok (g, d, hi) := by
   unfold Loop.realOf at h
   split at h
@@ -203,11 +203,11 @@ theorem realAt_of {T : ZKMal.CoinLayer.TableData}
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
       Nat → V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)} {sid : Nat} {σ : LoopAt}
     (hsrc : M.src = src M.x M.w M.ρ)
-    (h0 : ∀ (i r : Nat) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-      (l0 : _root_.Flock.Firewall.Level0.Level0) (stm : Stmt) (t : _root_.Flock.Firewall.Finish.Tab), r < 2 →
+    (h0 : ∀ (i r : Nat) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+      (l0 : _root_.Flock.ZkServer.Level0.Level0) (stm : Stmt) (t : _root_.Flock.ZkServer.Finish.Tab), r < 2 →
       sessAt σ.R sid = some rel → rel.spec.tables[i]? = some name →
-      _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
-      _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
+      _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → rel.sts[i]? = some stm →
+      _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t →
       ∃ hi, Loop.realOf src M.x M.w M.ρ (2 * i + r) = .ok (t, hi))
     (hS : SaltsSrc M sid σ) : RealAt M (Loop.realOf src) sid σ := by
   intro i r rel name l0 stm t hr hss hn hl0 hst ht
@@ -232,7 +232,7 @@ theorem roundPlace_scheduled_later (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Claims.Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (vals : String → Option ByteArray)
@@ -240,26 +240,26 @@ theorem roundPlace_scheduled_later (T : ZKMal.CoinLayer.TableData)
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q₀ + 1)
     (hk : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).1 = 2 * i + r) (hr2 : r < 2)
     (hj : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).2 = j + 1)
-    {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid : Nat} {dom content : ByteArray} {n : Nat}
+    {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid : Nat} {dom content : ByteArray} {n : Nat}
     {p q : Rep} {pc : Place} {f : Bool} {nd : Option String} (hfa : frameAt R sid i r = some p)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd))
-    {s : _root_.Flock.Firewall.Frames.Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd))
+    {s : _root_.Flock.ZkServer.Frames.Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     (hss : R.sessions.find? (·.sid == sid) = some s) (hn : s.spec.tables[i]? = some name)
-    (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) (hspec : s.spec = spec)
+    (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0) (hspec : s.spec = spec)
     (hsts : s.sts = sts) (hlink : s.link = some (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))
-    {stm : Stmt} {t : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {r0 : ByteArray} {q0 : Nat}
+    {stm : Stmt} {t : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {r0 : ByteArray} {q0 : Nat}
     (hst : sts[i]? = some stm)
-    (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
+    (htab : _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
     (hreal : real x w ρ (2 * i + r) = .ok (t, hi))
-    (hI : Loop.RepInv t (spec.domain name r).toUTF8 (_root_.Flock.Firewall.Drive.extras stm
-      (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi p)
+    (hI : Loop.RepInv t (spec.domain name r).toUTF8 (_root_.Flock.ZkServer.Drive.extras stm
+      (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi p)
     (hco : p.coins = (Array.range (j + 1)).map fun k =>
       Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) (q₀ - (j + 1) + k + 1))
     (hsalt : p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
       R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     {sched : Array (ByteArray × Nat)}
-    (hsch : Loop.schedSoFar t r (spec.domain name r).toUTF8 (_root_.Flock.Firewall.Drive.extras stm
-      (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
+    (hsch : Loop.schedSoFar t r (spec.domain name r).toUTF8 (_root_.Flock.ZkServer.Drive.extras stm
+      (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
       p.coins = .ok sched) :
     pc = .sched ⟨((LeanRelease.ofLoop T L₀ real).scheduled x w ρ (e0 :: h1) vals).toArray⟩ ∨
       (Loop.placeAt sched (j + 1)).1 = .own := by
@@ -312,7 +312,7 @@ theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Claims.Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (vals : String → Option ByteArray)
@@ -320,23 +320,23 @@ theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q₀ + 1)
     (hk : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).1 = 2 * i + r) (hr2 : r < 2)
     (hj : (ZKMal.CoinLayer.locate (Loop.roundsOf spec sts) 0 q₀).2 = 0)
-    {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {sid : Nat} {dom content : ByteArray} {n : Nat}
+    {R : Sessions} {L0 : _root_.Flock.ZkServer.Level0.Slots} {sid : Nat} {dom content : ByteArray} {n : Nat}
     {p q : Rep} {pc : Place} {f : Bool} {nd : Option String} (hfa : frameAt R sid i r = some p) (hp : FreshRep p)
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd))
-    {s : _root_.Flock.Firewall.Frames.Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace R L0 sid i r dom content n = .ok (q, pc, f, nd))
+    {s : _root_.Flock.ZkServer.Frames.Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     (hss : R.sessions.find? (·.sid == sid) = some s) (hn : s.spec.tables[i]? = some name)
-    (hl0 : _root_.Flock.Firewall.Level0.ofSession L0 sid name = some l0) (hspec : s.spec = spec)
+    (hl0 : _root_.Flock.ZkServer.Level0.ofSession L0 sid name = some l0) (hspec : s.spec = spec)
     (hsts : s.sts = sts) (hlink : s.link = some (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))
-    {p' : Rep} (hw : _root_.Flock.Firewall.Frames.withAlg s l0 name p = .ok p')
-    {stm : Stmt} {t : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray} {r0 : ByteArray} {q0 : Nat}
+    {p' : Rep} (hw : _root_.Flock.ZkServer.Frames.withAlg s l0 name p = .ok p')
+    {stm : Stmt} {t : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray} {r0 : ByteArray} {q0 : Nat}
     (hst : sts[i]? = some stm)
-    (htab : _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
-    (hcap : _root_.Flock.Firewall.Finish.flat t.cm0.cap = l0.root)
+    (htab : _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t)
+    (hcap : _root_.Flock.ZkServer.Finish.flat t.cm0.cap = l0.root)
     (hreal : real x w ρ (2 * i + r) = .ok (t, hi))
     (hsalt : p'.alg.size = 0 → R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hi))
     {sched : Array (ByteArray × Nat)}
-    (hsch : Loop.schedSoFar t r (spec.domain name r).toUTF8 (_root_.Flock.Firewall.Drive.extras stm
-      (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
+    (hsch : Loop.schedSoFar t r (spec.domain name r).toUTF8 (_root_.Flock.ZkServer.Drive.extras stm
+      (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
       #[] = .ok sched) :
     pc = .sched ⟨((LeanRelease.ofLoop T L₀ real).scheduled x w ρ (e0 :: h1) vals).toArray⟩ ∨
       (Loop.placeAt sched 0).1 = .own := by
@@ -353,11 +353,11 @@ theorem roundPlace_scheduled_first (T : ZKMal.CoinLayer.TableData)
   have hst' : s.sts[p.table]? = some stm := by
     rw [hsts, htb]
     exact hst
-  have hI' := repInv_withAlg hp hw hst' htab hcap (_root_.Flock.Firewall.Drive.extras stm
-    (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
+  have hI' := repInv_withAlg hp hw hst' htab hcap (_root_.Flock.ZkServer.Drive.extras stm
+    (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
   obtain ⟨htb'', hrep'', hco'', hal'', hI''⟩ : p''.table = p.table ∧ p''.rep = p.rep ∧ p''.coins = #[] ∧
-      p''.alg = p'.alg ∧ Loop.RepInv t (s.spec.domain name p.rep).toUTF8 (_root_.Flock.Firewall.Drive.extras stm
-        (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
+      p''.alg = p'.alg ∧ Loop.RepInv t (s.spec.domain name p.rep).toUTF8 (_root_.Flock.ZkServer.Drive.extras stm
+        (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
         p'' := by
     rcases hp'' with rfl | ⟨st₁, rfl⟩
     · exact ⟨htb', hrep', hco'.trans hp.coins, rfl, hI'⟩
@@ -428,7 +428,7 @@ theorem placeSt_seen {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : Sess
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
     (hnd : (spec.repStreams.toList.map (·.2.2)).Nodup) (hseen : seen.contains stream = true)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   obtain ⟨hk, hmem⟩ := round_rep hsl hF hJ hrep hlt hnd
   obtain ⟨p, rel, name, l0, hfa, -, -, -, hA⟩ := hJ.reps i r stream hmem hseen
@@ -449,23 +449,23 @@ theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {σ : LoopAt} {i r j : Nat} (hr2 : r < 2) (hR : RealAt M real sid σ)
     {e0 : Claims.Msg × Claims.Msg} {h1 : List (Claims.Msg × Claims.Msg)} {q₀ : Nat}
     (hh : M.hist σ.c = e0 :: h1) (hq : h1.length = q₀ + 1)
     (hk : nextAt spec sts (M.hist σ.c) = (2 * i + r, j + 1))
-    {p : Rep} {rel : _root_.Flock.Firewall.Frames.Release} {name : String} {l0 : _root_.Flock.Firewall.Level0.Level0}
+    {p : Rep} {rel : _root_.Flock.ZkServer.Frames.Release} {name : String} {l0 : _root_.Flock.ZkServer.Level0.Level0}
     (hfa : frameAt σ.R sid i r = some p) (hss : sessAt σ.R sid = some rel) (hn : rel.spec.tables[i]? = some name)
-    (hl0 : _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0)
+    (hl0 : _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0)
     (hA : StreamAt M spec sts (2 * i + r) (M.hist σ.c) rel name l0 p σ.R)
     (hspec : rel.spec = spec) (hsts : rel.sts = sts)
     (hlink : rel.link = some (Loop.wordsAt M.x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))
     {dom content : ByteArray} {n : Nat} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩ ∨
-      ∃ n' q', _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 =
+      ∃ n' q', _root_.Flock.ZkServer.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 =
         .ok (.own, n', q') := by
   have hss' : σ.R.sessions.find? (·.sid == sid) = some rel := hss
   have hlen : (M.hist σ.c).length - 2 = q₀ := by
@@ -497,7 +497,7 @@ theorem placeSched_later {T : ZKMal.CoinLayer.TableData}
   have hne' : p.coins.isEmpty = false := by simp [Array.isEmpty, hsz]
   obtain ⟨hiR, hreal, hRs⟩ := hR i r rel name l0 stm t hr2 hss hn hl0 hstm htab
   obtain ⟨r0, q0, hIR, hsalt⟩ : ∃ r0 q0, Loop.RepInv t (rel.spec.domain name r).toUTF8
-      (_root_.Flock.Firewall.Drive.extras stm (_root_.Flock.Firewall.Drive.linkPoints stm
+      (_root_.Flock.ZkServer.Drive.extras stm (_root_.Flock.ZkServer.Drive.linkPoints stm
         (Loop.wordsAt M.x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hiR p ∧
       (p.alg.size ≤ p.coins.size → p.opened = false → p.opening = none →
         σ.R.salts.find? (fun x => x.1 == l0.root && x.2.1 == p.rep) = some (r0, q0, hiR)) := by
@@ -551,21 +551,21 @@ theorem placeSched_seen {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, r)) (hlt : σ.c < M.τ.length)
     (hseen : seen.contains stream = true) (hR : RealAt M real sid σ)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩ ∨
-      ∃ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-        (l0 : _root_.Flock.Firewall.Level0.Level0),
+      ∃ (p : Rep) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+        (l0 : _root_.Flock.ZkServer.Level0.Level0),
         frameAt σ.R sid i r = some p ∧ sessAt σ.R sid = some rel ∧ rel.spec.tables[i]? = some name ∧
-        _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 ∧
-        ∃ n' q', _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 =
+        _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 ∧
+        ∃ n' q', _root_.Flock.ZkServer.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 =
           .ok (.own, n', q') := by
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
   obtain ⟨hk0, hmem⟩ := round_rep hsl hF hJ hrep hlt hD.names
@@ -613,7 +613,7 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -621,7 +621,7 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
     (hsn : seen.contains stream = false) (hR : RealAt M real sid σ) {m : Masker}
     (hA : M.L.answered M.x M.ρ (M.hist σ.c) = .ok m)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd)) :
     pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
       (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩ := by
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
@@ -698,7 +698,7 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
     rw [← hsts, getElem!_pos rel.sts i hli, he]
   obtain ⟨jb, gb, db, _, hjb, -, hdb⟩ := hJ.built hc2 name l0 hl0
   rw [tables_inj (j := i) hD.names hjb (by rw [← hspec]; exact hn), hstmb] at hdb
-  obtain ⟨t, htab⟩ : ∃ t, _root_.Flock.Firewall.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t := by
+  obtain ⟨t, htab⟩ : ∃ t, _root_.Flock.ZkServer.Finish.tabOfLevel0 (_root_.Flock.Setup.ofCircuit stm) l0 = .ok t := by
     have h := tab_of_placeholder (g := gb) (d := db) (l := l0) hph (by rw [hdiv, hstmb]; exact hdb)
     rwa [hdiv, hstmb] at h
   have hcap := cap_of_drawn hdb htab
@@ -706,12 +706,12 @@ theorem placeSched_first {T : ZKMal.CoinLayer.TableData}
   have hst' : rel.sts[p.table]? = some stm := by
     rw [hpt]
     exact hstm'
-  have hI' := repInv_withAlg hp hw hst' htab hcap (_root_.Flock.Firewall.Drive.extras stm
-    (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt M.x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
+  have hI' := repInv_withAlg hp hw hst' htab hcap (_root_.Flock.ZkServer.Drive.extras stm
+    (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt M.x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi
   have hpos : 0 < p'.alg.size := Loop.rounds_pos hI'.alg
   obtain ⟨-, hrw, hcw, -, -, -⟩ := withAlg_keep hw
-  have hsch := Loop.schedSoFar_alg t _ (_root_.Flock.Firewall.Drive.extras stm
-    (_root_.Flock.Firewall.Drive.linkPoints stm (Loop.wordsAt M.x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi p'
+  have hsch := Loop.schedSoFar_alg t _ (_root_.Flock.ZkServer.Drive.extras stm
+    (_root_.Flock.ZkServer.Drive.linkPoints stm (Loop.wordsAt M.x (h1.map fun e => ZKMal.CoinLayer.rd e.2) 0))) hi p'
     hI'.alg (by rw [hcw, hp.coins, Array.size_empty]; exact hpos)
   rw [hrw, hcw, hpr, hp.coins, hspec] at hsch
   rcases roundPlace_scheduled_first T L₀ real M.x M.w M.ρ e0 h1
@@ -735,14 +735,14 @@ theorem placeSt_first0 {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
     (hJ : LoopJ M sid spec sts seen st σ) (hrep : streamRep st stream = (i, 0)) (hlt : σ.c < M.τ.length)
     (hsn : seen.contains stream = false)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i 0 dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i 0 dom content n = .ok (q, pc, f, nd)) :
     ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   intro m hA
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
@@ -809,7 +809,7 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -817,7 +817,7 @@ theorem placeSt_first1 {T : ZKMal.CoinLayer.TableData}
     (hsn : seen.contains stream = false)
     (hpc : ∀ p, frameAt σ.R sid i 1 = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c))
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i 1 dom content n = .ok (q, pc, f, nd)) :
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i 1 dom content n = .ok (q, pc, f, nd)) :
     ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m → unstop q.st.m = unstop m := by
   intro m hA
   obtain ⟨hsent, hop, -, -⟩ := slot_round hsl
@@ -964,7 +964,7 @@ theorem placeFacts_seen {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -973,11 +973,11 @@ theorem placeFacts_seen {T : ZKMal.CoinLayer.TableData}
     (hcr : M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
       M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd))
-    (hown : ∀ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-      (l0 : _root_.Flock.Firewall.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
-      rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
-      _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd))
+    (hown : ∀ (p : Rep) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+      (l0 : _root_.Flock.ZkServer.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
+      rel.spec.tables[i]? = some name → _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 →
+      _root_.Flock.ZkServer.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
       pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩) :
     PlaceFacts M sid v σ q pc nd := by
@@ -998,7 +998,7 @@ theorem placeFacts_slot {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt} (hD : LoopModel.Deployed M L₀ real s0 spec sts)
     {sid : Nat} {seen : List String} {st : State} {pl : Placed} {σ : LoopAt} {stream : String} {n i r : Nat}
     (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -1009,11 +1009,11 @@ theorem placeFacts_slot {T : ZKMal.CoinLayer.TableData}
     (hcr : M.L.cross M.x (M.hist σ.c).length M.w M.ρ (M.hist σ.c) v = false →
       M.L.pass M.x M.w M.ρ (M.hist σ.c) v = false)
     {dom content : ByteArray} {q : Rep} {pc : Place} {f : Bool} {nd : Option String}
-    (hrp : _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd))
-    (hown : seen.contains stream = true → ∀ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-      (l0 : _root_.Flock.Firewall.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
-      rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
-      _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
+    (hrp : _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom content n = .ok (q, pc, f, nd))
+    (hown : seen.contains stream = true → ∀ (p : Rep) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+      (l0 : _root_.Flock.ZkServer.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
+      rel.spec.tables[i]? = some name → _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 →
+      _root_.Flock.ZkServer.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
       pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩) :
     PlaceFacts M sid v σ q pc nd := by
@@ -1036,7 +1036,7 @@ theorem slot_masked {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {σ : LoopAt}
     {stream : String} {n : Nat} (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -1073,7 +1073,7 @@ theorem rep_seen {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {σ : LoopAt}
     {stream : String} {n i r : Nat} (hsl : slot st pl = some (.round stream n)) (hF : LoopFacts sid spec seen st pl σ)
@@ -1135,7 +1135,7 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {e : Env}
     {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg}
@@ -1145,7 +1145,7 @@ theorem answered_of_round {T : ZKMal.CoinLayer.TableData}
     (hpc : ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) (ho : ∃ o, e.round = .ok o)
     (hfr : seen.contains stream = false → ∃ m, M.L.fresh M.x (M.hist σ.c) = .ok m)
     (hsc : seen.contains stream = true → ∀ q pc f nd,
-      _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
+      _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
       pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
         (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩)
     (hal : seen.contains stream = true → ∀ m, M.L.answeredR M.x M.ρ (M.hist σ.c) = .ok m →
@@ -1245,7 +1245,7 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
       ((ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand)}
     {real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session Loop.loopNr T).refP.Nonce × (ZKMal.CoinLayer.session Loop.loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {s0 : FlockDeploy.Ins} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     (hD : LoopModel.Deployed M L₀ real s0 spec sts) {seen : List String} {st : State} {pl : Placed} {e : Env}
     {σ σ' : LoopAt} {stream : String} {n i r : Nat} {dom : ByteArray} {v : Claims.Msg}
@@ -1254,7 +1254,7 @@ theorem roundFacts_loop {T : ZKMal.CoinLayer.TableData}
     (hr : RoundRun sid st pl stream n i r dom ⟨v.toArray⟩ e σ.R σ.L0 σ'.R)
     (hpc : ∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) (ho : ∃ o, e.round = .ok o)
     (hans : ∃ m, M.L.answered M.x M.ρ (M.hist σ.c) = .ok m)
-    (hpl : ∀ q pc f nd, _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n =
+    (hpl : ∀ q pc f nd, _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n =
       .ok (q, pc, f, nd) → PlaceFacts M sid v σ q pc nd) :
     RoundFacts M sid spec seen stream n i r dom v σ := by
   obtain ⟨hsent, hop, -, hq⟩ := slot_round hsl
@@ -1307,11 +1307,11 @@ def OwnSched {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (spec : SessionSpec)
     (∀ p, frameAt σ.R sid i r = some p → p.cfg = M.L.cfg M.x M.ρ (M.hist σ.c)) → SaltsSrc M sid σ →
     InnerSrc M sid i r σ → StartOk sts sid i r σ → (∃ o, e.round = .ok o) → seen.contains stream = true →
     ∀ (q : Rep) (pc : Place) (f : Bool) (nd : Option String),
-      _root_.Flock.Firewall.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
-      ∀ (p : Rep) (rel : _root_.Flock.Firewall.Frames.Release) (name : String)
-        (l0 : _root_.Flock.Firewall.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
-        rel.spec.tables[i]? = some name → _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 →
-        _root_.Flock.Firewall.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
+      _root_.Flock.ZkServer.Frames.roundPlace σ.R σ.L0 sid i r dom ⟨v.toArray⟩ n = .ok (q, pc, f, nd) →
+      ∀ (p : Rep) (rel : _root_.Flock.ZkServer.Frames.Release) (name : String)
+        (l0 : _root_.Flock.ZkServer.Level0.Level0) n' q', frameAt σ.R sid i r = some p → sessAt σ.R sid = some rel →
+        rel.spec.tables[i]? = some name → _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 →
+        _root_.Flock.ZkServer.Frames.placeOf σ.R.salts l0 rel p (rel.spec.domain name r).toUTF8 = .ok (.own, n', q') →
         pc = .sched ⟨(M.L.scheduled M.x M.w M.ρ (M.hist σ.c)
           (computedOf (M.L.computed M.x M.w M.ρ (M.hist σ.c)))).toArray⟩
 

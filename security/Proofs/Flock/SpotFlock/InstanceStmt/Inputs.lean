@@ -10,7 +10,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Tags
 import Flock.Zk
@@ -51,7 +51,7 @@ registered reads `regPorts` (`Registered.ofJson regJ`). At the fixed nets' layou
 
 namespace SpotFlock.InstanceStmt
 
-open Flock Flock.Firewall RecDeploy.VStarNets FlockVBridge.Names
+open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
 open Flock.Readable (Read)
 open FlockDeploy (Raw Ins jsonOf)
 open FlockDeploy.Concrete (noNl utf8_noTen)
@@ -92,7 +92,7 @@ theorem plain_t0 : t0.plainLeaves = false := by decide +kernel
 theorem part_plain : plain partObj = true := by
   simp only [partObj, progHex, HmRow.PARTITION_V1]
   plain_json
-theorem fjnorm_part : FlockSoundness.Discharge.Recursion.FirewallJson.norm partObj = partObj := by kernel_rfl
+theorem fjnorm_part : FlockSoundness.Discharge.Recursion.ZkServerJson.norm partObj = partObj := by kernel_rfl
 
 /-- **The partition file reads back** to `partObj`. -/
 theorem jsonOf_part (what : String) : jsonOf what (printJson partObj).toUTF8 = .ok partObj :=

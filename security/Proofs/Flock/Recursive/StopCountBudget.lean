@@ -31,7 +31,7 @@ released. Here `B` is the stream's failure budget `b`, at every order of the rec
 
 namespace Flock.StopCount
 
-open Core.Firewall Finset
+open Core.ZkServer Finset
 
 /-! ## The stream's sessions not released -/
 
@@ -414,7 +414,7 @@ theorem admit_error_open {evs : Events} {s part why : String} {evs' : Events}
 
 /-- An open the ZK server makes: its budget the stream's, and the stream's failures and unended sessions fewer than it. -/
 theorem openSession_guard (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
-    (release : Option Core.Firewall.Schedule) :
+    (release : Option Core.ZkServer.Schedule) :
     (openSession evs stream parts budget release).2 = evs ∨
       ∃ s, (openSession evs stream parts budget release).2 =
           evs.push (.opened { session := s, stream, parts, budget, release }) ∧
@@ -461,7 +461,7 @@ theorem openSession_guard (evs : Events) (stream : String) (parts : Array String
       simp
 
 /-- `stop`: a stop only of an opened session, or nothing. -/
-theorem RecOk.afterStop {evs : Events} (h : RecOk evs) (s p w : String) : RecOk (Core.Firewall.stop evs s p w).2 := by
+theorem RecOk.afterStop {evs : Events} (h : RecOk evs) (s p w : String) : RecOk (Core.ZkServer.stop evs s p w).2 := by
   rw [stop_evs]
   split
   · exact h
@@ -473,7 +473,7 @@ theorem RecOk.afterStop {evs : Events} (h : RecOk evs) (s p w : String) : RecOk 
     exact h.pushStop ho p w
 
 /-- `slot`: the slot's orphan's stop only if it was opened, then the slot. -/
-theorem RecOk.afterSlot {evs : Events} (h : RecOk evs) (s part : String) : RecOk (Core.Firewall.slot evs s part) := by
+theorem RecOk.afterSlot {evs : Events} (h : RecOk evs) (s part : String) : RecOk (Core.ZkServer.slot evs s part) := by
   rcases (slot_evs evs s part).1 with he | ⟨k, s', p', w, hor, hos, -, he⟩
   · rw [he]
     exact h.pushPlain (fun _ h => by cases h) (fun _ _ _ h => by cases h)
@@ -482,13 +482,13 @@ theorem RecOk.afterSlot {evs : Events} (h : RecOk evs) (s part : String) : RecOk
 
 /-- `admit`: nothing when it admits; a refusal when it refuses, after a stop of the session, opened, if out of turn. -/
 theorem RecOk.afterAdmit {evs : Events} (h : RecOk evs) (s part : String) :
-    RecOk (Core.Firewall.admit evs s part).2 := by
-  cases hadm : Core.Firewall.admit evs s part with
+    RecOk (Core.ZkServer.admit evs s part).2 := by
+  cases hadm : Core.ZkServer.admit evs s part with
   | mk r evs' =>
     cases r with
     | ok a =>
-      obtain ⟨o, j, -, -, -, hserved⟩ := Properties.Firewall.admit_ok hadm
-      obtain ⟨-, -, -, rfl⟩ := Properties.Firewall.served_ok hserved
+      obtain ⟨o, j, -, -, -, hserved⟩ := Properties.ZkServer.admit_ok hadm
+      obtain ⟨-, -, -, rfl⟩ := Properties.ZkServer.served_ok hserved
       exact h
     | error why =>
       rcases admit_error_open hadm with he | ⟨p, w, hos, he⟩
@@ -499,7 +499,7 @@ theorem RecOk.afterAdmit {evs : Events} (h : RecOk evs) (s part : String) :
 
 /-- `openSession`: an open the budget lets through, or nothing. -/
 theorem RecOk.afterOpen {evs : Events} (h : RecOk evs) (stream : String) (parts : Array String)
-    (budget : Option ℕ) (release : Option Core.Firewall.Schedule) :
+    (budget : Option ℕ) (release : Option Core.ZkServer.Schedule) :
     RecOk (openSession evs stream parts budget release).2 := by
   rcases openSession_guard evs stream parts budget release with he | ⟨s, he, hb, hg⟩
   · rw [he]
@@ -510,7 +510,7 @@ theorem RecOk.afterOpen {evs : Events} (h : RecOk evs) (stream : String) (parts 
 /-- One of the record's ops, as the ZK server calls them: `openSession`, `finish`, `stop`, `release`, `slot`,
 `admit`, and the Loop's `wait`. -/
 inductive RecOp where
-  | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.Firewall.Schedule)
+  | openRec (stream : String) (parts : Array String) (budget : Option ℕ) (release : Option Core.ZkServer.Schedule)
   | finish (s : String)
   | stop (s part why : String)
   | release (s part : String)
@@ -521,11 +521,11 @@ inductive RecOp where
 /-- The record after `op`. -/
 def RecOp.apply (evs : Events) : RecOp → Events
   | .openRec stream parts budget sched => (openSession evs stream parts budget sched).2
-  | .finish s => Core.Firewall.finish evs s
-  | .stop s part why => (Core.Firewall.stop evs s part why).2
-  | .release s part => Core.Firewall.release evs s part
-  | .slot s part => Core.Firewall.slot evs s part
-  | .admit s part => (Core.Firewall.admit evs s part).2
+  | .finish s => Core.ZkServer.finish evs s
+  | .stop s part why => (Core.ZkServer.stop evs s part why).2
+  | .release s part => Core.ZkServer.release evs s part
+  | .slot s part => Core.ZkServer.slot evs s part
+  | .admit s part => (Core.ZkServer.admit evs s part).2
   | .wait s part => evs.push (.wait s part)
 
 /-- The record after the ops `ops`, in order, from the empty record. -/
@@ -719,10 +719,10 @@ namespace Flock.Guarantees
 
 /-- **At most `b` of a stream's sessions are left with a statement not released**, at every order of the record's ops
 (`StopCount.opsRun`: `openSession`, `finish`, `stop`, `release`, `slot`, `admit` and the Loop's `wait`, as
-`Firewall.Record` defines them) and every stream, `b` the stream's failure budget.
+`ZkServer.Record` defines them) and every stream, `b` the stream's failure budget.
 
 It is about the Lean record's ops, in any order, with no model of the loop. The deployed opener is Python's
-`verity_flock.firewall.Firewall`, so for the deployment it rests on Python agreeing with the Lean, which the ZK server's
+`verity_flock.zk_server.ZkServer`, so for the deployment it rests on Python agreeing with the Lean, which the ZK server's
 difftests check. -/
 def UnrelLeBudget : Prop :=
   ∀ (ops : List StopCount.RecOp) (t : String), StopCount.UnrelWithin (StopCount.opsRun ops) t
@@ -765,7 +765,7 @@ end Flock.SecurityProofs
 
 namespace Flock.StopCount.Witness
 
-open Core.Firewall
+open Core.ZkServer
 
 /-- An honest stream at budget 1, as the record's ops: session `r0000` opened, its inner session finished, its statement
 admitted in the slot and released; then `r0001` opened. -/
@@ -783,7 +783,7 @@ def two : Fin 2 → String := !["r0000", "r0001"]
 
 /-- A ZK server without rule 4's refusals: every open is made, whatever the stream's failures and unended sessions. -/
 def openMade (evs : Events) (stream : String) (parts : Array String) (budget : Option ℕ)
-    (release : Option Core.Firewall.Schedule) : Events :=
+    (release : Option Core.ZkServer.Schedule) : Events :=
   (openSession.made evs stream parts budget release).2
 
 /-- The record's ops at `openMade`. -/
@@ -812,7 +812,7 @@ end Flock.StopCount.Witness
 
 namespace Flock.SecurityProofs
 
-open Core.Firewall Flock.StopCount Flock.StopCount.Witness
+open Core.ZkServer Flock.StopCount Flock.StopCount.Witness
 
 /-- **`UnrelLeBudget` says something at an honest stream**: at budget 1, `r0000` ran through and was released, `r0001`
 opened after it, and one of the stream's sessions is left unreleased, the budget reached. -/

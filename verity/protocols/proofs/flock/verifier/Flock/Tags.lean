@@ -403,9 +403,9 @@ def withPlainLeaves (t : Tags) : Tags :=
 
 /-- A statement whose trees have plain SHA-512 leaves (leafSchemePlain), ZK off: verify refuses it under --zk, as upstream's
 --zk does, and without --zk takes it where `ProvedScope.leafOk` covers it (hidden outputs). The pinned scheme is compared by
-its canonical form (`Firewall.canonForm`), since `Json`'s `==` is a `partial def` no proof can evaluate. -/
+its canonical form (`ZkServer.canonForm`), since `Json`'s `==` is a `partial def` no proof can evaluate. -/
 def plainLeaves (t : Tags) : Bool :=
-  t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)
+  t.pinnedLeafScheme.map ZkServer.canonForm == some (ZkServer.canonForm leafSchemePlain)
 
 /-- A recursive session's inner statement (`Tags.withPlainLeaves`): the default statement with plain SHA-512 leaves. -/
 def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }

@@ -27,8 +27,8 @@ the IO code's readings are the named trust `flock-relay-serves`, the worker's th
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec Stmt)
 
 /-- **What the relay's IO code does at a slot of kind `k` of session `sid`**: `LoopRead`'s clauses but the run's
@@ -43,18 +43,18 @@ def LoopServe {W Rr : Type} (M : LoopModel W Rr) (rv : List (Claims.Msg × Claim
       (e.setup = .ok (spec, sts) → SessOn spec sts σ'.R sid)
   | .commit, st, _, e, σ, σ' =>
     (∃ f, e.commit = (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).1 ∧
-        ∀ name, _root_.Flock.Firewall.Level0.ofSession σ'.L0 sid name =
-          _root_.Flock.Firewall.Level0.ofSession (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).2 sid name) ∧
-      (∃ ct, _root_.Flock.Firewall.Session.streamsOk spec sts ct = true) ∧
-      (∃ (ls : Array _root_.Flock.Firewall.Level0.Level0) (publics : List ByteArray), AfterDraw sid ls σ.L0 ∧
+        ∀ name, _root_.Flock.ZkServer.Level0.ofSession σ'.L0 sid name =
+          _root_.Flock.ZkServer.Level0.ofSession (commitRead σ.L0 sid (spec.tables.zip (sts.map (·.m))) f).2 sid name) ∧
+      (∃ ct, _root_.Flock.ZkServer.Session.streamsOk spec sts ct = true) ∧
+      (∃ (ls : Array _root_.Flock.ZkServer.Level0.Level0) (publics : List ByteArray), AfterDraw sid ls σ.L0 ∧
         (∀ j (hj : j < ls.size), ∃ g d hi, M.src (2 * j) = .ok (g, d, hi) ∧
-          _root_.Flock.Firewall.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
+          _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.wideLeaf sts[j]!.m g d = .ok ls[j]) ∧
         M.L.ownMsg M.x M.w M.ρ (M.hist σ.c) = 0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics ∧
         ls.size < 2 ^ 64 ∧ publics.length < 2 ^ 64 ∧ (∀ l ∈ ls, l.root.size < 2 ^ 64) ∧
         ∀ b ∈ publics, b.size < 2 ^ 64) ∧
       (∀ a, e.ans = some a → byte? a 0 = some 2 → (st.answer .commit a).1.stop = none →
         ∀ rel, sessAt σ'.R sid = some rel →
-          rel.link = some (_root_.Flock.Firewall.Frame.words (st.answer .commit a).2 5
+          rel.link = some (_root_.Flock.ZkServer.Frame.words (st.answer .commit a).2 5
             (((st.answer .commit a).2.size - 5) / 16))) ∧
       Between sid σ.R σ'.R ∧ σ'.c = σ.c + 1
   | .round stream n, st, pl, e, σ, σ' =>
@@ -105,7 +105,7 @@ def AudReads (aud : List ByteArray → Option ByteArray) : List ByteArray → St
 /-- `flock-relay-serves` (a trust in the relay's IO code, which Lean reads but does not run). **The relay serves
 session `sid`'s requests `ins` as its IO code reads**, from its start with the loop at `σ`: at each request that
 reaches a slot, `LoopServe`'s clauses (`ReadsBy`), and the answers it reads are the auditor `aud`'s to everything that
-left (`AudReads`). They read `Flock.Firewall.Session.relay`'s loop body (`stepK`, held to it by reading), the frames
+left (`AudReads`). They read `Flock.ZkServer.Session.relay`'s loop body (`stepK`, held to it by reading), the frames
 it puts on the auditor's connection (`sendFrame a`) and the answers it reads there (`recvFrame a`), the rep frames'
 tasks it calls on the shared frames (`Frames.round` on the request's `roundContent`, `Frames.coins` on the auditor's
 coins, `Frames.finish`; their pure updates `RegStep`, `RoundRun`), the `Commit`'s `Level0.commit` against the level

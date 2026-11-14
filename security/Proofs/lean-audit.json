@@ -96,7 +96,7 @@
   "Proofs.Properties.Challenger.Limits",
   "Proofs.Properties.Challenger.Coins",
   "Proofs.Properties.Challenger.ChallengePhase",
-  "Proofs.Properties.Firewall",
+  "Proofs.Properties.ZkServer",
   "Proofs.Properties.Core.Site",
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Nci.RecordRead",
@@ -325,7 +325,7 @@
    "why": "plain_lit, the tactic that shows a literal leaf or key of an instance statement's header plain, a macro that expands to one simp call over the module's plain, plainStr and literal definitions. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
   },
   "Proofs.Flock.SpotFlock.InstanceStmt.Plain": {
-   "why": "plain_json, the tactic that shows an instance statement's JSON object plain, a macro that expands to one simp call over FirewallObj.plain_mkObj and the module's plain, plainStr and hex lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
+   "why": "plain_json, the tactic that shows an instance statement's JSON object plain, a macro that expands to one simp call over ZkServerObj.plain_mkObj and the module's plain, plainStr and hex lemmas. It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds."
   }
  },
  "layers": {
@@ -468,7 +468,7 @@
     "ack": ["CollisionResistance.romCRAdvantage_le_birthday"]
    },
    "A3-uniform-bytes": {
-    "about": "A3 (UniformRandomBytes, and per test UniformRandomBytesTest, uniform/io-getrandombytes): the operating system's bytes, which the live draw and the firewall's frame and tap read through IO.getRandomBytes and the prover reads as salts through getrandom(2), are independent and uniform, per test up to eta; it rests on Linux's CRNG (drivers/char/random.c, 5.18 and later) and its reseed on a VM generation change (vmgenid), without which a restored snapshot reuses pads",
+    "about": "A3 (UniformRandomBytes, and per test UniformRandomBytesTest, uniform/io-getrandombytes): the operating system's bytes, which the live draw and the ZK server's frame and tap read through IO.getRandomBytes and the prover reads as salts through getrandom(2), are independent and uniform, per test up to eta; it rests on Linux's CRNG (drivers/char/random.c, 5.18 and later) and its reseed on a VM generation change (vmgenid), without which a restored snapshot reuses pads",
     "mentions": ["IO.getRandomBytes"],
     "ack": []
    },

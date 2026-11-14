@@ -40,7 +40,7 @@ root is the loop's sample for that table, whatever roots the worker sent, and wh
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (SessionSpec Stmt)
-open _root_.Flock.Firewall.Level0 (Level0 Slot Slots commit ofSession)
+open _root_.Flock.ZkServer.Level0 (Level0 Slot Slots commit ofSession)
 
 /-- **At the model's `Hello`, `EnvOk` where the relay's nonce is the tape's**: where `x` sets up the session on `spec`
 and the nonce the relay drew from the operating system is the tape's `ν`, the `Hello` it frames is the model's. -/
@@ -48,7 +48,7 @@ theorem envOk_hello_tape {x : Claims.Msg} {ν : Claims.ZKMal.CoinLayer.Nonce} {s
     {seen : List String} {ins : _} {e : Env} (hs : FlockDeploy.setupOf true x = some (ins, spec, sts))
     (hn : e.nonce = ⟨(Claims.ZKMal.CoinLayer.nb ν).toArray⟩) :
     EnvOk spec seen .hello e (Claims.ZKMal.CoinLayer.helloMsg x ν) := by
-  show _root_.Flock.Firewall.Hello.msg spec e.nonce = _
+  show _root_.Flock.ZkServer.Hello.msg spec e.nonce = _
   unfold Claims.ZKMal.CoinLayer.helloMsg
   rw [Claims.ZKMal.sessOf_flock hs, hn]
 
@@ -57,7 +57,7 @@ level-0 slots `R`: the roots its tables' level 0 now bound, in table order, and 
 leave (`Session.relay`'s `Commit` branch). -/
 def commitRead (R : Slots) (sid : Nat) (tables : Array (String × Nat)) (f : ByteArray) :
     Except String (List (String × ByteArray)) × Slots :=
-  match _root_.Flock.Firewall.Session.commitRoots f with
+  match _root_.Flock.ZkServer.Session.commitRoots f with
   | none => (.error "a Commit frame whose roots the loop cannot read", R)
   | some roots => match commit R sid tables roots with
     | .ok R' => (.ok (tables.toList.map fun (t, _) => (t, ((ofSession R' sid t).map (·.root)).getD .empty)), R')
@@ -104,7 +104,7 @@ theorem commit_inv {R R' : Slots} {sid : Nat} {tables : Array (String × Nat)}
     {roots : List (String × ByteArray)} (h : commit R sid tables roots = .ok R') :
     roots.map (·.1) = tables.toList.map (·.1) ∧
       CommitInv sid R.slots ((List.range roots.length).zip (roots.zip tables.toList)) R'.slots := by
-  unfold _root_.Flock.Firewall.Level0.commit at h
+  unfold _root_.Flock.ZkServer.Level0.commit at h
   rcases hc : (roots.map (·.1) != tables.toList.map (·.1)) with _ | _
   · simp only [hc, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
     refine ⟨by simpa using hc, ?_⟩
@@ -236,7 +236,7 @@ theorem commitRead_drawn {R : Slots} {sid : Nat} {tables : Array (String × Nat)
       obtain ⟨hlt, hls⟩ := hd s₀ hs₀ (hown0 ▸ hown)
       have htq : s₀.table = q := htab0 ▸ htab
       refine ⟨htq ▸ hlt, ?_⟩
-      unfold _root_.Flock.Firewall.Level0.ofSession
+      unfold _root_.Flock.ZkServer.Level0.ofSession
       rw [hs']
       simp only [Option.map_some, hl0, hls]
       subst htq
@@ -292,7 +292,7 @@ theorem draw_slots {R R' : Slots} {name : String} {ls : Array Level0} (h : R.dra
       (∀ s ∈ R'.slots, s ∈ R.slots ∨ ∃ i, ∃ h : i < ls.size, s = { l0 := ls[i], owner := sid, table := i }) ∧
       (∀ s ∈ R.slots, s ∈ R'.slots) ∧
       ∀ i (h : i < ls.size), ({ l0 := ls[i], owner := sid, table := i } : Slot) ∈ R'.slots := by
-  unfold _root_.Flock.Firewall.Level0.Slots.draw at h
+  unfold _root_.Flock.ZkServer.Level0.Slots.draw at h
   cases ha : R.admit name ls.size with
   | error e => simp [ha, bind, Except.bind] at h
   | ok sid =>
@@ -312,7 +312,7 @@ its count of tables. -/
 theorem admit_fresh {R : Slots} {name : String} {k sid : Nat} (h : R.admit name k = .ok sid) :
     (∀ s ∈ R.slots, s.owner ≠ sid) ∧ (∃ x ∈ R.sessions, x.2 = sid) ∧
       k = ((R.tables.find? (·.1 == sid)).map (·.2)).getD 0 := by
-  unfold _root_.Flock.Firewall.Level0.Slots.admit at h
+  unfold _root_.Flock.ZkServer.Level0.Slots.admit at h
   split at h
   · cases h
   · rename_i x hf
@@ -325,7 +325,7 @@ theorem admit_fresh {R : Slots} {name : String} {k sid : Nat} (h : R.admit name 
       · rename_i hk
         cases h
         refine ⟨fun s hs hown => ?_, ⟨_, Array.mem_of_find?_eq_some hf, rfl⟩, by simpa using hk⟩
-        simp only [_root_.Flock.Firewall.Level0.Slots.drawn, Bool.not_eq_true] at hd
+        simp only [_root_.Flock.ZkServer.Level0.Slots.drawn, Bool.not_eq_true] at hd
         exact absurd (by simp [hown]) (Array.any_eq_false'.mp hd s hs)
 
 /-- A level 0 bound to a session was sampled for it. -/
@@ -349,7 +349,7 @@ inductive SlotsReach : Slots → Prop
 theorem commit_sessions {R R' : Slots} {sid : Nat} {tables : Array (String × Nat)}
     {roots : List (String × ByteArray)} (h : commit R sid tables roots = .ok R') :
     R'.sessions = R.sessions ∧ R'.tables = R.tables := by
-  unfold _root_.Flock.Firewall.Level0.commit at h
+  unfold _root_.Flock.ZkServer.Level0.commit at h
   rcases hc : (roots.map (·.1) != tables.toList.map (·.1)) with _ | _
   · simp only [hc, Bool.false_eq_true, ↓reduceIte, bind, Except.bind, pure, Except.pure] at h
     split at h
@@ -569,9 +569,9 @@ theorem map_sublist_flatMap {α β : Type} (f g : α → β) :
 /-- **The setup's tables where its coin tree's streams are the session's** (`streamsOk`): one statement each, and of
 distinct names, since each table's first rep stream, `"{table}/rep0"`, is one of the tree's distinct streams. -/
 theorem streamsOk_tables {spec : SessionSpec} {sts : Array Stmt} {ct : _root_.Flock.CoinTree.Spec}
-    (h : _root_.Flock.Firewall.Session.streamsOk spec sts ct = true) :
+    (h : _root_.Flock.ZkServer.Session.streamsOk spec sts ct = true) :
     spec.tables.size = sts.size ∧ spec.tables.toList.Nodup := by
-  unfold _root_.Flock.Firewall.Session.streamsOk at h
+  unfold _root_.Flock.ZkServer.Session.streamsOk at h
   simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
   obtain ⟨⟨hs, hnd⟩, hsz⟩ := h
   have hrep : spec.repStreams.toList.map (·.2.2) =
@@ -608,7 +608,7 @@ theorem envOk_commit_after {spec : SessionSpec} {sts : Array Stmt} {seen : List 
     {ct : _root_.Flock.CoinTree.Spec} {e : Env} {R : Slots} {sid : Nat} {f : ByteArray} {ls : Array Level0}
     {publics : List ByteArray}
     (hread : e.commit = (commitRead R sid (spec.tables.zip (sts.map (·.m))) f).1)
-    (hok : _root_.Flock.Firewall.Session.streamsOk spec sts ct = true) (ha : AfterDraw sid ls R)
+    (hok : _root_.Flock.ZkServer.Session.streamsOk spec sts ct = true) (ha : AfterDraw sid ls R)
     (hr : ls.size < 2 ^ 64) (hp : publics.length < 2 ^ 64) (hrb : ∀ l ∈ ls, l.root.size < 2 ^ 64)
     (hpb : ∀ b ∈ publics, b.size < 2 ^ 64) :
     EnvOk spec seen .commit e (0 :: FlockDeploy.linkBody (ls.toList.map (·.root)) publics) := by

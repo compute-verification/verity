@@ -1,6 +1,6 @@
 module
 
-public import Flock.Firewall
+public import Flock.ZkServer
 public import Spot.Registered
 
 /-!
@@ -169,7 +169,7 @@ def pack (bits wordBits : Nat) (row : Array Nat) : Array Nat :=
 /-- `registered.row_digest`: a registered row's `x` in `schema`, `sha512/row/v1` of its u16 words (`rowWords`), else the
 bit row of its u16 words, little-endian, under `sha512/row/v2` or `sha512/row-seg/v1`. -/
 def rowDigest (schema : String) (row : Array Nat) (wordBits : Nat) : ByteArray :=
-  if schema == Registered.SCHEMA then Flock.Firewall.rowDigest (rowWords row wordBits) else
+  if schema == Registered.SCHEMA then Flock.ZkServer.rowDigest (rowWords row wordBits) else
   let ws := row.flatMap fun x => (Array.range (wordBits / 16)).map fun j => x / 2 ^ (16 * j) % 2 ^ 16
   let bytes := ws.foldl (fun b w => (b.push (w % 256).toUInt8).push (w / 256 % 256).toUInt8) ByteArray.empty
   if schema == Flock.HmRow.ROW_SCHEMA_V2 then Flock.Sha512.hash (Flock.HmRow.rowPrefixV2 (16 * ws.size) ++ bytes)

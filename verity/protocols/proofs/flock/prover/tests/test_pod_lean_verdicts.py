@@ -106,20 +106,20 @@ def _live(d: Path, name: str, stopped: str | None) -> None:
     (d / f"{name}.live").write_text(json.dumps({"accepted": False, "why": stopped or "", "prover_stopped": stopped}) + "\n")
 
 
-def test_a_forgery_the_firewall_held_back_is_not_exercised(tmp_path, capsys):
+def test_a_forgery_the_zk_server_held_back_is_not_exercised(tmp_path, capsys):
     """MODES=ZK server: the ZK server may hold a forgery's proofs back, so no session reaches Lean. The ZK server is the
-    prover's own check, which a dishonest prover doesn't run, so its FIREWALL-REFUSED stop leaves the verifier unexercised:
+    prover's own check, which a dishonest prover doesn't run, so its ZK-SERVER-REFUSED stop leaves the verifier unexercised:
     the forgery fails the step as not exercised, never counts as refused. Any other stop, or none, leaves the part without
     a verdict, and a ZK server refusal never passes an honest part."""
     for p in ("L0", "alg-p0"):
         _part(tmp_path, p, 0, True)
-    _live(tmp_path, "forged-comb-alg-p0", "FIREWALL-REFUSED: alg-p0: the constraints [3] fail on a rep's pads")
+    _live(tmp_path, "forged-comb-alg-p0", "ZK-SERVER-REFUSED: alg-p0: the constraints [3] fail on a rep's pads")
     _part(tmp_path, "forged-comb-L0", 0, True)
     parts = ("L0", "alg-p0", "forged-comb-alg-p0", "forged-comb-L0")
     rc, out = _run(tmp_path, *parts, capsys=capsys)
     assert rc == 1 and out[-1] == "lean: 2/2 accepted, 0/1 forgeries refused, 1 not exercised (no proof produced): the step fails"
     assert out[2].startswith("lean forged-comb-alg-p0 (forgery comb: one of its parts must be refused): refused by the "
-                             "firewall before Lean, no proof produced (not exercised), why \"FIREWALL-REFUSED: alg-p0: the "
+                             "ZK server before Lean, no proof produced (not exercised), why \"ZK-SERVER-REFUSED: alg-p0: the "
                              "constraints [3]")
     assert ("lean forgery comb: no proof produced (not exercised) at ['forged-comb-alg-p0'] of 2, so the verifier never "
             "checked it  <- FAILS") in out
@@ -134,7 +134,7 @@ def test_a_forgery_the_firewall_held_back_is_not_exercised(tmp_path, capsys):
     assert _run(tmp_path, *parts, capsys=capsys)[0] == 1
     (tmp_path / "alg-p0.log").unlink()
     (tmp_path / "time-alg-p0.txt").unlink()
-    _live(tmp_path, "alg-p0", "FIREWALL-REFUSED: alg-p0's level-0 root")
+    _live(tmp_path, "alg-p0", "ZK-SERVER-REFUSED: alg-p0's level-0 root")
     rc, out = _run(tmp_path, "L0", "alg-p0", capsys=capsys)
     assert rc == 1 and out[1].endswith("<- FAILS") and out[-1] == "lean: 1/2 accepted: the step fails"
 
@@ -332,12 +332,12 @@ def test_a_run_without_its_record_is_not_composed(tmp_path, capsys):
         _vpart(tmp_path, p, j, h)
     rc = LV.main(["--compose", binary, str(tmp_path), "L0", "cap"])
     out = capsys.readouterr().out.splitlines()
-    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json, or a firewalled oprove")
+    assert rc == 0 and out[-2].startswith("lean compose: no interactive-run record (rec-run.json, or a zk_served oprove")
 
 
 def _challenger(d: Path, opens: list[tuple[str, int]], session: str = "s", close: bool = True,
                 name: str = "rec-run.jsonl") -> list[dict]:
-    """The record 85's firewalled oprove keeps, one event a line (``rec-run.jsonl``): its staging of the rows file and
+    """The record 85's zk_served oprove keeps, one event a line (``rec-run.jsonl``): its staging of the rows file and
     the shared set the parts were given (`_shared`'s, at the inner session record ``session``), then one open per
     (key name, part) of ``opens`` as ``flock-circuit serve --rec-run`` logs it at each Hello, then (``close``) the close;
     under another ``name`` (a forgery's), its opens alone. Its events."""
@@ -350,7 +350,7 @@ def _challenger(d: Path, opens: list[tuple[str, int]], session: str = "s", close
     return evs
 
 
-def test_a_firewalled_oprove_composes_over_the_record_its_coin_servers_logged(tmp_path, capsys):
+def test_a_zk_served_oprove_composes_over_the_record_its_coin_servers_logged(tmp_path, capsys):
     """The run's record is the challenger's ``rec-run.jsonl``, event for event: oprove's staging, each part's open as its
     challenger logged it at the Hello, the close; the parts compose over it."""
     binary, h = _composer(tmp_path, 3)

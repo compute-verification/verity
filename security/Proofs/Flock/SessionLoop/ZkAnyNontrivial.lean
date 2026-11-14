@@ -105,20 +105,20 @@ theorem fork_unP_helloRej (S : RefSession) (vs : S.SwVals) (w : Flock.Wit) (x : 
 
 /-- **A Merkle layer above the leaves flattens to bytes**: `d − c ≥ 1` layers up, it is `2^c` digests. -/
 theorem flat_layer_pos (d c : ℕ) (lf : ℕ → ByteArray) (hc : c < d) :
-    0 < (_root_.Flock.Firewall.Link.flat (_root_.Flock.Firewall.Link.layer d lf (d - c))).size := by
+    0 < (_root_.Flock.ZkServer.Link.flat (_root_.Flock.ZkServer.Link.layer d lf (d - c))).size := by
   obtain ⟨k, hk⟩ : ∃ k, d - c = k + 1 := ⟨d - c - 1, by omega⟩
-  have hmem : ∀ b ∈ _root_.Flock.Firewall.Link.layer d lf (d - c), b.size = 64 := by
+  have hmem : ∀ b ∈ _root_.Flock.ZkServer.Link.layer d lf (d - c), b.size = 64 := by
     intro b hb
     rw [hk] at hb
-    simp only [_root_.Flock.Firewall.Link.layer, Array.mem_map] at hb
+    simp only [_root_.Flock.ZkServer.Link.layer, Array.mem_map] at hb
     obtain ⟨q, -, rfl⟩ := hb
     exact _root_.Flock.Sha512.hash_size _
-  have hsz : (_root_.Flock.Firewall.Link.layer d lf (d - c)).size = 2 ^ c := by
+  have hsz : (_root_.Flock.ZkServer.Link.layer d lf (d - c)).size = 2 ^ c := by
     rw [Sched.layer_size, Nat.pow_div (Nat.sub_le d c) (by norm_num)]
     congr 1
     omega
-  have hf : (_root_.Flock.Firewall.Link.flat (_root_.Flock.Firewall.Link.layer d lf (d - c))).size =
-      64 * (_root_.Flock.Firewall.Link.layer d lf (d - c)).size :=
+  have hf : (_root_.Flock.ZkServer.Link.flat (_root_.Flock.ZkServer.Link.layer d lf (d - c))).size =
+      64 * (_root_.Flock.ZkServer.Link.layer d lf (d - c)).size :=
     Sched.flat_size _ hmem
   rw [hf, hsz]
   positivity
@@ -126,21 +126,21 @@ theorem flat_layer_pos (d c : ℕ) (lf : ℕ → ByteArray) (hc : c < d) :
 /-- **A level 0 the `--zk` schedule samples has a root**: at `25 ≤ m ≤ 35` the level's root sits strictly below its
 depth, so the root holds at least one digest. -/
 theorem root_size_pos {m : ℕ} (h25 : 25 ≤ m) (h35 : m ≤ 35) {g : Array _root_.Flock.F128} {d : ByteArray}
-    {l : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l) :
+    {l : _root_.Flock.ZkServer.Level0.Level0} (h : _root_.Flock.ZkServer.Level0.ofDraws m g d = .ok l) :
     0 < l.root.size := by
-  obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, -, hroot⟩ := _root_.Flock.Firewall.Level0.ofDraws_ok h
+  obtain ⟨hm, -, ⟨s, hz, hlv⟩, -, -, hroot⟩ := _root_.Flock.ZkServer.Level0.ofDraws_ok h
   have hz' : _root_.Flock.Zk.schedule l.m = .ok (s, l.tPad) := by rw [hm]; exact hz
   have hlt : l.lv.cap < l.lv.d := by
     rw [hlv]
     exact FlockComplete.JsonRT.zkSchedule_cap0_lt h25 h35 hz
-  rw [hroot, _root_.Flock.Firewall.Level0.root_of l s hz' hlv]
-  exact flat_layer_pos l.lv.d l.lv.cap (fun q => (_root_.Flock.Firewall.Link.leaves l.lv l.tPad l.toIn)[q]!) hlt
+  rw [hroot, _root_.Flock.ZkServer.Level0.root_of l s hz' hlv]
+  exact flat_layer_pos l.lv.d l.lv.cap (fun q => (_root_.Flock.ZkServer.Link.leaves l.lv l.tPad l.toIn)[q]!) hlt
 
 /-- A level 0 the loop samples is the one built at its table's `m` from what the source gave. -/
 theorem built_of_level0Of {R : Type}
     {src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
-    {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array _root_.Flock.Stmt} {j : ℕ} {l : _root_.Flock.Firewall.Level0.Level0}
-    (h : level0Of src x w ρ sts j = .ok l) : ∃ g d, _root_.Flock.Firewall.Level0.ofDraws sts[j]!.m g d = .ok l := by
+    {x : Msg} {w : Flock.Wit} {ρ : R} {sts : Array _root_.Flock.Stmt} {j : ℕ} {l : _root_.Flock.ZkServer.Level0.Level0}
+    (h : level0Of src x w ρ sts j = .ok l) : ∃ g d, _root_.Flock.ZkServer.Level0.ofDraws sts[j]!.m g d = .ok l := by
   unfold level0Of at h
   cases hsrc : src x w ρ (2 * j) with
   | error e => rw [hsrc] at h; cases h
@@ -157,7 +157,7 @@ theorem length_linkOf {R : Type}
     {sts : Array _root_.Flock.Stmt} (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) :
     (linkOf src x w ρ).length = 17 + 16 * sts.size +
       ∑ j : Fin sts.size, (((level0Of src x w ρ sts j.val).toOption.map
-        (fun l : _root_.Flock.Firewall.Level0.Level0 => l.root)).getD ByteArray.empty).size := by
+        (fun l : _root_.Flock.ZkServer.Level0.Level0 => l.root)).getD ByteArray.empty).size := by
   unfold linkOf
   rw [hs]
   simp only [List.length_cons, FlockDeploy.linkBody, FlockDeploy.encList, FlockDeploy.encBytes, FlockDeploy.encNat,
@@ -198,15 +198,15 @@ theorem length_linkOf_of_root {R : Type}
     {src : Msg → Flock.Wit → R → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} {ρ : R} {s : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
     {sts : Array _root_.Flock.Stmt} (hs : FlockDeploy.setupOf true x = some (s, spec, sts)) (h0 : 0 < sts.size)
-    {l : _root_.Flock.Firewall.Level0.Level0} (hl : level0Of src x w ρ sts 0 = .ok l) (hpos : 0 < l.root.size) :
+    {l : _root_.Flock.ZkServer.Level0.Level0} (hl : level0Of src x w ρ sts 0 = .ok l) (hpos : 0 < l.root.size) :
     17 + 16 * sts.size < (linkOf src x w ρ).length := by
   rw [length_linkOf _ _ _ _ hs]
   have hle : (((level0Of src x w ρ sts 0).toOption.map
-        (fun l : _root_.Flock.Firewall.Level0.Level0 => l.root)).getD ByteArray.empty).size ≤
+        (fun l : _root_.Flock.ZkServer.Level0.Level0 => l.root)).getD ByteArray.empty).size ≤
       ∑ j : Fin sts.size, (((level0Of src x w ρ sts j.val).toOption.map
-          (fun l : _root_.Flock.Firewall.Level0.Level0 => l.root)).getD ByteArray.empty).size :=
+          (fun l : _root_.Flock.ZkServer.Level0.Level0 => l.root)).getD ByteArray.empty).size :=
     Finset.single_le_sum (f := fun j : Fin sts.size => (((level0Of src x w ρ sts j.val).toOption.map
-        (fun l : _root_.Flock.Firewall.Level0.Level0 => l.root)).getD ByteArray.empty).size)
+        (fun l : _root_.Flock.ZkServer.Level0.Level0 => l.root)).getD ByteArray.empty).size)
       (fun _ _ => Nat.zero_le _) (Finset.mem_univ ⟨0, h0⟩)
   rw [hl] at hle
   change l.root.size ≤ _ at hle

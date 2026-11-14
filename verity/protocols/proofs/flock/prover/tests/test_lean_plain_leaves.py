@@ -66,7 +66,7 @@ def test_the_plain_leaf_identity_is_the_provers():
     assert '"leaf_scheme": c.leaf_scheme,' in rust
     assert 'setObjVal! "leaf_scheme" leafSchemePlain' in body
     assert 'merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }' in body
-    assert "t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
+    assert "t.pinnedLeafScheme.map ZkServer.canonForm == some (ZkServer.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
 
 
 def test_the_pinned_leaf_scheme_is_a_constant():

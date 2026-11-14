@@ -23,14 +23,14 @@ paddings within level 0's sizes:
 
 @[expose] public section
 
-namespace Flock.Firewall.Finish
+namespace Flock.ZkServer.Finish
 
 /-- **A table from a level 0 holds its inputs**: its packed table, extra lanes and lane paddings are the level 0's
 (`Level0.toIn`). -/
-theorem tabOfLevel0_fields {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.Level0.Level0}
-    {t : _root_.Flock.Firewall.Finish.Tab} (h : _root_.Flock.Firewall.Finish.tabOfLevel0 st l = .ok t) :
+theorem tabOfLevel0_fields {st : _root_.Flock.Setup} {l : _root_.Flock.ZkServer.Level0.Level0}
+    {t : _root_.Flock.ZkServer.Finish.Tab} (h : _root_.Flock.ZkServer.Finish.tabOfLevel0 st l = .ok t) :
     t.g = l.toIn.g ∧ t.extra = l.toIn.extra ∧ t.lanePad = l.toIn.lanePad := by
-  unfold _root_.Flock.Firewall.Finish.tabOfLevel0 at h
+  unfold _root_.Flock.ZkServer.Finish.tabOfLevel0 at h
   simp only [bind, Except.bind] at h
   split at h
   · cases h
@@ -48,7 +48,7 @@ theorem tabOfLevel0_fields {st : _root_.Flock.Setup} {l : _root_.Flock.Firewall.
     subst h
     exact ⟨rfl, rfl, rfl⟩
 
-end Flock.Firewall.Finish
+end Flock.ZkServer.Finish
 
 namespace Claims.ZKMal.Masked
 
@@ -82,7 +82,7 @@ theorem Loop.Level0Src.realOf {src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hS : Loop.Level0Src src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
     tb.g = (Masked.linkIn x w t j).g ∧ tb.extra = (Masked.linkIn x w t j).extra ∧
       tb.lanePad = (Masked.linkIn x w t j).lanePad ∧ tb.g = Masked.ligTab x w t j := by
@@ -104,9 +104,9 @@ theorem Loop.Level0Src.realOf {src : Msg → Flock.Wit →
     · rename_i tb' htb
       simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
       obtain ⟨rfl, -⟩ := h
-      obtain ⟨hg, he, hp⟩ := _root_.Flock.Firewall.Finish.tabOfLevel0_fields htb
+      obtain ⟨hg, he, hp⟩ := _root_.Flock.ZkServer.Finish.tabOfLevel0_fields htb
       rw [← hin]
-      exact ⟨hg, he, hp, hg.trans ((congrArg _root_.Flock.Firewall.Link.In.g hin).trans (Masked.linkIn_g x w t j))⟩
+      exact ⟨hg, he, hp, hg.trans ((congrArg _root_.Flock.ZkServer.Link.In.g hin).trans (Masked.linkIn_g x w t j))⟩
 
 /-- **The loop's table's extra lanes and lane paddings are the tape's within level 0's sizes** (`swSrcE_repCut_v`'s
 `hex` and `hlp`), where `src` samples the tape's level 0: each extra lane below `2^cols`, and each of the `2^lanes + 4`
@@ -116,7 +116,7 @@ theorem Loop.Level0Src.realOf_lanes {src : Msg → Flock.Wit →
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hS : Loop.Level0Src src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
     (∀ e c, c < 2 ^ (Masked.lv0 x j).cols → tb.extra e c = (Masked.UE.tapeZk t).extra j.val e c) ∧
       ∀ l i, l < 2 ^ (Masked.lv0 x j).lanes + _root_.Flock.Zk.EXTRA_LANES → i < (Masked.zkTab x j).tPad →
@@ -127,7 +127,7 @@ theorem Loop.Level0Src.realOf_lanes {src : Msg → Flock.Wit →
 /-- **The loop's rep salts are the source's**: where the loop's table and salts at rep stream `k` are `(tb, hi)`, the source
 drew `hi` there. -/
 theorem Loop.realOf_src {R : Type} {src : Msg → Flock.Wit → R → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
-    {x : Msg} {w : Flock.Wit} {ρ : R} {k : ℕ} {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {x : Msg} {w : Flock.Wit} {ρ : R} {k : ℕ} {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w ρ k = .ok (tb, hi)) : ∃ g d, src x w ρ k = .ok (g, d, hi) := by
   unfold Loop.realOf at h
   split at h
@@ -154,11 +154,11 @@ theorem Loop.RepSrc.salt {L₀ : LeanRelease Flock.Wit
       ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hS : Loop.RepSrc L₀ src x w) (ν : (CoinLayer.session Loop.loopNr Masked.dataE).Nonce)
     (t : (CoinLayer.session Loop.loopNr Masked.dataE).Tape) (j : Fin (Masked.jOf x)) (r : Fin 2)
-    {tb : _root_.Flock.Firewall.Finish.Tab} {hi : Array ByteArray}
+    {tb : _root_.Flock.ZkServer.Finish.Tab} {hi : Array ByteArray}
     (h : Loop.realOf src x w (ν, t) (2 * j.val + r.val) = .ok (tb, hi)) :
     ∀ l, 1 ≤ l → l < (Masked.zkTab x j).sch.levels.size →
       ∀ p < 2 ^ ((Masked.zkTab x j).sch.levels.getD l default).d,
-        _root_.Flock.Firewall.Finish.saltAt (hi.getD (l - 1) ByteArray.empty) p =
+        _root_.Flock.ZkServer.Finish.saltAt (hi.getD (l - 1) ByteArray.empty) p =
           (Masked.UE.tapeZk t).salt j.val r.val l p := by
   obtain ⟨g, d, hs⟩ := Loop.realOf_src h
   exact (hS ν t j r).2.2.2 g d hi hs

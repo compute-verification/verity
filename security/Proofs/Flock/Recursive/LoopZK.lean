@@ -32,7 +32,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Flock.Recursive.FirewallZK
+import Proofs.Flock.Recursive.ZkServerZK
 import Proofs.Flock.Recursive.StopLeak
 import Proofs.Flock.Soundness.CROnly.Hiding
 import Proofs.Flock.Soundness.ZK.Hiding
@@ -40,7 +40,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 /-!
 # `RecursiveZK` at the session loop, released at a stop
 
-`Flock.Guarantees.RecursiveZKLoop` is `RecursiveZK` where the ZK server's code (`Flock.Firewall.run`) sends the
+`Flock.Guarantees.RecursiveZKLoop` is `RecursiveZK` where the ZK server's code (`Flock.ZkServer.run`) sends the
 commitments, the inner coins live, and the outer session is V*'s statements run by the session loop's switched prover
 (`OuterZK.LoopSessions.atWorker` at `OuterZK.loopRef`). The auditor is released its whole view cut at a stop of a public
 family, the stop any function of everything.
@@ -49,11 +49,11 @@ family, the stop any function of everything.
   transcript and V*'s public statements (`OuterZK.LoopSessions.pubStmts`), and nothing of the worker's requests,
   messages, witnesses, values or randomness.
 * `OuterZK.loopSent`, `OuterZK.loopReal_eq_sent`: the whole view where the ZK server sends the schedule's transcript with
-  the salted commit strings in its holes and finishes, which `loopReal` is under `FirewallSends`.
+  the salted commit strings in its holes and finishes, which `loopReal` is under `ZkServerSends`.
 * `OuterZK.loopSent_le`: that view's bound. V*'s statements are zero knowledge at the worker's context
   (`LoopSessions.view_le` at `OuterZK.loop_zkmalR`, the simulator reading no witness: `prCoin_simAt_pubStmts`), then T1
-  once per commitment over the adaptive leaves (`FirewallZK.recursiveZK_enc` at `commitBytes`), the salts read from
-  their bytes (`ZkView.saltsEquiv`, `FirewallZK.firewallStrings_os`).
+  once per commitment over the adaptive leaves (`ZkServerZK.recursiveZK_enc` at `commitBytes`), the salts read from
+  their bytes (`ZkView.saltsEquiv`, `ZkServerZK.zkServerStrings_os`).
 * `Flock.SecurityProofs.RecursiveZKLoop`: `prCoin_cut_le` over `loopSent_le`.
 -/
 
@@ -69,8 +69,8 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The auditor's whole view of the recursive audit at the session loop** at `u = (((a, p), b), q)`: its tape `a`;
-what the ZK server sends (`Flock.Firewall.run s`) on the worker's requests `reqs a p l`, `l` the salted commit strings it
-sends of the messages `msgs a p` at the salt bytes `b` (`firewallStrings`, message `i` reading the strings before it),
+what the ZK server sends (`Flock.ZkServer.run s`) on the worker's requests `reqs a p l`, `l` the salted commit strings it
+sends of the messages `msgs a p` at the salt bytes `b` (`zkServerStrings`, message `i` reading the strings before it),
 and whether the inner session finished; and the view of V*'s `m` statements at the tape and the ZK server's commitments
 (`OuterZK.LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers' values `vs` on its own
 tape in `q`, statement `j` on the witness `wit j` of the worker's context (`OuterZK.wctxAt`), against `V*` at its tape
@@ -79,21 +79,21 @@ noncomputable def loopReal {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (s : Flock.Firewall.Schedule) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (s : Flock.ZkServer.Schedule) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (m : ℕ)
     (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → OuterZK.WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (u : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
       ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) :
-    Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
+    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
   (u.1.1.1,
-    Flock.Firewall.run s (reqs u.1.1.1 u.1.1.2 (firewallStrings (msgs u.1.1.1 u.1.1.2)
+    Flock.ZkServer.run s (reqs u.1.1.1 u.1.1.2 (zkServerStrings (msgs u.1.1.1 u.1.1.2)
         fun i => FlockSoundness.Audit.Law.streamOf (u.1.2 i)))
       (List.ofFn fun i => FlockSoundness.Audit.Law.streamOf (u.1.2 i)),
     (OuterZK.LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH OuterZK.loopK
       ((OuterZK.loopRef L₀ src).swP vs).prover Vs
       (OuterZK.wctxAt msgs u.1.1.1 u.1.1.2 fun i => ZkView.saltOfBytes (u.1.2 i))
-      (θ u.1.1.1 (firewallCommits (msgs u.1.1.1 u.1.1.2) fun i => ZkView.saltOfBytes (u.1.2 i))) u.2)
+      (θ u.1.1.1 (zkServerCommits (msgs u.1.1.1 u.1.1.2) fun i => ZkView.saltOfBytes (u.1.2 i))) u.2)
 
 /-- **The simulated view at the session loop** at `c = ((a, u), s)`: the tape `a`; the schedule's transcript `T` with
 `nh` ideal commit strings in its holes (`commitBytes` of a uniform `U` beside a salt's own hash, which read no message),
@@ -105,11 +105,11 @@ noncomputable def loopIdeal {Ωa Θ : Type} {nh : ℕ} (t : ℕ)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent) (m : ℕ)
+    (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent) (m : ℕ)
     (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (CB : ℕ → Type) [∀ j, Fintype (CB j)]
     [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (c : (Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × OuterZK.LoopSessions.SimCoins CB m) :
-    Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
+    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
   (c.1.1, (T fun i => commitBytes (OuterZK.idealStrs c.1.2 i), true),
     (OuterZK.LoopSessions.pubStmts m stmt).simAt (OuterZK.loopRef L₀ src).Nonce (OuterZK.loopRef L₀ src).Tape
       Claims.ZKMal.CoinOpen.shaH OuterZK.loopK (OuterZK.loopSim L₀ src t) CB Vs (c.1.1, fun i => idealLeaf (c.1.2 i))
@@ -117,10 +117,10 @@ noncomputable def loopIdeal {Ωa Θ : Type} {nh : ℕ} (t : ℕ)
 
 /-- **The recursive audit at the session loop is zero knowledge, released at a stop.** `RecursiveZK` where the
 commitments are what the ZK server's code sends and the outer session is V*'s statements run by the session loop. The
-auditor's tape is `Ωa` and the worker's randomness `Ωp`. The worker sends the ZK server (`Flock.Firewall.run` at the
+auditor's tape is `Ωa` and the worker's randomness `Ωp`. The worker sends the ZK server (`Flock.ZkServer.run` at the
 pinned schedule `s`) its requests `reqs a p l`; the ZK server salts the `nh` messages and tree tops they commit,
 `msgs a p`, each with its own 192 uniform bytes, and sends the auditor the salted commit strings `l`
-(`firewallStrings`). The inner coins are live: message `i` and the requests after it read the strings before it. V*'s
+(`zkServerStrings`). The inner coins are live: message `i` and the requests after it read the strings before it. V*'s
 `m` statements `stmt j (a, h)` at the tape and the ZK server's commitments `h` (`OuterZK.LoopSessions.atWorker`) are each
 one `--zk` session of the loop (`OuterZK.loopRef`), run in turn by its switched prover at the workers' values `vs`, on
 the witness `wit j` of the worker's context (`OuterZK.wctxAt`), against the auditor `V*` at its tape `θ a h`. The
@@ -133,7 +133,7 @@ It takes, each an obligation:
   `Loop.tables_dataE` and its siblings prove, and `SwCausalOn` at `Loop.SwOk`'s coins), which takes `SessionsCoined`'s
   role;
 * the worker's requests run through the ZK server to the schedule's transcript `T` with the salted commit strings of
-  `msgs` in its holes, and finish (`FirewallSends`);
+  `msgs` in its holes, and finish (`ZkServerSends`);
 * the worker's values satisfy V*'s circuits: at every tape, randomness and salts, each statement parses and its witness
   satisfies its circuit (`OuterZK.LoopSessions.Honest` at `Claims.Flock.R`);
 * V*'s statements fix each one's simulator randomness, `CB j` (`OuterZK.LoopSessions.Sized`).
@@ -163,9 +163,9 @@ def RecursiveZKLoop : Prop :=
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
     -- the ZK server: the pinned schedule, the worker's requests and the messages they commit, each reading the commit
     -- strings sent before it, and the schedule's transcript
-    (s : Flock.Firewall.Schedule) (nh : ℕ) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (s : Flock.ZkServer.Schedule) (nh : ℕ) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
-    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
+    (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     -- V*'s statements at the tape and the commitments, their witnesses at the worker's context, and the simulator's
     -- coins
     (m : ℕ) (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg)
@@ -179,12 +179,12 @@ def RecursiveZKLoop : Prop :=
     Claims.ZKServer.Loop.finS.DummyReg → Claims.ZKServer.Loop.finS.Causal →
     Claims.ZKServer.Loop.finS.SwCausalOn (Claims.ZKServer.Loop.SwOk Claims.ZKMal.Masked.dataE) vs →
     Claims.ZKServer.Loop.finS.TapeOK →
-    FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) s (fun _ _ _ => reqs) (fun _ _ _ => msgs) T →
+    ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) s (fun _ _ _ => reqs) (fun _ _ _ => msgs) T →
     (OuterZK.LoopSessions.atWorker m stmt wit).Honest
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
       (fun u : (Ωa × Ωp) × (Fin nh → ZkView.Salt) => OuterZK.wctxAt msgs u.1.1 u.1.2 u.2) →
     (OuterZK.LoopSessions.atWorker m stmt wit).Sized (OuterZK.loopSim L₀ src t) CB →
-    ∀ (cut : St → Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
+    ∀ (cut : St → Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → W)
       (stop : (((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
         ((OuterZK.loopRef L₀ src).swP vs).Nonce ((OuterZK.loopRef L₀ src).swP vs).Rand m) × Ωk → St)
       (E : W → Prop),
@@ -207,37 +207,37 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The auditor's whole view where the ZK server sends the schedule's transcript** `T`, the salted commit strings of
-`msgs` in its holes, and finishes: `loopReal` under `FirewallSends` (`loopReal_eq_sent`). -/
+`msgs` in its holes, and finishes: `loopReal` under `ZkServerSends` (`loopReal_eq_sent`). -/
 noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
+    (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (m : ℕ)
     (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
     (u : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
       ((loopRef L₀ src).swP vs).Nonce ((loopRef L₀ src).swP vs).Rand m) :
-    Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
+    Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) :=
   (u.1.1.1,
-    (T (_root_.Flock.Guarantees.firewallStrings (msgs u.1.1.1 u.1.1.2)
+    (T (_root_.Flock.Guarantees.zkServerStrings (msgs u.1.1.1 u.1.1.2)
       fun i => FlockSoundness.Audit.Law.streamOf (u.1.2 i)), true),
     (LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover Vs
       (wctxAt msgs u.1.1.1 u.1.1.2 fun i => ZkView.saltOfBytes (u.1.2 i))
-      (θ u.1.1.1 (_root_.Flock.Guarantees.firewallCommits (msgs u.1.1.1 u.1.1.2) fun i => ZkView.saltOfBytes (u.1.2 i)))
+      (θ u.1.1.1 (_root_.Flock.Guarantees.zkServerCommits (msgs u.1.1.1 u.1.1.2) fun i => ZkView.saltOfBytes (u.1.2 i)))
       u.2)
 
-/-- Under `FirewallSends`, the whole view at the session loop is `loopSent`. -/
+/-- Under `ZkServerSends`, the whole view at the session loop is `loopSent`. -/
 theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (s : _root_.Flock.Firewall.Schedule) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
+    (s : _root_.Flock.ZkServer.Schedule) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
-    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent) (m : ℕ)
+    (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent) (m : ℕ)
     (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (Vs : Claims.VStar Θ) (θ : Ωa → (Fin nh → ByteArray) → Θ)
-    (hF : _root_.Flock.Guarantees.FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) s (fun _ _ _ => reqs)
+    (hF : _root_.Flock.Guarantees.ZkServerSends (Prog := Unit) (Wit := Unit) (Rr := Unit) s (fun _ _ _ => reqs)
       (fun _ _ _ => msgs) T)
     (u : ((Ωa × Ωp) × (Fin nh → Fin 192 → Fin 256)) × Claims.Sampling.unitTape.at 0
       ((loopRef L₀ src).swP vs).Nonce ((loopRef L₀ src).swP vs).Rand m) :
@@ -249,7 +249,7 @@ theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Lo
 /-- **The whole view at the session loop is close to the simulated one**, where the ZK server sends the schedule's
 transcript (`loopSent`): V*'s statements at the worker's context are within their error of their public statements'
 simulator (`LoopSessions.view_le` at `loop_zkmalR`, `prCoin_simAt_pubStmts`), and then T1 once per commitment over the
-adaptive leaves, at the commit strings' bytes (`FirewallZK.recursiveZK_enc` at `commitBytes`). -/
+adaptive leaves, at the commit strings' bytes (`ZkServerZK.recursiveZK_enc` at `commitBytes`). -/
 theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ωp] [Nonempty Ωp] {nh : ℕ}
     (vs : Claims.ZKServer.Loop.finS.SwVals) (t : ℕ) (ht : 0 < t) (hS : Claims.ZKServer.Loop.finS.Tables)
     (hV : Claims.ZKServer.Loop.finS.Complete
@@ -260,7 +260,7 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (T : (Fin nh → ByteArray) → Array Flock.Firewall.Sent)
+    (T : (Fin nh → ByteArray) → Array Flock.ZkServer.Sent)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray) (m : ℕ)
     (stmt : ℕ → Ωa × (Fin nh → ByteArray) → Claims.Msg) (wit : ℕ → WCtx Ωa Ωp nh → Claims.Flock.Wit)
     (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (Vs : Claims.VStar Θ)
@@ -269,7 +269,7 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
       (Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse)
       (fun u : (Ωa × Ωp) × (Fin nh → ZkView.Salt) => wctxAt msgs u.1.1 u.1.2 u.2))
     (hsz : (LoopSessions.atWorker m stmt wit).Sized (loopSim L₀ src t) CB)
-    (E : Ωa × (Array Flock.Firewall.Sent × Bool) × List (Claims.Msg × Claims.Out) → Prop) :
+    (E : Ωa × (Array Flock.ZkServer.Sent × Bool) × List (Claims.Msg × Claims.Out) → Prop) :
     prCoin (fun u => E (loopSent vs L₀ src T msgs m stmt wit Vs θ u)) ≤
       prCoin (fun c => E (_root_.Flock.Guarantees.loopIdeal t L₀ src T m stmt CB Vs θ c)) +
         ((LoopSessions.atWorker m stmt wit).err Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
@@ -280,16 +280,16 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
           E' ((LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH loopK
             ((loopRef L₀ src).swP vs).prover Vs
             (a, (fun i => _root_.Flock.Hm96.Default512.treeLeaf
-              (FirewallZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i)), p, y)
+              (ZkServerZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i)), p, y)
             (θ a fun i => _root_.Flock.Hm96.Default512.treeLeaf
-              (FirewallZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i)) q)) ≤
+              (ZkServerZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i)) q)) ≤
         prCoin (fun s : LoopSessions.SimCoins CB m =>
           E' ((LoopSessions.pubStmts m stmt).simAt (loopRef L₀ src).Nonce (loopRef L₀ src).Tape
             Claims.ZKMal.CoinOpen.shaH loopK (loopSim L₀ src t) CB Vs
             (a, fun i => _root_.Flock.Hm96.Default512.treeLeaf
-              (FirewallZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i))
+              (ZkServerZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i))
             (θ a fun i => _root_.Flock.Hm96.Default512.treeLeaf
-              (FirewallZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i)) s)) +
+              (ZkServerZK.encAt _root_.Flock.Guarantees.commitBytes (msgs a p) y i)) s)) +
           (LoopSessions.atWorker m stmt wit).err Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
             (loopEps L₀ src t) (4 * t * 3 ^ t) Vs (fun x => θ x.1 x.2.1) := fun a p y E' =>
     ((LoopSessions.atWorker m stmt wit).view_le Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover
@@ -298,7 +298,7 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
       (loopEps_nonneg L₀ src t) (by positivity) Vs (fun x => θ x.1 x.2.1) (wctxAt msgs a p y) _ rfl
       (fun j hj => hsz j hj _) (hH ((a, p), y)) E').trans_eq
       (congrArg (· + _) (LoopSessions.prCoin_simAt_pubStmts _ _ _ _ _ _ _ _ _ _ _))
-  have h := FirewallZK.recursiveZK_enc _root_.Flock.Guarantees.commitBytes nh msgs
+  have h := ZkServerZK.recursiveZK_enc _root_.Flock.Guarantees.commitBytes nh msgs
     (fun a l p y q => (LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH loopK
       ((loopRef L₀ src).swP vs).prover Vs (a, (fun i => _root_.Flock.Hm96.Default512.treeLeaf (l i)), p, y)
       (θ a fun i => _root_.Flock.Hm96.Default512.treeLeaf (l i)) q)
@@ -314,9 +314,9 @@ theorem loopSent_le {Ωa Ωp Θ : Type} [Fintype Ωa] [Nonempty Ωa] [Fintype Ω
   exact congrArg (fun f => E (z.1.1.1, (T f, true),
       (LoopSessions.atWorker m stmt wit).viewAt Claims.ZKMal.CoinOpen.shaH loopK ((loopRef L₀ src).swP vs).prover Vs
         (wctxAt msgs z.1.1.1 z.1.1.2 fun i => ZkView.saltOfBytes (z.1.2 i))
-        (θ z.1.1.1 (_root_.Flock.Guarantees.firewallCommits (msgs z.1.1.1 z.1.1.2)
+        (θ z.1.1.1 (_root_.Flock.Guarantees.zkServerCommits (msgs z.1.1.1 z.1.1.2)
           fun i => ZkView.saltOfBytes (z.1.2 i))) z.2))
-    (FirewallZK.firewallStrings_os (msgs z.1.1.1 z.1.1.2) z.1.2)
+    (ZkServerZK.zkServerStrings_os (msgs z.1.1.1 z.1.1.2) z.1.2)
 
 end FlockSoundness.Discharge.Recursion.OuterZK
 

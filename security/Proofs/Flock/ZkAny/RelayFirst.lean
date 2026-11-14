@@ -22,20 +22,20 @@ stream's first round in the schedule (`RelayFrames.leaveOf`). On the rep's run (
 namespace Claims.ZKServer.Relay
 
 open _root_.Flock (F128 SessionSpec)
-open _root_.Flock.Firewall.Frames (Rep)
-open _root_.Flock.Firewall.Frame (Cfg Req Place)
+open _root_.Flock.ZkServer.Frames (Rep)
+open _root_.Flock.ZkServer.Frame (Cfg Req Place)
 
 /-- **Rep 0's algebraic-phase coins keep a frame's `begun`**, whether it takes them or refuses them. -/
-theorem prior_begun (c : Cfg) (st : _root_.Flock.Firewall.Frame.State) (k : Nat) (b : ByteArray) :
-    (_root_.Flock.Firewall.Frame.step c st (.prior k b)).2.begun = st.begun := by
-  simp only [_root_.Flock.Firewall.Frame.step]
+theorem prior_begun (c : Cfg) (st : _root_.Flock.ZkServer.Frame.State) (k : Nat) (b : ByteArray) :
+    (_root_.Flock.ZkServer.Frame.step c st (.prior k b)).2.begun = st.begun := by
+  simp only [_root_.Flock.ZkServer.Frame.step]
   split
   · rfl
   · split <;> rfl
 
 /-- **A frame run on rep 0's algebraic-phase coins alone took no round it had not taken at its start.** -/
-theorem run_prior_begun (c : Cfg) : ∀ (pre : List Req) (st : _root_.Flock.Firewall.Frame.State),
-    (∀ q ∈ pre, ∃ k b, q = .prior k b) → (_root_.Flock.Firewall.Frame.run c st pre).1.begun = st.begun
+theorem run_prior_begun (c : Cfg) : ∀ (pre : List Req) (st : _root_.Flock.ZkServer.Frame.State),
+    (∀ q ∈ pre, ∃ k b, q = .prior k b) → (_root_.Flock.ZkServer.Frame.run c st pre).1.begun = st.begun
   | [], _, _ => rfl
   | q :: pre, st, h => by
     obtain ⟨k, b, rfl⟩ := h q List.mem_cons_self
@@ -56,7 +56,7 @@ theorem first_repRun {pre : List Req} {ev : List (Nat × ByteArray × Place × A
   | nil =>
     have e0 : evReqs ([] : List (Nat × ByteArray × Place × Array F128)) = [] := rfl
     rw [e0, List.append_nil] at h1
-    have e : (_root_.Flock.Firewall.Frame.run p.cfg {} pre).1.begun = p.st.begun := by rw [h1]
+    have e : (_root_.Flock.ZkServer.Frame.run p.cfg {} pre).1.begun = p.st.begun := by rw [h1]
     have hb : p.st.begun = false := by
       rw [← e, run_prior_begun _ pre _ hpre]
     simp [hb]

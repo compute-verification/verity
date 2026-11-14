@@ -6,7 +6,7 @@ import Proofs.Pouw.Period.Sort
 import Std.Data.TreeMap.Raw.Lemmas
 import Flock.Comp
 import Flock.JsonParse
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Norm
 import Flock.Canon
 import all Lean.Data.Json.Basic

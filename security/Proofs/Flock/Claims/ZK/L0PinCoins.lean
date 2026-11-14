@@ -78,15 +78,15 @@ theorem piopCut_split {coin : ℕ → ℕ → F128} {n : ℕ} {st : Setup} {lay 
         ((ringSwitchCut (asksCut coin n) src.sv (abcClaims st.m st.kLog zc lc ++ extras)).run t₂).go l₂ =
           (.ok ((ss, T, sws), t₃), l₃) := by
   unfold piopCut at h
-  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨zp', zc⟩, t₁, l₁, h₁, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨lp', lc⟩, t₂, l₂, h₂, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
-  obtain ⟨u, t₂', l₂', hr, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨u, t₂', l₂', hr, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   obtain ⟨ht, hl⟩ := rankCheckP_go hr
   rw [ht, hl] at h
   try dsimp only at h
-  obtain ⟨⟨ss', T', sws'⟩, t₃', l₃', h₃, h⟩ := Flock.Firewall.Finish.run_bind_ok h
+  obtain ⟨⟨ss', T', sws'⟩, t₃', l₃', h₃, h⟩ := Flock.ZkServer.Finish.run_bind_ok h
   try dsimp only at h
   rw [pure_go] at h
   simp only [Prod.mk.injEq, Except.ok.injEq] at h

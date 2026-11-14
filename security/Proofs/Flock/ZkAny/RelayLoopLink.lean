@@ -26,10 +26,10 @@ it. Here that link is the model's: the coins of the history's link round at the 
 
 namespace Claims.ZKServer.Relay
 
-open _root_.Flock.Firewall.Session
-open _root_.Flock.Firewall hiding State
+open _root_.Flock.ZkServer.Session
+open _root_.Flock.ZkServer hiding State
 open _root_.Flock (SessionSpec Stmt)
-open _root_.Flock.Firewall.Frames (Sessions)
+open _root_.Flock.ZkServer.Frames (Sessions)
 
 /-! ## The session's link points -/
 
@@ -339,9 +339,9 @@ answered the session's first opening with coins the session goes on past, the wo
 count (`Frames.feedOf`), within `Frames.COIN_MAX`. -/
 theorem commit_words {st : State} {a : ByteArray} {C : Coins.Release} (hst : st.stop = none)
     (hC : st.session = some C) (h0 : C.opened.length = 0) (hb : byte? a 0 = some 2)
-    (hn : (st.answer .commit a).1.stop = none) (hle : C.hello.links ≤ _root_.Flock.Firewall.Frames.COIN_MAX) :
-    _root_.Flock.Firewall.Frame.words (st.answer .commit a).2 5 (((st.answer .commit a).2.size - 5) / 16) =
-      _root_.Flock.Firewall.Frames.feedOf C.hello.links a.data.toList := by
+    (hn : (st.answer .commit a).1.stop = none) (hle : C.hello.links ≤ _root_.Flock.ZkServer.Frames.COIN_MAX) :
+    _root_.Flock.ZkServer.Frame.words (st.answer .commit a).2 5 (((st.answer .commit a).2.size - 5) / 16) =
+      _root_.Flock.ZkServer.Frames.feedOf C.hello.links a.data.toList := by
   rw [answer_commit_coins st hb] at hn ⊢
   obtain ⟨C', cs, ho, hout⟩ := coins_session hst hC h0 hn
   obtain ⟨hm, hc⟩ := open_parts ho
@@ -371,7 +371,7 @@ theorem commit_words {st : State} {a : ByteArray} {C : Coins.Release} (hst : st.
     intro k hk
     rw [hout, get!_toBytes, get!_toBytes, ← List.getElem?_drop, frame_drop5, hdrop, hJ k hk]
   rw [hsz, hcl, show (16 * C.hello.links + 5 - 5) / 16 = C.hello.links by omega]
-  unfold _root_.Flock.Firewall.Frames.feedOf _root_.Flock.Firewall.Frame.words
+  unfold _root_.Flock.ZkServer.Frames.feedOf _root_.Flock.ZkServer.Frame.words
   rw [Nat.min_eq_left hle]
   apply Array.map_congr_left
   intro i hi
@@ -398,7 +398,7 @@ are `m`'s first words there (`Frames.feedOf`). -/
 theorem wordsAt_hist_two {W Rr : Type} (M : LoopModel W Rr) {c : Nat} {m : Claims.Msg} (hj : c < M.τ.length)
     (hc : c = 1) (h1 : (M.τ[c]'hj).2 = .msg m) :
     Loop.wordsAt M.x ((M.hist (c + 1)).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0 =
-      _root_.Flock.Firewall.Frames.feedOf (Loop.loopNr M.x 0) m := by
+      _root_.Flock.ZkServer.Frames.feedOf (Loop.loopNr M.x 0) m := by
   subst hc
   rw [Loop.feedOf_rd]
   unfold LoopModel.hist
@@ -433,7 +433,7 @@ theorem wordsAt_hist_zero {W Rr : Type} (M : LoopModel W Rr) {c c' : Nat} (hc : 
 run `M`: the coins of the model's history so far that answer its link, at the loop's count (`Loop.wordsAt` at opening
 `0`). -/
 def LinkOn {W Rr : Type} (M : LoopModel W Rr) (sid : Nat) (σ : LoopAt) : Prop :=
-  ∀ rel : _root_.Flock.Firewall.Frames.Release, sessAt σ.R sid = some rel →
+  ∀ rel : _root_.Flock.ZkServer.Frames.Release, sessAt σ.R sid = some rel →
     rel.link = some (Loop.wordsAt M.x ((M.hist σ.c).tail.map fun e => ZKMal.CoinLayer.rd e.2) 0)
 
 theorem linkOn_stay {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {root : ByteArray} {σ σ' : LoopAt}
@@ -448,8 +448,8 @@ session, where what its rounds read of the loop stays (`Stays`: the session's en
 the session's entry is set up. -/
 theorem linkOn_stays {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {σ σ' : LoopAt} (hS : SessOn spec sts σ.R sid) (hs : Stays sid σ σ') (h2 : 2 ≤ σ.c) (hc : σ.c ≤ σ'.c)
-    (h : ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ) :
-    ∀ name l0, _root_.Flock.Firewall.Level0.ofSession σ'.L0 sid name = some l0 → LinkOn M sid σ' := by
+    (h : ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession σ.L0 sid name = some l0 → LinkOn M sid σ) :
+    ∀ name l0, _root_.Flock.ZkServer.Level0.ofSession σ'.L0 sid name = some l0 → LinkOn M sid σ' := by
   intro name l0 hl
   rw [hs.1 name] at hl
   obtain ⟨rel, hr, -⟩ := hS
@@ -469,7 +469,7 @@ the words of what the prover receives (`LoopRead`), which are those coins at the
 theorem linkOn_commit {W Rr : Type} {M : LoopModel W Rr} {sid : Nat} {spec : SessionSpec} {sts : Array Stmt}
     {nonce : ByteArray} {seen : List String} {st : State} {pl : Placed} {e : Env} {σ σ' : LoopAt} {s0 : FlockDeploy.Ins}
     (hx : FlockDeploy.setupOf true M.x = some (s0, spec, sts))
-    (hpm : spec.points * spec.mPts ≤ _root_.Flock.Firewall.Frames.COIN_MAX) (hsl : slot st pl = some .commit)
+    (hpm : spec.points * spec.mPts ≤ _root_.Flock.ZkServer.Frames.COIN_MAX) (hsl : slot st pl = some .commit)
     (hF : LoopFacts sid spec seen st pl σ) (hL : LinksOk spec st)
     (hra : LoopRead M sid spec sts nonce .commit st pl e σ σ')
     (hgo : ((stepK true st pl (some (tagOf .commit)) (.ok .commit) e).go &&

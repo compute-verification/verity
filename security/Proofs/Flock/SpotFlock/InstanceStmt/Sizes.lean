@@ -19,7 +19,7 @@ import Flock.HmNets
 import Flock.Canon
 import Flock.JsonParse
 import Flock.Net
-import Flock.Firewall
+import Flock.ZkServer
 import Flock.Bytes
 import Flock.FV3
 import Flock.Hm96
@@ -58,10 +58,10 @@ by its header's text, at most the closed parts' length plus each string the run 
 -/
 
 @[expose] public section
-open Flock Flock.Firewall RecDeploy.VStarNets FlockVBridge.Names
+open Flock Flock.ZkServer RecDeploy.VStarNets FlockVBridge.Names
 open Properties.Flock.Nets (LinesFit FixedNetsBuild)
 open FlockDeploy.Concrete (hash_size toUTF8_size utf8_ofList_le joinNl_size secLs_fit unit_fit hexOf_len unitLaid)
-open FlockSoundness.Discharge.Recursion.FirewallJson (jsonCharsObj_eq jsonCharsList_eq memberChars)
+open FlockSoundness.Discharge.Recursion.ZkServerJson (jsonCharsObj_eq jsonCharsList_eq memberChars)
 open Std.DTreeMap.Internal (Impl)
 open Lean (Json)
 

@@ -1,10 +1,10 @@
-"""A recorded honest session held to the honest worker's Lean (`Flock.Firewall.honestReqs`, `FirewallHonest.honestRows`):
+"""A recorded honest session held to the honest worker's Lean (`Flock.ZkServer.honestReqs`, `ZkServerHonest.honestRows`):
 every request `rec_live` relayed to Lean's live ZK server on an honest recursive session of the unmodified prover, in order,
 the ZK server's answer to each with the salts it drew, and the challenger's live-coin part's record (`fixtures/honest-session/`, from
-`pod/93-rec-honest-session.sh`, which keeps `flock-firewall live`'s stdin and stdout through a tee: RoPE d64, one head).
+`pod/93-rec-honest-session.sh`, which keeps `flock-zk-server live`'s stdin and stdout through a tee: RoPE d64, one head).
 
 The relayed requests, read back to what the worker brought (`test_honest_reqs.honest_of`), are Lean's `honestReqs` of it
-byte for byte (`firewall-honest-difftest`, whose reference is `rec_live`'s encoder); each commitment the ZK server sent is
+byte for byte (`zk-server-honest-difftest`, whose reference is `rec_live`'s encoder); each commitment the ZK server sent is
 the worker's row's (`honestRows`, mirrored here, through the bytes `rowBytes` gives its digest) under the salt it drew for
 it, in salt order; and the ZK server at those salts gives the live record again on Lean's requests."""
 from __future__ import annotations
@@ -19,7 +19,7 @@ import verity_difftest as D
 from verity.commitments.rowleaf import ROLE_X, row_bytes, sha512_row_digest, sha512_row_prefix
 from verity_flock import rec_live as RL
 
-from test_firewall_agreement import built, lean_run  # noqa: F401 - `built` is a fixture
+from test_zk_server_agreement import built, lean_run  # noqa: F401 - `built` is a fixture
 from test_honest_reqs import PORT, honest_of, server  # noqa: F401 - `server` is a fixture
 
 FIX = Path(__file__).resolve().parent / "fixtures" / "honest-session"
@@ -31,10 +31,10 @@ def recorded() -> tuple[dict, list[bytes], list[dict]]:
     """The session's schedule, every request `rec_live` relayed, in order, and the ZK server's answer to each. The binary
     starts twice, each start a schedule line and its `ok`: `rec_live serve`'s load check of the schedule, then the
     session."""
-    assert (FIX / "firewall-in.txt").is_file(), (
+    assert (FIX / "zk-server-in.txt").is_file(), (
         f"{FIX} is not fetched: `uv run research data fetch-fixtures verity/protocols/proofs/flock/prover/tests/fixtures/honest-session`")
-    lines = (FIX / "firewall-in.txt").read_text().splitlines()
-    answers = [json.loads(a) for a in (FIX / "firewall-out.txt").read_text().splitlines()]
+    lines = (FIX / "zk-server-in.txt").read_text().splitlines()
+    answers = [json.loads(a) for a in (FIX / "zk-server-out.txt").read_text().splitlines()]
     assert [i for i, line in enumerate(lines) if line.startswith("{")] == [0, 1] and lines[0] == lines[1]
     assert answers[:2] == [{"ok": True}] * 2 and len(answers) == len(lines)
     return json.loads(lines[1])["schedule"], [bytes.fromhex(h) for h in lines[2:]], answers[2:]
@@ -55,7 +55,7 @@ def drawn(answers: list[dict]) -> tuple[list[bytes], list[bytes]]:
 
 
 def honest_rows(schedule: dict, h: dict) -> list[list[int]]:
-    """`FirewallHonest.honestRows`, on `rec_live.top_rows` and `message_rows`: each table's level-0 top in Commit's order,
+    """`ZkServerHonest.honestRows`, on `rec_live.top_rows` and `message_rows`: each table's level-0 top in Commit's order,
     then each round's caps after the schedule's copies of level 0's top (`level0`), and its message."""
     rows = [r for _, top in h["roots"] for r in RL.top_rows(bytes.fromhex(top))]
     for i, r in enumerate(schedule["rounds"]):
@@ -67,7 +67,7 @@ def honest_rows(schedule: dict, h: dict) -> list[list[int]]:
 
 
 def row_message(row: list[int]) -> bytes:
-    """`FirewallHonest.rowBytes`: the bytes a row's `sha512/row/v1` digest hashes (role x, 16-bit words)."""
+    """`ZkServerHonest.rowBytes`: the bytes a row's `sha512/row/v1` digest hashes (role x, 16-bit words)."""
     return sha512_row_prefix(ROLE_X, 16, len(row)) + row_bytes(row, 16)
 
 
@@ -82,7 +82,7 @@ def test_rec_lives_relayed_requests_are_honest_reqs_byte_for_byte(server):
     assert kind == "output" and json.loads(out) == [b.hex() for b in reqs]
 
 
-def test_the_firewalls_commitments_are_of_the_workers_rows():
+def test_the_zk_servers_commitments_are_of_the_workers_rows():
     """As many rows as the schedule's (`rowCount`), each commitment the ZK server sent `hm96-sha512`'s of its row's digest
     under the salt it drew for it, the digest `sha512_row_digest`'s and of `rowBytes`' bytes."""
     schedule, reqs, answers = recorded()
@@ -97,8 +97,8 @@ def test_the_firewalls_commitments_are_of_the_workers_rows():
 
 
 @lean
-def test_the_firewall_gives_the_live_record_on_lean_honest_reqs(server, built):
-    """`flock-firewall` (`Flock.Firewall.run`) on Lean's requests for the session, at the salts the live ZK server drew,
+def test_the_zk_server_gives_the_live_record_on_lean_honest_reqs(server, built):
+    """`flock-zk-server` (`Flock.ZkServer.run`) on Lean's requests for the session, at the salts the live ZK server drew,
     finishes with the challenger's live-coin part's live record (its coins and the link's points, which it samples, left out)."""
     schedule, reqs, answers = recorded()
     salts, _ = drawn(answers)

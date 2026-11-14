@@ -100,7 +100,7 @@
   "Properties.Flock.Circuit",
   "Properties.Pous.WipeSigned",
   "Properties.Challenger",
-  "Properties.Firewall",
+  "Properties.ZkServer",
   "Properties.Core.Site"
  ],
  "proved_in": ["../Proofs"],
@@ -1116,8 +1116,8 @@
   "Properties.Challenger",
   "Definitions.Pouw.Dither",
   "Definitions.Pouw.Assumptions.ServedWork",
-  "Properties.Firewall",
-  "Firewall"
+  "Properties.ZkServer",
+  "ZkServer"
  ],
  "claims": {
   "modules": ["Properties.Accounting.Remote.Subprotocol"],
@@ -1223,13 +1223,13 @@
   "Properties.Remote.SecurityProofs.acceptComplies": {
    "nontrivial": "Properties.Remote.SecurityProofs.acceptComplies_nontrivial"
   },
-  "Properties.Firewall.admitNext": {
-   "honest": ["Properties.Firewall.admitNext_honest"],
-   "nontrivial": "Properties.Firewall.admitNext_nontrivial"
+  "Properties.ZkServer.admitNext": {
+   "honest": ["Properties.ZkServer.admitNext_honest"],
+   "nontrivial": "Properties.ZkServer.admitNext_nontrivial"
   },
-  "Properties.Firewall.afterOnTime": {
-   "honest": ["Properties.Firewall.afterOnTime_honest"],
-   "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
+  "Properties.ZkServer.afterOnTime": {
+   "honest": ["Properties.ZkServer.afterOnTime_honest"],
+   "nontrivial": "Properties.ZkServer.afterOnTime_nontrivial"
   },
   "Properties.Spot.SecurityProofs.secondMisses": {
    "honest": ["Properties.Spot.SecurityProofs.secondMisses_honest"],
@@ -2475,10 +2475,10 @@
    "except": [],
    "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
   },
-  "Properties.Firewall": {
-   "imports": ["Firewall"],
+  "Properties.ZkServer": {
+   "imports": ["ZkServer"],
    "except": [],
-   "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
+   "why": "the record's rules are stated against the release side's own functions (`ZkServer.Record`, `ZkServer.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
   "Properties.Spot.Second": {
    "imports": ["Definitions.Claims", "Spot", "Properties.Spot.Draw"],
@@ -13460,20 +13460,20 @@
     "function": "Core.Remote.protocol",
     "outcome": "accept"
    },
-   "Properties.Firewall.admitNext": {
-    "function": "Core.Firewall.admit",
+   "Properties.ZkServer.admitNext": {
+    "function": "Core.ZkServer.admit",
     "outcome": "accept"
    },
-   "Properties.Firewall.stopEnds": {
-    "function": ["Core.Firewall.admit", "Core.Firewall.stop"],
+   "Properties.ZkServer.stopEnds": {
+    "function": ["Core.ZkServer.admit", "Core.ZkServer.stop"],
     "outcome": "none"
    },
-   "Properties.Firewall.outOfTurnStops": {
-    "function": "Core.Firewall.admit",
+   "Properties.ZkServer.outOfTurnStops": {
+    "function": "Core.ZkServer.admit",
     "outcome": "none"
    },
-   "Properties.Firewall.afterOnTime": {
-    "function": "Core.Firewall.Decision.after",
+   "Properties.ZkServer.afterOnTime": {
+    "function": "Core.ZkServer.Decision.after",
     "outcome": "accept"
    },
    "Properties.Spot.SecurityProofs.secondMisses": {

@@ -21,13 +21,13 @@ import Proofs.Flock.Soundness.Game
 # The held salts' finder: a registrant's read of R's level-0 top against the salts its nodes were committed under
 
 R's level-0 top is committed node by node: node `i`'s commit string is the hm96 commit string of its row
-(`Firewall.topRows`) under `salt i`, `salt` the salts the prover's workers committed R's level-0 top rows under, which
+(`ZkServer.topRows`) under `salt i`, `salt` the salts the prover's workers committed R's level-0 top rows under, which
 they hold (`registrant-holds-openings`; the guarantee is applied at the held salts, `TopOf`). A session reading node
 `i` opens the port's root at the leaf of its own row bytes and salt; where that leaf is node `i`'s (`treeLeaf` of its
 commit string) and the bytes are not node `i`'s row's, the two hm96 leaves' preimages collide (`hm96Pair`), a pair
 computable only with `salt i` in hand.
 
-* `rowInV`: the bytes `Firewall.rowDigest` hashes for `RecCoins.commitRow`'s row; `capRow`, `capRows`: a node's row and
+* `rowInV`: the bytes `ZkServer.rowDigest` hashes for `RecCoins.commitRow`'s row; `capRow`, `capRows`: a node's row and
   `cap`'s rows;
 * `ReadsX.SaltClash`, `SaltColl`: some session's registered read whose hm96 pair against row `readAt` of `rows` under
   `salt` collides; `ReadsX.saltCands`, `saltCands`: that pair at each position of each session, with its test
@@ -47,14 +47,14 @@ open Flock
 /-- A row of u16 words' bytes, low byte first. -/
 def wordBytes (ws : List ℕ) : List UInt8 := ws.flatMap fun w => [(w % 256).toUInt8, (w / 256 % 256).toUInt8]
 
-/-- What `Firewall.rowDigest` hashes for `commitRow`'s row: `sha512/row/v1`'s first block, then the row's words
+/-- What `ZkServer.rowDigest` hashes for `commitRow`'s row: `sha512/row/v1`'s first block, then the row's words
 zero-padded to whole blocks. -/
 def rowInV (row : Array ℕ) : List UInt8 :=
   let ws := RecCoins.padTo row (Registered.rowWords row.size 16)
   (HmRow.rowPrefix ws.size).data.toList ++ wordBytes ws.toList
 
-/-- A tree top's node as its row (`Firewall.topRows`): 32 little-endian u16 words, then 32 zero words. -/
-def capRow (top : ByteArray) : Array ℕ := (Firewall.topRows top).headD #[]
+/-- A tree top's node as its row (`ZkServer.topRows`): 32 little-endian u16 words, then 32 zero words. -/
+def capRow (top : ByteArray) : Array ℕ := (ZkServer.topRows top).headD #[]
 
 /-- The rows of `cap`'s `2^capDepth lv` nodes. -/
 def capRows (lv : FlockSoundness.Accounting.Level) (cap : FlockSoundness.Model.Cap FlockSoundness.Refine.Dig) :

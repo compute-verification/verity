@@ -128,7 +128,7 @@ section Out
 
 open _root_.Flock (V)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree)
 
 -- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
@@ -185,7 +185,7 @@ theorem release_out_of_takes {W R : Type} (L : LeanRelease W R) (x : Msg) (ρ : 
   | ok p =>
     obtain ⟨out, m⟩ := p
     obtain ⟨m₀, -, hr⟩ := bindV_ok hs
-    unfold _root_.Flock.Firewall.Frame.round at hr
+    unfold _root_.Flock.ZkServer.Frame.round at hr
     obtain ⟨q, hq, hr⟩ := bindV_ok hr
     obtain ⟨o, k, ho⟩ := roundFree_out hq
     have hlt := (roundFree_sq (Loop.roundFree_ok_inner hq) hq).2.2.1
@@ -381,7 +381,7 @@ theorem enc_finS {x : Msg} (c : Fin (refK x) → finS.Coin) {n : ℕ} (hn : n �
 the run is live and its coins unrefused. -/
 theorem swOk_take_of_finCtx {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray)}
-    {real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray)}
+    {real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray)}
     {wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker} {x : Msg} {w : Flock.Wit} {ν : finS.Nonce}
     {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk} {m₀ ρ₀ : Msg} {ops : List (Msg × Msg)}
     (hF : FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) (k : ℕ) :
@@ -427,7 +427,7 @@ theorem round_of_logs {coin : ℕ → ℕ → _root_.Flock.F128} {B : ℕ} {d : 
     (hd : d.toUTF8.size < 2 ^ 64) {m : Msg} (hm : m = dropDom (0 :: l[L + j]!)) {o : ByteArray} {k' : UInt8}
     {n' : ℕ} (hn' : n' < 2 ^ 64) (hrel : m = 0 :: (o ++ _root_.Flock.Transcript.header 4 k' n').data.toList) :
     r = { n := n', sha := .empty, coins := (Array.range n').map (coin (L + j)),
-          bytes := some (if j = 0 then _root_.Flock.Firewall.Frames.domainFrame d ++ ⟨m.tail.toArray⟩
+          bytes := some (if j = 0 then _root_.Flock.ZkServer.Frames.domainFrame d ++ ⟨m.tail.toArray⟩
             else ⟨m.tail.toArray⟩) } := by
   obtain ⟨-, hle, hsha, hcoins, c, hc, hl, p, kind, hcp, hlead⟩ := hr
   obtain ⟨hlt, hle'⟩ := Array.getElem?_eq_some_iff.1 hl
@@ -436,7 +436,7 @@ theorem round_of_logs {coin : ℕ → ℕ → _root_.Flock.F128} {B : ℕ} {d : 
     simp [FlockSoundness.Refine.Frame.enc, FlockSoundness.Refine.Frame.op, FlockSoundness.Refine.Frame.kind,
       FlockSoundness.Refine.Frame.len, FlockSoundness.Refine.Frame.pay]
   have htail : ∃ P, m.tail = P ++ (_root_.Flock.Transcript.header 4 kind r.n).data.toList ∧
-      (if j = 0 then _root_.Flock.Firewall.Frames.domainFrame d ++ ⟨m.tail.toArray⟩ else ⟨m.tail.toArray⟩) = c := by
+      (if j = 0 then _root_.Flock.ZkServer.Frames.domainFrame d ++ ⟨m.tail.toArray⟩ else ⟨m.tail.toArray⟩) = c := by
     unfold FlockComplete.RepLog.Lead at hlead
     by_cases hj : j = 0
     · rw [ite_eq_left hj] at hlead ⊢
@@ -450,7 +450,7 @@ theorem round_of_logs {coin : ℕ → ℕ → _root_.Flock.F128} {B : ℕ} {d : 
       apply ByteArray.ext
       apply Array.ext'
       rw [hcp]
-      simp [ByteArray.data_append, _root_.Flock.Firewall.Frames.domainFrame, FlockSoundness.Refine.Frame.enc,
+      simp [ByteArray.data_append, _root_.Flock.ZkServer.Frames.domainFrame, FlockSoundness.Refine.Frame.enc,
         FlockSoundness.Refine.Frame.op, FlockSoundness.Refine.Frame.kind, FlockSoundness.Refine.Frame.len,
         FlockSoundness.Refine.Frame.pay]
     · rw [ite_eq_right hj] at hlead ⊢
@@ -554,7 +554,7 @@ theorem viewRep_size (vs : finS.SwVals) {x : Msg} {w : Flock.Wit}
 (`frameUnrefused_ofLoop`), and the deployed tables admit unrefused coins (`tablesAdmitUnrefused_dataE`). -/
 theorem admits_of_finCtx (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit} (hServe : Serves x)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src real).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src real) wk x w ν t κ m₀ ρ₀ ops) :
@@ -992,7 +992,7 @@ theorem streamOf_getElem (x : Msg) (h : List (Msg × Msg)) (spec : _root_.Flock.
       { n := loopNr x (streamAt (roundsOf spec sts) k + j + 1), sha := .empty,
         coins := wordsAt x (h.tail.map fun p => CoinLayer.rd p.2) (streamAt (roundsOf spec sts) k + j + 1),
         bytes := some (if j = 0 then
-            _root_.Flock.Firewall.Frames.domainFrame (spec.domain spec.tables[k / 2]! (k % 2)) ++
+            _root_.Flock.ZkServer.Frames.domainFrame (spec.domain spec.tables[k / 2]! (k % 2)) ++
               ⟨((h.tail.getD (streamAt (roundsOf spec sts) k + j + 1) ([], [])).1).tail.toArray⟩
           else ⟨((h.tail.getD (streamAt (roundsOf spec sts) k + j + 1) ([], [])).1).tail.toArray⟩) } := by
   simp only [streamOf, seenRounds, List.getElem_toArray, List.getElem_mapIdx, List.getElem_map, List.getElem_range]
@@ -1005,7 +1005,7 @@ session's body there (`runCut_body`), so history message `L + j + 1` (`msg_runCu
 message's bytes (`round_of_logs`). -/
 theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -1127,7 +1127,7 @@ theorem viewRep_rounds (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
       wordsAt x (ops.map fun p => CoinLayer.rd p.2) (l.size + j) := by
     refine Array.ext ?_ fun e he1 he2 => ?_
     · rw [Array.size_map, Array.size_range, hws,
-        Nat.min_eq_left (show loopNr x (l.size + j) ≤ _root_.Flock.Firewall.Frames.COIN_MAX from hcap)]
+        Nat.min_eq_left (show loopNr x (l.size + j) ≤ _root_.Flock.ZkServer.Frames.COIN_MAX from hcap)]
     · have es := wordsAt_slot Masked.dataE x ops hF.1.le (s := ops.length) (p := l.size + j) (e := e) hlt le_rfl
         (by rw [List.take_length]; exact he2)
       rw [List.take_length] at es
@@ -1147,7 +1147,7 @@ rounds (`viewRep_rounds`) and ends at the next one's first round (`viewRep_size`
 streams before it return (c), with their rounds the auditor's. -/
 theorem finRepRounds_of (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
@@ -1189,7 +1189,7 @@ theorem finRepRounds_of (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
 /-- **(a) to (c) give `FinishIs`**: (d) follows from them (`finRepRounds_of`), then `finishIs_of_parts`. -/
 theorem finishIs_of_abc (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (real : Msg → Flock.Wit → Tp → ℕ → _root_.Flock.V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)

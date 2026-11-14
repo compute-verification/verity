@@ -25,7 +25,7 @@ round absorbs in the algebraic phase (its free words), which a device round may 
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS roundFree)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS roundFree)
 
 namespace Free
 
@@ -344,8 +344,8 @@ theorem suffix_cons {g : ℕ → St → V (ForInStep St)} (hG : Grows g) (a : �
         omega
 
 theorem inFree_false {free : Array ℕ} {i : ℕ} (h : ∀ f ∈ free, i < f ∨ f + 16 ≤ i) :
-    _root_.Flock.Firewall.Frame.inFree free i = false := by
-  unfold _root_.Flock.Firewall.Frame.inFree
+    _root_.Flock.ZkServer.Frame.inFree free i = false := by
+  unfold _root_.Flock.ZkServer.Frame.inFree
   rw [Array.any_eq_false]
   intro k hk
   rcases h free[k] (Array.getElem_mem hk) with h' | h' <;> simp <;> omega
@@ -425,7 +425,7 @@ theorem forIn_cons_yield {τ : Type} {g : ℕ → τ → V (ForInStep τ)} {i : 
   exact h
 
 theorem inFree_split {free L : Array ℕ} {a b i : ℕ} (hf : ∀ e ∈ free, e + 16 ≤ a) (hL : ∀ e ∈ L, b ≤ e)
-    (ha : a ≤ i) (hb : i < b) : _root_.Flock.Firewall.Frame.inFree (free ++ L) i = false :=
+    (ha : a ≤ i) (hb : i < b) : _root_.Flock.ZkServer.Frame.inFree (free ++ L) i = false :=
   inFree_false fun f hf' => by
     rcases Array.mem_append.1 hf' with h | h
     · right
@@ -450,7 +450,7 @@ theorem ite_bind_ok' {α β : Type} {p : Prop} [Decidable p] {e : String} {a : �
   · rw [ite_eq_right hp] at h
     exact ⟨hp, h⟩
 
-open _root_.Flock.Firewall.Frame (inFree) in
+open _root_.Flock.ZkServer.Frame (inFree) in
 /-- **Two runs of a round alike outside its free words end alike**: at alike configurations, from states equal but
 for `stopped`, on two rounds of one size that agree outside the words the first run frees, both runs free the same
 offsets and end at states equal but for `stopped`. -/
@@ -705,13 +705,13 @@ theorem roundFree_agree {c c' : Cfg} (hc : CfgAlike c c') {s₁ s₂ : Masker} (
     · cases hy
 
 theorem roundFree_of_round {c : Cfg} {s : Masker} {r : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker}
-    (h : _root_.Flock.Firewall.Frame.round c s r n = .ok (o, t)) : ∃ fr, roundFree c s r n = .ok (o, t, fr) := by
-  unfold _root_.Flock.Firewall.Frame.round at h
+    (h : _root_.Flock.ZkServer.Frame.round c s r n = .ok (o, t)) : ∃ fr, roundFree c s r n = .ok (o, t, fr) := by
+  unfold _root_.Flock.ZkServer.Frame.round at h
   obtain ⟨⟨o', t', fr⟩, hq, h⟩ := bindV_ok h
   cases h
   exact ⟨fr, hq⟩
 
-open _root_.Flock.Firewall.Frame (check) in
+open _root_.Flock.ZkServer.Frame (check) in
 /-- **The frame's check leaves the scheduled round's state** but for `stopped`: whatever the device round, at a state
 of a stopped rep or not, the state the check returns is the one the scheduled round `r` leaves the rep in. -/
 theorem check_unstop {c : Cfg} {m : Masker} {st : Bool} {v r : ByteArray} {n : ℕ} {o : ByteArray} {t : Masker}

@@ -104,7 +104,7 @@ theorem frameUnrefused_ofLoop (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      ℕ → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (H : Msg → Msg) (wk : (ofLoop T L₀ real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hSv : Serves x) :
     FrameUnrefused loopNr T (ofLoop T L₀ real) H wk x w := by
   intro hx ν t κ m₀ ρ₀ ops hl hlive _ hr hR

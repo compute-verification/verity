@@ -41,7 +41,7 @@ namespace Claims.ZKServer
 
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 TMW Transcript liftTM Stmt SessionSpec)
-open _root_.Flock.Firewall.Finish (Tab RepIn)
+open _root_.Flock.ZkServer.Finish (Tab RepIn)
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -88,11 +88,11 @@ theorem asksPad_round_ok (C : Array (Array F128)) (c : ByteArray) {k : ℕ}
 `n` coins, returns round `k`'s coins and moves to round `k + 1`. -/
 theorem squeezeP_pad_ok (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64)
     (t : Flock.Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = n) :
-    ∃ t', ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n).run t).run k =
+    ∃ t', ((_root_.Flock.ZkServer.Finish.squeezeP (asksPad C) kind n).run t).run k =
       .ok (((Array.range n).map (padCoin C k), t'), k + 1) :=
   ⟨_, by
-    change ((_root_.Flock.Firewall.Finish.squeezeP (asksPad C) kind n t).run k) = _
-    unfold _root_.Flock.Firewall.Finish.squeezeP
+    change ((_root_.Flock.ZkServer.Finish.squeezeP (asksPad C) kind n t).run k) = _
+    unfold _root_.Flock.ZkServer.Finish.squeezeP
     dsimp only
     rw [ite_eq_right hn, StateT.run_bind,
       asksPad_round_ok C _ fun cs hcs => (hC cs hcs).trans (Count.framed_count t kind hn64).symm]
@@ -100,18 +100,18 @@ theorem squeezeP_pad_ok (C : Array (Array F128)) (kind : UInt8) {n : ℕ} (hn : 
 
 theorem sampleVecP_pad_ok (C : Array (Array F128)) {n : ℕ} (hn : n ≠ 0) (hn64 : n < 2 ^ 64) (t : Flock.Transcript) {k : ℕ}
     (hC : ∀ cs, C[k]? = some cs → cs.size = n) :
-    ∃ t', ((_root_.Flock.Firewall.Finish.sampleVecP (asksPad C) n).run t).run k =
+    ∃ t', ((_root_.Flock.ZkServer.Finish.sampleVecP (asksPad C) n).run t).run k =
       .ok (((Array.range n).map (padCoin C k), t'), k + 1) :=
   squeezeP_pad_ok C 2 hn hn64 t hC
 
 /-- A coin answered by `asksPad C` from round `k`, where round `k` is past `C` or holds one coin, is round `k`'s first. -/
 theorem sampleP_pad_ok (C : Array (Array F128)) (t : Flock.Transcript) {k : ℕ} (hC : ∀ cs, C[k]? = some cs → cs.size = 1) :
-    ∃ t', ((_root_.Flock.Firewall.Finish.sampleP (asksPad C)).run t).run k = .ok ((padCoin C k 0, t'), k + 1) := by
+    ∃ t', ((_root_.Flock.ZkServer.Finish.sampleP (asksPad C)).run t).run k = .ok ((padCoin C k 0, t'), k + 1) := by
   obtain ⟨t₁, h1⟩ := squeezeP_pad_ok C 1 (by decide) (by norm_num) t hC
   have e : ((Array.range 1).map (padCoin C k)).getD 0 0 = padCoin C k 0 := by
     simp [Array.getD_eq_getD_getElem?]
   refine ⟨t₁, ?_⟩
-  unfold _root_.Flock.Firewall.Finish.sampleP
+  unfold _root_.Flock.ZkServer.Finish.sampleP
   rw [StateT.run_bind, StateT.run_bind, h1, ← e]
   rfl
 
@@ -126,17 +126,17 @@ theorem tauLift_run {hh : ByteArray → ByteArray} {tau : F128} {salt : ByteArra
 and `k + 3` is past `C` or holds the count it squeezes (one, `|cons| + 3`, one and `Zk.Q`) and its `β`, round `k + 2`'s
 first coin, is not `0`. -/
 theorem innerP_pad_ok (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
-    (p : _root_.Flock.Firewall.Finish.PadsZk) (ic : _root_.Flock.Firewall.Finish.InnerCommit) (finalC : F128)
+    (p : _root_.Flock.ZkServer.Finish.PadsZk) (ic : _root_.Flock.ZkServer.Finish.InnerCommit) (finalC : F128)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (hcs : cons.size + 3 < 2 ^ 64) (t : Flock.Transcript) {k : ℕ}
     (h0 : ∀ cs, C[k]? = some cs → cs.size = 1) (h1 : ∀ cs, C[k + 1]? = some cs → cs.size = cons.size + 3)
     (h2 : ∀ cs, C[k + 2]? = some cs → cs.size = 1)
     (h3 : ∀ cs, C[k + 3]? = some cs → cs.size = _root_.Flock.Zk.Q)
     (hβ : (padCoin C (k + 2) 0).isZero = false) :
-    OkAt (_root_.Flock.Firewall.Finish.innerP (asksPad C) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) lay p
+    OkAt (_root_.Flock.ZkServer.Finish.innerP (asksPad C) (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) lay p
       ic finalC cons) t k := by
   have hsz : ∀ e r s, (cons ++ _root_.Flock.Zk.triple lay e r s).size = cons.size + 3 := fun _ _ _ => by
     simp [_root_.Flock.Zk.triple]
-  unfold _root_.Flock.Firewall.Finish.innerP
+  unfold _root_.Flock.ZkServer.Finish.innerP
   try dsimp only
   refine okAt_bind ⟨_, liftTM_run rfl⟩ fun t₁ => ?_
   try dsimp only
@@ -166,15 +166,15 @@ theorem innerP_pad_ok (C : Array (Array F128)) (lay : _root_.Flock.Zk.PadLayout)
     exact okAt_pure _ _ _
 
 /-- **The pads commitment returns** through SHA-512 (`JsonRT.innerCommitP_ok`, through `Finish.innerCommitP_eq`). -/
-theorem innerCommitP_fw_ok (p : _root_.Flock.Firewall.Finish.PadsZk) (salt : ℕ → ByteArray) :
-    ∃ ic, (_root_.Flock.Firewall.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) p salt :
-      V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic := by
+theorem innerCommitP_fw_ok (p : _root_.Flock.ZkServer.Finish.PadsZk) (salt : ℕ → ByteArray) :
+    ∃ ic, (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) p salt :
+      V _root_.Flock.ZkServer.Finish.InnerCommit) = .ok ic := by
   obtain ⟨icC, h⟩ := FlockComplete.JsonRT.innerCommitP_ok _root_.Flock.Sha512.hash p.toC salt
-  have e := _root_.Flock.Firewall.Finish.innerCommitP_eq (M := V)
+  have e := _root_.Flock.ZkServer.Finish.innerCommitP_eq (M := V)
     (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) p salt
   rw [h] at e
-  rcases hic : (_root_.Flock.Firewall.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) p
-    salt : V _root_.Flock.Firewall.Finish.InnerCommit) with err | ic
+  rcases hic : (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) p
+    salt : V _root_.Flock.ZkServer.Finish.InnerCommit) with err | ic
   · rw [hic] at e
     cases e
   · exact ⟨ic, rfl⟩
@@ -196,34 +196,34 @@ theorem getThe_bind_run {β : Type} (f : ℕ → TMW (StateT ℕ V) β) (t : Flo
 /-- **`consWhy` passes** where the rep took the request's rounds and its `zerocheck c_eval` constraints vanish on the
 pads (`consWhy_none`'s converse). -/
 theorem consWhy_none_of {n : ℕ} {cons : Array (String × _root_.Flock.Zk.Lin)} {h : Array F128}
-    (hz : ∀ q ∈ cons, q.1 = "zerocheck c_eval" → _root_.Flock.Firewall.Finish.linAt q.2 h = 0) :
-    _root_.Flock.Firewall.Finish.consWhy n n cons h = none := by
-  have he : _root_.Flock.Firewall.Finish.failingOn (cons.filter (·.1 == "zerocheck c_eval")) h = #[] :=
-    _root_.Flock.Firewall.Finish.failingOn_eq_empty_iff.2 fun q hq => by
+    (hz : ∀ q ∈ cons, q.1 = "zerocheck c_eval" → _root_.Flock.ZkServer.Finish.linAt q.2 h = 0) :
+    _root_.Flock.ZkServer.Finish.consWhy n n cons h = none := by
+  have he : _root_.Flock.ZkServer.Finish.failingOn (cons.filter (·.1 == "zerocheck c_eval")) h = #[] :=
+    _root_.Flock.ZkServer.Finish.failingOn_eq_empty_iff.2 fun q hq => by
       obtain ⟨hq, hname⟩ := Array.mem_filter.1 hq
       exact hz q hq (by simpa using hname)
-  unfold _root_.Flock.Firewall.Finish.consWhy
+  unfold _root_.Flock.ZkServer.Finish.consWhy
   simp [he]
 
 /-- **`finInner` returns where its parts do**: its pads commitment returns, its `repCons`, answered by `asksPad` from
 round `0` and a transcript with no rounds, returns at the request's round `n`, `consWhy` passes, and its inner proof
 returns from there. -/
 theorem finInner_ok_of {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : RepIn}
-    {ic : _root_.Flock.Firewall.Finish.InnerCommit}
-    (hic : (_root_.Flock.Firewall.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
-      (_root_.Flock.Firewall.Finish.padsOf q.draws) (_root_.Flock.Firewall.Finish.saltAt q.draws.salts) :
-      V _root_.Flock.Firewall.Finish.InnerCommit) = .ok ic)
+    {ic : _root_.Flock.ZkServer.Finish.InnerCommit}
+    (hic : (_root_.Flock.ZkServer.Finish.innerCommitP (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash)
+      (_root_.Flock.ZkServer.Finish.padsOf q.draws) (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts) :
+      V _root_.Flock.ZkServer.Finish.InnerCommit) = .ok ic)
     {p : _root_.Flock.Proof} {zl : _root_.Flock.Zk.Level0Msgs} {cons : Array (String × _root_.Flock.Zk.Lin)}
     {tF : Flock.Transcript}
-    (hrep : ((_root_.Flock.Firewall.Finish.repCons (asksPad q.coins)
-        (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) t.st t.sch t.tPad rep dom t.g t.cm0
-        (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws) ic q.vals t.extra
-        t.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
+    (hrep : ((_root_.Flock.ZkServer.Finish.repCons (asksPad q.coins)
+        (fun lv g s => pure (_root_.Flock.ZkServer.Finish.commitFw lv g s)) t.st t.sch t.tPad rep dom t.g t.cm0
+        (_root_.Flock.ZkServer.Finish.claimsOf q.xs) (_root_.Flock.ZkServer.Finish.padsOf q.draws) ic q.vals t.extra
+        t.lanePad (fun l => _root_.Flock.ZkServer.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run
         (_root_.Flock.Transcript.init #[] dom)).run 0 = .ok (((p, zl, cons), tF), n))
-    (hcw : _root_.Flock.Firewall.Finish.consWhy n n cons (_root_.Flock.Firewall.Finish.padsOf q.draws).h = none)
-    (hin : OkAt (_root_.Flock.Firewall.Finish.innerP (asksPad q.coins)
+    (hcw : _root_.Flock.ZkServer.Finish.consWhy n n cons (_root_.Flock.ZkServer.Finish.padsOf q.draws).h = none)
+    (hin : OkAt (_root_.Flock.ZkServer.Finish.innerP (asksPad q.coins)
       (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-      (_root_.Flock.Firewall.Finish.padsOf q.draws) ic p.zerocheck.finalC cons) tF n) :
+      (_root_.Flock.ZkServer.Finish.padsOf q.draws) ic p.zerocheck.finalC cons) tF n) :
     ∃ (fc' : F128) (tc : ByteArray), finInner t rep dom n q = .ok (fc', tc) := by
   obtain ⟨ip, tG, kG, hip⟩ := hin
   refine ⟨p.zerocheck.finalC, ip.tauCommit, ?_⟩
@@ -253,10 +253,10 @@ theorem all_lit {l : List ℕ} {B : ℕ} (h : ∀ c ∈ l, c ≤ B) : ∀ c ∈ 
   fun c hc => h c (by simpa using hc)
 
 theorem queryCoins_le {sch : _root_.Flock.Schedule} (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) (i : ℕ) :
-    ∀ c ∈ _root_.Flock.Firewall.Session.queryCoins sch i, c ≤ 65536 := by
+    ∀ c ∈ _root_.Flock.ZkServer.Session.queryCoins sch i, c ≤ 65536 := by
   have h1 := hq i
   have h2 := Nat.log2_le_self ((sch.levels.getD i default).q - 1)
-  unfold _root_.Flock.Firewall.Session.queryCoins
+  unfold _root_.Flock.ZkServer.Session.queryCoins
   dsimp only
   refine all_lit fun c hc => ?_
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
@@ -265,14 +265,14 @@ theorem queryCoins_le {sch : _root_.Flock.Schedule} (hq : ∀ i, (sch.levels.get
 /-- Each round of Ligerito's plan counts at most `65,536` coins, where its `n` and each level's `q` are below. -/
 theorem ligeritoCoins_le {sch : _root_.Flock.Schedule} (hn : sch.n + 1 ≤ 65536)
     (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) :
-    ∀ c ∈ _root_.Flock.Firewall.Session.ligeritoCoins sch, c ≤ 65536 := by
-  have hs : ∀ i, _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i ≤ 65536
+    ∀ c ∈ _root_.Flock.ZkServer.Session.ligeritoCoins sch, c ≤ 65536 := by
+  have hs : ∀ i, _root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) i ≤ 65536
     | 0 => show sch.n - sch.k0 + 1 ≤ 65536 by omega
     | i + 1 => by
       have := Count.splitAt_le (sch.n - sch.k0 + 1) i
-      show _root_.Flock.Firewall.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1 ≤ 65536
+      show _root_.Flock.ZkServer.Session.splitAt (sch.n - sch.k0 + 1) i - 4 + 1 ≤ 65536
       omega
-  unfold _root_.Flock.Firewall.Session.ligeritoCoins
+  unfold _root_.Flock.ZkServer.Session.ligeritoCoins
   dsimp only
   refine all_append (all_append (all_append (all_append (all_lit ?_) (all_replicate (by omega))) (all_lit ?_))
     (queryCoins_le hq 0)) ?_
@@ -298,14 +298,14 @@ levels' `q` are below `65,536`, with at most `65,536` claims. -/
 theorem repPlan_le {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) (h35 : st.m ≤ 35) (hn : sch.n + 1 ≤ 65536)
     (hq : ∀ i, (sch.levels.getD i default).q + 1 ≤ 65536) (hc : 2 + spec.points * st.regions.size ≤ 65536) (i : ℕ) :
-    (_root_.Flock.Firewall.Session.repPlan spec st).getD i 0 ≤ _root_.Flock.Firewall.Frames.COIN_MAX := by
-  have hall : ∀ c ∈ _root_.Flock.Firewall.Session.replayCoins st.m st.c.kLog ++
+    (_root_.Flock.ZkServer.Session.repPlan spec st).getD i 0 ≤ _root_.Flock.ZkServer.Frames.COIN_MAX := by
+  have hall : ∀ c ∈ _root_.Flock.ZkServer.Session.replayCoins st.m st.c.kLog ++
       Array.replicate (2 + spec.points * st.regions.size) 7 ++ #[2 + spec.points * st.regions.size] ++
-      _root_.Flock.Firewall.Session.ligeritoCoins sch ++
-      #[1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q], c ≤ 65536 := by
+      _root_.Flock.ZkServer.Session.ligeritoCoins sch ++
+      #[1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q], c ≤ 65536 := by
     refine all_append (all_append (all_append (all_append ?_ (all_replicate (by omega))) (all_lit ?_))
       (ligeritoCoins_le hn hq)) (all_lit ?_)
-    · unfold _root_.Flock.Firewall.Session.replayCoins
+    · unfold _root_.Flock.ZkServer.Session.replayCoins
       refine all_append (all_append (all_append (all_append (all_lit ?_) (all_replicate (by omega))) (all_lit ?_))
         (all_replicate (by omega))) (all_lit ?_) <;>
       · intro c hc
@@ -315,25 +315,25 @@ theorem repPlan_le {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hc
       omega
     · intro c hc
-      simp only [List.mem_cons, List.not_mem_nil, or_false, _root_.Flock.Firewall.Session.INNER_CONS,
+      simp only [List.mem_cons, List.not_mem_nil, or_false, _root_.Flock.ZkServer.Session.INNER_CONS,
         _root_.Flock.Zk.Q] at hc
       omega
   show _ ≤ 65536
   rw [Array.getD_eq_getD_getElem?]
-  rcases hget : (_root_.Flock.Firewall.Session.repPlan spec st)[i]? with _ | c
+  rcases hget : (_root_.Flock.ZkServer.Session.repPlan spec st)[i]? with _ | c
   · exact Nat.zero_le _
   · obtain ⟨hi, e⟩ := Array.getElem?_eq_some_iff.1 hget
-    have hmem : c ∈ _root_.Flock.Firewall.Session.repPlan spec st := e ▸ Array.getElem_mem hi
-    simp only [_root_.Flock.Firewall.Session.repPlan, repCoins_ok hz, Except.toOption, Option.getD_some] at hmem
+    have hmem : c ∈ _root_.Flock.ZkServer.Session.repPlan spec st := e ▸ Array.getElem_mem hi
+    simp only [_root_.Flock.ZkServer.Session.repPlan, repCoins_ok hz, Except.toOption, Option.getD_some] at hmem
     exact hall c (Array.mem_filter.1 hmem).1
 
 /-- **A rep's plan is `repCons`'s rounds, then the inner proof's four**, at the statement's setup and `--zk`
 schedule. -/
 theorem repPlan_cons {spec : SessionSpec} {st : Stmt} {sch : _root_.Flock.Schedule} {tp : ℕ}
     (hz : _root_.Flock.Zk.schedule st.wideLeaf st.m = .ok (sch, tp)) :
-    (_root_.Flock.Firewall.Session.repPlan spec st).toList =
+    (_root_.Flock.ZkServer.Session.repPlan spec st).toList =
       Count.consCounts (_root_.Flock.Setup.ofCircuit st) sch (spec.points * st.regions.size) ++
-        [1, _root_.Flock.Firewall.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
+        [1, _root_.Flock.ZkServer.Session.INNER_CONS, 1, _root_.Flock.Zk.Q] := by
   rw [Count.repPlan_list hz]
   rfl
 
@@ -363,32 +363,32 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
     (hf : ∀ (a : F128) (lw ρ : Array F128), lw.size = 64 → ρ.size = t.st.fold.kLog - 6 →
       ∃ v, t.st.fold.fold a lw ρ = .ok v)
     (hz : _root_.Flock.Zk.schedule t.st.wideLeaf t.st.m = .ok (t.sch, tp))
-    (hes : (_root_.Flock.Firewall.Finish.claimsOf q.xs).size + 2 < 2 ^ 64)
-    (hC : Count.consCounts t.st t.sch (_root_.Flock.Firewall.Finish.claimsOf q.xs).size <+:
+    (hes : (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size + 2 < 2 ^ 64)
+    (hC : Count.consCounts t.st t.sch (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size <+:
       q.coins.toList.map Array.size)
-    (hn : (Count.consCounts t.st t.sch (_root_.Flock.Firewall.Finish.claimsOf q.xs).size).length = n) (hn2 : 2 < n)
+    (hn : (Count.consCounts t.st t.sch (_root_.Flock.ZkServer.Finish.claimsOf q.xs).size).length = n) (hn2 : 2 < n)
     (hρ : _root_.Flock.Zk.rhoIndependent
-      ((⟨(q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.Firewall.Finish.claimsOf q.xs) + 2 + t.sch.k0]!)[0]!,
-          (q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.Firewall.Finish.claimsOf q.xs) + 2 + t.sch.k0]!)[1]!⟩ :
+      ((⟨(q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.ZkServer.Finish.claimsOf q.xs) + 2 + t.sch.k0]!)[0]!,
+          (q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.ZkServer.Finish.claimsOf q.xs) + 2 + t.sch.k0]!)[1]!⟩ :
           _root_.Flock.F256),
-        (⟨(q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.Firewall.Finish.claimsOf q.xs) + 3 + t.sch.k0]!)[0]!,
-          (q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.Firewall.Finish.claimsOf q.xs) + 3 + t.sch.k0]!)[1]!⟩ :
+        (⟨(q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.ZkServer.Finish.claimsOf q.xs) + 3 + t.sch.k0]!)[0]!,
+          (q.coins[FlockComplete.CutEq.ligAt 0 t.st (_root_.Flock.ZkServer.Finish.claimsOf q.xs) + 3 + t.sch.k0]!)[1]!⟩ :
           _root_.Flock.F256)) = true)
     (hval : q.vals[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).fc]! =
       _root_.Flock.dot (_root_.Flock.lagrange _root_.Flock.nodesL _root_.Flock.den6Inv (padCoin q.coins 2 0))
         ((Array.range 64).map fun i => q.vals[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).r1c i]!))
     (h0 : ∀ cs, q.coins[n]? = some cs → cs.size = 1)
-    (h1 : ∀ cs, q.coins[n + 1]? = some cs → cs.size = _root_.Flock.Firewall.Session.INNER_CONS)
+    (h1 : ∀ cs, q.coins[n + 1]? = some cs → cs.size = _root_.Flock.ZkServer.Session.INNER_CONS)
     (h2 : ∀ cs, q.coins[n + 2]? = some cs → cs.size = 1)
     (h3 : ∀ cs, q.coins[n + 3]? = some cs → cs.size = _root_.Flock.Zk.Q)
     (hβ : (padCoin q.coins (n + 2) 0).isZero = false) :
     ∃ (fc' : F128) (tc : ByteArray), finInner t rep dom n q = .ok (fc', tc) := by
-  obtain ⟨ic, hic⟩ := innerCommitP_fw_ok (_root_.Flock.Firewall.Finish.padsOf q.draws)
-    (_root_.Flock.Firewall.Finish.saltAt q.draws.salts)
+  obtain ⟨ic, hic⟩ := innerCommitP_fw_ok (_root_.Flock.ZkServer.Finish.padsOf q.draws)
+    (_root_.Flock.ZkServer.Finish.saltAt q.draws.salts)
   obtain ⟨⟨p, zl, cons⟩, tr, hrun, -, rp, t', lgc, rec, hrp, hlgc, hcons⟩ :=
-    _root_.Flock.Firewall.Finish.repCons_asksOf q.coins h25 h35 hkm hkk hmk hfold hf hz t.tPad rep dom t.g t.cm0
-      (_root_.Flock.Firewall.Finish.claimsOf q.xs) (_root_.Flock.Firewall.Finish.padsOf q.draws) ic q.vals t.extra
-      t.lanePad (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hes hC hρ
+    _root_.Flock.ZkServer.Finish.repCons_asksOf q.coins h25 h35 hkm hkk hmk hfold hf hz t.tPad rep dom t.g t.cm0
+      (_root_.Flock.ZkServer.Finish.claimsOf q.xs) (_root_.Flock.ZkServer.Finish.padsOf q.draws) ic q.vals t.extra
+      t.lanePad (fun l => _root_.Flock.ZkServer.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hes hC hρ
   rw [hn] at hrun
   have hle : n ≤ q.coins.size := by
     have := hC.length_le
@@ -418,15 +418,15 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
         rw [← getElem!_pos rp.cons 0 hi, hzc.1]
         dsimp only
         have hMk : FlockSoundness.Discharge.Composed.ZerocheckMasked.Masks
-            (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (_root_.Flock.Firewall.Finish.padsOf q.draws).h
+            (_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (_root_.Flock.ZkServer.Finish.padsOf q.draws).h
             ⟨(Array.range 64).map fun i => p.zerocheck.round1ab[i]! +
-                (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog
+                (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog
                   t.sch.k0).r1ab i]!,
               (Array.range 64).map fun i => q.vals[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).r1c i]!,
               p.zerocheck.rounds,
-              p.zerocheck.finalA + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new
+              p.zerocheck.finalA + (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new
                 t.st.m t.st.kLog t.sch.k0).fa]!,
-              p.zerocheck.finalB + (_root_.Flock.Firewall.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new
+              p.zerocheck.finalB + (_root_.Flock.ZkServer.Finish.padsOf q.draws).h[(_root_.Flock.Zk.PadLayout.new
                 t.st.m t.st.kLog t.sch.k0).fb]!,
               q.vals[(_root_.Flock.Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0).fc]!⟩ p.zerocheck 0 :=
           ⟨fun i hi => by
@@ -442,7 +442,7 @@ theorem finInner_ok_at {t : Tab} {rep : ℕ} {dom : ByteArray} {n : ℕ} {q : Re
           have htr : tr.rounds = rs.toArray := by rw [← hrs, Array.toArray_toList]
           show (tr.rounds[2]!).coins.getD 0 0 = _
           rw [htr, getElem!_pos rs.toArray 2 (by simpa using h2rs), List.getElem_toArray, hco, getD_map_range hpos]
-        rw [_root_.Flock.Firewall.Finish.linAt_eq,
+        rw [_root_.Flock.ZkServer.Finish.linAt_eq,
           FlockSoundness.Discharge.Composed.ZerocheckMasked.c_eval_eval _ _ _ _ 0 hMk]
         dsimp only
         rw [hz2, ← hval]

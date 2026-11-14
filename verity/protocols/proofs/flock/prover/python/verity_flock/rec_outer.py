@@ -165,7 +165,7 @@ class TopValue:
         reg = G.Registered.commit(program, value, rows, [s for t in runs for s in t.salts])
         own = RR.commits_entry(program, value, R.OUT_WORDS, [b for t in runs for b in t.bcs])
         if own["root"] != reg.entry()["root"]:
-            raise ValueError(f"level {level}: the prover's tops are not the ones the firewall committed")
+            raise ValueError(f"level {level}: the prover's tops are not the ones the ZK server committed")
         return cls(reg, own, first)
 
     def position(self, q: V.Query) -> int:

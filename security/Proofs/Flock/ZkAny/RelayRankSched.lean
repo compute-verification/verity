@@ -31,7 +31,7 @@ table, is the opening's first, or the empty round where that table or its schedu
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128 SessionSpec Stmt)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS)
 
 namespace Bind
 
@@ -41,12 +41,12 @@ open Loop
 /-- **Past the algebraic phase a rep's schedule has a next round**: on as many rounds' coins as the algebraic phase
 has, the schedule so far holds a round past them, the opening's driver asking for its first (`Count.openStep_end`,
 `feed_part`). -/
-theorem sched_open {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_open {t : _root_.Flock.ZkServer.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
-    (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
+    (hal : _root_.Flock.ZkServer.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.ZkServer.Finish.flat t.cm0.cap) dom =
       .ok alg)
     (hs : schedSoFar t rep dom xs hi cr = .ok sched) (hcr : cr.size = alg.size) (hdom : dom.size < 2 ^ 64)
-    (hdg : t.st.digest.size < 2 ^ 64) (hcap : (_root_.Flock.Firewall.Finish.flat t.cm0.cap).size < 2 ^ 64)
+    (hdg : t.st.digest.size < 2 ^ 64) (hcap : (_root_.Flock.ZkServer.Finish.flat t.cm0.cap).size < 2 ^ 64)
     (hm : t.st.m < 2 ^ 64) (hx : xs.size + 2 < 2 ^ 64) (hk : 1 ≤ t.sch.k0) (hn : t.sch.n < 2 ^ 62)
     (hq : ∀ i, (t.sch.levels.getD i default).q < 2 ^ 63) : alg.size < sched.size := by
   obtain ⟨hdrop, hnf⟩ := schedSoFar_sentQ hal hs hcr.ge
@@ -98,13 +98,13 @@ theorem ofLoop_rank_sched (T : ZKMal.CoinLayer.TableData)
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
     (real : Msg → Claims.Flock.Wit →
       (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand →
-      Nat → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+      Nat → V (_root_.Flock.ZkServer.Finish.Tab × Array ByteArray))
     (x : Msg) (w : Claims.Flock.Wit)
     (ρ : (ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand)
     (e0 : Msg × Msg) (h1 : List (Msg × Msg)) (vals : String → Option ByteArray)
     {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q k j : Nat}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts))
-    (hz : _root_.Flock.Firewall.Session.sizesOk spec sts = true) (hR : Count.RealTabs sts (real x w ρ))
+    (hz : _root_.Flock.ZkServer.Session.sizesOk spec sts = true) (hR : Count.RealTabs sts (real x w ρ))
     (hq : h1.length = q + 1) (hki : ZKMal.CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1))
     (hk : k < spec.repStreams.size) (hm14 : 14 ≤ sts[k / 2]!.m) (hk6 : 6 ≤ sts[k / 2]!.c.kLog)
     (hmk : sts[k / 2]!.merkle = _root_.Flock.MerkleScheme.hm96Sha512) {m : Masker}
@@ -132,7 +132,7 @@ theorem ofLoop_rank_sched (T : ZKMal.CoinLayer.TableData)
   rw [progOf_at x cs hx hq1 hj (by rw [hk1]; exact hph'), hj, hk1] at hF
   obtain ⟨lay, mask, hds, hc', hdm, hxe⟩ := placeholder_ok hph'
   obtain ⟨-, hd, hx2, -⟩ := sizesOk_at hz hk
-  have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.Firewall.Frames.COIN_MAX := by
+  have hls : (wordsAt x cs 0).size = min (loopNr x 0) _root_.Flock.ZkServer.Frames.COIN_MAX := by
     rw [← hcs]
     cases h1 with
     | nil => simp at hq
@@ -186,7 +186,7 @@ theorem ofLoop_rank_sched (T : ZKMal.CoinLayer.TableData)
   obtain ⟨hdgr, hmbr, -, -, -, -⟩ := Count.real_bounds hph' hT
   have hstr : tr.st = t.st := hT.1
   have hschr : tr.sch = t.sch := hT.2.1
-  have hcapr : (_root_.Flock.Firewall.Finish.flat tr.cm0.cap).size < 2 ^ 64 := hT.2.2.2.2.2
+  have hcapr : (_root_.Flock.ZkServer.Finish.flat tr.cm0.cap).size < 2 ^ 64 := hT.2.2.2.2.2
   rcases hrs : schedSoFar tr (k % 2) dom xs hr'
       ((Array.range (j + 1)).map fun i => wordsAt x cs (q' + 1 - (j + 1) + i + 1)) with _ | rs
   · have hrs' := hrs

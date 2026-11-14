@@ -109,7 +109,7 @@ theorem runCut_innerBody_live {x : Msg} (hx : Live x) (c : Fin (refK x) → Floc
     (hi : i < 4) (hN : ¬ Refused x c (repSlot x (2 * j.val + r.val) (innerOff i))) :
     (runCut x c (repSlot x (2 * j.val + r.val) (innerOff i)) spec src).2[repSlot x (2 * j.val + r.val) (innerOff i)]! =
       FlockComplete.CutFree.innerCutBody (((src j.val).rep r.val).masked (innerLayE x j).fc) ((src j.val).rep r.val)
-        _root_.Flock.Firewall.Session.INNER_CONS i := by
+        _root_.Flock.ZkServer.Session.INNER_CONS i := by
   obtain ⟨-, -, -, hall⟩ := FlockComplete.ZkTables.tables_of_setup hx.1 hsx
   obtain ⟨schs, hs, -⟩ := schedsPZk_live hx
   have hms : ∀ k < (FlockDeploy.tabsOf (stsOf x)).size,
@@ -160,8 +160,8 @@ namespace Claims.ZKServer
 open Claims Claims.ZKMal
 open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Transcript (header)
-open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS labelFrame wordBytes words)
-open _root_.Flock.Firewall.Finish (Tab)
+open _root_.Flock.ZkServer.Frame (Cfg Masker INNER_ROUNDS labelFrame wordBytes words)
+open _root_.Flock.ZkServer.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
 /-! ### The cut session's inner bodies and the ZK server's own rounds -/
@@ -278,7 +278,7 @@ theorem swMsgAt_innerAt (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVal
         ((Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
           (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
             ((CoinLayer.session Loop.loopNr Masked.dataE).seenOf x t)) t j.val).rep r.val)
-        _root_.Flock.Firewall.Session.INNER_CONS e := by
+        _root_.Flock.ZkServer.Session.INNER_CONS e := by
   have hb := Masked.runCut_innerBody_live hx ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
     (Masked.swSrcE x ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs) w
       (vs x w ν ((CoinLayer.session Loop.loopNr Masked.dataE).pad cs)
@@ -318,7 +318,7 @@ theorem ofLoop_start_at (T : CoinLayer.TableData)
     {s0 : _} {spec : SessionSpec} {sts : Array Stmt} {q k j : ℕ}
     (hx : FlockDeploy.setupOf true x = some (s0, spec, sts)) (hq : h1.length = q + 1)
     (hki : CoinLayer.locate (roundsOf spec sts) 0 q = (k, j + 1)) :
-    ∃ lay mask, _root_.Flock.Firewall.Drive.start sts[k / 2]! = .ok (lay, mask) := by
+    ∃ lay mask, _root_.Flock.ZkServer.Drive.start sts[k / 2]! = .ok (lay, mask) := by
   have hq1 : cs.length = q + 1 := by rw [← hcs, List.length_map, hq]
   have hj : (CoinLayer.locate (roundsOf spec sts) 0 q).2 = j + 1 := by rw [hki]
   obtain ⟨m0, r0⟩ := e0
@@ -389,7 +389,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
     (hv : wk x w (ν, t) ((m₀, ρ₀) :: ops) 0 = some (v, false))
     (hI : Loop.InnerAt (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2))
     (hF : ∀ (w' : ByteArray) (j : Fin (Masked.jOf x)) (r : Fin 2), w'.size = 16 →
-      v = (_root_.Flock.Firewall.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++
+      v = (_root_.Flock.ZkServer.Frame.labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8 ++
         _root_.Flock.Transcript.header 3 1 1 ++ w' ++ _root_.Flock.Transcript.header 4 1 1).data.toList →
       (ofLoopLink (withInner Masked.dataE L₁ real fin) src real).rep x (ops.length + 1) = 2 * j.val + r.val →
       ops.length = Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0) →
@@ -439,7 +439,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
   obtain rfl := Option.some.inj (hin.symm.trans hin')
   obtain ⟨W, T, hW, hT', hsch⟩ : ∃ W T : ByteArray, W.size = 16 ∧ T.size = 64 ∧
       ∀ (c : Cfg) (s : Masker) (n k : ℕ),
-        _root_.Flock.Firewall.Frame.innerSched c s (fin x w (ν, t) ((m₀, ρ₀) :: ops)) n k = ownRound c s W T n k :=
+        _root_.Flock.ZkServer.Frame.innerSched c s (fin x w (ν, t) ((m₀, ρ₀) :: ops)) n k = ownRound c s W T n k :=
     ⟨wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 0 .empty)
         ((labelFrame _root_.Flock.Zk.LABEL_INNER.toUTF8).size + 16) 1),
       wordBytes (words ((fin x w (ν, t) ((m₀, ρ₀) :: ops)).getD 2 .empty) 16 4),
@@ -512,7 +512,7 @@ theorem liveInner_withInner_at (vs : (CoinLayer.session Loop.loopNr Masked.dataE
       FlockSoundness.Refine.getD_of_lt hfcL, FlockSoundness.Discharge.Composed.ZerocheckMasked.add_add_self]
     rfl
   · -- round 1: the pair's openings
-    have hn1 : loopNr x (q + 1) = _root_.Flock.Firewall.Session.INNER_CONS := by
+    have hn1 : loopNr x (q + 1) = _root_.Flock.ZkServer.Session.INNER_CONS := by
       rw [hslot]
       exact hnr 1 (by decide)
     have hL1 := Masked.repSlot_innerOff hxs jf rf 1
