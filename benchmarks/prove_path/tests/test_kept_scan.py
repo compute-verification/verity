@@ -31,7 +31,7 @@ import pytest
 
 from verity.protocols.accounting.certifier.prover import ingress_scan as IS
 from verity.protocols.accounting.certifier.verifier import warden as W
-from verity.protocols.accounting.certifier.verifier.active import id_request
+from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.blocks import SCAN_STATE
 from verity.protocols.accounting.certifier.verifier.certificate import Issuer, LmsSigner
 from verity.commitments.crypto import lms

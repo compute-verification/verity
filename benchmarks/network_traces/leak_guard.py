@@ -34,7 +34,7 @@ file in those records: for a record that observes what the witness file also rec
 which pieces match changes with the values (the runner's resources.jsonl and the stall probe's cgroup counters). An
 entry excuses a piece by its witness file and its records, never by a key path, and one that names anything else is
 refused: a value other files repeat by chance is written in a form they don't (the certifier's CPUs,
-`active_replay.cpu_ranges`). An entry is written only after its find was read by counts and digests
+`runner_parts.cpu_ranges`). An entry is written only after its find was read by counts and digests
 (QUARANTINE/leak-guard.json), never by its bytes.
 
 Each find is moved to QUARANTINE/files/ under its record path. QUARANTINE must lie outside RUN_DIR and is kept 0700;

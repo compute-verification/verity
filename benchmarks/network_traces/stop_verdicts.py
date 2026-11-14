@@ -108,7 +108,7 @@ the command does not write itself, closes that, and the reader is handed none.
 held to the digest its certificate names. No signature is checked here: the certificate verifies under the network
 certifier's key and session, which a calculator doesn't hold. The signature is checked where `REGISTRATIONS_FILE` is
 written, by the offline check of the network certifier's run (`warden_serve.py check --registrations`,
-`connection_rows_run.check`). The auditor hands that check the SHA-512 of the network certifier's public key and
+`connection_rows_check.check`). The auditor hands that check the SHA-512 of the network certifier's public key and
 the session; it holds the run's deployment record to them, verifies each registration under that key and session
 (`connection_rows.check_registration`), lays its tables again from the run's own records, and writes the file only
 where it found no problem: a first line, of a ``format`` of its own (`CHECKED`), that names the hash and the
