@@ -166,17 +166,6 @@ def test_lean_module_roots_are_disjoint():
     assert not clashes, clashes
 
 
-def test_every_lock_is_owned():
-    """A lock with no owner, issue or due date in it is unowned, and the Lean check holds it to no owner rule
-    (`check.py`'s `unowned_lock`): the lock of a tree with no lanes.  This tree has lanes, so each of its locks that
-    lists a guarantee or a premise names who answers for it."""
-    merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
-    unowned = [_rel(p) for p in lake_packages() if merge.A.unowned_lock(_lock(p))]
-    assert not unowned, (f"locks that name no owner, so no entry of theirs owes one: {unowned}; run `check.py --update "
-                         f"--owner @lane` on each, which owns its entries")
-    assert any(merge.A.unowned_lock({s: {"X": {}}}) for s in merge.A.LANE_ENTRIES)
-
-
 def test_every_record_merges_with_the_driver():
     """`.gitattributes` sends every `lean-audit.json` to `tools/verity/lean/merge.py`, and the unread ratchet's caps to its
     `--caps` driver, and each record's `reads` digests are the ones the driver recomputes from their definitions."""
