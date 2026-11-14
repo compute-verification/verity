@@ -60,7 +60,7 @@ def test_pouw_period(server):
     assert set(swept) == {"accept", "reject"}, dict(swept)
     assert {"accept", "reject params", "reject commitment", "reject evidence", "reject form", "reject period",
             "reject window", "reject circuit", "reject missing", "reject order", "reject coin",
-            "reject budget"} <= set(RULES), RULES
+            "reject budget", "reject sessions"} <= set(RULES), RULES
 
 
 def test_an_honest_period_is_its_credit():
@@ -70,10 +70,31 @@ def test_an_honest_period_is_its_credit():
     a = PC.case(case)
     assert a["verdict"] == "accept", a["reason"]
     assert a["public"]["delta"] == "1/1099511627776" and a["profile"]["windows"] == len(a["public"]["windows"])
+    p, ledger = case["params"], [json.loads(x) for x in json.loads(bytes.fromhex(case["commitment"]))]
+    close = next(e for e in ledger if e["kind"] == "period-close" and e["body"]["period"] == p["name"])
+    start = next(e["seq"] for e in ledger if e["kind"] == "period-open" and e["body"]["period"] == p["name"])
+    assert {k: a["public"][k] for k in ("key", "roots", "start", "length")} == {
+        "key": p["key"], "roots": [w["root"] for w in close["body"]["windows"]], "start": start,
+        "length": close["seq"] + 1 - start}
+    assert not {"registration_head", "place", "part", "head"} & set(a["public"]), "the period names no device"
+    assert p["sessions"] == [w["session"] for w in close["body"]["windows"]] != []
     assert a["commitment"] == PC.digest({"bytes": bytes.fromhex(case["commitment"])}).hex()
-    for name, what in (("params-missing", "params"), ("ledger-object", "commitment"), ("evidence-list", "evidence")):
+    for name, what in (("params-missing", "params"), ("params-device", "params"), ("params-sessions", "params"),
+                       ("sessions-unlisted", "sessions"), ("ledger-object", "commitment"), ("evidence-list", "evidence")):
         got = PC.case(cases.instance(random.Random(f"{name}/credit"), name))
         assert got["verdict"] == "reject" and got["reason"].startswith(f"{what}: "), (name, got)
+
+
+def test_the_parameters_name_no_device():
+    """Parameters naming a device's head or place are refused, and without `sessions` the period runs with no session
+    list, with the same answer."""
+    for seed in range(4):
+        got = PC.case(cases.instance(random.Random(f"params-device/{seed}"), "params-device"))
+        assert got["verdict"] == "reject" and got["reason"] == f"params: {PC.KEYS_FORM}", got
+    alone = PC.case(cases.instance(random.Random("honest/credit"), "alone"))
+    listed = PC.case(cases.instance(random.Random("honest/credit")))
+    assert alone["verdict"] == "accept", alone["reason"]
+    assert alone["public"] == listed["public"]
 
 
 @pytest.mark.parametrize("name,why", [("form-pass", "is a Pearl-C pass"),
