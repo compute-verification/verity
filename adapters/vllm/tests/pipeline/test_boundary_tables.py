@@ -16,15 +16,20 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 import torch
-
-from verity.protocols.proofs.spot.verifier.one_stage import partition as P, registration as R, verifier as V
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.circuits.types import Array, Value as Bits
+from verity.circuits.types import Array
+from verity.circuits.types import Value as Bits
 from verity.commitments import history as HT
 from verity.commitments.windows import rows as CS
+from verity.protocols.proofs.spot.verifier.one_stage import partition as P
+from verity.protocols.proofs.spot.verifier.one_stage import registration as R
+from verity.protocols.proofs.spot.verifier.one_stage import verifier as V
+
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, boundary_windows as BW
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import boundary_windows as BW
 from verity_vllm.records.boundary_tables import ROOTS
 
 RUN = "a" * 128
@@ -419,8 +424,8 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
         bw.stop()
     finally:
         hooks.uninstall()
-    assert [x["error"] for x in lines] == ["ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
-                                           "are incomplete: step 9: ValueError: no slot"] * 2
+    assert [x["error"] for x in lines] == [("ValueError: rank 0 built no history tables: ValueError: rank 0's latent rows "
+                                            "are incomplete: step 9: ValueError: no slot")] * 2
     assert not list(tmp_path.rglob(BR.COMMIT))
     L = BR.Layout(PAIR, 0, 1, 8, 4, 1, RUN, layers=(0, 3), capacity=CAP)
     entries = [HT.HistoryTable(L.partition["program"], n, H.WORDS, CAP).entry() for n in L.tables]

@@ -11,10 +11,10 @@ import pytest
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.commitments.gates import embedding as EMB
-from verity.definitions.numerics import deepgemm_twins as DT
 from verity.circuits.ops.boolean import gemm as BG
 from verity.circuits.ops.prims import HopperE4m3MmaV2Dot32
+from verity.commitments.gates import embedding as EMB
+from verity.definitions.numerics import deepgemm_twins as DT
 from verity.definitions.registry import boolean_deepgemm as BDG
 from verity.definitions.registry import boolean_fp8_moe as BFM
 from verity.definitions.registry import deepgemm as DG

@@ -34,15 +34,17 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-
-from verity.protocols.proofs.spot.verifier import second_stage as SS
-from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
 from verity.circuits.codec import definitions
-from verity.commitments import hm96, history as HT
+from verity.commitments import history as HT
+from verity.commitments import hm96
 from verity.commitments.gates import embedding as EMB
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows.interface import digest_words
-from verity_vllm.pipeline import boundary_tables as BT, serving_rows as SRW
+from verity.protocols.proofs.spot.verifier import second_stage as SS
+from verity.protocols.proofs.spot.verifier.one_stage import registered as RG
+
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import serving_rows as SRW
 
 #: a table read's parameters (`gates.embedding`'s `EmbeddingRead_v1`): its key, its table's root and domain id, its opening
 READ = ("tok", "root", "domain", "row", "salt", "path")
