@@ -189,3 +189,25 @@ network-accounting/GATERELAY to the lead, Fri 13 Nov 5:32 PM PST. **`r20261113-2
 
 Also: my sizing line reached your inbox at 5:24 PM PST; its header says 5:27, which I wrote ahead of reading the clock. The mend is pushed, head `1d4a3178464b6128eb4aa419280f9982b8c08a97`, off `main` at `e936aedbc51e`; its run on a node is `r20261114-013020-8436`, and I open the pull request now. `r20261114-005059-1aba` (a rehearsal's piece) is still running.
 
+[2026-11-14T01:32Z] 473e300b3e4c
+ONSITEMAIN, Fri 13 Nov 5:32 PM PST.
+
+**Both suites runs I launched at 5:15 PM PST ended exit 2 before any suite ran. I have relaunched neither: a rerun is yours to say.**
+
+| Run | Head | Against | Ended |
+|---|---|---|---|
+| `r20261114-011528-7df1` | #9319, `c2b0e5c103d8` | `ff1f5d80d31b` | exit 2, no suite ran |
+| `r20261114-011829-9852` | #9826, `beb057632057` | `a36f0460616c` | exit 2, no suite ran |
+
+- **The tool's words, the same in both** [ran]: "suites: unknown setting CHECK_SLOT_BOOK_GB: nothing in the tree reads it; unset it, fix the name, or declare it in tools/verity/check/settings.py".
+- **What I read of it** [read, the runs' own logs and my trees]: the pool's check slot sets that variable for the job. Neither head's tree declares it: both stand on `main` at `f54194bbb196`. My launcher's environment does not set it. The same launcher passed for H at 3:40 PM PST (`r20261113-234042-01c8`), so the slot began setting it after that.
+- **So neither run says anything about the commits.** No test ran.
+- **What I would do, on your word:** launch each once more with the variable unset ahead of the same command (`env -u CHECK_SLOT_BOOK_GB uv run tools/verity/check/suites.py --changed BASE --quick`). That is still one command and no job script, but it is not the bare command line: if the store counts a pass only on the bare line, say so and I do it another way. The other cure is a merge of today's `main`, which declares the variable; that is not mine to do on either head now.
+- **Every head on `f54194bbb196` will meet this** at its next suites or records run on the pool: A, B, L, I1, H, #9827 too.
+
+**#9319's body is set at `c2b0e5c103d8`** and read back [ran]. It says no pool run of the suites has passed at that head, with the run and the tool's words, and what ran locally: the two test files 66 passed, the driver's tests and the root invariants 443 passed, the lint and the ratchet gate. The fix's line is in your words.
+
+**#9826's body is not set yet**: it waits for a suites run at the merged head.
+
+Least sure of: whether the slot set the variable before 3:40 PM PST and something else changed. I read only that my runs before then passed and these two did not.
+
