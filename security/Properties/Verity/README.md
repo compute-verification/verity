@@ -3,7 +3,8 @@
 One theorem says what an accepted run of Verity guarantees, at each composite's compiled verifier: the verifier accepts
 while one of its subprotocols' claims fails with probability at most the sum of their errors. A composite is the list of
 its subprotocols' ids (`Verity.Registration.Composite`, `security/Definitions/Core/Site.lean`), so the theorem holds at
-every list, and onsite and remote are two of them (`Composite.onsite`, `Composite.remote`). It is the union bound over
+every list, and onsite, remote and remote's plain sibling are three of them (`Composite.onsite`, `Composite.remote`,
+`Composite.plain`). It is the union bound over
 the composite's subprotocols in one game, from each subprotocol's **target**, which it takes as a hypothesis until that
 subprotocol's own proof discharges it. This page says where it is, what it reads and what it rests on.
 
@@ -19,6 +20,7 @@ properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) i
 | `Verity.soundness_at_of_targets : Verity.SoundnessOf` | at every composite `k`, a list of subprotocols' ids, `k`'s subprotocols' targets give `Vocab.SoundnessAt k` | `security/Proofs/Properties/Verity/Soundness.lean` |
 | `Verity.soundness_of_subprotocols : Verity.Soundness` | `SoundnessOf` at onsite's list, from its seven targets | the same file |
 | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` | `SoundnessOf` at remote's list, from its three targets | the same file |
+| `Verity.plain_soundness_of_subprotocols : Verity.PlainSoundness` | `SoundnessOf` at remote's plain sibling's list, the rows check in v0's place, from its three targets | the same file |
 
 The statements are in `Soundness.lean` (this directory). **Remote's**: for any device and any names `V` the subprotocols
 define (`Vocab`), if SPOT, PoUW and the inference-only policy each meet their target at remote, then at all
@@ -40,18 +42,25 @@ Pearl+'s run verdict in a composite that lists Pearl+'s id and H1's period credi
 `Verity.component`), and the composite's verifier (`Verity.verifier k`) composes the listed ones under the code's one
 rule, with each tie between two it lists (`Verity.ties`). At onsite's and remote's lists it is the verifier the code
 builds from that list (`Verity.ofIds_onsite`, `Verity.ofIds_remote`,
-`security/Proofs/Properties/Verity/Soundness/Composite.lean`); the code builds no other (`Core.Composites.ofIds`).
+`security/Proofs/Properties/Verity/Soundness/Composite.lean`); the code builds no other (`Core.Composites.ofIds`), and
+refuses the plain sibling's list by name until its soundness is proved (`Verity.ofIds_plain`). No compiled check carries
+the rows check's id yet: the game reads it as `Verity.rowsCheck`, whose behavior nothing states (`rowsUnbuilt`, an
+`escapes` entry of the lock), so its target there is proved only from the compiled check that replaces it. Its claim
+there is `Verity.rowsHeld`, which nothing states either: v0's clause, which `Vocab.inferenceOnlySound` proves at a
+composite that lists v0 and not the rows check, would read no case at the plain sibling (`Verity.v0_not_mem_plain`,
+`Vocab.holds_plain`, `Verity.not_inferenceOnlySound_hyp_plain`).
 
-| Subprotocol | Target | Compiled check | Remote | Onsite |
-|---|---|---|---|---|
-| SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes |
-| PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | | yes |
-| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | |
-| the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | yes |
-| PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | yes |
-| PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | yes |
-| the network certifier | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | yes |
-| the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | yes |
+| Subprotocol | Target | Compiled check | Remote | Plain | Onsite |
+|---|---|---|---|---|---|
+| SPOT | `SpotSound` | `VStar.Recursive.Sampled.protocol` (id `verity/sampled-proofs/v1`): one-stage v2 (`Spot.OneStageZk`); one-stage v1 and the recursive audit are refused by name | yes | yes | yes |
+| PoUW | `PouwSound` | `PouwCheck.Period.protocol` (`verity/pouw/period/v1`) | | | yes |
+| | | `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`): Pearl+'s run verdict, its claim in MACs | yes | yes | |
+| the inference-only policy | `InferenceOnlySound` | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | yes | | yes |
+| | | `Verity.rowsCheck` (`verity/inference-only/rows/v1`): the rows check, not yet compiled | | yes | |
+| PoUS | `PousSound` | `PousCheck.RunProtocol.protocol` (`verity/pous/p2/v4/run`) | | | yes |
+| PoUB-P2, on PoUS's store | `BandwidthAuditSound` | `RemoteAudit.P2Protocol.protocol` (`verity/remote-bandwidth/p2/v0`) | | | yes |
+| the network certifier | `NetworkCertifierSound` | `NetworkCheck.Period.protocol` (`verity/certifier/v0`) | | | yes |
+| the wipe | `WipeSound` | `MemoryChallenger.WipeProtocol.protocol` (`verity/wipe/v0`) | | | yes |
 
 ## How to read it
 

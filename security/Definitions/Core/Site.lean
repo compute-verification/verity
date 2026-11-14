@@ -346,9 +346,10 @@ namespace Registration
 
 open Site (Sheet)
 
-/-- **A composite**: the ids of the protocols it composes, in the order of their ids. Any list is one; onsite and remote
-are two (`Composite.onsite`, `Composite.remote`). A site's log is registered for a composite. The code's
-`Core.Site.Registration.Composite` is this type, `List String`, and its two lists are these two. -/
+/-- **A composite**: the ids of the protocols it composes, in the order of their ids. Any list is one; onsite, remote and
+remote's plain sibling are three (`Composite.onsite`, `Composite.remote`, `Composite.plain`). A site's log is registered
+for a composite. The code's `Core.Site.Registration.Composite` is this type, `List String`, and its three lists are
+these three. -/
 abbrev Composite : Type := List String
 
 /-- **Onsite**, the composite of an auditor with devices at the datacenter: network certification, the inference-only
@@ -362,6 +363,11 @@ def Composite.onsite : Composite :=
 Pearl+'s run verdict, and SPOT. -/
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
+
+/-- **Remote's plain sibling**, the composite whose guarantee is soundness alone: remote's list with the inference-only
+policy's rows check (`verity/inference-only/rows/v1`, which reads the run's blocks in the clear) in place of v0. -/
+def Composite.plain : Composite :=
+  ["verity/inference-only/rows/v1", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
 /-- The digests the log names things by, SHA-512 in the deployed check: a sheet's, an entry's, and the head of a
 composite's empty log. -/

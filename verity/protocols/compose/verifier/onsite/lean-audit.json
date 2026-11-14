@@ -26,9 +26,9 @@
    "why": "the program is code: the core interface, C-Flock's Lean and its components' ports, no Mathlib and nothing of Security"
   },
   "CoreComposites": {
-   "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreRemote"],
+   "imports": ["CoreOnsite", "CoreProtocol.Cli", "CoreProtocol.Site", "CoreRemote"],
    "except": [],
-   "why": "the composite a deployment's listed subprotocols make, onsite or remote: code over the two composites, no Mathlib and nothing of Security"
+   "why": "the composite a deployment's listed subprotocols make, onsite or remote: code over the two composites and the Site's named lists (the plain sibling's, refused by name), no Mathlib and nothing of Security"
   }
  },
  "guarantees": {},

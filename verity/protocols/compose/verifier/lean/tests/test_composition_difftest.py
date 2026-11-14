@@ -935,7 +935,7 @@ def test_product_names_only_the_composites():
     """`product IDS id` is each composite over its subprotocols, in any order (onsite, and remote v1 with Pearl+'s
     run), exactly the configuration's composites (`verity.config.COMPOSITES`, by the ids `SUBPROTOCOLS`
     gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
-    and the wipe (exit 64)."""
+    and the wipe (exit 64), and remote's plain sibling by name."""
     exe = D.build(ONSITE_PACKAGE, "product")
 
     def named(xs) -> tuple[int, str]:
@@ -958,6 +958,10 @@ def test_product_names_only_the_composites():
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
+    plain = ["verity/inference-only/rows/v1", R.PEARL_PLUS.id, R.SAMPLED_PROOFS.id]
+    for ids in (plain, plain[::-1]):
+        p = subprocess.run([exe, ",".join(ids), "id"], capture_output=True, text=True)
+        assert (p.returncode, p.stdout) == (64, "") and "is remote's plain sibling, refused until" in p.stderr, p.stderr
 
 
 @pytest.mark.slow

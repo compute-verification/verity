@@ -1104,6 +1104,10 @@
   "Properties.Firewall",
   "Firewall"
  ],
+ "escapes": {
+  "Verity.rowsUnbuilt": "the behavior of the inference-only policy's rows check (verity/inference-only/rows/v1), which no compiled check carries yet: the game reads the check under that id (Verity.rowsCheck) and states nothing of what it does, so its target at a composite that lists it (Verity.Vocab.InferenceOnlySound at Verity.Registration.Composite.plain) is proved only from the compiled check that replaces this, never by computing a placeholder; the code refuses every list naming the id (Core.Composites.ofIds)",
+  "Verity.rowsHeld": "the inference-only policy's clause where v0 doesn't decide it, a composite listing no v0 (remote's plain sibling) or listing the rows check: the clause in rows on the record's circuit, which the rows check's guarantee states; until then nothing says what it is, so v0's clause, which would hold of every play where no v0 case is accepted, doesn't decide the plain sibling's inference-only target (Verity.Vocab.inferenceOnlySound takes v0 listed and the rows check not)"
+ },
  "claims": {
   "modules": ["Properties.Accounting.Remote.Subprotocol"],
   "witnesses": {
@@ -1189,6 +1193,10 @@
   "Verity.remote_soundness_of_subprotocols": {
    "honest": ["Verity.remote_soundness_of_subprotocols_honest"],
    "nontrivial": "Verity.remote_soundness_of_subprotocols_nontrivial"
+  },
+  "Verity.plain_soundness_of_subprotocols": {
+   "honest": ["Verity.plain_soundness_of_subprotocols_honest"],
+   "nontrivial": "Verity.plain_soundness_of_subprotocols_nontrivial"
   },
   "Properties.Composition.acceptSame": {
    "honest": ["Properties.Composition.acceptSame_honest"],
@@ -11201,6 +11209,87 @@
    },
    "type_hash": "685ffcdcfb618322cb616fc939e27ae7afb06436848dacb078fe8270820cab89"
   },
+  "Verity.plain_soundness_of_subprotocols": {
+   "owner": "@soundness",
+   "signature": ["Verity.plain_soundness_of_subprotocols : Verity.PlainSoundness"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "1d1d5352b86264c9d567f36348b5947139ae119b410d5faf3dcc4f3b34190de6",
+   "unfolded_hash": "6dcc1bdd376ed59c0f3c78eb909ba4f7901d3f09d4b38fc2e895a2eb4d621780"
+  },
+  "Verity.plain_soundness_of_subprotocols_honest": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.plain_soundness_of_subprotocols_honest :",
+    "  And (Verity.Idle.unbounded.SpotSound Verity.Registration.Composite.plain)",
+    "    (And (Verity.Idle.unbounded.PouwSound Verity.Registration.Composite.plain)",
+    "      (Verity.Idle.unbounded.InferenceOnlySound Verity.Registration.Composite.plain))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "1c71f65bfa75766c2198c7d999e4136dc54cfef609b1e3c447a90880c7a005c4"
+  },
+  "Verity.plain_soundness_of_subprotocols_nontrivial": {
+   "owner": "@soundness",
+   "signature": [
+    "Verity.plain_soundness_of_subprotocols_nontrivial :",
+    "  Not (Verity.Idle.exact.SoundnessFor Verity.Registration.Composite.plain fun x => True)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": [
+     "Hash.Assumptions.LmsForger",
+     "Hash.Assumptions.LmsForger.Forges",
+     "Hash.Assumptions.LmsForger.Pr",
+     "Hash.Assumptions.LmsForger.S",
+     "Hash.Assumptions.LmsForger.cost",
+     "Hash.Assumptions.LmsForger.fin",
+     "Hash.Assumptions.LmsForger.key",
+     "Hash.Assumptions.LmsForger.mk",
+     "Hash.Assumptions.LmsForger.out",
+     "Hash.Assumptions.LmsForger.signed",
+     "Hash.Assumptions.LmsUnforgeable"
+    ]
+   },
+   "type_hash": "539e926c268243c205989561f3c3bdb0d9fa2e67c12c26e92ef9646d434cf771"
+  },
   "Verity.remote_soundness_of_subprotocols": {
    "owner": "@soundness",
    "signature": ["Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness"],
@@ -13333,7 +13422,8 @@
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
    "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
-   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet"
+   "NciCheck.Properties.Record.DigestPins": "unstated: the closure digest pins the decoded Definition (two Program texts that give a key one closure digest decode it to one Definition, or two byte strings the digests hashed collide under SHA-512); a premise of what a pinned reader opens, which is a theorem no guarantee lists, and no theorem proves the pin yet",
+   "Verity.plain_soundness_of_subprotocols": "frozen (premise): Verity.remote_soundness_of_subprotocols's statement at remote's plain sibling: the union bound at the compiled verifier of the plain sibling's list (Verity.Registration.Composite.plain, remote's list with the inference-only policy's rows check, verity/inference-only/rows/v1, in v0's place; Verity.componentsOf_plain) in the same causal game, from Verity.soundness_at_of_targets at the plain sibling; its three subprotocols are sampled proofs v2, PoUW by Pearl+'s run verdict (PouwCheck.PearlPlus.Protocol) and the inference-only policy decided by the rows check (Verity.rowsCheck, whose behavior Verity.rowsUnbuilt leaves unstated until a compiled check carries its id), with the same errors, Vocab and claims as at remote; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at the plain sibling) as hypotheses until each is proved, and the code refuses the plain sibling's list until then (Core.Composites.ofIds, Verity.ofIds_plain)"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -16540,7 +16630,7 @@
    }
   },
   "Definitions.Core.Site": {
-   "digest": "47032cfe157e1c19d2af4555691716b908a3cf45ba45b2142e3396c7d7aa692b",
+   "digest": "64859da1ae14f933b09e0b186df3b7f21429c4e7fbdbdd2f1dc42a05fbc6df6a",
    "definitions": {
     "Verity.Registration": "19abeebc07b97795968bf46f58273cd0f421c08a96fa7f67c8af825c0732d9c1",
     "Verity.Registration.Auditor": "625eec8c800db32cc74de43bc0c35aadce84e8c88036031c6f1ffd9e9e5b564a",
@@ -16552,6 +16642,7 @@
     "Verity.Registration.Builder.B": "4ea94ec6c82857314aba12667f0e9088a8fcc16ec4983f80cb1ef4ad53c7a54f",
     "Verity.Registration.Composite": "e2f6823d5fa8fca82f2f9a54a9478aac12799c5dfa9badcf3990d402ef7b9363",
     "Verity.Registration.Composite.onsite": "a3732978de6cc3c9902e6f4183bb8312cb9567d3357e48ab08a1ff647f515d03",
+    "Verity.Registration.Composite.plain": "212d4c4c597cbe0688fc64cb40c41da623ec479a111da7f026e57ca641868368",
     "Verity.Registration.Composite.remote": "fc05e2083693a78e9b467c652be7d3d931dfd491b1762b6a1c415241487134b0",
     "Verity.Registration.Declared": "19ec364a529867d84086e19a86d2eb55146219369a71933ddddb1c4db9868d49",
     "Verity.Registration.Declared.day": "b9672ef317ae97d32d170d8ffa6b19d1b17a279a0542557cb396fb84ccfa0e57",
@@ -25564,7 +25655,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "50d803f9d370b2a1234642ab1fe2d83ae16c09c81ab51d4902d3937fc7cded8e",
+   "digest": "fdd1b9dc19ba92c97287e19a3df966ad19d6071671bd89d6b75b1d988f9d2740",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -25643,7 +25734,7 @@
     "Verity.Subprotocol.poub": "f39baa1de1e7b5e73c21ae5bfa75eaa62c8efb0b5e6199da54e6b3074f5d90ef",
     "Verity.Subprotocol.pous": "c631ac0f593e9df91d62e8ca2837ec81a1970e1e8c64c8da6f8ca64efd917af6",
     "Verity.Subprotocol.pouw": "80ccd495d963f37b56bfde82ac4f8bf195ae91d3208d9296dc9f228db0fcf565",
-    "Verity.Subprotocol.protocolAt": "78c28221198a9f9041c4517b6c744bd944e44ab867cd846cde01e3cc585e1cda",
+    "Verity.Subprotocol.protocolAt": "12735597d38365388b55257c161f3a46139191c53e22f5117196e0af507a1e38",
     "Verity.Subprotocol.rec": "93e91d92b8a5c8ea230e34c3719be18c64082aee7b60900da55021eacd3e5c86",
     "Verity.Subprotocol.sampled": "69d73672cf8533483ecca485114db9a5a632d33f7520a8a8d2f92d3030013496",
     "Verity.Subprotocol.wipe": "cc4050252c3fe7821a1b748b71c068867616e91d64091e6426cb946f8b8cfa3e",
@@ -25731,6 +25822,9 @@
     "Verity.play": "b187f6b62030777141ef88fafd554b2a3e447a027da49376df0d0d14feda91c2",
     "Verity.releases": "8869b0edf60abb125cfaa3d452dc6dafba8bc54a8d3d355ea88108b1972b476e",
     "Verity.requestThen": "b70d7a5e2bcc5092f4bee27d3538e501e3c1ae4f47c74d9bec8d615eecf9b496",
+    "Verity.rowsCheck": "540fa2df0442c172cfd8fb6d4c7cae416316cf886dfbc12ae2f84a9b65baf097",
+    "Verity.rowsId": "1ffb9b0bd5ed1218b5f514b4ea2fca836c3c9b8895ee1d39400893f6fa11e8eb",
+    "Verity.rowsUnbuilt": "d531de0f2444180cb4d7bb34acbce9422e971f094847e517288110a483be97f4",
     "Verity.sha512Msg": "3fb17014d068a5ee9446e95057ecee922f7236ff6db8a8a8167135c2f044a07b",
     "Verity.subprotocols": "166b3e753488aa75de4e0365502275fa91b6a6ee7697a77723db7610f6bfe09b",
     "Verity.takeCoin": "5193fdb4beb57e000e16d5feab7919fb8585ac4950f6701c8eae9bd8102edc79",
@@ -25775,8 +25869,9 @@
    }
   },
   "Properties.Verity.Soundness": {
-   "digest": "18ee5f5cab5ae04e6ef9dc13c17bf187cc245a9ba7233dfcaeff48d9462b01dc",
+   "digest": "4f5354ef1c15ec7632766e633ff4eb4a453e944882ddea2bc75e74783eed01ea",
    "definitions": {
+    "Verity.PlainSoundness": "11106967bf16e2ba5ce9e4d2a4bcc9ee9d368915eed29ea2f44e151129a720d6",
     "Verity.RemoteSoundness": "d9d45508b013d47b813919b07749041907afaf701f39a1ec2286e227ed7e22dc",
     "Verity.Soundness": "b81c345a1f8c793d5569d5d1e22d153cbab06af99f472af8c9b325858d421a7e",
     "Verity.SoundnessOf": "3abf7fc71d4cd416ddc449573787ec1779a9ce603411ea3dfaa949b52eb6ce1a"

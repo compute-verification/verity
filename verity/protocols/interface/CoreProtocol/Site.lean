@@ -295,6 +295,12 @@ def Composite.onsite : Composite :=
 def Composite.remote : Composite :=
   ["verity/inference-only/v0", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
 
+/-- **Remote's plain sibling**, the spec's `Verity.Registration.Composite.plain`: remote's list with the inference-only
+policy's rows check in place of v0. No composite the code builds is this list: `Core.Composites.ofIds` refuses it by
+name. -/
+def Composite.plain : Composite :=
+  ["verity/inference-only/rows/v1", "verity/pouw/pearl-plus/v1", "verity/sampled-proofs/v1"]
+
 /-- The digests the log names things by: a sheet's, an entry's, and the head of a composite's empty log. -/
 structure Digests where
   sheet : Sheet → String
