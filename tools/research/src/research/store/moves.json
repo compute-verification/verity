@@ -3314,6 +3314,13 @@
         "adapters/vllm/verity_vllm/pipeline/m1_capture.py": "adapters/vllm/verity_vllm/pipeline/match_capture.py",
         "adapters/vllm/tests/pipeline/test_m1_capture_main.py": "adapters/vllm/tests/pipeline/test_match_capture_main.py"
       }
+    },
+    {
+      "paths": {
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_registry.py": "verity/protocols/accounting/poub/tests/test_registry.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_memory_map.py": "verity/protocols/accounting/poub/tests/test_memory_map.py",
+        "adapters/vllm/tests/protocols/remote_bandwidth/test_remote_session.py": "verity/protocols/accounting/poub/tests/test_remote_session.py"
+      }
     }
   ]
 }
