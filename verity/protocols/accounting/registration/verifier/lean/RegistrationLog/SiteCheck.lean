@@ -45,13 +45,15 @@ def Refs : Prop :=
 
 /-- `kind`: parents and tiers by kind, so an auditor's device is at the site and holds only the auditor's devices; links
 between kinds a link may join, each at a positive capacity or, where it says no certifier splits it, at none, and each
-certifier splitting exactly one uplink. -/
+certifier splitting exactly one uplink, of a host each of whose links to the outside states a rate. -/
 def Kinds : Prop :=
   (∀ x ∈ e.locs, x.parent.bind (S.add e).kind? ∈ x.kind.parents ∧ (x.kind = .memory ↔ x.tier.isSome)) ∧
     (∀ k ∈ e.links, k.ends.1 ≠ k.ends.2 ∧ (∃ p ∈ Kind.links, (S.add e).Joins k p.1 p.2) ∧
       (∀ b ∈ k.β, 0 < b) ∧ (k.β = none → k.unmediated.isSome)) ∧
-    ∀ x ∈ (S.add e).locs, x.kind = .certifier →
-      (((S.add e).far x.id).map (S.add e).kind?).Perm [some .host, some .outside]
+    (∀ x ∈ (S.add e).locs, x.kind = .certifier →
+      (((S.add e).far x.id).map (S.add e).kind?).Perm [some .host, some .outside]) ∧
+    ∀ x ∈ (S.add e).locs, x.kind = .certifier → ∀ h ∈ (S.add e).far x.id, (S.add e).kind? h = some .host →
+      ∀ k ∈ (S.add e).links, (S.add e).Joins k .host .outside → (k.ends.1 = h ∨ k.ends.2 = h) → k.β ≠ none
 
 /-- `sheetDigest`: each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered
 sheet's digest. -/

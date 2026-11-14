@@ -298,7 +298,7 @@ theorem kinds_iff : Verity.Site.Entry.Kinds (site S) (entry e) ↔ Core.Site.Ent
     intro i; rw [far_site, List.map_map]; congr 1; funext j; simp [kind?_site]
   simp only [entry_locs, entry_links, site_locs, List.forall_mem_map, loc_parent, loc_kind, loc_tier, loc_id,
     link_ends, link_β, link_unmediated, hb, hf, parents_iff, perm_iff, Option.isSome_map, kind_eq_iff, ofKind]
-  simp [Verity.Site.Kind.links, Core.Site.Kind.links, joins_site, ofKind]
+  simp [Verity.Site.Kind.links, Core.Site.Kind.links, joins_site, ofKind, far_site, kind?_site_eq_some]
 
 theorem sheets_iff :
     Verity.Site.Entry.Sheets (digests D) (auditor A) (site S) (entry e) ↔ Core.Site.Entry.Sheets D A S e := by

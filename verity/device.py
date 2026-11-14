@@ -1340,7 +1340,7 @@ def _refs(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 def _kinds(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
     """Parents and tiers by kind, so an auditor's device is at the site and holds only the auditor's devices; links
     between kinds a link may join, each at a positive capacity or, where it says no certifier splits it, at none, and
-    each certifier splitting exactly one uplink."""
+    each certifier splitting exactly one uplink, of a host each of whose links to the outside states a rate."""
     t = s.add(e)
     for x in e.locs:
         if ((None if x.parent is None else t.kind(x.parent)) not in PARENTS[x.kind]
@@ -1355,6 +1355,12 @@ def _kinds(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
         if x.kind == "certifier" and (far := [t.kind(n) for n in t.far(x.id)]) not in (["host", "outside"],
                                                                                        ["outside", "host"]):
             return f"certifier {x.id} doesn't split one uplink: it links to {far}"
+    for x in t.locs:
+        if x.kind == "certifier" and (unrated := [k.id for h in t.far(x.id) if t.kind(h) == "host" for k in t.links
+                                                  if t.joins(k, "host", "outside") and h in k.ends
+                                                  and k.beta is None]):
+            return (f"certifier {x.id} splits a host whose links to the outside {unrated} state no rate, so its "
+                    "rate, theirs summed, would be below what it splits")
     return None
 
 

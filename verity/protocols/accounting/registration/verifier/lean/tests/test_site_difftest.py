@@ -23,7 +23,7 @@ import pytest
 from hypothesis import strategies as st
 
 import verity_difftest as D
-from verity.device import (COMPOSITES, KINDS, OPERAND_CLASSES, OUTSIDE, OWNERS, SCHEMES, TIERS, Auditor,
+from verity.device import (COMPOSITES, KINDS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, OWNERS, SCHEMES, TIERS, Auditor,
                                   DeviceFigures, Entry, HostFigures, Link, Loc, Malformed, MemoryFigures, Refused,
                                   Registration, Sheet, Site, check, genesis, refusal)
 
@@ -153,11 +153,12 @@ ENTRIES = {
                                          links=UPLINK9)),
     "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
+    "unrated-at-certifier": ("kind", Entry("", links=(Link("u9", ("node0", OUTSIDE), None, 1, NO_LINE_RATE),))),
     "bare-uplink": ("uncertified", Entry("", links=(Link("u9", ("node0", OUTSIDE), 1, 1),))),
     "unreached-host": ("challenger-reach", Entry("", locs=(host("node1"), leaf("dram1", "dram")),
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
 }
-REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
+REMOTE_ACCEPTS = {"bare-uplink", "unrated-at-certifier", "unreached-host"}
 VM0 = Loc("vm0", "auditor-host", "site0", "auditor", key="dummy-vm0-key", scheme=SCHEME, timebase="tb0")
 HOUSED = Entry("", locs=(VM0, Loc("chal9", "challenger", "vm0", "auditor", scheme=SCHEME)))
 """An auditor's device at the site with a second memory challenger in it; the onsite auditor holds their keys and the

@@ -204,6 +204,12 @@ private def uplinks : List Link :=
   [{ id := "up0", ends := ("node0", "cert0"), β := some 1, latency := 0 },
    { id := "up1", ends := ("cert0", outside), β := some 1, latency := 0 }]
 #guard decide (Entry.Kinds empty { locs := [root, host, vm, inVm], links := uplinks })
+-- a certifier's host states a rate on each of its links to the outside: one that states none is refused, though it says
+-- why no certifier splits it, and taken where no certifier splits the host
+#guard decide (Entry.Kinds empty { locs := [root, host, cert], links := uplinks ++ [bare (some "a stand-in")] })
+#guard !decide (Entry.Kinds empty { locs := [root, host, cert], links := uplinks ++ [unrated (some "a stand-in")] })
+#guard !decide (Entry.Kinds empty { locs := [root, host, cert], links := [unrated (some "a stand-in")] ++ uplinks })
+#guard decide (Entry.Kinds empty { locs := [root, host], links := [unrated (some "a stand-in")] })
 #guard decide (Entry.Kinds empty { locs := [root, host, vm, { inVm with kind := .challenger }] })
 #guard !decide (Entry.Kinds empty { locs := [root, host, vm "node0"] })
 #guard !decide (Entry.Kinds empty { locs := [root, host, { inVm with parent := some "node0" }], links := uplinks })
