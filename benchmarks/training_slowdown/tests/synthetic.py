@@ -216,12 +216,14 @@ KINDS = {"adamw-decay": {"dials": {"trainable": "*", "lr": 1e-2, "weight_decay":
          "qat-grad4": {"route": "qat", "blocks": 2, "dials": QAT | {"grad_code": "rtn4"}},
          "qat-grad4-lowstate": {"route": "qat", "blocks": 2, "dials": QAT | {"grad_code": "rtn4", "low_state": True}}}
 JOBS |= KINDS
-#: the dials whose branches `kind_of` reads, from what a route builds or from the dial
-KIND_DIALS = {"trainable", "embed", "targets", "opt", "fused", "weight_decay", "low_state", "micro_batches", "clip",
-              "grad_code", "zero"}
+#: the dials whose branches `kind_of` reads, from what a route builds or from the dial; grow's `embed_lr` is one, its
+#: embedding frozen at 0 and trained above
+KIND_DIALS = {"trainable", "embed", "embed_lr", "targets", "opt", "fused", "weight_decay", "low_state",
+              "micro_batches", "clip", "grad_code", "zero"}
 #: the dials that take no branch of a step: rates (a rate adds a group to an optimizer outside torch's fused kernel,
-#: which `kind_of` reads), schedules, shares and sizes, and `store` (E, encoded outside the count)
-OTHER_DIALS = {"lr", "gain_lr", "embed_lr", "adam_lr", "warmup", "decay", "schedule", "cooldown", "ema_decay",
+#: which `kind_of` reads), schedules, shares and sizes, and `store` (E, encoded outside the count); `ema_horizon`
+#: branches the step only at its first step, which no config of the library measures
+OTHER_DIALS = {"lr", "gain_lr", "adam_lr", "warmup", "decay", "schedule", "cooldown", "ema_decay",
                "ema_horizon", "keep", "group", "rank", "alpha", "depth", "store"}
 
 
@@ -242,9 +244,10 @@ def kind_of(route: str, given: dict, blocks: int) -> tuple:
     trains; whether the step runs micro-batches and clips; which blocks are frozen below, between or above trained
     ones; whether QAT codes its gradients; and whether a grown model's repeated copies start zeroed. Two configs of
     one kind run the same code, the same branches taken, on tensors of other shapes and at other rates: what a dial
-    of `OTHER_DIALS` sets is no part of it. An optimizer's number of parameter groups is: one outside torch's fused
-    kernel keeps a group a rate, so a config that adds a rate is a new kind until traced. A QAT config's 8-bit gradient codes are its 4-bit ones: the two differ only
-    in shifts and ors, which no count holds."""
+    of `OTHER_DIALS` sets is no part of it. An optimizer's number of parameter groups is part of the kind: outside
+    torch's fused kernel it keeps one group a rate, so a config that adds a rate is a new kind until a job takes it.
+    A QAT config's 8-bit gradient codes are its 4-bit ones: the two differ only in shifts and ors, which no count
+    holds."""
     mod = config.route(route)
     dials = config.dials(mod, given, route) | getattr(mod, "FIXED", {})
     torch.manual_seed(0)
