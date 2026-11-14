@@ -1,6 +1,6 @@
 """The difftest of the inference-only policy's Lean check against its Python reference: the Python half.
 
-`verity/protocols/policy/inference_only/verifier/inference_only/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
+`verity/protocols/policy/inference_only/verifier/lean/scripts/difftest_vectors.py` writes 4,000 random declarations with divisions,
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
 neighbours, and three pinned ones (θ with an input bound per run, refused, θ the registered input, accepted, and a
 declaration with a constant gate, accepted), and
@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 
-LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "inference_only" / "lean"
+LEAN = Path(__file__).resolve().parents[5] / "policy" / "inference_only" / "verifier" / "lean"
 
 
 def _load(name: str):

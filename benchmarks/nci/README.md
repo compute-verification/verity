@@ -1,7 +1,7 @@
 # The inference-only policy's literature index and slowdown board
 
 Data and a calculator for the question negotiators will ask about the
-[inference-only policy](../../verity/protocols/policy/inference_only/verifier/inference_only/README.md) ("bounding accumulation"): if both sides
+[inference-only policy](../../verity/protocols/policy/inference_only/verifier/README.md) ("bounding accumulation"): if both sides
 adopt it, how fast can a determined actor still advance frontier capability? Four parts:
 
 - every source we rely on, each claim quoted verbatim (`sources/`);
