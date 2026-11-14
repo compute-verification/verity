@@ -405,7 +405,6 @@
     {"file": "verity_vllm/protocols/pous.py", "kind": "union-attr", "symbol": "_package", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "arg-type", "symbol": "_install_h1", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "assignment", "symbol": "install", "detail": ""},
-    {"file": "verity_vllm/protocols/pouw/__init__.py", "kind": "misc", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/prover.py", "kind": "index", "symbol": "Writer.keep", "detail": ""},
     {"file": "verity_vllm/protocols/pouw/h1/registered_device.py", "kind": "union-attr", "symbol": "device_hash", "detail": "", "count": 2},
     {"file": "verity_vllm/protocols/pouw/h1/window.py", "kind": "return-value", "symbol": "reserve_draw", "detail": ""},

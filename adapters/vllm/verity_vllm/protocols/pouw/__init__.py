@@ -555,7 +555,7 @@ def ncp_linear_op() -> Any:
     return torch.ops.verity_pouw.ncp_linear
 
 
-def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int):
+def _executor(run: _Run | _CircuitRun | PPD.PearlCDeviceRun, w: int, _orig: Any):
     if isinstance(run, _CircuitRun):
         op = ncp_linear_op()
 
@@ -701,7 +701,7 @@ def install(scheme: str, target: Target) -> Option:
             _CIRCUIT_RUNS[entry] = (run, _sites(target.model, layers))
         h = target.hooks(entry)
         for w, layer in enumerate(layers):
-            h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
+            h.wrap(layer.quant_method, "apply", functools.partial(_executor, run, w))
         if device:
             PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir, settings.runner)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=end_pass,
