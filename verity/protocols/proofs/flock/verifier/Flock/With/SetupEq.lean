@@ -113,9 +113,9 @@ theorem loadPublicWith_std (tags : Tags) (c : Circuit) (file : ByteArray) :
   try rfl
 
 set_option maxRecDepth 20000 in
-theorem drawnWith_std (c : Circuit) (pub : Public) (draw : Json) :
-    HmRow.drawnWith std c pub draw = HmRow.drawn c pub draw := by
-  unfold HmRow.drawnWith HmRow.drawn
+theorem sampledWith_std (c : Circuit) (pub : Public) (draw : Json) :
+    HmRow.sampledWith std c pub draw = HmRow.drawn c pub draw := by
+  unfold HmRow.sampledWith HmRow.drawn
   simp only [publicDigestWith_std]
   try rfl
 
@@ -166,7 +166,7 @@ theorem setupHWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (coins
     Stmt.setupHWith std tags circuitFile publicFile coins tables draw partition program
       = Stmt.setupH tags circuitFile publicFile coins tables draw partition program := by
   unfold Stmt.setupHWith Stmt.setupH
-  simp -zeta only [parseTypedWith_std, parseWith_std, checkPartitionWith_std, loadPublicWith_std, drawnWith_std,
+  simp -zeta only [parseTypedWith_std, parseWith_std, checkPartitionWith_std, loadPublicWith_std, sampledWith_std,
     stratifiedLawWith_std, checkPublicWith_std, deriveTemplateUnitsWith_std, qwordFindingWith_std, std_sha512, pure_bind]
   try rfl
 
@@ -196,10 +196,10 @@ theorem inLoadPublicWith_std (tags : Tags) (c : Circuit) (pi : HmIn.Ports) (file
   simp -zeta only [loadPublicWith_std]
   try rfl
 
-theorem inDrawnWith_std (c : Circuit) (pi : HmIn.Ports) (pub : Public) (draw : Json) :
-    HmIn.drawnWith std c pi pub draw = HmIn.drawn c pi pub draw := by
-  unfold HmIn.drawnWith HmIn.drawn
-  exact drawnWith_std _ _ _
+theorem inSampledWith_std (c : Circuit) (pi : HmIn.Ports) (pub : Public) (draw : Json) :
+    HmIn.sampledWith std c pi pub draw = HmIn.drawn c pi pub draw := by
+  unfold HmIn.sampledWith HmIn.drawn
+  exact sampledWith_std _ _ _
 
 set_option maxRecDepth 20000 in
 theorem linksCheckWith_std (c : Circuit) (pop : Public) (readers : Option (Array Nat)) (program : ByteArray) :
@@ -215,7 +215,7 @@ theorem setupHiddenWith_std (tags : Tags) (circuitFile publicFile : ByteArray) (
     Stmt.setupHiddenWith std tags circuitFile publicFile coins tables draw partition program publicInputs
       = Stmt.setupHidden tags circuitFile publicFile coins tables draw partition program publicInputs := by
   unfold Stmt.setupHiddenWith Stmt.setupHidden
-  simp -zeta only [outParseCommitWith_std, checkPartitionWith_std, inLoadPublicWith_std, inDrawnWith_std,
+  simp -zeta only [outParseCommitWith_std, checkPartitionWith_std, inLoadPublicWith_std, inSampledWith_std,
     stratifiedLawWith_std, outCheckPublicWith_std, deriveTemplateUnitsWith_std, linksCheckWith_std, qwordFindingWith_std,
     std_sha512, pure_bind]
   try rfl

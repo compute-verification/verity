@@ -83,7 +83,7 @@ def test_each_chunk_opens_one_connections_cells_under_the_wardens_root(run):
                                                                                              for s in x.opening.salts}
 
 
-def test_the_registration_proves_every_transfer_gate_unit_beside_the_drawn_rest(run):
+def test_the_registration_proves_every_transfer_gate_unit_beside_the_sampled_rest(run):
     tmp, at = run
     mine, c, rec, _win = committed(tmp, at, "law")
     tg, rid = mine.members[0].template, mine.members[-1].template

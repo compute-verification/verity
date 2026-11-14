@@ -11,7 +11,7 @@ ZK server runs, the analysis's masked prover (`Flock.ZkServer.Finish`'s copies, 
   (`FlockComplete.commitP`'s, which evaluates each entry on its own), its leaves `hm96-sha512/v1`'s in tasks.
 * `commit0`: level 0's commitment of the table the transport hands it (`Link.In`, the table `Link.parse` reads;
   `FlockComplete.commitPZk`'s). `commitOf`: the same commitment read off the table's `Level0`, which the session
-  loop drew and committed (`Level0.ofDraws_ok`: its rows, layers and root are `Link`'s of its own inputs).
+  loop drew and committed (`Level0.ofSamples_ok`: its rows, layers and root are `Link`'s of its own inputs).
 * `zerocheckFw`, `lincheckFw`: the masked zerocheck and lincheck sending the passed values `v_i` as `v_i + h_i`
   (`FlockComplete.zerocheckCut`, `lincheckCut` at `masked i = v_i + h_i`), `final_c`'s too: the inner proof holds the
   passed `final_c` to `P_c(ζ)` of the passed `round1_c` (`Zk.replay`'s constraint).
@@ -115,7 +115,7 @@ def commit0 (lv : Level) (tPad : Nat) (i : Link.In) : Commit :=
   commitRows lv (Link.rows lv tPad i.g i.extra i.lanePad) i.salt
 
 /-- **Level 0's commitment as the session loop keeps it** (`Level0`): its rows, its salts fitted to 192 bytes, its layers
-from the leaves to the cap, and the cap, the top layer; `commit0`'s of the table `l.toIn` where `Level0.ofDraws_ok` holds,
+from the leaves to the cap, and the cap, the top layer; `commit0`'s of the table `l.toIn` where `Level0.ofSamples_ok` holds,
 read off rather than committed again. -/
 def commitOf (l : Level0.Level0) : Commit :=
   ⟨l.rows, (Array.range (2 ^ l.lv.d)).map (fun q => fitBytes 192 (l.salt q)), l.layers, l.layers.back?.getD #[]⟩
@@ -896,11 +896,11 @@ def drawsOf (own : Nat → Nat → ByteArray → IO (Option (Except String Own))
   | none, some d => return .ok d
   | none, none => return .error s!"finish: table {i} rep {r}'s draws, which no session loop holds and this finish did not draw"
 
-/-- **A rep's samples, this finish's own**, where no session loop is beside it: `Frame.drawBytes` of the table's layout from
+/-- **A rep's samples, this finish's own**, where no session loop is beside it: `Frame.sampleBytes` of the table's layout from
 `get`, in one read. -/
-def drawsFrom (get : USize → IO ByteArray) (t : Tab) : IO Frame.Draws := do
+def samplesFrom (get : USize → IO ByteArray) (t : Tab) : IO Frame.Draws := do
   let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
-  return Frame.Draws.ofBytes lay (← get (Frame.drawBytes lay).toUSize)
+  return Frame.Draws.ofBytes lay (← get (Frame.sampleBytes lay).toUSize)
 
 /-- The names of a rep's constraints that fail on its pads as they go to the prover: their count, then each name's byte
 count and bytes, every count a `u64le`. A constraint's value on the pads is its check on the unmasked values and the
@@ -918,7 +918,7 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   finishes, and refuses another). Where the session loop holds the rep (`own`), they are sampled only once its frame took
   the coins of every round of the rep's algebraic phase (`Own.algebraEnded`): asking before is refused, so no round of
   the algebraic phase the prover sends can depend on them. Without `liveOnly`, the rep's samples are sampled here too
-  (`drawsFrom`) and kept, never answered.
+  (`samplesFrom`) and kept, never answered.
 * `open I R LEN`: rep `R`'s opening on table `I`, after its salts, on the extra claims and the algebraic phase's coins
   (`parseOpen`): each of its rounds goes to the ZK server as it comes and waits for its coins (`openLive`, `liveAsks`), the
   rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
@@ -994,7 +994,7 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
         return (← refuse why)
       let s ← hiSaltsOf get t
       if let some why ← keep (flat t.cm0.cap) r s then return (← refuse s!"finish: table {i} {why}")
-      let d ← if liveOnly then pure none else some <$> drawsFrom get t
+      let d ← if liveOnly then pure none else some <$> samplesFrom get t
       hi := hi.set! i ((hi[i]!).set! r (some s))
       drawn := drawn.set! i ((drawn[i]!).set! r d)
       answer (saltsBytes s)

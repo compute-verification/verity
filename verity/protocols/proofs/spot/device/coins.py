@@ -350,7 +350,7 @@ DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: 
 
 
 def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
-    """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
+    """Lean `Challenger.sampleCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
     The key, the window and the family are the verifier's, so a prover can't sign a ledger of its own; the copy of
     main's history is the evidence's, which `coins_reason` holds to its caller's. The session must be a withheld one

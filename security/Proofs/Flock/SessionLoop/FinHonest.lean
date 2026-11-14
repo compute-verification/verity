@@ -107,7 +107,7 @@ theorem cfg_ofLoopLink_withInner (L₁ : LeanRelease Flock.Wit Tp)
     (fin : Msg → Flock.Wit → Tp → List (Msg × Msg) → Array ByteArray) (x : Msg) (ρ : Tp) (h : List (Msg × Msg)) :
     (LeanRelease.ofLoopLink (LeanRelease.withInner Masked.dataE L₁ real fin) src real).cfg x ρ h =
       (LeanRelease.ofLoopLink L₁ src real).cfg x ρ h := by
-  unfold LeanRelease.cfg LeanRelease.drawsAt
+  unfold LeanRelease.cfg LeanRelease.samplesAt
   rfl
 
 /-- `withInner` keeps the values `vsAt` reads at the release it wraps: they read its rep. -/

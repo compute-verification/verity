@@ -288,12 +288,12 @@ PEARLPLUS_COINS = {"epoch": "a salt-only session on vy-challenger-1, reserved th
                             "ledger (`pearlplus_draw`); the piece puts that record in the evidence store the moment it is "
                             "drawn and holds the verdict to it (`coin`, `pearlplus_coin`)"}
 #: the replay's samples where verify ran without the gate (`verify_run.node_draw`)
-PEARLPLUS_NODE_DRAWS = ("the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
+PEARLPLUS_NODE_SAMPLES = ("the Lean verifier's IO.getRandomBytes in verify_run.py on the serving node, one source for the "
                         "run, taken once every pass's roots are read and recorded in the passes' coin.json before any "
                         "replay; the piece puts that record in the evidence store the moment it is drawn and holds the "
                         "verdict to it (`coin`, `pearlplus_coin`)")
 #: the same where its epoch's coins are an in-process challenger's
-PEARLPLUS_COINS_IN_PROCESS = {"draws": PEARLPLUS_NODE_DRAWS,
+PEARLPLUS_COINS_IN_PROCESS = {"draws": PEARLPLUS_NODE_SAMPLES,
                               "epoch": "an in-process challenger of epoch 0 (verity_bench's protocols_config, "
                                        "pouw.challenged), held by the serving process"}
 #: where the epoch's salt coin comes from under PEARLPLUS_TIE (``epoch``; ``draws`` as above)
@@ -367,8 +367,8 @@ PEARLPLUS_ANSWER, PEARLPLUS_LEAN = "pearlplus-answer.json", "pearlplus-lean.json
 #: the window's registration R as its records audit under ``--sampled-proofs`` sampled against (a5's copy), and that
 #: audit's summary (`spot_row`)
 WINDOW_REGISTRATION, AUDIT_SUMMARY = "window/registration.json", "summary.json"
-#: why `pearlplus_live_draw` refuses a node's sample source
-PEARLPLUS_NODE_DRAW = ("the verifier's draw source is drawn on the serving node (verify_run.node_draw, PEARLPLUS_NODE_DRAWS), "
+#: why `pearlplus_live_sample` refuses a node's sample source
+PEARLPLUS_NODE_SAMPLE = ("the verifier's draw source is drawn on the serving node (verify_run.node_draw, PEARLPLUS_NODE_SAMPLES), "
                        "not a challenger coin opened on the run commitment (served_passes.py verify under "
                        "PEARLC_CHALLENGER_GATE)")
 #: H1's record of a window (`pouw_h1.CALLS_FILE`) under the serve dir
@@ -1079,7 +1079,7 @@ def pearlplus_period_rule(piece_dir: Path, gate: str, lane: str, record: Path) -
     """The rule the verifier's sample keeps, read in the gate's ledger once its coin is flipped: the sample session of the coin
     record `record` (``draw.reserved.session``) is lane `lane`'s first reserve after the period in ``piece_dir/PERIOD``
     closed (`pouw_h1_window.after_close`, which `bench_arm.LiveDraw` held it to before asking its coin, and
-    `pearlplus_live_draw` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
+    `pearlplus_live_sample` holds the record to). Whether it held, and its ``RULE`` line; kept as the PERIOD document's
     ``rule``."""
     from verity.protocols.accounting.pouw.prover.serving.h1 import window as PHW
 
@@ -1284,7 +1284,7 @@ def pearlplus_draw(record: Path, out: Path, gate: str | None, key: str | None, m
     root its coin followed, and the record's opening its coin ``pouw/draw`` 0 after C (`challenger.live_reason`) with
     the record's source its coin. `fetch` replaces the gate's answers (tests). ``{from, session, reason}``: the sample's
     origin, its session and None or the first refusal; a node's sample has no session and no refusal here (the compose
-    refuses it, `pearlplus_live_draw`)."""
+    refuses it, `pearlplus_live_sample`)."""
     from verity.protocols.accounting.pouw.verifier import salt as PS
     from verity.protocols.accounting.pouw.verifier import window as Wd
     from verity.protocols.proofs.spot.device import challenger as Ch
@@ -1477,7 +1477,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     ``coin``, the verifier's coin as `coin` published it (its ``coin-put.json``), is ``coin`` (`pearlplus_coin`): its
     store id or why it has none, and an accept whose run commitment or sample source isn't the published record's
     rejects; the record's sample is ``coins.draw`` (`pearlplus_draw`), and a challenger sample its session doesn't hold
-    rejects (a node's says so in ``coins.draws``, `PEARLPLUS_NODE_DRAWS`). The piece names its load (``load``: the requests, their prompt and output tokens, and the tokens a step).
+    rejects (a node's says so in ``coins.draws``, `PEARLPLUS_NODE_SAMPLES`). The piece names its load (``load``: the requests, their prompt and output tokens, and the tokens a step).
     ``tie``, under PEARLPLUS_TIE, is the window record W the window's passes are held to (``served_passes.py retain
     --window-record``): ``served`` is then serve-openai's Pearl+ arm's document for the window (``pearl/w<k>/served.json``,
     its ``error`` why it isn't ok), its epoch's coins are `PEARLPLUS_EPOCH_TIED`'s (or `PEARLPLUS_EPOCH_TIED_IN_PROCESS`'s),
@@ -1516,7 +1516,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     if coin is not None and (coin.parent / COIN_RECORD).is_file():
         coins["draw"] = pearlplus_draw(coin.parent / COIN_RECORD, out, gate, key, main)
         if coins["draw"]["from"] != "challenger":
-            coins["draws"] = PEARLPLUS_NODE_DRAWS
+            coins["draws"] = PEARLPLUS_NODE_SAMPLES
         elif coins["draw"]["reason"] is not None:
             reasons.append(f"draw: {coins['draw']['reason']}")
     if tie is None:
@@ -1666,11 +1666,11 @@ def _ledger_period(lines: Sequence[str], session: str) -> tuple[dict[str, Any] |
     return None, None
 
 
-def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, lane: str, check: Mapping[str, Any],
+def pearlplus_live_sample(record: Mapping[str, Any], piece_dir: Path, key: str, lane: str, check: Mapping[str, Any],
                         lines: Sequence[str], period: str) -> str | None:
     """Why the verifier's sample source in its coin record `record` (the piece's `COIN_RECORD`, `verify_run`'s "The coin
     record") is not a coin the auditor device's challenger under `key` opened on the run commitment C, or None. It must be
-    a challenger sample (`PEARLPLUS_NODE_DRAW`) whose session the piece's check held to the signed ledger and session
+    a challenger sample (`PEARLPLUS_NODE_SAMPLE`) whose session the piece's check held to the signed ledger and session
     (`check`, `pearlplus_draw`'s), under `key` (that session's tree in the piece); in the piece's ledger `lines`, the
     first reserve of lane `lane` after its Pearl-C period `period` closed, withheld with a sample session's layout alone,
     and the one session opened on C, so a prover who samples again under another session holds a sample no compose takes;
@@ -1685,7 +1685,7 @@ def pearlplus_live_draw(record: Mapping[str, Any], piece_dir: Path, key: str, la
         return f"the verifier's coin record is {record.get('schema')!r}, not {COIN_KIND}, which carries its draw"
     draw = record.get("draw") or {}
     if draw.get("from") != "challenger":
-        return PEARLPLUS_NODE_DRAW
+        return PEARLPLUS_NODE_SAMPLE
     sid = (draw.get("reserved") or {}).get("session")
     if check.get("reason") is not None or check.get("session") != sid:
         return f"the draw session's check refused it: {check.get('reason') or 'it checked another session'}"
@@ -1744,7 +1744,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     3. **The lane's open period, the live sample, and the window tie.** The session joined lane `lane`'s period open at
        the reserve, a Pearl-C one (its open commits none of H1's fields: `credit.pearl_c_period_credit` credits a salt
        session in no other). The verifier's sample source is a sample session's coin opened on the run's commitment, that
-       session the lane's first reserve after the period closed (`pearlplus_live_draw` over `pearlplus_draw`'s check),
+       session the lane's first reserve after the period closed (`pearlplus_live_sample` over `pearlplus_draw`'s check),
        and the verdict is over the coin published at its sample (`pearlplus_coin`).
        Pearl+'s verdict (`PEARLPLUS_ANSWER`) held its passes to a window record W (``verify --tie W``), the
        window's registration R under `spot` is chained right after W, and its records audit is tied to W
@@ -1797,7 +1797,7 @@ def pearlplus_of_record(doc: Mapping[str, Any], piece_dir: Path, spot: Path | No
     except (OSError, ValueError) as e:
         return None, f"the verifier's coin record can't be read ({type(e).__name__}: {e})"
     drew = (doc.get("coins") or {}).get("draw") or {}
-    if (why := pearlplus_live_draw(coin, piece_dir, key, lane, drew, lines, str(name))) is not None:
+    if (why := pearlplus_live_sample(coin, piece_dir, key, lane, drew, lines, str(name))) is not None:
         return None, why
     published = doc.get("coin") or {}
     if not published or published.get("reason") is not None:

@@ -24,7 +24,7 @@ import Proofs.Flock.Soundness.Refine.Plays
 
 `zk_ligerito_plays`: `Zk.ligerito` refines the model's masked level 0 with Ligerito's levels compiled. The model's
 games branch only on the schedule, so each of them has a run at any claim, polynomial and state, given its messages and
-coins of the right sizes (`foldRoundsC_any`, `foldRoundsZK_any`, `drawKs_any`, `twoOodC_any`,
+coins of the right sizes (`foldRoundsC_any`, `foldRoundsZK_any`, `sampleKs_any`, `twoOodC_any`,
 `queryAndBatchPadC_any`, `ligTailC_any`, `ligeritoPadZC_any`); and its Ligerito verdict is not a reject, since the last
 recursive round records a query. What the executable gives is the coins: every round it consumes issued the number of
 coins the model samples there (`fold_coins`, `lane_coins`, `queryLevel0_bind`).
@@ -55,19 +55,19 @@ theorem ex_recv {M : Type} {f : M → Game β} {ms : List Msg} {cs : List (Array
   let ⟨b, hb⟩ := h
   ⟨b, Plays.bind' (Plays.recv M m) hb rfl rfl⟩
 
-theorem ex_drawVec {n : ℕ} {iF : Fintype (Fin n → 𝔽)} {iN : Nonempty (Fin n → 𝔽)} {f : (Fin n → 𝔽) → Game β}
+theorem ex_sampleVec {n : ℕ} {iF : Fintype (Fin n → 𝔽)} {iN : Nonempty (Fin n → 𝔽)} {f : (Fin n → 𝔽) → Game β}
     {ms : List Msg} {cs : List (Array F128)} (c : Array F128) (hc : c.size = n) (h1 : n ≠ 1)
     (h : ∀ v, ∃ b, Plays fOf (f v) ms cs b) : ∃ b, Plays fOf (@Game.draw (Fin n → 𝔽) iF iN >>= f) ms (c :: cs) b :=
   let ⟨b, hb⟩ := h _
   ⟨b, Plays.bind' (@Plays.drawVec _ _ _ fOf n iF iN c hc h1) hb rfl rfl⟩
 
-theorem ex_drawOne {iF : Fintype 𝔽} {iN : Nonempty 𝔽} {f : 𝔽 → Game β} {ms : List Msg} {cs : List (Array F128)}
+theorem ex_sampleOne {iF : Fintype 𝔽} {iN : Nonempty 𝔽} {f : 𝔽 → Game β} {ms : List Msg} {cs : List (Array F128)}
     (c : Array F128) (hc : c.size = 1) (h : ∀ v, ∃ b, Plays fOf (f v) ms cs b) :
     ∃ b, Plays fOf (@Game.draw 𝔽 iF iN >>= f) ms (c :: cs) b :=
   let ⟨b, hb⟩ := h _
   ⟨b, Plays.bind' (@Plays.drawOne _ _ _ fOf iF iN c hc) hb rfl rfl⟩
 
-theorem ex_drawK {f : 𝕂 → Game β} {ms : List Msg} {cs : List (Array F128)} (c : Array F128) (hc : c.size = 2)
+theorem ex_sampleK {f : 𝕂 → Game β} {ms : List Msg} {cs : List (Array F128)} (c : Array F128) (hc : c.size = 2)
     (h : ∀ r, ∃ b, Plays fOf (f r) ms cs b) : ∃ b, Plays fOf (Model.drawK execArith >>= f) ms (c :: cs) b := by
   have hk : Plays fOf (Model.drawK execArith) [] [c] (execArith.ofLimbs (fOf (c)[0]!) (fOf (c)[1]!)) := by
     unfold Model.drawK
@@ -98,14 +98,14 @@ theorem exQ_recv {Q : β → Prop} {M : Type} {f : M → Game β} {ms : List Msg
   let ⟨b, hb, hQ⟩ := h
   ⟨b, Plays.bind' (Plays.recv M m) hb rfl rfl, hQ⟩
 
-theorem exQ_drawVec {Q : β → Prop} {n : ℕ} {iF : Fintype (Fin n → 𝔽)} {iN : Nonempty (Fin n → 𝔽)}
+theorem exQ_sampleVec {Q : β → Prop} {n : ℕ} {iF : Fintype (Fin n → 𝔽)} {iN : Nonempty (Fin n → 𝔽)}
     {f : (Fin n → 𝔽) → Game β} {ms : List Msg} {cs : List (Array F128)} (c : Array F128) (hc : c.size = n)
     (h1 : n ≠ 1) (h : ∀ v, ∃ b, Plays fOf (f v) ms cs b ∧ Q b) :
     ∃ b, Plays fOf (@Game.draw (Fin n → 𝔽) iF iN >>= f) ms (c :: cs) b ∧ Q b :=
   let ⟨b, hb, hQ⟩ := h _
   ⟨b, Plays.bind' (@Plays.drawVec _ _ _ fOf n iF iN c hc h1) hb rfl rfl, hQ⟩
 
-theorem exQ_drawOne {Q : β → Prop} {iF : Fintype 𝔽} {iN : Nonempty 𝔽} {f : 𝔽 → Game β} {ms : List Msg}
+theorem exQ_sampleOne {Q : β → Prop} {iF : Fintype 𝔽} {iN : Nonempty 𝔽} {f : 𝔽 → Game β} {ms : List Msg}
     {cs : List (Array F128)} (c : Array F128) (hc : c.size = 1) (h : ∀ v, ∃ b, Plays fOf (f v) ms cs b ∧ Q b) :
     ∃ b, Plays fOf (@Game.draw 𝔽 iF iN >>= f) ms (c :: cs) b ∧ Q b :=
   let ⟨b, hb, hQ⟩ := h _
@@ -123,7 +123,7 @@ theorem foldRoundsC_any (p : LigeritoProof) :
   | k + 1, a, sM, qM, c :: cs, hl, hs => by
       rw [Model.foldRoundsC, show kMsgs p a (k + 1) = kMsg p.messages[a]! :: kMsgs p (a + 1) k by
         simp [kMsgs, List.range'_succ]]
-      refine ex_drawK c (hs c (by simp)) fun r => ?_
+      refine ex_sampleK c (hs c (by simp)) fun r => ?_
       refine ex_recv _ ?_
       exact ex_bind (foldRoundsC_any p k (a + 1) _ _ cs (by simpa using hl) fun c' h => hs c' (by simp [h]))
         (fun _ => ⟨_, Plays.pure _⟩) (List.append_nil _).symm (List.append_nil _).symm
@@ -138,24 +138,24 @@ theorem foldRoundsZK_any {np : ℕ} (P : ZkSession.Pads0 np 2) (p : LigeritoProo
   | 1, j, a, s, q, c :: cs, hl, hs => by
       rw [List.eq_nil_of_length_eq_zero (by simpa using hl : cs.length = 0), ZkSession.foldRoundsZK,
         show kMsgs p a (1 - 1) = [] by simp [kMsgs]]
-      exact ex_drawK c (hs c (by simp)) fun _ => ⟨_, Plays.pure _⟩
+      exact ex_sampleK c (hs c (by simp)) fun _ => ⟨_, Plays.pure _⟩
   | k + 2, j, a, s, q, c :: cs, hl, hs => by
       rw [ZkSession.foldRoundsZK, show kMsgs p a (k + 2 - 1) = kMsg p.messages[a]! :: kMsgs p (a + 1) (k + 1 - 1) by
         simp [kMsgs, List.range'_succ]]
-      refine ex_drawK c (hs c (by simp)) fun r => ?_
+      refine ex_sampleK c (hs c (by simp)) fun r => ?_
       refine ex_recv _ ?_
       exact ex_bind (foldRoundsZK_any P p (k + 1) (j + 1) (a + 1) _ _ cs (by simpa using hl)
         fun c' h => hs c' (by simp [h])) (fun _ => ⟨_, Plays.pure _⟩) (List.append_nil _).symm
         (List.append_nil _).symm
 
-theorem drawKs_any : ∀ (e : ℕ) (cs : List (Array F128)), cs.length = e → (∀ c ∈ cs, c.size = 2) →
-    ∃ out, Plays fOf (Model.drawKs execArith e) [] cs out
+theorem sampleKs_any : ∀ (e : ℕ) (cs : List (Array F128)), cs.length = e → (∀ c ∈ cs, c.size = 2) →
+    ∃ out, Plays fOf (Model.sampleKs execArith e) [] cs out
   | 0, cs, hl, _ => by
-      rw [List.eq_nil_of_length_eq_zero hl, Model.drawKs]
+      rw [List.eq_nil_of_length_eq_zero hl, Model.sampleKs]
       exact ⟨_, Plays.pure _⟩
   | e + 1, c :: cs, hl, hs => by
-      rw [Model.drawKs]
-      exact ex_drawK c (hs c (by simp)) fun _ => ex_bind (drawKs_any e cs (by simpa using hl)
+      rw [Model.sampleKs]
+      exact ex_sampleK c (hs c (by simp)) fun _ => ex_bind (sampleKs_any e cs (by simpa using hl)
         fun c' h => hs c' (by simp [h])) (fun _ => ⟨_, Plays.pure _⟩) rfl (List.append_nil _).symm
 
 theorem twoOodC_any (dim split : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens 𝔽 D → Model.Quad 𝕂)
@@ -164,9 +164,9 @@ theorem twoOodC_any (dim split : ℕ) (sM : Opens 𝔽 D → 𝕂) (qM : Opens �
     ∃ out, Plays fOf (Model.twoOodC execArith dim split sM qM) [fMsg y₁, kMsg m₁, fMsg y₂, kMsg m₂]
       [z₁, c₁, z₂, c₂] out := by
   unfold Model.twoOodC
-  refine ex_drawVec z₁ hz₁ hd fun _ => ex_recv _ (ex_recv _ (ex_drawOne c₁ hc₁ fun _ => ?_))
+  refine ex_sampleVec z₁ hz₁ hd fun _ => ex_recv _ (ex_recv _ (ex_sampleOne c₁ hc₁ fun _ => ?_))
   dsimp only
-  exact ex_drawVec z₂ hz₂ hd fun _ => ex_recv _ (ex_recv _ (ex_drawOne c₂ hc₂ fun _ => ⟨_, Plays.pure _⟩))
+  exact ex_sampleVec z₂ hz₂ hd fun _ => ex_recv _ (ex_recv _ (ex_sampleOne c₂ hc₂ fun _ => ⟨_, Plays.pure _⟩))
 
 theorem queryAndBatchPadC_any (r : ℕ) (lv : Accounting.Level) (col : List 𝔽 → ℕ → 𝕂) (start : ℕ)
     (st : LigStateC 𝔽 𝕂 D) (cw cα cβ : Array F128) (hcw : cw.size = lv.queries)
@@ -174,9 +174,9 @@ theorem queryAndBatchPadC_any (r : ℕ) (lv : Accounting.Level) (col : List 𝔽
     (hα1 : Accounting.ceilLog2 lv.queries ≠ 1) (m : F256 × F256) :
     ∃ st', Plays fOf (ZkLink.queryAndBatchPadC execArith r lv col start st) [kMsg m] [cw, cα, cβ] st' := by
   unfold ZkLink.queryAndBatchPadC
-  refine ex_drawVec cw hcw hq1 fun _ => ex_drawVec cα hcα hα1 fun _ => ?_
+  refine ex_sampleVec cw hcw hq1 fun _ => ex_sampleVec cα hcα hα1 fun _ => ?_
   dsimp only
-  exact ex_recv _ (ex_drawOne cβ hcβ fun _ => ⟨_, Plays.pure _⟩)
+  exact ex_recv _ (ex_sampleOne cβ hcβ fun _ => ⟨_, Plays.pure _⟩)
 
 theorem ligTailC_any (r : ℕ) (sch : Accounting.Schedule) (tp : ℕ) (c₀ : 𝔽) (e : ℕ) (b : ℕ → 𝔽)
     (lv₀ lv₁ : Accounting.Level) (rest : List Accounting.Level) (z₀ : Fin (sch.m - 7) → 𝔽) (β₀ : 𝔽) (ini : List 𝕂)
@@ -201,7 +201,7 @@ theorem ligeritoPadZC_any {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accountin
     (hl : sch.levels = lv₀ :: lv₁ :: rest) (z₀ cβ₀ : Array F128) (hz₀ : z₀.size = sch.m - 7) (hm7 : sch.m - 7 ≠ 1)
     (hβ₀ : cβ₀.size = 1) (y₀ : 𝔽) (m₀ : 𝕂 × 𝕂) {msF : List Msg} {csF : List (Array F128)}
     (hfold : ∀ s q, ∃ out, Plays fOf (ZkSession.foldRoundsZK execArith P sch.k0 0 s q) msF csF out)
-    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} (hρ : ∃ ρ, Plays fOf (Model.drawKs execArith 2) [] csρ ρ) (T' : 𝕂)
+    (ev : Fin 2 → 𝕂) {csρ : List (Array F128)} (hρ : ∃ ρ, Plays fOf (Model.sampleKs execArith 2) [] csρ ρ) (T' : 𝕂)
     (ybar : Fin tp → 𝕂) (m' : 𝕂 × 𝕂) (C₁ : Cap D) {msO msQ msR : List Msg} {csO csQ csR : List (Array F128)}
     (htwo : ∀ s q, ∃ out, Plays fOf (Model.twoOodC (D := D) execArith (sch.m - 7 - sch.k0 + 1) 0 s q) msO csO out)
     (hqb : ∀ col st, ∃ st', Plays fOf (ZkLink.queryAndBatchPadC (D := D) execArith r lv₀ col 0 st) msQ csQ st')
@@ -214,7 +214,7 @@ theorem ligeritoPadZC_any {np : ℕ} (P : ZkSession.Pads0 np 2) (sch : Accountin
   unfold ZkLink.ligeritoPadZC
   rw [hl]
   dsimp only
-  refine exQ_drawVec z₀ hz₀ hm7 fun z => exQ_recv y₀ (exQ_drawOne cβ₀ hβ₀ fun β => ?_)
+  refine exQ_sampleVec z₀ hz₀ hm7 fun z => exQ_recv y₀ (exQ_sampleOne cβ₀ hβ₀ fun β => ?_)
   refine exQ_recv m₀ (exQ_bind (hfold _ _) (fun ⟨ini, s⟩ => ?_) rfl rfl)
   dsimp only
   refine exQ_recv ev (exQ_bind0 hρ (fun ρ => ?_) rfl)
@@ -716,7 +716,7 @@ theorem zk_ligerito_plays : ZkLigeritoPlays := by
     (t.rounds[t.k]!).coins (t.rounds[t.k + 1]!).coins hz₀ (by show sch.m - 7 ≠ 1; omega) hβ₀
     (fOf p.oodValues[0]!) (gOf p.messages[0]!.1, gOf p.messages[0]!.2)
     (fun s q => foldRoundsZK_any P p sch.k0 0 1 s q _ hFl hFs)
-    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (drawKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
+    ![gOf zl.msgs.e0, gOf zl.msgs.e1] (sampleKs_any 2 _ hρl hρs) (gOf zl.msgs.tPrime)
     (fun i => gOf zl.msgs.ybar[i.val]!) (gOf p.messages[sch.k0]!.1, gOf p.messages[sch.k0]!.2)
     (capDig p.recursiveCaps[0]!)
     (fun s q => twoOodC_any _ 0 s q

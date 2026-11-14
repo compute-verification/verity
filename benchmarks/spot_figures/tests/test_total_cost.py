@@ -376,7 +376,7 @@ def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monke
              Cell(4.0, 4096.0, prove=1e-2, fixed=5.0, cap=8, commit_bytes=512.0, table=4)]
     row = {"merged": "template", "form": "statements", "registration_sample": 3, "k": {0: 10, 1: 2}, "tables": 2.0}
     got = t.limits(cells, row)
-    assert t.draw_width(100) == (7 + 64 + 7) // 8 == 9 and t.draw_width(4) == (3 + 64 + 7) // 8
+    assert t.sample_width(100) == (7 + 64 + 7) // 8 == 9 and t.sample_width(4) == (3 + 64 + 7) // 8
     assert got["draw_bytes"] == 3 * ((2 * 10 * 9 + 64) + (2 * 2 * 9 + 64))
     # each type's sampled blocks of the phase are one session: 30 blocks within a table of 64, 6 blocks 1.5 tables of 4
     assert got["lines"] == pytest.approx(2 * 2 + t.TABLE_LINES * (1 + 1.5))

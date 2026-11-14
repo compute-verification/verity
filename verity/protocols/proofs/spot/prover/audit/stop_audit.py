@@ -230,7 +230,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
                                               sort_keys=True))
     env = {**a0.prover_env(zk_server, st), **({"FC_ZK_SELF_CHECK": "skip"} if forged else {})}
     t = time.time()
-    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", PL.free_port(), out, draw_file=out / "sample.json",
+    record, live = a0.session(bin_, st, n, f"subset:{len(local)}", PL.free_port(), out, sample_file=out / "sample.json",
                               zk=True, env=env, prove_timeout=timeout)
     seconds = round(time.time() - t, 1)
     lv = a0.lean_verify(lean, st, n, out, zk=True)

@@ -55,14 +55,14 @@ set at its own interior values does when `Y` is the incorrect set at each replay
   incorrect proof block and antitone in their count.
 * `prod_filter_eq_sum`, `Ex_esc_le`: **the first stage**. Catching each replay block independently, `∏_{ρ∈S} e_ρ` is
   the sum over sets `T` of the indicator that `S` misses `T` times `T`'s weight, so its average over the replay sample
-  is at most `P̄_a` (`Sessions.replayDraws`).
+  is at most `P̄_a` (`Sessions.replaySamples`).
 * `above_congr`, `card_image_above_le`, `badOuterTwo_inter`, `unions_of_nPU_le`: the waits' unions. `above Y` reads
   `Y` only through its counts on the grid, so over `S₁Two` it takes at most `2^M` values, `M` the footprint bits
   (`TwoFoot`); an outer run bad for sets is bad for their projections on any set of proof blocks; and counts of at
   least `n_PU` meet `Sessions.unions`.
 * `inner_badTwo_le`, `outer_badTwo_le`, `pr_failsTwo_le_of`: **the failure event's probability**, at `Compiled`'s
   `κ_δ` and `γ`: the inner wait's union bound over `above Y` projected on the outer run's replay sample (at most
-  `2^{|sampleBlocks S|}` sets) at the second stage's miss (`Sessions.secondDraws`, at most `∏_{ρ∈S} e_ρ` at `Y`'s
+  `2^{|sampleBlocks S|}` sets) at the second stage's miss (`Sessions.secondSamples`, at most `∏_{ρ∈S} e_ρ` at `Y`'s
   counts, by `above`, which the projection keeps), and the outer wait's over `above`'s values on `S₁Two` (at most
   `2^M`), each within its wait's slack: `|sampleBlocks S| ≤ n_in` and `M ≤ n_out` (`Sessions.unions`). An outer run
   no second-stage fork of which is accepted adds nothing, so the inner union needs its bits only where one is.
@@ -470,8 +470,8 @@ theorem outer_badTwo_le (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (x 
 
 set_option synthInstance.maxSize 1024 in
 /-- **The failure event's probability, at any found event**: `Compiled.pr_fails_le_of` at the two-stage failure event,
-`κ(δ) + √(γ·Pr[B])`, with the outer wait's bound `outer_badTwo_le` from `Sessions.replayDraws` and
-`Sessions.secondDraws`. -/
+`κ(δ) + √(γ·Pr[B])`, with the outer wait's bound `outer_badTwo_le` from `Sessions.replaySamples` and
+`Sessions.secondSamples`. -/
 theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} (hδ : 0 ≤ δ) (hS : L.Sessions H)
     (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (found : Ω → (u : Fin (L.nPU x)) → (Fin (L.V.k x) → Coin) → A.EC (L.sh x u) → Prop)
@@ -526,7 +526,7 @@ theorem pr_failsTwo_le_of (H : Msg → Msg) (L : CompiledTwo Coin A) {δ : ℝ} 
       ⟨(hS.unions x s Pt d hs hPt hd hin).1, (hS.unions x s Pt d hs hPt hd hin).2 Ω P ω⟩
       (fun r => L.κs x + Real.sqrt (L.V.k x * L.γs x * β ω r))
       (fun r => add_nonneg (L.κs_nonneg x) (Real.sqrt_nonneg _))
-      (hS.replayDraws x s Pt d hs hPt hd hin) (hS.secondDraws x s Pt d hs hPt hd hin) (hS.slots x)
+      (hS.replaySamples x s Pt d hs hPt hd hin) (hS.secondSamples x s Pt d hs hPt hd hin) (hS.slots x)
       (hsess ω)).trans (le_of_eq ?_)
     rw [Ex_add, Ex_const]
     unfold Compiled.κ

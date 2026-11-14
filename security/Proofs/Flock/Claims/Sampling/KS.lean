@@ -54,8 +54,8 @@ sampled verifier, each a hypothesis to discharge there. This file states them, a
 proof reads: the opening checks' rerun programs, kept openings and the assembled witness, the waits' kept lists, the
 refused sets and the unions' sizes against the waits' slack.
 
-* `DrawLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`: **the hypotheses**. The sampling design over `Design.Pa`
-  (`drawLaw_of_slots` proves it of the deployed sample, `Sampling.Select.DrawLaw`); the scope refusal; the interior
+* `SampleLaw`, `Refuses`, `InteriorFixed`, `SessionOpens`: **the hypotheses**. The sampling design over `Design.Pa`
+  (`sampleLaw_of_slots` proves it of the deployed sample, `Sampling.Select.SampleLaw`); the scope refusal; the interior
   commitments fixed by the first stage; and that a checked unit's Flock witness reveals openings making its proof block
   correct.
 * `SlotsCover`, `SessionOpensSlots`: **sessions that cover several checked units**. Every checked unit has the rounds
@@ -241,7 +241,7 @@ noncomputable def γF (D : Deploy Coin Col T) (x : Msg) : ℝ :=
 /-- **The sampling design**: on a statement in scope, for each set `B` of proof blocks, a weight `esc` of the first-stage coins
 bounds, at each, the probability over the second stage that the checked units (the first `n_PU`) miss every slot
 `v ∈ B`, and averages at most `P_a(B)`. -/
-def DrawLaw (D : Deploy Coin Col T) : Prop :=
+def SampleLaw (D : Deploy Coin Col T) : Prop :=
   ∀ x s Pt, D.parse x = some s → D.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ range Pt.blocks.length, ∃ esc : (Fin (D.V.k x) → Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (D.V.k x) → Coin => ∀ v ∈ B, ∀ p : Fin (nPU D x),

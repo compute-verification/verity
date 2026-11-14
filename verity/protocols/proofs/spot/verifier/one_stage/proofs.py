@@ -22,7 +22,7 @@ soundness (`SampledKSLiveV3`, and `SampledKSLiveV5` at a shared-row public file)
 ``form`` refusal, so the mirror can only refuse more.
 
 `fits_why` and `draw_fits_why` mirror v2's refusal of a length a session's statement can't hold, since it writes each in
-an 8-byte word (`OneStageZk.fitsWhy`, `drawFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
+an 8-byte word (`OneStageZk.fitsWhy`, `sampleFitsWhy`, at `WORD`): a file, a lookup table, the program, or the partition
 object, the registered reads or a session's sample as `printed` prints them, at ``2^64`` bytes or more.
 
 `population_why` mirrors the v2 audit's check that the public file's units are the registration's population in order
@@ -338,7 +338,7 @@ def fits_why(limit: int, circuit: bytes, public: bytes, tables: Sequence[tuple[s
 
 
 def draw_fits_why(limit: int, draw: Any) -> str | None:
-    """`OneStageZk.drawFitsWhy`: ``"the draw"`` when a session's statement would hold its record's sample ``draw`` (None
+    """`OneStageZk.sampleFitsWhy`: ``"the draw"`` when a session's statement would hold its record's sample ``draw`` (None
     for none) at ``limit`` bytes or more."""
     return "the draw" if draw is not None and limit <= printed_size(draw) else None
 

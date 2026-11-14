@@ -22,8 +22,8 @@ At every `D`:
   wait's `k` and `K` are `D`'s (`ofDeploy_kOut`, `ofDeploy_kIn`, `ofDeploy_capOut`, `ofDeploy_capIn`); and its opening
   count is `D`'s (`openCallsLe_ofDeploy`, from `Sampling.OpenCallsLe`);
 * **it meets the contract** where `D` meets the frozen hypotheses (`sessions_ofDeploy`): `draws` from
-  `DrawLaw`, `slots` by the cut, `unions` by its bits, `refuses` from `Refuses`, `interior` from `InteriorFixed`,
-  `fixed` from `DrawFixed` (`fixed_ofDeployAt`), `runs` from `SessionRuns` one way (`SessionRunsTo`) and the inner
+  `SampleLaw`, `slots` by the cut, `unions` by its bits, `refuses` from `Refuses`, `interior` from `InteriorFixed`,
+  `fixed` from `SampleFixed` (`fixed_ofDeployAt`), `runs` from `SessionRuns` one way (`SessionRunsTo`) and the inner
   numbers at each unit's `N₀` (`InnerNumbersAt`, `runs_ofDeployAt`; the session's embedding is `emb`, the only order
   embedding onto its rounds), and `opens` from `SessionOpens`.
 
@@ -32,8 +32,8 @@ sessions, reveal, interior roots and commitment are the code's (`compiled_checke
 is bounded by the reveal count (`openCallsLe_compiled`). `SamplingDeploy.compiledAt F c iroots` is `ofDeployAt` there
 at the code's `unitN₀`, the two-stage compiler's, and `compiled` at a code that sets no `unitN₀`. The four contract
 clauses that are facts about the sampled verifier's code alone are named Props of `SamplingDeploy.Code`'s functions
-(`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), each the frozen hypothesis at `deployOf F c`
-(`drawLaw_deployOf`, …, `Iff.rfl`), and `sessions_compiled` reads them.
+(`Code.SampleLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.SampleFixed`), each the frozen hypothesis at `deployOf F c`
+(`sampleLaw_deployOf`, …, `Iff.rfl`), and `sessions_compiled` reads them.
 -/
 
 @[expose] public section
@@ -185,9 +185,9 @@ theorem flock_check_of_R {parse : Msg → Option Claims.Flock.Stmt} {xS : Msg} {
   exact decide_eq_true hrel
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **`fixed` from `DrawFixed`**: a sampled proof block's session's rounds are second-stage, and fresh coins on them keep the
+/-- **`fixed` from `SampleFixed`**: a sampled proof block's session's rounds are second-stage, and fresh coins on them keep the
 sample. -/
-theorem fixed_ofDeployAt (hf : Claims.Sampling.DrawFixed D) (x : Msg)
+theorem fixed_ofDeployAt (hf : Claims.Sampling.SampleFixed D) (x : Msg)
     (r : Fin ((ofDeployAt D iroots n₀).V.k x) → Coin) (u : ℕ) (hu : u ∈ (ofDeployAt D iroots n₀).checked x r) :
     (ofDeployAt D iroots n₀).rounds x u ⊆ (ofDeployAt D iroots n₀).stage2 x ∧
       ∀ d, (ofDeployAt D iroots n₀).checked x (forkOn ((ofDeployAt D iroots n₀).rounds x u) r d) =
@@ -255,11 +255,11 @@ theorem runs_ofDeployAt (H : Msg → Msg) (hruns : Claims.Sampling.SessionRunsTo
       exact hlt i
 
 omit [Nonempty Coin] in
-/-- **The contract from the frozen hypotheses** at `D` (`Claims.Sampling.DrawLaw`, …, `SessionOpens`): they give
+/-- **The contract from the frozen hypotheses** at `D` (`Claims.Sampling.SampleLaw`, …, `SessionOpens`): they give
 `ofDeploy`'s `Sessions`. The sample's members are the checked units at slots below `n_PU` (`mem_ofDeploy_checked`);
 `fixed` and `runs` are `fixed_ofDeployAt`'s and `runs_ofDeployAt`'s at the record's `N₀`. -/
-theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.DrawLaw D) (hr : Claims.Sampling.Refuses H D)
-    (hi : Claims.Sampling.InteriorFixed H D iroots) (hf : Claims.Sampling.DrawFixed D)
+theorem sessions_ofDeploy (H : Msg → Msg) (hd : Claims.Sampling.SampleLaw D) (hr : Claims.Sampling.Refuses H D)
+    (hi : Claims.Sampling.InteriorFixed H D iroots) (hf : Claims.Sampling.SampleFixed D)
     (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D)
     (hopens : Claims.Sampling.SessionOpens H D iroots) : (ofDeploy D iroots).Sessions H where
   draws x s P hs hP hin B hB := by
@@ -300,17 +300,17 @@ open Claims.SamplingGeneric (ofDeploy)
 The contract's clauses that read only the sampled verifier's code, as Props of `Code`'s functions, each the frozen
 hypothesis of its name at `deployOf F c` (`Iff.rfl`):
 
-* `Code.DrawLaw` (`draws`): on a statement in scope, for each set `B` of proof blocks, a weight of the first-stage coins
+* `Code.SampleLaw` (`draws`): on a statement in scope, for each set `B` of proof blocks, a weight of the first-stage coins
   bounds the probability over the second stage that no slot below the proof blocks holds a block of `B`, and averages
   at most `P_a(B)`;
 * `Code.Refuses` (`refuses`): an accepted run's statement parses, its query evaluates, and the pair is in scope;
 * `Code.InteriorFixed` (`interior`): the roots a run shows for a proof block's interior values are the same at fresh
   second-stage coins;
-* `Code.DrawFixed` (`fixed`): a unit checked at a slot below the proof blocks has its session's rounds in the second
+* `Code.SampleFixed` (`fixed`): a unit checked at a slot below the proof blocks has its session's rounds in the second
   stage, and fresh coins on them keep the checked units. -/
 
 /-- **Sampling design**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
-def Code.DrawLaw (c : Code) : Prop :=
+def Code.SampleLaw (c : Code) : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ Finset.range Pt.blocks.length, ∃ esc : (Fin (c.V.k x) → FlockDeploy.Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
       (∀ r, Pr (fun d : Fin (c.V.k x) → FlockDeploy.Coin => ∀ v ∈ B, ∀ p : Fin (units c x),
@@ -328,7 +328,7 @@ def Code.InteriorFixed (H : Msg → Msg) (c : Code) (iroots : Msg → Seen → �
     iroots x (run H P c.V x ω (forkOn (c.stage2 x) r d)).seen v = iroots x (run H P c.V x ω r).seen v
 
 /-- **Sample fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
-def Code.DrawFixed (c : Code) : Prop :=
+def Code.SampleFixed (c : Code) : Prop :=
   ∀ x r u, (∃ p : Fin (units c x), (c.checked x r)[p.val]? = some u) →
     c.rounds x u ⊆ c.stage2 x ∧ ∀ d, c.checked x (forkOn (c.rounds x u) r d) = c.checked x r
 
@@ -337,14 +337,14 @@ section Compiled
 variable {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (c : Code)
   (iroots : Msg → Seen → ℕ → List Msg)
 
-theorem drawLaw_deployOf : Claims.Sampling.DrawLaw (deployOf F c) ↔ c.DrawLaw := Iff.rfl
+theorem sampleLaw_deployOf : Claims.Sampling.SampleLaw (deployOf F c) ↔ c.SampleLaw := Iff.rfl
 
 theorem refuses_deployOf (H : Msg → Msg) : Claims.Sampling.Refuses H (deployOf F c) ↔ c.Refuses H := Iff.rfl
 
 theorem interiorFixed_deployOf (H : Msg → Msg) :
     Claims.Sampling.InteriorFixed H (deployOf F c) iroots ↔ c.InteriorFixed H iroots := Iff.rfl
 
-theorem drawFixed_deployOf : Claims.Sampling.DrawFixed (deployOf F c) ↔ c.DrawFixed := Iff.rfl
+theorem sampleFixed_deployOf : Claims.Sampling.SampleFixed (deployOf F c) ↔ c.SampleFixed := Iff.rfl
 
 /-- **The deployed sampled verifier as a compiled sampled verifier over Flock**: `ofDeploy` at `deployOf F c`, the
 sessions' Flock record `F` at its deployed decoder. -/
@@ -389,8 +389,8 @@ theorem compiledAt_sh (x : Msg) (u : ℕ) :
 
 /-- **The contract at the deployed record**: the code's facts, with the sessions' runs, numbers and openings
 (`sessions_ofDeploy`). -/
-theorem sessions_compiled (H : Msg → Msg) (hd : c.DrawLaw) (hr : c.Refuses H) (hi : c.InteriorFixed H iroots)
-    (hf : c.DrawFixed) (hruns : Claims.Sampling.SessionRuns H (deployOf F c))
+theorem sessions_compiled (H : Msg → Msg) (hd : c.SampleLaw) (hr : c.Refuses H) (hi : c.InteriorFixed H iroots)
+    (hf : c.SampleFixed) (hruns : Claims.Sampling.SessionRuns H (deployOf F c))
     (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c iroots).Sessions H :=
   Claims.SamplingGeneric.sessions_ofDeploy (deployOf F c) iroots H hd hr hi hf hruns hnum hopens

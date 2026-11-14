@@ -6,7 +6,7 @@ public import Spot.Partition
 The sample (`one_stage/draw.py`): the verifier's sampling design expanded over its own program and query (`derive`), a sample held to the
 registration and to that sampling design (`checkDraw`), and the proved statement's units held to the sample (`checkProved`). The strata,
 their rules, the sampling design object and the samplers are Flock's (`Flock.Draw`). The check samples nothing: the sample comes from
-the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
+the challenger's coins, raw bytes with no derivation, which `sampleFirst` reads as `coins.draw_first` does.
 -/
 
 @[expose] public section
@@ -162,7 +162,7 @@ def strataMessage (law : Json) (population : Int) : Option String := Id.run do
 
 /-- `draw.check_draw`: the sample is well formed, over the registered population, under the verifier's sampling design (for
 `stratified` and `work`, the expanded sampling design of `derive`), each failure with Python's detail. -/
-def checkDrawFull (draw population law : Json) : Check := Id.run do
+def checkSampleFull (draw population law : Json) : Check := Id.run do
   let kind := match getD draw "law" with | .str s => s | _ => ""
   if !(draw matches .obj _) || !["subset", "bernoulli", "stratified", "work"].contains kind then
     return Check.fail {} "not-a-draw" draw
@@ -227,7 +227,7 @@ def checkDrawFull (draw population law : Json) : Check := Id.run do
   return c
 
 /-- `draw.check_draw`'s failure codes. -/
-def checkDraw (draw population law : Json) : Array String := (checkDrawFull draw population law).codes
+def checkDraw (draw population law : Json) : Array String := (checkSampleFull draw population law).codes
 
 /-- `draw.proved`: the sampled proof blocks and a work sample's closure, ascending. -/
 def proved (draw : Json) : Array Int :=
@@ -290,22 +290,22 @@ def flockLaw (law : Json) (population : Nat) : Except String Flock.Draw.Law := d
 /-- The units `law` samples over `[0, population)` as `Flock.Draw.drawWith` samples them from `src` read in order (`take`):
 `subset` and `bernoulli` on one stream, `stratified` and `work` one stream per stratum, each extended and rerun when it
 runs out; with the number of bytes of `src` read. An error when `src` runs out. -/
-def drawUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Except String (Array Nat × Nat) := do
+def sampleUnits (law : Flock.Draw.Law) (population : Nat) (src : ByteArray) : Except String (Array Nat × Nat) := do
   let (some d, read) ← (Flock.Draw.drawWith (fun _ need => take src need) law population).run 0
     | throw "the draw did not end"
   return (d.units, read)
 
 /-- `coins.draw_first` without a closure map: the one-stage sample object of the verifier's sampling design over `[0, population)`
-(the sampling design as `derive` expands it, with `population` and the sampled `units`), its units sampled from `src` (`drawUnits`) under
+(the sampling design as `derive` expands it, with `population` and the sampled `units`), its units sampled from `src` (`sampleUnits`) under
 the sampling design's Flock sampling design (`flockLaw`). An error where either is. With the sample, the number of bytes of `src` it read. -/
-def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
-  let (units, read) ← drawUnits (← flockLaw law population) population src
+def sampleFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except String (Json × Nat) := do
+  let (units, read) ← sampleUnits (← flockLaw law population) population src
   return (Json.mkObj (entries law |>.toList |>.append [("population", Lean.toJson population), ("units", natsJson units)]),
     read)
 
-/-- `drawFirstRead`'s sample. -/
-def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json :=
-  (·.1) <$> drawFirstRead law population src
+/-- `sampleFirstRead`'s sample. -/
+def sampleFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json :=
+  (·.1) <$> sampleFirstRead law population src
 
 /-- Whether a sample that gave `r` ran out of its source (`RAN_OUT`): false when it drew, its refusal when it refused
 otherwise (`coins.ran_out`). -/

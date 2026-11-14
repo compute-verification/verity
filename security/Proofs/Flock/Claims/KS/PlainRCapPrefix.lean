@@ -74,7 +74,7 @@ namespace FlockDeploy.KS
 
 open Flock Transcript FlockSoundness FlockSoundness.Refine FlockSoundness.Discharge.Exec
 open Claims.Bridge.Custody (checksAtJ_ok custody_ok)
-open Claims.Bridge.PlainDraw (decideR_sha512)
+open Claims.Bridge.PlainSample (decideR_sha512)
 open Lean (Json)
 
 /-! ## The rep's schedule at the cap's round -/

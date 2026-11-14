@@ -163,8 +163,8 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   whose `README.md` lists every theorem; `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`).
 - **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`verity-verify-proof draw`): the
-  samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
-  `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
+  samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecSample.lean`,
+  `ExecStratified.lean` and `ExecSampleOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
   `verity/protocols/proofs/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
@@ -263,7 +263,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
 - **The Lean-generated vectors.** `tests/fixtures/exfiltration_lean.json` is `audit_exfiltration` and
   `stratified_miss_eq_greedy` evaluated by Lean, and `exfiltration_two_lean.json` `card_influenceTwo_le_uniform`'s
   count on two-stage designs (`tests/lean/`, by `generate.sh`); `tests/test_consumers.py` holds the consumers to them.
-  `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `drawOn` on raw bytes,
+  `tests/test_coins.py` holds the samplers and `draw_first` to the Lean verifier's `sampleOn` on raw bytes,
   `tests/test_one_stage.py` the work sizes to Flock's tests' pins, and `verity/protocols/proofs/flock/prover/tests/stratified_agree.py`
   the Lean verifier's sample to `one_stage.draw`.
 - **The parties.** `parties` holds both deployments (Core API) as parties of `verity.runtime`, each machine's work a

@@ -48,7 +48,7 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
   each table's link points the session's, nonzero and within `Frames.COIN_MAX` (`SessionSpec.mPts`, `points`); the
   stream's domain (`SessionSpec.domain`, `Drive`'s domain frame) and the extra claims at the link points (`Drive.extras`:
   the table's regions at each link point) within a `u64`'s count; and the placeholder's pad row, `Drive.start`'s layout
-  plus `Zk.K_PAD` (`Cfg.ofDraws`'s `rowH`), within a `u64`'s count. The loop refuses a session whose setup fails it
+  plus `Zk.K_PAD` (`Cfg.ofSamples`'s `rowH`), within a `u64`'s count. The loop refuses a session whose setup fails it
   (`Session.State.sendHello`: no `Hello` leaves).
 * `Loop.Serves`, `Loop.sizesOk_of_serves`: the loop serves `x` where its `Hello` leaves at `x`'s setup
   (`FlockDeploy.setupOf`), and then the setup passes `sizesOk` (`sizesOk_of_sendHello`).
@@ -59,7 +59,7 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
 * **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
   with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
   tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
-  level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the ZK server's own at some
+  level 0 `Level0.ofSamples` drew) and `L₀`'s round at the inner proof's round 0 being the ZK server's own at some
   `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner
   proof's label).
 -/
@@ -211,7 +211,7 @@ theorem ofLoop_progChecks_sizes (T : ZKMal.CoinLayer.TableData)
   · intro s0 spec sts k link c' t dom xs hi hx hk hph
     obtain ⟨lay, mask, hs, hc, -, -⟩ := placeholder_ok hph
     subst hc
-    rw [ofDraws_rowH_size]
+    rw [ofSamples_rowH_size]
     exact (sizesOk_at (hSz s0 spec sts hx) hk).2.2.2 lay mask hs
 
 end LeanRelease
