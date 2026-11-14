@@ -99,7 +99,7 @@ theorem challenger_compiled {P : AuditorPins} {k : _root_.Spot.Challenger.Challe
     P.compiled.challenger.any (Composites.sameKey k) = true ↔ P.HoldsChallenger k := by
   rcases k with ⟨⟨kN, kW, kH⟩, pub⟩
   simp only [AuditorPins.compiled, AuditorPins.HoldsChallenger]
-  rcases P.keys.head? with _ | ⟨role, key, ⟨N, W, H⟩, marks, link, stretch, servers⟩
+  rcases P.keys.head? with _ | ⟨role, key, ⟨N, W, H⟩, marks, link, session, start, servers⟩
   · simp
   · by_cases hr : role = .challenger <;> simp [hr, Option.filter, Composites.sameKey, and_assoc]
 
@@ -113,10 +113,6 @@ theorem heldBytes_map {L : List (List UInt8)} {s : ByteArray} :
 
 theorem memorySessions_compiled {P : AuditorPins} {s : ByteArray} :
     Composites.heldBytes P.compiled.memorySessions s = true ↔ P.HoldsSession .memoryChallenger s :=
-  heldBytes_map
-
-theorem certifierSessions_compiled {P : AuditorPins} {s : ByteArray} :
-    Composites.heldBytes P.compiled.certifierSessions s = true ↔ P.HoldsSession .networkCertifier s :=
   heldBytes_map
 
 /-- **A key passes the compiled memory pins exactly where it is a pinned memory challenger's.** -/
@@ -133,17 +129,31 @@ theorem memoryFor_compiled {P : AuditorPins} {s t : ByteArray} :
   simp only [AuditorPins.compiled, AuditorPins.HoldsMemoryFor, List.any_map, List.any_eq_true, List.mem_filter,
     Function.comp_apply, decide_eq_true_eq, Bool.and_eq_true, and_assoc, sameBytes_toArray, heldBytes_map]
 
-/-- **A key passes the compiled certifier pins for a link's link-windows exactly where a certifier pinned for that
-link signs them under it.** -/
-theorem certifier_compiled {P : AuditorPins} {link : String} {first windows : ℕ}
-    {k : _root_.Spot.Challenger.ChallengerKey} :
-    Composites.certifierHolds P.compiled link first windows k = true ↔ P.HoldsCertifier link first windows k := by
-  rcases k with ⟨⟨kN, kW, kH⟩, pub⟩
-  simp only [Composites.certifierHolds, AuditorPins.compiled, AuditorPins.HoldsCertifier, List.any_map,
-    List.any_eq_true, List.mem_filter, Function.comp_apply, decide_eq_true_eq, and_assoc]
-  refine exists_congr fun q => and_congr_right fun _ => and_congr_right fun _ => ?_
-  rcases q with ⟨role, key, ⟨N, W, H⟩, marks, qlink, ⟨a, b⟩, servers⟩
-  simp [Composites.sameKey, eq_toArray_iff, and_assoc]
+/-- **A period's entry passes a compiled certifier pin exactly where it is that pin.** -/
+theorem entryHeld_compiled {lms : Lms.Params} {q : AuditorPin} {e : _root_.NetworkCheck.Period.Entry} :
+    Composites.entryHeld lms (AuditorPins.certifierPin q) e = true ↔ AuditorPins.EntryHeld lms q e := by
+  rcases lms with ⟨N, W, H⟩
+  rcases q with ⟨role, key, ⟨qN, qW, qH⟩, marks, link, session, start, servers⟩
+  simp [Composites.entryHeld, AuditorPins.certifierPin, Composites.sameKey, Composites.sameBytes,
+    AuditorPins.EntryHeld, eq_toArray_iff, and_assoc]
+
+/-- **A period's entries pass the compiled certifier pins `qs` exactly where they are `qs`, one for one.** -/
+theorem entriesHeld_compiled {lms : Lms.Params} :
+    ∀ {qs : List AuditorPin} {es : List _root_.NetworkCheck.Period.Entry},
+      Composites.entriesHeld lms (qs.map AuditorPins.certifierPin) es = true ↔
+        List.Forall₂ (AuditorPins.EntryHeld lms) qs es
+  | [], [] => by simp [Composites.entriesHeld]
+  | [], _ :: _ => by simp [Composites.entriesHeld]
+  | _ :: _, [] => by simp [Composites.entriesHeld]
+  | q :: qs, e :: es => by
+    simp only [List.map_cons, Composites.entriesHeld, Bool.and_eq_true, entryHeld_compiled, entriesHeld_compiled,
+      List.forall₂_cons]
+
+/-- **The compiled certifier pins for a link are the certifier pins for that link, compiled.** -/
+theorem certifiers_compiled {P : AuditorPins} {link : String} :
+    P.compiled.certifiers.filter (·.link == link) = (P.certifiersFor link).map AuditorPins.certifierPin := by
+  simp only [AuditorPins.compiled, AuditorPins.certifiersFor, List.filter_map]
+  rfl
 
 /-- **One sampled component's parameters pass the compiled pin check exactly where they name only what the pins
 hold**, as `SpotPinned` states it of each. -/
@@ -161,14 +171,21 @@ theorem spotPinned_compiled {P : AuditorPins} {p : _root_.Spot.OneStageZk.Params
     · simp [AuditorPins.compiled, AuditorPins.Designated, List.any_map, toArray_eq_iff]
 
 /-- **One PoUW period's parameters pass the compiled pin check exactly where its challenger key is SPOT's pinned
-one**, as `PouwPinned` states it of each. -/
+one and it lists its sessions, each designated for the challenger**, as `PouwPinned` states it of each. -/
 theorem pouwPinned_compiled {P : AuditorPins} {p : _root_.PouwCheck.Period.Params} :
     Composites.pouwPinned P.compiled p = true ↔
-      ∀ k, _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok k → P.HoldsChallenger k := by
+      (∀ k, _root_.Spot.Challenger.ChallengerKey.ofJson p.key = .ok k → P.HoldsChallenger k) ∧
+        ∃ r, p.registered = some r ∧ ∀ s ∈ r.challengePhases, P.Designated .challenger s := by
   unfold Composites.pouwPinned
-  cases _root_.Spot.Challenger.ChallengerKey.ofJson p.key with
-  | error _ => simp
-  | ok k => simp [challenger_compiled]
+  rw [Bool.and_eq_true]
+  refine and_congr ?_ ?_
+  · cases _root_.Spot.Challenger.ChallengerKey.ofJson p.key with
+    | error _ => simp
+    | ok k => simp [challenger_compiled]
+  · cases p.registered with
+    | none => simp
+    | some r =>
+      simp [AuditorPins.compiled, AuditorPins.Designated, Composites.heldBytes, List.any_map, toArray_eq_iff]
 
 /-- **One PoUS run's parameters pass the compiled pin check exactly where every key it trusts is a pinned memory
 challenger's and its session is designated for the memory challengers.** -/
@@ -184,14 +201,12 @@ theorem wipePinned_compiled {P : AuditorPins} {p : _root_.MemoryChallenger.WipeP
       (∀ t ∈ p.trusted, P.HoldsMemoryFor p.server t) ∧ P.HoldsSession .memoryChallenger p.session := by
   simp only [Composites.wipePinned, Bool.and_eq_true, Array.all_eq_true', memoryFor_compiled, memorySessions_compiled]
 
-/-- **One network period's parameters pass the compiled pin check exactly where a certifier pinned for its link
-signs its link-windows under every key it lists and every session it lists is designated for the certifiers.** -/
+/-- **One network period's parameters pass the compiled pin check exactly where its entries are the certifier pins
+for its link, one for one.** -/
 theorem networkPinned_compiled {P : AuditorPins} {p : _root_.NetworkCheck.Period.Params} :
     Composites.networkPinned P.compiled p = true ↔
-      (∀ k ∈ p.keys, P.HoldsCertifier p.link p.first p.windows ⟨p.lms, k⟩) ∧
-        ∀ s ∈ p.sessions, P.HoldsSession .networkCertifier s := by
-  simp only [Composites.networkPinned, Bool.and_eq_true, Array.all_eq_true', certifier_compiled,
-    certifierSessions_compiled]
+      List.Forall₂ (AuditorPins.EntryHeld p.lms) (P.certifiersFor p.link) p.entries.toList := by
+  rw [Composites.networkPinned, certifiers_compiled, entriesHeld_compiled]
 
 /-- **Every subprotocol's pin check is the five that read a device key.** -/
 theorem pinnedFor_iff {P : AuditorPins} {θ : ByteArray} :
@@ -217,9 +232,10 @@ theorem paramsPinned_compiled {P : AuditorPins} {θ : ByteArray} :
 
 /-- **The agreement of the model's acceptance with the compiled check under the pins**: `Accepts pins k`, the
 acceptance of `product IDS --pins` (`pinnedVerifier`), is the compiled verifier's acceptance with every subprotocol's
-pin check passing: each sampled component's challenger key and window, each PoUW period's challenger key, every key
-PoUS and the wipe trust with their sessions, and each network period's keys for its link and its sessions, as their own
-decoders read them. -/
+pin check passing: each sampled component's challenger key and window, each PoUW period's challenger key and its
+sessions, each designated for the challenger (a session not in the pins, or a period run alone, which lists none, is
+refused), every key PoUS and the wipe trust with their sessions, and each network period's entries, its link's pinned
+entries one for one (key, session and start), as their own decoders read them. -/
 theorem accepts_iff {pins : AuditorPins} {k : Verity.Registration.Composite} {s : Sent} :
     Accepts pins k s ↔ ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept ∧
       ∀ a, PinnedFor pins a s.params := by

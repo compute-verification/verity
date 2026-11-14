@@ -56,17 +56,14 @@ def ofIds (ids : List String) : Except String BlobProtocol :=
 open Lean (Json)
 open Flock (V)
 
-/-- A network certifier's key as the auditor pins it: its LMS key and the stretch of link-windows it signs, those `w`
-with `first ≤ w < stop`. -/
-structure CertifierKey where
-  key : Spot.Challenger.ChallengerKey
-  first : Nat
-  stop : Nat
-
-/-- A network certifier's pin: the link it is pinned for and its keys, in order. -/
+/-- A network certifier's entry as the auditor pins it: the link it is pinned for, its LMS key, its session and the
+start of the stretch of the link's link-windows it signs, as a period's parameters list an entry
+(`NetworkCheck.Period.Entry`). A link's pinned entries, in their order, are the list its periods list. -/
 structure CertifierPin where
   link : String
-  keys : List CertifierKey
+  key : Spot.Challenger.ChallengerKey
+  session : ByteArray
+  start : Nat
 
 /-- A memory challenger's pin: its LMS public key and the servers whose memory it is pinned to challenge. -/
 structure MemoryPin where
@@ -74,15 +71,14 @@ structure MemoryPin where
   servers : List ByteArray
 
 /-- **The auditor's pins**, as the composite reads them: its challenger's key (none: no challenger is pinned) and the
-window roots of the sessions it designated for the challenger, each as the bytes of its text; its memory challengers
-and the sessions it designated for them; and its network certifiers and the sessions it designated for them. -/
+sessions it designated for the challenger, sampled proofs' window roots and PoUW's session ids, each as the bytes of
+its text; its memory challengers and the sessions it designated for them; and its network certifiers' entries. -/
 structure Pins where
   challenger : Option Spot.Challenger.ChallengerKey := none
   sessions : List ByteArray := []
   memory : List MemoryPin := []
   memorySessions : List ByteArray := []
   certifiers : List CertifierPin := []
-  certifierSessions : List ByteArray := []
 
 /-- `j` is an object with exactly the keys `ks`, in their order. -/
 def pinKeys (j : Json) (ks : Array String) (what : String) : V Unit := do
@@ -93,19 +89,15 @@ def pinKeys (j : Json) (ks : Array String) (what : String) : V Unit := do
 def pinHexes (j : Json) (k ctx : String) : V (List ByteArray) := do
   (← Flock.J.arr j k ctx).toList.mapM fun s => do Flock.unhex (← Flock.J.asStr s s!"{ctx}.{k}")
 
-/-- A network certifier's pinned key, `{"H": h, "N": n, "W": w, "public": hex, "windows": [first, stop]}`. -/
-def certifierKeyOfJson (j : Json) : V CertifierKey := do
-  let ctx := "a certifier's key"
-  pinKeys j #["H", "N", "W", "public", "windows"] ctx
-  let #[a, b] ← Flock.J.arr j "windows" ctx | throw s!"{ctx}: windows is [first, stop]"
-  pure ⟨⟨⟨← Flock.J.nat j "N" ctx, ← Flock.J.nat j "W" ctx, ← Flock.J.nat j "H" ctx⟩,
-    ← Flock.unhex (← Flock.J.str j "public" ctx)⟩, ← Flock.J.asNat a ctx, ← Flock.J.asNat b ctx⟩
-
-/-- A network certifier's pin, `{"keys": [KEY, ...], "link": name}`, each `KEY` as `certifierKeyOfJson` reads it. -/
+/-- A network certifier's pinned entry,
+`{"H": h, "N": n, "W": w, "link": name, "public": hex, "session": hex, "start": a}`. -/
 def certifierOfJson (j : Json) : V CertifierPin := do
-  pinKeys j #["keys", "link"] "a certifier's pin"
-  pure ⟨← Flock.J.str j "link" "a certifier's pin",
-    ← (← Flock.J.arr j "keys" "a certifier's pin").toList.mapM certifierKeyOfJson⟩
+  let ctx := "a certifier's entry"
+  pinKeys j #["H", "N", "W", "link", "public", "session", "start"] ctx
+  pure ⟨← Flock.J.str j "link" ctx,
+    ⟨⟨← Flock.J.nat j "N" ctx, ← Flock.J.nat j "W" ctx, ← Flock.J.nat j "H" ctx⟩,
+      ← Flock.unhex (← Flock.J.str j "public" ctx)⟩,
+    ← Flock.unhex (← Flock.J.str j "session" ctx), ← Flock.J.nat j "start" ctx⟩
 
 /-- A memory challenger's pin, `{"public": hex, "servers": [hex, ...]}`. -/
 def memoryOfJson (j : Json) : V MemoryPin := do
@@ -113,12 +105,12 @@ def memoryOfJson (j : Json) : V MemoryPin := do
   pure ⟨← Flock.unhex (← Flock.J.str j "public" "a memory challenger's pin"),
     ← pinHexes j "servers" "a memory challenger's pin"⟩
 
-/-- The pins file: `{"certifier_sessions": [hex, ...], "certifiers": [CERTIFIER, ...], "challenger": KEY | null,
-"memory": [MEMORY, ...], "memory_sessions": [hex, ...], "sessions": [WINDOW_ROOT, ...]}`, `KEY` as the sampled
-parameters carry a challenger's key (`ChallengerKey.ofJson`), `CERTIFIER` as `certifierOfJson` and `MEMORY` as
-`memoryOfJson` read them. -/
+/-- The pins file: `{"certifiers": [CERTIFIER, ...], "challenger": KEY | null, "memory": [MEMORY, ...],
+"memory_sessions": [hex, ...], "sessions": [SESSION, ...]}`, `KEY` as the sampled parameters carry a challenger's key
+(`ChallengerKey.ofJson`), `SESSION` a sampled window root or a PoUW session id, `CERTIFIER` as `certifierOfJson` and
+`MEMORY` as `memoryOfJson` read them. -/
 def Pins.ofJson (j : Json) : V Pins := do
-  pinKeys j #["certifier_sessions", "certifiers", "challenger", "memory", "memory_sessions", "sessions"] "the pins"
+  pinKeys j #["certifiers", "challenger", "memory", "memory_sessions", "sessions"] "the pins"
   let challenger ← match ← Flock.J.get j "challenger" "the pins" with
     | .null => pure none
     | k => some <$> Spot.Challenger.ChallengerKey.ofJson k
@@ -127,8 +119,7 @@ def Pins.ofJson (j : Json) : V Pins := do
   pure { challenger, sessions,
          memory := ← (← Flock.J.arr j "memory" "the pins").toList.mapM memoryOfJson,
          memorySessions := ← pinHexes j "memory_sessions" "the pins",
-         certifiers := ← (← Flock.J.arr j "certifiers" "the pins").toList.mapM certifierOfJson,
-         certifierSessions := ← pinHexes j "certifier_sessions" "the pins" }
+         certifiers := ← (← Flock.J.arr j "certifiers" "the pins").toList.mapM certifierOfJson }
 
 /-- The one-stage parameters of a sampled-proofs component, `n`, or none for any other component or parameters that
 don't read (which its own check refuses). -/
@@ -167,17 +158,20 @@ def spotPinned (P : Pins) (p : Spot.OneStageZk.Params) : Bool :=
   (p.base.challenger.all fun kl => P.challenger.any (sameKey kl.1)) &&
   p.base.verifier.windowRoot.all fun w => P.sessions.any (·.data.toList == w.toUTF8.data.toList)
 
-/-- A PoUW period's challenger key, where it reads as one, is the pinned challenger's. -/
-def pouwPinned (P : Pins) (p : PouwCheck.Period.Params) : Bool :=
-  match Spot.Challenger.ChallengerKey.ofJson p.key with
-  | .ok k => P.challenger.any (sameKey k)
-  | .error _ => true
-
 /-- The bytes `a` are the bytes `b`. -/
 def sameBytes (a b : ByteArray) : Bool := a.data.toList == b.data.toList
 
 /-- One of `S` is the bytes `s`. -/
 def heldBytes (S : List ByteArray) (s : ByteArray) : Bool := S.any (·.data.toList == s.data.toList)
+
+/-- A PoUW period's challenger key, where it reads as one, is the pinned challenger's, and its parameters list the
+sessions its windows' checks are held to (`registered`), each one designated for the challenger. A period run alone
+lists none, so the sessions its challenger's ledger opens are held to nothing, and it is refused. -/
+def pouwPinned (P : Pins) (p : PouwCheck.Period.Params) : Bool :=
+  (match Spot.Challenger.ChallengerKey.ofJson p.key with
+    | .ok k => P.challenger.any (sameKey k)
+    | .error _ => true) &&
+  p.registered.any fun r => r.challengePhases.all fun s => heldBytes P.sessions s.toUTF8
 
 /-- Every key a PoUS run trusts is a pinned memory challenger's, and its session is one designated for the memory
 challengers. A run's parameters name no server, so any pinned memory challenger's key passes. -/
@@ -190,17 +184,22 @@ def wipePinned (P : Pins) (p : MemoryChallenger.WipeProtocol.Params) : Bool :=
   (p.trusted.all fun t => P.memory.any fun m => sameBytes t m.key && heldBytes m.servers p.server) &&
     heldBytes P.memorySessions p.session
 
-/-- The LMS key `k` is one the certifier pinned for `link` signs every link-window `w` with `first ≤ w <
-first + windows` under. -/
-def certifierHolds (P : Pins) (link : String) (first windows : Nat) (k : Spot.Challenger.ChallengerKey) : Bool :=
-  P.certifiers.any fun c => c.link == link && c.keys.any fun e =>
-    sameKey k e.key && decide (e.first ≤ first) && decide (first + windows ≤ e.stop)
+/-- A period's entry `e`, its key under the period's LMS parameters `lms`, is the pinned entry `c`: the same key,
+session and start. -/
+def entryHeld (lms : Lms.Params) (c : CertifierPin) (e : NetworkCheck.Period.Entry) : Bool :=
+  sameKey ⟨lms, e.key⟩ c.key && sameBytes e.session c.session && e.start == c.start
 
-/-- Every key a network certifier period lists, under its LMS parameters, is one the certifier pinned for the period's
-link signs the period's link-windows under, and every session it lists is one designated for the certifiers. -/
+/-- The period's entries `es` are the pinned entries `cs`, one for one in their order. -/
+def entriesHeld (lms : Lms.Params) : List CertifierPin → List NetworkCheck.Period.Entry → Bool
+  | [], [] => true
+  | c :: cs, e :: es => entryHeld lms c e && entriesHeld lms cs es
+  | _, _ => false
+
+/-- A network certifier period's entries, read by its own decoder (`NetworkCheck.Period.certifierEntries`'s), are the
+entries pinned for its link, one for one: each window's entry (`NetworkCheck.Period.entryAt`) is then the pinned
+entry whose stretch holds it, and a link with no pinned entry is refused, since a period lists at least one. -/
 def networkPinned (P : Pins) (p : NetworkCheck.Period.Params) : Bool :=
-  (p.keys.all fun k => certifierHolds P p.link p.first p.windows ⟨p.lms, k⟩) &&
-    p.sessions.all (heldBytes P.certifierSessions)
+  entriesHeld p.lms (P.certifiers.filter (·.link == p.link)) p.entries.toList
 
 /-- The composite's parameters `j` name only what `P` pins, in every component that reads a device's key or session:
 sampled proofs', PoUW's, PoUS's, the wipe's and the network certifier's. Parameters that don't read as a composite's
@@ -302,40 +301,59 @@ private def pinsOf (s : String) : Except String Pins := Json.parse s >>= Pins.of
 
 -- the pins file: no challenger and no sessions pins nothing; any other key, or a key that doesn't read, is refused
 private def noPins (rest : String) : String :=
-  "{\"certifier_sessions\":[],\"certifiers\":[],\"challenger\":null,\"memory\":[],\"memory_sessions\":[]," ++
-    "\"sessions\":[" ++ rest ++ "]}"
+  "{\"certifiers\":[],\"challenger\":null,\"memory\":[],\"memory_sessions\":[],\"sessions\":[" ++ rest ++ "]}"
 #guard match pinsOf (noPins "\"ab\"") with
   | .ok P => P.challenger.isNone && P.memory.isEmpty && P.certifiers.isEmpty && P.memorySessions.isEmpty &&
-      P.certifierSessions.isEmpty && P.sessions.map (·.data.toList) == ["ab".toUTF8.data.toList]
+      P.sessions.map (·.data.toList) == ["ab".toUTF8.data.toList]
   | .error _ => false
+private def entryPin (link pub session : String) (start : Nat) : String :=
+  s!"\{\"H\":3,\"N\":64,\"W\":1,\"link\":\"{link}\",\"public\":\"{pub}\",\"session\":\"{session}\",\"start\":{start}}"
 private def somePins : String :=
-  "{\"certifier_sessions\":[\"0c\"],\"certifiers\":[{\"keys\":[{\"H\":3,\"N\":64,\"W\":1,\"public\":\"0a\"," ++
-    "\"windows\":[4,9]}],\"link\":\"eth0\"}],\"challenger\":null,\"memory\":[{\"public\":\"0b\"," ++
+  "{\"certifiers\":[" ++ entryPin "eth0" "0a" "0c" 4 ++ "," ++ entryPin "eth1" "0f" "0c" 0 ++ "," ++
+    entryPin "eth0" "1a" "1c" 9 ++ "],\"challenger\":null,\"memory\":[{\"public\":\"0b\"," ++
     "\"servers\":[\"0d\"]}],\"memory_sessions\":[\"0e\"],\"sessions\":[]}"
 #guard match pinsOf somePins with
   | .ok P => P.memory.map (fun m => (m.key.data.toList, m.servers.map (·.data.toList))) == [([0x0b], [[0x0d]])] &&
-      P.memorySessions.map (·.data.toList) == [[0x0e]] && P.certifierSessions.map (·.data.toList) == [[0x0c]] &&
-      P.certifiers.map (fun c => (c.link, c.keys.map fun e =>
-        (e.key.params.N, e.key.params.W, e.key.params.H, e.key.pub.data.toList, e.first, e.stop))) ==
-        [("eth0", [(64, 1, 3, [0x0a], 4, 9)])]
+      P.memorySessions.map (·.data.toList) == [[0x0e]] &&
+      P.certifiers.map (fun c => (c.link, c.key.params.N, c.key.params.W, c.key.params.H, c.key.pub.data.toList,
+        c.session.data.toList, c.start)) ==
+        [("eth0", 64, 1, 3, [0x0a], [0x0c], 4), ("eth1", 64, 1, 3, [0x0f], [0x0c], 0),
+          ("eth0", 64, 1, 3, [0x1a], [0x1c], 9)]
   | .error _ => false
--- a certifier's key holds for its link's link-windows inside its stretch, and for no other link or window
+-- a period's entries pass where they are its link's pinned entries one for one, in order: not a subset, a reordering,
+-- another start, session or key, other LMS parameters, or another link's
 #guard match pinsOf somePins with
   | .ok P =>
-    let k : Spot.Challenger.ChallengerKey := ⟨⟨64, 1, 3⟩, ⟨#[0x0a]⟩⟩
-    certifierHolds P "eth0" 4 5 k && certifierHolds P "eth0" 6 2 k && !certifierHolds P "eth1" 4 5 k &&
-      !certifierHolds P "eth0" 3 2 k && !certifierHolds P "eth0" 5 5 k &&
-      !certifierHolds P "eth0" 4 5 ⟨⟨64, 1, 2⟩, ⟨#[0x0a]⟩⟩
+    let lms : Lms.Params := ⟨64, 1, 3⟩
+    let e (k s : UInt8) (a : Nat) : NetworkCheck.Period.Entry := ⟨⟨#[k]⟩, ⟨#[s]⟩, a⟩
+    let held (l : Lms.Params) (link : String) (es : List NetworkCheck.Period.Entry) :=
+      entriesHeld l (P.certifiers.filter (·.link == link)) es
+    held lms "eth0" [e 0x0a 0x0c 4, e 0x1a 0x1c 9] && held lms "eth1" [e 0x0f 0x0c 0] &&
+      !held lms "eth0" [e 0x0a 0x0c 4] && !held lms "eth0" [e 0x1a 0x1c 9, e 0x0a 0x0c 4] &&
+      !held lms "eth0" [e 0x0a 0x0c 3, e 0x1a 0x1c 9] && !held lms "eth0" [e 0x0a 0x1c 4, e 0x1a 0x1c 9] &&
+      !held lms "eth0" [e 0x0f 0x0c 4, e 0x1a 0x1c 9] && !held ⟨64, 1, 2⟩ "eth0" [e 0x0a 0x0c 4, e 0x1a 0x1c 9] &&
+      !held lms "eth2" [e 0x0a 0x0c 4] && !held lms "eth1" []
   | .error _ => false
 #guard (pinsOf "{\"challenger\":null,\"sessions\":[]}").toOption.isNone
 #guard (pinsOf "{\"certifiers\":[],\"challenger\":null,\"memory\":null,\"sessions\":[]}").toOption.isNone
 #guard (pinsOf ((noPins "").replace "\"sessions\"" "\"extra\":1,\"sessions\"")).toOption.isNone
+#guard (pinsOf ((noPins "").replace "\"certifiers\"" "\"certifier_sessions\":[],\"certifiers\"")).toOption.isNone
 #guard (pinsOf ((noPins "").replace "\"challenger\":null" "\"challenger\":{\"H\":3}")).toOption.isNone
 #guard (pinsOf (noPins "1")).toOption.isNone
 #guard (pinsOf ((noPins "").replace "\"memory_sessions\":[]" "\"memory_sessions\":[1]")).toOption.isNone
-#guard (pinsOf (somePins.replace "\"windows\":[4,9]" "\"windows\":[4]")).toOption.isNone
-#guard (pinsOf (somePins.replace "\"link\":\"eth0\"" "\"link\":\"eth0\",\"x\":0")).toOption.isNone
+#guard (pinsOf (somePins.replace "\"start\":4" "\"start\":4,\"stop\":9")).toOption.isNone
+#guard (pinsOf (somePins.replace "\"start\":4" "\"start\":\"4\"")).toOption.isNone
+#guard (pinsOf (somePins.replace "\"session\":\"0c\"" "\"session\":\"0\"")).toOption.isNone
 #guard (pinsOf (somePins.replace "\"servers\":[\"0d\"]" "\"servers\":\"0d\"")).toOption.isNone
+-- a PoUW period passes where its sessions are designated for the challenger; a period run alone lists none, and is
+-- refused
+#guard match pinsOf (noPins "\"s1\",\"s2\"") with
+  | .ok P =>
+    let p (r : Option PouwCheck.Period.Registered) : PouwCheck.Period.Params := ⟨.null, .null, "p", r⟩
+    let reg (ss : List String) : Option PouwCheck.Period.Registered := some ⟨"h", "d", ss⟩
+    pouwPinned P (p (reg ["s1"])) && pouwPinned P (p (reg ["s2", "s1"])) && pouwPinned P (p (reg [])) &&
+      !pouwPinned P (p (reg ["s1", "s3"])) && !pouwPinned P (p none)
+  | .error _ => false
 -- parameters that aren't a composite's are the composite's to refuse
 #guard paramsPinned {} Json.null
 
