@@ -5,14 +5,14 @@
 # `window_laws`, the configuration's `default_law`, the adapter's `window_law` module and its `law_of`, the served
 # commit's `law_of`, test constants `LAW`) and prose that names the sampling design by a possessive or a qualifier.
 # Left by this map:
-# - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, `benchmarks/one_stage/`,
-#   `benchmarks/remote_session/`), and the names defined there (`Law`, `selection_law`, `params_law`, `second_law`,
+# - proofs' paths (`verity/protocols/proofs/`, the Flock and SPOT areas of `security/`, the lane's benchmarks, the
+#   files `law_prose_map.toml` names), and the names defined there (`Law`, `selection_law`, `params_law`, `second_law`,
 #   `core_law`, one-stage's `law_of`, `V3C_LAW`, `FLOCK_DRAW_LAW`): a use here takes proofs' spelling after its map;
 # - the bare `law` in code and every Lean name, which follow proofs' map and lean's names move;
-# - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the key `law`, `sqrt_law`), reason
-#   codes (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`;
+# - bytes a record, a wire format, a hash or a signature takes in: one-token strings (the key `law`), reason codes
+#   (`R1-law`, `record-law`, `answer-public-law`), the claim id `accounting-ts-window-law`;
 # - another sense: a probability law (`noise_law`, `_below_law`), a scaling, power or size law, a law of the courts;
-# - the network certifier's files and network-accounting's benchmarks, until that lane reads this map;
+# - network-accounting's files (the certifier, its benchmarks), which that lane runs this map's spellings over;
 # - records of what was: GLOSSARY.md's table, the retired-terms lint, its allowlists and tests, the move tool's tests.
 
 [words]
@@ -83,6 +83,12 @@ files = ["verity/commitments/windows/tests/test_blocks.py", "verity/commitments/
 exclude = ["tools/move/**", "archive/**", "**/CHANGELOG.md", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock",
            "**/*.lock", "**/*.lean", "**/lean-audit.json", "**/lakefile.*", "**/lake-manifest.json",
            "verity/protocols/proofs/**", "benchmarks/one_stage/**", "benchmarks/remote_session/**",
+           "benchmarks/commitments/**", "benchmarks/dsa_topk/**", "benchmarks/flock_kernels/**",
+           "benchmarks/flock_s8_block/**", "benchmarks/multi_unit/**", "benchmarks/private_circuit/**",
+           "benchmarks/proof_throughput/**", "benchmarks/replay_ladder/**", "benchmarks/route_capture/**",
+           "benchmarks/sampling_plan/**", "benchmarks/serve_tax/**", "benchmarks/spot_figures/**",
+           "benchmarks/spot_proved/**", "benchmarks/two_stage/**", "benchmarks/unit_walk/**",
+           "benchmarks/verifier_cost/**",
            "security/*/Flock/**", "security/*/Flock.lean", "security/*/Spot/**", "security/*/Spot.lean",
            "security/Proofs/Properties/Flock/**", "security/Proofs/Properties/Spot/**",
            "verity/protocols/accounting/certifier/**", "benchmarks/network_traces/**", "benchmarks/prove_path/**",
