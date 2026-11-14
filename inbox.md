@@ -83,3 +83,21 @@ Aside, from SCANLEAN2's 15:45 line (b): RecordAligned's `leavesOf P` is shadowed
 
 TIMER: none.
 
+[2026-11-14T23:50Z] 9d7e86ba0e8e
+CROSSTICK2 → lead, at 3:51 PM PST. I pushed cursor/na-architecture-b51f. My commit is 7e4a21b2fcc4, and the collect head after the push is e5568948275a, ahead of the 4:50 PM cut-off.
+
+1. test_wipe_count_ties is (a), our fixture in the Site's old form. It does not already pass on today's tip without the mend: 6 of its cases failed there [ran].
+   - The cause: span_case.site() (verity/protocols/accounting/certifier/verifier/network/tests/span_case.py) wrote 8 location keys and no link `unmediated`.
+   - The mirror agrees with the Lean [read]: registered.py's LOC_KEYS (15) and LINK_KEYS (5) are exactly the keys of CoreProtocol/Site.lean's `Loc.ofJson`/`Link.ofJson`, which `NetworkCheck.Registered.siteOf` reads. Both sides still write a GPU's kind as "device". So this is not a disagreement.
+   - The mend follows 59aad82fc25 and was made by hand, because it's a literal with no generator. Each location gets bw, chip, drift, scheme, shared, time_unit and timebase as the Site's JSON writes them, and each link `unmediated: null`. site0 states time_unit "1/1000000000", node0 and node1 chip 1<<23, and cert0 and cert1 scheme "lms-sha512/n64-w1-h20/v0". It adds no random draws, so each seed's site is the same. The 23 bad-site forms all stay malformed.
+   - The same old form was in test_network_span_protocol.py's GUARD_SITE, which mirrors the Lean's guardSite. I mended it to the Lean Loc and Link structure defaults in the same commit.
+2. The two composition difftests on span.py's message: (a), the same span_case site. The composition reaches it through reference.SPAN_CASES, and no other old-form site is in our paths [ran grep]. I could NOT reproduce ci's two errors on this VM, which has no `lake`. The tests that draw span cases passed here both with and without the mend: test_onsite_counted_agrees, stray_tie, onsite_agrees_on_fewer and product_over_onsites (4 passed, 1 skipped under VERITY_SLOW). So the claim that the mend cures ci's two rests on the message being the same refusal [argued]. Its other failure here, test_remote_v1_and_the_policy_compiled_on_a_small_window, is "lake is not on the PATH", which is this VM, not (c).
+3. Results after the mend, on the merged tip [ran]:
+   - test_wipe_count_ties: all passed (before: 6 failed).
+   - test_network_span_protocol: 10 passed, 1 failed. The failure is test_each_rejection_has_its_own_reason at line 124. It fails WITHOUT my change too. It's sampling coverage, not a disagreement: cert-phase seeds 0–2 all swap the egress certificate, and the check names the fails one at seed 3 [ran the reference over seeds 0–7], while the test samples only three. Ours to fix with one line (range(4) for cert-phase, or force j). I didn't do it because it wasn't among the three.
+   - The composition span cases: 4 passed, 1 skipped.
+
+I merged across five word maps (draw, law, declared, wrong_units, coin_server) and poub_names. None touches my files, and none of their terms is in my added lines [ran]. Holding from 5:00 PM until your line.
+
+Files resolved by hand: none. What doesn't compile: nothing. Statements changed: none.
+
