@@ -1160,6 +1160,7 @@
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial"
   },
   "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "honest": ["Properties.Pouw.Credit.SecurityProofs.sampleWithheld_honest"],
    "nontrivial": "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial"
   },
   "Properties.Site.refuses": {
@@ -1412,9 +1413,11 @@
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
   },
   "Properties.Challenger.Drawn.familyOneCommitment": {
+   "honest": ["Properties.Challenger.familyOneCommitment_honest"],
    "nontrivial": "Properties.Challenger.familyOneCommitment_nontrivial"
   },
   "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "honest": ["Properties.Challenger.familyOneCommitmentRead_honest"],
    "nontrivial": "Properties.Challenger.familyOneCommitmentRead_nontrivial"
   },
   "Pous.Component.SecurityProofs.wipeAccepts": {
@@ -1631,18 +1634,6 @@
    "type_hash": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b",
    "unfolded_hash": "0a87d8c678cbbcbcfd3b9f6a2d10f1de9d03f229a0ad67e234cd37d950660ac9"
   },
-  "Properties.Challenger.Drawn.familyOneCommitment": {
-   "type_hash": "d25d13708014dcd8d2eb549d47fd2fdc14f164abb43696f548a4e9609d653c15",
-   "missing": "honest",
-   "why": "an honest instance is a whole withheld session that Challenger.drawCoins reads: a key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin of the family opened under the session's commitment with its salt and path, all as the JSON the reader parses; no proof builds one yet",
-   "unfolded_hash": "98d7bd97e86e28d09418ff820ca59c57e4389a060e9767dbafe18735a2030343"
-  },
-  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
-   "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
-   "missing": "honest",
-   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes under the verifier's key: a key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet",
-   "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"
-  },
   "Properties.Composition.acceptMeans": {
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320",
    "unfolded_hash": "3865ee471c90bee66c8aed0e7d75d9f9ca2d032a0d2366f5f193589bbee48292"
@@ -1802,12 +1793,6 @@
   "Properties.Pouw.Commit.saltSize": {
    "type_hash": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
    "unfolded_hash": "886e1a4446361385b29acb248b94643c3c24993a290636bea27053884eb7dc11"
-  },
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld",
-   "unfolded_hash": "1c50962c1922c6ddacfb9742353e1de96fdd113bca73ae42a82d7c5ad0282b33"
   },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
@@ -4584,6 +4569,33 @@
    "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
    "unfolded_hash": "0c9cd9cc1ff7c0c68e2f27b924ca9402548d77da20ca38b8c224d14e3b58f286"
   },
+  "Properties.Challenger.familyOneCommitmentRead_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Challenger.familyOneCommitmentRead_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun k =>",
+    "      Exists fun main =>",
+    "        Exists fun w =>",
+    "          Exists fun label =>",
+    "            Exists fun after =>",
+    "              Exists fun read =>",
+    "                Exists fun coins =>",
+    "                  And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                    (Eq",
+    "                      (Spot.Challenger.coinsReason { params := Lms.deployed, pub := k.publicKey } main coins w label",
+    "                        after read)",
+    "                      Option.none)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "412052c440b37794a97c1dac2fabceaefc100f9082cd852666e8e48e72d2ea3c"
+  },
   "Properties.Challenger.familyOneCommitmentRead_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -4610,6 +4622,30 @@
     "reads": []
    },
    "type_hash": "12cc19971ea099cfc9cd50cfc554cb55d253b3c3df70a23e273181d6006237d5"
+  },
+  "Properties.Challenger.familyOneCommitment_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Challenger.familyOneCommitment_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun k =>",
+    "      Exists fun w =>",
+    "        Exists fun label =>",
+    "          Exists fun after =>",
+    "            Exists fun coins =>",
+    "              Exists fun ξ =>",
+    "                And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                  (Eq (Spot.Challenger.drawCoins { params := Lms.deployed, pub := k.publicKey } w label after coins)",
+    "                    (Except.ok ξ))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8e46ab322330306c86424c8287d6c9e57332fb57a712dec762b29a66b0e40446"
   },
   "Properties.Challenger.familyOneCommitment_nontrivial": {
    "owner": "@proofs",
@@ -6919,6 +6955,36 @@
     "reads": []
    },
    "type_hash": "12f3ca8e98677f6e6995ec42d2279e8296183c03f73be651e8240633b2e19f09"
+  },
+  "Properties.Pouw.Credit.SecurityProofs.sampleWithheld_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_honest :",
+    "  Exists fun seed =>",
+    "    Exists fun k =>",
+    "      Exists fun ledger =>",
+    "        Exists fun pins =>",
+    "          Exists fun main =>",
+    "            Exists fun salt =>",
+    "              Exists fun calls =>",
+    "                Exists fun served =>",
+    "                  Exists fun commit =>",
+    "                    Exists fun rounds =>",
+    "                      Exists fun draw =>",
+    "                        And (Eq (Lms.keygen Lms.deployed seed) (Except.ok k))",
+    "                          (Eq",
+    "                            (PouwCheck.Credit.Internal.credited { params := Lms.deployed, pub := k.publicKey }.toJson",
+    "                              ledger pins main salt calls served commit rounds draw)",
+    "                            (Except.ok (List.cons 0 List.nil)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f4df8411b5532943a218ace2a84ce72d094f5a3d3b7abb8a2c81aaa547eafcff"
   },
   "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
    "owner": "@compute-accounting",
@@ -22475,7 +22541,7 @@
    }
   },
   "PouwCheck.Credit": {
-   "digest": "aae623e186a3f032b48db59e9fcbc3953deb11de116e29addfd18e537034cd79",
+   "digest": "44deedd2e3b68bf5c15e2418683d994fa197c7423756b0503e6fd23bf23e3b83",
    "definitions": {
     "PouwCheck.Credit.BODY": "071fefb97f3971bcd352e1c3b07d11024a6f9c774c6fb6c3b46931a10dfb376c",
     "PouwCheck.Credit.CALLS_FORM": "d6bf6cb3768f79c8900ee97cb118d0b475d4456410e4d0a86afbe35047c0da92",
@@ -22604,7 +22670,7 @@
     "PouwCheck.Credit.capsRoot": "ecd9578d3ea23f00ca1f3b3185dbd0071a6417f7cd85b68c67d12220b1e3d45e",
     "PouwCheck.Credit.chunks?": "65256e121dbc5592830544c4284bb5a55ee3edd07dabd9880e8628a50de222f1",
     "PouwCheck.Credit.commitIds": "5fc5874c96e5ddc06fa4e59591298cbe784ebebc04c69e6a91f89d30c0bc356e",
-    "PouwCheck.Credit.commitOf?": "94e511b0d8cf72f2072e27abedd539ad10e20b2f3bf5e43eebb798dc4d6f7077",
+    "PouwCheck.Credit.commitOf?": "ee767cbf27bcd3cd0de4eb2d54c944cae6e3db732f282887f24b33e3e12d0321",
     "PouwCheck.Credit.commitRows": "935c00ed18db025df43f38a2cc865ba4565a9a46dd296c48cc4f9d49b2a0aab0",
     "PouwCheck.Credit.committedFloor": "5e718cbf6eca126e2cc52717d75328d2388ad29ed9115a039924fc3d1dec2206",
     "PouwCheck.Credit.committedK": "d0e8c0ca14be1d535e61496821fc7b3709330be668f8417c7fbf46a18ef06ddc",
@@ -26622,13 +26688,14 @@
    }
   },
   "Spot.ChallengerRecord": {
-   "digest": "ae9e8cd7e9852345ec3a820a32cb07fa1268cb1e8af9952a4cfa1ee08ea32300",
+   "digest": "d340a6312bf51a19edc1b1697a315f97f88e9420f417c7866284814f9672a191",
    "definitions": {
     "Spot.Challenger.COMMITMENT_TAG": "533b9e8aa59874facc70d607333a408dd5b2d893dbbbbbd3ff44360e1bca81d5",
     "Spot.Challenger.ChallengerKey": "28b8d7cf3733aafd4ec5fe39df55a719cc4712c962b00c6b39c49be8ab4f9804",
     "Spot.Challenger.ChallengerKey.ofJson": "2c7c120d650f2104d67f0199662f0b69d94bcee76c858ae61c247c9908c14d87",
     "Spot.Challenger.ChallengerKey.params": "496eb88d98078a52412a4459e869ca299c2a19198694f102ecea3b422278db9b",
     "Spot.Challenger.ChallengerKey.pub": "683d64dd20c754651509026792838007e590699136152ae61010d787339f8edf",
+    "Spot.Challenger.ChallengerKey.toJson": "130051f0f97937615bd57797ce11b41409a6f5ea344b3dbb85a877ba77c0a0c4",
     "Spot.Challenger.ChallengerRecord": "18efb288e2059a90fe75190dd9a234b7e7389a10119596d4475f9d8838acb600",
     "Spot.Challenger.ChallengerRecord.commitment": "4ff5dc3a1177c631d40ce46b9b806a90fee3cf1b1057d0e9672182609fbcbac9",
     "Spot.Challenger.ChallengerRecord.host": "ccc4b6e8dfacd3d1d68b8cc01d452ab775a47bfc630532139a895df79b773d4c",

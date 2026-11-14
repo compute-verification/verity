@@ -178,7 +178,19 @@
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Sampled.MemberForm",
-  "Proofs.Properties.Verity.Recursive.Audit"
+  "Proofs.Properties.Verity.Recursive.Audit",
+  "Proofs.Properties.Challenger.Steps",
+  "Proofs.Properties.Challenger.Plain",
+  "Proofs.Properties.Challenger.Entry",
+  "Proofs.Properties.Challenger.Signer",
+  "Proofs.Properties.Challenger.Built",
+  "Proofs.Properties.Challenger.Files",
+  "Proofs.Properties.Challenger.Bodies",
+  "Proofs.Properties.Challenger.Logs",
+  "Proofs.Properties.Challenger.Messages",
+  "Proofs.Properties.Challenger.Ledger",
+  "Proofs.Properties.Challenger.Withheld",
+  "Proofs.Pouw.Credit.Withheld"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",

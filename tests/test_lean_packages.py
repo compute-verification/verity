@@ -96,7 +96,7 @@ def test_one_mathlib():
 # their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique;
 # Flock.SecurityProofs.SessionLoopZKAnyDeployed carries its honest one, and its nontrivial one is due with the lemma
 # restated at the deployed session its domain hypothesis fixes
-UNWITNESSED = {"security": 222, "security/Properties": 182, "verity/protocols/proofs/flock/verifier": 7}
+UNWITNESSED = {"security": 222, "security/Properties": 179, "verity/protocols/proofs/flock/verifier": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
