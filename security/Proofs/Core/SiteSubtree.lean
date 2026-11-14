@@ -12,6 +12,8 @@ public import Mathlib.Data.Finset.Union
 * `Site.placesIn_union`, `Site.placesIn_biUnion`: the places of a union of sets of ids are the union of their places.
 * `Site.crossing`, `Site.uncovered`: the registered links with exactly one end in a set of ids, and those of them with
   neither end in a covering set, as lists of links.
+* `Site.mem_far_iff`: where no link joins a place to itself, as on a valid log's Site, a far end of a place's links is
+  the other end of a registered link that ends at it.
 * `Site.challengers_sealed`: at a Site whose links join kinds a link may join, every link of a memory challenger linked
   only into a subtree ends at one of the subtree's prover places (`Site.mem_far_of_link`, `Site.host_of_challenger`);
   so such challengers, as sinks, add no uncovered link (`Site.uncovered_sealed`).
@@ -90,6 +92,28 @@ theorem mem_far_of_link {k : Link} (hk : k ∈ S.links) :
   · intro h
     refine List.mem_flatMap.2 ⟨k, List.mem_filter.2 ⟨hk, by simp⟩, ?_⟩
     simp [h]
+
+/-- **Where no link joins a place to itself**, as on a valid log's Site (`Registration.Valid.ends_ne`), `y` is a far
+end of `x`'s links exactly when a registered link has its two ends at `x` and `y`. On any Site the far ends of `x`
+leave `x` itself out, so a link from `x` to `x` gives it no far end. -/
+theorem mem_far_iff (hne : ∀ k ∈ S.links, k.ends.1 ≠ k.ends.2) {x y : String} :
+    y ∈ S.far x ↔ ∃ k ∈ S.links, (k.ends.1 = x ∧ k.ends.2 = y) ∨ (k.ends.1 = y ∧ k.ends.2 = x) := by
+  constructor
+  · intro h
+    unfold far at h
+    obtain ⟨k, hk, hy⟩ := List.mem_flatMap.1 h
+    obtain ⟨hk, hx⟩ := List.mem_filter.1 hk
+    have hx : k.ends.1 = x ∨ k.ends.2 = x := by simpa using hx
+    have hy : (y = k.ends.1 ∨ y = k.ends.2) ∧ y ≠ x := by simpa using hy
+    refine ⟨k, hk, ?_⟩
+    rcases hx with hx | hx <;> rcases hy with ⟨hy | hy, hyx⟩
+    · exact absurd (hy.trans hx) hyx
+    · exact Or.inl ⟨hx, hy.symm⟩
+    · exact Or.inr ⟨hy.symm, hx⟩
+    · exact absurd (hy.trans hx) hyx
+  · rintro ⟨k, hk, ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩⟩
+    · exact (S.mem_far_of_link hk).1 (hne k hk).symm
+    · exact (S.mem_far_of_link hk).2 (hne k hk)
 
 /-- **The memory challengers linked only into a subtree are sealed by the registration**: at a Site whose links join
 kinds a link may join, every link with an end at a memory challenger of `sink`, each linked only into the subtree at

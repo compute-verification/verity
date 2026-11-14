@@ -26,6 +26,9 @@ bound of the model at these is a bound read off the registration.
   auditor's devices at it, read off the links' far ends (`Site.far`).
 * `Site.Within`, `Site.sharedOf`: a place linked only into a subtree, and the memory challengers of a subtree that are
   not.
+
+A far end of a place's links leaves the place itself out, on any Site. A valid log's Site has no link from a place to
+itself, and there the far ends of a place are the other ends of the registered links that end at it.
 -/
 
 @[expose] public section
@@ -74,7 +77,9 @@ noncomputable def proverUnder (i : String) : Finset String :=
 
 open Classical in
 /-- **The certifiers of the subtree at `i`**: the registered certifiers at the far end (`far`) of a link of one of the
-subtree's prover places. -/
+subtree's prover places. On any Site, valid or not, a far end of `x` is the other end of a registered link that ends
+at `x`, `x` itself left out. Where no link joins a place to itself, as on a valid log's Site, that is every registered
+certifier a registered link joins to one of those places. -/
 noncomputable def certifiersOf (i : String) : Finset String :=
   S.places.filter fun y => S.kind? y = some .certifier ∧ ∃ x ∈ S.proverUnder i, y ∈ S.far x
 
@@ -82,7 +87,9 @@ open Classical in
 /-- **The memory challengers of the subtree at `i`**, under the pins `pinned`: the registered memory challengers among
 `pinned` at the far end (`far`) of a link of one of the subtree's prover places. `pinned` holds the ids of the
 challengers whose key and session the auditor's pins hold, a parameter. A challenger that is not pinned, and a device
-at a link's end that is not registered as a challenger, is not among them. -/
+at a link's end that is not registered as a challenger, is not among them. On any Site, valid or not, a far end of `x`
+is the other end of a registered link that ends at `x`, `x` itself left out. Where no link joins a place to itself, as
+on a valid log's Site, that is every pinned registered challenger a registered link joins to one of those places. -/
 noncomputable def challengersOf (pinned : Finset String) (i : String) : Finset String :=
   S.places.filter fun y => S.kind? y = some .challenger ∧ y ∈ pinned ∧ ∃ x ∈ S.proverUnder i, y ∈ S.far x
 
@@ -90,7 +97,10 @@ noncomputable def challengersOf (pinned : Finset String) (i : String) : Finset S
 noncomputable def auditorsOf (pinned : Finset String) (i : String) : Finset String :=
   S.certifiersOf i ∪ S.challengersOf pinned i
 
-/-- **`y` is linked only into the subtree at `i`**: the far end (`far`) of each of `y`'s links is in the subtree. -/
+/-- **`y` is linked only into the subtree at `i`**: the far end (`far`) of each of `y`'s links is in the subtree. On
+any Site, valid or not, a link from `y` to `y` gives `y` no far end and so is not asked about. Where no link joins a
+place to itself, as on a valid log's Site, it is every registered link that ends at `y` having its other end in the
+subtree. -/
 def Within (i y : String) : Prop := ∀ z ∈ S.far y, z ∈ S.under i
 
 open Classical in

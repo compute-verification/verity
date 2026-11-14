@@ -21,9 +21,9 @@ import all Init.Data.ToString.Basic
   `Site.kind?_ofLog_prefix`), so a later entry changes nothing already registered.
 * `Registration.Valid.ids_nodup` and `Registration.Valid.parents`: a valid log registers each id once, and its Site is a
   tree, each location under a registered parent of a kind its own allows.
-* `Registration.Valid.linkKinds` and `Registration.Valid.ends_known`: a valid log's links join kinds a link may join
-  (`Site.LinkKinds`) and end at something registered; so the other end of a memory challenger's link is a host
-  (`Site.host_of_challenger`).
+* `Registration.Valid.linkKinds`, `Registration.Valid.ends_known` and `Registration.Valid.ends_ne`: a valid log's
+  links join kinds a link may join (`Site.LinkKinds`), end at something registered and each join two different ends;
+  so the other end of a memory challenger's link is a host (`Site.host_of_challenger`).
 * A small onsite site and a later entry for each check, each refused by that check's name
   (`Registration.Example.onsite_refusals`), and the same entries on a remote site, which accepts the two that only an
   onsite site refuses (`Registration.Example.remote_refusals`); a device's model read off the Site
@@ -313,6 +313,23 @@ theorem Valid.ends_known {l : Registration} (h : Valid D A c l) :
     rcases List.mem_append.mp hk with hk | hk
     · exact ⟨Site.known_of_prefix hpre (ih hl k hk).1, Site.known_of_prefix hpre (ih hl k hk).2⟩
     · exact he.2.1.2 k hk
+
+/-- **A valid log's links each join two different ends**: the entry check `kind` holds each new link to it. -/
+theorem Valid.ends_ne {l : Registration} (h : Valid D A c l) :
+    ∀ k ∈ (Site.ofLog l).links, k.ends.1 ≠ k.ends.2 := by
+  induction l using List.reverseRecOn with
+  | nil => simp
+  | append_singleton l e ih =>
+    obtain ⟨hl, ⟨-, he⟩, -⟩ := valid_append_singleton.mp h
+    cases e with
+    | information _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | declaration _ _ => simpa [Site.ofLog_concat, Entry.added] using ih hl
+    | site _ s => ?_
+    rw [Site.ofLog_concat, Entry.added]
+    intro k hk
+    rcases List.mem_append.mp hk with hk | hk
+    · exact ih hl k hk
+    · exact (he.2.2.1.2.1 k hk).1
 
 namespace Example
 
