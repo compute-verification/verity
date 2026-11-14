@@ -47,7 +47,10 @@ from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.bits import evaluate_bits
 from verity.circuits.types import Array, Tuple
 from verity.protocols.accounting.certifier.verifier.advice import FINISHES, VERSION, WIDTH_BITS, MalformedAdvice, _Reader, decode
-from verity.protocols.accounting.certifier.verifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
+from verity.circuits.boolean import BIT
+from verity.circuits.boolean.trace import part as _part
+from verity.commitments.gates.frame_v3 import _refs
+from verity.protocols.accounting.certifier.verifier.head_check import _coll, _Consts, ands
 
 #: the refusals of `advice.decode` the circuit doesn't make yet, by the start of decode's message for each
 DEFERRED = {
