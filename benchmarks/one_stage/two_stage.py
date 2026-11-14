@@ -626,7 +626,8 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
              rids: Mapping[str, str] | None = None, salt_key: bytes | None = None, unlinked: bool = False) -> Replayed:
     """The replay side's half of the second stage, on the class's stream at the end of its first stage (``again``,
     `resume`): the sampled spans' proof blocks from ``capture`` (`spans_of`), committed as the interior
-    (`interior_rows.interior`: each replay-block parameter a port reads registered as a value, under ``window_root``;
+    (`interior_rows.interior`: each wired unit held to the writer unit the block's rows give it, `Design.rows`; each
+    replay-block parameter a port reads registered as a value, under ``window_root``;
     each output that writes a return round 1's record commits under the serve's salts at round 1's rows, opened from
     ``c``), written under ``directory`` as the one-stage audit reads a window (`interior_rows.write`), registered on the stream
     after the boundary registration, and sampled: ``k`` proof blocks in each (replay block, template) cell, on the
@@ -643,7 +644,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     sample = [int(u) for u in again.sample.units]
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
-                     wires=d.wires, served=again.record, window_root=window_root, salt_key=salt_key,
+                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
                      returns=[(x, c.port(x.value)) for x in d.returns if x.held])
     record = IR.write(it, directory)
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
