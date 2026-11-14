@@ -180,7 +180,14 @@ every execution phase that has connection rows to a registration that verifies a
 the records. Under `--lengths 2` every execution phase of the run ends, its last at the run's last close: in its
 head, or in the network certifier's signed word that it has none, a line of `rows.jsonl` too, and `check` holds each
 to the one that is due. The network certifier then admits nothing in the run's last `WardenParams.span` buckets, so
-`rehearse` runs long enough for its last request to be admitted before them (`closing_windows`).
+`rehearse` runs long enough for its last request to be admitted before them (`closing_windows`). With `--head-offset
+N --head-wait W` beside `--lengths` (`warden`'s "The head's tick") the publisher process writes no line: it hands
+each one back, and the network certifier's tick appends it to `rows.jsonl` at the tick the schedule gives it, N
+buckets after the close that handed its execution phase or up to W ticks later. A line not back by then is never
+written, and the tick writes its note that the line missed. The run ticks on past its last window until its last line
+has left or missed. A line holds no tick: the tick it left at is the network certifier's own note, in `warden.json`
+alone (`heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the auditor's side,
+which is not built. `check` counts the execution phases whose line missed, which have no head.
 """
 
 from __future__ import annotations
@@ -687,12 +694,13 @@ def start_json(start: CertifiedStart) -> dict:
 
 
 def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params: WardenParams, commit,
-                    load_heads: Path | None, base_ms: int, ordinal: int) -> None:
+                    load_heads: Path | None, base_ms: int, ordinal: int, lines=None) -> None:
     """`PublisherProcess`'s process: the network certifier's key and its leaf state are this process's alone. It signs
     the load's heads first when there are any (`sign_load`), then the start's certificate of its session at `base_ms`
     and `ordinal` (`certify_start`), sends that and the public key, rebuilds each record from its released rows, keeps
     it as `Publisher` does at its close once the rebuilt grid's digest is the close marker's, and at the end sends the
-    issuer's refusals and its own usage."""
+    issuer's refusals and its own usage. In a schedule with a head offset it sends each execution phase's line of
+    connection rows on `lines` and writes none (`runner_parts.Keeper`), and None once it sends no more."""
     try:
         own = ck.signer(key)
         issuer = Issuer(own, session)
@@ -701,7 +709,7 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
         results.send(("start", start_json(certify_start(issuer, base_ms, ordinal, params))))
         results.send(("key", own.public_key()))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
-        keeper = rp.Keeper(out, issuer, params, LINK)
+        keeper = rp.Keeper(out, issuer, params, LINK, back=lines and (lambda window, line: lines.send((window, line))))
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
@@ -728,6 +736,9 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
     except BaseException:
         results.send(("error", traceback.format_exc()))
         raise
+    finally:
+        if lines is not None:
+            lines.send(None)
 
 
 class PublisherProcess:
@@ -745,18 +756,23 @@ class PublisherProcess:
     `start` is that certificate as `deployment.json` carries it, there before construction returns, so before any
     origin is set, and a signer that refuses it fails the construction. The queue's thread is started at
     construction, with a row of the grid's size that the process drops, so that the first tick starts no thread and
-    the thread's buffers have grown to a row's; `feeder` is its thread id."""
+    the thread's buffers have grown to a row's; `feeder` is its thread id. In a schedule with a head offset the
+    process writes no line of connection rows: it sends each one back, and `heads` names who takes them."""
 
     def __init__(self, out: Path, key: Path, session: bytes, params: WardenParams, commit=None,
                  load_heads: Path | None = None, *, base_ms: int, ordinal: int) -> None:
         ctx = multiprocessing.get_context("spawn")
         self.rows = ctx.Queue()
         self.results, results = ctx.Pipe(duplex=False)
+        self.lines, lines = ctx.Pipe(duplex=False) if params.head_offset is not None else (None, None)
         self.process = ctx.Process(target=_publisher_main, name="warden-publisher", daemon=True,
                                    args=(self.rows, results, out, key, session, params, commit, load_heads, base_ms,
-                                         ordinal))
+                                         ordinal, lines))
         self.process.start()
         results.close()
+        if lines is not None:
+            lines.close()
+        self._reader: threading.Thread | None = None
         self.usage: dict | None = None
         self._released: dict[str, list] = {}
         self._digests: dict[str, object] = {}
@@ -814,8 +830,30 @@ class PublisherProcess:
         self.rows.close()
         self.rows.join_thread()
         self.process.join()
+        if self._reader is not None:
+            self._reader.join()
         self.usage = done["usage"]
         return done["refused"]
+
+    def heads(self, back, ended=None) -> None:
+        """In a schedule with a head offset: from now `back(execution phase, line)` takes each line of connection
+        rows the process sends back, on a thread of this object's that only waits on them, until the process says
+        it sends no more or is gone, when the thread calls `ended()` if given. `serve` has the network certifier's
+        loop hand each line to `Warden.head_back`. A process that is gone without that word raises on the thread,
+        as it does at `close`."""
+        if self.lines is None or self._reader is not None:
+            raise ValueError("the publisher process sends lines back in a schedule with a head offset, to one taker")
+
+        def read() -> None:
+            try:
+                while (item := self.lines.recv()) is not None:
+                    back(*item)
+            finally:
+                if ended is not None:
+                    ended()
+
+        self._reader = threading.Thread(target=read, name="lines-back", daemon=True)
+        self._reader.start()
 
     def lengths(self, window: int, strides) -> None:
         """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
@@ -952,8 +990,12 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     `paced_ms` after its boundary (`Warden(paced=…)`, which a warden on the host's clock must have), and the watermark
     stream sent to `upstream` when `watermark` (`Warden(watermark=…)`). Returns what `warden.json` holds, with
     `process`, what `prepare_process` did.
-    The loop's errors are kept, not logged: the ticker writes no file. With `paced_ms` 0 there is no pacer, which the
-    network certifier refuses on a clock of its host's: only a run on a caller's own clock has none.
+    The loop's errors are kept, not logged: the ticker writes no file, but in a schedule with a head offset, where
+    the tick a line of connection rows leaves at appends it to `rows.jsonl` (`runner_parts.Lines`): the
+    publisher's process hands each line back, and nothing off the tick publishes one. `warden.json` then has
+    `heads`, each execution phase with the tick its line left at, or null for one that was never written. With
+    `paced_ms` 0 there is no pacer, which the network certifier refuses on a clock of its host's: only a run on a
+    caller's own clock has none.
 
     It starts in this order, and a step that refuses starts nothing after it. The clock is read: a host without the
     raw clock runs no network certifier (`pacer.ClockRefused`). The key's device state (`DEVICE` in `key`) is opened
@@ -977,12 +1019,15 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
         if publish.key != registered:
             publish.close()
             raise StartRefused(f"{key}: the signer's key isn't the registered key")
+        lines = rp.Lines(out, LINK) if params.head_offset is not None else None
         started = (clock(), wall())
         origin = started[0] + start_in
         warden = Warden(params, lambda: asyncio.open_connection(*upstream), origin=origin, windows=windows,
                         clock=clock, sleep=sleep, publish=publish, withhold=publish.withhold, release=publish.release,
-                        slack=slack, paced=paced_ms / 1000 if paced_ms else None,
+                        slack=slack, paced=paced_ms / 1000 if paced_ms else None, leave=lines,
                         watermark=(lambda: asyncio.open_connection(*upstream)) if watermark else None)
+        if lines is not None:
+            publish.heads(lambda window, line: loop.call_soon_threadsafe(warden.head_back, window, line))
         server = await listening(warden.handle, listen, sock)
         sampler = stall_probe.start(out / "stalls.json", origin,
                                     {"warden": os.getpid(), "publisher": publish.process.pid},
@@ -1001,6 +1046,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
         finally:
             server.close()
             refused = await loop.run_in_executor(None, publish.close)
+            if lines is not None:
+                lines.close()
             stalls = sampler and stall_probe.stop(sampler, out / "stalls.json")
     lateness = [x * 1000 for x in warden.lateness]
     log = {"connections": warden.log, "ordinals": warden.ordinals, "refused": warden.refused,
@@ -1015,6 +1062,8 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
     if watermark:
         log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
                             "error": warden.watermark_error}
+    if lines is not None:
+        log["heads"] = [list(h) for h in warden.heads]
     (out / "warden.json").write_text(json.dumps(log, indent=1))
     announce({"served": True, "out": str(out)})
     return log

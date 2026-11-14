@@ -7,9 +7,10 @@ of that form (`warden`'s "The lengths rows") and `--content P,O[,ROWS] ...` its 
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
 it and no other. `--request-words`, with `--lengths 2`, `--content` and the schedule's `--max-tokens-cap`, gives it
 request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`
-and count of prompt ids as the network certifier reads them. `warden_serve`'s `serve` and `rehearse` take the three
-flags, and `rehearse` passes them to its `serve`. Without them the schedule, its digest and everything the
-run writes are what they were.
+and count of prompt ids as the network certifier reads them. `--head-offset N --head-wait W`, with `--lengths`, hold
+each execution phase's line to a tick (`warden`'s "The head's tick"): N buckets after the close that hands it, or up
+to W ticks later for one that is late. `warden_serve`'s `serve` and `rehearse` take the flags, and `rehearse` passes
+them to its `serve`. Without them the schedule, its digest and everything the run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
 the next one's records are published (`Warden.hand_lengths`): on its ticker, after that execution phase's last bucket
@@ -37,6 +38,16 @@ and one blob, in the run's order, and takes one leaf of the key. Under form 2 a 
 so a line's rows, its blob of salts and the publisher's build and commit follow the execution phase's releases, and
 `read` takes each table's salts by the rows the line's registration counts.
 
+In a schedule with a head offset (`WardenParams.head_offset`) the publisher's process writes no line. It keeps the
+salts, which are witness, as it did, and hands each execution phase's line back to the network certifier
+(`Keeper(back=…)`, `Warden.head_back`), whose tick writes it (`Lines`, the network certifier's `leave`) as it
+was handed back. The line holds no tick: the tick it left at is the network certifier's own note, in its log alone
+(`warden.json`'s `heads`). No check and no verifier reads it. Nothing holds the head's time yet: that is the
+auditor's side, which is not built. A line that is not back by the last tick it could leave at is never written:
+that execution phase has no head, and the tick writes `{"missed": [link, direction, execution phase]}` in its
+place, the network certifier's own unsigned note of it, so that every execution phase still has one line and one
+blob. A late line may leave after the next execution phase's, so `read` takes the lines by execution phase.
+
 **The check** (`check`). Every execution phase that is handed, and no other, has a registration that
 `connection_rows.check_registration` accepts under the network certifier's key and session, and its head is the head
 of the tables laid from the records' own reading of the same cells, under the kept salts: the rows say what the
@@ -45,7 +56,11 @@ Under form 2 they are those whose records, the ones before theirs and the ones a
 execution phase of the run has the word that it has no head, which `connection_rows.check_no_head` accepts: an
 execution phase with neither, with both, or with the one where the other is due is a problem. The reading takes each
 release's place in the release order from the run's `warden.json` where there is one, since the records stop
-counting it at an execution phase that isn't complete.
+counting it at an execution phase that isn't complete. In a schedule with a head offset an execution phase whose
+line is `missed` has no head, which is no problem of the run, and the summary counts those (`heads`). Reading that
+unsigned note is safe: it stands where a head or the word would, so it can only take one away. What an execution
+phase with no head is charged is its reader's: each class's whole schedule, which no reader here charges yet. The
+summary's `heads` names those execution phases for it.
 
 **The registrations' file** (`connection_rows_check.check`'s ``registrations`` and ``under``,
 `keep_registrations`). The check writes each registration that passed both of its holds, as the publisher kept it, one JSON object a line and in the execution
@@ -70,8 +85,8 @@ and as the hash and the session that run was handed.
 **The cost** of a close, for a schedule and its classes:
 
     python connection_rows_run.py cost --out FILE [--lengths 1|2] [--classes P,O[,ROWS] ...] [--request-words]
-        [--load grid|rows] [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16] [--window 600] [--every 1]
-        [--delay 30] [--ingress-cells 96] [--egress-cells 4097] [--height 10]
+        [--head-offset N --head-wait W] [--load grid|rows] [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16]
+        [--window 600] [--every 1] [--delay 30] [--ingress-cells 96] [--egress-cells 4097] [--height 10]
 
 It loads an execution phase (`loaded`): with `--load grid`, releases of each class in turn, each of its class's
 longest request and most ids, until the classes' rows, the lengths table's slots or the cells the schedule's grids
@@ -87,15 +102,27 @@ reads the words of. It then times, over `--phases` execution phases: the device'
 pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
 item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result
 is `--out`'s JSON.
+
+With `--head-offset N --head-wait W` the publisher's process hands each line back, and the cost also times each
+execution phase from its hand to its line back in the network certifier's process (`back_ms`), one execution phase
+at a time and before it times the items' pickling. Under `heads` it counts the lines back later than N buckets and
+within N + W (`late`) and those later still (`missed`: at W = 0, the heads that missed their tick), of the
+`phases` it ran, with the least offset at which none of them would be late (`least_offset`). The cost has no
+ticker: it counts by the host's clock from the hand, and its publisher does nothing else, where a served close has
+it keep the closing window's three records before the hand. So its count is a floor on a served run's; a served
+run's own count is its `missed` lines, and the network certifier's own log has the tick each line left at
+(`warden.json`'s `heads`).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import math
 import pickle
 import sys
 import tempfile
+import threading
 import time
 from collections.abc import Sequence
 from pathlib import Path
@@ -108,7 +135,7 @@ from verity.protocols.accounting.certifier.verifier import content_rows as CT
 from verity.protocols.accounting.certifier.verifier.id_form import id_request
 from verity.protocols.accounting.certifier.verifier.run_clock import VirtualClock
 from verity.protocols.accounting.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
-from runner_parts import _class, hand
+from runner_parts import _class, hand, head_flags
 from verity.protocols.accounting.certifier.verifier.connection_rows_check import ROWS, _spread
 
 #: the classes the cost is measured at by default: each (P, O) a power of four apart, 16 rows each under form 1
@@ -203,12 +230,19 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
     from benchmarks.network_traces import warden_serve as ws  # at its use: it imports this module
 
     releases = loaded(params, load)
-    hands, pickles, longest = [], [], []
+    hands, pickles, longest, backs = [], [], [], []
+    timed, back, lines = params.head_offset is not None, threading.Event(), {}
     with tempfile.TemporaryDirectory(prefix="connection-rows-cost-") as scratch:
         out, key = Path(scratch) / "run", Path(scratch) / "key"
         out.mkdir()
         ck.load_key(key, height)
         publish = ws.PublisherProcess(out, key, bytes(32), params, base_ms=0, ordinal=0)  # a scratch key's first
+        if timed:
+            def taken(window: int, line: dict) -> None:
+                lines[window] = (time.perf_counter(), line)
+                back.set()
+
+            publish.heads(taken)
         try:
             for phase in range(phases):
                 handed: list = []
@@ -218,9 +252,16 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
                     publish.lengths(phase, strides)
 
                 device = _device(params, releases, lengths)
+                back.clear()
                 t0 = time.perf_counter()
                 device._emit_lengths(1, True)
                 hands.append((time.perf_counter() - t0) * 1000)
+                if timed:
+                    # one execution phase at a time, and nothing else of this process's beside the queue's thread
+                    while not back.wait(1.0):
+                        if not publish.process.is_alive():
+                            publish._end()
+                    backs.append((lines[phase][0] - t0) * 1000)
                 each = []
                 for item in hand(phase, handed[0]):
                     t0 = time.perf_counter()
@@ -230,13 +271,21 @@ def cost(params: WardenParams, load: str, phases: int, height: int) -> dict:
                 longest.append(max(each))
         finally:
             publish.close()
-        kept = [json.loads(x)["cost"] for x in (out / ROWS).read_text().splitlines()]
+        kept = [lines[phase][1]["cost"] for phase in range(phases)] if timed else \
+            [json.loads(x)["cost"] for x in (out / ROWS).read_text().splitlines()]
+    heads = {}
+    if timed:
+        tau, due, last = params.bucket_ms, params.head_offset, params.head_offset + params.head_wait
+        heads = {"heads": {"offset": due, "wait": params.head_wait, "bucket_ms": tau, "of": phases,
+                           "late": sum(due * tau < x <= last * tau for x in backs),
+                           "missed": sum(x > last * tau for x in backs), "back_ms": _spread(backs),
+                           "least_offset": max(1, math.ceil(max(backs) / tau))}}
     return {"parameters": params.digest.hex(), "classes": [list(c) for c in params.content], "load": load,
             "releases": len(releases), "handed_bytes": sum(size + 4 * ids for size, ids in releases),
             "tables": kept[0]["tables"], "rows": kept[0]["rows"], "row_bytes": kept[0]["row_bytes"],
             "phases": phases, "hand_ms": _spread(hands), "pickle_ms": _spread(pickles),
             "pickle_longest_item_ms": _spread(longest),
-            **{k: _spread([c[k] for c in kept]) for k in ("build_ms", "commit_ms", "sign_ms")},
+            **{k: _spread([c[k] for c in kept]) for k in ("build_ms", "commit_ms", "sign_ms")}, **heads,
             "publisher_usage": publish.usage}
 
 
@@ -252,6 +301,7 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--request-words", action="store_true",
                    help="under --lengths 2: the schedule has request words, under a response cap of its most ids "
                         "(egress_cells − 1), and each release's request is a canonical id request")
+    head_flags(c)
     c.add_argument("--load", choices=("grid", "rows"), default="grid")
     c.add_argument("--phases", type=int, default=5)
     c.add_argument("--height", type=int, default=ck.HEIGHT, help="the LMS key's tree height")
@@ -268,7 +318,7 @@ def costed(args: argparse.Namespace) -> WardenParams:
     return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
                         every=args.every, delay=args.delay, ingress_buckets=args.delay,
                         ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=args.lengths,
-                        content=tuple(classes), **words)
+                        content=tuple(classes), head_offset=args.head_offset, head_wait=args.head_wait, **words)
 
 
 def main(argv=None) -> int:
