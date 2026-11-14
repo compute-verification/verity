@@ -1,0 +1,115 @@
+# SPOT's older name, the rest of it: what `tools/move/rename.py --map tools/move/sampled_proofs_words_map.toml` renames,
+# the sampled proof system's older name where `spot_names_map.toml` (the code's `sampled_proofs` and `SampledProofs`) and
+# `spot_term_map.toml` (prose only) left it, in code, strings and prose alike (GLOSSARY.md, Older names;
+# `tests/test_retired_terms.py`'s `SPOT_NAMES` holds what is left from growing):
+# - "sampled proofs" becomes SPOT. SPOT is one system, so a verb it alone is the subject of takes the singular, and a
+#   compound subject ("the policy and sampled proofs commit") keeps its verb; phrases come before the words they hold.
+#   "A sampled proof", "the sampled proof blocks" and every other "sampled" for a proof block that was sampled keep
+#   their sense and their words, and the map has no singular "sampled proof".
+# - "sampled-proofs" as the name's adjective ("the sampled-proofs verifier") becomes SPOT, by each phrase it stands in,
+#   never by the word alone.
+# - The Lake executables of SPOT's verifier (`verity/protocols/proofs/spot/verifier/lean/lakefile.toml`) take `spot-`,
+#   as `spot-monitoring-period` beside them has: `sampled-proofs-verifier` becomes `spot-verifier`, and likewise
+#   `-difftest`, `-one-stage`, `-one-stage-zk`, `-plancheck` and `-wired-key-dev`, with every path and call to them.
+# - The constants `SAMPLED_PROOFS` and `SAMPLED_PROOFS_V1`, Python names, become `SPOT` and `SPOT_V1`; the id each holds
+#   keeps its spelling.
+#
+# What it leaves, since no word here spells it: the protocol's id, which keeps its name until a format version
+# (GLOSSARY.md): `sampled-proofs` as a string, a key, a list's entry or a component's name, its protocol entries
+# (`sampled-proofs:rows-sha512`, which a recorded `TargetProfile`'s digest hashes), the record ids under
+# `verity/sampled-proofs/`, the line label `SAMPLED-PROOFS` (the id, as `CERTIFIER-FRONT` beside it is), the run
+# directories and logs named for it (`sampled-proofs/`, `sampled-proofs-served/`, `sampled-proofs-v1/`,
+# `sampled-proofs.log`, `build-sampled-proofs.log`), which the store and later runs read from runs already recorded, the
+# flag `--sampled-proofs` and its attribute `a.sampled_proofs`, and a record's key `sampled_proofs`. It leaves the Python
+# distribution `verity-core-sampled-proofs` and its suite, whose rename re-sorts `uv.lock`, which `uv lock` writes.
+
+[words]
+# --- the executables, longest first
+"sampled-proofs-one-stage-zk" = "spot-one-stage-zk"
+"sampled-proofs-one-stage" = "spot-one-stage"
+"sampled-proofs-wired-key-dev" = "spot-wired-key-dev"
+"sampled-proofs-plancheck" = "spot-plancheck"
+"sampled-proofs-difftest" = "spot-difftest"
+"sampled-proofs-verifier" = "spot-verifier"
+
+# --- the constants
+"SAMPLED_PROOFS" = "SPOT"
+
+# --- the adjective, by the phrases it stands in
+"sampled-proofs audit" = "SPOT audit"
+"sampled-proofs verifier" = "SPOT verifier"
+"sampled-proofs settings" = "SPOT settings"
+"sampled-proofs setting" = "SPOT setting"
+"sampled-proofs run" = "SPOT run"
+"sampled-proofs Lean" = "SPOT Lean"
+"sampled-proofs planner" = "SPOT planner"
+"sampled-proofs window" = "SPOT window"
+"sampled-proofs suite" = "SPOT suite"
+"sampled-proofs registration" = "SPOT registration"
+"sampled-proofs service" = "SPOT service"
+"sampled-proofs claim" = "SPOT claim"
+"sampled-proofs build" = "SPOT build"
+"sampled-proofs target" = "SPOT target"
+"sampled-proofs statement" = "SPOT statement"
+"sampled-proofs package" = "SPOT package"
+"sampled-proofs legs" = "SPOT legs"
+"sampled-proofs knowledge error" = "SPOT knowledge error"
+"sampled-proofs half" = "SPOT half"
+"sampled-proofs guarantee" = "SPOT guarantee"
+"sampled-proofs files" = "SPOT files"
+"sampled-proofs component" = "SPOT component"
+"sampled-proofs coins" = "SPOT coins"
+"sampled-proofs case" = "SPOT case"
+"sampled-proofs adapter" = "SPOT adapter"
+
+# --- possessives: SPOT's, never SPOT'
+"the sampled proofs'" = "SPOT's"
+"The sampled proofs'" = "SPOT's"
+"sampled proofs'" = "SPOT's"
+"Sampled proofs'" = "SPOT's"
+
+# --- a verb whose subject is SPOT alone takes the singular
+"the sampled proofs let" = "SPOT lets"
+"the sampled proofs prove" = "SPOT proves"
+"the sampled proofs partition" = "SPOT partitions"
+"The sampled proofs sample" = "SPOT samples"
+"whose sampled proofs accept" = "whose SPOT accepts"
+"that sampled proofs commit" = "that SPOT commits"
+"where sampled proofs read" = "where SPOT reads"
+"sampled proofs add their" = "SPOT adds its"
+"I/O; sampled proofs hold" = "I/O; SPOT holds"
+"I/O, and sampled proofs hold" = "I/O, and SPOT holds"
+"Sampled proofs catch" = "SPOT catches"
+"sampled proofs catch" = "SPOT catches"
+"Sampled proofs certify" = "SPOT certifies"
+"Sampled proofs bound" = "SPOT bounds"
+"sampled proofs show" = "SPOT shows"
+"Sampled proofs check" = "SPOT checks"
+"Sampled proofs spot-check" = "SPOT spot-checks"
+"sampled proofs are" = "SPOT is"
+
+# --- the name as a noun's modifier keeps its article
+"the sampled proofs verifier" = "the SPOT verifier"
+"the sampled proofs service" = "the SPOT service"
+"the sampled proofs bound" = "the SPOT bound"
+
+# --- the name
+"the sampled proofs" = "SPOT"
+"The sampled proofs" = "SPOT"
+"sampled proofs" = "SPOT"
+"Sampled proofs" = "SPOT"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the retired-terms
+# lint, whose docstrings and examples name the older name as the older name, files whose bytes a digest pins (`rename.py`
+# repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests and the Lean tools' fixtures.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/uv.lock",
+           "**/*.lock", "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
+
+[keep]
+# The Glossary's row of the older name, which names it; and the two-stage vectors' exporter's docstring, which keeps its
+# text as it moves: `exfiltration_two_lean.json` pins its digest, which only `generate.sh` rewrites.
+patterns = ['(?m)^\| "sampled proofs", the sampled proof system.*$',
+            'Vectors for `verity\.core\.protocols\.sampled_proofs\.consumers\.exfiltration_bound` on a design with a replay stage']
+strings = []
