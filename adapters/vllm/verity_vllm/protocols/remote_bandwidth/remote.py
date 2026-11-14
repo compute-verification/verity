@@ -23,8 +23,9 @@ from verity.protocols.accounting.poub.prover.node_store.serving import (
 from verity.protocols.accounting.poub.verifier import audit
 from verity.protocols.accounting.poub.verifier import codec as rcodec
 
-from verity_vllm.engine.handle import core_or_none, engine_of
+from verity_vllm.engine.handle import core_in_process, engine_of
 from verity_vllm.protocols.remote_bandwidth.binder import Binder
+from verity_vllm.records.schema_ids import REMOTE_SESSION_SCHEMA
 
 __all__ = ["CommitSession"]
 
@@ -118,7 +119,7 @@ class CommitSession:
 
     def check(self, llm: Any, runner: Any) -> dict[str, Any]:
         vc, why = engine_of(llm).vllm_config, []
-        if getattr(core_or_none(llm), "engine_core", None) is None:
+        if not core_in_process(llm):
             why.append("the engine core in another process")
         if vc.scheduler_config.async_scheduling:
             why.append("async scheduling resolved on")
@@ -166,7 +167,7 @@ class CommitSession:
             if steps is None:
                 steps = []
             self.record = {
-                "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan,
+                "schema": REMOTE_SESSION_SCHEMA, "verifier": self.verifier, "plan": self.plan,
                 "accepted": error is None and bool(result.get("accepted")), "error": error, "prover": result,
                 "store": self.binder.stats() if self.binder is not None else None, "layout": backend.layout(),
                 "kv_pages": self.kv_pages, "weight_blocks": self.weight_blocks, "step_ms": self.step_ms,
@@ -190,7 +191,7 @@ class CommitSession:
         lock.finish()
         thread.join()
         rec: dict[str, Any] = self.record if self.record is not None else {
-            "schema": "verity-vllm/remote-session/v0", "verifier": self.verifier, "plan": self.plan, "accepted": False,
+            "schema": REMOTE_SESSION_SCHEMA, "verifier": self.verifier, "plan": self.plan, "accepted": False,
             "error": "the session's record was not written (its thread raised)", "memory_map": None, "encode": None}
         rec["run"] = {"steps": lock.audited + lock.unaudited, "audited": lock.audited, "unaudited": lock.unaudited}
         self.record = rec
