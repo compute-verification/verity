@@ -232,7 +232,7 @@ def test_a_registration_that_roots_the_rotary_table_is_refused_at_the_pins(x, tm
 
 
 def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
-    """`verity-vllm weights-tie` as `benchmarks/prove_path/run.sh` runs it, under the tie's own design: ``commit`` writes
+    """`verity-vllm weights-tie` as `verity/protocols/proofs/spot/prover/audit/prove_path.sh` runs it, under the tie's own design: ``commit`` writes
     the registration (its key sampled 0600) and the tie window, ``verify`` the verifier's tie of the same circuit, run and
     units and no output class, and ``pins`` writes the roots on an accepting audit's summary and nothing (exit 1) on one
     that refused; a forged digest without served words is a usage error."""

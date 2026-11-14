@@ -196,7 +196,7 @@ def _canon_step_relative(P: RootView, i: int, seqs: list[list[int]], unfold: boo
     keeps ``seqs``' positions for the calls that follow with the same list, and keeps the list with them: a list's address
     alone names whichever list is allocated there next, once this one is freed."""
     pos, key = getattr(P, "_pos_cache", None), getattr(P, "_pos_cache_key", None)
-    if pos is None or key[0] != unfold or key[1] is not seqs:
+    if pos is None or key is None or key[0] != unfold or key[1] is not seqs:
         pos = {}
         for s, idxs in enumerate(seqs):
             for j, ii in enumerate(idxs):

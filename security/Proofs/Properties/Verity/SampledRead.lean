@@ -22,8 +22,8 @@ digest, one coin of `COIN_BYTES` bytes each. So the read meets the sample's ask 
 * **v2's challenger** (`drawCoins_ok`, `trustedSessionOf_ok`, `sessionNamed_ok`, `sessionOf_ok`, `releasedRootsOf_ok`,
   `challengerStream_ok`): where v2 reads `ξ`, the session's log is a list of lines, the roots of the sample's family are
   those its pairs' root lines show (`sel`), and `ξ` is `COIN_BYTES` bytes for each of them equal to the digest.
-* **What the read shows** (`fresh_readLog`, `countFresh_eq`, `chunks_flatten`): the read's coins of the sample's family
-  after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
+* **What the read shows** (`fresh_readLog`, `countFresh_eq`, and `chunks_flatten` in `SampledLog`): the read's coins of
+  the sample's family after the digest are `ξ`'s coins, one for each such root, so their bits are `ξ`'s.
 * **The read in order** (`treeStep_some`, `specOf_streams`, `sampleLinkFirst_snoc`, `sampleLinkFirst_readTail`,
   `sampleLinkFirst_readLog`, `sampleLinkFirst_congr`): where the release log's lines after its head pass
   `sampleLinkFirst`, the releases the read shows pass `SampleLinkFirst`: the sample, then the link, then the other
@@ -302,40 +302,6 @@ theorem releasedRootsOf_ok {c : LiveCommitment} {log : List String} {roots : Roo
 
 /-! ## What the read shows -/
 
-theorem bit_cons_lt (x : UInt8) (l : List UInt8) {t : Nat} (ht : t < 8) :
-    Flock.Hm96.bit ⟨⟨x :: l⟩⟩ t = x.toNat.testBit t := by
-  unfold Flock.Hm96.bit
-  rw [Nat.div_eq_of_lt ht, Nat.mod_eq_of_lt ht, show (⟨⟨x :: l⟩⟩ : ByteArray).get! 0 = x from rfl,
-    Nat.testBit_eq_decide_div_mod_eq, Nat.shiftRight_eq_div_pow]
-  generalize x.toNat / 2 ^ t % 2 = r
-  by_cases h : r = 1 <;> simp [h]
-
-theorem bit_cons_add (x : UInt8) (l : List UInt8) (t : Nat) :
-    Flock.Hm96.bit ⟨⟨x :: l⟩⟩ (8 + t) = Flock.Hm96.bit ⟨⟨l⟩⟩ t := by
-  unfold Flock.Hm96.bit
-  rw [show (8 + t) / 8 = t / 8 + 1 by omega, show (8 + t) % 8 = t % 8 by omega]
-  rw [show (⟨⟨x :: l⟩⟩ : ByteArray).get! (t / 8 + 1) = (⟨⟨l⟩⟩ : ByteArray).get! (t / 8) by
-    show (x :: l).toArray[t / 8 + 1]! = l.toArray[t / 8]!
-    simp]
-
-theorem bitsOfBytes_list : ∀ l : List UInt8, Verity.bitsOfBytes ⟨⟨l⟩⟩ = l.flatMap byteBits
-  | [] => rfl
-  | x :: l => by
-    have e := bitsOfBytes_list l
-    unfold Verity.bitsOfBytes at e ⊢
-    rw [show (⟨⟨x :: l⟩⟩ : ByteArray).size = 8 / 8 + l.length by simp [ByteArray.size]; omega] at *
-    rw [show 8 * (8 / 8 + l.length) = 8 + 8 * l.length by omega, List.range_add, List.map_append, List.flatMap_cons,
-      List.map_map]
-    rw [show (⟨⟨l⟩⟩ : ByteArray).size = l.length from rfl] at e
-    rw [← e]
-    congr 1
-    · exact List.map_congr_left fun t ht => bit_cons_lt x l (List.mem_range.1 ht)
-    · exact List.map_congr_left fun t _ => bit_cons_add x l t
-
-theorem beq_bytes {a b : ByteArray} : (a == b) = true ↔ a = b := by
-  show (a.data == b.data) = true ↔ a = b
-  rw [beq_iff_eq, ByteArray.ext_iff]
-
 theorem countFresh_eq (label : String) (after : ByteArray) :
     ∀ rest : List String, countFresh label after rest = ((sel label (pairs rest)).filter (· == after)).length
   | a :: b :: rest => by
@@ -358,26 +324,6 @@ theorem countFresh_eq (label : String) (after : ByteArray) :
       · simp [hl]
   | [_] => rfl
   | [] => rfl
-
-/-- The bits of bytes, as the device's log reads them, are their bits as a sample reads them. -/
-theorem bitsOfBytes_eq (b : ByteArray) : Verity.bitsOfBytes b = bitsOf b := by
-  rw [bitsOf_eq]
-  rcases b with ⟨⟨l⟩⟩
-  exact bitsOfBytes_list l
-
-/-- **`m` coins of `ξ` are its bits**, where `ξ` is `m` coins long. -/
-theorem chunks_flatten : ∀ (m : ℕ) (ξ : ByteArray), ξ.size = COIN_BYTES * m → (chunks m ξ).flatten = bitsOf ξ
-  | 0, ξ, h => by
-    rw [← bitsOfBytes_eq]
-    simp [chunks, Verity.bitsOfBytes, h]
-  | m + 1, ξ, h => by
-    have h64 : COIN_BYTES ≤ ξ.size := by
-      rw [h, Nat.mul_succ]
-      exact Nat.le_add_left _ _
-    have hs : (ξ.extract COIN_BYTES ξ.size).size = COIN_BYTES * m := by
-      rw [ByteArray.size_extract, Nat.min_self, h, Nat.mul_succ, Nat.add_sub_cancel]
-    rw [chunks, List.flatten_cons, chunks_flatten m _ hs, bitsOfBytes_eq, ← bitsOf_append,
-      ByteArray.extract_append_extract, Nat.zero_min, Nat.max_eq_right h64, ByteArray.extract_zero_size]
 
 /-! ## The read in order -/
 
@@ -796,6 +742,57 @@ theorem linesOf_of {e : _root_.Spot.OneStageZk.Evidence} {ls : Array Json} {line
   rw [hls]
   exact mapM_str_ok (fun _ => rfl) lines
 
+/-- v2's case names v2's parameters in the parameters sent. -/
+theorem caseOf_params {s : Verity.Sent} {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {e : _root_.Spot.OneStageZk.Evidence} (h : caseOf s = .ok (p, c, e)) : ParamsAt s.params p := by
+  unfold caseOf at h
+  cases hps : (_root_.Core.canonicalJson s.params >>= _root_.Core.Composition.decodeParams) with
+  | error _ => rw [hps] at h; cases h
+  | ok ps =>
+    rw [hps, ok_bind] at h
+    cases hx : ps.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
+    | none => rw [hx] at h; cases h
+    | some x =>
+      rw [hx] at h
+      dsimp only at h
+      cases hev : _root_.Core.Composition.decodeEvidence s.evidence with
+      | error _ => rw [hev] at h; cases h
+      | ok ev =>
+        rw [hev, ok_bind] at h
+        cases hy : ev.find? (·.id == VStar.Recursive.Sampled.PROTOCOL) with
+        | none => rw [hy] at h; cases h
+        | some y =>
+          rw [hy] at h
+          dsimp only at h
+          cases hnp : (_root_.Core.canonicalJson x.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) with
+          | error _ => rw [hnp] at h; cases h
+          | ok q =>
+            rw [hnp, ok_bind] at h
+            rcases q with p' | q
+            · dsimp only at h
+              cases hc : Spot.OneStage.commitmentOf y.commitment with
+              | error _ => rw [hc] at h; cases h
+              | ok c' =>
+                rw [hc, ok_bind] at h
+                cases he : VStar.Recursive.Sampled.evidenceOf y.evidence with
+                | error _ => rw [he] at h; cases h
+                | ok r =>
+                  rw [he, ok_bind] at h
+                  rcases r with e' | _
+                  · obtain rfl : p' = p := congrArg Prod.fst (Except.ok.inj h)
+                    exact ⟨ps, hps, x, hx, hnp⟩
+                  · cases h
+            · cases h
+
+/-- **An accept on parameters that name no members is the one statement's**: where the parameters sent name no
+members (`OneStatement`), the parameters v2's case accepted in them name none. -/
+theorem single_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
+    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
+    (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr)
+    (hone : OneStatement s.params) : p.members = none :=
+  hone p (caseOf_params (caseOf_of hS hcase hacc.1 hacc.2.1 hacc.2.2.1))
+
 /-! ## The session's law -/
 
 /-- **v2's parameters in the parameters sent are the ones its case accepted**, in a composition composite `k`
@@ -841,7 +838,8 @@ theorem coupled_draw_setsUp {V : Vocab d α} {k : Verity.Registration.Composite}
           bitsOf (_root_.Properties.Spot.bytesOf (A.src ω.1 0)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ :=
+    coupled_draw K A θ F c σ hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-- `coupled_draw_coins` at the session v2 sets up. -/
@@ -857,7 +855,8 @@ theorem coupled_draw_coins_setsUp {V : Vocab d α} {k : Verity.Registration.Comp
         freshCoins dr.label dr.after o.log <+: (List.ofFn fun j => List.ofFn (κ ω.1 j)) →
         (K.live A θ F c σ).L.draw ω = Finset.univ.filter fun u => u.val ∈ units := by
   obtain ⟨p₀, hp₀, -⟩ := hA.params
-  obtain ⟨dr, L, n, ξ, units, hd, h⟩ := coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) hv hl κ hsrc
+  obtain ⟨dr, L, n, ξ, units, hd, h⟩ :=
+    coupled_draw_coins K A θ F c σ hR (by rw [hθ]; exact hp₀) (by rw [hθ]; exact hA.single) hv hl κ hsrc
   exact ⟨dr, L, n, ξ, units, hd, fun ω hn hp => h ω (law_of_setsUp hA hv.2.1 hθ hd hn) hn hp⟩
 
 /-! ## The session's population -/
@@ -868,7 +867,10 @@ theorem popHeld_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {bs : Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
     (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     _root_.Spot.OneStageZk.popHeld p.base.verifier c.record = .ok () := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  rcases _root_.Spot.OneStageZk.checkBlobsAt_accept h with ⟨-, -, h⟩ | ⟨ms, sts, -, -, h⟩
+  swap
+  · obtain ⟨r, hr, -, -⟩ := _root_.Spot.OneStageZk.checkMembersAt_accept h
+    exact (_root_.Spot.OneStageZk.membersRun_held hr).2
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
@@ -1238,15 +1240,15 @@ theorem treesOf_ok {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStage
   | error err => intro h; cases h
   | ok t => intro h; cases h; rfl
 
-/-- **v2's check at the coins `ξ` accepts only where the challenger's trees hold**: `treesOf` reads them and
-`treesHeld` holds the evidence's sessions to them. -/
+/-- **v2's check at the coins `ξ` accepts, on parameters that name no members, only where the challenger's trees
+hold**: `treesOf` reads them and `treesHeld` holds the evidence's sessions to them. -/
 theorem trees_of_checkBlobsAt {p : _root_.Spot.OneStageZk.Params}
     {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    (hm : p.members = none) (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
       _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept h).1
+  replace h := (_root_.Spot.OneStageZk.checkBlobsAt_accept_one hm h).1
   unfold _root_.Spot.OneStageZk.checkOneAt at h
   try simp only [] at h
   split at h
@@ -1323,13 +1325,13 @@ theorem readLog_isSome (label : String) (after : ByteArray) (records : List Json
       simp only [treeFold, ite_eq_right ht] at hT
       exact readTail_isSome label after records ls [] none ξ hT hP
 
-/-- **v2's acceptance reads the device's log, with v2's own tests**: wherever composite `k` accepted what the prover
-sent and v2's case in it accepts, `logRead` returns a log. -/
+/-- **The one statement's acceptance reads the device's log, with v2's own tests**: wherever composite `k` accepted
+what the prover sent and v2's case in it accepts on parameters that name no members, `logRead` returns a log. -/
 theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
     {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
     {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws} (hS : Verity.SameAccepts k s)
-    (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) :
-    (logRead s).isSome := by
+    (hcase : V2Case k s a b e) (hacc : V2Accepts (Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr)
+    (hm : p.members = none) : (logRead s).isSome := by
   obtain ⟨hp, hc, hev, hξ, hdr, pub, prof, hck⟩ := hacc
   obtain ⟨key, hch, -⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
@@ -1339,7 +1341,7 @@ theorem logRead_isSome {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   obtain ⟨_, hso⟩ := sessionNamed_ok hsn
   obtain ⟨ls, lines, hlog, hls, hrr⟩ := sessionOf_ok hso
   have hl := linesOf_of hlog hls
-  obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hck
+  obtain ⟨ts, htr, hth⟩ := trees_of_checkBlobsAt hm hck
   obtain ⟨key', w, htt⟩ := treesOf_ok htr
   obtain ⟨ls', lines', hlog', hls', hct⟩ := trustedTreesOf_ok htt
   have hl' := linesOf_of hlog' hls'
@@ -1461,8 +1463,9 @@ theorem shows_logRead {k : Verity.Registration.Composite} {s : Verity.Sent} {a b
 
 /-- **The read with v2's own tests shows the sample**, with no premise: `logRead` meets the sample's ask (`DrawRead`). -/
 theorem drawRead_logRead (k : Verity.Registration.Composite) : DrawRead k logRead := by
-  intro s a b e p c ev ξ dr hS hcase hacc
-  obtain ⟨log, hlog⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc)
+  intro s a b e p c ev ξ dr hS hcase hacc hone
+  obtain ⟨log, hlog⟩ :=
+    Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc (single_of_case hS hcase hacc hone))
   exact ⟨log, hlog, shows_logRead hS hcase hacc hlog⟩
 
 /-- **v2's read shows the sample**, with no premise: `coinsRead` is `logRead` (`coinsRead_eq_logRead`), so it meets the

@@ -41,3 +41,9 @@ root = "SampledTwoMain"
 [[lean_exe]]
 name = "sampled-two-on"
 root = "SampledTwoOnMain"
+
+# A test's executable: the two-stage form's descriptor check (`SampledTwoDescMain`) on one play, and on the play with
+# two templates of one name, which it must refuse. No party runs it; nothing in the form calls the check yet.
+[[lean_exe]]
+name = "sampled-two-desc"
+root = "SampledTwoDescMain"

@@ -665,7 +665,7 @@ KNOWN: dict[str, str] = {
         "homonym, a table of benchmark lowerings: rename (compute-accounting)",
     "verity/protocols/proofs/flock/prover/python/verity_flock/subcircuit_templates.py::Draw":
         "homonym, one synthetic benchmark draw: rename (compute-accounting)",
-    "benchmarks/one_stage/a5_coins.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
+    "verity/protocols/proofs/spot/device/challenger_session.py::Gate": "homonym, infra's challenger gate (an SSH host): rename (proofs)",
     "benchmarks/pous/p2_v1/store.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a client of it (memory-accounting)",
     "verity/protocols/accounting/pouw/prover/clear/clear_audit.py::Transcript":
@@ -721,8 +721,8 @@ KNOWN: dict[str, str] = {
     "benchmarks/rho/rho/params.py::Registry": "homonym, a table of benchmark parameters: rename (training)",
     "benchmarks/rho/rho/theorem.py::Partition":
         "homonym, a benchmark's serving blocks and dark leaves: rename (training)",
-    "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
-    "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
+    "verity/protocols/proofs/spot/prover/cost/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
+    "verity/protocols/proofs/spot/prover/cost/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
     # demos/
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":

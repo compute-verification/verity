@@ -43,7 +43,6 @@ from verity_vllm.program.lifting import lifted_records
 CONTINUATION_VERSION = "continuation-v1"  # every Continuation_v1 result carries it (recorder, builder and Match share one version)
 PROFILES = {0: "synchronous (zero lag: run moves with emit)", 1: "admitted one-step-ahead async (run trails emit by exactly one slot after early EOS)"}
 PROFILE_FIELD = lifted_records.LAG_FIELD  # RunHeader.profile.engine_kwargs.async_scheduling -- the ONE resolved field A and LAG both read
-FAMILIES = ("is_eos", "emit", "run", "out", "in")  # b_t, e_t, r_t, o_t, u_t: Q(P) identities with named families
 #: the Definition's statement about randomness.  The sampler of slot `t` EXECUTES iff `r_t = 1` (it is the
 #: slot's sampling event; `u_t = bot` makes the whole step bot by strictness, sampler included), so a stochastic Program samples exactly once
 #: per executed slot: the lag slot (e, r) = (0, 1) consumes ONE sample after the served EOS, an inactive slot none.  With the counter RNG of

@@ -85,7 +85,9 @@ abbrev VBridgeC {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : 
 
 /-- **VBridge at the committed rounds, off `Bad`**: `Flock.Assumptions.VBridgeCOff`. -/
 abbrev VBridgeCOff {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {S : ℕ} {Vs : Fin S → VStmt}
-    {Reg' Reg₂ : Type} (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → Prop)
+    {Reg' Reg₂ : Type}
+    (Bad : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ →
+      ((j : Fin S) → Reg' × Finset (Fin (Vs j).nv) × FlockSoundness.Discharge.Exec.Transcript) → Prop)
     (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray)
     (N k Rw : ℕ) (x : Reg → L.Ω → I.Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)

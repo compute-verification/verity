@@ -564,7 +564,7 @@ def _ahead(fit: int, free: int, waiting: int) -> float:
 
 def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
     """The line a run joins for a slot of Lean ``pool`` on the machine whose `read` document is ``doc``, and how to say it:
-    0 with no ``pool`` to take, where the machine caps no Lean, or while a slot is free for every waiter and this run; else the
+    0 with no ``pool`` to take, where the machine limits no Lean, or while a slot is free for every waiter and this run; else the
     waiters ahead and this run, per slot of the pool; infinite when its Lean slots weren't read; None, with why, when they give
     the pool none, so the run would never get one there."""
     if not pool:

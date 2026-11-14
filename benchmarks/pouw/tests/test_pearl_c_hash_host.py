@@ -24,7 +24,7 @@ from verity.protocols.accounting.pouw.verifier import audit
 from verity.protocols.accounting.pouw.verifier.audit import ROW_SCHEMA, activation_binding, rows_domain
 from verity.protocols.accounting.pouw.prover.schemes import pearl_c as C
 
-HERE = Path(__file__).resolve().parents[1] / "pearl_c"
+HERE = Path(__file__).resolve().parents[3] / "verity" / "protocols" / "accounting" / "pouw" / "prover" / "kernels" / "pearl_c"
 FAST = HERE.parent / "pearl_c_sm120" / "hash_fast.cuh"
 WIDE = HERE / "hash_wide.cuh"
 R = load("pearl_c_sm120/run.py")

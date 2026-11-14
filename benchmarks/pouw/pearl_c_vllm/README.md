@@ -2,8 +2,8 @@
 
 What Pearl-C costs when it serves: a vLLM model on one GPU with every linear call computed and committed on the device
 by the adapter's Pearl-C run, timed against stock vLLM's FP8 on the same card, rep by rep, and the reference replay of
-the passes that run retained. The cards are the RTX PRO 6000 (`../pearl_c_sm120/`'s kernels) and the H100 and H200
-(`../pearl_c_sm90/`'s).
+the passes that run retained. The cards are the RTX PRO 6000 (`../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm120/`'s kernels) and the H100 and H200
+(`../../../verity/protocols/accounting/pouw/prover/kernels/pearl_c_sm90/`'s).
 
 `e2e.py` is the measurement. Before any timing it gates every distinct linear shape in the arm's own process: the
 served output against the float product, the commitment twice bit for bit, and a control with its tile leaves omitted

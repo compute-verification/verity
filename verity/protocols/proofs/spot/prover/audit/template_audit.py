@@ -1,0 +1,852 @@
+"""One-stage audit, run A0: a template's captured served values through registration, the verifier's sample, M0's prover and
+verifier, the Lean verifier's sample checks, and the audit record with its integrity profile; then the negatives.
+
+    PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/adapters/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
+      python verity/protocols/proofs/spot/prover/audit/template_audit.py --set DIR --m0-pythonpath PATH --bin flock-circuit --lean verity-verify-proof --out DIR \\
+      [--k 16] [--delta 0.01] [--port 7511]
+
+* **Stand-in commitment.** M0 commits the captured values afresh (`frame-v3-sha512`, `hm96-sha512/row/v1` leaves, fresh
+  OS salts). The values were read under the served run's `vllm-v1` root and replayed bit-exact there by `vu_export`; that
+  link is provenance, not proof, and the registration says so.
+* **Partition.** `Q_template_instance` v0 over the population program: one unit per instance, no width rule.
+* **Verifier of record.** Lean's `verity-verify-proof verify` replays the session offline with the circuit and the public
+  file held by content; Lean also checks U1-U3 on the sample, and M0's own verifier (`flock-circuit serve`) checks it live.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import secrets
+import select
+import shutil
+import subprocess
+import sys
+import time
+from collections.abc import Sequence
+from pathlib import Path
+
+from verity.commitments.identity import identity_digest, identity_digest_sha512
+from verity.commitments.indexed import RangeIndexedDomain
+from verity.commitments.merkle import CommitmentDomain
+from verity.circuits.codec import canonical_json, encode_program, program_digest
+from verity.circuits.program import Program
+from verity_flock.input_sets import InputSet
+from verity.protocols.proofs.spot.device import challenger as Ch, coins as CC
+from verity.protocols.proofs.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.proofs.spot.verifier.one_stage.proofs import verifier_env
+from verity.protocols.proofs.spot.verifier.one_stage.verdict import Verdict
+
+import r2_population as R2
+
+HERE = (Path(__file__).resolve().parent.parent.parent.parent.parent.parent.parent / "benchmarks" / "one_stage")
+SCHEME = "frame-v3-sha512/hm96-sha512"
+#: M0's set-bound frame domains (verity_flock.circuit.BINDING_TAG), each tag with its identity digest; v1 is M0's before
+#: 64-byte bindings, for a pinned tree that old (--binding)
+STAND_IN_BINDINGS = {"verity/flock-circuit/binding/v2": identity_digest_sha512,
+                     "verity/flock-ir-frame/binding/v1": lambda tag, doc: bytes.fromhex(identity_digest(tag, doc))}
+STAND_IN_BINDING = "verity/flock-circuit/binding/v2"
+STATEMENT_ID = "verity/flock-circuit"
+
+
+def sha512_file(path: Path) -> str:
+    return hashlib.sha512(path.read_bytes()).hexdigest()
+
+
+def environ(env: dict | None) -> dict:
+    """This process's environment with ``env`` over it, a None value removing its variable (flock-circuit takes the host's
+    witness when FC_HOST_WITNESS is set at all)."""
+    return {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+
+
+def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 3600) -> subprocess.CompletedProcess:
+    t = time.time()
+    p = subprocess.run(cmd, capture_output=True, text=True, env=environ(env), timeout=timeout)
+    log.write_text(f"$ {' '.join(cmd)}\n# rc {p.returncode} in {time.time() - t:.1f} s\n--- stdout\n{p.stdout}\n--- stderr\n{p.stderr}")
+    return p
+
+
+#: the development challenger's layout: one family, the coins one sample reads
+DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
+
+
+def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
+                    log: Path) -> subprocess.CompletedProcess:
+    """Lean's sample, ``verity-verify-proof draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
+    none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
+    committed before any coin opens. Its one family holds the coins the sample reads, opened after `after` (the
+    registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
+    Lean's `Draw.drawOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
+    the segment, from which `coins.challenger_stream` replays F. Its samples show the path, not an auditor's coins: those
+    are `a5_coins`' (`a5.py --challenger`)."""
+    reads: list[int] = []
+    CC.draw_first(CC.OwnRandomness(lambda n: reads.append(n) or bytes(n)), law, population)
+    need = sum(reads)
+    ch = Ch.LiveChallenger(DEV_SCHEME, 0, [(DEV_FAMILY, max(1, -(-need // Ch.COIN_BYTES)))], secrets.token_bytes)
+    coins = CC.ChallengerCoins(Ch.LiveRecord(ch, DEV_FAMILY))
+    coins.commit(bytes.fromhex(after) if isinstance(after, str) else bytes(after))
+    stream = log.with_name(log.stem + ".coins.bin")
+    stream.write_bytes(coins(need))
+    log.with_name(log.stem + ".coins.json").write_text(json.dumps(
+        {"source": "development challenger (in-process, secrets.token_bytes)", "commitment": ch.commitment.to_json(),
+         "segment": coins.segments[-1].to_json(), "need": need}, sort_keys=True))
+    return run([lean, "draw", *args, "--stream-file", str(stream)], log)
+
+
+def stage(set_dir: str, ns: list[int], out: Path, m0_path: str, tampered: bool = False, bind: dict | None = None) -> dict:
+    """M0's staging; `bind` (the verifier's partition digest, program SHA-512 and unit indices) goes into the statement."""
+    out.mkdir(parents=True, exist_ok=True)
+    env = {"PYTHONPATH": m0_path}
+    extra: list[str] = []
+    if bind:
+        (out / "unit-indices.json").write_text(json.dumps(bind["indices"]))
+        extra = ["--partition", bind["partition"], "--program", bind["program"], "--unit-indices", str(out / "unit-indices.json")]
+    if tampered:
+        cmd = [sys.executable, str(HERE / "stage_tampered.py"), "--input-set", set_dir, "--n", str(ns[0]), "--out", str(out), *extra]
+    else:
+        cmd = [sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--n", *map(str, ns), "--out", str(out), *extra]
+    p = run(cmd, out / "stage.log", env)
+    if p.returncode != 0:
+        raise RuntimeError(f"staging failed: {p.stderr[-2000:]}")
+    text = (out / "circuit.txt").read_text()
+    meta = json.loads(text.split("\n", 2)[1][5:])
+    return {"dir": out, "meta": meta, "pin": hashlib.sha512(text.encode()).hexdigest()}
+
+
+def hold_bound(st: dict, program, query) -> None:
+    """The verifier's own partition object and program beside a bound stage, which the Lean verifier then reads by content."""
+    (st["dir"] / "partition.json").write_text(json.dumps(P.partition(program, query), sort_keys=True))
+    (st["dir"] / "program.json").write_bytes(canonical_json(encode_program(program)))
+    st["partition_file"], st["program_file"] = st["dir"] / "partition.json", st["dir"] / "program.json"
+
+
+def hold_registered(st: dict, program, query, served, log=(), ports=None) -> SV.ServedRegistration:
+    """The verifier's own `--registered` file beside a bound stage (`served.register_served`: each served tree a port, the
+    form every served path registers in), which `lean_verify` passes to `verify --zk`. The returned registration's
+    `registered` entries go into the record (`R.record(..., registered=)`), and its `values` and `outputs` into R7."""
+    sr = SV.register_served(program, query, served, log=log, ports=ports)
+    st["registered_file"] = sr.write(st["dir"] / "registered.json")
+    return sr
+
+
+def unit_class(set_dir: str, m0_path: str, out: Path) -> str:
+    """The class of every instance, from the verifier's own composition of the circuit (M0's `--class-only`)."""
+    p = run([sys.executable, "-m", "verity_flock.circuit", "--input-set", set_dir, "--class-only"], out / "class.log", {"PYTHONPATH": m0_path})
+    return json.loads(p.stdout.strip().splitlines()[-1])["class_sha512"]
+
+
+def template_program_ok(meta: dict, defn) -> bool:
+    """META's one `program_digests` entry is this template's: keyed by its descriptor id (or its display id, as M0 keys it
+    through 68ae79f2), valued core's `program_digest` of its Program."""
+    pd = meta.get("program_digests", {})
+    return len(pd) == 1 and next(iter(pd)) in (P.template_id(defn), defn.id) and next(iter(pd.values())) == program_digest(Program(defn))
+
+
+def bindings(meta: dict, header: dict, rec: dict, cls: str) -> dict:
+    """What the staged statement binds, against the registration: the partition, the program, the global unit indices of
+    `Q_template_instance` (instance i is unit i), and one class per instance."""
+    n = rec["population"]
+    got = {"partition": meta.get("partition"), "program": meta.get("program_sha512"),
+           "indices": header["units"]["indices"] == list(range(n)), "classes": header["units"].get("classes") == [cls] * n}
+    ok = {"partition": got["partition"] == {"rule": P.FORMAT, "digest": rec["partition"]},
+          "program": got["program"] == rec["program"], "indices": got["indices"], "classes": got["classes"]}
+    return {"ok": all(ok.values()), "each": ok, "class_sha512": cls}
+
+
+def public_header(stage_dir: Path, n: int) -> dict:
+    with open(stage_dir / f"pub-{n}.bin", "rb") as f:
+        return json.loads(f.readline())
+
+
+def hidden_outputs(meta: dict) -> bool:
+    """M0 from hidden outputs (META `input_ports`): every output port is a row after the input rows, and no domain binds the
+    set's unsalted content digest."""
+    return "input_ports" in meta
+
+
+def ports(meta: dict, n: int) -> dict[str, tuple[str, int]]:
+    """Each port the layout derives: its schema and leaf count (before hidden outputs, each output port a tree of u16 words)."""
+    out = {name: ("hm96-sha512/row/v1", n) for name, *_ in meta["ports"]}
+    if not hidden_outputs(meta):
+        out.update({name: ("u16", n * words) for name, words in meta["out_ports"]})
+    return out
+
+
+def stand_in_ports(name: str, content_digest: str, meta: dict, n: int) -> dict[str, dict]:
+    """The verifier's own derivation of the stand-in's domains: M0's frame domains bound to the set (before hidden outputs,
+    its content digest too), the range, the port and its schema."""
+    out = {}
+    content = {} if hidden_outputs(meta) else {"content_digest": content_digest}
+    for p, (schema, count) in ports(meta, n).items():
+        b = STAND_IN_BINDINGS[STAND_IN_BINDING](STAND_IN_BINDING, {"set": name, **content, "lo": 0, "hi": n, "port": p, "schema": schema})
+        out[p] = {"leaves": count, "domain": CommitmentDomain(b, -1, RangeIndexedDomain(0, count), hash="sha512").domain_id.hex()}
+    return out
+
+
+def registered_roots(header: dict, want: dict[str, dict]) -> list[dict]:
+    fv = header["frame_v3"]
+    return [{"port": p, "root": fv["roots"][p], "leaves": want[p]["leaves"], "domain": fv["domain_ids"][p]} for p in want]
+
+
+def stand_in(set_dir: str) -> dict:
+    prov = json.loads((Path(set_dir) / "manifest.json").read_text()).get("provenance", {})
+    return {"kind": "stand-in", "of": "vllm-v1 commitment of a served run", "input_set": Path(set_dir).name, "row": prov.get("row"), "run": prov.get("research_run") or prov.get("run"),
+            "run_root": prov.get("run_root"), "model": prov.get("model"), "program_digests": prov.get("program_digests"),
+            "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
+
+
+def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
+    """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
+    keyed coin tree)."""
+    senv = {**os.environ, **(env or {})}
+    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
+#: `session` reads its verifier's log for ``SERVING`` this often, for this long at most (seconds): the prover starts
+#: within a read of the verifier's listening, and the wait is outside the prover's clock
+SERVING_POLL, SERVING_WAIT = 0.02, 900.0
+
+
+def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
+    """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
+    Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
+    its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
+    and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
+    caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
+    `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
+    sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
+    (`Flock.ProvedScope`). `env`: added to
+    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds.
+    ``st["tmpl_unit"]``: a templated statement's unit rows at their positions, which both sides read (`--tmpl-unit`)."""
+    out.mkdir(parents=True, exist_ok=True)
+    d = st["dir"]
+    tables = d / "tables"
+    zf = ["--zk"] if zk else []
+    tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
+    ch = None
+    if tree_from is None and own_challenger(env, zk):
+        from verity_flock import challengers as CH
+        ch = CH.start(out / "challenger")
+    serve_log = open(out / "serve.log", "w")
+    serve = subprocess.Popen([bin_, "serve", *zf, "--listen", f"127.0.0.1:{port}", "--out", str(out / "sessions"),
+                              "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
+                              "--pin", st["pin"], "--operator", "one-stage-a0",
+                              *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
+                              *(ch[1] if ch else tree_from or [])],
+                             stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
+    got = None
+    try:
+        late = time.monotonic() + SERVING_WAIT
+        while "SERVING" not in (out / "serve.log").read_text() and serve.poll() is None and time.monotonic() < late:
+            time.sleep(SERVING_POLL)
+        p = run([bin_, "prove", *zf, "--verifier", f"127.0.0.1:{port}", "--instances", str(d / f"inst-{n}.bin"),
+                 "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables), "--runs", "1", "--warm", "0"], out / "prove.log", env=env,
+                timeout=prove_timeout)
+        live = next((json.loads(line[5:]) for line in p.stdout.splitlines() if line.startswith("LIVE\t")), None)
+        if live is None:
+            refused = next((line for line in p.stdout.splitlines() if line.startswith("REFUSED\t")), "")
+            live = {"accepted": False, "why": f"prover exited {p.returncode}: {refused[:600]} {p.stderr[-600:]}".strip()}
+        serve.wait(timeout=600)
+    finally:
+        if serve.poll() is None:
+            serve.kill()
+        serve_log.close()
+        if ch:
+            got = CH.end(out / "challenger", ch[0], CH.records(out / "sessions"))
+    if got is not None:
+        live = {**live, "challenger": got}
+        if not got["ok"]:
+            live.update(accepted=False, why=f"challenger: {json.dumps(got)[:600]}")
+    recs = sorted((out / "sessions").glob("*/session.json"))
+    return (json.loads(recs[-1].read_text()) if recs else None), live
+
+
+def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
+    """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
+    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
+    from verity_flock import circuit as FC
+
+    if st.meta.get("statement") != FC.TMPL_STATEMENT:
+        return {}
+    if not tmpl_unit_bin:
+        raise SystemExit("a templated statement's prover reads its unit placed by flock-tmpl-unit: give --tmpl-unit-bin")
+    placed = d / "unit.placed"
+    if not placed.exists():
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "unit.tmpl").write_text(FC.template_of(st.text))
+        (d / "unit.layout").write_text(st.meta["layout"])
+        p = run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
+        if p.returncode:
+            raise SystemExit(f"flock-tmpl-unit: exit {p.returncode} ({d / 'tmpl-unit.log'})")
+    return {"statement": FC.TMPL_STATEMENT, "tmpl_unit": placed}
+
+
+def lean_draw_test(lean: str, cases: list[dict], out: Path, name: str) -> list[dict]:
+    f = out / f"{name}.cases.json"
+    f.write_text(json.dumps(cases))
+    p = run([lean, "draw-test", str(f)], out / f"{name}.lean.log")
+    return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("DRAWCHECK")]
+
+
+def firewall_env(st: dict) -> dict:
+    """What a firewalled prover (`FC_FIREWALL=1`) sets its Lean `Hello` up on (live PROTOCOL.md §10.4): the statement
+    `lean_verify` verifies under, and the statement's partition and program."""
+    args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
+    return {"FC_FIREWALL_STATEMENT": st.get("statement", STATEMENT_ID), "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
+#: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
+#: its witness built where the prover builds it (`zk_cost.py`'s `dev` arm, which Figure 1 prices)
+DIRECT = {"FC_FIREWALL": "0", "FC_HOST_WITNESS": None}
+
+
+def prover_env(firewall: str | None, st: dict) -> dict:
+    """A `--zk` session's prover environment: behind the ZK server's send check when ``firewall`` names Lean's
+    `flock-firewall` (the core protocols' path), else `DIRECT`."""
+    if firewall:
+        return {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": firewall, **firewall_env(st)}
+    return dict(DIRECT)
+
+
+def identity(f: Path) -> tuple | None:
+    """File ``f``'s identity, the same for every link of one file; None for a file that is not there."""
+    if not f.exists():
+        return None
+    s = f.stat()
+    return (s.st_dev, s.st_ino, s.st_size, s.st_mtime_ns)
+
+
+def bound_files(st: dict) -> list[str]:
+    """What statement ``st`` is verified against besides its circuit, public file and tables, each by `verify`'s flag
+    for it (the file is ``st["<flag>_file"]``): its partition, program and registered reads where it has them, and with
+    registered reads the window's registered circuit record (``interface``) where it has one."""
+    return [x for x in ("partition", "program", "registered", "interface")
+            if st.get(f"{x}_file") and (x != "interface" or st.get("registered_file"))]
+
+
+def archive_files(st: dict, n: int) -> list[Path]:
+    """What `lean_verify` archives for statement ``st`` on ``n`` units: the circuit, the public file, the tables, and
+    what else the statement is verified against (`bound_files`)."""
+    d = st["dir"]
+    return [d / "circuit.txt", d / f"pub-{n}.bin", *sorted(f for f in (d / "tables").glob("*") if f.is_file()),
+            *(Path(st[f"{x}_file"]) for x in bound_files(st))]
+
+
+def archive_put(lean: str, archive: Path, files: Sequence[Path], log: Path, held: dict | None = None) -> dict[Path, str]:
+    """Each of ``files`` in ``archive`` under its SHA-512 (Lean's ``archive-put``, its log ``log``), and each one's
+    key there; a file Lean could not put has none. ``held``, a dict a run's archives share: a file archived once, by its
+    identity (`identity`), is linked into a later archive rather than read again, and a call whose every file is held
+    starts no process. Lean holds an object to its key when it reads it (`archiveGet`)."""
+    ids = {f: identity(f) if held is not None else None for f in files}
+
+    def known(f: Path) -> tuple[str, Path] | None:
+        pre = held.get(ids[f]) if ids[f] is not None else None
+        return pre if pre is not None and pre[1].exists() else None
+
+    new, seen = [], set()
+    for f in files:
+        if ids[f] is None or (known(f) is None and ids[f] not in seen):
+            new.append(f)
+            seen.add(ids[f])
+    put = {}
+    if new:
+        p = run([lean, "archive-put", str(archive), *map(str, new)], log)
+        put = {x[1]: x[0] for x in (line.split() for line in p.stdout.splitlines()) if len(x) == 2}
+        for f in new:
+            if ids[f] is not None and str(f) in put:
+                held[ids[f]] = (put[str(f)], archive / "sha512" / put[str(f)])
+    keys = {}
+    for f in files:
+        pre = known(f)
+        if pre is None:
+            if str(f) in put:
+                keys[f] = put[str(f)]
+            continue
+        keys[f] = pre[0]
+        if not (archive / "sha512" / pre[0]).exists():
+            (archive / "sha512").mkdir(parents=True, exist_ok=True)
+            os.link(pre[1], archive / "sha512" / pre[0])
+    return keys
+
+
+#: `VerifyMembers` waits this long for a member's answer, as `run` waits for a `verify` process, and this long for the
+#: process to exit once its standard input is closed or its output has ended (seconds), by this clock
+MEMBER_WAIT, EXIT_WAIT = 3600.0, 60.0
+monotonic = time.monotonic
+
+
+class VerifyMembers:
+    """Lean's ``verify-members``, one process for a run's members (`Flock.VerifyMembers`): started on the run's
+    registered program (``program``, its key in ``archive``), which it reads once, it takes a member as one line, the JSON
+    array of `verify`'s arguments for it, and answers with what `verify` prints for that member and then
+    ``MEMBER {"exit":E,"index":I}``, E `verify`'s exit status and I the line's place.
+
+    `verify` hands it the next member and writes that member's log as `run` writes a `verify` process's, with one more
+    line saying how it was run, so the log's readers read either. A member is handed in once, in the members' order. A
+    member the process does not answer (it ended, it wrote nothing for `MEMBER_WAIT` seconds, or it answered another place)
+    has no verdict, and neither has any member after it: the process is ended, by its PID, and never started again.
+    `close` ends it and writes its own log (``log``); until then its standard error is the ``.stderr`` file beside it.
+
+    It runs in this process's environment as it is, not in `verifier_env`. A `verify` process exits after its member;
+    this one stays for the run, beside the run's provers, and under the verifier's allocator setting it would hold
+    every page it freed once it had read the program. So it starts under the allocator's default unless this process's
+    environment sets a value."""
+
+    def __init__(self, lean: str, archive: Path, program: str, log: Path):
+        self.cmd = [lean, "verify-members", "--archive", str(archive), "--program", program]
+        self.log, self.stderr, self.started = log, log.with_suffix(".stderr"), time.time()
+        # its standard error is a file of this run's alone, which `_stderr` reads through an opening of its own; the pipes
+        # are unbuffered, read and written through their descriptors
+        with self.stderr.open("wb") as err:
+            self.proc = subprocess.Popen(self.cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=err, bufsize=0,
+                                         env=environ(None))
+        self.members, self.ended = 0, None
+        self._buf, self._err_read, self._ends = b"", 0, []
+
+    def _stop(self, why: str, kill: bool = False) -> None:
+        """The process answers no member from here: ``why``, with its exit status, is every later member's reason."""
+        if kill and self.proc.poll() is None:
+            self.proc.kill()
+        try:
+            self.proc.wait(timeout=EXIT_WAIT)
+        except subprocess.TimeoutExpired as e:
+            self.proc.kill()
+            self.proc.wait()
+            why = f"{why}, and did not exit in {e.timeout:.0f} s"
+        self.ended = f"{why} (it exited {self.proc.returncode})"
+
+    def _line(self, wait: float) -> bytes | str:
+        """The process's next line of standard output; or, a str, why there is none: its output ended, or it wrote
+        nothing for ``wait`` seconds."""
+        late = monotonic() + wait
+        while b"\n" not in self._buf:
+            left = late - monotonic()
+            if left <= 0 or not select.select([self.proc.stdout], [], [], left)[0]:
+                return f"wrote nothing for {wait:.0f} s"
+            got = os.read(self.proc.stdout.fileno(), 1 << 16)
+            if not got:
+                return "ended"
+            self._buf += got
+        line, _, self._buf = self._buf.partition(b"\n")
+        return line
+
+    def _stderr(self) -> str:
+        """What the process wrote on standard error since the last call."""
+        with self.stderr.open("rb") as f:
+            f.seek(self._err_read)
+            got = f.read()
+        self._err_read += len(got)
+        return got.decode(errors="replace")
+
+    def verify(self, args: Sequence[str], log: Path) -> tuple[str, str]:
+        """The next member, `verify`'s arguments ``args``: what `verify` printed for it, nothing where the process did not
+        answer it; and why it has no verdict if it has none (`verify`'s exit status, or what the process did instead).
+        ``log``: the member's log."""
+        i, t = self.members, time.time()
+        self.members += 1
+        printed, status = [], None
+        if self.ended is None:
+            line = json.dumps(list(args)).encode() + b"\n"
+            try:
+                while line:
+                    line = line[os.write(self.proc.stdin.fileno(), line):]
+            except OSError as e:
+                self._stop(f"the kept verifier could not be handed member {i} ({e})")
+        while self.ended is None and status is None:
+            line = self._line(MEMBER_WAIT)
+            if isinstance(line, str):
+                self._stop(f"the kept verifier {line} before member {i}'s MEMBER line", kill=line != "ended")
+            elif not line.startswith(b"MEMBER "):
+                printed.append(line.decode(errors="replace"))
+            else:
+                self._ends.append(line.decode(errors="replace"))
+                try:
+                    end = json.loads(line[7:])
+                except ValueError as e:
+                    end = f"not JSON ({e})"
+                if isinstance(end, dict) and end.get("index") == i and isinstance(end.get("exit"), int):
+                    status = end["exit"]
+                else:
+                    self._stop(f"the kept verifier answered member {i} with {self._ends[-1][:200]}", kill=True)
+        stderr = self._stderr()
+        # what the process printed for a member it did not answer is kept, and is no verdict to any reader of the log
+        stdout = "".join(("" if status is not None else "not taken: ") + x + "\n" for x in printed)
+        why = f"no verdict (rc {status}): {stderr[-400:]}" if status is not None else f"no verdict: {self.ended}: {stderr[-400:]}"
+        log.write_text(f"$ {self.cmd[0]} verify {' '.join(args)}\n# rc {status} in {time.time() - t:.3f} s\n"
+                       f"# run as member {i} of: {' '.join(self.cmd)}" + ("" if status is not None else f"\n# {self.ended}")
+                       + f"\n--- stdout\n{stdout}\n--- stderr\n{stderr}")
+        return (stdout if status is not None else ""), why
+
+    def close(self) -> int:
+        """Ends the process, its standard input closed so that it exits once it has answered what it was handed: its exit
+        status, and its log as `run` writes one (its members' ``MEMBER`` lines; their verdicts are in their own logs)."""
+        if self.ended is None:
+            self.proc.stdin.close()
+            while isinstance(line := self._line(EXIT_WAIT), bytes):
+                self._ends.append(line.decode(errors="replace"))
+            self._stop("closed after its last member" if line == "ended" else f"the kept verifier {line} once its input closed",
+                       kill=line != "ended")
+        self.log.write_text(f"$ {' '.join(self.cmd)}\n# rc {self.proc.returncode} in {time.time() - self.started:.1f} s\n"
+                            f"# {self.members} members handed in; {self.ended}\n--- stdout\n"
+                            + "".join(x + "\n" for x in self._ends) + self._buf.decode(errors="replace")
+                            + f"\n--- stderr\n{self.stderr.read_text(errors='replace')}")
+        self.stderr.unlink()
+        for f in (self.proc.stdin, self.proc.stdout):
+            f.close()
+        return self.proc.returncode
+
+
+def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
+                flags: Sequence[str] = (), members: VerifyMembers | None = None) -> dict:
+    """The verifier: Lean `verity-verify-proof verify` on the session's record, with the circuit and the public file
+    held by content (`--archive`, SHA-512 keys), and the verifier's own registered reads (`st["registered_file"]`,
+    `hold_registered`) when the statement reads registered values, with the window's registered circuit record
+    (`st["interface_file"]`, `--interface`) whose declared registered ports the file never binds (`bound_files`); `zk`,
+    a `--zk` session's. `log` names its logs under `out` (a negative's own, beside the honest verdict's). `flags`: more
+    of `verify`'s (a plain session's ``--coins tree --stratified K``). ``members``: the run's kept verifier
+    (`VerifyMembers`), which is handed `verify`'s arguments for this session as its next member in place of a `verify`
+    process of its own, and gives the same verdict. ``st["archived"]``, a dict a run's members share (`archive_put`'s
+    ``held``): a file archived once, the members' circuit or a file the run put before its sessions, is linked into
+    every later archive rather than put again. ``st["statement"]``: the statement `verify` sets up
+    (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
+    public file's header, the registered reads, the sample and the tables it checked the session against
+    (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
+    holds each statement to. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's
+    environment sets its own. The kept verifier does not (`VerifyMembers`)."""
+    sessions = sorted((out / "sessions").glob("*/session.json"))
+    if not sessions:
+        return {"accepted": False, "of_record": True, "why": "no session recorded"}
+    archive, files = out / "archive", archive_files(st, n)
+    keys = archive_put(lean, archive, files, out / ("archive-put.log" if log == "lean-verify" else f"{log}.archive-put.log"),
+                       st.get("archived"))
+    bound = [y for x in bound_files(st) for y in (f"--{x}", keys.get(Path(st[f"{x}_file"]), ""))]
+    args = ["--statement", st.get("statement", STATEMENT_ID), "--archive", str(archive),
+            "--circuit", keys.get(files[0], ""), "--public", keys.get(files[1], ""), *bound,
+            *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)]
+    t = time.time()
+    if members is None:
+        p = run([lean, "verify", *args], out / f"{log}.log", env=verifier_env())
+        stdout, none = p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"
+    else:
+        stdout, none = members.verify(args, out / f"{log}.log")
+    line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
+    v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": none}
+    return {"accepted": v.get("accepted") is True, "why": v.get("why"), "of_record": True, "verify_s": round(time.time() - t, 1),
+            "partition": v.get("partition"), **({"registered": v["registered"]} if "registered" in v else {}),
+            **{k: v[k] for k in ("public_header_sha512", "registered_sha512", "unit_draw", "session_tables") if k in v},
+            "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
+
+
+#: how Lean's reason opens where a file of the session, its record or a rep's proof, was not there to read (`verify` in
+#: FlockVerify.lean, after the statement is set up and before any check of a proof)
+NO_SESSION_FILES = "session files:"
+
+
+def lean_refused(v: dict, names: str | None = None) -> bool:
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not where it read none: at
+    setup, where a missing or unreadable input is refused, or for want of a file of the session (`NO_SESSION_FILES`);
+    unless the refusal names `names`, a check Lean makes there."""
+    why = v.get("why") or ""
+    return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
+        names in why if names else not why.startswith(("setup:", NO_SESSION_FILES)))
+
+
+def lean_read_no_proof(v: dict) -> bool:
+    """Lean's own verdict refused the session for want of a file of it (`NO_SESSION_FILES`), so it read no proof: what a
+    prover that sent none, or a ZK server that held one back, leaves. It says no proof left, never that Lean refused one."""
+    return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
+
+
+def lean_answered(verifiers: dict | None) -> bool:
+    """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
+    writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
+    fails its check either way."""
+    return "refused" not in ((verifiers or {}).get("lean") or {"refused": None})
+
+
+def negative(v: Verdict) -> dict:
+    """A negative's row from the verifier's verdict `v` on its altered input: refused only where the check failed and
+    the Lean answered (`lean_answered`). Under a Lean that could not run the verifier fails every check, the honest
+    input's too, so that failure refuses no negative: the row then carries what the verifier wrote in the Lean's place
+    (``lean``), and the audit fails."""
+    answered = lean_answered(v.verifiers)
+    return {"refused": not v.ok and answered, "codes": list(v.codes),
+            **({} if answered else {"lean": (v.verifiers or {}).get("lean")})}
+
+
+def history_negative(v: Verdict) -> dict:
+    """`negative` for a history table's registered root that is not the table's. The Python refuses it with a reason
+    and no code (`R.HistoryRefused`) and the Lean's own answer is a refusal too, so the verifier's verdict is `R.HISTORY`
+    alone for whatever stands in the Lean's place, a Lean that could not run included (`verifier.check`). Only the
+    Lean's own check of the root gives the Python's reason: refused only where the two reasons are one; else the row
+    carries both (``reasons``)."""
+    why = v.detail.get(R.HISTORY) or {}
+    refused = v.codes == (R.HISTORY,) and isinstance(why.get("lean"), str) and why["lean"] == why.get("python")
+    return {"refused": refused, "codes": list(v.codes), **({"reasons": dict(why)} if why and not refused else {})}
+
+
+def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
+    """Lean's sample check refused case `i` by `code` (U1, U3), not for a sample it could not read."""
+    return len(cases) > i and not cases[i]["ok"] and cases[i]["why"].startswith(f"{code}:")
+
+
+def proved_units(header: dict, live: dict) -> list[int]:
+    """The sampled statement's units as global unit indices: the population header's index of each sampled position."""
+    pop = header["units"]["indices"]
+    return [pop[u] for u in (live.get("unit_draw") or {}).get("units", [])]
+
+
+def audit_session(rec: dict, receipt: dict, st: dict, header: dict, law: dict, record, live, lean: str, lean118: str, out: Path,
+                  delta: float) -> dict:
+    """Every check on one session, then the audit record."""
+    draw = (record or {}).get("unit_draw")
+    verifier = (record or {}).get("verdict") or {}
+    lean_u = lean_draw_test(lean, [{"record": draw, "statement": (live or {}).get("unit_draw"),
+                                    "instances": (live or {}).get("instances", 0)}], out, "u1-u3") if draw else []
+    statement = {"circuit_sha512": (live or {}).get("circuit_sha512"), "statement_digest": (live or {}).get("statement_digest"),
+                 "public_sha512": (live or {}).get("public_sha512"), "sigma": (live or {}).get("sigma"),
+                 "roots": (live or {}).get("roots"), "coin_commitment": ((record or {}).get("coin_seed") or {}).get("commitment"),
+                 "roots_are_registered": (live or {}).get("roots") == {r["port"]: r["root"] for r in rec["roots"]}}
+    verdicts = {
+        "m0-verifier": {"accepted": verifier.get("accepted") is True, "why": verifier.get("why"),
+                        "tool": "flock-circuit serve (M0)"},
+        "lean-draw-u1-u3": {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u,
+                            "tool": "verity-verify-proof draw-test (9d0d53df)"},
+        "lean-verify": {**lean_verify(lean118, st, header["instances"], out), "tool": "verity-verify-proof verify --archive"},
+    }
+    if draw is None:
+        return {"accepted": False, "why": "no draw recorded", "verdicts": verdicts, "statement": statement}
+    sessions = [sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))]
+    return V.audit_record(rec, receipt, draw, law, proved_units(header, live or {}), (live or {}).get("instances", -1),
+                          statement, verdicts, delta, sessions=sessions, session_roots=(live or {}).get("roots") or {})
+
+
+def audit_negatives(result: dict, law: dict, delta: float, session_roots: dict, served: list | None = None, *,
+                    own_reads: bool = False) -> dict[str, dict]:
+    """The audit record's own refusals, each re-deciding the real record with one input altered: the verifier
+    not run or absent, a session root that isn't the registered one, the verifier reporting a registered value's
+    reads opened against another root than its registered one, and, when the sessions were handed the verifier's sample
+    (`served`), a served share that isn't it. Each is decided by the verifier (`verifier.audit_record`, with its
+    ``own_reads`` where the real record was decided with it) and refused only where the Lean answered (`lean_answered`);
+    `agree` is whether the Lean and the Python decided it alike."""
+    base = dict(registration=result["registration"], receipt=result["receipt"], draw=result["draw"], law=law,
+                proved_units=result["proved_units"], instances=len(result["proved_units"]), statement=result["statement"],
+                verdicts=result["verdicts"], delta=delta, served=served, session_roots=session_roots, own_reads=own_reads)
+
+    def decide(**change) -> dict:
+        r = V.audit_record(**{**base, **change})
+        return {"refused": not r["accepted"] and r["profile"] is None and lean_answered(r["verifiers"]),
+                "failed": [k for k, c in r["checks"].items() if not c["ok"]], "agree": r["verifiers"]["agree"]}
+
+    vs = base["verdicts"]
+    port = next(iter(session_roots), None)
+    neg = {"verifier-of-record-did-not-run (C2)": decide(verdicts={k: {**v, "accepted": None} if v.get("of_record") else v
+                                                                   for k, v in vs.items()}),
+           "no-verifier-of-record (C2)": decide(verdicts={k: v for k, v in vs.items() if not v.get("of_record")}),
+           "session-root-not-registered": decide(session_roots={**session_roots, port: "00" * 64})}
+    opened = audit.session_registered(vs, base["registration"])
+    if opened:
+        value = next(iter(opened))
+        neg["registered-read-opened-against-another-root"] = decide(verdicts={
+            k: {**v, "registered": {p: {**e, "root": "00" * 64} if e["value"] == value else e for p, e in v["registered"].items()}}
+            if v.get("of_record") and isinstance(v.get("registered"), dict) else v for k, v in vs.items()})
+    if served is not None:
+        drawn = set(served)
+        other = [u for u in range(result["registration"]["population"]) if u not in drawn][:1]
+        neg["served-share-not-the-verifier's-draw (C1)"] = decide(served=sorted(served)[1:] + other)
+    return neg
+
+
+def altered_public(lean: str, st: dict, n: int, session_dir: Path, out: Path, rec: dict, check, zk: bool = False) -> dict:
+    """A public file whose body is altered (its last output word's high byte flipped) and whose leaf-layer digest is updated
+    to match, so the registration passes R1-R6 and only the verifier, recomputing the roots from the file, can
+    refuse it. `check(record, leaf_layer)` is the verifier's registration check."""
+    stage = out / "stage"
+    shutil.rmtree(out, ignore_errors=True)
+    (stage / "tables").mkdir(parents=True)
+    os.link(st["dir"] / "circuit.txt", stage / "circuit.txt")
+    for f in (st["dir"] / "tables").glob("*"):
+        if f.is_file():
+            os.link(f, stage / "tables" / f.name)
+    shutil.copytree(session_dir / "sessions", out / "sessions", copy_function=os.link)
+    body = bytearray((st["dir"] / f"pub-{n}.bin").read_bytes())
+    body[-1] ^= 1
+    (stage / f"pub-{n}.bin").write_bytes(bytes(body))
+    digest = hashlib.sha512(bytes(body)).hexdigest()
+    registration = check(dict(rec, leaf_layer=digest), digest)
+    lean_v = lean_verify(lean, dict(st, dir=stage), n, out, zk=zk)
+    return {"refused": registration.ok and lean_refused(lean_v, names="do not hash to the header's"),
+            "registration_passes": registration.ok,
+            "lean": lean_v.get("why")}
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--set", required=True)
+    ap.add_argument("--m0-pythonpath", required=True)
+    ap.add_argument("--bin", required=True)
+    ap.add_argument("--lean", required=True, help="verity-verify-proof for the draw checks")
+    ap.add_argument("--lean-verify", default=None, help="verity-verify-proof for the full verify; default --lean")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--k", type=int, default=16)
+    ap.add_argument("--delta", type=float, default=0.01)
+    ap.add_argument("--port", type=int, default=7511)
+    ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
+    ap.add_argument("--statement", default=STATEMENT_ID,
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit, "
+                         "verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl, and refuses a superseded one "
+                         "(verity/flock-circuit@967b8d06, for files staged at M0 68ae79f2 or later) once every check has "
+                         "passed")
+    ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
+                    help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
+    a = ap.parse_args()
+    a.lean_verify = a.lean_verify or a.lean
+    globals()["STATEMENT_ID"] = a.statement
+    globals()["STAND_IN_BINDING"] = a.binding
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    s = InputSet.open(a.set)
+    n = s.n
+    template = s.subcircuit.definition()
+    law_text = f"subset:{a.k}"
+    law = D.parse_design(law_text)
+    summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
+
+    # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
+    program = P.population_program(template, n)
+    query = P.template_instance_query(template)
+    bind = None
+    if a.bind:
+        part = P.partition(program, query)
+        bind = {"partition": P.digest(part), "program": part["program"], "indices": list(range(P.units(program, query)))}
+
+    # serving commits (the stand-in): M0 stages the captured values under frame-v3-sha512 / hm96-sha512
+    t = time.time()
+    st = stage(a.set, [4, n], out / "stage", a.m0_pythonpath, bind=bind)
+    if a.bind:
+        hold_bound(st, program, query)
+    header = public_header(st["dir"], n)
+    summary["stage_s"] = round(time.time() - t, 1)
+    summary["template_program"] = {"statement": st["meta"]["program_digests"],
+                                   "verifier": {P.template_id(template): program_digest(Program(template))},
+                                   "ok": template_program_ok(st["meta"], template)}
+
+    # 3. registration, before any sample; the verifier holds its own public file to it
+    fv = header["frame_v3"]
+    want = stand_in_ports(s.name, s.content_digest, st["meta"], n)
+    leaf_layer = sha512_file(st["dir"] / f"pub-{n}.bin")
+    rec = R.record(program, query, law, header["scheme"], registered_roots(header, want), stand_in(a.set), leaf_layer=leaf_layer)
+    (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+    checks = {"registration": V.check(rec, program, query, law, SCHEME, want, leaf_layer=leaf_layer).to_json(),
+              "public": V.matches_public(rec, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"]).to_json()}
+    receipt = R.receipt(rec, "one-stage-e2e verifier (a0.py)")
+    (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+    if a.bind:
+        checks["bindings"] = bindings(st["meta"], header, rec, unit_class(a.set, a.m0_pythonpath, out))
+    summary["registration_digest"] = R.digest(rec)
+    summary["partition_digest"] = rec["partition"]
+    summary["checks_before_draw"] = {k: v["ok"] for k, v in checks.items()}
+    if not all(c["ok"] for c in checks.values()) or not summary["template_program"]["ok"]:
+        summary["checks"] = checks
+        (out / "summary.json").write_text(json.dumps(summary, indent=1))
+        print("A0 " + json.dumps({"refused_before_draw": checks}))
+        return 1
+
+    # 4-6. the verifier samples after Register, M0 proves the sampled proof blocks, M0's verifier and Lean's sample checks
+    t = time.time()
+    record, live = session(a.bin, st, n, law_text, a.port, out / "session")
+    summary["session_s"] = round(time.time() - t, 1)
+    result = audit_session(rec, receipt, st, header, law, record, live, a.lean, a.lean_verify, out / "session", a.delta)
+    result["checks_before_draw"] = checks
+    result["timing"] = {k: (live or {}).get(k) for k in ("e2e_s", "witness_s", "prove_total_s", "tp_s", "proof_bytes", "k_log", "units")}
+    result["timing"]["verify_s"] = ((record or {}).get("verdict") or {}).get("verify_s")
+    (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True))
+    summary["audit"] = {k: result.get(k) for k in ("accepted", "complete", "proved_units", "wrong_units", "checks", "integrity_profile")}
+    summary["audit"]["verdicts"] = {k: v.get("accepted") for k, v in result.get("verdicts", {}).items()}
+    summary["timing"] = result["timing"]
+
+    # negatives: each must be refused
+    neg: dict[str, dict] = {}
+    first = rec["roots"][0]["port"]
+    other = dict(rec, roots=[dict(rec["roots"][0], root="00" * 64), *rec["roots"][1:]])
+    v = V.matches_public(other, header["scheme"], fv["roots"], fv["domain_ids"], header["instances"])
+    neg["registration-root-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.matches_public(rec, header["scheme"], fv["roots"], {**fv["domain_ids"], first: "00" * 64}, header["instances"])
+    neg["public-file-domain-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check(rec, R2.program([(template, n)], mixed=False), query, law, SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-partition-mismatch"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
+                leaf_layer=leaf_layer)
+    neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check(rec, program, query, D.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
+    neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
+    v = V.check(dict(rec, leaf_layer=None), program, query, law, SCHEME, want, leaf_layer=leaf_layer)
+    neg["registration-null-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+    if "registration" in result:
+        neg.update(audit_negatives(result, law, a.delta, (live or {}).get("roots") or {}))
+    neg["public-body-altered-leaf-layer-updated (Lean roots)"] = altered_public(
+        a.lean_verify, st, n, out / "session", out / "neg-public-body", rec,
+        lambda r, digest: V.check(r, program, query, law, SCHEME, want, leaf_layer=digest))
+    if a.bind:
+        other_part = P.digest(P.partition(R2.program([(template, n)], mixed=False), query))
+        b = bindings(dict(st["meta"], partition={"rule": P.FORMAT, "digest": other_part}), header, rec, checks["bindings"]["class_sha512"])
+        neg["statement-binds-another-partition"] = {"refused": not b["ok"], "each": b["each"]}
+    draw = (record or {}).get("unit_draw") or {"law": "subset", "population": n, "k": a.k, "units": list(range(a.k))}
+    for name, bad in (("draw-over-another-population", {**draw, "population": n + 1}),
+                      ("draw-outside-the-partition", {**draw, "units": draw["units"][:-1] + [n]}),
+                      ("draw-under-another-law", {**draw, "k": a.k - 1, "units": draw["units"][:-1]})):
+        v = V.check_draw(bad, rec, law)
+        neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
+    altered = {**draw, "units": sorted(set(draw["units"][:-1]) | {next(u for u in range(n) if u not in draw["units"])})}
+    lean_alt = lean_draw_test(a.lean, [{"record": altered, "statement": draw, "instances": len(draw["units"])},
+                                       {"record": draw, "statement": draw, "instances": len(draw["units"]) + 1},
+                                       {"record": None, "statement": draw, "instances": len(draw["units"])}], out, "negatives")
+    neg["draw-altered-after-session (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 0, "U1"), "lean": lean_alt[:1],
+                                                   "proved-check": V.check_proved(altered, proved_units(header, live or {}),
+                                                                                  (live or {}).get("instances", -1)).to_json()}
+    neg["instances-not-the-draw (Lean U3)"] = {"refused": drawcheck_refused(lean_alt, 1, "U3"), "lean": lean_alt[1:2]}
+    neg["draw-dropped-from-record (Lean U1)"] = {"refused": drawcheck_refused(lean_alt, 2, "U1"), "lean": lean_alt[2:3]}
+    for case in ("unit_draw_ignored_refused", "unit_draw_session"):
+        p = run([a.bin, "selftest", "--instances", str(st["dir"] / "inst-4.bin"), "--circuit", str(st["dir"] / "circuit.txt"),
+                 "--tables", str(st["dir"] / "tables"), "--only", case], out / f"selftest-{case}.log")
+        res = next((json.loads(line[4:]) for line in p.stdout.splitlines() if line.startswith("NEG\t")), None)
+        key = "prover-ignores-the-draw (M0 selftest)" if case == "unit_draw_ignored_refused" else "m0-selftest-unit-draw-session"
+        neg[key] = {"refused" if case == "unit_draw_ignored_refused" else "passed": bool(res and res.get("pass")), "case": res}
+    tn = 8
+    tprog = P.population_program(template, tn)
+    tpart = P.partition(tprog, query)
+    tbind = {"partition": P.digest(tpart), "program": tpart["program"], "indices": list(range(tn))} if a.bind else None
+    tst = stage(a.set, [tn], out / "stage-tampered", a.m0_pythonpath, tampered=True, bind=tbind)
+    if a.bind:
+        hold_bound(tst, tprog, query)
+    theader = public_header(tst["dir"], tn)
+    tlaw = D.parse_design("subset:2")
+    twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
+    trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
+                    {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},
+                    leaf_layer=sha512_file(tst["dir"] / f"pub-{tn}.bin"))
+    trecord, tlive = session(a.bin, tst, tn, "subset:2", a.port + 1, out / "session-tampered")
+    tres = audit_session(trec, R.receipt(trec, "one-stage-e2e verifier (a0.py)"), tst, theader, tlaw, trecord, tlive, a.lean,
+                         a.lean_verify, out / "session-tampered", a.delta)
+    tlean = tres.get("verdicts", {}).get("lean-verify", {})
+    neg["wrong-output-word"] = {"refused": trecord is not None and tres.get("accepted") is False and tres.get("profile") is None
+                                and lean_refused(tlean),
+                                "verifier": ((trecord or {}).get("verdict") or {}).get("why"),
+                                "lean": tlean.get("why"), "lean_refused": lean_refused(tlean),
+                                "prover": (tlive or {}).get("why"), "draw": (trecord or {}).get("unit_draw")}
+    (out / "negatives.json").write_text(json.dumps(neg, indent=1, sort_keys=True))
+    summary["negatives"] = {k: v.get("refused", v.get("passed")) for k, v in neg.items()}
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True))
+    ok = bool(result.get("accepted")) and all(summary["negatives"].values())
+    print("A0 " + json.dumps(summary, sort_keys=True))
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

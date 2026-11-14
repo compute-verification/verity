@@ -51,7 +51,7 @@ def _module(name: str, path: Path):
 TV = _module("test_served_verdicts", HERE / "test_served_verdicts.py")
 S = TV.S
 T = _module("test_pearl_c_vllm", ROOT / "benchmarks" / "pouw" / "tests" / "test_pearl_c_vllm.py")
-SP = T.load("pearl_c_vllm_served_passes", T.KERNEL.parent / "pearl_c_vllm" / "served_passes.py")
+SP = T.load("pearl_c_vllm_served_passes", T.POUW / "pearl_c_vllm" / "served_passes.py")
 
 
 def test_the_lean_step_writes_the_real_lean_answer_on_the_served_run_and_the_compose_reads_it(tmp_path, monkeypatch):
