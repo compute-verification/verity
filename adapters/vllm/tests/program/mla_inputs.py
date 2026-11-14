@@ -1,38 +1,24 @@
-"""Captures of vLLM d9105ea80's Triton MLA decode (`TritonMLAImpl.forward_mqa` -> `decode_attention_fwd`, grouped kernel,
-`is_mla=True`) at GLM-4.7-Flash's shapes, for `mla.TritonMlaDecode`:
+"""The inputs of the Triton MLA decode captures and the check of their words against the Boolean Definitions, for
+`tests/program/test_mla.py` and `tests/program/test_sparse_mla_split.py`.
 
-    # node, torch venv:  verity-vllm mla-capture produce --out DIR [--suite NAME] [--triton-cache DIR]
-    # verity venv:       verity-vllm mla-capture check --dir DIR [--out REPORT.json]
-    #                    verity-vllm mla-capture check-bits --dir DIR [--tmin T] [--tmax T]
-    #                        [--worker I --workers N] [--skip EARLIER.json ...] [--fresh] [--out R.json]
-
-`check` holds the numpy models (`mla_check`) to every captured word; `check-bits` evaluates the Boolean Definitions
-themselves: `mla.TritonMlaDecodeHead` on the one-split decode rows, `mla.MlaBmm` and `mla.MoeSharedCombine` on every case.
-
-The inputs are counter-based (`words`: splitmix64 of the case seed and the word index), so the check rebuilds them from the
-manifest and only the kernel's outputs are stored: `o` (bf16 words `[B, H, 512]`), `lse` (bf16 `[B, H]`) and the split pass's
-scratch `attn_logits` (f32 words `[B, H, SPLITS, 513]`: each split's `acc / e_sum` and `e_max + log(e_sum)`). `produce` calls
-`decode_attention_fwd` exactly as forward_mqa does: q `[B, H, 576]`, the paged cache `[pages, PAGE, 1, 576]` and its first 512
-columns as the value buffer, a shuffled block table, `k_scale = v_scale = 1.0`. With `TRITON_CACHE_DIR` set the compiled
-kernels' TTGIR, LLIR, PTX and cubin land there; `produce` writes each cubin's SASS beside it (`--triton-cache`, which defaults
-to that variable).
+The captures are of vLLM d9105ea80's Triton MLA decode (`TritonMLAImpl.forward_mqa` -> `decode_attention_fwd`, grouped kernel,
+`is_mla=True`) at GLM-4.7-Flash's shapes. The inputs are counter-based (`words`: splitmix64 of the case seed and the word
+index), so a check rebuilds them from a capture's manifest and only the kernel's outputs are stored: `o` (bf16 words
+`[B, H, 512]`), `lse` (bf16 `[B, H]`) and the per-split scratch `attn_logits` (f32 words `[B, H, SPLITS, 513]`).
+`check_bits` evaluates the Boolean Definitions themselves: `mla.TritonMlaDecodeHead` on the one-split decode rows,
+`mla.MlaBmm` and `mla.MoeSharedCombine` on every case.
 """
 from __future__ import annotations
 
 import json
-import sys
 from collections.abc import Collection
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
 
-from verity_vllm.config import option
-
 DL, DR = 512, 64
 D = DL + DR
 H = 20
-SCALE = 0.0625  # GLM-4.7-Flash: (qk_nope 192 + qk_rope 64) ** -0.5, no yarn
 
 
 def _splitmix(x: np.ndarray) -> np.ndarray:
@@ -76,58 +62,6 @@ def case_inputs(case: dict) -> tuple[np.ndarray, list[np.ndarray]]:
     return q, kv
 
 
-def _lens(seed: int, B: int, hi: int) -> list[int]:
-    r = _splitmix(np.arange(B, dtype=np.uint64) + (np.uint64(seed) << np.uint64(52)) + (np.uint64(0xFFFF) << np.uint64(40)))
-    return [int(1 + v % np.uint64(hi)) for v in r]
-
-
-EDGE_LENS = [1, 2, 31, 32, 33, 63, 64, 65, 127, 128, 129, 255, 256, 257, 511, 512, 513, 1023, 1024, 1025, 2047, 2048, 2049,
-             4095, 4096]
-
-
-def suite(name: str) -> list[dict]:
-    """The cases of a capture suite: batch sizes 1..32, lengths 1..4096, the batch-invariant split (1) and the served ones."""
-    cases: list[dict] = []
-    seed = 1
-
-    def add(lens, splits, kind, page):
-        nonlocal seed
-        cases.append({"seqlens": [int(t) for t in lens], "splits": splits, "kind": kind, "page": page, "seed": seed})
-        seed += 1
-
-    if name == "smoke":
-        add([1, 33, 100], 1, "unit", 16)
-        add([64, 513], 2, "unit", 64)
-        return cases
-    if name == "decode-v1":
-        for i in range(0, len(EDGE_LENS), 5):
-            add(EDGE_LENS[i:i + 5], 1, "unit", 64)
-        for kind in KINDS:
-            for B, hi in ((1, 4096), (4, 4096), (8, 2048), (16, 1024), (32, 512), (32, 2048), (32, 4096)):
-                add(_lens(seed, B, hi), 1, kind, 16 if B % 8 else 64)
-        add(_lens(seed, 16, 2048), 1, "special", 64)
-        add(_lens(seed, 32, 1024), 1, "special", 16)
-        for splits in (2, 4, 8):
-            for kind in ("unit", "wide"):
-                add(_lens(seed, 8, 4096), splits, kind, 64)
-        return cases
-    if name == "bmm-v1":
-        for NH, M in ((20, 1), (20, 4), (5, 2), (20, 32), (1, 7)):
-            for K, N in ((192, 512), (512, 256)):
-                for kind in ("act", "special"):
-                    cases.append({"op": "bmm", "NH": NH, "M": M, "K": K, "N": N, "kind": kind, "seed": seed})
-                    seed += 1
-        return cases
-    if name == "combine-v1":
-        for T in (1, 7, 32):
-            for kind in ("act", "special"):
-                cases.append({"op": "combine", "T": T, "HD": 2048, "rsf": 1.8, "kind": kind, "seed": seed})
-                seed += 1
-        cases.append({"op": "combine", "T": 4, "HD": 2048, "rsf": 2.5, "kind": "act", "seed": seed})
-        return cases
-    raise KeyError(name)
-
-
 #: exponent ranges of the GEMM and combine operands: activations around 1, weights around 2^-6
 OPERANDS = {"act": {"x": (118, 129), "w": (112, 122)}}
 
@@ -159,164 +93,6 @@ def combine_inputs(case: dict) -> tuple[np.ndarray, np.ndarray]:
 
 #: op -> its case's inputs, rebuilt from the manifest (`mla_check.check`)
 INPUTS = {"decode": case_inputs, "bmm": bmm_inputs, "combine": combine_inputs}
-
-
-# --- produce (node, torch venv) -----------------------------------------------------------------------------------------
-
-def _bf(a: np.ndarray, device: str):
-    import torch
-    return torch.from_numpy(a.view(np.int16).copy()).view(torch.bfloat16).to(device)
-
-
-def _w16(t) -> np.ndarray:
-    import torch
-    return t.contiguous().cpu().view(torch.int16).numpy().view(np.uint16)
-
-
-def _run_bmm(case: dict, device: str) -> dict:
-    """`torch.bmm` under VLLM_BATCH_INVARIANT: vLLM's `bmm_batch_invariant` (the Triton `bmm_kernel`)."""
-    from vllm.model_executor.determinism.batch_invariant import bmm_batch_invariant
-
-    a, b = bmm_inputs(case)
-    c = bmm_batch_invariant(_bf(a, device), _bf(b, device))
-    return {"c": _w16(c)}
-
-
-def _run_combine(case: dict, device: str) -> dict:
-    """`MoERunner._maybe_apply_routed_scale_to_output` (bf16: ``fused_output *= rsf``) then ``shared_output + fused_output``."""
-    routed, shared = combine_inputs(case)
-    fused, sh = _bf(routed, device), _bf(shared, device)
-    fused *= case["rsf"]
-    return {"out": _w16(sh + fused)}
-
-
-_MUFU_SRC = {"ex2_ftz": "ex2.approx.ftz.f32 $0, $1;", "rcp_ftz": "rcp.approx.ftz.f32 $0, $1;",
-             "lg2_ftz": "lg2.approx.ftz.f32 $0, $1;", "ex2": "ex2.approx.f32 $0, $1;", "lg2": "lg2.approx.f32 $0, $1;"}
-
-
-def _mufu(op: str, x):
-    import torch
-    import triton
-    import triton.language as tl
-
-    @triton.jit
-    def k(X, Y, n, BLOCK: tl.constexpr, ASM: tl.constexpr):
-        i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
-        v = tl.load(X + i, mask=i < n)
-        y = tl.inline_asm_elementwise(ASM, "=r,r", [v], dtype=tl.float32, is_pure=True, pack=1)
-        tl.store(Y + i, y, mask=i < n)
-
-    y = torch.empty_like(x)
-    k[(triton.cdiv(x.numel(), 1024),)](x, y, x.numel(), BLOCK=1024, ASM=_MUFU_SRC[op])
-    return y
-
-
-def mufu_probe(out: Path, device: str) -> dict:
-    """MUFU.EX2 and MUFU.RCP on this GPU against core's sm_89 tables (`verity.circuits.ops.mufu`): ex2 on [0, 1) at every 2^-23 step and
-    rcp on every mantissa of [1, 2), plus ex2 / lg2 (ftz and not) on a sweep of 2^20 words; the words are stored."""
-    import torch
-    from verity.circuits.ops import mufu as MU
-
-    rep = {}
-    j = np.arange(1 << 23, dtype=np.uint32)
-    ex2_in = (j.astype(np.float64) / (1 << 23)).astype(np.float32)
-    rcp_in = (np.uint32(0x3F800000) | j).view(np.float32)
-    for op, xs, name in (("ex2_ftz", ex2_in, "ex2"), ("rcp_ftz", rcp_in, "rcp")):
-        y = _mufu(op, torch.from_numpy(xs.copy()).to(device)).cpu().numpy().view(np.uint32)
-        ref = MU.table(name)
-        bad = np.flatnonzero(y != ref)
-        rep[op] = {"words": int(y.size), "mismatches": int(bad.size), "first": [[int(i), int(y[i]), int(ref[i])] for i in bad[:8]]}
-        if bad.size:
-            np.savez_compressed(out / f"mufu_{op}.npz", y=y)
-    sweep = _splitmix(np.arange(1 << 20, dtype=np.uint64) + (np.uint64(0xABC) << np.uint64(40))).astype(np.uint32)
-    np.savez_compressed(out / "mufu_sweep_in.npz", x=sweep)
-    for op in ("ex2", "lg2", "lg2_ftz", "ex2_ftz"):
-        y = _mufu(op, torch.from_numpy(sweep.view(np.float32).copy()).to(device)).cpu().numpy().view(np.uint32)
-        np.savez_compressed(out / f"mufu_sweep_{op}.npz", y=y)
-    lg2_in = (np.uint32(0x3F800000) | j).view(np.float32)
-    y = _mufu("lg2_ftz", torch.from_numpy(lg2_in.copy()).to(device)).cpu().numpy().view(np.uint32)
-    np.savez_compressed(out / "mufu_lg2_ftz_mantissas.npz", y=y)
-    rep["lg2_ftz_mantissas"] = {"words": int(y.size)}
-    return rep
-
-
-def _run_case(case: dict, device: str):
-    import torch
-    from vllm.v1.attention.ops.triton_decode_attention import decode_attention_fwd
-
-    q_w, kv_w = case_inputs(case)
-    B, page, S = len(case["seqlens"]), int(case["page"]), int(case["splits"])
-    need = [-(-T // page) for T in case["seqlens"]]
-    npages = sum(need) + 3
-    order = np.argsort(_splitmix(np.arange(npages, dtype=np.uint64) + (np.uint64(case["seed"]) << np.uint64(52))
-                                 + (np.uint64(0xFFFE) << np.uint64(40))), kind="stable")
-    cache = np.zeros((npages, page, D), np.uint16)
-    table = np.zeros((B, max(need)), np.int32)
-    nxt = 0
-    for b, T in enumerate(case["seqlens"]):
-        for j in range(need[b]):
-            p = int(order[nxt])
-            nxt += 1
-            table[b, j] = p
-            rows = kv_w[b][j * page:(j + 1) * page]
-            cache[p, :rows.shape[0]] = rows
-    q = _bf(q_w, device)
-    kv = _bf(cache, device).unsqueeze(2)
-    kv_c = kv[..., :DL]
-    o = torch.zeros(B, H, DL, dtype=torch.bfloat16, device=device)
-    lse = torch.zeros(B, H, dtype=torch.bfloat16, device=device)
-    logits = torch.empty((B, H, S, DL + 1), dtype=torch.float32, device=device)
-    one = torch.ones((), dtype=torch.float32, device=device)
-    decode_attention_fwd(q, kv, kv_c, o, lse, torch.from_numpy(table).to(device),
-                         torch.tensor(case["seqlens"], dtype=torch.int32, device=device), logits, S, SCALE, page,
-                         k_scale=one, v_scale=one, is_mla=True)
-    torch.cuda.synchronize()
-    return {"o": _w16(o), "lse": _w16(lse), "logits": logits.contiguous().cpu().view(torch.int32).numpy().view(np.uint32)}
-
-
-def _sass(cache_dir: Path) -> list[str]:
-    import shutil
-    import subprocess
-
-    import triton
-
-    tool = Path(triton.__file__).parent / "backends" / "nvidia" / "bin" / "cuobjdump"
-    exe = str(tool) if tool.exists() else shutil.which("cuobjdump")
-    done = []
-    for cubin in sorted(cache_dir.rglob("*.cubin")):
-        if exe is None:
-            break
-        out = subprocess.run([exe, "-sass", str(cubin)], capture_output=True, text=True)
-        cubin.with_suffix(".sass").write_text(out.stdout + out.stderr)
-        done.append(str(cubin.relative_to(cache_dir)))
-    return done
-
-
-RUN = {"decode": _run_case, "bmm": _run_bmm, "combine": _run_combine}
-
-
-def produce(out: Path, suite_name: str, device: str = "cuda", triton_cache: Path | None = None) -> dict:
-    import torch
-    import triton
-    import vllm
-
-    out.mkdir(parents=True, exist_ok=True)
-    man = {"schema": "verity-vllm/mla-capture/v1", "suite": suite_name, "torch": torch.__version__, "triton": triton.__version__,
-           "vllm": vllm.__version__, "device": torch.cuda.get_device_name(0), "cc": list(torch.cuda.get_device_capability(0)),
-           "scale": SCALE, "H": H}
-    if suite_name == "mufu":
-        man["mufu"] = mufu_probe(out, device)
-        cases = []
-    else:
-        cases = suite(suite_name)
-    man["cases"] = cases
-    for i, case in enumerate(cases):
-        np.savez_compressed(out / f"case_{i}.npz", **RUN[case.get("op", "decode")](case, device))
-        print(f"[mla-capture] case {i}: {json.dumps(case)[:160]}", file=sys.stderr, flush=True)
-    if triton_cache is not None:
-        man["sass"] = _sass(triton_cache)
-    (out / "manifest.json").write_text(json.dumps(man, indent=1) + "\n")
-    return man
 
 
 def _bits_groups(d: Path, man: dict, tmin: int | None, tmax: int | None) -> dict:
@@ -435,58 +211,3 @@ def check_bits(d: Path, tmax: int | None = None, worker: int = 0, workers: int =
         if out:
             out.write_text(json.dumps(rep, indent=1) + "\n")
     return rep
-
-
-@dataclass(frozen=True, kw_only=True)
-class ProduceOptions:
-    """Capture a suite's cases on the GPU (node, torch venv)."""
-
-    out: str = option("--out")
-    suite: str = option("--suite", default="decode-v1")
-    device: str = option("--device", default="cuda")
-    triton_cache: str | None = option("--triton-cache", env="TRITON_CACHE_DIR", default=None,
-                                      help="the Triton cache the run compiles into, whose cubins' SASS the manifest records")
-
-
-@dataclass(frozen=True, kw_only=True)
-class CheckOptions:
-    """The numpy models (`mla_check`) against every captured word."""
-
-    dir: str = option("--dir")
-    out: str | None = option("--out", default=None)
-
-
-@dataclass(frozen=True, kw_only=True)
-class CheckBitsOptions:
-    """The Boolean Definitions on bits against the captures."""
-
-    dir: str = option("--dir")
-    out: str | None = option("--out", default=None)
-    tmin: int | None = option("--tmin", type=int, default=None)
-    tmax: int | None = option("--tmax", type=int, default=None)
-    worker: int = option("--worker", type=int, default=0)
-    workers: int = option("--workers", type=int, default=1)
-    skip: list[str] = option("--skip", nargs="*", default=[], help="earlier check-bits reports: their finished keys are not rerun")
-    fresh: bool = option("--fresh", action="store_true", default=False,
-                         help="each key in a new process (a worker's memory is one key's)")
-
-
-COMMANDS = {"produce": ProduceOptions, "check": CheckOptions, "check-bits": CheckBitsOptions}
-
-
-def main(a: ProduceOptions | CheckOptions | CheckBitsOptions) -> int:
-    if isinstance(a, ProduceOptions):
-        produce(Path(a.out), a.suite, a.device, Path(a.triton_cache) if a.triton_cache else None)
-        return 0
-    if isinstance(a, CheckBitsOptions):
-        rep = check_bits(Path(a.dir), a.tmax, a.worker, a.workers, Path(a.out) if a.out else None, a.tmin,
-                         done_keys([Path(p) for p in a.skip]), a.fresh)
-        print(json.dumps({k: rep[k] for k in ("rows", "mismatched_rows", "words_bad", "first_mismatch")}), file=sys.stderr)
-        return 0 if rep["mismatched_rows"] == 0 else 1
-    from verity.definitions.registry import mla_check
-
-    rep = mla_check.check(Path(a.dir), INPUTS)
-    if a.out:
-        Path(a.out).write_text(json.dumps(rep, indent=1) + "\n")
-    print(json.dumps(rep["summary"]), file=sys.stderr)
-    return 0 if rep["summary"]["mismatched_rows"] == 0 else 1
