@@ -3,9 +3,8 @@
   _C.silu_and_mul   act_and_mul_kernel<bf16, silu_kernel>   ->  SiluMul_v2{I} over SiluMulBf16_v2
   aten.gelu (erf)   torch's GeluCUDAKernelImpl              ->  GeluErf_v1{N} over GeluErfBf16_v1
 
-PROMOTED from `verity_vllm.program.quarantine.act`: each Definition below is the quarantine module's
-body VERBATIM — same name, same version, same gates — so its specialization ids are the quarantine's. The quarantine modules
-re-export these objects (their difftest adapter, `ALL_DEFINITIONS` and `SEMANTIC_ID`s are unchanged). Bound as the `silu_mul` kind
+PROMOTED from the vLLM adapter's quarantine: each Definition below is the quarantined body VERBATIM — same name, same
+version, same gates — so its specialization ids are the ones the quarantine admitted. Bound as the `silu_mul` kind
 of the `b1-eager-v3` vocabulary (`frontend/rules/vocab.py`), asked for by `SiluAndMulRule`; `SiluMul_v1` (b1) stays registered,
 the kind of the older vocabularies and of the bodies that call it directly. The Boolean form is `boolean_silu.SiluMulExpf`
 (`SiluMul_v4{I}`, word view `SiluMul_v2{I}`).
@@ -33,11 +32,11 @@ i.e. `bf16( (f * 0.5f) * (1.0f + erff(f * 0x3F3504F3)) )`, `f = (float)x`, store
 NaN -> 0x7FFF).  `erff` is CUDA libdevice's `__nv_erff` (a minimax polynomial pair with FMAs, not correctly rounded), so the
 word is NOT `RN(gelu(x))` for every x; rather than transcribe libdevice, the function is pinned by its **exhaustive table**: the
 domain is the 65,536 bf16 words, and `gelu_erf_table.py` holds the kernel's output word for every one of them, measured on the
-pod (RTX 4090, sm_89, torch 2.13.0+cu129) by `verity_vllm/ops/gelu_erf_table_probe.py` (`aten.gelu` on
-`arange(65536).view(bfloat16)`, then zlib + base64).  The primitive is the table lookup.  Precedent: `prims.MufuEx2Ftz` /
+pod (RTX 4090, sm_89, torch 2.13.0+cu129) by a probe that ran `aten.gelu` on `arange(65536).view(bfloat16)` and
+stored the words zlib + base64.  The primitive is the table lookup.  Precedent: `prims.MufuEx2Ftz` /
 `MufuRcpFtz` (measured hardware tables).  `GeluErf_v1{N}` is `out[j] = GeluErfBf16(x[j])` over a row, the GPT-NeoX MLP
 activation (`nn.GELU()`, vLLM `get_act_fn("gelu")`).  Both were promoted from quarantine with their bodies verbatim, so
-their ids keep the quarantine's `ln/` prefix; the Match fold binds them (`engine/profiles/gen_ln_patterns.py`), and `tests/engine/test_gen_ln.py`
+their ids keep the quarantine's `ln/` prefix; the Match fold binds them (`observe/fold/profiles/gen_ln_patterns.py`), and `tests/engine/test_gen_ln.py`
 checks the table's sanity facts: gelu(+0) = +0, gelu(-0) = -0, gelu(x) = x for x >= 2^4, gelu(x) = -0 for x <= -2^4, NaN words
 -> 0x7FFF, +inf -> +inf, -inf -> NaN.
 """
@@ -52,7 +51,7 @@ from verity_vllm.definitions.evidence import EVIDENCE
 from verity_vllm.definitions.registry import prims as P
 from verity_vllm.definitions.registry.gelu_erf_table import TABLE_WORDS
 
-#: `SEMANTIC_ID`s of the promoted Definitions (their quarantine identities; the quarantine `act` modules keep the same strings)
+#: `SEMANTIC_ID`s of the promoted Definitions (their quarantine identities)
 SEMANTIC_IDS = {"SiluMulBf16": "act/SiluMulBf16@v2", "SiluMul": "act/SiluMul@v2", "GeluErfBf16": "ln/GeluErfBf16@v1",
                 "GeluErf": "ln/GeluErf@v1"}
 
