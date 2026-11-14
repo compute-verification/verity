@@ -673,6 +673,19 @@ theorem IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried := by
     ((S.integrity_on s (S.sessions b) hq hqt hA3 hs hA2 ⌈Real.log (1 / δ) / q⌉₊).trans ?_)
   exact add_le_add (add_le_add (one_sub_pow_le_of_log hq hδ (Nat.le_ceil _)) le_rfl) le_rfl
 
+/-- **Sessions that prove every unit and share registered values, with no proof block wrong**: `integrity_on` on
+the sessions `I` at `q = 1`, which every session of `I` meets (`kd = n`, `0 < n`), and `M = 1`, where its sampling term
+`(1 - q)^M` is `0`. -/
+theorem IntegrityAllProvedCarried : Flock.Guarantees.IntegrityAllProvedCarried := by
+  intro S I hall hA3 s hT hL hA2
+  have hs : MonitoringPeriodGood (fun t => (S.W t).game) (fun t => (S.W t).CR) 0 S.T s :=
+    periodGood_of_plays _ _ S.T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp)
+  have hqt : ∀ t ∈ I, (1 : ℝ) ≤ ((S.W t).kd : ℝ) / (S.W t).n := fun t ht => by
+    obtain ⟨hn, hk⟩ := hall t ht
+    rw [hk, div_self (Nat.cast_ne_zero.2 hn.ne')]
+  have h := S.integrity_on s I one_pos hqt hA3 hs hA2 1
+  rwa [sub_self, ENNReal.ofReal_zero, pow_one, zero_add] at h
+
 /-- **`IntegrityBlockCarried` is `IntegrityBlock` with no carried leaf**: at `CarriedBlocks.ofServer S` the run is
 `S.run` (`CarriedBlocks.run_ofServer`), the carried term is `0` and the finder premise is vacuous. -/
 theorem IntegrityBlock_of_IntegrityBlockCarried (h : Flock.Guarantees.IntegrityBlockCarried) :

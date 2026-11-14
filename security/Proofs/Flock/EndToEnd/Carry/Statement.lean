@@ -316,8 +316,8 @@ def IntegrityHorizonCarried : Prop :=
       ENNReal.ofReal δ + ∑ b ∈ Finset.range S.B, S.err b + ∑ x, (S.leaf x).carry
 
 /-- **Sessions that prove every unit and share registered values, with no proof block wrong.** In a monitoring period
-with carried leaves (`CarriedBlocks`), on a set `I` of its sessions each of which proves every one of its units
-(`kd = n`), the probability that every session of `I` is accepted and at least one proof block of `I` is incorrect,
+with carried leaves (`CarriedBlocks`), on a set `I` of its sessions each of which has units and proves every one of
+them (`0 < n`, `kd = n`), the probability that every session of `I` is accepted and at least one proof block of `I` is incorrect,
 each carried leaf read at its one value in every session that shares it, is at most
 $$\sum_{t \in I} (\varepsilon_{ks,t} + \delta_{link,t}) + \sum_\ell \delta_{carry,\ell,I},$$
 with no sampling term. Two sessions that share one registered value are the case where `I` is those two and the value
@@ -333,11 +333,11 @@ is `Gives` at `K₀ = 1` for the run whose `accepts` is every session of `I` acc
 `I`'s sessions (`failing.card` the sum of their `wrong`), and whose `ok` is each unit's circuit at its values, each
 carried leaf at its one value, at `ε` the bound above. A row's lemma takes that `Gives` and concludes its own check.
 
-Not proved: it is `Flock.SecurityProofs.integrity_on` at `q = 1` and `M = 1`, whose sampling term `(1 - q)^M` is then
-`0`, once `IntegrityHorizonCarried`'s premises give that lemma's. -/
+Proved as `Flock.SecurityProofs.IntegrityAllProvedCarried`: `Flock.SecurityProofs.integrity_on` at `q = 1` and
+`M = 1`, whose sampling term `(1 - q)^M` is then `0`. -/
 def IntegrityAllProvedCarried : Prop :=
   ∀ (S : CarriedBlocks) (I : Finset ℕ),
-    (∀ t ∈ I, (S.W t).kd = (S.W t).n) →
+    (∀ t ∈ I, 0 < (S.W t).n ∧ (S.W t).kd = (S.W t).n) →
     (∀ t ∈ I, Assumptions.UniformRandomBytes (S.W t).Lb (S.W t).src) →
     ∀ s : Strategy S.game,
     (∀ t (τ : Strategy (S.W t).game), Period.Plays S.W S.T s t τ → ∀ ω j,
