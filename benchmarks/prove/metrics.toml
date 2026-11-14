@@ -12,6 +12,17 @@ every = "7d"
 goal = "benchmarks/proof-system-performance"
 
 [[metric]]
+id = "benchmarks/prover-gpus-per-serving-gpu-at-record"
+title = "GLM-5.3 at the exfiltration run of record's design (the planner's world year at 10% of total compute): prover GPUs for each serving GPU, modeled"
+owner = "benchmarks"
+unit = "prover GPUs a serving GPU"
+better = "lower"
+command = "research run --on auto --project verity --source . --cwd source --store-read -- uv run --extra torch-cpu python benchmarks/prove/run.py --system spot --workload glm53"
+every = "7d"
+goal = "benchmarks/proof-system-performance"
+tags = ["modeled"]
+
+[[metric]]
 id = "benchmarks/prover-gpu-seconds-per-token"
 title = "GLM-5.3 under SPOT[Flock] at its sampling plan of record: prover GPU-seconds for each served token"
 owner = "benchmarks"
